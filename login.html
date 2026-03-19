@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acceder — Agente Google Ads</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0c0f; --bg2: #111318; --bg3: #181c23;
+  --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+  --text: #e8eaf0; --muted: #6b7280; --muted2: #9ca3af;
+  --accent: #4a90d9; --accent2: #34c68a;
+  --font: 'DM Sans', sans-serif; --mono: 'DM Mono', monospace;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* Fondo con grid sutil */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(74,144,217,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,144,217,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Logo + marca */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+  justify-content: center;
+}
+.brand-logo {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 14px; font-weight: 500; color: #fff;
+}
+.brand-name { font-size: 16px; font-weight: 500; }
+.brand-tag {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 20px;
+  background: rgba(74,144,217,0.15);
+  color: var(--accent);
+  border: 1px solid rgba(74,144,217,0.2);
+}
+
+/* Card principal */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 18px;
+  padding: 32px 28px;
+  animation: fadeUp .4s ease;
+}
+@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+
+.card-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.card-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+
+/* Trial banner */
+.trial-banner {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: rgba(52,198,138,0.08);
+  border: 1px solid rgba(52,198,138,0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 22px;
+  font-size: 12px; color: var(--accent2); line-height: 1.5;
+}
+.trial-icon { font-size: 15px; flex-shrink: 0; }
+
+/* Google button */
+.google-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px; font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all .15s;
+  margin-bottom: 16px;
+}
+.google-btn:hover { border-color: rgba(255,255,255,0.25); background: #1e2330; }
+.google-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* Divider */
+.divider {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; color: var(--muted); font-size: 12px;
+}
+.divider::before, .divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* Inputs */
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; color: var(--muted2); margin-bottom: 5px; font-weight: 500; }
+.field input {
+  width: 100%; background: var(--bg3);
+  border: 1px solid var(--border2); border-radius: 10px;
+  padding: 11px 14px; font-size: 13px; color: var(--text);
+  font-family: var(--font); outline: none; transition: border-color .15s;
+}
+.field input:focus { border-color: var(--accent); }
+.field input::placeholder { color: var(--muted); }
+
+/* Submit button */
+.submit-btn {
+  width: 100%; padding: 12px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 500;
+  cursor: pointer; font-family: var(--font);
+  transition: opacity .15s; margin-top: 4px;
+}
+.submit-btn:hover { opacity: .88; }
+.submit-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Tabs login/registro */
+.tabs { display: flex; gap: 0; margin-bottom: 22px; background: var(--bg3); border-radius: 10px; padding: 3px; }
+.tab-btn {
+  flex: 1; padding: 8px; border-radius: 8px; font-size: 13px;
+  font-weight: 500; cursor: pointer; border: none;
+  background: transparent; color: var(--muted);
+  font-family: var(--font); transition: all .15s;
+}
+.tab-btn.active { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); }
+
+/* Error */
+.error-msg {
+  background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.25);
+  border-radius: 8px; padding: 9px 12px;
+  font-size: 12px; color: #e08080; margin-bottom: 12px; display: none;
+}
+
+/* Footer */
+.card-footer { text-align: center; margin-top: 20px; font-size: 11px; color: var(--muted); }
+.card-footer a { color: var(--muted2); text-decoration: underline; }
+
+/* Loading spinner */
+.spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="brand">
+    <div class="brand-logo">GA</div>
+    <span class="brand-name">Agente Google Ads</span>
+    <span class="brand-tag">Beta</span>
+  </div>
+
+  <div class="card">
+    <div class="trial-banner">
+      <span class="trial-icon">★</span>
+      <span><strong>7 días gratis con acceso completo</strong> — sin tarjeta de crédito. Crea tu cuenta y empieza ahora.</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="setTab('login', this)">Iniciar sesión</button>
+      <button class="tab-btn" onclick="setTab('register', this)">Crear cuenta</button>
+    </div>
+
+    <!-- Google -->
+    <button class="google-btn" onclick="loginGoogle()">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Continuar con Google
+    </button>
+
+    <div class="divider">o con email</div>
+
+    <div class="error-msg" id="error-msg"></div>
+
+    <!-- Login form -->
+    <div id="form-login">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()">
+      </div>
+      <button class="submit-btn" id="login-btn" onclick="submitLogin()">Iniciar sesión</button>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none">
+      <div class="field">
+        <label>Nombre completo</label>
+        <input type="text" id="reg-name" placeholder="Tu nombre">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitRegister()">
+      </div>
+      <button class="submit-btn" id="reg-btn" onclick="submitRegister()">Crear cuenta gratis</button>
+    </div>
+
+    <div class="card-footer">
+      Al continuar aceptas los <a href="#">Términos de uso</a> y la <a href="#">Política de privacidad</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const CLERK_KEY = window.__CLERK_PUBLISHABLE_KEY__ || 'TU_CLERK_PUBLISHABLE_KEY';
+
+let clerk;
+let currentTab = 'login';
+
+async function initClerk() {
+  try {
+    clerk = new Clerk(CLERK_KEY);
+    await clerk.load();
+    if (clerk.user) {
+      window.location.href = '/';
+    }
+  } catch(e) {
+    console.warn('Clerk no inicializado — modo demo:', e.message);
+  }
+}
+initClerk();
+
+function setTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  hideError();
+}
+
+async function loginGoogle() {
+  if (!clerk) { showError('Clerk no está configurado. Agrega tu publishable key.'); return; }
+  try {
+    await clerk.signIn.authenticateWithRedirect({
+      strategy: 'oauth_google',
+      redirectUrl: '/sso-callback',
+      redirectUrlComplete: '/'
+    });
+  } catch(e) { showError('Error con Google login: ' + e.message); }
+}
+
+async function submitLogin() {
+  if (!clerk) { showError('Clerk no configurado.'); return; }
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!email || !pass) { showError('Completa email y contraseña.'); return; }
+  setLoading('login-btn', true);
+  try {
+    const result = await clerk.signIn.create({ identifier: email, password: pass });
+    if (result.status === 'complete') {
+      await clerk.setActive({ session: result.createdSessionId });
+      window.location.href = '/';
+    }
+  } catch(e) {
+    showError(e.errors?.[0]?.message || 'Email o contraseña incorrectos.');
+  }
+  setLoading('login-btn', false);
+}
+
+async function submitRegister() {
+  if (!clerk) { showError('Clerk no configurado.'); return; }
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  if (!name || !email || !pass) { showError('Completa todos los campos.'); return; }
+  if (pass.length < 8) { showError('La contraseña debe tener al menos 8 caracteres.'); return; }
+  setLoading('reg-btn', true);
+  try {
+    const result = await clerk.signUp.create({
+      firstName: name.split(' ')[0],
+      lastName: name.split(' ').slice(1).join(' '),
+      emailAddress: email,
+      password: pass
+    });
+    if (result.status === 'complete') {
+      await clerk.setActive({ session: result.createdSessionId });
+      window.location.href = '/';
+    } else if (result.status === 'missing_requirements') {
+      await result.prepareEmailAddressVerification({ strategy: 'email_code' });
+      showVerification();
+    }
+  } catch(e) {
+    showError(e.errors?.[0]?.message || 'Error al crear cuenta. Intenta de nuevo.');
+  }
+  setLoading('reg-btn', false);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('error-msg').style.display = 'none';
+}
+function setLoading(btnId, on) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = on;
+  btn.innerHTML = on ? '<span class="spinner"></span>Procesando...' : (btnId === 'login-btn' ? 'Iniciar sesión' : 'Crear cuenta gratis');
+}
+function showVerification() {
+  document.querySelector('.card').innerHTML = `
+    <div style="text-align:center;padding:10px 0">
+      <div style="font-size:32px;margin-bottom:16px">📧</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">Verifica tu email</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Te enviamos un código a tu correo. Ingrésalo aquí.</div>
+      <input type="text" id="verify-code" placeholder="Código de 6 dígitos" maxlength="6"
+        style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px;font-size:20px;text-align:center;color:var(--text);font-family:var(--mono);letter-spacing:.3em;outline:none;margin-bottom:12px">
+      <button class="submit-btn" onclick="verifyCode()">Verificar y entrar</button>
+    </div>`;
+}
+async function verifyCode() {
+  const code = document.getElementById('verify-code')?.value?.trim();
+  if (!code) return;
+  try {
+    const result = await clerk.signUp.attemptEmailAddressVerification({ code });
+    if (result.status === 'complete') {
+      await clerk.setActive({ session: result.createdSessionId });
+      window.location.href = '/';
+    }
+  } catch(e) { alert('Código incorrecto. Intenta de nuevo.'); }
+}
+</script>
+</body>
+</html>
