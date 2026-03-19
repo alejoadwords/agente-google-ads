@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Acceder — Agente Google Ads</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -248,15 +248,37 @@ const CLERK_KEY = window.__CLERK_PUBLISHABLE_KEY__ || 'pk_test_dW5pcXVlLXplYnJhL
 let clerk;
 let currentTab = 'login';
 
+function waitForClerk(timeout = 6000) {
+  return new Promise((resolve, reject) => {
+    if (typeof Clerk !== 'undefined') return resolve(window.Clerk);
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (typeof Clerk !== 'undefined') {
+        clearInterval(interval);
+        resolve(window.Clerk);
+      } else if (Date.now() - start > timeout) {
+        clearInterval(interval);
+        reject(new Error('Clerk no cargó'));
+      }
+    }, 50);
+  });
+}
+
 async function initClerk() {
+  if (!CLERK_KEY || CLERK_KEY === 'pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ') {
+    showError('Publishable key no configurada. Revisa el archivo login.html.');
+    return;
+  }
   try {
-    clerk = new Clerk(CLERK_KEY);
+    const ClerkClass = await waitForClerk();
+    clerk = new ClerkClass(CLERK_KEY);
     await clerk.load();
     if (clerk.user) {
       window.location.href = '/';
     }
   } catch(e) {
-    console.warn('Clerk no inicializado — modo demo:', e.message);
+    console.error('Error Clerk:', e.message);
+    showError('Error al cargar el sistema de autenticación. Recarga la página.');
   }
 }
 initClerk();

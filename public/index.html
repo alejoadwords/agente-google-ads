@@ -4,11 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agente Google Ads</title>
-<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
 <script>
-  // Clerk se inicializa antes que el resto del JS
   window.__CLERK_PUBLISHABLE_KEY__ = 'pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ';
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" 
+  data-clerk-publishable-key="TU_CLERK_PUBLISHABLE_KEY"
+  crossorigin="anonymous"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -711,32 +712,44 @@ let sessionToken = null;
 let userPlan = 'free';
 let trialDaysLeft = 7;
 
-async function initAuth() {
-  try {
-    // Esperar a que Clerk esté disponible
-    await new Promise((resolve, reject) => {
-      if (window.Clerk) return resolve();
-      const script = document.querySelector('script[src*="clerk"]');
-      if (!script) return reject(new Error('Script de Clerk no encontrado'));
-      script.addEventListener('load', resolve);
-      script.addEventListener('error', reject);
-      setTimeout(resolve, 3000);
-    });
+function waitForClerk(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (typeof Clerk !== 'undefined') return resolve(window.Clerk);
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (typeof Clerk !== 'undefined') {
+        clearInterval(interval);
+        resolve(window.Clerk);
+      } else if (Date.now() - start > timeout) {
+        clearInterval(interval);
+        reject(new Error('Clerk no cargó en tiempo'));
+      }
+    }, 50);
+  });
+}
 
-    clerkInstance = new Clerk(window.__CLERK_PUBLISHABLE_KEY__);
+async function initAuth() {
+  const key = window.__CLERK_PUBLISHABLE_KEY__;
+  if (!key || key === 'pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ') {
+    console.warn('Publishable key no configurada — modo demo');
+    return true;
+  }
+  try {
+    const ClerkClass = await waitForClerk();
+    clerkInstance = new ClerkClass(key);
     await clerkInstance.load();
     if (!clerkInstance.user) {
       window.location.href = '/login.html';
       return false;
     }
     sessionToken = await clerkInstance.session.getToken();
-    // Leer plan del publicMetadata del usuario (lo configuras en Clerk Dashboard)
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     updateUserHeader(clerkInstance.user);
     return true;
   } catch(e) {
-    console.warn('Auth en modo demo (Clerk no configurado):', e.message);
-    return true; // Permite usar en local sin Clerk
+    console.error('Error de auth:', e.message);
+    window.location.href = '/login.html';
+    return false;
   }
 }
 
