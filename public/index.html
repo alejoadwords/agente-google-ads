@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agente Google Ads</title>
+<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
+<script>
+  // Clerk se inicializa antes que el resto del JS
+  window.__CLERK_PUBLISHABLE_KEY__ = 'TU_CLERK_PUBLISHABLE_KEY';
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -205,8 +210,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   <div class="logo">GA</div>
   <div class="hdr-title">Agente Google Ads</div>
   <span class="badge">Pro</span>
-  <div class="hdr-right">
+  <div class="hdr-right" style="display:flex;align-items:center;gap:12px">
     <span class="hdr-info" id="hdr-stage">Configura tu perfil para comenzar</span>
+    <button onclick="logout()" style="background:transparent;border:1px solid var(--border2);border-radius:7px;padding:4px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:var(--font);">Salir</button>
     <div class="status"></div>
   </div>
 </div>
@@ -580,7 +586,9 @@ const obSteps = [
 ];
 
 // ── INIT ──
-window.onload = () => {
+window.onload = async () => {
+  const authOk = await initAuth();
+  if (!authOk) return;
   addAgent('Hola, soy tu **Agente de Google Ads**. Estoy aquí para ayudarte a crear campañas que generen resultados reales y guiarte en cada etapa del camino.\n\nAntes de empezar, necesito conocer tu negocio. Son 7 preguntas rápidas — quedarán guardadas en tu perfil.');
   setTimeout(() => renderOb(), 500);
 };
@@ -697,27 +705,131 @@ function askAgent(stage) {
   qSend(msgs[stage] || 'Guíame en esta etapa de mi cuenta.');
 }
 
+// ── AUTH STATE ──
+let clerkInstance = null;
+let sessionToken = null;
+let userPlan = 'free';
+let trialDaysLeft = 7;
+
+async function initAuth() {
+  try {
+    clerkInstance = new Clerk(window.__CLERK_PUBLISHABLE_KEY__);
+    await clerkInstance.load();
+    if (!clerkInstance.user) {
+      window.location.href = '/login.html';
+      return false;
+    }
+    sessionToken = await clerkInstance.session.getToken();
+    // Leer plan del publicMetadata del usuario (lo configuras en Clerk Dashboard)
+    userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
+    updateUserHeader(clerkInstance.user);
+    return true;
+  } catch(e) {
+    console.warn('Auth en modo demo (Clerk no configurado):', e.message);
+    return true; // Permite usar en local sin Clerk
+  }
+}
+
+function updateUserHeader(user) {
+  const nameEl = document.getElementById('hdr-stage');
+  if (nameEl && user) {
+    nameEl.textContent = user.firstName || user.emailAddresses[0]?.emailAddress || 'Usuario';
+  }
+  // Mostrar badge de plan
+  const badge = document.querySelector('.badge');
+  if (badge) {
+    badge.textContent = userPlan === 'pro' ? 'Pro' : userPlan === 'agency' ? 'Agency' : 'Free — 7 días';
+  }
+}
+
+async function logout() {
+  if (clerkInstance) {
+    await clerkInstance.signOut();
+    window.location.href = '/login.html';
+  }
+}
+
 async function callClaude() {
   loading = true;
   document.getElementById('sbtn').disabled = true;
   const tid = addThinking();
   const sys = SYSTEM.replace('{MEMORY}', memCtx()).replace('{STAGE}', clientStage);
+
+  // Refrescar token si es necesario
+  if (clerkInstance?.session) {
+    try { sessionToken = await clerkInstance.session.getToken(); } catch {}
+  }
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+
   try {
     const r = await fetch('/api/chat', {
-      method:'POST',
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system:sys, messages:hist })
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        messages: hist,
+        system: sys,
+        userPlan
+      })
     });
+
     const d = await r.json();
     rmThinking(tid);
+
+    // Manejar errores de auth y límites
+    if (r.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
+    if (r.status === 429) {
+      showLimitBanner(d);
+      loading = false;
+      document.getElementById('sbtn').disabled = false;
+      return;
+    }
+
     const reply = d.content?.[0]?.text || 'Error al procesar la respuesta. Intenta de nuevo.';
     hist.push({ role:'assistant', content:reply });
     addAgent(reply);
+
+    // Mostrar días de trial restantes si aplica
+    if (d._meta?.trial && d._meta?.daysLeft <= 3) {
+      showTrialBanner(d._meta.daysLeft);
+    }
+    if (d._meta?.remaining !== undefined && d._meta.remaining <= 2) {
+      showLimitWarning(d._meta.remaining);
+    }
+
   } catch(e) {
     rmThinking(tid);
-    addAgent('Error de conexión. Verifica la configuración de la API key en el archivo HTML.');
+    addAgent('Error de conexión. Verifica tu conexión a internet e intenta de nuevo.');
   }
   loading = false;
   document.getElementById('sbtn').disabled = false;
+}
+
+function showLimitBanner(data) {
+  const area = document.getElementById('chat-area');
+  const el = document.createElement('div');
+  el.style.cssText = 'margin:8px 0;padding:14px 16px;background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.25);border-radius:12px;font-size:13px;color:#f5a623;';
+  el.innerHTML = `<strong>Límite diario alcanzado</strong> — Usaste tus ${data.limit} mensajes gratuitos de hoy.<br><span style="color:var(--muted2);font-size:12px">Actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html" style="display:inline-block;margin-top:8px;padding:6px 14px;background:#4a90d9;color:#fff;border-radius:8px;font-size:12px;text-decoration:none;font-weight:500">Ver planes →</a>`;
+  area.appendChild(el);
+  area.scrollTop = area.scrollHeight;
+}
+
+function showTrialBanner(daysLeft) {
+  const existing = document.getElementById('trial-banner');
+  if (existing) return;
+  const banner = document.createElement('div');
+  banner.id = 'trial-banner';
+  banner.style.cssText = 'position:fixed;bottom:80px;right:20px;background:#111318;border:1px solid rgba(245,166,35,0.3);border-radius:12px;padding:12px 16px;font-size:12px;color:#f5a623;max-width:260px;z-index:100;';
+  banner.innerHTML = `<strong>Tu período de prueba termina en ${daysLeft} día${daysLeft>1?'s':''}</strong><br><span style="color:var(--muted2)">Actualiza para no perder el acceso.</span><br><a href="/pricing.html" style="color:#4a90d9;text-decoration:none;font-weight:500">Ver planes →</a> <button onclick="this.parentElement.remove()" style="float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">×</button>`;
+  document.body.appendChild(banner);
+}
+
+function showLimitWarning(remaining) {
+  addAgent(`_Nota: Te quedan **${remaining} mensaje${remaining>1?'s':''}** gratuito${remaining>1?'s':''} hoy. [Ver planes →](/pricing.html)_`);
 }
 
 // ── ROADMAP ──
