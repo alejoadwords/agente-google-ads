@@ -713,6 +713,16 @@ let trialDaysLeft = 7;
 
 async function initAuth() {
   try {
+    // Esperar a que Clerk esté disponible
+    await new Promise((resolve, reject) => {
+      if (window.Clerk) return resolve();
+      const script = document.querySelector('script[src*="clerk"]');
+      if (!script) return reject(new Error('Script de Clerk no encontrado'));
+      script.addEventListener('load', resolve);
+      script.addEventListener('error', reject);
+      setTimeout(resolve, 3000);
+    });
+
     clerkInstance = new Clerk(window.__CLERK_PUBLISHABLE_KEY__);
     await clerkInstance.load();
     if (!clerkInstance.user) {
