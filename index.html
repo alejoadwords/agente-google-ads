@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agente Google Ads</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0c0f; --bg2: #111318; --bg3: #181c23; --bg4: #1e2330;
+  --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+  --text: #e8eaf0; --muted: #6b7280; --muted2: #9ca3af;
+  --accent: #4a90d9; --accent2: #34c68a; --accent3: #f5a623;
+  --coral: #e07055; --purple: #8b7fe8; --danger: #e05555;
+  --font: 'DM Sans', sans-serif; --mono: 'DM Mono', monospace;
+  --r: 10px; --rlg: 16px;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── HEADER ── */
+.hdr { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+.logo { width: 30px; height: 30px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #fff; font-family: var(--mono); flex-shrink: 0; }
+.hdr-title { font-size: 14px; font-weight: 500; }
+.badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; background: rgba(74,144,217,0.15); color: var(--accent); border: 1px solid rgba(74,144,217,0.2); }
+.status { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); animation: pulse 2s infinite; margin-left: 4px; }
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.hdr-info { font-size: 12px; color: var(--muted); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.35} }
+
+/* ── NAV TABS ── */
+.nav { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+.tab { padding: 10px 14px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── LAYOUT ── */
+.layout { display: flex; flex: 1; overflow: hidden; }
+
+/* ── SIDEBAR ── */
+.sidebar { width: 220px; border-right: 1px solid var(--border); background: var(--bg2); display: flex; flex-direction: column; padding: 12px 10px; gap: 2px; overflow-y: auto; flex-shrink: 0; }
+.sb-section { font-size: 10px; font-weight: 600; letter-spacing: .08em; color: var(--muted); padding: 10px 8px 4px; text-transform: uppercase; }
+.sb-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r); cursor: pointer; font-size: 12px; color: var(--muted); transition: all .15s; border: 1px solid transparent; }
+.sb-item:hover { background: var(--bg3); color: var(--text); }
+.sb-item.active { background: rgba(74,144,217,0.1); color: var(--accent); border-color: rgba(74,144,217,0.18); }
+.sb-icon { width: 20px; height: 20px; border-radius: 5px; background: var(--bg3); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.sb-item.active .sb-icon { background: rgba(74,144,217,0.2); }
+
+.mem-card { margin-top: auto; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; }
+.mem-title { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.mem-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; }
+.mem-label { color: var(--muted); }
+.mem-val { color: var(--text); font-weight: 500; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+
+/* ── VIEWS ── */
+.view { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.view.active { display: flex; }
+
+/* ── CHAT VIEW ── */
+.chat-area { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+.chat-area::-webkit-scrollbar { width: 3px; }
+.chat-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.msg { display: flex; gap: 10px; }
+.msg.user { flex-direction: row-reverse; align-self: flex-end; max-width: 80%; }
+.av { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.av.ag { background: rgba(74,144,217,0.2); color: var(--accent); }
+.av.usr { background: rgba(52,198,138,0.2); color: var(--accent2); }
+.bubble { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rlg); padding: 11px 15px; font-size: 13px; line-height: 1.65; max-width: 600px; }
+.msg.user .bubble { background: rgba(74,144,217,0.09); border-color: rgba(74,144,217,0.2); }
+.bubble b, .bubble strong { font-weight: 600; color: var(--accent2); }
+.bubble code { font-family: var(--mono); font-size: 12px; background: var(--bg3); padding: 1px 5px; border-radius: 4px; color: var(--accent3); }
+.bubble ul { padding-left: 16px; margin: 4px 0; }
+.bubble li { margin: 3px 0; color: var(--muted2); }
+.bubble li b { color: var(--text); }
+.bubble h4 { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; }
+.bubble p + p { margin-top: 6px; }
+
+.thinking-bbl { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rlg); padding: 12px 15px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.spinner { width: 13px; height: 13px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── ONBOARDING ── */
+.ob-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rlg); padding: 20px 22px; max-width: 520px; }
+.ob-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.ob-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.prog-bar { height: 2px; background: var(--border); border-radius: 2px; margin-bottom: 18px; }
+.prog-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s ease; }
+.step-lbl { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.step-q { font-size: 14px; font-weight: 500; margin-bottom: 13px; line-height: 1.4; }
+.finput { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r); padding: 9px 13px; font-size: 13px; color: var(--text); font-family: var(--font); outline: none; transition: border-color .15s; }
+.finput:focus { border-color: var(--accent); }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.opt { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); padding: 9px 11px; font-size: 12px; color: var(--muted); cursor: pointer; text-align: left; transition: all .15s; font-family: var(--font); line-height: 1.4; }
+.opt:hover { border-color: var(--accent); color: var(--text); }
+.opt.sel { border-color: var(--accent); background: rgba(74,144,217,0.1); color: var(--accent); }
+.step-nav { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.btn { padding: 8px 16px; border-radius: var(--r); font-size: 12px; font-weight: 500; cursor: pointer; font-family: var(--font); transition: all .15s; border: 1px solid transparent; }
+.btn-p { background: var(--accent); color: #fff; }
+.btn-p:hover { opacity: .88; }
+.btn-p:disabled { opacity: .35; cursor: not-allowed; }
+.btn-g { background: transparent; color: var(--muted); border-color: var(--border2); }
+.btn-g:hover { background: var(--bg3); color: var(--text); }
+
+/* ── CHAT INPUT ── */
+.cin-area { border-top: 1px solid var(--border); padding: 12px 18px; background: var(--bg2); flex-shrink: 0; }
+.qa { display: flex; gap: 6px; margin-bottom: 9px; flex-wrap: wrap; }
+.qb { padding: 4px 11px; border-radius: 20px; font-size: 11px; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; font-family: var(--font); transition: all .15s; }
+.qb:hover { border-color: var(--accent); color: var(--accent); }
+.cin-wrap { display: flex; gap: 8px; align-items: flex-end; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--rlg); padding: 8px 10px; transition: border-color .15s; }
+.cin-wrap:focus-within { border-color: var(--accent); }
+.cin { flex: 1; background: transparent; border: none; outline: none; font-family: var(--font); font-size: 13px; color: var(--text); resize: none; max-height: 100px; min-height: 22px; line-height: 1.5; }
+.cin::placeholder { color: var(--muted); }
+.sbtn { width: 30px; height: 30px; border-radius: 7px; background: var(--accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity .15s; }
+.sbtn:hover { opacity: .85; }
+.sbtn:disabled { opacity: .3; cursor: not-allowed; }
+.sbtn svg { width: 13px; height: 13px; fill: white; }
+
+/* ── ROADMAP VIEW ── */
+.rm-view { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.rm-view::-webkit-scrollbar { width: 3px; }
+.rm-view::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.stage-selector { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.stage-btn { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: var(--font); transition: all .15s; }
+.stage-btn:hover { color: var(--text); border-color: var(--text); }
+.stage-btn.active { color: var(--text); border-color: var(--text); background: var(--bg3); }
+
+.stage-panel { display: none; }
+.stage-panel.active { display: block; }
+
+.stage-hero { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rlg); padding: 18px 20px; margin-bottom: 14px; }
+.stage-hero-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.stage-period-pill { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.stage-hero-title { font-size: 16px; font-weight: 600; }
+.stage-hero-desc { font-size: 13px; color: var(--muted2); line-height: 1.65; }
+.stage-alert { display: flex; gap: 8px; align-items: flex-start; background: rgba(224,112,85,0.1); border: 1px solid rgba(224,112,85,0.25); border-radius: var(--r); padding: 10px 12px; margin-top: 10px; font-size: 12px; color: #f0a090; line-height: 1.5; }
+.alert-icon { flex-shrink: 0; margin-top: 1px; }
+
+.checklist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.checklist-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rlg); padding: 14px 16px; }
+.cl-header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.cl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cl-title { font-size: 12px; font-weight: 600; }
+.cl-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; }
+.cl-item:last-child { border-bottom: none; }
+.cl-item:hover { color: var(--text); }
+.cl-check { width: 16px; height: 16px; border: 1px solid var(--border2); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .15s; margin-top: 1px; }
+.cl-item.done .cl-check { background: var(--accent2); border-color: var(--accent2); }
+.cl-item.done .cl-text { color: var(--muted); text-decoration: line-through; }
+.cl-check-mark { width: 8px; height: 8px; display: none; }
+.cl-item.done .cl-check-mark { display: block; }
+.cl-text { line-height: 1.4; color: var(--muted2); }
+.cl-text b { color: var(--text); font-weight: 500; }
+.cl-badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; margin-top: 2px; }
+.cb-red { background: rgba(224,85,85,0.15); color: #e08080; }
+.cb-blue { background: rgba(74,144,217,0.15); color: var(--accent); }
+.cb-green { background: rgba(52,198,138,0.15); color: var(--accent2); }
+.cb-amber { background: rgba(245,166,35,0.15); color: var(--accent3); }
+
+.metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.metric-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; }
+.metric-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.metric-val { font-size: 20px; font-weight: 600; font-family: var(--mono); }
+.metric-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.mv-blue { color: var(--accent); }
+.mv-green { color: var(--accent2); }
+.mv-amber { color: var(--accent3); }
+.mv-coral { color: var(--coral); }
+
+.ask-agent-btn { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(74,144,217,0.08); border: 1px solid rgba(74,144,217,0.2); border-radius: var(--r); font-size: 12px; color: var(--accent); cursor: pointer; font-family: var(--font); width: 100%; text-align: left; transition: all .15s; margin-top: 4px; }
+.ask-agent-btn:hover { background: rgba(74,144,217,0.15); }
+
+/* ── PROGRESS TRACKER ── */
+.progress-track { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rlg); padding: 14px 18px; margin-bottom: 14px; }
+.pt-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.pt-title { font-size: 12px; font-weight: 600; }
+.pt-count { font-size: 12px; color: var(--muted2); font-family: var(--mono); }
+.pt-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.pt-fill { height: 100%; background: var(--accent2); border-radius: 2px; transition: width .4s ease; }
+.pt-stages { display: flex; gap: 0; margin-top: 12px; }
+.pt-stage { flex: 1; text-align: center; position: relative; }
+.pt-stage::before { content: ''; position: absolute; top: 6px; left: 50%; right: -50%; height: 2px; background: var(--border); z-index: 0; }
+.pt-stage:last-child::before { display: none; }
+.pt-stage-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border2); background: var(--bg); margin: 0 auto 5px; position: relative; z-index: 1; transition: all .3s; }
+.pt-stage.done .pt-stage-dot { background: var(--accent2); border-color: var(--accent2); }
+.pt-stage.current .pt-stage-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,144,217,0.25); }
+.pt-stage-label { font-size: 10px; color: var(--muted); }
+.pt-stage.done .pt-stage-label, .pt-stage.current .pt-stage-label { color: var(--text); }
+
+/* ── UTILS ── */
+.text-muted { color: var(--muted); }
+.pill-dia { background: #FAECE7; color: #993C1D; }
+.pill-semana { background: rgba(74,144,217,0.15); color: #185FA5; }
+.pill-quincena { background: #FAEEDA; color: #633806; }
+.pill-mes { background: #E1F5EE; color: #085041; }
+.pill-trimestre { background: #EEEDFE; color: #3C3489; }
+.pill-semestre { background: #F1EFE8; color: #5F5E5A; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo">GA</div>
+  <div class="hdr-title">Agente Google Ads</div>
+  <span class="badge">Pro</span>
+  <div class="hdr-right">
+    <span class="hdr-info" id="hdr-stage">Configura tu perfil para comenzar</span>
+    <div class="status"></div>
+  </div>
+</div>
+
+<!-- NAV TABS -->
+<div class="nav">
+  <div class="tab active" onclick="showView('chat', this)">Chat con el agente</div>
+  <div class="tab" onclick="showView('roadmap', this)">Hoja de ruta</div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-section">Acceso rápido</div>
+    <div class="sb-item active" onclick="switchSb(this); showView('chat')">
+      <div class="sb-icon">💬</div>Chat experto
+    </div>
+    <div class="sb-item" onclick="switchSb(this); showView('roadmap')">
+      <div class="sb-icon">🗓</div>Hoja de ruta
+    </div>
+
+    <div class="sb-section">Módulos</div>
+    <div class="sb-item" onclick="switchSb(this); qSend('Hacer keyword research completo para mi negocio')">
+      <div class="sb-icon">🔍</div>Keywords
+    </div>
+    <div class="sb-item" onclick="switchSb(this); qSend('Crear anuncios RSA completos para mi campaña principal')">
+      <div class="sb-icon">📝</div>Anuncios RSA
+    </div>
+    <div class="sb-item" onclick="switchSb(this); qSend('Estructurar mi campaña completa de Google Ads')">
+      <div class="sb-icon">📊</div>Campaña
+    </div>
+    <div class="sb-item" onclick="switchSb(this); qSend('Recomendar presupuesto y estrategia de pujas para mi negocio')">
+      <div class="sb-icon">💰</div>Presupuesto
+    </div>
+    <div class="sb-item" onclick="switchSb(this); qSend('Analizar mi competencia en Google Ads')">
+      <div class="sb-icon">🎯</div>Competencia
+    </div>
+    <div class="sb-item" onclick="switchSb(this); qSend('Generar reporte completo de mi cuenta de Google Ads')">
+      <div class="sb-icon">📄</div>Reporte
+    </div>
+
+    <div id="mem-card" class="mem-card" style="display:none">
+      <div class="mem-title">Perfil del cliente</div>
+      <div class="mem-row"><span class="mem-label">Negocio</span><span class="mem-val" id="m-neg">—</span></div>
+      <div class="mem-row"><span class="mem-label">Industria</span><span class="mem-val" id="m-ind">—</span></div>
+      <div class="mem-row"><span class="mem-label">Presupuesto</span><span class="mem-val" id="m-pre">—</span></div>
+      <div class="mem-row"><span class="mem-label">Objetivo</span><span class="mem-val" id="m-obj">—</span></div>
+      <div class="mem-row"><span class="mem-label">Etapa</span><span class="mem-val" id="m-stage" style="color:var(--accent)">—</span></div>
+    </div>
+  </div>
+
+  <!-- VIEWS -->
+
+  <!-- CHAT VIEW -->
+  <div class="view active" id="view-chat">
+    <div class="chat-area" id="chat-area"></div>
+    <div class="cin-area">
+      <div class="qa" id="qa">
+        <button class="qb" onclick="qSend('Keyword research para mi negocio')">Keywords</button>
+        <button class="qb" onclick="qSend('Crear anuncios RSA')">RSA</button>
+        <button class="qb" onclick="qSend('Presupuesto recomendado')">Presupuesto</button>
+        <button class="qb" onclick="qSend('Estructura de campaña completa')">Campaña</button>
+        <button class="qb" onclick="qSend('¿Qué debo revisar hoy en mi cuenta?')">¿Qué revisar hoy?</button>
+        <button class="qb" onclick="qSend('Analizar competencia')">Competencia</button>
+      </div>
+      <div class="cin-wrap">
+        <textarea class="cin" id="cin" placeholder="Pregunta al agente..." rows="1"
+          onkeydown="handleKey(event)" oninput="autoR(this)"></textarea>
+        <button class="sbtn" id="sbtn" onclick="sendMsg()">
+          <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROADMAP VIEW -->
+  <div class="view" id="view-roadmap">
+    <div class="rm-view">
+      <div style="margin-bottom:16px">
+        <div style="font-size:16px;font-weight:600;margin-bottom:4px">Hoja de ruta — Google Ads</div>
+        <div style="font-size:12px;color:var(--muted)">Guía paso a paso para gestionar tu cuenta como un profesional. Selecciona tu etapa actual.</div>
+      </div>
+
+      <!-- Progress tracker -->
+      <div class="progress-track">
+        <div class="pt-header">
+          <span class="pt-title">Tu progreso</span>
+          <span class="pt-count" id="pt-count">0 / 0 tareas completadas</span>
+        </div>
+        <div class="pt-bar"><div class="pt-fill" id="pt-fill" style="width:0%"></div></div>
+        <div class="pt-stages" style="margin-top:14px">
+          <div class="pt-stage current" id="ps-dia"><div class="pt-stage-dot"></div><div class="pt-stage-label">Día 1</div></div>
+          <div class="pt-stage" id="ps-semana"><div class="pt-stage-dot"></div><div class="pt-stage-label">Semana 1</div></div>
+          <div class="pt-stage" id="ps-quincena"><div class="pt-stage-dot"></div><div class="pt-stage-label">Quincena</div></div>
+          <div class="pt-stage" id="ps-mes"><div class="pt-stage-dot"></div><div class="pt-stage-label">Mes 1</div></div>
+          <div class="pt-stage" id="ps-trimestre"><div class="pt-stage-dot"></div><div class="pt-stage-label">Trimestre</div></div>
+          <div class="pt-stage" id="ps-semestre"><div class="pt-stage-dot"></div><div class="pt-stage-label">Semestre</div></div>
+        </div>
+      </div>
+
+      <!-- Stage selector -->
+      <div class="stage-selector">
+        <button class="stage-btn active" onclick="setStage('dia', this)">Día 1</button>
+        <button class="stage-btn" onclick="setStage('semana', this)">Semana 1</button>
+        <button class="stage-btn" onclick="setStage('quincena', this)">Quincena 1</button>
+        <button class="stage-btn" onclick="setStage('mes', this)">Mes 1</button>
+        <button class="stage-btn" onclick="setStage('trimestre', this)">Trimestre</button>
+        <button class="stage-btn" onclick="setStage('semestre', this)">Semestre</button>
+      </div>
+
+      <!-- STAGE PANELS -->
+
+      <!-- DÍA 1 -->
+      <div class="stage-panel active" id="sp-dia">
+        <div class="stage-hero">
+          <div class="stage-hero-header">
+            <span class="stage-period-pill pill-dia">Día 1</span>
+            <span class="stage-hero-title">Configuración y lanzamiento</span>
+          </div>
+          <div class="stage-hero-desc">El día más crítico de toda la cuenta. Sin conversión tracking correctamente configurado, todos los datos que recolectes serán inútiles para optimizar. No lances sin esto.</div>
+          <div class="stage-alert">
+            <span class="alert-icon">⚠</span>
+            <span><b>Prioridad máxima:</b> Configura el seguimiento de conversiones ANTES de activar cualquier campaña. Sin tracking, estás tirando dinero a ciegas.</span>
+          </div>
+        </div>
+        <div class="checklist-grid">
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--coral)"></div><div class="cl-title">Tracking obligatorio</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text"><b>Google Tag Manager</b> instalado en el sitio web</div><span class="cl-badge cb-red">Crítico</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text"><b>Conversión principal</b> configurada (lead, compra, llamada)</div><span class="cl-badge cb-red">Crítico</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text"><b>Google Analytics 4</b> vinculado a la cuenta</div><span class="cl-badge cb-red">Crítico</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text"><b>Prueba de conversión</b> verificada manualmente</div><span class="cl-badge cb-red">Crítico</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent)"></div><div class="cl-title">Configuración de campaña</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Campaña de búsqueda creada con <b>objetivo correcto</b></div><span class="cl-badge cb-blue">Setup</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Ubicaciones geográficas <b>bien segmentadas</b></div><span class="cl-badge cb-blue">Setup</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Presupuesto diario configurado <b>sin superar límite mensual</b></div><span class="cl-badge cb-blue">Setup</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Red de Display <b>desactivada</b> en campaña de búsqueda</div><span class="cl-badge cb-red">Crítico</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent2)"></div><div class="cl-title">Anuncios y keywords</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Al menos <b>1 anuncio RSA</b> por grupo de anuncios</div><span class="cl-badge cb-green">Anuncios</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">URLs finales <b>correctas</b> (página relevante, no home)</div><span class="cl-badge cb-blue">Setup</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Keywords con <b>tipos de concordancia mixtos</b> configurados</div><span class="cl-badge cb-green">Keywords</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Primeras <b>palabras negativas</b> de industria añadidas</div><span class="cl-badge cb-green">Keywords</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent3)"></div><div class="cl-title">Extensiones de anuncio</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Extensiones de <b>sitio</b> (mínimo 4 links)</div><span class="cl-badge cb-amber">Extensión</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Extensiones de <b>llamada</b> si atiendes por teléfono</div><span class="cl-badge cb-amber">Extensión</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Extensiones de <b>texto destacado</b> (beneficios clave)</div><span class="cl-badge cb-amber">Extensión</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Extensiones de <b>fragmento estructurado</b> configuradas</div><span class="cl-badge cb-amber">Extensión</span></div>
+          </div>
+        </div>
+        <button class="ask-agent-btn" onclick="askAgent('dia')">
+          ▸ Preguntar al agente — guíame en la configuración del Día 1
+        </button>
+      </div>
+
+      <!-- SEMANA 1 -->
+      <div class="stage-panel" id="sp-semana">
+        <div class="stage-hero">
+          <div class="stage-hero-header">
+            <span class="stage-period-pill pill-semana">Días 2–7</span>
+            <span class="stage-hero-title">Primera semana — Observar, no tocar</span>
+          </div>
+          <div class="stage-hero-desc">La campaña necesita acumular datos para que el algoritmo aprenda. Resistir la tentación de hacer cambios grandes. En esta etapa, tu trabajo es vigilar y eliminar búsquedas irrelevantes.</div>
+          <div class="stage-alert">
+            <span class="alert-icon">⚠</span>
+            <span><b>Regla de oro:</b> No cambies pujas, presupuesto ni estructura en los primeros 7 días. Solo añade palabras negativas si detectas términos claramente irrelevantes.</span>
+          </div>
+        </div>
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-label">Revisar diario</div><div class="metric-val mv-blue">CTR</div><div class="metric-sub">Objetivo: &gt;3% búsqueda</div></div>
+          <div class="metric-card"><div class="metric-label">Revisar diario</div><div class="metric-val mv-amber">Gasto</div><div class="metric-sub">vs presupuesto diario</div></div>
+          <div class="metric-card"><div class="metric-label">Revisar c/2 días</div><div class="metric-val mv-green">Conversiones</div><div class="metric-sub">¿El tracking funciona?</div></div>
+          <div class="metric-card"><div class="metric-label">Revisar c/2 días</div><div class="metric-val mv-coral">Imp. Share</div><div class="metric-sub">% del mercado captado</div></div>
+        </div>
+        <div class="checklist-grid">
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--coral)"></div><div class="cl-title">Acciones urgentes (solo estas)</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar <b>términos de búsqueda</b> diariamente</div><span class="cl-badge cb-red">Diario</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Añadir <b>negativos obvios</b> (términos claramente irrelevantes)</div><span class="cl-badge cb-red">Urgente</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Confirmar que el <b>tracking sigue activo</b> (no se rompió)</div><span class="cl-badge cb-red">Crítico</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent)"></div><div class="cl-title">Análisis de la semana</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar <b>Quality Score</b> de keywords principales</div><span class="cl-badge cb-blue">Análisis</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Anotar <b>posición promedio</b> de cada keyword</div><span class="cl-badge cb-blue">Análisis</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Verificar <b>CPC real</b> vs CPC estimado al inicio</div><span class="cl-badge cb-blue">Análisis</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Detectar <b>anuncios con mejor CTR</b> (al día 7)</div><span class="cl-badge cb-blue">Análisis</span></div>
+          </div>
+        </div>
+        <button class="ask-agent-btn" onclick="askAgent('semana')">
+          ▸ Preguntar al agente — analiza mis resultados de la primera semana
+        </button>
+      </div>
+
+      <!-- QUINCENA -->
+      <div class="stage-panel" id="sp-quincena">
+        <div class="stage-hero">
+          <div class="stage-hero-header">
+            <span class="stage-period-pill pill-quincena">Días 8–15</span>
+            <span class="stage-hero-title">Primera quincena — Primeras optimizaciones reales</span>
+          </div>
+          <div class="stage-hero-desc">Ya tienes suficientes datos para tomar decisiones con evidencia. Primera ronda de optimización: limpiar lo que no funciona, potenciar lo que sí. Empieza el trabajo de verdad.</div>
+        </div>
+        <div class="checklist-grid">
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent3)"></div><div class="cl-title">Optimización de keywords</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Pausar keywords con <b>0 clics y alto gasto</b></div><span class="cl-badge cb-amber">Optimizar</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Expandir lista de <b>negativos</b> basado en términos reales</div><span class="cl-badge cb-amber">Optimizar</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Añadir <b>nuevas keywords</b> descubiertas en términos</div><span class="cl-badge cb-green">Expandir</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Ajustar <b>tipos de concordancia</b> según resultados</div><span class="cl-badge cb-amber">Optimizar</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent)"></div><div class="cl-title">Optimización de anuncios</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar calificación del RSA (apuntar a <b>"Excelente"</b>)</div><span class="cl-badge cb-blue">Anuncios</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Crear <b>segunda variación</b> del anuncio principal</div><span class="cl-badge cb-green">Crear</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Identificar qué <b>títulos tienen mayor CTR</b> (sección activos)</div><span class="cl-badge cb-blue">Análisis</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent2)"></div><div class="cl-title">Ajustes de pujas y dispositivos</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Comparar tasa de conv. <b>móvil vs desktop</b></div><span class="cl-badge cb-blue">Análisis</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Ajustar puja por dispositivo si hay diferencia <b>&gt;20%</b></div><span class="cl-badge cb-amber">Optimizar</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar horarios de mayor rendimiento (<b>segmento hora</b>)</div><span class="cl-badge cb-blue">Análisis</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--purple)"></div><div class="cl-title">Mejoras en la landing</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar <b>tasa de rebote</b> de la landing en GA4</div><span class="cl-badge cb-blue">Análisis</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Verificar que el <b>mensaje del anuncio coincide</b> con la landing</div><span class="cl-badge cb-red">Crítico</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Velocidad de carga móvil <b>&lt;3 segundos</b> (PageSpeed)</div><span class="cl-badge cb-amber">Optimizar</span></div>
+          </div>
+        </div>
+        <button class="ask-agent-btn" onclick="askAgent('quincena')">
+          ▸ Preguntar al agente — ayúdame con las optimizaciones de la quincena
+        </button>
+      </div>
+
+      <!-- MES 1 -->
+      <div class="stage-panel" id="sp-mes">
+        <div class="stage-hero">
+          <div class="stage-hero-header">
+            <span class="stage-period-pill pill-mes">Mes 1</span>
+            <span class="stage-hero-title">Primer mes completo — Análisis real y replanteo</span>
+          </div>
+          <div class="stage-hero-desc">Primer reporte mensual completo. Ya tienes datos estadísticamente válidos para evaluar el rendimiento real de la campaña. Si el CPA o ROAS no cumple el objetivo, es momento de replantear la estrategia.</div>
+        </div>
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-label">Objetivo mes 1</div><div class="metric-val mv-blue">CPA</div><div class="metric-sub">Costo por conversión</div></div>
+          <div class="metric-card"><div class="metric-label">Objetivo mes 1</div><div class="metric-val mv-green">ROAS</div><div class="metric-sub">Retorno en inversión</div></div>
+          <div class="metric-card"><div class="metric-label">Objetivo mes 1</div><div class="metric-val mv-amber">CTR</div><div class="metric-sub">&gt;3% en búsqueda</div></div>
+          <div class="metric-card"><div class="metric-label">Objetivo mes 1</div><div class="metric-val mv-coral">Conv. Rate</div><div class="metric-sub">Landing vs. industria</div></div>
+        </div>
+        <div class="checklist-grid">
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent2)"></div><div class="cl-title">Reporte mensual</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Generar <b>reporte completo</b> del mes con todas las métricas</div><span class="cl-badge cb-green">Reporte</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Comparar CPA real vs <b>CPA objetivo</b> definido al inicio</div><span class="cl-badge cb-green">Reporte</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar <b>Search Impression Share</b> vs competencia</div><span class="cl-badge cb-blue">Análisis</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent)"></div><div class="cl-title">Decisiones estratégicas</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Evaluar activar <b>Smart Bidding</b> (si hay +30 conversiones)</div><span class="cl-badge cb-amber">Decisión</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Decidir si <b>escalar presupuesto</b> o restructurar</div><span class="cl-badge cb-amber">Decisión</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Revisar y optimizar <b>estructura de grupos</b> de anuncios</div><span class="cl-badge cb-amber">Optimizar</span></div>
+          </div>
+        </div>
+        <button class="ask-agent-btn" onclick="askAgent('mes')">
+          ▸ Preguntar al agente — genera mi reporte del primer mes
+        </button>
+      </div>
+
+      <!-- TRIMESTRE -->
+      <div class="stage-panel" id="sp-trimestre">
+        <div class="stage-hero">
+          <div class="stage-hero-header">
+            <span class="stage-period-pill pill-trimestre">Meses 2–3</span>
+            <span class="stage-hero-title">Trimestre — Escala lo que funciona</span>
+          </div>
+          <div class="stage-hero-desc">La cuenta tiene historial y el algoritmo está entrenado. Es momento de escalar las campañas rentables, agregar nuevos tipos de campaña (remarketing, display) y comenzar experimentos A/B formales.</div>
+        </div>
+        <div class="checklist-grid">
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--purple)"></div><div class="cl-title">Nuevas campañas</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Lanzar campaña de <b>remarketing</b> a visitantes</div><span class="cl-badge cb-green">Expandir</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Explorar <b>audiencias de intención personalizada</b></div><span class="cl-badge cb-green">Expandir</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Evaluar <b>campaña de marca</b> si no existe</div><span class="cl-badge cb-green">Expandir</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent3)"></div><div class="cl-title">Experimentación</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Crear experimento <b>A/B formal</b> en Google Ads</div><span class="cl-badge cb-amber">A/B</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Probar nueva <b>estrategia de puja</b> (tROAS o tCPA)</div><span class="cl-badge cb-amber">Optimizar</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Análisis profundo de <b>competencia</b> en la subasta</div><span class="cl-badge cb-blue">Análisis</span></div>
+          </div>
+        </div>
+        <button class="ask-agent-btn" onclick="askAgent('trimestre')">
+          ▸ Preguntar al agente — estrategia de escalado para el trimestre
+        </button>
+      </div>
+
+      <!-- SEMESTRE -->
+      <div class="stage-panel" id="sp-semestre">
+        <div class="stage-hero">
+          <div class="stage-hero-header">
+            <span class="stage-period-pill pill-semestre">Meses 4–6</span>
+            <span class="stage-hero-title">Primer semestre — Cuenta madura y automatización</span>
+          </div>
+          <div class="stage-hero-desc">Cuenta con historial sólido. Se puede pasar a estrategias de automatización avanzada, análisis estacional, Performance Max y planificación del siguiente semestre con datos reales.</div>
+        </div>
+        <div class="checklist-grid">
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent2)"></div><div class="cl-title">Automatización avanzada</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Evaluar e implementar <b>Performance Max</b></div><span class="cl-badge cb-green">PMax</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Configurar <b>audiencias similares</b> basadas en convertidores</div><span class="cl-badge cb-green">Expandir</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Analizar <b>patrones estacionales</b> del semestre</div><span class="cl-badge cb-blue">Análisis</span></div>
+          </div>
+          <div class="checklist-card">
+            <div class="cl-header"><div class="cl-dot" style="background:var(--accent)"></div><div class="cl-title">Reporte y planificación</div></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Reporte <b>semestral ejecutivo</b> completo</div><span class="cl-badge cb-blue">Reporte</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Benchmark vs <b>competencia y la industria</b></div><span class="cl-badge cb-blue">Análisis</span></div>
+            <div class="cl-item" onclick="toggleCheck(this)"><div class="cl-check"><svg class="cl-check-mark" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="cl-text">Definir <b>estrategia y presupuesto</b> segundo semestre</div><span class="cl-badge cb-amber">Planificar</span></div>
+          </div>
+        </div>
+        <button class="ask-agent-btn" onclick="askAgent('semestre')">
+          ▸ Preguntar al agente — genera mi reporte semestral y plan siguiente
+        </button>
+      </div>
+
+    </div><!-- end rm-view -->
+  </div><!-- end view-roadmap -->
+
+</div><!-- end layout -->
+
+<script>
+// ── SYSTEM PROMPT ──
+const SYSTEM = `Eres un experto en Google Ads con más de 10 años de experiencia gestionando campañas de alto rendimiento para empresas de todos los tamaños. Hablas como un consultor senior: directo, basado en datos, sin rodeos, pero pedagógico con quien está aprendiendo.
+
+REGLAS DE COMPORTAMIENTO:
+- Siempre en español. Profesional pero cercano.
+- Cuando el usuario pregunta qué revisar en su cuenta, adapta la respuesta a su etapa (día, semana, quincena, mes, trimestre, semestre)
+- Cuando haces keyword research: grupos claros (Primarias / Secundarias / Negativas), volumen estimado, intención de búsqueda
+- Cuando creas RSA: exactamente 15 títulos numerados + 4 descripciones numeradas
+- Cuando recomiendas presupuesto: da cifras concretas con razonamiento (CPC promedio × clics necesarios para X conversiones)
+- Cuando estructuras campaña: Campaña → Grupos de anuncios → Keywords → Anuncios → Extensiones
+- Usa **negrita** para términos técnicos y cifras importantes
+- Usa listas con – para items dentro de secciones
+- Usa ### para secciones cuando la respuesta es larga
+- Sé conciso. No repitas lo que ya dijiste antes en la conversación.
+
+CONTEXTO DEL CLIENTE:
+{MEMORY}
+
+ETAPA ACTUAL DEL CLIENTE: {STAGE}`;
+
+// ── STATE ──
+let mem = {}, hist = [], onDone = false, obStep = 0, loading = false;
+let clientStage = 'Sin definir';
+
+const obSteps = [
+  { q: '¿Cuál es el nombre y URL de tu negocio?', ph: 'Ej: TuMarca · www.tumarca.com', key: 'negocio', type: 'input' },
+  { q: '¿En qué industria opera tu negocio?', key: 'industria', type: 'opts', opts: ['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector'] },
+  { q: '¿Cuál es tu producto o servicio principal?', ph: 'Ej: Software de gestión contable para PYMEs', key: 'producto', type: 'input' },
+  { q: '¿Cuál es tu presupuesto mensual en Google Ads?', key: 'presupuesto', type: 'opts', opts: ['Menos de $500 USD','$500 – $2.000 USD','$2.000 – $10.000 USD','Más de $10.000 USD'] },
+  { q: '¿Cuál es tu objetivo principal de campaña?', key: 'objetivo', type: 'opts', opts: ['Generar leads / contactos','Ventas directas (e-commerce)','Tráfico al sitio web','Llamadas telefónicas','Reconocimiento de marca'] },
+  { q: '¿Cuál es tu mercado geográfico objetivo?', ph: 'Ej: Colombia, México, toda Latinoamérica...', key: 'mercado', type: 'input' },
+  { q: '¿En qué etapa estás con Google Ads?', key: 'etapa', type: 'opts', opts: ['Empezando desde cero','Tengo campaña activa (menos de 1 mes)','Campaña activa 1–3 meses','Más de 3 meses de experiencia'] }
+];
+
+// ── INIT ──
+window.onload = () => {
+  addAgent('Hola, soy tu **Agente de Google Ads**. Estoy aquí para ayudarte a crear campañas que generen resultados reales y guiarte en cada etapa del camino.\n\nAntes de empezar, necesito conocer tu negocio. Son 7 preguntas rápidas — quedarán guardadas en tu perfil.');
+  setTimeout(() => renderOb(), 500);
+};
+
+// ── ONBOARDING ──
+function renderOb() {
+  const s = obSteps[obStep];
+  const pct = (obStep / obSteps.length) * 100;
+  let inner = s.type === 'input'
+    ? `<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`
+    : `<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;
+  const html = `<div class="ob-card" id="obc">
+    <div class="ob-title">Configuración del perfil</div>
+    <div class="ob-sub">Paso ${obStep+1} de ${obSteps.length}</div>
+    <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+    <div class="step-lbl">Pregunta ${obStep+1}</div>
+    <div class="step-q">${s.q}</div>
+    ${inner}
+    <div class="step-nav">
+      ${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← Atrás</button>':''}
+      <button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''}>
+        ${obStep<obSteps.length-1?'Continuar →':'Iniciar →'}
+      </button>
+    </div>
+  </div>`;
+  appendRaw(html);
+  if (s.type === 'input') setTimeout(()=>document.getElementById('oi')?.focus(), 80);
+  scrollB();
+}
+
+function selOpt(btn, val) {
+  btn.closest('.opts').querySelectorAll('.opt').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  btn.dataset.val = val;
+  document.getElementById('nxt').disabled = false;
+}
+
+function nextStep() {
+  const s = obSteps[obStep];
+  let val = s.type === 'input'
+    ? document.getElementById('oi')?.value?.trim()
+    : document.querySelector('#obc .opt.sel')?.dataset?.val;
+  if (!val) return;
+  mem[s.key] = val;
+  document.getElementById('obc')?.remove();
+  addUser(val);
+  if (obStep < obSteps.length - 1) { obStep++; setTimeout(renderOb, 250); }
+  else { updateMem(); finishOb(); }
+}
+
+function prevStep() {
+  if (obStep > 0) { document.getElementById('obc')?.remove(); obStep--; renderOb(); }
+}
+
+function finishOb() {
+  onDone = true;
+  document.getElementById('mem-card').style.display = 'block';
+  clientStage = mapStage(mem.etapa);
+  document.getElementById('m-stage').textContent = clientStage;
+  document.getElementById('hdr-stage').textContent = clientStage;
+  hist = [];
+  const txt = `Perfecto, ya tengo tu perfil completo:\n\n**Negocio:** ${mem.negocio}\n**Industria:** ${mem.industria}\n**Producto:** ${mem.producto}\n**Presupuesto mensual:** ${mem.presupuesto}\n**Objetivo:** ${mem.objetivo}\n**Mercado:** ${mem.mercado}\n**Etapa:** ${clientStage}\n\nTodo guardado. Soy tu experto dedicado en Google Ads. Basándome en tu etapa, te recomiendo empezar por la **Hoja de ruta** (pestaña arriba) para ver exactamente qué debes hacer hoy. O dime directamente, ¿en qué quieres que trabajemos primero?`;
+  addAgent(txt);
+}
+
+function mapStage(e) {
+  if (!e) return 'Sin definir';
+  if (e.includes('cero')) return 'Día 1 — Configuración';
+  if (e.includes('menos de 1')) return 'Primera semana';
+  if (e.includes('1–3')) return 'Meses 1–3';
+  return 'Cuenta madura (+3 meses)';
+}
+
+function updateMem() {
+  document.getElementById('m-neg').textContent = mem.negocio?.split('·')[0]?.trim() || '—';
+  document.getElementById('m-ind').textContent = mem.industria || '—';
+  document.getElementById('m-pre').textContent = mem.presupuesto || '—';
+  document.getElementById('m-obj').textContent = mem.objetivo?.split('/')[0]?.trim() || '—';
+}
+
+// ── CHAT ──
+function memCtx() {
+  return Object.keys(mem).length
+    ? Object.entries(mem).map(([k,v])=>`${k}: ${v}`).join('\n')
+    : 'Perfil no completado aún.';
+}
+
+async function sendMsg() {
+  if (loading || !onDone) return;
+  const el = document.getElementById('cin');
+  const txt = el.value.trim(); if (!txt) return;
+  el.value = ''; autoR(el);
+  addUser(txt);
+  hist.push({ role:'user', content:txt });
+  await callClaude();
+}
+
+function qSend(txt) {
+  if (!onDone || loading) return;
+  showView('chat');
+  document.getElementById('cin').value = txt;
+  sendMsg();
+}
+
+function askAgent(stage) {
+  const msgs = {
+    dia: 'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',
+    semana: 'Estoy en la primera semana de mi campaña. Analiza qué debería estar viendo en mi cuenta ahora mismo y qué es lo más importante.',
+    quincena: 'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',
+    mes: 'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',
+    trimestre: 'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',
+    semestre: 'Tengo 6 meses de historial en mi cuenta. Ayúdame a planificar el siguiente semestre y dame las recomendaciones de cuenta madura.'
+  };
+  qSend(msgs[stage] || 'Guíame en esta etapa de mi cuenta.');
+}
+
+async function callClaude() {
+  loading = true;
+  document.getElementById('sbtn').disabled = true;
+  const tid = addThinking();
+  const sys = SYSTEM.replace('{MEMORY}', memCtx()).replace('{STAGE}', clientStage);
+  try {
+    const r = await fetch('/api/chat', {
+      method:'POST',
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system:sys, messages:hist })
+    });
+    const d = await r.json();
+    rmThinking(tid);
+    const reply = d.content?.[0]?.text || 'Error al procesar la respuesta. Intenta de nuevo.';
+    hist.push({ role:'assistant', content:reply });
+    addAgent(reply);
+  } catch(e) {
+    rmThinking(tid);
+    addAgent('Error de conexión. Verifica la configuración de la API key en el archivo HTML.');
+  }
+  loading = false;
+  document.getElementById('sbtn').disabled = false;
+}
+
+// ── ROADMAP ──
+let curStage = 'dia';
+function setStage(s, btn) {
+  curStage = s;
+  document.querySelectorAll('.stage-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.stage-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('sp-'+s).classList.add('active');
+  const pmap = {dia:'ps-dia',semana:'ps-semana',quincena:'ps-quincena',mes:'ps-mes',trimestre:'ps-trimestre',semestre:'ps-semestre'};
+  document.querySelectorAll('.pt-stage').forEach(el=>el.classList.remove('current'));
+  document.getElementById(pmap[s])?.classList.add('current');
+}
+
+function toggleCheck(item) {
+  item.classList.toggle('done');
+  updateProgress();
+}
+
+function updateProgress() {
+  const all = document.querySelectorAll('.stage-panel.active .cl-item').length;
+  const done = document.querySelectorAll('.stage-panel.active .cl-item.done').length;
+  document.getElementById('pt-count').textContent = `${done} / ${all} tareas completadas`;
+  document.getElementById('pt-fill').style.width = all ? `${(done/all)*100}%` : '0%';
+}
+
+// ── VIEWS ──
+function showView(id, tabEl) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  if (!tabEl) tabEl = document.querySelector(`.tab:nth-child(${id==='chat'?1:2})`);
+  if (tabEl) { document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); tabEl.classList.add('active'); }
+  if (id === 'roadmap') updateProgress();
+}
+
+function switchSb(el) {
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── DOM HELPERS ──
+function addAgent(txt) {
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = `<div class="av ag">AG</div><div class="bubble">${fmt(txt)}</div>`;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function addUser(txt) {
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `<div class="av usr">TÚ</div><div class="bubble">${esc(txt)}</div>`;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function addThinking() {
+  const id = 'th'+Date.now();
+  const el = document.createElement('div');
+  el.className = 'msg'; el.id = id;
+  el.innerHTML = `<div class="av ag">AG</div><div class="thinking-bbl"><div class="spinner"></div>Analizando tu cuenta...</div>`;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB(); return id;
+}
+
+function rmThinking(id) { document.getElementById(id)?.remove(); }
+
+function appendRaw(html) {
+  const area = document.getElementById('chat-area');
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  area.appendChild(d.firstElementChild);
+}
+
+function scrollB() { const a = document.getElementById('chat-area'); setTimeout(()=>{a.scrollTop=a.scrollHeight;},50); }
+
+function fmt(t) {
+  return esc(t)
+    .replace(/### (.*?)(\n|$)/g,'<h4>$1</h4>')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`(.*?)`/g,'<code>$1</code>')
+    .replace(/^– (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>')
+    .replace(/\n\n/g,'</p><p style="margin-top:7px">')
+    .replace(/\n/g,'<br>')
+    .replace(/^/,'<p>').replace(/$/,'</p>');
+}
+
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
+function autoR(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
+</script>
+</body>
+</html>
