@@ -243,7 +243,8 @@ body::before {
 </div>
 
 <script>
-const CLERK_KEY = window.__CLERK_PUBLISHABLE_KEY__ || 'pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ';
+const CLER
+  K_KEY = window.__CLERK_PUBLISHABLE_KEY__ || 'pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ';
 
 let clerk;
 let currentTab = 'login';
@@ -265,7 +266,7 @@ function waitForClerk(timeout = 6000) {
 }
 
 async function initClerk() {
-  if (!CLERK_KEY || CLERK_KEY === 'pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ') {
+  if (!CLERK_KEY || CLERK_KEY === 'TU_CLERK_PUBLISHABLE_KEY') {
     showError('Publishable key no configurada. Revisa el archivo login.html.');
     return;
   }
