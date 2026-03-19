@@ -730,7 +730,7 @@ function waitForClerk(timeout = 5000) {
 
 async function initAuth() {
   const key = window.__CLERK_PUBLISHABLE_KEY__;
-  if (!key || key.includes('pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ')) {
+  if (!key || key.includes('TU_CLERK')) {
     console.warn('Publishable key no configurada — modo demo');
     return true;
   }
