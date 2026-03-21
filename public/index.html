@@ -50,6 +50,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
 .sb-item.active .sb-icon{background:var(--blue-lt);border-color:var(--blue-md)}
 .sb-divider{height:1px;background:var(--border);margin:6px 8px}
 .sb-agent-header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);cursor:pointer;transition:all .15s;margin-top:2px;user-select:none}
+.sb-agent-header.open{background:var(--sidebar2)}
 .sb-agent-header:hover{background:var(--sidebar2)}
 .sb-agent-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .sb-agent-name{font-size:12px;font-weight:600;color:var(--text);letter-spacing:-.1px;flex:1}
@@ -254,7 +255,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
       <svg class="sb-chevron" id="chev-ga" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items" id="ag-ga">
-      <div class="sb-item active" onclick="switchSb(this);showView('roadmap');setAgentContext('google-ads')">
+      <div class="sb-item active" onclick="switchSb(this);setAgentContext('google-ads');showView('roadmap')">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Google Ads para mi negocio')">
@@ -718,7 +719,108 @@ function updateUserUI(u){const name=u.firstName||u.emailAddresses?.[0]?.emailAdd
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
 // INIT
-window.onload=async()=>{const ok=await initAuth();if(!ok)return;addAgent('hola, soy tu **agente de Google Ads** en acuarius. estoy aquí para ayudarte a crear campañas que generen resultados reales y guiarte en cada etapa del camino.\n\nantes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.');setTimeout(()=>renderOb(),500)};
+
+const AGENT_GUIDES = {
+  'google-ads': `hola, soy tu **agente de Google Ads** en acuarius.
+
+estoy aquí para ayudarte a crear y optimizar campañas de Google Ads que generen resultados reales. esto es lo que puedo hacer por ti:
+
+### lo que puedo hacer por ti
+– **planeación de campaña** — estructura profesional desde cero según tus objetivos
+– **keyword research** — palabras clave primarias, secundarias y negativas con intención de búsqueda
+– **presupuesto** — recomendación de inversión basada en tu industria y CPC promedio
+– **anuncios RSA** — 15 títulos y 4 descripciones optimizados para cada grupo de anuncios
+– **anuncios Display** — copys y especificaciones para la red de display de Google
+– **análisis y optimización** — revisión periódica con recomendaciones accionables
+– **reportes** — informes completos de rendimiento de tu cuenta
+– **hoja de ruta** — guía paso a paso de qué revisar en cada etapa (día 1, semana, mes...)
+
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil para todas las sesiones.`,
+
+  'meta-ads': `hola, soy tu **agente de Meta Ads** en acuarius.
+
+estoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que conecten con tu audiencia y generen resultados medibles. esto es lo que puedo hacer por ti:
+
+### lo que puedo hacer por ti
+– **planeación de campaña** — estructura completa con objetivos, audiencias y formatos correctos
+– **presupuesto** — distribución óptima entre campañas, conjuntos de anuncios y públicos
+– **copys** — textos persuasivos adaptados al formato y objetivo de cada anuncio
+– **anuncios gráficos** — especificaciones, textos y recomendaciones creativas para imagen
+– **anuncios de video** — guiones, hooks y estructura para video en feed, stories y reels
+– **análisis y optimización** — interpretación de métricas del Administrador de anuncios
+– **reportes** — informes de rendimiento con conclusiones y próximos pasos
+
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+
+  'tiktok-ads': `hola, soy tu **agente de TikTok Ads** en acuarius.
+
+estoy aquí para ayudarte a crear campañas en TikTok que impacten a audiencias jóvenes y generen resultados reales en la plataforma de mayor crecimiento del momento. esto es lo que puedo hacer por ti:
+
+### lo que puedo hacer por ti
+– **planeación de campaña** — estructura para In-Feed Ads, TopView, Spark Ads y más
+– **presupuesto** — inversión recomendada según tu objetivo y el CPM promedio de TikTok
+– **copys** — textos y hooks para capturar la atención en los primeros 3 segundos
+– **anuncios gráficos** — especificaciones y textos para formatos de imagen en TikTok
+– **anuncios de video** — guiones, estructura narrativa y tendencias de formato para TikTok
+– **análisis y optimización** — métricas clave del TikTok Ads Manager
+– **reportes** — informes de rendimiento adaptados a la plataforma
+
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+
+  'linkedin-ads': `hola, soy tu **agente de LinkedIn Ads** en acuarius.
+
+estoy aquí para ayudarte a crear campañas B2B de alto impacto en LinkedIn, la plataforma con el mayor poder de segmentación profesional del mundo. esto es lo que puedo hacer por ti:
+
+### lo que puedo hacer por ti
+– **planeación de campaña** — estructura para Sponsored Content, Message Ads, Lead Gen Forms
+– **presupuesto** — inversión recomendada considerando el CPL promedio de LinkedIn por industria
+– **copys** — mensajes profesionales adaptados a audiencias ejecutivas y tomadores de decisión
+– **anuncios gráficos** — especificaciones y textos para imagen en LinkedIn
+– **anuncios de video** — guiones y estructura para video en feed de LinkedIn
+– **análisis y optimización** — métricas del Campaign Manager de LinkedIn
+– **reportes** — informes de rendimiento con enfoque en pipeline y lead quality
+
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+
+  'seo': `hola, soy tu **agente de SEO** en acuarius.
+
+estoy aquí para ayudarte a mejorar el posicionamiento orgánico de tu sitio web en Google y generar tráfico de calidad sin pagar por cada clic. esto es lo que puedo hacer por ti:
+
+### lo que puedo hacer por ti
+– **análisis inicial** — auditoría técnica y de contenido de tu sitio web actual
+– **estudio de palabras clave** — investigación de keywords con volumen, dificultad e intención
+– **análisis de competencia** — qué están haciendo bien tus competidores y cómo superarlos
+– **optimización on page** — mejoras en títulos, meta descripciones, headings y estructura
+– **creación de contenido** — artículos y páginas optimizados para posicionar
+– **análisis de posiciones** — seguimiento de rankings y oportunidades de mejora
+– **enlaces externos** — estrategia de link building para aumentar la autoridad de tu dominio
+
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+
+  'social': `hola, soy tu **agente de contenido para redes sociales** en acuarius.
+
+estoy aquí para ayudarte a construir una presencia sólida en redes sociales con contenido estratégico que conecte con tu audiencia y genere comunidad. esto es lo que puedo hacer por ti:
+
+### lo que puedo hacer por ti
+– **estudio de marca** — definición de voz, tono, valores y personalidad digital de tu marca
+– **planeación de contenido** — parrilla mensual con temas, formatos y fechas de publicación
+– **publicación de contenido** — estructura y guía para publicar de forma consistente y estratégica
+– **análisis de rendimiento** — interpretación de métricas y recomendaciones para mejorar
+
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`
+};
+
+function showAgentGuide(agentKey) {
+  const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
+  document.getElementById('chat-area').innerHTML = '';
+  hist = [];
+  onDone = false;
+  obStep = 0;
+  addAgent(guide);
+  setTimeout(() => renderOb(), 500);
+}
+
+window.onload=async()=>{const ok=await initAuth();if(!ok)return;showAgentGuide('google-ads');};
 
 // ONBOARDING
 function renderOb(){const s=obSteps[obStep];const pct=(obStep/obSteps.length)*100;let inner=s.type==='input'?`<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`:`<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;const html=`<div class="ob-card" id="obc"><div class="ob-title">configuración del perfil</div><div class="ob-sub">paso ${obStep+1} de ${obSteps.length}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div><div class="step-lbl">pregunta ${obStep+1}</div><div class="step-q">${s.q}</div>${inner}<div class="step-nav">${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← atrás</button>':''}<button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''>${obStep<obSteps.length-1?'continuar →':'iniciar →'}</button></div></div>`;appendRaw(html);if(s.type==='input')setTimeout(()=>document.getElementById('oi')?.focus(),80);scrollB()}
@@ -746,9 +848,9 @@ function updateProgress(){const all=document.querySelectorAll('.stage-panel.acti
 // VIEWS
 function showView(id,tabEl){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-'+id).classList.add('active');if(id==='roadmap')updateProgress()}
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');chev.classList.add('open')}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');chev.classList.add('open');setAgentContext(key, true);showView('chat');}}
 let currentAgentCtx='google-ads';
-function setAgentContext(ctx){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx}
+function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);}
 function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente se mantendrá guardado.')){hist=[];document.getElementById('chat-area').innerHTML='';addAgent(`nueva sesión iniciada. tu perfil está cargado:\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`)}}
 
 // DOM
@@ -768,6 +870,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   const chev=document.getElementById('chev-ga');
   if(ga)ga.classList.remove('sb-collapsed');
   if(chev)chev.classList.add('open');
+  // Resaltar header de Google Ads
+  const gaHeader=document.querySelector('[onclick="toggleAgent('ga')"]');
+  if(gaHeader)gaHeader.classList.add('open');
+  // Activar primer item
+  const firstItem=ga?.querySelector('.sb-item');
+  if(firstItem)firstItem.classList.add('active');
 });
 </script>
 </body>
