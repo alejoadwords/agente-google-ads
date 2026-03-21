@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>acuarius — agente google ads</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script>window.__CLERK_PUBLISHABLE_KEY__='TU_CLERK_PUBLISHABLE_KEY';</script>
+<script>window.__CLERK_PUBLISHABLE_KEY__='pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ';</script>
 <script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="TU_CLERK_PUBLISHABLE_KEY" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -714,7 +714,7 @@ const obSteps=[
 
 // AUTH
 function waitForClerk(t=6000){return new Promise((res,rej)=>{if(typeof Clerk!=='undefined')return res(window.Clerk);const s=Date.now(),iv=setInterval(()=>{if(typeof Clerk!=='undefined'){clearInterval(iv);res(window.Clerk)}else if(Date.now()-s>t){clearInterval(iv);rej(new Error('timeout'))}},50)})}
-async function initAuth(){const key=window.__CLERK_PUBLISHABLE_KEY__;if(!key||key==='TU_CLERK_PUBLISHABLE_KEY'||key.includes('TU_CLERK')){console.warn('Clerk en modo demo');return true}try{const C=await waitForClerk();clerkInstance=new C(key);await clerkInstance.load();if(!clerkInstance.user){window.location.href='/login.html';return false}sessionToken=await clerkInstance.session.getToken();userPlan=clerkInstance.user.publicMetadata?.plan||'free';updateUserUI(clerkInstance.user);return true}catch(e){console.error('Auth error:',e.message);window.location.href='/login.html';return false}}
+async function initAuth(){const key=window.__CLERK_PUBLISHABLE_KEY__;if(!key||key==='pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ'||key.includes('TU_CLERK')){console.warn('Clerk en modo demo');return true}try{const C=await waitForClerk();clerkInstance=new C(key);await clerkInstance.load();if(!clerkInstance.user){window.location.href='/login.html';return false}sessionToken=await clerkInstance.session.getToken();userPlan=clerkInstance.user.publicMetadata?.plan||'free';updateUserUI(clerkInstance.user);return true}catch(e){console.error('Auth error:',e.message);window.location.href='/login.html';return false}}
 function updateUserUI(u){const name=u.firstName||u.emailAddresses?.[0]?.emailAddress||'usuario';document.getElementById('hdr-user').textContent=name;const initials=(u.firstName?.[0]||'')+(u.lastName?.[0]||'');document.getElementById('hdr-avatar').textContent=initials||'AC';const badge=document.getElementById('plan-badge');if(badge)badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días'}
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
