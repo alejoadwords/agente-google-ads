@@ -6,7 +6,18 @@
 <title>acuarius — agente google ads</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>window.__CLERK_PUBLISHABLE_KEY__='pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ';</script>
-<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ" crossorigin="anonymous"></script>
+<script>
+// Solo cargar Clerk si la key es real
+(function(){
+  var key = window.__CLERK_PUBLISHABLE_KEY__;
+  if(key && key.startsWith('pk_')){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+    s.crossOrigin = 'anonymous';
+    document.head.appendChild(s);
+  }
+})();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -716,7 +727,7 @@ const obSteps=[
 function waitForClerk(t=6000){return new Promise((res,rej)=>{if(typeof Clerk!=='undefined')return res(window.Clerk);const s=Date.now(),iv=setInterval(()=>{if(typeof Clerk!=='undefined'){clearInterval(iv);res(window.Clerk)}else if(Date.now()-s>t){clearInterval(iv);rej(new Error('timeout'))}},50)})}
 async function initAuth(){
   const key=window.__CLERK_PUBLISHABLE_KEY__;
-  if(!key||key==='pk_test_dW5pcXVlLXplYnJhLTMxLmNsZXJrLmFjY291bnRzLmRldiQ'||key.includes('TU_CLERK')){
+  if(!key||key==='PLACEHOLDER'||key.includes('PLACEHOLDER')){
     console.warn('Clerk: modo demo');
     return true;
   }
@@ -862,7 +873,7 @@ window.onload = async () => {
 };
 
 // ONBOARDING
-function renderOb(){const s=obSteps[obStep];const pct=(obStep/obSteps.length)*100;let inner=s.type==='input'?`<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`:`<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;const html=`<div class="ob-card" id="obc"><div class="ob-title">configuración del perfil</div><div class="ob-sub">paso ${obStep+1} de ${obSteps.length}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div><div class="step-lbl">pregunta ${obStep+1}</div><div class="step-q">${s.q}</div>${inner}<div class="step-nav">${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← atrás</button>':''}<button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''>${obStep<obSteps.length-1?'continuar →':'iniciar →'}</button></div></div>`;appendRaw(html);if(s.type==='input')setTimeout(()=>document.getElementById('oi')?.focus(),80);scrollB()}
+function renderOb(){const s=obSteps[obStep];const pct=(obStep/obSteps.length)*100;let inner=s.type==='input'?`<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`:`<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;const html=`<div class="ob-card" id="obc"><div class="ob-title">configuración del perfil</div><div class="ob-sub">paso ${obStep+1} de ${obSteps.length}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div><div class="step-lbl">pregunta ${obStep+1}</div><div class="step-q">${s.q}</div>${inner}<div class="step-nav">${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← atrás</button>':''}<button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''}>${obStep<obSteps.length-1?'continuar →':'iniciar →'}</button></div></div>`;appendRaw(html);if(s.type==='input')setTimeout(()=>document.getElementById('oi')?.focus(),80);scrollB()}
 function selOpt(btn,val){btn.closest('.opts').querySelectorAll('.opt').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');btn.dataset.val=val;document.getElementById('nxt').disabled=false}
 function nextStep(){const s=obSteps[obStep];let val=s.type==='input'?document.getElementById('oi')?.value?.trim():document.querySelector('#obc .opt.sel')?.dataset?.val;if(!val)return;mem[s.key]=val;document.getElementById('obc')?.remove();addUser(val);if(obStep<obSteps.length-1){obStep++;setTimeout(renderOb,250)}else{updateMem();finishOb()}}
 function prevStep(){if(obStep>0){document.getElementById('obc')?.remove();obStep--;renderOb()}}
