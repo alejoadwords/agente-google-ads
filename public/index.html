@@ -290,7 +290,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
       <svg class="sb-chevron" id="chev-meta" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-meta">
-      <div class="sb-item" onclick="switchSb(this);setAgentContext('meta-ads');showView('roadmap')">
+      <div class="sb-item" onclick="switchSb(this);openRoadmap()">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio')">
@@ -325,7 +325,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
       <svg class="sb-chevron" id="chev-tiktok" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-tiktok">
-      <div class="sb-item" onclick="switchSb(this);setAgentContext('tiktok-ads');showView('roadmap')">
+      <div class="sb-item" onclick="switchSb(this);openRoadmap()">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de TikTok Ads para mi negocio')">
@@ -360,7 +360,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
       <svg class="sb-chevron" id="chev-linkedin" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-linkedin">
-      <div class="sb-item" onclick="switchSb(this);setAgentContext('linkedin-ads');showView('roadmap')">
+      <div class="sb-item" onclick="switchSb(this);openRoadmap()">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de LinkedIn Ads para mi negocio B2B')">
@@ -395,7 +395,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
       <svg class="sb-chevron" id="chev-seo" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-seo">
-      <div class="sb-item" onclick="switchSb(this);setAgentContext('seo');showView('roadmap')">
+      <div class="sb-item" onclick="switchSb(this);openRoadmap()">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Hacer un análisis SEO inicial completo de mi sitio web')">
@@ -430,7 +430,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
       <svg class="sb-chevron" id="chev-social" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-social">
-      <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('roadmap')">
+      <div class="sb-item" onclick="switchSb(this);openRoadmap()">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Hacer un estudio de marca completo para definir la identidad digital de mi negocio en redes sociales')">
@@ -461,7 +461,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
 
   <!-- CHAT VIEW -->
   <div class="view active" id="view-chat">
-    <div class="chat-area" id="chat-area"></div>
+    <button class="rm-float-btn" onclick="openRoadmap()" title="Hoja de ruta">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        hoja de ruta
+      </button>
+      <div class="chat-area" id="chat-area"></div>
     <div class="cin-area">
       <div class="qa" id="qa">
         <button class="qb" onclick="qSend('Keyword research para mi negocio')">keywords</button>
@@ -916,6 +920,442 @@ document.addEventListener('DOMContentLoaded',()=>{
   const firstItem=ga?.querySelector('.sb-item');
   if(firstItem)firstItem.classList.add('active');
 });
+
+// ── ROADMAP PANEL ──
+const ROADMAP_CONTENT = {
+  'google-ads': {
+    title: 'hoja de ruta · google ads',
+    stages: [
+      { id:'dia', label:'día 1', pill:'pill-dia', title:'configuración y lanzamiento',
+        alert:'Configura el seguimiento de conversiones ANTES de activar. Sin tracking, inviertes a ciegas.',
+        tasks:[
+          {text:'<b>Google Tag Manager</b> instalado en el sitio web', badge:'crítico', color:'cb-red'},
+          {text:'<b>Conversión principal</b> configurada (lead, compra, llamada)', badge:'crítico', color:'cb-red'},
+          {text:'<b>Google Analytics 4</b> vinculado a la cuenta', badge:'crítico', color:'cb-red'},
+          {text:'Campaña de búsqueda con <b>objetivo correcto</b>', badge:'setup', color:'cb-blue'},
+          {text:'Red de Display <b>desactivada</b> en campaña de búsqueda', badge:'crítico', color:'cb-red'},
+          {text:'Al menos <b>1 anuncio RSA</b> por grupo de anuncios', badge:'anuncios', color:'cb-green'},
+          {text:'Primeras <b>palabras negativas</b> de industria añadidas', badge:'keywords', color:'cb-green'},
+          {text:'Extensiones de <b>sitio, llamada y texto destacado</b>', badge:'extensión', color:'cb-amber'},
+        ]
+      },
+      { id:'semana', label:'semana 1', pill:'pill-semana', title:'observar sin tocar',
+        alert:'No cambies pujas ni presupuesto. Solo añade negativos obvios.',
+        tasks:[
+          {text:'Revisar <b>términos de búsqueda</b> diariamente', badge:'diario', color:'cb-red'},
+          {text:'Añadir <b>negativos obvios</b> si los hay', badge:'urgente', color:'cb-red'},
+          {text:'Confirmar que el <b>tracking sigue activo</b>', badge:'crítico', color:'cb-red'},
+          {text:'Revisar <b>Quality Score</b> de keywords principales', badge:'análisis', color:'cb-blue'},
+          {text:'Verificar <b>CPC real</b> vs CPC estimado al inicio', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'quincena', label:'quincena 1', pill:'pill-quincena', title:'primeras optimizaciones',
+        tasks:[
+          {text:'Pausar keywords con <b>0 clics y alto gasto</b>', badge:'optimizar', color:'cb-amber'},
+          {text:'Expandir lista de <b>negativos</b> basado en términos reales', badge:'optimizar', color:'cb-amber'},
+          {text:'Revisar calificación RSA (apuntar a <b>"Excelente"</b>)', badge:'anuncios', color:'cb-blue'},
+          {text:'Comparar tasa de conv. <b>móvil vs desktop</b>', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'mes', label:'mes 1', pill:'pill-mes', title:'análisis real y replanteo',
+        tasks:[
+          {text:'Generar <b>reporte completo</b> del mes', badge:'reporte', color:'cb-green'},
+          {text:'Comparar CPA real vs <b>CPA objetivo</b>', badge:'reporte', color:'cb-green'},
+          {text:'Evaluar activar <b>Smart Bidding</b> si hay +30 conversiones', badge:'decisión', color:'cb-amber'},
+          {text:'Decidir si <b>escalar presupuesto</b> o restructurar', badge:'decisión', color:'cb-amber'},
+        ]
+      },
+      { id:'trimestre', label:'trimestre', pill:'pill-trimestre', title:'escala lo que funciona',
+        tasks:[
+          {text:'Lanzar campaña de <b>remarketing</b> a visitantes', badge:'expandir', color:'cb-green'},
+          {text:'Crear experimento <b>A/B formal</b> en Google Ads', badge:'a/b', color:'cb-amber'},
+          {text:'Probar nueva <b>estrategia de puja</b> (tROAS o tCPA)', badge:'optimizar', color:'cb-amber'},
+        ]
+      },
+      { id:'semestre', label:'semestre', pill:'pill-semestre', title:'cuenta madura',
+        tasks:[
+          {text:'Evaluar e implementar <b>Performance Max</b>', badge:'pmax', color:'cb-green'},
+          {text:'Reporte <b>semestral ejecutivo</b> completo', badge:'reporte', color:'cb-blue'},
+          {text:'Definir <b>estrategia y presupuesto</b> siguiente semestre', badge:'planificar', color:'cb-amber'},
+        ]
+      }
+    ]
+  },
+  'meta-ads': {
+    title: 'hoja de ruta · meta ads',
+    stages: [
+      { id:'dia', label:'día 1', pill:'pill-dia', title:'configuración inicial',
+        alert:'Instala el Meta Pixel ANTES de lanzar cualquier campaña.',
+        tasks:[
+          {text:'<b>Meta Pixel</b> instalado y verificado en el sitio', badge:'crítico', color:'cb-red'},
+          {text:'<b>Conversiones personalizadas</b> configuradas', badge:'crítico', color:'cb-red'},
+          {text:'<b>Cuenta publicitaria</b> verificada y activa', badge:'setup', color:'cb-blue'},
+          {text:'<b>Página de Facebook</b> y perfil de Instagram conectados', badge:'setup', color:'cb-blue'},
+          {text:'Primera campaña con <b>objetivo correcto</b>', badge:'setup', color:'cb-blue'},
+          {text:'<b>Audiencia inicial</b> bien segmentada', badge:'audiencia', color:'cb-green'},
+        ]
+      },
+      { id:'semana', label:'semana 1', pill:'pill-semana', title:'fase de aprendizaje',
+        alert:'Meta necesita 50 conversiones por conjunto de anuncios para salir de la fase de aprendizaje. No hagas cambios.',
+        tasks:[
+          {text:'Monitorear <b>costo por resultado</b> diariamente', badge:'diario', color:'cb-red'},
+          {text:'Verificar que el <b>Pixel reporta eventos</b> correctamente', badge:'crítico', color:'cb-red'},
+          {text:'Revisar <b>frecuencia</b> (no debe superar 2.5 en la primera semana)', badge:'análisis', color:'cb-blue'},
+          {text:'Analizar <b>CTR de anuncios</b> — objetivo >1.5%', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'quincena', label:'quincena 1', pill:'pill-quincena', title:'primeras optimizaciones',
+        tasks:[
+          {text:'Pausar creativos con <b>CTR bajo</b> (<0.5%)', badge:'optimizar', color:'cb-amber'},
+          {text:'Escalar <b>creativos ganadores</b> incrementando presupuesto 20%', badge:'escalar', color:'cb-green'},
+          {text:'Crear <b>audiencias similares</b> basadas en compradores/leads', badge:'audiencia', color:'cb-green'},
+          {text:'Lanzar <b>campaña de remarketing</b> a visitantes del sitio', badge:'remarketing', color:'cb-blue'},
+        ]
+      },
+      { id:'mes', label:'mes 1', pill:'pill-mes', title:'análisis y escala',
+        tasks:[
+          {text:'Reporte completo: <b>ROAS, CPL, CPA</b> por campaña', badge:'reporte', color:'cb-green'},
+          {text:'Comparar rendimiento por <b>placement</b> (feed, stories, reels)', badge:'análisis', color:'cb-blue'},
+          {text:'Evaluar <b>Advantage+ Shopping</b> si es e-commerce', badge:'decisión', color:'cb-amber'},
+          {text:'Definir <b>presupuesto mes 2</b> basado en ROAS real', badge:'decisión', color:'cb-amber'},
+        ]
+      },
+      { id:'trimestre', label:'trimestre', pill:'pill-trimestre', title:'madurez y automatización',
+        tasks:[
+          {text:'Implementar <b>Advantage+ Audience</b> para ampliar alcance', badge:'expandir', color:'cb-green'},
+          {text:'Crear <b>catálogo de productos</b> para Dynamic Ads si aplica', badge:'expandir', color:'cb-green'},
+          {text:'Pruebas A/B formales de <b>creativos vs creativos</b>', badge:'a/b', color:'cb-amber'},
+        ]
+      },
+      { id:'semestre', label:'semestre', pill:'pill-semestre', title:'cuenta madura',
+        tasks:[
+          {text:'Análisis de <b>estacionalidad</b> y planificación de temporadas', badge:'planificar', color:'cb-blue'},
+          {text:'Reporte <b>semestral</b> con benchmark vs industria', badge:'reporte', color:'cb-green'},
+          {text:'Estrategia de <b>contenido creativo</b> para el siguiente semestre', badge:'planificar', color:'cb-amber'},
+        ]
+      }
+    ]
+  },
+  'tiktok-ads': {
+    title: 'hoja de ruta · tiktok ads',
+    stages: [
+      { id:'dia', label:'día 1', pill:'pill-dia', title:'configuración inicial',
+        alert:'El contenido nativo funciona mejor que los anuncios pulidos. Piensa como creador, no como marca.',
+        tasks:[
+          {text:'<b>TikTok Pixel</b> instalado y verificado', badge:'crítico', color:'cb-red'},
+          {text:'<b>Cuenta Business</b> de TikTok verificada', badge:'setup', color:'cb-blue'},
+          {text:'Primera campaña <b>In-Feed Ads</b> configurada', badge:'setup', color:'cb-blue'},
+          {text:'Video creativo con <b>hook en los primeros 3 segundos</b>', badge:'crítico', color:'cb-red'},
+          {text:'<b>Audiencia por intereses</b> configurada correctamente', badge:'audiencia', color:'cb-green'},
+        ]
+      },
+      { id:'semana', label:'semana 1', pill:'pill-semana', title:'fase de aprendizaje',
+        alert:'TikTok necesita datos para optimizar. No pausar ni modificar la campaña los primeros 7 días.',
+        tasks:[
+          {text:'Revisar <b>Video Views Rate</b> (objetivo >15%)', badge:'diario', color:'cb-red'},
+          {text:'Monitorear <b>CPM y CTR</b> diariamente', badge:'análisis', color:'cb-blue'},
+          {text:'Verificar que el <b>Pixel registra eventos</b>', badge:'crítico', color:'cb-red'},
+          {text:'Analizar <b>tiempo de reproducción</b> promedio del video', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'quincena', label:'quincena 1', pill:'pill-quincena', title:'optimización creativa',
+        tasks:[
+          {text:'Crear <b>3-5 variaciones</b> del video creativo con diferentes hooks', badge:'crear', color:'cb-green'},
+          {text:'Pausar videos con <b>VVR menor al 10%</b>', badge:'optimizar', color:'cb-amber'},
+          {text:'Explorar <b>Spark Ads</b> con contenido orgánico que funcione', badge:'expandir', color:'cb-green'},
+          {text:'Ajustar segmentación por <b>dispositivo y sistema operativo</b>', badge:'optimizar', color:'cb-amber'},
+        ]
+      },
+      { id:'mes', label:'mes 1', pill:'pill-mes', title:'análisis y escala',
+        tasks:[
+          {text:'Reporte: <b>CPM, CPC, CPL, ROAS</b> por campaña y creativo', badge:'reporte', color:'cb-green'},
+          {text:'Identificar el <b>mejor hook</b> y replicarlo en nuevos videos', badge:'análisis', color:'cb-blue'},
+          {text:'Lanzar campaña de <b>retargeting</b> a espectadores del video', badge:'expandir', color:'cb-green'},
+        ]
+      },
+      { id:'trimestre', label:'trimestre', pill:'pill-trimestre', title:'escala creativa',
+        tasks:[
+          {text:'Probar <b>TopView o Brand Takeover</b> si el presupuesto lo permite', badge:'expandir', color:'cb-green'},
+          {text:'Crear <b>Branded Hashtag Challenge</b> para alcance orgánico', badge:'expandir', color:'cb-green'},
+          {text:'Implementar <b>TikTok Shop</b> si es e-commerce', badge:'expandir', color:'cb-amber'},
+        ]
+      },
+      { id:'semestre', label:'semestre', pill:'pill-semestre', title:'cuenta madura',
+        tasks:[
+          {text:'Estrategia de <b>contenido UGC</b> con creadores locales', badge:'planificar', color:'cb-blue'},
+          {text:'Reporte semestral con <b>análisis de tendencias</b> de la plataforma', badge:'reporte', color:'cb-green'},
+        ]
+      }
+    ]
+  },
+  'linkedin-ads': {
+    title: 'hoja de ruta · linkedin ads',
+    stages: [
+      { id:'dia', label:'día 1', pill:'pill-dia', title:'configuración B2B',
+        alert:'LinkedIn Ads es 5-10x más caro que otras plataformas. La segmentación precisa es crítica para no desperdiciar presupuesto.',
+        tasks:[
+          {text:'<b>LinkedIn Insight Tag</b> instalado en el sitio web', badge:'crítico', color:'cb-red'},
+          {text:'<b>Conversiones</b> configuradas en Campaign Manager', badge:'crítico', color:'cb-red'},
+          {text:'Segmentación por <b>cargo, industria y tamaño de empresa</b>', badge:'setup', color:'cb-blue'},
+          {text:'Primera campaña <b>Sponsored Content</b> activa', badge:'setup', color:'cb-blue'},
+          {text:'<b>Lead Gen Form</b> configurado si el objetivo es leads', badge:'setup', color:'cb-green'},
+        ]
+      },
+      { id:'semana', label:'semana 1', pill:'pill-semana', title:'validación inicial',
+        alert:'Si el CTR es menor al 0.4% en la primera semana, el creativo o la segmentación necesita ajuste urgente.',
+        tasks:[
+          {text:'Revisar <b>CTR</b> — objetivo mínimo 0.4% en LinkedIn', badge:'análisis', color:'cb-blue'},
+          {text:'Verificar <b>CPL real</b> vs CPL estimado', badge:'análisis', color:'cb-blue'},
+          {text:'Confirmar que <b>Insight Tag reporta</b> visitas correctamente', badge:'crítico', color:'cb-red'},
+        ]
+      },
+      { id:'quincena', label:'quincena 1', pill:'pill-quincena', title:'optimización de segmentación',
+        tasks:[
+          {text:'Probar <b>Matched Audiences</b> con lista de clientes actuales', badge:'audiencia', color:'cb-green'},
+          {text:'Ajustar segmentación — pausar segmentos con <b>CPL alto</b>', badge:'optimizar', color:'cb-amber'},
+          {text:'Crear variación del anuncio con <b>diferente titular</b>', badge:'a/b', color:'cb-blue'},
+        ]
+      },
+      { id:'mes', label:'mes 1', pill:'pill-mes', title:'análisis de calidad de leads',
+        tasks:[
+          {text:'Evaluar <b>calidad de leads</b> con el equipo de ventas', badge:'crítico', color:'cb-red'},
+          {text:'Reporte: <b>CPL, CTR, tasa de conversión a oportunidad</b>', badge:'reporte', color:'cb-green'},
+          {text:'Evaluar <b>Message Ads</b> para prospectos de alto valor', badge:'expandir', color:'cb-amber'},
+        ]
+      },
+      { id:'trimestre', label:'trimestre', pill:'pill-trimestre', title:'escala B2B',
+        tasks:[
+          {text:'Implementar <b>Account-Based Marketing</b> con empresas objetivo', badge:'expandir', color:'cb-green'},
+          {text:'Crear contenido de <b>Thought Leadership</b> para ejecutivos', badge:'contenido', color:'cb-blue'},
+          {text:'Probar <b>Dynamic Ads</b> para personalización a escala', badge:'expandir', color:'cb-amber'},
+        ]
+      },
+      { id:'semestre', label:'semestre', pill:'pill-semestre', title:'pipeline maduro',
+        tasks:[
+          {text:'Análisis de <b>atribución multi-touch</b> con CRM', badge:'análisis', color:'cb-blue'},
+          {text:'Reporte semestral de <b>pipeline generado vs invertido</b>', badge:'reporte', color:'cb-green'},
+        ]
+      }
+    ]
+  },
+  'seo': {
+    title: 'hoja de ruta · seo',
+    stages: [
+      { id:'dia', label:'semana 1', pill:'pill-dia', title:'diagnóstico inicial',
+        alert:'No hagas cambios masivos sin un diagnóstico previo. Identifica primero qué está funcionando.',
+        tasks:[
+          {text:'Configurar <b>Google Search Console</b> y Google Analytics 4', badge:'crítico', color:'cb-red'},
+          {text:'Auditoría técnica: <b>velocidad, móvil, indexación</b>', badge:'crítico', color:'cb-red'},
+          {text:'Identificar las <b>10 páginas con más tráfico</b> actuales', badge:'análisis', color:'cb-blue'},
+          {text:'Mapear las <b>keywords que ya posicionan</b> en top 20', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'semana', label:'mes 1', pill:'pill-semana', title:'correcciones técnicas',
+        tasks:[
+          {text:'Corregir errores de <b>indexación y rastreo</b> críticos', badge:'técnico', color:'cb-red'},
+          {text:'Optimizar <b>velocidad de carga</b> (Core Web Vitals)', badge:'técnico', color:'cb-amber'},
+          {text:'Revisar y corregir <b>etiquetas title y meta description</b>', badge:'on-page', color:'cb-blue'},
+          {text:'Implementar <b>estructura de URLs limpia y jerárquica</b>', badge:'on-page', color:'cb-blue'},
+        ]
+      },
+      { id:'quincena', label:'mes 2-3', pill:'pill-quincena', title:'optimización on-page',
+        tasks:[
+          {text:'Optimizar páginas clave con <b>keywords objetivo</b>', badge:'on-page', color:'cb-blue'},
+          {text:'Crear o mejorar <b>contenido existente</b> con intención de búsqueda', badge:'contenido', color:'cb-green'},
+          {text:'Implementar <b>enlazado interno estratégico</b>', badge:'on-page', color:'cb-amber'},
+          {text:'Optimizar imágenes: <b>alt text, compresión, WebP</b>', badge:'técnico', color:'cb-amber'},
+        ]
+      },
+      { id:'mes', label:'mes 4-6', pill:'pill-mes', title:'creación de contenido',
+        tasks:[
+          {text:'Publicar <b>4-8 artículos SEO</b> mensuales optimizados', badge:'contenido', color:'cb-green'},
+          {text:'Crear <b>páginas pilares</b> para clusters de keywords', badge:'contenido', color:'cb-green'},
+          {text:'Monitorear <b>posiciones en Search Console</b> semanalmente', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'trimestre', label:'mes 7-9', pill:'pill-trimestre', title:'autoridad de dominio',
+        tasks:[
+          {text:'Estrategia de <b>link building</b> con sitios de calidad', badge:'off-page', color:'cb-green'},
+          {text:'Guest posts en <b>medios y blogs de la industria</b>', badge:'off-page', color:'cb-green'},
+          {text:'Análisis de <b>backlinks de competencia</b> para replicar', badge:'análisis', color:'cb-blue'},
+        ]
+      },
+      { id:'semestre', label:'año 1+', pill:'pill-semestre', title:'posicionamiento consolidado',
+        tasks:[
+          {text:'Reporte semestral de <b>tráfico orgánico y posiciones</b>', badge:'reporte', color:'cb-green'},
+          {text:'Análisis de <b>ROI orgánico</b> vs inversión en contenido', badge:'análisis', color:'cb-blue'},
+          {text:'Planificación de <b>contenido y SEO para el siguiente año</b>', badge:'planificar', color:'cb-amber'},
+        ]
+      }
+    ]
+  },
+  'social': {
+    title: 'hoja de ruta · contenido para redes',
+    stages: [
+      { id:'dia', label:'semana 1', pill:'pill-dia', title:'estudio de marca',
+        alert:'Sin una identidad clara, el contenido se verá inconsistente y no construirá comunidad.',
+        tasks:[
+          {text:'Definir <b>voz y tono de marca</b> para redes sociales', badge:'crítico', color:'cb-red'},
+          {text:'Establecer <b>paleta de colores y tipografía</b> para contenido', badge:'setup', color:'cb-blue'},
+          {text:'Auditar <b>perfiles existentes</b> y unificar información', badge:'setup', color:'cb-blue'},
+          {text:'Definir <b>pilares de contenido</b> (educación, entretenimiento, ventas)', badge:'estrategia', color:'cb-green'},
+        ]
+      },
+      { id:'semana', label:'mes 1', pill:'pill-semana', title:'primera parrilla',
+        tasks:[
+          {text:'Crear <b>parrilla de contenido mensual</b> con 20-30 piezas', badge:'crear', color:'cb-green'},
+          {text:'Establecer <b>frecuencia de publicación</b> por red social', badge:'setup', color:'cb-blue'},
+          {text:'Crear plantillas de <b>diseño para stories, posts y reels</b>', badge:'crear', color:'cb-green'},
+          {text:'Programar primeras 2 semanas de contenido', badge:'publicar', color:'cb-amber'},
+        ]
+      },
+      { id:'quincena', label:'mes 2', pill:'pill-quincena', title:'análisis inicial',
+        tasks:[
+          {text:'Analizar <b>tasa de engagement</b> por tipo de contenido', badge:'análisis', color:'cb-blue'},
+          {text:'Identificar los <b>mejores horarios de publicación</b>', badge:'análisis', color:'cb-blue'},
+          {text:'Replicar los <b>formatos con mayor alcance</b>', badge:'optimizar', color:'cb-amber'},
+        ]
+      },
+      { id:'mes', label:'mes 3', pill:'pill-mes', title:'optimización de contenido',
+        tasks:[
+          {text:'Reporte mensual: <b>alcance, engagement, seguidores</b>', badge:'reporte', color:'cb-green'},
+          {text:'Ajustar <b>mezcla de formatos</b> según rendimiento', badge:'optimizar', color:'cb-amber'},
+          {text:'Implementar <b>contenido generado por usuario (UGC)</b>', badge:'expandir', color:'cb-green'},
+        ]
+      },
+      { id:'trimestre', label:'trimestre', pill:'pill-trimestre', title:'crecimiento acelerado',
+        tasks:[
+          {text:'Estrategia de <b>colaboraciones con micro-influencers</b>', badge:'expandir', color:'cb-green'},
+          {text:'Crear <b>serie de contenido</b> para fidelizar audiencia', badge:'crear', color:'cb-blue'},
+          {text:'Implementar <b>historias interactivas</b> (encuestas, preguntas)', badge:'engagement', color:'cb-amber'},
+        ]
+      },
+      { id:'semestre', label:'semestre', pill:'pill-semestre', title:'comunidad consolidada',
+        tasks:[
+          {text:'Reporte semestral de <b>crecimiento de comunidad</b>', badge:'reporte', color:'cb-green'},
+          {text:'Estrategia de contenido <b>multiplataforma integrada</b>', badge:'planificar', color:'cb-blue'},
+        ]
+      }
+    ]
+  }
+};
+
+function openRoadmap() {
+  const agentKey = currentAgentCtx || 'google-ads';
+  const data = ROADMAP_CONTENT[agentKey] || ROADMAP_CONTENT['google-ads'];
+  
+  document.getElementById('rm-panel-title').textContent = data.title;
+  
+  // Renderizar contenido
+  let html = '';
+  
+  // Selector de etapas
+  html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px">';
+  data.stages.forEach((stage, idx) => {
+    html += `<button onclick="rmShowStage(${idx})" id="rm-stage-${idx}" 
+      style="padding:5px 12px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1.5px solid var(--border2);background:${idx===0?'var(--blue)':'var(--bg)'};color:${idx===0?'#fff':'var(--muted)'};font-family:var(--font);transition:all .15s" 
+      >${stage.label}</button>`;
+  });
+  html += '</div>';
+  
+  // Contenido de etapas
+  data.stages.forEach((stage, idx) => {
+    html += `<div id="rm-stage-content-${idx}" style="display:${idx===0?'block':'none'}">`;
+    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">`;
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">`;
+    html += `<span class="stage-period-pill ${stage.pill}" style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">${stage.label}</span>`;
+    html += `<span style="font-size:14px;font-weight:600">${stage.title}</span>`;
+    html += `</div>`;
+    if(stage.alert) {
+      html += `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:10px">⚠ ${stage.alert}</div>`;
+    }
+    html += `</div>`;
+    
+    // Checklist
+    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">`;
+    stage.tasks.forEach(task => {
+      html += `<div class="cl-item" onclick="this.classList.toggle('done')" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer">`;
+      html += `<div class="cl-check" style="width:16px;height:16px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;background:var(--bg);transition:all .15s">`;
+      html += `<svg class="cl-check-mark" style="display:none;width:8px;height:8px" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+      html += `</div>`;
+      html += `<div class="cl-text" style="line-height:1.4;color:var(--muted);flex:1">${task.text}</div>`;
+      html += `<span class="cl-badge ${task.color}" style="font-size:10px;padding:1px 6px;border-radius:10px;flex-shrink:0">${task.badge}</span>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+    
+    // Botón preguntar al agente
+    html += `<button class="ask-agent-btn" onclick="askAgentFromRoadmap('${stage.id}')" style="margin-bottom:16px">▸ preguntar al agente sobre esta etapa</button>`;
+    html += `</div>`;
+  });
+  
+  document.getElementById('rm-panel-body').innerHTML = html;
+  
+  // Añadir estilos de done a los checks del panel
+  document.querySelectorAll('#rm-panel-body .cl-item').forEach(item => {
+    const check = item.querySelector('.cl-check');
+    const mark = item.querySelector('.cl-check-mark');
+    item.addEventListener('click', function() {
+      const done = this.classList.contains('done');
+      if(done) {
+        check.style.background = 'var(--success)';
+        check.style.borderColor = 'var(--success)';
+        mark.style.display = 'block';
+      } else {
+        check.style.background = 'var(--bg)';
+        check.style.borderColor = 'var(--border2)';
+        mark.style.display = 'none';
+      }
+    });
+  });
+  
+  document.getElementById('rm-overlay').classList.add('open');
+  document.getElementById('rm-panel').classList.add('open');
+}
+
+function rmShowStage(idx) {
+  document.querySelectorAll('[id^="rm-stage-content-"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('[id^="rm-stage-"]').forEach(btn => {
+    if(btn.id.startsWith('rm-stage-') && !btn.id.includes('content')) {
+      btn.style.background = 'var(--bg)';
+      btn.style.color = 'var(--muted)';
+      btn.style.borderColor = 'var(--border2)';
+    }
+  });
+  const content = document.getElementById('rm-stage-content-'+idx);
+  const btn = document.getElementById('rm-stage-'+idx);
+  if(content) content.style.display = 'block';
+  if(btn) { btn.style.background = 'var(--blue)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--blue)'; }
+}
+
+function closeRoadmap() {
+  document.getElementById('rm-overlay').classList.remove('open');
+  document.getElementById('rm-panel').classList.remove('open');
+}
+
+function askAgentFromRoadmap(stageId) {
+  closeRoadmap();
+  askAgent(stageId);
+  showView('chat');
+}
+
 </script>
+
+<!-- ROADMAP PANEL -->
+<div class="rm-panel-overlay" id="rm-overlay" onclick="closeRoadmap()"></div>
+<div class="rm-panel" id="rm-panel">
+  <div class="rm-panel-header">
+    <div>
+      <div class="rm-panel-title" id="rm-panel-title">hoja de ruta · google ads</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">guía profesional paso a paso</div>
+    </div>
+    <button class="rm-panel-close" onclick="closeRoadmap()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="rm-panel-body" id="rm-panel-body">
+    <!-- Contenido dinámico según el agente activo -->
+  </div>
+</div>
 </body>
 </html>
