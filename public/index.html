@@ -894,14 +894,10 @@ const obSteps=[
 // AUTH
 function waitForClerk(t=6000){return new Promise((res,rej)=>{if(typeof Clerk!=='undefined')return res(window.Clerk);const s=Date.now(),iv=setInterval(()=>{if(typeof Clerk!=='undefined'){clearInterval(iv);res(window.Clerk)}else if(Date.now()-s>t){clearInterval(iv);rej(new Error('timeout'))}},50)})}
 async function initAuth(){
-  const key=window.__CLERK_PUBLISHABLE_KEY__;
-  if(!key||key.length<10){
-    console.warn('Clerk: modo demo');
-    return true;
-  }
+  const key='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';
   try {
     const C = await waitForClerk();
-    clerkInstance = new C(key);
+    clerkInstance = new C('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
     await clerkInstance.load();
     if(!clerkInstance.user){
       window.location.href='/login.html';

@@ -455,10 +455,9 @@ function waitForClerk(t=6000){
 }
 
 async function initClerk() {
-  if(!CLERK_KEY || CLERK_KEY.length < 10) return;
   try {
     const C = await waitForClerk();
-    clerk = new C(CLERK_KEY);
+    clerk = new C('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
     await clerk.load();
     if(clerk.user) window.location.href = '/';
   } catch(e) { console.warn('Clerk:', e.message); }
