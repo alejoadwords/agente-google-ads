@@ -6,7 +6,7 @@
 <title>acuarius — agente google ads</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>window.__CLERK_PUBLISHABLE_KEY__='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';</script>
-<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
+<script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -894,11 +894,18 @@ const obSteps=[
 // AUTH
 function waitForClerk(t=6000){return new Promise((res,rej)=>{if(typeof Clerk!=='undefined')return res(window.Clerk);const s=Date.now(),iv=setInterval(()=>{if(typeof Clerk!=='undefined'){clearInterval(iv);res(window.Clerk)}else if(Date.now()-s>t){clearInterval(iv);rej(new Error('timeout'))}},50)})}
 async function initAuth(){
-  const key='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';
   try {
-    const C = await waitForClerk();
-    clerkInstance = new C('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
-    await clerkInstance.load();
+    // Esperar a que Clerk cargue via data-clerk-publishable-key
+    await new Promise((res,rej)=>{
+      const s=Date.now();
+      const iv=setInterval(()=>{
+        if(window.Clerk&&window.Clerk.loaded){clearInterval(iv);res()}
+        else if(window.Clerk&&!window.Clerk.loaded){window.Clerk.load().then(()=>{clearInterval(iv);res()}).catch(rej);clearInterval(iv)}
+        else if(Date.now()-s>10000){clearInterval(iv);rej(new Error('timeout'))}
+      },100)
+    });
+    clerkInstance=window.Clerk;
+    clerkInstance.__pk='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';
     if(!clerkInstance.user){
       window.location.href='/login.html';
       return false;

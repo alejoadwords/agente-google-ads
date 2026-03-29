@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>acuarius — acceder</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
+<script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -456,13 +456,35 @@ function waitForClerk(t=6000){
 
 async function initClerk() {
   try {
-    const C = await waitForClerk(10000);
-    clerk = new C('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
-    await clerk.load();
-    console.log('Clerk loaded OK, user:', clerk.user?.emailAddresses?.[0]?.emailAddress || 'none');
+    // Esperar a que Clerk esté disponible (cargado via data-clerk-publishable-key)
+    await new Promise((res, rej) => {
+      const start = Date.now();
+      const iv = setInterval(() => {
+        if(window.Clerk && window.Clerk.loaded) { clearInterval(iv); res(); }
+        else if(window.Clerk && !window.Clerk.loaded) {
+          window.Clerk.load().then(() => { clearInterval(iv); res(); }).catch(rej);
+          clearInterval(iv);
+        }
+        else if(Date.now() - start > 10000) { clearInterval(iv); rej(new Error('timeout')); }
+      }, 100);
+    });
+    clerk = window.Clerk;
+    console.log('Clerk OK:', clerk.user?.emailAddresses?.[0]?.emailAddress || 'no user');
     if(clerk.user) window.location.href = '/';
   } catch(e) {
-    console.error('Clerk init error:', e);
+    console.error('Clerk error:', e.message);
+    // Fallback: intentar inicializar manualmente
+    try {
+      const C = window.Clerk || (await new Promise(res => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+        s.onload = () => res(window.Clerk);
+        document.head.appendChild(s);
+      }));
+      clerk = new C('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
+      await clerk.load();
+      if(clerk.user) window.location.href = '/';
+    } catch(e2) { console.error('Clerk fallback error:', e2.message); }
   }
 }
 initClerk();
