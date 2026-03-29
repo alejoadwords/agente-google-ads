@@ -457,17 +457,17 @@ function waitForClerk(t=6000){
 async function initClerk() {
   try {
     await new Promise((res, rej) => {
-      if(window.Clerk?.load) return res();
+      if(window.Clerk) return res();
       const s = Date.now();
       const iv = setInterval(() => {
-        if(window.Clerk?.load) { clearInterval(iv); res(); }
+        if(window.Clerk) { clearInterval(iv); res(); }
         else if(Date.now()-s > 8000) { clearInterval(iv); rej(new Error('timeout')); }
       }, 100);
     });
-    // window.Clerk YA es la instancia — solo cargarla
-    await window.Clerk.load();
+    // Para HTML vanilla: pasar publishableKey a load()
+    await window.Clerk.load({ publishableKey: 'pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA' });
     clerk = window.Clerk;
-    console.log('Clerk ready, user:', clerk.user?.primaryEmailAddress?.emailAddress || 'none');
+    console.log('Clerk ready:', clerk.user?.primaryEmailAddress?.emailAddress || 'no user');
     if(clerk.user) window.location.href = '/';
   } catch(e) {
     console.error('Clerk error:', e.message);
