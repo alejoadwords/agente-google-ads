@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>acuarius — acceder</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA"
+  src="https://clerk.acuarius.app/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -455,22 +461,25 @@ function waitForClerk(t=6000){
 }
 
 async function initClerk() {
-  try {
-    await new Promise((res, rej) => {
-      if(window.Clerk) return res();
-      const s = Date.now();
-      const iv = setInterval(() => {
-        if(window.Clerk) { clearInterval(iv); res(); }
-        else if(Date.now()-s > 8000) { clearInterval(iv); rej(new Error('timeout')); }
-      }, 100);
-    });
-    // Para HTML vanilla: pasar publishableKey a load()
-    await window.Clerk.load({ publishableKey: 'pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA' });
-    clerk = window.Clerk;
-    console.log('Clerk ready:', clerk.user?.primaryEmailAddress?.emailAddress || 'no user');
-    if(clerk.user) window.location.href = '/';
-  } catch(e) {
-    console.error('Clerk error:', e.message);
+  // Con el script del Frontend API, Clerk se auto-inicializa
+  // Solo hay que esperar el evento y luego llamar load()
+  window.addEventListener('load', async () => {
+    try {
+      await window.Clerk.load();
+      clerk = window.Clerk;
+      console.log('Clerk ready:', clerk.user?.primaryEmailAddress?.emailAddress || 'no user');
+      if(clerk.user) window.location.href = '/';
+    } catch(e) {
+      console.error('Clerk load error:', e);
+    }
+  });
+  // Por si el script ya cargó antes del evento load
+  if(window.Clerk) {
+    try {
+      await window.Clerk.load();
+      clerk = window.Clerk;
+      if(clerk.user) window.location.href = '/';
+    } catch(e) {}
   }
 }
 initClerk();
