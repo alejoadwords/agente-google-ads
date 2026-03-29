@@ -456,18 +456,17 @@ function waitForClerk(t=6000){
 
 async function initClerk() {
   try {
-    // Esperar que el script de Clerk cargue
     await new Promise((res, rej) => {
-      if(typeof window.Clerk !== 'undefined') return res();
+      if(window.Clerk?.load) return res();
       const s = Date.now();
       const iv = setInterval(() => {
-        if(typeof window.Clerk !== 'undefined') { clearInterval(iv); res(); }
-        else if(Date.now() - s > 8000) { clearInterval(iv); rej(new Error('timeout')); }
+        if(window.Clerk?.load) { clearInterval(iv); res(); }
+        else if(Date.now()-s > 8000) { clearInterval(iv); rej(new Error('timeout')); }
       }, 100);
     });
-    // Inicializar Clerk con la key — forma correcta para HTML vanilla
-    clerk = new window.Clerk('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
-    await clerk.load();
+    // window.Clerk YA es la instancia — solo cargarla
+    await window.Clerk.load();
+    clerk = window.Clerk;
     console.log('Clerk ready, user:', clerk.user?.primaryEmailAddress?.emailAddress || 'none');
     if(clerk.user) window.location.href = '/';
   } catch(e) {
