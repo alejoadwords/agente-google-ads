@@ -500,7 +500,7 @@ function setTab(t, btn) {
 async function loginGoogle() {
   if(!clerk) { showErr('Cargando autenticación, intenta en unos segundos...'); initClerk(); return; }
   try {
-    await clerk.signIn.authenticateWithRedirect({
+    await clerk.client.signIn.authenticateWithRedirect({
       strategy: 'oauth_google',
       redirectUrl: '/sso-callback',
       redirectUrlComplete: '/'
@@ -515,7 +515,7 @@ async function submitLogin() {
   if(!e || !p) { showErr('Completa email y contraseña.'); return; }
   setL('lbtn', true, 'iniciando sesión...');
   try {
-    const r = await clerk.signIn.create({ identifier: e, password: p });
+    const r = await clerk.client.signIn.create({ identifier: e, password: p });
     if(r.status === 'complete') {
       await clerk.setActive({ session: r.createdSessionId });
       window.location.href = '/';
@@ -533,7 +533,7 @@ async function submitRegister() {
   if(p.length < 8) { showErr('La contraseña debe tener al menos 8 caracteres.'); return; }
   setL('rbtn', true, 'creando cuenta...');
   try {
-    const r = await clerk.signUp.create({
+    const r = await clerk.client.signUp.create({
       firstName: n.split(' ')[0],
       lastName: n.split(' ').slice(1).join(' '),
       emailAddress: e,
@@ -543,7 +543,7 @@ async function submitRegister() {
       await clerk.setActive({ session: r.createdSessionId });
       window.location.href = '/';
     } else if(r.status === 'missing_requirements') {
-      await r.prepareEmailAddressVerification({ strategy: 'email_code' });
+      await clerk.client.signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       showVerify();
     }
   } catch(e) { showErr(e.errors?.[0]?.message || 'Error al crear cuenta.'); }
@@ -572,7 +572,7 @@ async function verifyCode() {
   const c = document.getElementById('vc')?.value?.trim();
   if(!c || c.length < 6) return;
   try {
-    const r = await clerk.signUp.attemptEmailAddressVerification({ code: c });
+    const r = await clerk.client.signUp.attemptEmailAddressVerification({ code: c });
     if(r.status === 'complete') {
       await clerk.setActive({ session: r.createdSessionId });
       window.location.href = '/';
