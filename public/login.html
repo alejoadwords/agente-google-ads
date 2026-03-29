@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>acuarius — acceder</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -456,24 +456,22 @@ function waitForClerk(t=6000){
 
 async function initClerk() {
   try {
-    // Esperar a que el script de Clerk cargue y se auto-inicialice
+    // Esperar que el script de Clerk cargue
     await new Promise((res, rej) => {
-      const start = Date.now();
+      if(typeof window.Clerk !== 'undefined') return res();
+      const s = Date.now();
       const iv = setInterval(() => {
-        // Con data-clerk-publishable-key, Clerk se inicializa solo
-        // y expone window.Clerk como instancia lista
-        if(window.Clerk && typeof window.Clerk.signIn !== 'undefined') {
-          clearInterval(iv); res();
-        } else if(Date.now() - start > 10000) {
-          clearInterval(iv); rej(new Error('timeout'));
-        }
-      }, 200);
+        if(typeof window.Clerk !== 'undefined') { clearInterval(iv); res(); }
+        else if(Date.now() - s > 8000) { clearInterval(iv); rej(new Error('timeout')); }
+      }, 100);
     });
-    clerk = window.Clerk;
+    // Inicializar Clerk con la key — forma correcta para HTML vanilla
+    clerk = new window.Clerk('pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA');
+    await clerk.load();
     console.log('Clerk ready, user:', clerk.user?.primaryEmailAddress?.emailAddress || 'none');
     if(clerk.user) window.location.href = '/';
   } catch(e) {
-    console.error('Clerk init failed:', e.message);
+    console.error('Clerk error:', e.message);
   }
 }
 initClerk();
