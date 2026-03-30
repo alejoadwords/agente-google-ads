@@ -1349,7 +1349,7 @@ function handleImgSelect(input){
     canvas.getContext('2d').drawImage(img,0,0,w,h);
     const dataUrl=canvas.toDataURL('image/jpeg',0.85);
     const base64=dataUrl.split(',')[1];
-    pendingImg={base64,mediaType:'image/jpeg',name:file.name};
+    pendingImg={base64,mediaType:'image/jpeg',name:file.name,dataUrl};
     console.log('Imagen lista:', w+'x'+h, Math.round(base64.length/1024)+'KB base64');
     // Indicador en el botón
     const btn=document.getElementById('attach-plus');
@@ -1421,7 +1421,7 @@ async function captureScreen(){
     canvas.getContext('2d').drawImage(bitmap,0,0);
     const dataUrl=canvas.toDataURL('image/jpeg',0.85);
     const base64=dataUrl.split(',')[1];
-    pendingImg={base64,mediaType:'image/jpeg',name:'captura.jpg'};
+    pendingImg={base64,mediaType:'image/jpeg',name:'captura.jpg',dataUrl};
     const btn=document.getElementById('attach-plus');
     if(btn)btn.classList.add('has-img');
     showImgChip('captura.jpg', dataUrl, base64.length);
@@ -1477,7 +1477,7 @@ function addUser(txt,img){
   el.className='msg user';
   let imgHtml='';
   if(img){
-    imgHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 10px 5px 5px;max-width:200px"><img src="data:${img.mediaType};base64,${img.base64}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #E5E7EB"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:12px;font-weight:500;color:#0A0A0A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(img.name||'imagen')}</span><span style="font-size:11px;color:#6B7280">imagen</span></div></div></div>`;
+    imgHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 10px 5px 5px;max-width:200px"><img src="${img.dataUrl||'data:'+img.mediaType+';base64,'+img.base64}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #E5E7EB"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:12px;font-weight:500;color:#0A0A0A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(img.name||'imagen')}</span><span style="font-size:11px;color:#6B7280">imagen</span></div></div></div>`;
   }
   const textHtml=txt&&txt!=='[Imagen adjunta]'?`<div class="bubble usr-bubble">${esc(txt)}</div>`:'';
   el.innerHTML=`<div class="av usr" style="font-size:10px;font-weight:600">tú</div>${imgHtml}${textHtml}`;
