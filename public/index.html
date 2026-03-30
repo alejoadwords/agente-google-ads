@@ -1476,7 +1476,9 @@ function addUser(txt,img){
   const el=document.createElement('div');
   el.className='msg user';
   let imgHtml='';
-  if(img){imgHtml=`<img src="data:${img.mediaType};base64,${img.base64}" class="msg-img" alt="imagen adjunta">`}
+  if(img){
+    imgHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 10px 5px 5px;max-width:200px"><img src="data:${img.mediaType};base64,${img.base64}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #E5E7EB"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:12px;font-weight:500;color:#0A0A0A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(img.name||'imagen')}</span><span style="font-size:11px;color:#6B7280">imagen</span></div></div></div>`;
+  }
   const textHtml=txt&&txt!=='[Imagen adjunta]'?`<div class="bubble usr-bubble">${esc(txt)}</div>`:'';
   el.innerHTML=`<div class="av usr" style="font-size:10px;font-weight:600">tú</div>${imgHtml}${textHtml}`;
   document.getElementById('chat-area').appendChild(el);scrollB();
