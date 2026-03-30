@@ -77,24 +77,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .view.active{display:flex}
 
 /* ── HOME ── */
-.home-wrap{flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:48px 28px 24px;background:var(--bg)}
-.home-greeting{font-size:24px;font-weight:700;letter-spacing:-.4px;color:var(--text);margin-bottom:4px;text-align:center}
-.home-sub{font-size:14px;color:var(--muted);text-align:center;margin-bottom:36px}
-.home-agents{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:720px;margin-bottom:32px}
+.home-wrap{flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:52px 28px 28px;background:var(--bg)}
+.home-greeting{font-size:26px;font-weight:700;letter-spacing:-.4px;color:var(--text);margin-bottom:6px;text-align:center}
+.home-sub{font-size:14px;color:var(--muted);text-align:center;margin-bottom:40px}
+.home-agents{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:740px;margin-bottom:36px}
 @media(max-width:640px){.home-agents{grid-template-columns:repeat(2,1fr)}}
-.home-agent-card{border:1px solid var(--border);border-radius:var(--rlg);padding:16px;cursor:pointer;transition:all .15s;background:var(--bg);text-align:left}
-.home-agent-card:hover{border-color:var(--blue-md);background:var(--blue-lt);transform:translateY(-1px);box-shadow:0 4px 12px rgba(30,43,204,.08)}
-.home-agent-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
-.home-agent-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.home-agent-card{border:1.5px solid var(--border);border-radius:var(--rlg);padding:18px 16px;cursor:pointer;transition:all .15s;background:var(--bg)}
+.home-agent-card:hover{border-color:var(--blue-md);background:var(--blue-lt);transform:translateY(-2px);box-shadow:0 6px 16px rgba(30,43,204,.08)}
+.home-agent-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.home-agent-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
 .home-agent-desc{font-size:11px;color:var(--muted);line-height:1.4}
-.home-cin-wrap{width:100%;max-width:720px}
-.home-cin-box{display:flex;align-items:flex-end;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:10px 12px;transition:border-color .15s}
-.home-cin-box:focus-within{border-color:var(--blue-md)}
-.home-cin-box textarea{flex:1;border:none;outline:none;font-family:var(--font);font-size:13.5px;color:var(--text);resize:none;background:transparent;line-height:1.5;max-height:120px}
+.home-or{font-size:10px;color:var(--muted2);text-align:center;margin-bottom:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;width:100%;max-width:740px}
+.home-cin-wrap{width:100%;max-width:740px}
+.home-cin-box{display:flex;align-items:flex-end;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:10px 12px;transition:border-color .15s;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.home-cin-box:focus-within{border-color:var(--blue-md);box-shadow:0 2px 12px rgba(30,43,204,.1)}
+.home-cin-box textarea{flex:1;border:none;outline:none;font-family:var(--font);font-size:14px;color:var(--text);resize:none;background:transparent;line-height:1.5;max-height:120px}
 .home-cin-box textarea::placeholder{color:var(--muted2)}
-.home-send-btn{width:32px;height:32px;border-radius:8px;background:var(--blue);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
+.home-send-btn{width:34px;height:34px;border-radius:9px;background:var(--blue);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
 .home-send-btn:hover{background:var(--blue-h)}
-.home-send-btn svg{width:14px;height:14px;fill:none;stroke:white;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.home-send-btn svg{width:15px;height:15px;fill:none;stroke:white;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
 /* ── CHAT ── */
 .chat-area{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth;background:var(--bg)}
@@ -430,7 +431,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 
 <!-- HEADER -->
 <div class="hdr">
-  <a class="hdr-logo" href="/">
+  <a class="hdr-logo" href="#" onclick="event.preventDefault();showView('home')" style="cursor:pointer">
     <img src="data:image/png;base64,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" alt="acuarius" style="height:28px;width:auto;display:block;max-width:160px;object-fit:contain">
   </a>
   <button class="mob-menu-btn" id="mob-menu-btn" onclick="toggleSidebar()" aria-label="Menú">
@@ -694,69 +695,43 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     <div class="home-wrap">
       <div class="home-greeting" id="home-greeting">hola 👋</div>
       <div class="home-sub">¿con qué agente quieres trabajar hoy?</div>
-
       <div class="home-agents">
-        <!-- Google Ads -->
         <div class="home-agent-card" onclick="openAgent('google-ads')">
-          <div class="home-agent-icon" style="background:#E8F0FE">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-          </div>
+          <div class="home-agent-icon" style="background:#E8F0FE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg></div>
           <div class="home-agent-name">Google Ads</div>
           <div class="home-agent-desc">Campañas, keywords, RSA y optimización</div>
         </div>
-
-        <!-- Meta Ads -->
         <div class="home-agent-card" onclick="openAgent('meta-ads')">
-          <div class="home-agent-icon" style="background:#EEF2FF">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-          </div>
+          <div class="home-agent-icon" style="background:#EEF2FF"><svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></div>
           <div class="home-agent-name">Meta Ads</div>
           <div class="home-agent-desc">Facebook e Instagram Ads</div>
         </div>
-
-        <!-- TikTok Ads -->
         <div class="home-agent-card" onclick="openAgent('tiktok-ads')">
-          <div class="home-agent-icon" style="background:#F0F0F0">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
-          </div>
+          <div class="home-agent-icon" style="background:#F0F0F0"><svg width="20" height="20" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg></div>
           <div class="home-agent-name">TikTok Ads</div>
           <div class="home-agent-desc">Campañas y contenido para TikTok</div>
         </div>
-
-        <!-- LinkedIn Ads -->
         <div class="home-agent-card" onclick="openAgent('linkedin-ads')">
-          <div class="home-agent-icon" style="background:#E8F3FC">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-          </div>
+          <div class="home-agent-icon" style="background:#E8F3FC"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></div>
           <div class="home-agent-name">LinkedIn Ads</div>
           <div class="home-agent-desc">Campañas B2B de alto impacto</div>
         </div>
-
-        <!-- SEO -->
         <div class="home-agent-card" onclick="openAgent('seo')">
-          <div class="home-agent-icon" style="background:#ECFDF5">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#059669" stroke-width="2"/><path d="M21 21l-3.5-3.5" stroke="#059669" stroke-width="2" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="#059669" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </div>
+          <div class="home-agent-icon" style="background:#ECFDF5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#059669" stroke-width="2"/><path d="M21 21l-3.5-3.5" stroke="#059669" stroke-width="2" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="#059669" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="home-agent-name">SEO</div>
           <div class="home-agent-desc">Posicionamiento orgánico en Google</div>
         </div>
-
-        <!-- Contenido -->
         <div class="home-agent-card" onclick="openAgent('social')">
-          <div class="home-agent-icon" style="background:#FFFBEB">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg>
-          </div>
+          <div class="home-agent-icon" style="background:#FFFBEB"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg></div>
           <div class="home-agent-name">Contenido</div>
           <div class="home-agent-desc">Contenido estratégico para redes sociales</div>
         </div>
       </div>
-
-      <!-- Chat libre -->
+      <div class="home-or">o escribe directamente</div>
       <div class="home-cin-wrap">
-        <div style="font-size:11px;color:var(--muted2);text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">o escribe directamente</div>
         <div class="home-cin-box">
           <textarea id="home-cin" placeholder="¿En qué puedo ayudarte hoy?" rows="1"
-            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();homeChat()}"></textarea>
           <button class="home-send-btn" onclick="homeChat()">
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -1308,13 +1283,8 @@ function updateUserUI(u){
   document.getElementById('hdr-avatar').textContent=initials||'AC';
   const badge=document.getElementById('plan-badge');
   if(badge)badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días';
-  // Saludo personalizado en home
   const greeting=document.getElementById('home-greeting');
-  if(greeting){
-    const hour=new Date().getHours();
-    const time=hour<12?'buenos días':hour<18?'buenas tardes':'buenas noches';
-    greeting.textContent=`${time}, ${name} 👋`;
-  }
+  if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
@@ -1410,146 +1380,26 @@ estoy aquí para ayudarte a construir una presencia sólida en redes sociales co
 antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`
 };
 
-const SYSTEM_GUIDES = {
-  'google-ads': `hola, soy tu **agente de Google Ads** en acuarius.
+// Alias para compatibilidad
+const SYSTEM_GUIDES = AGENT_GUIDES;
 
-estoy aquí para ayudarte a crear y optimizar campañas de Google Ads que generen resultados reales. esto es lo que puedo hacer por ti:
+function showAgentGuide(agentKey) { openAgent(agentKey); }
 
-### lo que puedo hacer por ti
-– **planeación de campaña** — estructura profesional desde cero según tus objetivos
-– **keyword research** — palabras clave primarias, secundarias y negativas con intención de búsqueda
-– **presupuesto** — recomendación de inversión basada en tu industria y CPC promedio
-– **anuncios RSA** — 15 títulos y 4 descripciones optimizados para cada grupo de anuncios
-– **anuncios Display** — copys y especificaciones para la red de display de Google
-– **análisis y optimización** — revisión periódica con recomendaciones accionables
-– **reportes** — informes completos de rendimiento de tu cuenta
-– **hoja de ruta** — guía paso a paso de qué revisar en cada etapa (día 1, semana, mes...)
-
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil para todas las sesiones.`,
-
-  'meta-ads': `hola, soy tu **agente de Meta Ads** en acuarius.
-
-estoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que conecten con tu audiencia y generen resultados medibles. esto es lo que puedo hacer por ti:
-
-### lo que puedo hacer por ti
-– **planeación de campaña** — estructura para campañas de conversión, tráfico, leads y reconocimiento
-– **presupuesto** — inversión recomendada según objetivo, industria y CPM promedio de Meta
-– **copys** — textos persuasivos para anuncios en feed, stories y reels
-– **anuncios gráficos** — especificaciones y textos para imagen en Facebook e Instagram
-– **anuncios de video** — guiones, hooks y estructura narrativa para video en Meta
-– **análisis y optimización** — métricas del Ads Manager y recomendaciones accionables
-– **reportes** — informes de rendimiento con conclusiones y próximos pasos
-
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
-
-  'tiktok-ads': `hola, soy tu **agente de TikTok Ads** en acuarius.
-
-estoy aquí para ayudarte a crear campañas en TikTok que impacten a audiencias jóvenes y generen resultados reales en la plataforma de mayor crecimiento del momento. esto es lo que puedo hacer por ti:
-
-### lo que puedo hacer por ti
-– **planeación de campaña** — estructura para In-Feed Ads, TopView, Spark Ads y más
-– **presupuesto** — inversión recomendada según tu objetivo y el CPM promedio de TikTok
-– **copys** — textos y hooks para capturar la atención en los primeros 3 segundos
-– **anuncios gráficos** — especificaciones y textos para formatos de imagen en TikTok
-– **anuncios de video** — guiones, estructura narrativa y tendencias de formato para TikTok
-– **análisis y optimización** — métricas clave del TikTok Ads Manager
-– **reportes** — informes de rendimiento adaptados a la plataforma
-
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
-
-  'linkedin-ads': `hola, soy tu **agente de LinkedIn Ads** en acuarius.
-
-estoy aquí para ayudarte a crear campañas B2B de alto impacto en LinkedIn, la plataforma con el mayor poder de segmentación profesional del mundo. esto es lo que puedo hacer por ti:
-
-### lo que puedo hacer por ti
-– **planeación de campaña** — estructura para Sponsored Content, Message Ads, Lead Gen Forms
-– **presupuesto** — inversión recomendada considerando el CPL promedio de LinkedIn por industria
-– **copys** — mensajes profesionales adaptados a audiencias ejecutivas y tomadores de decisión
-– **anuncios gráficos** — especificaciones y textos para imagen en LinkedIn
-– **anuncios de video** — guiones y estructura para video en feed de LinkedIn
-– **análisis y optimización** — métricas del Campaign Manager de LinkedIn
-– **reportes** — informes de rendimiento con enfoque en pipeline y lead quality
-
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
-
-  'seo': `hola, soy tu **agente de SEO** en acuarius.
-
-estoy aquí para ayudarte a mejorar el posicionamiento orgánico de tu sitio web en Google y generar tráfico de calidad sin pagar por cada clic. esto es lo que puedo hacer por ti:
-
-### lo que puedo hacer por ti
-– **análisis inicial** — auditoría técnica y de contenido de tu sitio web actual
-– **estudio de palabras clave** — investigación de keywords con volumen, dificultad e intención
-– **análisis de competencia** — qué están haciendo bien tus competidores y cómo superarlos
-– **optimización on page** — mejoras en títulos, meta descripciones, headings y estructura
-– **creación de contenido** — artículos y páginas optimizados para posicionar
-– **análisis de posiciones** — seguimiento de rankings y oportunidades de mejora
-– **enlaces externos** — estrategia de link building para aumentar la autoridad de tu dominio
-
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
-
-  'social': `hola, soy tu **agente de contenido para redes sociales** en acuarius.
-
-estoy aquí para ayudarte a construir una presencia sólida en redes sociales con contenido estratégico que conecte con tu audiencia y genere comunidad. esto es lo que puedo hacer por ti:
-
-### lo que puedo hacer por ti
-– **estudio de marca** — definición de voz, tono, valores y personalidad digital de tu marca
-– **planeación de contenido** — parrilla mensual con temas, formatos y fechas de publicación
-– **publicación de contenido** — estructura y guía para publicar de forma consistente y estratégica
-– **análisis de rendimiento** — interpretación de métricas y recomendaciones para mejorar
-
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`
-};
-
-// Alias para compatibilidad con código existente
-const AGENT_GUIDES = SYSTEM_GUIDES;
-
-function showAgentGuide(agentKey) {
-  openAgent(agentKey);
-}
-
-window.onload = async () => {
-  try {
-    const ok = await initAuth();
-    if(!ok) return;
-  } catch(e) {
-    console.warn('initAuth error:', e.message);
-  }
-  // Mostrar pantalla de inicio en lugar del onboarding directo
-  showView('home');
-};
-
-// Abre un agente desde la pantalla de inicio
+// Abre un agente: carga perfil si existe, lanza onboarding si no
 function openAgent(agentKey) {
-  // Marcar agente activo en sidebar
-  const agentSidebarMap = {
-    'google-ads': 'google-ads',
-    'meta-ads': 'meta',
-    'tiktok-ads': 'tiktok',
-    'linkedin-ads': 'linkedin',
-    'seo': 'seo',
-    'social': 'social'
-  };
-  const sbKey = agentSidebarMap[agentKey] || agentKey;
-  // Expandir el agente en el sidebar
-  document.querySelectorAll('.sb-agent-items').forEach(el => el.classList.add('sb-collapsed'));
-  document.querySelectorAll('.sb-chevron').forEach(el => el.classList.remove('open'));
-  const items = document.getElementById('ag-' + sbKey);
-  const chev  = document.getElementById('chev-' + sbKey);
-  if (items) { items.classList.remove('sb-collapsed'); }
-  if (chev)  { chev.classList.add('open'); }
-
   setAgentContext(agentKey);
   showView('chat');
-
-  // Verificar si ya tiene perfil guardado para este agente
-  const profileKey = adsActiveAccount
-    ? `acuarius_profile_${adsActiveAccount.id}`
-    : `acuarius_profile_${agentKey}`;
-  const savedProfile = localStorage.getItem(profileKey);
 
   const area = document.getElementById('chat-area');
   area.innerHTML = '';
   hist = [];
+
+  // Clave de perfil: por cuenta activa o por agente
+  const profileKey = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount)
+    ? `acuarius_profile_${adsActiveAccount.id}_${agentKey}`
+    : `acuarius_profile_${agentKey}`;
+
+  const savedProfile = localStorage.getItem(profileKey);
 
   if (savedProfile) {
     try {
@@ -1562,46 +1412,57 @@ function openAgent(agentKey) {
       document.getElementById('m-stage').textContent = clientStage;
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes'};
       addAgent(`hola de nuevo. agente de **${agentLabels[agentKey]||agentKey}** listo.\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
-    } catch {
-      launchOnboarding(agentKey);
-    }
-  } else {
-    launchOnboarding(agentKey);
+      return;
+    } catch(e) { /* si falla el parse, lanzar onboarding */ }
   }
+  launchOnboarding(agentKey);
 }
 
-// Lanza el onboarding para un agente nuevo
+// Lanza onboarding para agente sin perfil
 function launchOnboarding(agentKey) {
   mem = {}; hist = []; onDone = false; obStep = 0;
   document.getElementById('mem-card').style.display = 'none';
-  const guide = SYSTEM_GUIDES[agentKey] || SYSTEM_GUIDES['google-ads'];
+  const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
   addAgent(guide);
   setTimeout(() => renderOb(), 600);
 }
 
-// Envía mensaje desde el chat libre de la pantalla de inicio
+// Envía desde el chat libre de la pantalla de inicio
 function homeChat() {
   const el = document.getElementById('home-cin');
+  if (!el) return;
   const txt = el.value.trim();
   if (!txt) return;
   el.value = '';
   el.style.height = 'auto';
 
-  // Ir al chat con agente Google Ads por defecto (o el último activo)
-  setAgentContext(currentAgentCtx || 'google-ads');
-  showView('chat');
-
-  // Si no hay onboarding completado, activar modo libre
+  // Si no hay agente activo ni onboarding, usar Google Ads por defecto
   if (!onDone) {
-    onDone = true; // permitir enviar sin onboarding
-    hist = [];
+    openAgent(currentAgentCtx || 'google-ads');
+    // Esperar a que el chat esté listo y enviar
+    setTimeout(() => {
+      const cin = document.getElementById('cin');
+      if (cin) { cin.value = txt; }
+      // Si el onboarding está activo, no enviamos aún
+      // Si ya tenía perfil (onDone=true tras openAgent), enviamos
+      if (onDone) sendMsg();
+    }, 800);
+  } else {
+    showView('chat');
+    const cin = document.getElementById('cin');
+    if (cin) { cin.value = txt; sendMsg(); }
   }
-
-  // Meter el texto y enviar
-  document.getElementById('cin').value = txt;
-  sendMsg();
 }
 
+window.onload = async () => {
+  try {
+    const ok = await initAuth();
+    if(!ok) return;
+  } catch(e) {
+    console.warn('initAuth error:', e.message);
+  }
+  showView('home');
+};
 
 // ONBOARDING
 function renderOb(){const s=obSteps[obStep];const pct=(obStep/obSteps.length)*100;let inner=s.type==='input'?`<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`:`<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;const html=`<div class="ob-card" id="obc"><div class="ob-title">configuración del perfil</div><div class="ob-sub">paso ${obStep+1} de ${obSteps.length}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div><div class="step-lbl">pregunta ${obStep+1}</div><div class="step-q">${s.q}</div>${inner}<div class="step-nav">${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← atrás</button>':''}<button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''}>${obStep<obSteps.length-1?'continuar →':'iniciar →'}</button></div></div>`;appendRaw(html);if(s.type==='input')setTimeout(()=>document.getElementById('oi')?.focus(),80);scrollB()}
@@ -1781,7 +1642,7 @@ function toggleCheck(item){item.classList.toggle('done');updateProgress()}
 function updateProgress(){const all=document.querySelectorAll('.stage-panel.active .cl-item').length;const done=document.querySelectorAll('.stage-panel.active .cl-item.done').length;document.getElementById('pt-count').textContent=`${done} / ${all} tareas`;document.getElementById('pt-fill').style.width=all?`${(done/all)*100}%`:'0%'}
 
 // VIEWS
-function showView(id,tabEl){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-'+id).classList.add('active');if(id==='roadmap')updateProgress();}
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();}
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
@@ -1798,7 +1659,7 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');chev.classList.add('open');const agentKeyMap={'google-ads':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social'};const agentKey=agentKeyMap[key]||key;openAgent(agentKey);}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'google-ads':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social'};openAgent(map[key]||key);}}
 let currentAgentCtx='google-ads';
 function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);}
 function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente se mantendrá guardado.')){hist=[];document.getElementById('chat-area').innerHTML='';addAgent(`nueva sesión iniciada. tu perfil está cargado:\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`)}}
