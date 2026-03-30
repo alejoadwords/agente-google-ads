@@ -1327,7 +1327,7 @@ function renderOb(){const s=obSteps[obStep];const pct=(obStep/obSteps.length)*10
 function selOpt(btn,val){btn.closest('.opts').querySelectorAll('.opt').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');btn.dataset.val=val;document.getElementById('nxt').disabled=false}
 function nextStep(){const s=obSteps[obStep];let val=s.type==='input'?document.getElementById('oi')?.value?.trim():document.querySelector('#obc .opt.sel')?.dataset?.val;if(!val)return;mem[s.key]=val;document.getElementById('obc')?.remove();addUser(val);if(obStep<obSteps.length-1){obStep++;setTimeout(renderOb,250)}else{updateMem();finishOb()}}
 function prevStep(){if(obStep>0){document.getElementById('obc')?.remove();obStep--;renderOb()}}
-function finishOb(){onDone=true;document.getElementById('mem-card').style.display='block';clientStage=mapStage(mem.etapa);document.getElementById('m-stage').textContent=clientStage;hist=[];addAgent(`perfecto, ya tengo tu perfil completo:\n\n**negocio:** ${mem.negocio}\n**industria:** ${mem.industria}\n**producto:** ${mem.producto}\n**presupuesto mensual:** ${mem.presupuesto}\n**objetivo:** ${mem.objetivo}\n**mercado:** ${mem.mercado}\n**etapa:** ${clientStage}\n\ntodo guardado. soy tu experto dedicado en Google Ads. ¿por dónde quieres empezar?`)}
+function finishOb(){finishObWithAccountSave()}
 function mapStage(e){if(!e)return'sin definir';if(e.includes('cero'))return'día 1 — configuración';if(e.includes('menos de 1'))return'primera semana';if(e.includes('1–3'))return'meses 1–3';return'cuenta madura (+3 meses)'}
 function updateMem(){document.getElementById('m-neg').textContent=mem.negocio?.split('·')[0]?.trim()||'—';document.getElementById('m-ind').textContent=mem.industria||'—';document.getElementById('m-pre').textContent=mem.presupuesto||'—';document.getElementById('m-obj').textContent=mem.objetivo?.split('/')[0]?.trim()||'—'}
 
@@ -2031,8 +2031,13 @@ function switchSettingsTab(tab) {
 }
 
 // =============================================
-// GOOGLE ADS — Conexión OAuth
+// GOOGLE ADS — Conexión OAuth + Selector de cuentas MCC
 // =============================================
+
+// Estado global de cuentas
+let adsAccounts = [];       // todas las cuentas accesibles
+let adsActiveAccount = null; // { id, name, currency, timezone, isManager }
+
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('ads_connected') === 'true') {
@@ -2044,22 +2049,24 @@ function switchSettingsTab(tab) {
       sessionStorage.setItem('ads_refresh_token', refresh || '');
       sessionStorage.setItem('ads_email', email || '');
       updateAdsUI(true, email);
-      // Abrir settings en conexiones para que el usuario vea que se conectó
-      setTimeout(() => openSettings(), 400);
+      setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
     }
     window.history.replaceState({}, '', window.location.pathname);
   }
   if (params.get('ads_error')) {
     window.history.replaceState({}, '', window.location.pathname);
   }
-  const savedToken      = sessionStorage.getItem('ads_access_token');
-  const savedEmail      = sessionStorage.getItem('ads_email');
-  const savedCustomerId = sessionStorage.getItem('ads_customer_id');
+  // Restaurar sesión guardada
+  const savedToken   = sessionStorage.getItem('ads_access_token');
+  const savedEmail   = sessionStorage.getItem('ads_email');
+  const savedAccount = sessionStorage.getItem('ads_active_account');
   if (savedToken) {
     updateAdsUI(true, savedEmail);
-    if (savedCustomerId) {
-      const el = document.getElementById('adsCustomerId');
-      if (el) el.value = savedCustomerId;
+    if (savedAccount) {
+      try {
+        adsActiveAccount = JSON.parse(savedAccount);
+        renderActiveAccount();
+      } catch {}
     }
   }
 })();
@@ -2072,18 +2079,188 @@ function disconnectGoogleAds() {
   sessionStorage.removeItem('ads_access_token');
   sessionStorage.removeItem('ads_refresh_token');
   sessionStorage.removeItem('ads_email');
-  sessionStorage.removeItem('ads_customer_id');
+  sessionStorage.removeItem('ads_active_account');
+  adsAccounts = [];
+  adsActiveAccount = null;
   updateAdsUI(false);
 }
 
-function saveAdsAccount() {
-  const customerId = document.getElementById('adsCustomerId').value.trim();
-  if (!customerId) return;
-  sessionStorage.setItem('ads_customer_id', customerId);
-  const btn = event.target;
-  const orig = btn.textContent;
-  btn.textContent = '✓ guardado';
-  setTimeout(() => btn.textContent = orig, 2000);
+// Carga las cuentas desde la API y muestra el selector
+async function loadAdsAccounts() {
+  const accessToken = sessionStorage.getItem('ads_access_token');
+  if (!accessToken) return;
+
+  // Mostrar loading
+  document.getElementById('adsAccountsLoading').style.display = 'block';
+  document.getElementById('adsAccountsList').style.display = 'none';
+  document.getElementById('adsActiveAccount').style.display = 'none';
+  document.getElementById('adsAccountsError').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/list-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken }),
+    });
+    const data = await res.json();
+    document.getElementById('adsAccountsLoading').style.display = 'none';
+
+    if (data.error || !data.accounts?.length) {
+      showAdsError('No se pudieron cargar las cuentas. Puede ser que la API aún esté en revisión por Google.');
+      return;
+    }
+
+    adsAccounts = data.accounts;
+    renderAccountSelector();
+
+  } catch (err) {
+    document.getElementById('adsAccountsLoading').style.display = 'none';
+    showAdsError('Error de conexión al cargar las cuentas.');
+  }
+}
+
+function renderAccountSelector() {
+  const container = document.getElementById('adsAccountsContainer');
+  const isAgency  = userPlan === 'agency';
+  const nonManager = adsAccounts.filter(a => !a.isManager);
+  const toShow    = nonManager.length > 0 ? nonManager : adsAccounts;
+
+  // Gate de plan: individual solo puede ver/activar 1 cuenta
+  const gateMsg = document.getElementById('adsPlanGateMsg');
+  if (!isAgency && toShow.length > 1) {
+    gateMsg.style.display = 'block';
+  } else {
+    gateMsg.style.display = 'none';
+  }
+
+  container.innerHTML = toShow.map((acc, idx) => {
+    const isLocked = !isAgency && idx > 0; // solo la primera disponible en plan individual
+    const isActive = adsActiveAccount?.id === acc.id;
+    return `
+    <div onclick="${isLocked ? 'showUpgradeHint()' : `selectAdsAccount('${acc.id}')`}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:${isLocked ? 'default' : 'pointer'};
+      border:1.5px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
+      background:${isActive ? 'var(--blue-lt)' : isLocked ? 'var(--sidebar2)' : 'var(--bg)'};
+      opacity:${isLocked ? '.5' : '1'};transition:all .15s"
+      onmouseover="if(!${isLocked})this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--blue-md)'}'"
+      onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}'">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">ID: ${acc.id} · ${acc.currency}${acc.isTest ? ' · cuenta de prueba' : ''}</div>
+      </div>
+      ${isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+      ${isLocked ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--muted2)" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"/></svg>' : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('adsAccountsList').style.display = 'block';
+
+  // Si ya hay una cuenta activa, mostrarla también
+  if (adsActiveAccount) renderActiveAccount();
+}
+
+function selectAdsAccount(accountId) {
+  const acc = adsAccounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  adsActiveAccount = acc;
+  sessionStorage.setItem('ads_active_account', JSON.stringify(acc));
+
+  // Guardar también el customerId para queryGoogleAds
+  sessionStorage.setItem('ads_customer_id', acc.id);
+
+  renderActiveAccount();
+  renderAccountSelector(); // re-render para marcar el activo
+
+  // Verificar si esta cuenta tiene perfil guardado
+  const profileKey = `acuarius_profile_${acc.id}`;
+  const savedProfile = localStorage.getItem(profileKey);
+
+  // Notificar al agente del cambio de cuenta
+  const accountMsg = savedProfile
+    ? `He cambiado a la cuenta **${acc.name}** (ID: ${acc.id}). Ya tengo perfil guardado para esta cuenta.`
+    : `He cambiado a la cuenta **${acc.name}** (ID: ${acc.id}). Esta es una cuenta nueva — inicia el onboarding.`;
+
+  // Cerrar settings y notificar
+  closeSettings();
+  setTimeout(() => {
+    if (savedProfile) {
+      // Restaurar perfil de esta cuenta
+      try {
+        const profile = JSON.parse(savedProfile);
+        Object.assign(mem, profile);
+        updateMem();
+        onDone = true;
+        document.getElementById('mem-card').style.display = 'block';
+        clientStage = mapStage(mem.etapa);
+        document.getElementById('m-stage').textContent = clientStage;
+        hist = [];
+        addAgent(`cuenta cambiada a **${acc.name}**.\n\nPerfil cargado:\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿En qué trabajamos hoy para esta cuenta?`);
+      } catch {
+        startNewAccountOnboarding(acc);
+      }
+    } else {
+      startNewAccountOnboarding(acc);
+    }
+  }, 300);
+}
+
+function startNewAccountOnboarding(acc) {
+  // Reiniciar perfil para cuenta nueva
+  mem = {};
+  hist = [];
+  onDone = false;
+  obStep = 0;
+  document.getElementById('mem-card').style.display = 'none';
+  document.getElementById('chat-area').innerHTML = '';
+  showView('chat');
+  addAgent(`nueva cuenta detectada: **${acc.name}** (ID: ${acc.id}).\n\nPara darte recomendaciones precisas, necesito conocer a este cliente. Son 7 preguntas rápidas.`);
+  setTimeout(() => renderOb(), 600);
+}
+
+// Guarda perfil al completar onboarding por cuenta
+const _origFinishOb = window.finishOb;
+function finishObWithAccountSave() {
+  // Guardar perfil asociado a la cuenta activa
+  if (adsActiveAccount) {
+    const profileKey = `acuarius_profile_${adsActiveAccount.id}`;
+    localStorage.setItem(profileKey, JSON.stringify(mem));
+  }
+  onDone = true;
+  document.getElementById('mem-card').style.display = 'block';
+  clientStage = mapStage(mem.etapa);
+  document.getElementById('m-stage').textContent = clientStage;
+  hist = [];
+  const accountName = adsActiveAccount ? ` para **${adsActiveAccount.name}**` : '';
+  addAgent(`perfecto, ya tengo el perfil completo${accountName}:\n\n**negocio:** ${mem.negocio}\n**industria:** ${mem.industria}\n**producto:** ${mem.producto}\n**presupuesto mensual:** ${mem.presupuesto}\n**objetivo:** ${mem.objetivo}\n**mercado:** ${mem.mercado}\n**etapa:** ${clientStage}\n\ntodo guardado. ¿por dónde quieres empezar?`);
+}
+
+function renderActiveAccount() {
+  if (!adsActiveAccount) return;
+  const el = document.getElementById('adsActiveAccount');
+  const nameEl = document.getElementById('adsActiveName');
+  const idEl   = document.getElementById('adsActiveId');
+  if (nameEl) nameEl.textContent = adsActiveAccount.name;
+  if (idEl)   idEl.textContent   = `ID: ${adsActiveAccount.id} · ${adsActiveAccount.currency}`;
+  if (el)     el.style.display   = 'block';
+}
+
+function showAccountSelector() {
+  document.getElementById('adsActiveAccount').style.display = 'none';
+  if (adsAccounts.length > 0) {
+    renderAccountSelector();
+  } else {
+    loadAdsAccounts();
+  }
+}
+
+function showAdsError(msg) {
+  const el = document.getElementById('adsAccountsError');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function showUpgradeHint() {
+  showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
 }
 
 function updateAdsUI(connected, email) {
@@ -2100,6 +2277,8 @@ function updateAdsUI(connected, email) {
     connDiv.style.display = 'block';
     if (email && emailSpan) emailSpan.textContent = email;
     if (connBadge) connBadge.style.display = 'block';
+    // Cargar cuentas automáticamente si no las tenemos aún
+    if (!adsAccounts.length && !adsActiveAccount) loadAdsAccounts();
   } else {
     badge.textContent = 'sin conectar';
     badge.style.background = 'var(--sidebar2)';
@@ -2114,7 +2293,7 @@ async function queryGoogleAds(gaqlQuery) {
   const accessToken = sessionStorage.getItem('ads_access_token');
   const customerId  = sessionStorage.getItem('ads_customer_id');
   if (!accessToken) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
-  if (!customerId)  return { error: 'No hay Customer ID guardado. Ingrésalo en Configuración → Conexiones.' };
+  if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {
     const res = await fetch('/api/google-ads', {
       method: 'POST',
@@ -2173,18 +2352,38 @@ async function queryGoogleAds(gaqlQuery) {
 
       <!-- Conectado -->
       <div id="adsConnected" style="display:none">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:var(--sidebar);border-radius:7px">
-          <span style="color:var(--muted2)">Cuenta:</span> <span id="adsEmail" style="color:var(--text);font-weight:500"></span>
+        <!-- Email conectado -->
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--sidebar);border-radius:7px;display:flex;align-items:center;gap:6px">
+          <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#34A853"/></svg>
+          <span id="adsEmail" style="color:var(--text);font-weight:500"></span>
         </div>
-        <div style="margin-bottom:10px">
-          <label style="font-size:10px;color:var(--muted2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">Customer ID</label>
-          <input id="adsCustomerId" type="text" placeholder="123-456-7890" style="width:100%;padding:7px 10px;background:var(--sidebar);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);box-sizing:border-box"/>
-          <div style="font-size:10px;color:var(--muted2);margin-top:3px">Lo encuentras en la esquina superior derecha de Google Ads</div>
+
+        <!-- Cargando cuentas -->
+        <div id="adsAccountsLoading" style="text-align:center;padding:16px 0;display:none">
+          <div style="font-size:12px;color:var(--muted)">Cargando tus cuentas...</div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="saveAdsAccount()" style="flex:1;padding:7px;background:var(--success);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Guardar</button>
-          <button onclick="disconnectGoogleAds()" style="padding:7px 12px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar</button>
+
+        <!-- Selector de cuentas -->
+        <div id="adsAccountsList" style="display:none;margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Tus cuentas</label>
+            <span id="adsPlanGateMsg" style="font-size:10px;color:var(--warning);display:none">Plan individual: 1 cuenta</span>
+          </div>
+          <div id="adsAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
         </div>
+
+        <!-- Cuenta activa -->
+        <div id="adsActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
+          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
+          <div id="adsActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+          <div id="adsActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+          <button onclick="showAccountSelector()" style="margin-top:8px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+        </div>
+
+        <!-- Error cargando -->
+        <div id="adsAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
+
+        <button onclick="disconnectGoogleAds()" style="width:100%;padding:7px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
       </div>
     </div>
 
