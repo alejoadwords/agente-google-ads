@@ -655,7 +655,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <input type="file" id="img-file" accept="image/*" style="display:none" onchange="handleImgSelect(this)">
       <div id="chat-input-area">
         <div class="cin-wrap">
-          <button class="attach-btn" onclick="document.getElementById('img-file').click()" title="adjuntar imagen de campaña">
+          <button class="attach-btn" onclick="pendingImg ? clearImg() : document.getElementById('img-file').click()" title="adjuntar imagen de campaña">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
               <polyline points="21 15 16 10 5 21"/>
@@ -1308,24 +1308,23 @@ function handleImgSelect(input){
     const base64=dataUrl.split(',')[1];
     const mediaType=file.type||'image/jpeg';
     pendingImg={base64,mediaType,name:file.name};
-    showImgPreview(file.name,dataUrl);
+    // Indicador sutil en el botón
+    const btn=document.querySelector('.attach-btn');
+    if(btn){btn.style.color='var(--blue)';btn.style.background='var(--blue-lt)';btn.title='imagen lista — clic para quitar';}
+    // Cambiar placeholder
+    const cin=document.getElementById('cin');
+    if(cin)cin.placeholder='imagen lista — escribe tu pregunta o envía directamente';
   };
   reader.readAsDataURL(file);
-  input.value=''; // reset para poder subir la misma imagen de nuevo
-}
-
-function showImgPreview(name,dataUrl){
-  document.getElementById('img-preview-bar')?.remove();
-  const bar=document.createElement('div');
-  bar.id='img-preview-bar';
-  bar.className='img-preview';
-  bar.innerHTML=`<img src="${dataUrl}" alt="preview"><span class="img-preview-name">${esc(name)}</span><button class="img-remove" onclick="clearImg()" title="quitar imagen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
-  document.getElementById('chat-input-area').prepend(bar);
+  input.value='';
 }
 
 function clearImg(){
   pendingImg=null;
-  document.getElementById('img-preview-bar')?.remove();
+  const btn=document.querySelector('.attach-btn');
+  if(btn){btn.style.color='';btn.style.background='';btn.title='adjuntar imagen de campaña';}
+  const cin=document.getElementById('cin');
+  if(cin)cin.placeholder='pregunta al agente o adjunta una captura...';
 }
 function qSend(txt){if(!onDone||loading)return;showView('chat');document.getElementById('cin').value=txt;sendMsg()}
 function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',semana:'Estoy en la primera semana de mi campaña. ¿Qué debería estar revisando ahora mismo y qué es lo más importante?',quincena:'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',mes:'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',trimestre:'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',semestre:'Tengo 6 meses de historial. Ayúdame a planificar el siguiente semestre y dame recomendaciones de cuenta madura.'};qSend(msgs[stage]||'Guíame en esta etapa de mi cuenta.')}
