@@ -1305,7 +1305,7 @@ function updateMem(){document.getElementById('m-neg').textContent=mem.negocio?.s
 // CHAT
 function memCtx(){return Object.keys(mem).length?Object.entries(mem).map(([k,v])=>`${k}: ${v}`).join('\n'):'perfil no completado aún.'}
 async function sendMsg(){
-  if(loading||!onDone)return;
+  if(loading||((!onDone)&&!pendingImg))return;
   const el=document.getElementById('cin');
   const txt=el.value.trim();
   if(!txt && !pendingImg)return;
