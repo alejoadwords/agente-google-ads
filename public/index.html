@@ -646,33 +646,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
     </div>
 
-    <!-- GOOGLE ADS CONNECT PANEL -->
-    <div id="googleAdsPanel" style="margin:10px 0 4px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:12px 14px;flex-shrink:0">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <div style="width:22px;height:22px;border-radius:6px;background:#E8F0FE;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+    <!-- BOTÓN CONFIGURACIÓN -->
+    <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--border);margin-left:-10px;margin-right:-10px;padding-left:10px;padding-right:10px;margin-bottom:0">
+      <div onclick="openSettings()" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent" onmouseover="this.style.background='var(--sidebar2)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--muted)'">
+        <div style="width:22px;height:22px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </div>
-        <span style="font-size:11px;font-weight:600;color:var(--text);flex:1">Google Ads</span>
-        <span id="adsStatusBadge" style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--sidebar2);color:var(--muted)">sin conectar</span>
-      </div>
-
-      <!-- Desconectado -->
-      <div id="adsDisconnected">
-        <p style="font-size:11px;color:var(--muted);margin:0 0 8px 0;line-height:1.4">Conecta tu cuenta para que el agente acceda a tus campañas en tiempo real.</p>
-        <button onclick="connectGoogleAds()" style="width:100%;padding:7px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar cuenta</button>
-      </div>
-
-      <!-- Conectado -->
-      <div id="adsConnected" style="display:none">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Cuenta: <span id="adsEmail" style="color:var(--text);font-weight:500"></span></div>
-        <div style="margin-bottom:8px">
-          <label style="font-size:10px;color:var(--muted2);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Customer ID</label>
-          <input id="adsCustomerId" type="text" placeholder="123-456-7890" style="width:100%;padding:6px 9px;background:var(--sidebar);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);box-sizing:border-box"/>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="saveAdsAccount()" style="flex:1;padding:6px;background:var(--success);color:white;border:none;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Guardar</button>
-          <button onclick="disconnectGoogleAds()" style="flex:1;padding:6px;background:var(--sidebar2);color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:11px;cursor:pointer;font-family:var(--font)">Desconectar</button>
-        </div>
+        <span style="flex:1">configuración</span>
+        <span id="connBadge" style="display:none;width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0"></span>
       </div>
     </div>
 
@@ -1155,7 +1136,25 @@ REGLAS DE RESPUESTA
 **Límites claros:**
 – No prometas resultados específicos (CTR del 10%, ROAS de 5x, etc.)
 – No recomiendes estrategias que el cliente no pueda ejecutar con su presupuesto
-– Si el cliente pregunta sobre Meta, TikTok u otras plataformas, responde brevemente y redirige al agente correspondiente`;
+– Si el cliente pregunta sobre Meta, TikTok u otras plataformas, responde brevemente y redirige al agente correspondiente
+
+## ACCESO DIRECTO A GOOGLE ADS API
+
+Tienes acceso a la función window.queryGoogleAds(gaqlQuery) que consulta la API de Google Ads del cliente en tiempo real usando GAQL (Google Ads Query Language).
+
+**Cuándo usarla:** Cuando el cliente pida analizar su cuenta, ver campañas, métricas, keywords, o cualquier dato que puedas obtener directamente.
+
+**Cómo usarla:** Incluye un bloque de código especial en tu respuesta con este formato exacto:
+[GAQL_QUERY: SELECT campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM campaign WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.cost_micros DESC]
+
+El sistema ejecutará la query automáticamente y te devolverá los resultados para que los analices.
+
+**Queries útiles de ejemplo:**
+– Resumen de campañas: SELECT campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.cost_micros, metrics.conversions FROM campaign WHERE segments.date DURING LAST_30_DAYS
+– Keywords top: SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.impressions, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.clicks DESC LIMIT 20
+– Search terms: SELECT search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.ctr, metrics.conversions FROM search_term_view WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.clicks DESC LIMIT 20
+
+**Si no hay cuenta conectada:** El sistema te avisará. En ese caso, pide al cliente que conecte su cuenta en Configuración → Conexiones.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -1468,7 +1467,30 @@ document.addEventListener('click',function(e){
 });
 function qSend(txt){if(!onDone||loading)return;showView('chat');document.getElementById('cin').value=txt;sendMsg()}
 function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',semana:'Estoy en la primera semana de mi campaña. ¿Qué debería estar revisando ahora mismo y qué es lo más importante?',quincena:'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',mes:'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',trimestre:'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',semestre:'Tengo 6 meses de historial. Ayúdame a planificar el siguiente semestre y dame recomendaciones de cuenta madura.'};qSend(msgs[stage]||'Guíame en esta etapa de mi cuenta.')}
-async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};const sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};console.log('Enviando',hist.length,'mensajes, último content type:',typeof hist[hist.length-1]?.content);const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)console.error('API error',r.status,d);rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}const reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';hist.push({role:'assistant',content:reply});addAgent(reply)}catch(e){rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.')}loading=false;document.getElementById('sbtn').disabled=false}
+async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};const sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};console.log('Enviando',hist.length,'mensajes, último content type:',typeof hist[hist.length-1]?.content);const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)console.error('API error',r.status,d);rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}let reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';
+    // Detectar bloque GAQL y ejecutar query
+    const gaqlMatch = reply.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
+    if(gaqlMatch){
+      const gaqlQuery = gaqlMatch[1].trim();
+      reply = reply.replace(gaqlMatch[0], '').trim();
+      addAgent(reply || 'Consultando tu cuenta de Google Ads...');
+      const gaqlResult = await queryGoogleAds(gaqlQuery);
+      if(gaqlResult.error){
+        hist.push({role:'assistant',content:reply});
+        hist.push({role:'user',content:`Error al consultar Google Ads API: ${gaqlResult.error}`});
+        addAgent(`⚠️ No pude consultar tu cuenta: ${gaqlResult.error}`);
+      } else {
+        const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
+        hist.push({role:'assistant',content:reply});
+        hist.push({role:'user',content:`Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
+        await callClaude();
+        return;
+      }
+    } else {
+      hist.push({role:'assistant',content:reply});
+      addAgent(reply);
+    }
+    }catch(e){rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.')}loading=false;document.getElementById('sbtn').disabled=false}
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 // ROADMAP
@@ -1967,6 +1989,48 @@ function askAgentFromRoadmap(stageId) {
 }
 
 // =============================================
+// SETTINGS PANEL
+// =============================================
+function openSettings() {
+  const panel = document.getElementById('settings-panel');
+  const overlay = document.getElementById('settings-overlay');
+  panel.style.display = 'flex';
+  overlay.style.display = 'block';
+  // Poblar datos de cuenta
+  if (clerkInstance && clerkInstance.user) {
+    const u = clerkInstance.user;
+    const name = u.firstName ? (u.firstName + (u.lastName ? ' ' + u.lastName : '')) : (u.username || '—');
+    const email = u.primaryEmailAddress?.emailAddress || '—';
+    const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    document.getElementById('cfg-avatar').textContent = initials;
+    document.getElementById('cfg-name').textContent = name;
+    document.getElementById('cfg-email').textContent = email;
+    document.getElementById('cfg-plan').textContent = userPlan === 'pro' ? 'Pro' : 'Free';
+  }
+}
+
+function closeSettings() {
+  document.getElementById('settings-panel').style.display = 'none';
+  document.getElementById('settings-overlay').style.display = 'none';
+}
+
+function switchSettingsTab(tab) {
+  ['connections','account'].forEach(t => {
+    document.getElementById('stab-content-'+t).style.display = t === tab ? 'block' : 'none';
+    const btn = document.getElementById('stab-'+t);
+    if (t === tab) {
+      btn.style.color = 'var(--blue)';
+      btn.style.borderBottom = '2px solid var(--blue)';
+      btn.style.fontWeight = '600';
+    } else {
+      btn.style.color = 'var(--muted)';
+      btn.style.borderBottom = '2px solid transparent';
+      btn.style.fontWeight = '500';
+    }
+  });
+}
+
+// =============================================
 // GOOGLE ADS — Conexión OAuth
 // =============================================
 (function checkAdsCallback() {
@@ -1980,6 +2044,8 @@ function askAgentFromRoadmap(stageId) {
       sessionStorage.setItem('ads_refresh_token', refresh || '');
       sessionStorage.setItem('ads_email', email || '');
       updateAdsUI(true, email);
+      // Abrir settings en conexiones para que el usuario vea que se conectó
+      setTimeout(() => openSettings(), 400);
     }
     window.history.replaceState({}, '', window.location.pathname);
   }
@@ -2025,6 +2091,7 @@ function updateAdsUI(connected, email) {
   const disconnDiv = document.getElementById('adsDisconnected');
   const connDiv    = document.getElementById('adsConnected');
   const emailSpan  = document.getElementById('adsEmail');
+  const connBadge  = document.getElementById('connBadge');
   if (connected) {
     badge.textContent = '● conectado';
     badge.style.background = 'rgba(5,150,105,.1)';
@@ -2032,20 +2099,22 @@ function updateAdsUI(connected, email) {
     disconnDiv.style.display = 'none';
     connDiv.style.display = 'block';
     if (email && emailSpan) emailSpan.textContent = email;
+    if (connBadge) connBadge.style.display = 'block';
   } else {
     badge.textContent = 'sin conectar';
     badge.style.background = 'var(--sidebar2)';
     badge.style.color = 'var(--muted)';
     disconnDiv.style.display = 'block';
     connDiv.style.display = 'none';
+    if (connBadge) connBadge.style.display = 'none';
   }
 }
 
 async function queryGoogleAds(gaqlQuery) {
   const accessToken = sessionStorage.getItem('ads_access_token');
   const customerId  = sessionStorage.getItem('ads_customer_id');
-  if (!accessToken) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta primero.' };
-  if (!customerId)  return { error: 'No hay Customer ID guardado. Ingrésalo en el panel lateral.' };
+  if (!accessToken) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
+  if (!customerId)  return { error: 'No hay Customer ID guardado. Ingrésalo en Configuración → Conexiones.' };
   try {
     const res = await fetch('/api/google-ads', {
       method: 'POST',
@@ -2061,6 +2130,131 @@ async function queryGoogleAds(gaqlQuery) {
 </script>
 
 
+
+<!-- SETTINGS PANEL -->
+<div id="settings-overlay" onclick="closeSettings()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:200;backdrop-filter:blur(2px)"></div>
+<div id="settings-panel" style="display:none;position:fixed;top:0;right:0;width:340px;height:100%;background:var(--bg);border-left:1px solid var(--border);z-index:201;flex-direction:column;overflow:hidden">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    <span style="font-size:15px;font-weight:600;letter-spacing:-.2px;flex:1">Configuración</span>
+    <button onclick="closeSettings()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted)" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='none'">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 20px">
+    <button onclick="switchSettingsTab('connections')" id="stab-connections" style="font-size:12px;font-weight:600;padding:10px 0;margin-right:20px;border:none;background:none;cursor:pointer;color:var(--blue);border-bottom:2px solid var(--blue);font-family:var(--font)">Conexiones</button>
+    <button onclick="switchSettingsTab('account')" id="stab-account" style="font-size:12px;font-weight:500;padding:10px 0;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-family:var(--font)">Cuenta</button>
+  </div>
+
+  <!-- Tab: Conexiones -->
+  <div id="stab-content-connections" style="flex:1;overflow-y:auto;padding:20px">
+    <p style="font-size:11px;color:var(--muted2);margin-bottom:16px;line-height:1.5">Conecta tus plataformas para que los agentes puedan acceder a tus datos en tiempo real.</p>
+
+    <!-- Google Ads -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:32px;height:32px;border-radius:8px;background:#E8F0FE;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Google Ads</div>
+          <div style="font-size:11px;color:var(--muted)">Campañas, keywords y rendimiento</div>
+        </div>
+        <span id="adsStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
+      </div>
+
+      <!-- Desconectado -->
+      <div id="adsDisconnected">
+        <button onclick="connectGoogleAds()" style="width:100%;padding:8px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Google</button>
+      </div>
+
+      <!-- Conectado -->
+      <div id="adsConnected" style="display:none">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:var(--sidebar);border-radius:7px">
+          <span style="color:var(--muted2)">Cuenta:</span> <span id="adsEmail" style="color:var(--text);font-weight:500"></span>
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:10px;color:var(--muted2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">Customer ID</label>
+          <input id="adsCustomerId" type="text" placeholder="123-456-7890" style="width:100%;padding:7px 10px;background:var(--sidebar);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);box-sizing:border-box"/>
+          <div style="font-size:10px;color:var(--muted2);margin-top:3px">Lo encuentras en la esquina superior derecha de Google Ads</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="saveAdsAccount()" style="flex:1;padding:7px;background:var(--success);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Guardar</button>
+          <button onclick="disconnectGoogleAds()" style="padding:7px 12px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Meta Ads — próximamente -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px;opacity:.55">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:8px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Meta Ads</div>
+          <div style="font-size:11px;color:var(--muted)">Facebook e Instagram Ads</div>
+        </div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+      </div>
+    </div>
+
+    <!-- TikTok Ads — próximamente -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px;opacity:.55">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:8px;background:#F0F0F0;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">TikTok Ads</div>
+          <div style="font-size:11px;color:var(--muted)">Campañas en TikTok</div>
+        </div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+      </div>
+    </div>
+
+    <!-- Página web — próximamente -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;opacity:.55">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:8px;background:#F0FDF4;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Página web</div>
+          <div style="font-size:11px;color:var(--muted)">Analytics y conversiones</div>
+        </div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Cuenta -->
+  <div id="stab-content-account" style="display:none;flex:1;overflow-y:auto;padding:20px">
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:12px">Tu cuenta</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="cfg-avatar" style="width:38px;height:38px;border-radius:50%;background:var(--blue-lt);border:2px solid var(--blue-md);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--blue);flex-shrink:0">A</div>
+        <div>
+          <div id="cfg-name" style="font-size:13px;font-weight:600;color:var(--text)">—</div>
+          <div id="cfg-email" style="font-size:11px;color:var(--muted);margin-top:1px">—</div>
+        </div>
+      </div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:12px">Plan actual</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div id="cfg-plan" style="font-size:13px;font-weight:600;color:var(--text)">Free</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">7 días de prueba</div>
+        </div>
+        <button style="padding:6px 12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Mejorar plan</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ROADMAP PANEL -->
 <div class="rm-panel-overlay" id="rm-overlay" onclick="closeRoadmap()"></div>
