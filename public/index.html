@@ -1378,13 +1378,13 @@ function showImgChip(name, dataUrl, b64len){
   const sizeLabel=kb>1024?Math.round(kb/1024)+'MB':kb+'KB';
   const bar=document.createElement('div');
   bar.id='img-chip-bar';
-  bar.innerHTML=`<div class="img-chip">
-    <img class="img-chip-thumb" src="${dataUrl}" alt="preview">
-    <div class="img-chip-info">
-      <span class="img-chip-name">${esc(name)}</span>
-      <span class="img-chip-size">${sizeLabel}</span>
+  bar.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 10px 5px 5px;max-width:200px;margin:6px 0 2px">
+    <img src="${dataUrl}" style="width:32px;height:32px;min-width:32px;border-radius:6px;object-fit:cover;border:1px solid #E5E7EB;display:block" alt="preview">
+    <div style="display:flex;flex-direction:column;gap:1px;min-width:0;flex:1">
+      <span style="font-size:12px;font-weight:500;color:#0A0A0A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;display:block">${esc(name)}</span>
+      <span style="font-size:11px;color:#6B7280">${sizeLabel}</span>
     </div>
-    <button class="img-chip-remove" onclick="clearImg()" title="quitar imagen">
+    <button onclick="clearImg()" title="quitar" style="background:none;border:none;cursor:pointer;color:#9CA3AF;padding:2px;border-radius:4px;display:flex;align-items:center;flex-shrink:0">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
