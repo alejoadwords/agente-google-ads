@@ -133,8 +133,27 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .qa{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .qb{padding:5px 12px;border-radius:20px;font-size:12px;border:1px solid var(--border2);background:var(--bg);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s}
 .qb:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
+.attach-wrap{position:relative;flex-shrink:0}
 .attach-btn{background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:var(--muted);display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .attach-btn:hover{background:var(--blue-lt);color:var(--blue)}
+.attach-btn.active{background:var(--blue-lt);color:var(--blue)}
+.attach-btn.has-img{color:var(--blue);background:var(--blue-lt)}
+.attach-menu{
+  display:none;position:absolute;bottom:calc(100% + 8px);left:0;
+  background:#fff;border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 4px 20px rgba(0,0,0,.12);min-width:180px;
+  padding:6px;z-index:100;
+}
+.attach-menu.open{display:block}
+.attach-opt{
+  width:100%;display:flex;align-items:center;gap:10px;
+  background:none;border:none;cursor:pointer;
+  padding:9px 12px;border-radius:8px;
+  font-size:13px;font-weight:500;color:var(--text);
+  font-family:var(--font);text-align:left;transition:background .1s;
+}
+.attach-opt:hover{background:var(--bg2)}
+.attach-opt svg{color:var(--muted);flex-shrink:0}
 .cin-wrap{display:flex;gap:8px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rlg);padding:8px 12px;transition:border-color .15s}
 .cin-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-dim)}
 .cin{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:16px;color:var(--text);resize:none;max-height:120px;min-height:22px;line-height:1.5}
@@ -655,12 +674,23 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <input type="file" id="img-file" accept="image/*" style="display:none" onchange="handleImgSelect(this)">
       <div id="chat-input-area">
         <div class="cin-wrap">
-          <button class="attach-btn" onclick="pendingImg ? clearImg() : document.getElementById('img-file').click()" title="adjuntar imagen de campaña">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-          </button>
+          <div class="attach-wrap" id="attach-wrap">
+            <button class="attach-btn" id="attach-plus" onclick="toggleAttachMenu(event)" title="adjuntar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+            <div class="attach-menu" id="attach-menu">
+              <button class="attach-opt" onclick="document.getElementById('img-file').click();closeAttachMenu()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Subir imagen
+              </button>
+              <button class="attach-opt" onclick="captureScreen();closeAttachMenu()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                Tomar captura
+              </button>
+            </div>
+          </div>
           <textarea class="cin" id="cin" placeholder="pregunta al agente o adjunta una captura..." rows="1" onkeydown="handleKey(event)" oninput="autoR(this)"></textarea>
           <button class="sbtn" id="sbtn" onclick="sendMsg()">
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -1301,34 +1331,114 @@ async function sendMsg(){
 function handleImgSelect(input){
   const file=input.files[0];
   if(!file)return;
-  if(file.size>5*1024*1024){alert('La imagen debe pesar menos de 5MB');return;}
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const dataUrl=e.target.result;
+  if(file.size>10*1024*1024){alert('La imagen debe pesar menos de 10MB');return;}
+  
+  // Comprimir imagen antes de enviar para evitar timeouts
+  const img=new Image();
+  const url=URL.createObjectURL(file);
+  img.onload=()=>{
+    URL.revokeObjectURL(url);
+    const MAX=1280; // máximo lado largo en px
+    let w=img.width, h=img.height;
+    if(w>MAX||h>MAX){
+      if(w>h){h=Math.round(h*MAX/w);w=MAX;}
+      else{w=Math.round(w*MAX/h);h=MAX;}
+    }
+    const canvas=document.createElement('canvas');
+    canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    const dataUrl=canvas.toDataURL('image/jpeg',0.85);
     const base64=dataUrl.split(',')[1];
-    const mediaType=file.type||'image/jpeg';
-    pendingImg={base64,mediaType,name:file.name};
-    // Indicador sutil en el botón
-    const btn=document.querySelector('.attach-btn');
-    if(btn){btn.style.color='var(--blue)';btn.style.background='var(--blue-lt)';btn.title='imagen lista — clic para quitar';}
-    // Cambiar placeholder
+    pendingImg={base64,mediaType:'image/jpeg',name:file.name};
+    console.log('Imagen lista:', w+'x'+h, Math.round(base64.length/1024)+'KB base64');
+    // Indicador en el botón
+    const btn=document.getElementById('attach-plus');
+    if(btn)btn.classList.add('has-img');
     const cin=document.getElementById('cin');
     if(cin)cin.placeholder='imagen lista — escribe tu pregunta o envía directamente';
+    showImgChip(file.name, dataUrl, base64.length);
   };
-  reader.readAsDataURL(file);
+  img.onerror=()=>{alert('Error al cargar la imagen. Intenta con otro archivo.');};
+  img.src=url;
   input.value='';
 }
 
 function clearImg(){
   pendingImg=null;
-  const btn=document.querySelector('.attach-btn');
-  if(btn){btn.style.color='';btn.style.background='';btn.title='adjuntar imagen de campaña';}
+  document.getElementById('img-chip-bar')?.remove();
+  const btn=document.getElementById('attach-plus');
+  if(btn)btn.classList.remove('has-img');
   const cin=document.getElementById('cin');
   if(cin)cin.placeholder='pregunta al agente o adjunta una captura...';
 }
+
+function showImgChip(name, dataUrl, b64len){
+  document.getElementById('img-chip-bar')?.remove();
+  const kb=Math.round(b64len/1024*0.75); // base64 → KB aprox
+  const sizeLabel=kb>1024?Math.round(kb/1024)+'MB':kb+'KB';
+  const bar=document.createElement('div');
+  bar.id='img-chip-bar';
+  bar.innerHTML=`<div class="img-chip">
+    <img class="img-chip-thumb" src="${dataUrl}" alt="preview">
+    <div class="img-chip-info">
+      <span class="img-chip-name">${esc(name)}</span>
+      <span class="img-chip-size">${sizeLabel}</span>
+    </div>
+    <button class="img-chip-remove" onclick="clearImg()" title="quitar imagen">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>`;
+  // Insertar encima del cin-wrap dentro del chat-input-area
+  const wrap=document.querySelector('.cin-wrap');
+  if(wrap)wrap.parentNode.insertBefore(bar, wrap);
+}
+
+function toggleAttachMenu(e){
+  e.stopPropagation();
+  if(pendingImg){clearImg();return;}
+  const menu=document.getElementById('attach-menu');
+  const btn=document.getElementById('attach-plus');
+  menu.classList.toggle('open');
+  btn.classList.toggle('active',menu.classList.contains('open'));
+}
+
+function closeAttachMenu(){
+  document.getElementById('attach-menu')?.classList.remove('open');
+  document.getElementById('attach-plus')?.classList.remove('active');
+}
+
+async function captureScreen(){
+  try{
+    const stream=await navigator.mediaDevices.getDisplayMedia({preferCurrentTab:true});
+    const track=stream.getVideoTracks()[0];
+    const capture=new ImageCapture(track);
+    const bitmap=await capture.grabFrame();
+    track.stop();
+    const canvas=document.createElement('canvas');
+    canvas.width=bitmap.width;canvas.height=bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap,0,0);
+    const dataUrl=canvas.toDataURL('image/jpeg',0.85);
+    const base64=dataUrl.split(',')[1];
+    pendingImg={base64,mediaType:'image/jpeg',name:'captura.jpg'};
+    const btn=document.getElementById('attach-plus');
+    if(btn)btn.classList.add('has-img');
+    showImgChip('captura.jpg', dataUrl, base64.length);
+    const cin=document.getElementById('cin');
+    if(cin)cin.placeholder='captura lista — escribe tu pregunta o envía directamente';
+  } catch(e){
+    if(e.name!=='NotAllowedError')alert('No se pudo capturar la pantalla. Usa "Subir imagen" en su lugar.');
+  }
+}
+
+// Cerrar menú al hacer clic fuera
+document.addEventListener('click',function(e){
+  if(!document.getElementById('attach-wrap')?.contains(e.target))closeAttachMenu();
+});
 function qSend(txt){if(!onDone||loading)return;showView('chat');document.getElementById('cin').value=txt;sendMsg()}
 function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',semana:'Estoy en la primera semana de mi campaña. ¿Qué debería estar revisando ahora mismo y qué es lo más importante?',quincena:'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',mes:'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',trimestre:'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',semestre:'Tengo 6 meses de historial. Ayúdame a planificar el siguiente semestre y dame recomendaciones de cuenta madura.'};qSend(msgs[stage]||'Guíame en esta etapa de mi cuenta.')}
-async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};const sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify({messages:hist,system:sys,userPlan})});const d=await r.json();rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}const reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';hist.push({role:'assistant',content:reply});addAgent(reply)}catch(e){rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.')}loading=false;document.getElementById('sbtn').disabled=false}
+async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};const sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};console.log('Enviando',hist.length,'mensajes, último content type:',typeof hist[hist.length-1]?.content);const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)console.error('API error',r.status,d);rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}const reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';hist.push({role:'assistant',content:reply});addAgent(reply)}catch(e){rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.')}loading=false;document.getElementById('sbtn').disabled=false}
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 // ROADMAP
