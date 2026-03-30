@@ -133,6 +133,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .qa{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .qb{padding:5px 12px;border-radius:20px;font-size:12px;border:1px solid var(--border2);background:var(--bg);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s}
 .qb:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
+.attach-btn{background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:var(--muted);display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.attach-btn:hover{background:var(--blue-lt);color:var(--blue)}
 .cin-wrap{display:flex;gap:8px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rlg);padding:8px 12px;transition:border-color .15s}
 .cin-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-dim)}
 .cin{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:16px;color:var(--text);resize:none;max-height:120px;min-height:22px;line-height:1.5}
@@ -650,11 +652,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <button class="qb" onclick="qSend('¿Qué debo revisar hoy en mi cuenta?')">¿qué revisar hoy?</button>
         <button class="qb" onclick="qSend('Analizar competencia')">competencia</button>
       </div>
-      <div class="cin-wrap">
-        <textarea class="cin" id="cin" placeholder="pregunta al agente..." rows="1" onkeydown="handleKey(event)" oninput="autoR(this)"></textarea>
-        <button class="sbtn" id="sbtn" onclick="sendMsg()">
-          <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-        </button>
+      <input type="file" id="img-file" accept="image/*" style="display:none" onchange="handleImgSelect(this)">
+      <div id="chat-input-area">
+        <div class="cin-wrap">
+          <button class="attach-btn" onclick="document.getElementById('img-file').click()" title="adjuntar imagen de campaña">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+          <textarea class="cin" id="cin" placeholder="pregunta al agente o adjunta una captura..." rows="1" onkeydown="handleKey(event)" oninput="autoR(this)"></textarea>
+          <button class="sbtn" id="sbtn" onclick="sendMsg()">
+            <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1087,6 +1098,7 @@ REGLAS DE RESPUESTA
 – Si el cliente pregunta sobre Meta, TikTok u otras plataformas, responde brevemente y redirige al agente correspondiente`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
+let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
 
 const obSteps=[
@@ -1262,7 +1274,59 @@ function updateMem(){document.getElementById('m-neg').textContent=mem.negocio?.s
 
 // CHAT
 function memCtx(){return Object.keys(mem).length?Object.entries(mem).map(([k,v])=>`${k}: ${v}`).join('\n'):'perfil no completado aún.'}
-async function sendMsg(){if(loading||!onDone)return;const el=document.getElementById('cin');const txt=el.value.trim();if(!txt)return;el.value='';autoR(el);addUser(txt);hist.push({role:'user',content:txt});await callClaude()}
+async function sendMsg(){
+  if(loading||!onDone)return;
+  const el=document.getElementById('cin');
+  const txt=el.value.trim();
+  if(!txt && !pendingImg)return;
+  el.value='';autoR(el);
+  
+  // Construir contenido del mensaje con imagen opcional
+  let msgContent;
+  if(pendingImg){
+    msgContent=[];
+    msgContent.push({type:'image',source:{type:'base64',media_type:pendingImg.mediaType,data:pendingImg.base64}});
+    if(txt)msgContent.push({type:'text',text:txt});
+    else msgContent.push({type:'text',text:'Analiza esta imagen de mi campaña de Google Ads.'});
+    addUser(txt||'[Imagen adjunta]', pendingImg);
+    clearImg();
+  } else {
+    msgContent=txt;
+    addUser(txt);
+  }
+  hist.push({role:'user',content:msgContent});
+  await callClaude();
+}
+
+function handleImgSelect(input){
+  const file=input.files[0];
+  if(!file)return;
+  if(file.size>5*1024*1024){alert('La imagen debe pesar menos de 5MB');return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const dataUrl=e.target.result;
+    const base64=dataUrl.split(',')[1];
+    const mediaType=file.type||'image/jpeg';
+    pendingImg={base64,mediaType,name:file.name};
+    showImgPreview(file.name,dataUrl);
+  };
+  reader.readAsDataURL(file);
+  input.value=''; // reset para poder subir la misma imagen de nuevo
+}
+
+function showImgPreview(name,dataUrl){
+  document.getElementById('img-preview-bar')?.remove();
+  const bar=document.createElement('div');
+  bar.id='img-preview-bar';
+  bar.className='img-preview';
+  bar.innerHTML=`<img src="${dataUrl}" alt="preview"><span class="img-preview-name">${esc(name)}</span><button class="img-remove" onclick="clearImg()" title="quitar imagen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  document.getElementById('chat-input-area').prepend(bar);
+}
+
+function clearImg(){
+  pendingImg=null;
+  document.getElementById('img-preview-bar')?.remove();
+}
 function qSend(txt){if(!onDone||loading)return;showView('chat');document.getElementById('cin').value=txt;sendMsg()}
 function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',semana:'Estoy en la primera semana de mi campaña. ¿Qué debería estar revisando ahora mismo y qué es lo más importante?',quincena:'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',mes:'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',trimestre:'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',semestre:'Tengo 6 meses de historial. Ayúdame a planificar el siguiente semestre y dame recomendaciones de cuenta madura.'};qSend(msgs[stage]||'Guíame en esta etapa de mi cuenta.')}
 async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};const sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify({messages:hist,system:sys,userPlan})});const d=await r.json();rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}const reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';hist.push({role:'assistant',content:reply});addAgent(reply)}catch(e){rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.')}loading=false;document.getElementById('sbtn').disabled=false}
@@ -1299,7 +1363,15 @@ function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente
 
 // DOM
 function addAgent(txt){const el=document.createElement('div');el.className='msg';el.innerHTML=`<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="bubble ag-bubble">${fmt(txt)}</div>`;document.getElementById('chat-area').appendChild(el);scrollB()}
-function addUser(txt){const el=document.createElement('div');el.className='msg user';el.innerHTML=`<div class="av usr" style="font-size:10px;font-weight:600">tú</div><div class="bubble usr-bubble">${esc(txt)}</div>`;document.getElementById('chat-area').appendChild(el);scrollB()}
+function addUser(txt,img){
+  const el=document.createElement('div');
+  el.className='msg user';
+  let imgHtml='';
+  if(img){imgHtml=`<img src="data:${img.mediaType};base64,${img.base64}" class="msg-img" alt="imagen adjunta">`}
+  const textHtml=txt&&txt!=='[Imagen adjunta]'?`<div class="bubble usr-bubble">${esc(txt)}</div>`:'';
+  el.innerHTML=`<div class="av usr" style="font-size:10px;font-weight:600">tú</div>${imgHtml}${textHtml}`;
+  document.getElementById('chat-area').appendChild(el);scrollB();
+}
 function addThinking(){const id='th'+Date.now();const el=document.createElement('div');el.className='msg';el.id=id;el.innerHTML=`<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="thinking-bbl"><div class="spinner"></div>analizando tu cuenta...</div>`;document.getElementById('chat-area').appendChild(el);scrollB();return id}
 function rmThinking(id){document.getElementById(id)?.remove()}
 function appendRaw(html){const a=document.getElementById('chat-area');const d=document.createElement('div');d.innerHTML=html;a.appendChild(d.firstElementChild)}
