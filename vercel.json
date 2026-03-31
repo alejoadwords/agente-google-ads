@@ -1,27 +1,22 @@
 {
-  "outputDirectory": "public",
-  "redirects": [
+  "rewrites": [
     {
-      "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "acuarius.app"
-        }
-      ],
-      "destination": "https://www.acuarius.app/$1",
-      "permanent": true
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "acuarius.app" }],
+      "destination": "/landing/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.acuarius.app" }],
+      "destination": "/landing/index.html"
     },
     {
       "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.acuarius.app"
-        }
-      ],
-      "destination": "https://www.acuarius.app/$1",
-      "permanent": false
+      "destination": "/public/$1"
     }
   ]
 }
