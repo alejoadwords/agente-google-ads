@@ -1,4 +1,5 @@
 {
+  "outputDirectory": "public",
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -6,17 +7,13 @@
     },
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "acuarius.app" }],
-      "destination": "/landing/index.html"
-    },
-    {
-      "source": "/:path*",
       "has": [{ "type": "host", "value": "www.acuarius.app" }],
       "destination": "/landing/index.html"
     },
     {
-      "source": "/(.*)",
-      "destination": "/public/$1"
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "acuarius.app" }],
+      "destination": "/landing/index.html"
     }
   ]
 }
