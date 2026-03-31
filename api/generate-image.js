@@ -1,100 +1,118 @@
 // api/generate-image.js
-// Genera imágenes de anuncios usando la API de Anthropic
-// Recibe: { prompt, format, variations }
+// Genera imágenes de anuncios usando fal.ai
+// Modelos: Ideogram V3 (anuncios con texto) | Flux 2 Pro (lifestyle/producto sin texto)
+// Body: { prompt, format, variations, hasText }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { prompt, format = 'square', variations = 1 } = req.body;
+  const {
+    prompt,
+    format     = 'square',
+    variations = 1,
+    hasText    = false,
+  } = req.body;
+
   if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const falKey = process.env.FAL_API_KEY;
+  if (!falKey) return res.status(500).json({ error: 'FAL_API_KEY no configurado' });
 
-  // Dimensiones por formato
   const formatSpecs = {
-    square:   { label: 'Feed cuadrado',   ratio: '1:1',  size: '1080x1080', desc: 'cuadrada, ideal para feed de Facebook e Instagram' },
-    vertical: { label: 'Feed vertical',   ratio: '4:5',  size: '1080x1350', desc: 'vertical 4:5, optimizada para feed móvil' },
-    story:    { label: 'Stories / Reels', ratio: '9:16', size: '1080x1920', desc: 'vertical completa 9:16 para Stories y Reels' },
-    carousel: { label: 'Carrusel',        ratio: '1:1',  size: '1080x1080', desc: 'cuadrada para tarjeta de carrusel' },
+    square:   { w: 1080, h: 1080, ratio: '1:1',  label: 'Feed cuadrado · 1080×1080',   fluxRatio: '1:1'  },
+    vertical: { w: 1080, h: 1350, ratio: '4:5',  label: 'Feed vertical · 1080×1350',   fluxRatio: '4:5'  },
+    story:    { w: 1080, h: 1920, ratio: '9:16', label: 'Stories / Reels · 1080×1920', fluxRatio: '9:16' },
+    carousel: { w: 1080, h: 1080, ratio: '1:1',  label: 'Carrusel · 1080×1080',        fluxRatio: '1:1'  },
   };
 
-  const spec = formatSpecs[format] || formatSpecs.square;
-
-  // Construir prompt optimizado para anuncios de Meta
-  const enhancedPrompt = `
-Crea una imagen profesional para un anuncio de Meta Ads (Facebook/Instagram).
-Formato: ${spec.desc} (${spec.size}px).
-
-BRIEFING DEL ANUNCIO:
-${prompt}
-
-REQUISITOS TÉCNICOS Y CREATIVOS:
-- Composición ${spec.ratio} perfectamente equilibrada
-- Estilo visual moderno, limpio y profesional
-- Colores vibrantes y llamativos que destaquen en el feed
-- Zona central despejada o con espacio para texto superpuesto
-- Sin texto dentro de la imagen (el copy se agrega por separado en Meta)
-- Iluminación natural y atractiva
-- Calidad fotográfica o ilustración de alta gama
-- Apropiado para audiencias latinoamericanas
-- Optimizado para verse bien tanto en móvil como en desktop
-`.trim();
+  const spec  = formatSpecs[format] || formatSpecs.square;
+  const count = Math.min(Math.max(1, variations), 5);
+  const useIdeogram = hasText;
 
   try {
     const results = [];
 
-    for (let i = 0; i < Math.min(variations, 3); i++) {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type':      'application/json',
-          'x-api-key':         apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-beta':    'images-2025-04-01',
-        },
-        body: JSON.stringify({
-          model:      'claude-opus-4-5',
-          max_tokens: 1024,
-          messages: [{
-            role:    'user',
-            content: [{
-              type: 'image_generation',
-              prompt: enhancedPrompt,
-              output_format: 'base64',
-            }],
-          }],
-        }),
-      });
+    for (let i = 0; i < count; i++) {
+      let imageUrl, imageBase64, mediaType = 'image/jpeg';
 
-      const data = await response.json();
-
-      if (data.error) {
-        console.error('Image gen error:', data.error);
-        // Si falla la generación, continuar con las siguientes
-        continue;
-      }
-
-      // Extraer imagen base64 del response
-      const imageBlock = data.content?.find(b => b.type === 'image' || b.type === 'image_generation');
-      if (imageBlock) {
-        results.push({
-          index:    i + 1,
-          format:   spec.label,
-          size:     spec.size,
-          base64:   imageBlock.source?.data || imageBlock.data || '',
-          mediaType: imageBlock.source?.media_type || 'image/png',
+      if (useIdeogram) {
+        // IDEOGRAM V3 — mejor para texto legible en imagen
+        const ideogramRes = await fetch('https://fal.run/fal-ai/ideogram/v3', {
+          method:  'POST',
+          headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt:       buildIdeogramPrompt(prompt, format),
+            aspect_ratio: spec.ratio,
+            style:        'REALISTIC',
+            magic_prompt: 'AUTO',
+            seed:         Math.floor(Math.random() * 999999),
+          }),
         });
-      }
-    }
+        const ideogramData = await ideogramRes.json();
+        if (!ideogramRes.ok) throw new Error(ideogramData.detail?.[0]?.msg || ideogramData.error || 'Error en Ideogram');
+        imageUrl = ideogramData.images?.[0]?.url;
 
-    if (results.length === 0) {
-      return res.status(500).json({ error: 'No se pudieron generar imágenes. Intenta de nuevo.' });
+      } else {
+        // FLUX 2 PRO — mejor para fotografía lifestyle
+        const fluxRes = await fetch('https://fal.run/fal-ai/flux-pro/v1.1', {
+          method:  'POST',
+          headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt:           buildFluxPrompt(prompt, format),
+            aspect_ratio:     spec.fluxRatio,
+            output_format:    'jpeg',
+            output_quality:   95,
+            safety_tolerance: '2',
+            seed:             Math.floor(Math.random() * 999999),
+          }),
+        });
+        const fluxData = await fluxRes.json();
+        if (!fluxRes.ok) throw new Error(fluxData.detail?.[0]?.msg || fluxData.error || 'Error en Flux');
+        imageUrl = fluxData.images?.[0]?.url;
+      }
+
+      if (!imageUrl) throw new Error('No se recibió URL de imagen');
+
+      const imgRes    = await fetch(imageUrl);
+      const imgBuffer = await imgRes.arrayBuffer();
+      imageBase64     = Buffer.from(imgBuffer).toString('base64');
+      mediaType       = imgRes.headers.get('content-type') || 'image/jpeg';
+
+      results.push({
+        index: i + 1, format: spec.label, size: `${spec.w}x${spec.h}`,
+        base64: imageBase64, mediaType,
+        model: useIdeogram ? 'Ideogram V3' : 'Flux 2 Pro',
+        url: imageUrl,
+      });
     }
 
     return res.status(200).json({ images: results, format: spec });
 
   } catch (err) {
     console.error('generate-image error:', err);
-    return res.status(500).json({ error: 'Error generando imágenes: ' + err.message });
+    return res.status(500).json({ error: err.message || 'Error generando imágenes' });
   }
+}
+
+function buildIdeogramPrompt(userPrompt, format) {
+  const notes = {
+    square:   'square 1:1 composition, balanced layout with space for text overlays',
+    vertical: 'vertical 4:5 composition, text zones at top and bottom thirds',
+    story:    'full vertical 9:16 immersive, text in upper and lower safe zones',
+    carousel: 'clean square composition, well-distributed text elements',
+  };
+  return `Professional Meta Ads creative for Latin American market. ${userPrompt}.
+Format: ${notes[format] || notes.square}.
+Requirements: High contrast text, bold readable typography in Spanish, vibrant colors for mobile feed, strong call-to-action visually prominent, modern advertising design that converts, photorealistic premium quality. All text must be in Spanish and clearly legible.`;
+}
+
+function buildFluxPrompt(userPrompt, format) {
+  const notes = {
+    square:   'perfect square 1:1 composition',
+    vertical: 'vertical 4:5 mobile-optimized',
+    story:    'full vertical 9:16 immersive',
+    carousel: 'clean square composition',
+  };
+  return `Professional advertising photograph for Meta Ads. ${userPrompt}.
+${notes[format] || notes.square}. Commercial photography quality, studio lighting, vibrant colors that pop in social media feed, authentic Latin American aesthetic, no text overlays, sharp focus, high-converting visual style optimized for mobile.`;
 }
