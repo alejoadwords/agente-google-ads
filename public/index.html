@@ -1445,7 +1445,38 @@ REGLAS DE RESPUESTA
 
 **Límites:**
 – No prometas ROAS o resultados específicos garantizados
-– Si el cliente pregunta sobre Google Ads u otras plataformas, responde brevemente y redirige al agente correspondiente`;
+– Si el cliente pregunta sobre Google Ads u otras plataformas, responde brevemente y redirige al agente correspondiente
+
+## SKILL 10: GENERACIÓN DE IMÁGENES PARA ANUNCIOS
+
+Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads directamente en el chat.
+
+**Cuándo usarla:** Cuando el cliente pida crear, diseñar o generar una imagen, pieza visual, creativo o anuncio gráfico.
+
+**Formatos disponibles:**
+– square: Feed cuadrado 1080x1080 (feed Facebook/Instagram)
+– vertical: Feed vertical 1080x1350 (mejor rendimiento en móvil)
+– story: Stories y Reels 1080x1920
+– carousel: Tarjeta de carrusel 1080x1080
+
+**Cómo usarla:** Incluye este bloque en tu respuesta con el formato exacto:
+[GENERAR_IMAGEN: {"prompt": "descripción detallada del anuncio", "format": "square", "variations": 2}]
+
+**Instrucciones para escribir el prompt:**
+– Describe el producto/servicio, el ambiente, los colores de marca, el estilo visual
+– Menciona la emoción o sensación que debe transmitir
+– Especifica si debe ser fotografía, ilustración, flat design, etc.
+– Incluye el público objetivo para que la imagen sea relevante
+– NO incluyas texto en el prompt — el copy va separado en Meta
+
+**Ejemplos de uso:**
+– "Crea una imagen para un anuncio de academia de inglés online, estilo moderno, colores azul y blanco, persona joven estudiando feliz con laptop, formato vertical"
+→ [GENERAR_IMAGEN: {"prompt": "Joven latinoamericano de 22 años estudiando inglés online con laptop, cara de satisfacción y logro, ambiente de hogar moderno y luminoso, estilo fotográfico profesional, paleta azul marino y blanco, sensación de progreso y futuro prometedor", "format": "vertical", "variations": 2}]
+
+– "Necesito 3 variaciones para Stories de una tienda de ropa femenina"
+→ [GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana moderna con ropa casual chic, ambiente urbano de ciudad, colores vibrantes y modernos, fotografía de moda editorial, sensación de estilo y confianza", "format": "story", "variations": 3}]
+
+**Después de generar:** Siempre sugiere el copy del anuncio (texto principal, título, CTA) que acompañaría cada imagen.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -2085,6 +2116,21 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
         }
       }
     }
+    // Detectar bloque GENERAR_IMAGEN
+    else if(reply.includes('[GENERAR_IMAGEN:')){
+      const imgMatch = reply.match(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/);
+      if(imgMatch){
+        let imgCmd;
+        try{ imgCmd = JSON.parse(imgMatch[1]); }catch(e){ imgCmd = null; }
+        if(imgCmd){
+          const cleanReply = reply.replace(imgMatch[0], '').trim();
+          if(cleanReply) addAgent(cleanReply);
+          hist.push({role:'assistant', content: cleanReply || 'Generando imágenes para tu anuncio...'});
+          await generateAdImages(imgCmd);
+          loading=false; document.getElementById('sbtn').disabled=false; return;
+        }
+      }
+    }
     else {
       hist.push({role:'assistant',content:reply});
       addAgent(reply);
@@ -2585,6 +2631,78 @@ function askAgentFromRoadmap(stageId) {
   closeRoadmap();
   askAgent(stageId);
   showView('chat');
+}
+
+// =============================================
+// GENERACIÓN DE IMÁGENES PARA ANUNCIOS META
+// =============================================
+
+async function generateAdImages(cmd) {
+  const { prompt, format = 'square', variations = 1 } = cmd;
+  const thinkId = addThinking();
+  setTimeout(() => {
+    const el = document.getElementById(thinkId);
+    if (el) { const txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando imágenes con IA...'; }
+  }, 100);
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch('/api/generate-image', {
+      method: 'POST', headers,
+      body: JSON.stringify({ prompt, format, variations: Math.min(variations, 3) }),
+    });
+    const data = await res.json();
+    rmThinking(thinkId);
+    if (data.error) { addAgent(`⚠️ No pude generar las imágenes: ${data.error}`); return; }
+    data.images.forEach((img, idx) => renderAdImage(img, idx + 1, data.images.length, format, prompt));
+    hist.push({ role: 'user', content: `Se generaron ${data.images.length} imagen(es) en formato ${format}. Ahora sugiere el copy del anuncio: texto principal, título y CTA.` });
+    await callClaude();
+  } catch (err) {
+    rmThinking(thinkId);
+    addAgent(`⚠️ Error generando imágenes: ${err.message}`);
+  }
+}
+
+function renderAdImage(img, index, total, format, prompt) {
+  const formatLabels = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories / Reels · 1080×1920', carousel:'Carrusel · 1080×1080' };
+  const ratios = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' };
+  const ratio = ratios[format] || '1/1';
+  const maxH = { square:'280px', vertical:'320px', story:'340px', carousel:'280px' };
+
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = `
+    <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div>
+    <div style="max-width:300px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">${total>1?`Variación ${index}/${total} · `:''}${formatLabels[format]||format}</div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:${ratio};max-height:${maxH[format]||'280px'};display:flex;align-items:center;justify-content:center">
+        <img src="data:${img.mediaType};base64,${img.base64}" alt="Anuncio ${index}" style="width:100%;height:100%;object-fit:cover;display:block"/>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button onclick="downloadAdImage('${img.base64}','${img.mediaType}','anuncio_${format}_${index}.png')" style="flex:1;padding:8px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar
+        </button>
+        <button onclick="requestImageVariation('${encodeURIComponent(prompt)}','${format}')" style="padding:8px 12px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">
+          Variar
+        </button>
+      </div>
+    </div>`;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function downloadAdImage(base64, mediaType, filename) {
+  const a = document.createElement('a');
+  a.href = `data:${mediaType};base64,${base64}`;
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function requestImageVariation(encodedPrompt, format) {
+  const cin = document.getElementById('cin');
+  if (cin) { cin.value = `Genera una variación diferente de la imagen anterior, mismo concepto pero composición distinta. Formato: ${format}.`; sendMsg(); }
 }
 
 // =============================================
