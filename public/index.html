@@ -1449,34 +1449,43 @@ REGLAS DE RESPUESTA
 
 ## SKILL 10: GENERACIÓN DE IMÁGENES PARA ANUNCIOS
 
-Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads directamente en el chat.
+Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads usando dos modelos de IA especializados vía fal.ai:
 
-**Cuándo usarla:** Cuando el cliente pida crear, diseñar o generar una imagen, pieza visual, creativo o anuncio gráfico.
+**Modelos disponibles (se seleccionan automáticamente):**
+– **Ideogram V3** — cuando el anuncio necesita texto legible dentro de la imagen (precios, CTAs, ganchos, slogans). Especialista en tipografía dentro de imágenes.
+– **Flux 2 Pro** — cuando es una imagen lifestyle, producto o escena sin texto. El más fotorrealista del mercado.
 
 **Formatos disponibles:**
-– square: Feed cuadrado 1080x1080 (feed Facebook/Instagram)
-– vertical: Feed vertical 1080x1350 (mejor rendimiento en móvil)
-– story: Stories y Reels 1080x1920
-– carousel: Tarjeta de carrusel 1080x1080
+– square: Feed cuadrado 1080×1080
+– vertical: Feed vertical 1080×1350 (mejor CTR móvil)
+– story: Stories y Reels 1080×1920
+– carousel: Tarjeta carrusel 1080×1080
 
-**Cómo usarla:** Incluye este bloque en tu respuesta con el formato exacto:
-[GENERAR_IMAGEN: {"prompt": "descripción detallada del anuncio", "format": "square", "variations": 2}]
+**Cómo usarlo — incluye este bloque EXACTO en tu respuesta:**
+[GENERAR_IMAGEN: {"prompt": "descripción detallada", "format": "square", "variations": 3, "hasText": false}]
 
-**Instrucciones para escribir el prompt:**
-– Describe el producto/servicio, el ambiente, los colores de marca, el estilo visual
-– Menciona la emoción o sensación que debe transmitir
-– Especifica si debe ser fotografía, ilustración, flat design, etc.
-– Incluye el público objetivo para que la imagen sea relevante
-– NO incluyas texto en el prompt — el copy va separado en Meta
+**hasText:**
+– true = imagen con texto dentro (precio, CTA, gancho) → usa Ideogram V3
+– false = imagen lifestyle/producto sin texto → usa Flux 2 Pro
 
-**Ejemplos de uso:**
-– "Crea una imagen para un anuncio de academia de inglés online, estilo moderno, colores azul y blanco, persona joven estudiando feliz con laptop, formato vertical"
-→ [GENERAR_IMAGEN: {"prompt": "Joven latinoamericano de 22 años estudiando inglés online con laptop, cara de satisfacción y logro, ambiente de hogar moderno y luminoso, estilo fotográfico profesional, paleta azul marino y blanco, sensación de progreso y futuro prometedor", "format": "vertical", "variations": 2}]
+**Para 5 variaciones de un anuncio, genera múltiples bloques con diferentes enfoques creativos:**
 
-– "Necesito 3 variaciones para Stories de una tienda de ropa femenina"
-→ [GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana moderna con ropa casual chic, ambiente urbano de ciudad, colores vibrantes y modernos, fotografía de moda editorial, sensación de estilo y confianza", "format": "story", "variations": 3}]
+Variación 1 - Imagen lifestyle (Flux):
+[GENERAR_IMAGEN: {"prompt": "escena principal del producto/servicio, ambiente aspiracional", "format": "vertical", "variations": 1, "hasText": false}]
 
-**Después de generar:** Siempre sugiere el copy del anuncio (texto principal, título, CTA) que acompañaría cada imagen.`;
+Variación 2 - Con precio/oferta (Ideogram):
+[GENERAR_IMAGEN: {"prompt": "misma escena pero con precio prominente ej: $99.000 COP, texto del gancho", "format": "vertical", "variations": 1, "hasText": true}]
+
+**Reglas para prompts de calidad:**
+– Describe la escena, el ambiente, los colores de marca y el público objetivo
+– Para hasText:true incluye el texto exacto que debe aparecer en la imagen
+– Menciona el estilo: fotografía realista, ilustración, flat design, etc.
+– Adapta al mercado LatAm: personas, ambientes y referencias culturales relevantes
+
+**Después de generar siempre proporciona:**
+1. El copy del anuncio (texto principal, título, CTA) para cada variación
+2. Recomendación de cuál variación probar primero según el objetivo
+3. Sugerencia de segmentación de audiencia para cada variación`;`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -2638,11 +2647,14 @@ function askAgentFromRoadmap(stageId) {
 // =============================================
 
 async function generateAdImages(cmd) {
-  const { prompt, format = 'square', variations = 1 } = cmd;
+  const { prompt, format = 'square', variations = 1, hasText = false } = cmd;
   const thinkId = addThinking();
   setTimeout(() => {
     const el = document.getElementById(thinkId);
-    if (el) { const txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando imágenes con IA...'; }
+    if (el) {
+      const txt = el.querySelector('.thinking-bbl');
+      if (txt) txt.innerHTML = `<div class="spinner"></div>${hasText ? 'generando anuncio con texto (Ideogram V3)...' : 'generando imagen fotorrealista (Flux 2 Pro)...'}`;
+    }
   }, 100);
 
   try {
@@ -2650,13 +2662,13 @@ async function generateAdImages(cmd) {
     if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
     const res = await fetch('/api/generate-image', {
       method: 'POST', headers,
-      body: JSON.stringify({ prompt, format, variations: Math.min(variations, 3) }),
+      body: JSON.stringify({ prompt, format, variations: Math.min(variations, 5), hasText }),
     });
     const data = await res.json();
     rmThinking(thinkId);
     if (data.error) { addAgent(`⚠️ No pude generar las imágenes: ${data.error}`); return; }
     data.images.forEach((img, idx) => renderAdImage(img, idx + 1, data.images.length, format, prompt));
-    hist.push({ role: 'user', content: `Se generaron ${data.images.length} imagen(es) en formato ${format}. Ahora sugiere el copy del anuncio: texto principal, título y CTA.` });
+    hist.push({ role: 'user', content: `Se generaron ${data.images.length} imagen(es) en formato ${format} usando ${data.images[0]?.model || 'IA'}. Ahora sugiere el copy del anuncio (texto principal, título, CTA) y recomienda cuál variación probar primero.` });
     await callClaude();
   } catch (err) {
     rmThinking(thinkId);
@@ -2675,7 +2687,7 @@ function renderAdImage(img, index, total, format, prompt) {
   el.innerHTML = `
     <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div>
     <div style="max-width:300px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">${total>1?`Variación ${index}/${total} · `:''}${formatLabels[format]||format}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">${total>1?`Variación ${index}/${total} · `:''}${formatLabels[format]||format}${img.model ? ` · <span style="color:var(--blue)">${img.model}</span>` : ''}</div>
       <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:${ratio};max-height:${maxH[format]||'280px'};display:flex;align-items:center;justify-content:center">
         <img src="data:${img.mediaType};base64,${img.base64}" alt="Anuncio ${index}" style="width:100%;height:100%;object-fit:cover;display:block"/>
       </div>
