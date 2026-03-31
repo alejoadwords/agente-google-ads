@@ -125,6 +125,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .thinking-bbl{background:var(--bg);border:1px solid var(--border);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.thinking-dots{display:flex;align-items:center;gap:4px}
+.thinking-dots span{width:6px;height:6px;border-radius:50%;background:var(--muted2);animation:tdot 1.2s ease-in-out infinite}
+.thinking-dots span:nth-child(2){animation-delay:.2s}
+.thinking-dots span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
 
 /* Onboarding card */
 .ob-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:22px 24px;max-width:520px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
@@ -1588,16 +1593,34 @@ function appendHomeThinking() {
     <div style="width:28px;height:28px;flex-shrink:0;overflow:hidden;border-radius:7px">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" style="width:28px;height:28px;display:block"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>
     </div>
-    <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:12px 16px">
-      <div class="thinking-dots"><span></span><span></span><span></span></div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:11px 14px;display:flex;align-items:center;gap:10px">
+      <div class="spinner"></div>
+      <span id="${id}_txt" style="font-size:13px;color:var(--muted)">analizando tu pregunta...</span>
     </div>`;
   box.appendChild(el);
   box.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+  // Rotar el texto cada 3 segundos para que no se vea estático
+  const msgs = ['analizando tu pregunta...', 'preparando respuesta...', 'consultando estrategias...', 'casi listo...'];
+  let i = 0;
+  const interval = setInterval(() => {
+    i = (i + 1) % msgs.length;
+    const txtEl = document.getElementById(id + '_txt');
+    if (txtEl) txtEl.textContent = msgs[i];
+    else clearInterval(interval);
+  }, 2500);
+  el.dataset.interval = interval;
+
   return id;
 }
 
 function removeHomeThinking(id) {
-  if (id) document.getElementById(id)?.remove();
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) {
+    if (el.dataset.interval) clearInterval(el.dataset.interval);
+    el.remove();
+  }
 }
 
 // Continuar con agente específico — transfiere el historial
