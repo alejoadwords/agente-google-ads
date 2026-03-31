@@ -1228,6 +1228,225 @@ El sistema ejecutará la query automáticamente y te devolverá los resultados p
 
 **Si no hay cuenta conectada:** El sistema te avisará. En ese caso, pide al cliente que conecte su cuenta en Configuración → Conexiones.`;
 
+const SYSTEM_META = `Eres el agente de Meta Ads de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de Meta Ads (Facebook e Instagram) con más de 10 años de experiencia gestionando cuentas en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y basas cada recomendación en datos reales.
+
+PLATAFORMA ACTIVA: Meta Ads (Facebook e Instagram)
+CONTEXTO DEL CLIENTE: {MEMORY}
+ETAPA ACTUAL: {STAGE}
+
+════════════════════════════════════════
+SKILLS DE META ADS — CONOCIMIENTO BASE
+════════════════════════════════════════
+
+## SKILL 1: ESTRUCTURA DE CUENTA META ADS (2025)
+
+La estructura correcta en 2025 con Advantage+ y aprendizaje automático:
+
+**Jerarquía:**
+Cuenta Publicitaria → Campañas (por objetivo) → Conjuntos de anuncios (por audiencia/presupuesto) → Anuncios (creatividades)
+
+**Objetivos principales 2025:**
+– Ventas (conversiones en sitio web, catálogo)
+– Clientes potenciales (formulario nativo, sitio web)
+– Tráfico (clics al sitio)
+– Reconocimiento (alcance, reproducción de video)
+– Interacción (mensajes por WhatsApp, DM)
+
+**Regla clave:** Máximo 3-5 conjuntos de anuncios por campaña. Más de eso fragmenta el aprendizaje del algoritmo. En 2025, Meta recomienda 1-2 conjuntos por campaña con Advantage+ Audience.
+
+## SKILL 2: ADVANTAGE+ Y AUTOMATIZACIÓN (2025)
+
+Meta ha migrado hacia la automatización total con Advantage+:
+
+**Advantage+ Shopping Campaigns (ASC):**
+– Para e-commerce con catálogo de productos
+– Combina prospección + remarketing automáticamente
+– Requiere mínimo 50 conversiones/semana para optimizar bien
+– ROAS objetivo típico en LatAm: 2.5x - 4x según industria
+
+**Advantage+ Audience:**
+– Reemplaza la segmentación manual en la mayoría de casos
+– El algoritmo encuentra la audiencia óptima
+– Puedes dar "sugerencias" de audiencia (intereses, lookalike)
+– Para LatAm: siempre incluir segmentación geográfica específica
+
+**Cuándo NO usar Advantage+:**
+– Presupuestos menores a $20 USD/día (sin datos suficientes)
+– Negocios muy nicho con audiencias muy específicas B2B
+– Campañas de remarketing exclusivo a clientes existentes
+
+## SKILL 3: CREATIVIDADES Y FORMATOS (2025)
+
+El creativo es el factor #1 de rendimiento en Meta Ads:
+
+**Formatos por objetivo:**
+– Feed imagen: 1080x1080px o 1080x1350px (4:5 mejor rendimiento)
+– Stories/Reels: 1080x1920px (9:16 obligatorio)
+– Carrusel: 1080x1080px, máximo 10 tarjetas
+– Video feed: 1080x1080px o 1080x1350px, primeros 3 segundos críticos
+– Video Reels: 1080x1920px, máximo 90 segundos (15-30s óptimo)
+
+**Principios de creatividad ganadora en LatAm 2025:**
+– Hook en los primeros 3 segundos (texto o acción impactante)
+– Texto en imagen: máximo 20% del área (aunque Meta eliminó la regla, funciona mejor con poco texto)
+– Subtítulos en video SIEMPRE (70% ve sin sonido)
+– UGC (User Generated Content) supera creatividades producidas en CTR
+– Colores vibrantes funcionan mejor en mercados LatAm vs. minimalismo
+
+**Copy de anuncio:**
+– Texto principal: 125 caracteres óptimo (se corta en móvil)
+– Título: 40 caracteres máximo
+– CTA: usar botones nativos de Meta (Ver más, Comprar, Registrarse, Enviar mensaje)
+– Emojis: aumentan CTR 20-30% en LatAm, usar con moderación
+
+## SKILL 4: SEGMENTACIÓN Y AUDIENCIAS
+
+**Audiencias frías (prospección):**
+– Advantage+ Audience (recomendado 2025)
+– Intereses + comportamientos (para cuentas nuevas sin datos)
+– Lookalike 1-3% basado en compradores o leads de calidad
+– Segmentación demográfica + geográfica siempre activa
+
+**Audiencias calientes (remarketing):**
+– Visitantes web últimos 30/60/90 días (pixel requerido)
+– Interacción con página/perfil últimos 30/60 días
+– Lista de clientes (Customer List) para excluir o lookalike
+– Reproducciones de video (25%, 50%, 75%, 95%)
+
+**Para LatAm específico:**
+– Colombia: Bogotá, Medellín, Cali, Barranquilla separadas por comportamiento diferente
+– México: CDMX vs. Guadalajara vs. Monterrey tienen CPMs muy distintos
+– Argentina: considerar inflación — presupuestos en USD siempre
+– Brasil: idioma portugués obligatorio, mercado más grande de LatAm
+
+**Tamaños de audiencia recomendados:**
+– Prospección: mínimo 500K personas (idealmente 1M-10M)
+– Remarketing: sin límite mínimo, pero con menos de 1K puede no aprender
+
+## SKILL 5: PRESUPUESTO Y PUJAS (2025)
+
+**Distribución recomendada:**
+– 70% prospección (Advantage+ o frías)
+– 30% remarketing (visitantes web, interacciones)
+
+**Presupuestos mínimos por objetivo en LatAm:**
+– Conversiones: mínimo $15-20 USD/día por conjunto de anuncios
+– Tráfico: mínimo $5-10 USD/día
+– Reconocimiento: mínimo $5 USD/día
+– Lead gen formulario: mínimo $10-15 USD/día
+
+**Estrategias de puja 2025:**
+– Costo más bajo (automático): recomendado para empezar
+– ROAS mínimo: solo cuando tienes +50 conv/semana
+– Límite de costo: para controlar CPA máximo
+– Costo por resultado objetivo: para escala controlada
+
+**Benchmarks LatAm 2025:**
+– CPM promedio: $3-8 USD (vs. $15-25 en USA)
+– CPC promedio: $0.10-0.50 USD
+– CTR promedio: 1-3% (feed imagen), 0.5-1.5% (video)
+– CPL promedio: $2-15 USD según industria
+– ROAS e-commerce promedio: 2x-4x
+
+## SKILL 6: PIXEL Y CONVERSIONES
+
+**Meta Pixel — configuración obligatoria:**
+– Instalar en TODAS las páginas del sitio
+– Configurar eventos estándar: PageView, ViewContent, AddToCart, Purchase, Lead, Contact
+– Conversions API (CAPI) para sobrevivir bloqueo de cookies — CRÍTICO 2025
+– Verificar con Meta Pixel Helper (extensión Chrome)
+
+**Para LatAm — eventos especiales:**
+– WhatsApp click: configurar como evento Lead o Contact
+– Pagos locales (PSE, OXXO, Mercado Pago): trackear en confirmación de pago
+– Formularios nativos de Meta: no requieren pixel, leads van directo al Ads Manager
+
+**Calidad del evento (Event Match Quality):**
+– Objetivo: score 6+/10
+– Mejorar con: email, teléfono, nombre hasheados via CAPI
+– EMQ bajo = algoritmo no puede optimizar bien
+
+## SKILL 7: ANÁLISIS Y OPTIMIZACIÓN SEMANAL
+
+**Métricas principales a revisar:**
+– CPM: si sube mucho, audiencia saturada o creatividad cansada
+– CTR (link): objetivo >1% en feed, >0.5% en video
+– CPC link: referencia de eficiencia del creativo
+– Frecuencia: si >3-4 en prospección, renovar creatividades
+– ROAS / CPL: métrica final de rentabilidad
+
+**Señales de creatividad cansada:**
+– CTR baja >20% vs. semana anterior
+– Frecuencia >3 en prospección
+– CPM sube sin cambios de audiencia
+– Acción: crear nuevas variaciones, no pausar la campaña
+
+**Framework semanal:**
+– Lunes: revisar métricas del fin de semana, ajustar presupuesto
+– Miércoles: revisar frecuencia y CPM, introducir creatividades nuevas
+– Viernes: análisis de resultados semana, planificar siguiente semana
+
+## SKILL 8: REMARKETING AVANZADO Y LOOKALIKE
+
+**Estructura de remarketing por temperatura:**
+– Caliente (1-7 días): mayor agresividad, descuentos/urgencia
+– Tibio (8-30 días): recordatorio de propuesta de valor
+– Frío (31-90 días): reactivación con nueva oferta
+
+**Lookalike audiences:**
+– Base ideal: lista de compradores o leads de alta calidad (mínimo 100, óptimo 1000+)
+– Porcentaje: 1% más similar, 3-5% más volumen
+– Para LatAm: crear lookalike por país, no mezclado
+– Actualizar base de datos cada 30-60 días
+
+## SKILL 9: CREACIÓN DE ANUNCIOS VIA API
+
+Tienes acceso a la Meta Marketing API para crear y gestionar campañas directamente.
+
+**Comandos disponibles — incluye el bloque exacto en tu respuesta:**
+
+Leer campañas:
+[META_API: {"endpoint":"act_{AD_ACCOUNT_ID}/campaigns","method":"GET","params":{"fields":"id,name,status,objective,daily_budget,lifetime_budget","limit":"20"}}]
+
+Leer métricas (últimos 30 días):
+[META_API: {"endpoint":"act_{AD_ACCOUNT_ID}/insights","method":"GET","params":{"fields":"campaign_name,impressions,clicks,spend,ctr,cpc,cpp,actions","date_preset":"last_30d","level":"campaign"}}]
+
+Crear campaña:
+[META_API: {"endpoint":"act_{AD_ACCOUNT_ID}/campaigns","method":"POST","params":{"name":"Nombre campaña","objective":"OUTCOME_LEADS","status":"PAUSED","special_ad_categories":[]}}]
+
+Crear conjunto de anuncios:
+[META_API: {"endpoint":"act_{AD_ACCOUNT_ID}/adsets","method":"POST","params":{"name":"Nombre ad set","campaign_id":"{CAMPAIGN_ID}","daily_budget":1500,"billing_event":"IMPRESSIONS","optimization_goal":"LEAD_GENERATION","targeting":{"geo_locations":{"countries":["CO"]},"age_min":18,"age_max":65},"status":"PAUSED"}}]
+
+**Notas importantes:**
+– Los presupuestos van en centavos (USD): $15/día = 1500
+– Siempre crear campañas en estado PAUSED para revisión
+– {AD_ACCOUNT_ID} se reemplaza automáticamente con la cuenta activa
+– Si no hay cuenta conectada, pide al cliente que conecte en Configuración → Conexiones
+
+════════════════════════════════════════
+REGLAS DE RESPUESTA
+════════════════════════════════════════
+
+**Formato:**
+– Usa **negrita** para términos clave y cifras importantes
+– Usa – para listas dentro de secciones
+– Usa ### para secciones en respuestas largas
+– Sé conciso pero completo. Prefiere respuestas accionables sobre teóricas
+
+**Tono:**
+– Habla como consultor experto en Meta Ads, no como chatbot genérico
+– Cuando el cliente está equivocado, corrígelo con datos
+– Siempre termina con el siguiente paso concreto a ejecutar
+
+**Siempre adapta al contexto del cliente:**
+– Su industria, presupuesto y mercado geográfico definen todas las recomendaciones
+– Los CPMs, CPLs y benchmarks deben ajustarse a LatAm
+– Si no conoces un dato del cliente, pregunta antes de asumir
+
+**Límites:**
+– No prometas ROAS o resultados específicos garantizados
+– Si el cliente pregunta sobre Google Ads u otras plataformas, responde brevemente y redirige al agente correspondiente`;
+
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
@@ -1816,8 +2035,16 @@ document.addEventListener('click',function(e){
 });
 function qSend(txt){if(!onDone||loading)return;showView('chat');document.getElementById('cin').value=txt;sendMsg()}
 function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',semana:'Estoy en la primera semana de mi campaña. ¿Qué debería estar revisando ahora mismo y qué es lo más importante?',quincena:'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',mes:'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',trimestre:'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',semestre:'Tengo 6 meses de historial. Ayúdame a planificar el siguiente semestre y dame recomendaciones de cuenta madura.'};qSend(msgs[stage]||'Guíame en esta etapa de mi cuenta.')}
-async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};const sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};console.log('Enviando',hist.length,'mensajes, último content type:',typeof hist[hist.length-1]?.content);const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)console.error('API error',r.status,d);rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}let reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';
-    // Detectar bloque GAQL y ejecutar query
+async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};
+// Seleccionar system prompt según agente activo
+let sys;
+if(currentAgentCtx==='meta-ads'){
+  sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else{
+  sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
+}
+if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};console.log('Enviando',hist.length,'mensajes, último content type:',typeof hist[hist.length-1]?.content);const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)console.error('API error',r.status,d);rmThinking(tid);if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}let reply=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';
+    // Detectar bloque GAQL (Google Ads)
     const gaqlMatch = reply.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
     if(gaqlMatch){
       const gaqlQuery = gaqlMatch[1].trim();
@@ -1832,10 +2059,33 @@ async function callClaude(){loading=true;document.getElementById('sbtn').disable
         const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
         hist.push({role:'assistant',content:reply});
         hist.push({role:'user',content:`Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
-        await callClaude();
-        return;
+        await callClaude(); return;
       }
-    } else {
+    }
+    // Detectar bloque META_API
+    else if(reply.includes('[META_API:')){
+      const metaMatch = reply.match(/\[META_API:\s*(\{[\s\S]+?\})\]/);
+      if(metaMatch){
+        let metaCmd;
+        try{ metaCmd = JSON.parse(metaMatch[1]); }catch(e){ metaCmd = null; }
+        if(metaCmd){
+          reply = reply.replace(metaMatch[0], '').trim();
+          addAgent(reply || 'Ejecutando acción en Meta Ads...');
+          const metaResult = await callMetaAPI(metaCmd.endpoint, metaCmd.method||'GET', metaCmd.params||{});
+          if(metaResult.error){
+            hist.push({role:'assistant',content:reply});
+            hist.push({role:'user',content:`Error en Meta API: ${metaResult.error}`});
+            addAgent(`⚠️ No pude ejecutar la acción en Meta: ${metaResult.error}`);
+          } else {
+            const resultStr = JSON.stringify(metaResult, null, 2);
+            hist.push({role:'assistant',content:reply});
+            hist.push({role:'user',content:`Resultado de Meta API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
+            await callClaude(); return;
+          }
+        }
+      }
+    }
+    else {
       hist.push({role:'assistant',content:reply});
       addAgent(reply);
     }
@@ -2338,8 +2588,190 @@ function askAgentFromRoadmap(stageId) {
 }
 
 // =============================================
-// SETTINGS PANEL
+// META ADS — Conexión OAuth + Selector de cuentas
 // =============================================
+let metaAccounts = [];
+let metaActiveAccount = null;
+
+(function checkMetaCallback() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('meta_connected') === 'true') {
+    const token  = params.get('meta_token');
+    const name   = params.get('meta_name');
+    const email  = params.get('meta_email');
+    const userId = params.get('meta_user_id');
+    if (token) {
+      sessionStorage.setItem('meta_access_token', token);
+      sessionStorage.setItem('meta_user_name',   name   || '');
+      sessionStorage.setItem('meta_user_email',  email  || '');
+      sessionStorage.setItem('meta_user_id',     userId || '');
+      updateMetaUI(true, name);
+      setTimeout(() => { openSettings(); loadMetaAccounts(); }, 400);
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  if (params.get('meta_error')) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  const savedToken   = sessionStorage.getItem('meta_access_token');
+  const savedName    = sessionStorage.getItem('meta_user_name');
+  const savedAccount = sessionStorage.getItem('meta_active_account');
+  if (savedToken) {
+    updateMetaUI(true, savedName);
+    if (savedAccount) {
+      try { metaActiveAccount = JSON.parse(savedAccount); renderMetaActiveAccount(); } catch {}
+    }
+  }
+})();
+
+function connectMetaAds() { window.location.href = '/api/meta-auth'; }
+
+function disconnectMetaAds() {
+  ['meta_access_token','meta_user_name','meta_user_email','meta_user_id','meta_active_account','meta_ad_account_id']
+    .forEach(k => sessionStorage.removeItem(k));
+  metaAccounts = []; metaActiveAccount = null;
+  updateMetaUI(false);
+}
+
+async function loadMetaAccounts() {
+  const token = sessionStorage.getItem('meta_access_token');
+  if (!token) return;
+  document.getElementById('metaAccountsLoading').style.display = 'block';
+  document.getElementById('metaAccountsList').style.display    = 'none';
+  document.getElementById('metaActiveAccount').style.display   = 'none';
+  document.getElementById('metaAccountsError').style.display   = 'none';
+  try {
+    const res  = await fetch('/api/meta-list-accounts', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ accessToken: token }),
+    });
+    const data = await res.json();
+    document.getElementById('metaAccountsLoading').style.display = 'none';
+    if (data.error || !data.accounts?.length) {
+      showMetaError('No se encontraron cuentas publicitarias. Verifica que tu cuenta tenga acceso a Meta Business Manager.');
+      return;
+    }
+    metaAccounts = data.accounts;
+    renderMetaAccountSelector();
+  } catch(e) {
+    document.getElementById('metaAccountsLoading').style.display = 'none';
+    showMetaError('Error de conexión al cargar las cuentas.');
+  }
+}
+
+function renderMetaAccountSelector() {
+  const container = document.getElementById('metaAccountsContainer');
+  container.innerHTML = metaAccounts.map(acc => {
+    const isActive = metaActiveAccount?.id === acc.id;
+    return `<div onclick="selectMetaAccount('${acc.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;
+      border:1.5px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
+      background:${isActive ? 'var(--blue-lt)' : 'var(--bg)'};transition:all .15s"
+      onmouseover="this.style.borderColor='var(--blue-md)'"
+      onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}'">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">${acc.id} · ${acc.currency} · ${acc.status}${acc.business ? ' · '+esc(acc.business) : ''}</div>
+      </div>
+      ${isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+    </div>`;
+  }).join('');
+  document.getElementById('metaAccountsList').style.display = 'block';
+  if (metaActiveAccount) renderMetaActiveAccount();
+}
+
+function selectMetaAccount(accountId) {
+  const acc = metaAccounts.find(a => a.id === accountId);
+  if (!acc) return;
+  metaActiveAccount = acc;
+  sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
+  sessionStorage.setItem('meta_ad_account_id', acc.id);
+  renderMetaActiveAccount();
+  renderMetaAccountSelector();
+  closeSettings();
+  setTimeout(() => {
+    const profileKey = `acuarius_profile_meta_${acc.id}`;
+    const saved = localStorage.getItem(profileKey);
+    if (saved) {
+      try {
+        const profile = JSON.parse(saved);
+        Object.assign(mem, profile); updateMem(); onDone = true;
+        clientStage = mapStage(mem.etapa);
+        document.getElementById('mem-card').style.display = 'block';
+        document.getElementById('m-stage').textContent = clientStage;
+        hist = [];
+        addAgent(`cuenta Meta cambiada a **${acc.name}**.\n\n¿En qué trabajamos hoy?`);
+      } catch { startNewMetaOnboarding(acc); }
+    } else { startNewMetaOnboarding(acc); }
+  }, 300);
+}
+
+function startNewMetaOnboarding(acc) {
+  mem = {}; hist = []; onDone = false; obStep = 0;
+  document.getElementById('mem-card').style.display = 'none';
+  document.getElementById('chat-area').innerHTML = '';
+  showView('chat'); setAgentContext('meta-ads');
+  addAgent(`nueva cuenta Meta: **${acc.name}**.\n\nPara darte recomendaciones precisas, necesito conocer este negocio. Son 7 preguntas rápidas.`);
+  setTimeout(() => renderOb(), 600);
+}
+
+function renderMetaActiveAccount() {
+  if (!metaActiveAccount) return;
+  const el = document.getElementById('metaActiveAccount');
+  document.getElementById('metaActiveName').textContent = metaActiveAccount.name;
+  document.getElementById('metaActiveId').textContent   = `${metaActiveAccount.id} · ${metaActiveAccount.currency}`;
+  if (el) el.style.display = 'block';
+}
+
+function showMetaAccountSelector() {
+  document.getElementById('metaActiveAccount').style.display = 'none';
+  metaAccounts.length ? renderMetaAccountSelector() : loadMetaAccounts();
+}
+
+function showMetaError(msg) {
+  const el = document.getElementById('metaAccountsError');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function updateMetaUI(connected, name) {
+  const badge     = document.getElementById('metaStatusBadge');
+  const discDiv   = document.getElementById('metaDisconnected');
+  const connDiv   = document.getElementById('metaConnected');
+  const nameSpan  = document.getElementById('metaUserName');
+  if (connected) {
+    badge.textContent = '● conectado';
+    badge.style.background = 'rgba(5,150,105,.1)';
+    badge.style.color = 'var(--success)';
+    discDiv.style.display = 'none';
+    connDiv.style.display = 'block';
+    if (name && nameSpan) nameSpan.textContent = name;
+    if (!metaAccounts.length && !metaActiveAccount) loadMetaAccounts();
+  } else {
+    badge.textContent = 'sin conectar';
+    badge.style.background = 'var(--sidebar2)';
+    badge.style.color = 'var(--muted)';
+    discDiv.style.display = 'block';
+    connDiv.style.display = 'none';
+  }
+}
+
+// Llamada a Meta Marketing API
+async function callMetaAPI(endpoint, method = 'GET', params = {}) {
+  const token     = sessionStorage.getItem('meta_access_token');
+  const accountId = sessionStorage.getItem('meta_ad_account_id');
+  if (!token)     return { error: 'No hay sesión de Meta Ads. Conecta tu cuenta en Configuración.' };
+  if (!accountId && endpoint.includes('{AD_ACCOUNT_ID}'))
+    return { error: 'No hay cuenta de Meta activa. Selecciona una en Configuración → Conexiones.' };
+  const resolvedEndpoint = endpoint.replace('{AD_ACCOUNT_ID}', accountId?.replace('act_','') || '');
+  try {
+    const res  = await fetch('/api/meta-ads', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ accessToken: token, adAccountId: accountId, endpoint: resolvedEndpoint, method, params }),
+    });
+    return await res.json();
+  } catch(e) { return { error: e.message }; }
+}
+
+
 function openSettings() {
   const panel = document.getElementById('settings-panel');
   const overlay = document.getElementById('settings-overlay');
@@ -2736,9 +3168,9 @@ async function queryGoogleAds(gaqlQuery) {
       </div>
     </div>
 
-    <!-- Meta Ads — próximamente -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px;opacity:.55">
-      <div style="display:flex;align-items:center;gap:10px">
+    <!-- Meta Ads -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <div style="width:32px;height:32px;border-radius:8px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
         </div>
@@ -2746,7 +3178,38 @@ async function queryGoogleAds(gaqlQuery) {
           <div style="font-size:13px;font-weight:600;color:var(--text)">Meta Ads</div>
           <div style="font-size:11px;color:var(--muted)">Facebook e Instagram Ads</div>
         </div>
-        <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+        <span id="metaStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
+      </div>
+      <!-- Desconectado -->
+      <div id="metaDisconnected">
+        <button onclick="connectMetaAds()" style="width:100%;padding:8px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Meta</button>
+      </div>
+      <!-- Conectado -->
+      <div id="metaConnected" style="display:none">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--sidebar);border-radius:7px;display:flex;align-items:center;gap:6px">
+          <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#34A853"/></svg>
+          <span id="metaUserName" style="color:var(--text);font-weight:500"></span>
+        </div>
+        <!-- Cargando cuentas -->
+        <div id="metaAccountsLoading" style="text-align:center;padding:12px 0;display:none">
+          <div style="font-size:12px;color:var(--muted)">Cargando cuentas publicitarias...</div>
+        </div>
+        <!-- Lista de cuentas -->
+        <div id="metaAccountsList" style="display:none;margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cuentas publicitarias</label>
+          </div>
+          <div id="metaAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto"></div>
+        </div>
+        <!-- Cuenta activa -->
+        <div id="metaActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
+          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
+          <div id="metaActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+          <div id="metaActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+          <button onclick="showMetaAccountSelector()" style="margin-top:8px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+        </div>
+        <div id="metaAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
+        <button onclick="disconnectMetaAds()" style="width:100%;padding:7px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
       </div>
     </div>
 
