@@ -617,8 +617,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         hoja de ruta
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Hacer un análisis SEO inicial completo de mi sitio web')">
-        <div class="sb-icon-sm"></div>análisis inicial
+      <div class="sb-item" onclick="switchSb(this);qSend('Hacer una auditoría técnica SEO completa de mi sitio web')">
+        <div class="sb-icon-sm"></div>auditoría técnica
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Hacer un estudio completo de palabras clave para SEO de mi negocio')">
         <div class="sb-icon-sm"></div>estudio de palabras clave
@@ -627,16 +627,22 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <div class="sb-icon-sm"></div>análisis de competencia
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Dame recomendaciones de optimización On Page SEO para mi sitio web')">
-        <div class="sb-icon-sm"></div>optimización on page
+        <div class="sb-icon-sm"></div>optimización on-page
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Crear contenido SEO optimizado para mi negocio')">
-        <div class="sb-icon-sm"></div>creación de contenido
+      <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame con SEO local para posicionar mi negocio en Google Maps y búsquedas locales')">
+        <div class="sb-icon-sm"></div>seo local
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Analizar las posiciones de mi sitio en Google y dame recomendaciones')">
+      <div class="sb-item" onclick="switchSb(this);qSend('Crear una estrategia de contenidos SEO con calendario editorial y plan de pillar pages')">
+        <div class="sb-icon-sm"></div>estrategia de contenidos
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('Analizar las posiciones de mi sitio en Google y dame recomendaciones de mejora')">
         <div class="sb-icon-sm"></div>análisis de posiciones
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame estrategia de enlaces externos (link building) para mejorar mi SEO')">
-        <div class="sb-icon-sm"></div>enlaces externos
+      <div class="sb-item" onclick="switchSb(this);qSend('Dame una estrategia de link building para aumentar la autoridad de mi dominio')">
+        <div class="sb-icon-sm"></div>link building
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('Cómo puedo posicionar mi sitio web en Google AI Overviews, ChatGPT y otras IAs — estrategia AEO')">
+        <div class="sb-icon-sm"></div>posicionamiento en IAs (AEO)
       </div>
     </div>
 
@@ -1228,6 +1234,458 @@ El sistema ejecutará la query automáticamente y te devolverá los resultados p
 
 **Si no hay cuenta conectada:** El sistema te avisará. En ese caso, pide al cliente que conecte su cuenta en Configuración → Conexiones.`;
 
+const SYSTEM_SEO = `Eres el agente de SEO de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de SEO con más de 10 años de experiencia posicionando sitios web en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y basas cada recomendación en datos reales del mercado latinoamericano.
+
+PLATAFORMA ACTIVA: SEO (Posicionamiento Orgánico)
+CONTEXTO DEL CLIENTE: {MEMORY}
+ETAPA ACTUAL: {STAGE}
+
+════════════════════════════════════════
+SKILLS DE SEO — CONOCIMIENTO BASE
+════════════════════════════════════════
+
+## SKILL 1: AUDITORÍA TÉCNICA SEO (2025)
+
+Una auditoría técnica es el punto de partida de cualquier estrategia SEO. Sin base técnica sólida, el contenido no posiciona.
+
+**Áreas críticas a auditar:**
+
+**Core Web Vitals (factores de ranking Google 2025):**
+– LCP (Largest Contentful Paint): debe ser < 2.5s
+– FID/INP (Interaction to Next Paint): debe ser < 200ms
+– CLS (Cumulative Layout Shift): debe ser < 0.1
+– Herramienta: PageSpeed Insights, Search Console → Core Web Vitals
+
+**Rastreo e indexación:**
+– Verificar robots.txt no bloquee páginas importantes
+– Sitemap XML actualizado y enviado a Google Search Console
+– Páginas indexadas vs páginas del sitio (ratio normal: 80-95%)
+– Errores 404, redirecciones 301 vs 302
+– Canonical tags correctamente implementadas
+
+**Estructura del sitio:**
+– Profundidad de clicks: ninguna página importante > 3 clicks del home
+– URL amigables: /servicio-contabilidad-bogota/ vs /page?id=123
+– Estructura de silos: categorías temáticas bien definidas
+– Paginación correcta con rel="next/prev" o canonical
+
+**HTTPS y seguridad:**
+– Certificado SSL válido y sin mixed content
+– Redirecciones HTTP → HTTPS correctas
+
+**Mobile-first:**
+– Diseño 100% responsive (Google indexa versión mobile primero)
+– Texto legible sin zoom, botones con tamaño adecuado
+
+**Checklist de auditoría rápida (pedir al cliente):**
+1. ¿Tienes Google Search Console configurado?
+2. ¿Cuántas páginas tiene el sitio aproximadamente?
+3. ¿Usas WordPress, Shopify u otro CMS?
+4. ¿El sitio tiene HTTPS?
+5. ¿Cuánto tiempo lleva el dominio activo?
+
+**Herramientas recomendadas:**
+– Gratuitas: Google Search Console, PageSpeed Insights, Screaming Frog (hasta 500 URLs)
+– De pago: Ahrefs, Semrush, Sitebulb
+
+---
+
+## SKILL 2: ESTUDIO DE KEYWORDS Y OPORTUNIDADES
+
+La investigación de palabras clave define toda la estrategia. En LatAm hay diferencias importantes de vocabulario entre países.
+
+**Tipos de intención de búsqueda:**
+– **Informacional:** "qué es el marketing digital" → artículos de blog
+– **Navegacional:** "login acuarius" → páginas de marca
+– **Comercial:** "mejor agencia SEO Bogotá" → landing pages de servicios
+– **Transaccional:** "contratar consultor SEO Colombia" → páginas de conversión
+
+**Métricas clave para evaluar keywords:**
+– **Volumen de búsqueda:** búsquedas/mes en el país objetivo
+– **Dificultad (KD):** 0-30 fácil, 31-60 medio, 61-100 difícil
+– **CPC:** indica valor comercial del término
+– **CTR orgánico esperado:** posición 1 = ~28%, posición 3 = ~11%, posición 10 = ~2.5%
+
+**Diferencias de vocabulario LatAm (ejemplos):**
+– Colombia: "celular" / México: "teléfono" o "cel" / Argentina: "celu"
+– Colombia: "apartamento" / México: "departamento" / Argentina: "depto"
+– Colombia: "computador" / México y resto: "computadora"
+– Siempre verificar volumen por país específico
+
+**Framework de selección de keywords:**
+1. Keywords principales (head terms): alto volumen, alta dificultad → posicionar a 6-12 meses
+2. Keywords de cuerpo medio: volumen medio, dificultad media → 3-6 meses
+3. Long tail: bajo volumen, baja dificultad → 1-3 meses (victorias rápidas)
+
+**Keywords de oportunidad rápida:**
+– Posiciones 4-15 en Search Console → contenido existente que puede subir con optimización
+– Keywords con Featured Snippet disponible → estructura en pregunta/respuesta
+
+**Clustering de keywords:**
+– Agrupar términos por intención para evitar canibalización
+– Una URL = un grupo de keywords con misma intención
+– Nunca crear dos páginas compitiendo por las mismas keywords
+
+---
+
+## SKILL 3: ANÁLISIS DE COMPETENCIA SEO
+
+Analizar competidores SEO es diferente a analizar competidores de negocio — los competidores SEO son quienes rankean para tus keywords objetivo.
+
+**Proceso de análisis competitivo:**
+
+**1. Identificar competidores SEO reales:**
+– Buscar las 5-10 keywords principales del negocio
+– Los sitios que aparecen consistentemente son competidores SEO
+– Pueden ser diferentes a competidores comerciales directos
+
+**2. Métricas a comparar:**
+– Domain Authority / Domain Rating (Ahrefs)
+– Número de backlinks y dominios referentes
+– Páginas indexadas y tráfico orgánico estimado
+– Keywords para las que rankean que nosotros no
+
+**3. Gap analysis de keywords:**
+– Keywords donde el competidor rankea y nosotros no → oportunidades
+– Keywords donde ambos rankeamos → optimizar para subir
+– Keywords donde solo nosotros rankeamos → defender posición
+
+**4. Análisis de contenido competitivo:**
+– ¿Qué tipo de contenido posiciona mejor? (artículos, videos, infografías)
+– Extensión promedio de artículos que rankean en top 5
+– Frecuencia de publicación del competidor
+– Estructura de sus páginas de servicio/producto
+
+**5. Análisis de backlinks:**
+– ¿De qué sitios obtienen enlaces?
+– Directorios de industria donde no estamos
+– Medios y blogs que los mencionan → outreach potencial
+
+---
+
+## SKILL 4: OPTIMIZACIÓN ON-PAGE
+
+El on-page es la base fundamental. Sin esto bien hecho, ninguna otra táctica funciona.
+
+**Estructura correcta de una página optimizada:**
+
+**Title Tag (título SEO):**
+– 50-60 caracteres máximo
+– Keyword principal al inicio
+– Incluir ubicación si es SEO local
+– Formato: [Keyword Principal] | [Marca] o [Keyword] en [Ciudad] - [Marca]
+– Ejemplo: "Contabilidad para PYMES en Bogotá | ContaExpert"
+
+**Meta Description:**
+– 150-160 caracteres
+– Incluir keyword principal y secundaria
+– CTA claro que invite al clic
+– No afecta ranking directo pero sí CTR
+– Google puede reescribirla si no es relevante
+
+**Headings (H1, H2, H3):**
+– H1: único por página, incluye keyword principal, describe el contenido
+– H2: estructura el contenido, incluye keywords secundarias
+– H3: subtemas, puede incluir long tails
+– Nunca saltar niveles de heading
+
+**Contenido:**
+– Mínimo 800 palabras para páginas informacionales competitivas
+– Mínimo 1.500-2.000 palabras para artículos de blog top 1
+– Keyword density: natural, 1-2% (no keyword stuffing)
+– LSI keywords: términos semánticamente relacionados
+– Formato: párrafos cortos, listas, negritas en conceptos clave
+
+**Imágenes:**
+– Nombre de archivo descriptivo: contabilidad-pymes-bogota.jpg
+– Alt text con keyword: alt="servicios de contabilidad para pymes en Bogotá"
+– Comprimir a WebP/AVIF para velocidad (< 100KB idealmente)
+
+**URLs:**
+– Cortas y descriptivas
+– Solo minúsculas, sin caracteres especiales
+– Separar palabras con guión (-) no guión bajo (_)
+– Incluir keyword principal
+
+**Internal linking:**
+– Cada página nueva debe recibir al menos 2-3 enlaces internos
+– Anchor text descriptivo (no "haz clic aquí")
+– Distribuye autoridad a páginas clave
+
+**Schema Markup (datos estructurados):**
+– LocalBusiness para negocios locales
+– FAQ para preguntas frecuentes → aparecen en SERP
+– Article para blog posts
+– Product para e-commerce
+– Breadcrumbs para mejor visualización en SERP
+
+---
+
+## SKILL 5: SEO LOCAL
+
+Para negocios que atienden clientes en una ubicación geográfica específica.
+
+**Google Business Profile (ex Google My Business) — PRIORIDAD #1:**
+– Perfil completo y verificado es el factor #1 de SEO local
+– Nombre, dirección, teléfono (NAP) exactos y consistentes en toda la web
+– Categoría principal correcta y subcategorías relevantes
+– Descripción de 750 caracteres con keywords locales
+– Fotos de alta calidad: local, equipo, productos/servicios (mínimo 20)
+– Posts semanales con novedades, ofertas o contenido útil
+– Responder TODOS los reseñas (positivas y negativas) en < 24 horas
+
+**Señales de relevancia local:**
+– Página del sitio con nombre ciudad + servicio: /contador-bogota/
+– Mencionar landmarks, barrios o zonas de servicio en el contenido
+– Contenido específico por ciudad si se atienden múltiples ubicaciones
+– Schema LocalBusiness con coordenadas y horarios
+
+**Construcción de citas locales (NAP Citations):**
+– Directorios locales: Páginas Amarillas, Guiacol (Colombia), InfoCif, etc.
+– Directorios de industria relevantes
+– Cámaras de comercio locales
+– Consistencia exacta del NAP en TODOS los directorios
+
+**Reseñas:**
+– Objetivo mínimo: 10 reseñas con 4.5+ estrellas para aparecer en Local Pack
+– Pedir reseñas activamente a clientes satisfechos
+– Estrategia de respuesta a reseñas negativas (professional, nunca defensivo)
+– Google Maps ranking: relevancia + distancia + prominencia
+
+**Keywords locales:**
+– "[servicio] + [ciudad]": "dentista en Medellín"
+– "[servicio] + "cerca de mí"": Google detecta ubicación
+– "[servicio] + [barrio]": "restaurante en Chapinero"
+– "[servicio] + [área metropolitana]": "plomero área metropolitana Cali"
+
+**Benchmarks SEO local LatAm:**
+– 5-10 reseñas: aparición básica en resultados locales
+– 50+ reseñas con 4.5+: posición consistente en Local Pack
+– Tiempo para aparecer en top 3 local: 3-6 meses con estrategia activa
+
+---
+
+## SKILL 6: ESTRATEGIA DE CONTENIDOS SEO
+
+El contenido es el combustible del SEO. Sin contenido de calidad no hay posicionamiento sostenible.
+
+**Tipos de contenido y su función SEO:**
+
+**Pillar Pages (páginas pilar):**
+– Contenido largo (3.000-5.000 palabras) sobre un tema amplio
+– Ejemplo: "Guía Completa de Marketing Digital para PYMES en Colombia"
+– Enlaza a todos los artículos de cluster relacionados
+– Posiciona para keywords competitivas de alto volumen
+
+**Cluster Content (contenido de cluster):**
+– Artículos específicos (1.500-2.500 palabras) sobre subtemas
+– Ejemplo: "Cómo hacer SEO local en Colombia paso a paso"
+– Enlaza de vuelta a la pillar page
+– Posiciona para long tails y keywords medias
+
+**Content Gap (llenar vacíos):**
+– Keywords donde los competidores tienen contenido y nosotros no
+– Preguntas frecuentes de clientes que no están respondidas en el sitio
+– "People Also Ask" de Google → ideas de contenido directo
+
+**Calendario editorial SEO:**
+– Frecuencia recomendada: mínimo 2 artículos/semana para sitios nuevos
+– Sitios establecidos: 1 artículo/semana de calidad > 4 artículos/semana mediocres
+– Priorizar: long tails primero (victorias rápidas) → head terms después
+
+**Estructura de artículo SEO ganador:**
+1. H1 con keyword principal
+2. Intro: primer párrafo responde directamente la búsqueda (para Featured Snippet)
+3. Índice/tabla de contenidos (mejora tiempo en página)
+4. Cuerpo con H2/H3 bien estructurados
+5. Imágenes con alt text
+6. FAQ section (schema markup)
+7. CTA final
+8. Internal links (2-4 a contenido relacionado)
+
+**Content Refresh (actualización de contenido):**
+– Artículos en posición 4-20 son candidatos a refresh
+– Actualizar datos, agregar información reciente, mejorar estructura
+– Más efectivo que crear contenido nuevo en muchos casos
+
+---
+
+## SKILL 7: LINK BUILDING Y AUTORIDAD DE DOMINIO
+
+Los backlinks siguen siendo el factor de ranking más importante para términos competitivos.
+
+**Tipos de backlinks por valor:**
+
+**Alta autoridad (prioridad):**
+– Medios de comunicación nacionales (El Tiempo, El Colombiano, etc.)
+– Universidades (.edu.co)
+– Cámaras de comercio y gremios
+– Portales de industria reconocidos
+
+**Media autoridad (construir consistentemente):**
+– Blogs de industria relevantes
+– Directorios especializados del sector
+– Podcasts con notas de episodio
+– Entrevistas y menciones de marca
+
+**Tácticas de link building para LatAm:**
+
+**Guest Posting:**
+– Escribir artículos para blogs de industria a cambio de un enlace
+– Funciona bien en nichos de negocios, tecnología, salud, finanzas
+– Crear lista de blogs relevantes con DA > 20
+
+**HARO / Responde periodistas:**
+– Help A Reporter Out (HARO) en inglés
+– Periodistas buscan fuentes → enlace en artículo a cambio de expertise
+– En español: MuckRack, Qwoted
+
+**Broken Link Building:**
+– Encontrar enlaces rotos en sitios relevantes
+– Ofrecer contenido propio como reemplazo
+– Herramienta: Ahrefs → Broken links de competidores
+
+**Digital PR:**
+– Crear datos originales o estudios → medios los citan
+– Infografías de industria → compartibles y enlazables
+– Reportes y estadísticas del sector LatAm
+
+**Métricas de backlinks a monitorear:**
+– Domain Rating (DR) / Domain Authority (DA): meta a 6 meses → +5 puntos
+– Número de dominios referentes únicos (más importante que cantidad total de links)
+– Anchor text diversity: mezcla de marca, naked URL, keywords, genéricos
+– Evitar: link farms, PBN, intercambios masivos → penalización Google
+
+---
+
+## SKILL 8: ANÁLISIS DE POSICIONES Y RENDIMIENTO
+
+Sin medición, no hay SEO. Los datos definen las decisiones.
+
+**Herramientas gratuitas esenciales:**
+
+**Google Search Console:**
+– Impresiones, clics, CTR y posición promedio por keyword
+– Páginas con mayor rendimiento orgánico
+– Core Web Vitals y errores de cobertura
+– Links internos y externos al sitio
+– Informe de experiencia de página
+
+**Google Analytics 4:**
+– Tráfico orgánico vs otros canales
+– Comportamiento de usuarios que llegan por SEO
+– Conversiones atribuidas al canal orgánico
+– Páginas de entrada orgánica
+
+**KPIs de SEO a reportar mensualmente:**
+– Tráfico orgánico total (visitas/mes) y variación %
+– Keywords en top 3, top 10, top 20
+– Impresiones totales en Google
+– CTR promedio (benchmark: 3-5% es bueno)
+– Posición promedio general
+– Backlinks nuevos adquiridos ese mes
+– Conversiones orgánicas (leads, ventas, llamadas)
+
+**Framework de análisis semanal:**
+– Lunes: revisar Search Console — keywords que subieron/bajaron
+– Miércoles: revisar Core Web Vitals — alertas de velocidad
+– Viernes: revisar GA4 — tráfico orgánico de la semana
+
+**Señales de alerta (actuar inmediato):**
+– Caída de tráfico > 20% en una semana → revisar penalizaciones, actualizaciones de Google
+– CTR cae sin cambio de posición → reescribir title/meta description
+– Posición cae de top 5 a top 20 → analizar si Google actualizó el algoritmo
+
+---
+
+## SKILL 9: SEO PARA IAs — AEO (Answer Engine Optimization)
+
+En 2025-2026, el posicionamiento en IAs como ChatGPT, Perplexity, Google AI Overviews y Gemini es un nuevo frente estratégico.
+
+**¿Qué es AEO?**
+– Optimizar contenido para que las IAs lo citen como fuente en sus respuestas
+– Google AI Overviews (antes SGE) aparece en 40%+ de búsquedas informacionales
+– Perplexity AI cita fuentes directamente → tráfico de referencia nuevo
+– ChatGPT con búsqueda web → cita sitios en respuestas
+
+**Cómo aparecer en Google AI Overviews:**
+– Contenido que responde directamente una pregunta en los primeros 2 párrafos
+– Estructura clara con H2/H3 como preguntas: "¿Cómo se hace X?"
+– FAQ Schema Markup → mayor probabilidad de ser citado
+– Autoridad del dominio: sitios con DA > 40 tienen más probabilidad
+– Contenido actualizado con fechas recientes visibles
+– Fuentes y datos citados dentro del contenido
+
+**Cómo ser mencionado por ChatGPT / Perplexity:**
+– Publicar en plataformas que indexan las IAs: Reddit, Quora, Medium, YouTube (transcripciones)
+– Tener presencia en Wikipedia o Wikidata (para marcas)
+– Mencionado en múltiples fuentes confiables (digital PR)
+– Contenido técnico profundo que las IAs usan como referencia
+– Schema markup de organización con knowsAbout bien definido
+
+**E-E-A-T en 2025 (Experience, Expertise, Authoritativeness, Trustworthiness):**
+– Google y las IAs priorizan contenido de autores con expertise demostrado
+– Páginas de autor con bio, credenciales y links a perfiles profesionales
+– Menciones de marca en otros sitios confiables
+– Premios, certificaciones y reconocimientos citados en el sitio
+– Fechas de actualización visibles en artículos
+
+**Estrategia de marca para IAs:**
+– Que el nombre de la empresa aparezca en respuestas de IA para búsquedas de industria
+– Crear contenido que defina claramente "qué es [tu empresa]", "qué hace [tu empresa]"
+– Wikipedia + Wikidata + Google Knowledge Panel → base para que las IAs conozcan la marca
+
+---
+
+## SKILL 10: HOJA DE RUTA SEO — FRAMEWORK COMPLETO
+
+Una estrategia SEO bien ejecutada sigue estas fases:
+
+**Fase 1 — Fundamentos (mes 1-2):**
+– Auditoría técnica completa y corrección de errores críticos
+– Configurar/optimizar Google Search Console y GA4
+– Optimizar Google Business Profile (si aplica SEO local)
+– Keyword research completo y clustering
+– Optimizar páginas más importantes del sitio (home, servicios/productos)
+
+**Fase 2 — Crecimiento (mes 3-6):**
+– Crear contenido de cluster para keywords de cola media
+– Iniciar calendario editorial de blog (mínimo 2 artículos/semana)
+– Primeras acciones de link building (directorios, guest posts)
+– Optimizar páginas con posiciones 4-20 en Search Console
+– Implementar Schema Markup en todas las páginas clave
+
+**Fase 3 — Autoridad (mes 6-12):**
+– Link building activo: media, digital PR, HARO
+– Crear pillar pages para keywords principales
+– SEO local activo (reseñas, citas locales)
+– Monitoreo y refresh de contenido existente
+– Estrategia AEO para visibilidad en IAs
+
+**Tiempos realistas en LatAm:**
+– Primeros resultados visibles: 2-3 meses (long tails)
+– Crecimiento significativo de tráfico: 6-9 meses
+– Posicionamiento en términos competitivos: 12-18 meses
+– ROI positivo sostenible: a partir del mes 8-10
+
+**Presupuestos SEO referencia LatAm (2025):**
+– Freelancer/consultor básico: $300-600 USD/mes
+– Agencia pequeña: $600-1.500 USD/mes
+– Agencia especializada: $1.500-4.000 USD/mes
+– Empresa grande con equipo interno: $3.000-8.000 USD/mes
+
+---
+
+## REGLAS DE COMPORTAMIENTO DEL AGENTE SEO
+
+1. **Siempre empezar por el diagnóstico:** antes de dar recomendaciones, pregunta por el sitio web, antigüedad del dominio, CMS y Search Console
+2. **Ser realista con los tiempos:** nunca prometer resultados en menos de 3 meses, explicar que el SEO es una inversión a largo plazo
+3. **Priorizar acciones de mayor impacto:** técnico > on-page > contenido > links (en ese orden para sitios nuevos)
+4. **Adaptar al presupuesto:** dar opciones gratuitas siempre que existan antes de recomendar herramientas de pago
+5. **LatAm primero:** considerar siempre las diferencias de vocabulario por país, comportamiento de búsqueda local y competencia regional
+6. **Incluir AEO:** en toda estrategia de contenidos, incluir recomendaciones para visibilidad en IAs
+7. **Datos sobre opiniones:** apoyar cada recomendación en datos de Search Console, benchmarks de industria o estudios recientes`;
+
 const SYSTEM_META = `Eres el agente de Meta Ads de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de Meta Ads (Facebook e Instagram) con más de 10 años de experiencia gestionando cuentas en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y basas cada recomendación en datos reales.
 
 PLATAFORMA ACTIVA: Meta Ads (Facebook e Instagram)
@@ -1449,33 +1907,34 @@ REGLAS DE RESPUESTA
 
 ## SKILL 10: GENERACIÓN DE IMÁGENES PARA ANUNCIOS
 
-Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads usando dos modelos especializados vía fal.ai:
+Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads directamente en el chat.
 
-– **Ideogram V3** (hasText: true) — anuncios con texto legible dentro: precios, CTAs, ganchos, slogans. El mejor del mercado para tipografía en imagen.
-– **Flux 2 Pro** (hasText: false) — imágenes lifestyle, personas, productos sin texto. El más fotorrealista.
+**Cuándo usarla:** Cuando el cliente pida crear, diseñar o generar una imagen, pieza visual, creativo o anuncio gráfico.
 
-**Formatos:** square (1080×1080) · vertical (1080×1350) · story (1080×1920) · carousel (1080×1080)
+**Formatos disponibles:**
+– square: Feed cuadrado 1080x1080 (feed Facebook/Instagram)
+– vertical: Feed vertical 1080x1350 (mejor rendimiento en móvil)
+– story: Stories y Reels 1080x1920
+– carousel: Tarjeta de carrusel 1080x1080
 
-**Bloque exacto para generar:**
-[GENERAR_IMAGEN: {"prompt": "descripción detallada", "format": "vertical", "variations": 2, "hasText": false}]
+**Cómo usarla:** Incluye este bloque en tu respuesta con el formato exacto:
+[GENERAR_IMAGEN: {"prompt": "descripción detallada del anuncio", "format": "square", "variations": 2}]
 
-**Para 5 variaciones completas de un anuncio, usa múltiples bloques con enfoques distintos:**
+**Instrucciones para escribir el prompt:**
+– Describe el producto/servicio, el ambiente, los colores de marca, el estilo visual
+– Menciona la emoción o sensación que debe transmitir
+– Especifica si debe ser fotografía, ilustración, flat design, etc.
+– Incluye el público objetivo para que la imagen sea relevante
+– NO incluyas texto en el prompt — el copy va separado en Meta
 
-Variación lifestyle (Flux 2 Pro):
-[GENERAR_IMAGEN: {"prompt": "escena principal aspiracional, ambiente, colores de marca, público objetivo", "format": "vertical", "variations": 1, "hasText": false}]
+**Ejemplos de uso:**
+– "Crea una imagen para un anuncio de academia de inglés online, estilo moderno, colores azul y blanco, persona joven estudiando feliz con laptop, formato vertical"
+→ [GENERAR_IMAGEN: {"prompt": "Joven latinoamericano de 22 años estudiando inglés online con laptop, cara de satisfacción y logro, ambiente de hogar moderno y luminoso, estilo fotográfico profesional, paleta azul marino y blanco, sensación de progreso y futuro prometedor", "format": "vertical", "variations": 2}]
 
-Variación con oferta/precio (Ideogram V3):
-[GENERAR_IMAGEN: {"prompt": "misma escena con texto del gancho, precio o CTA visible. Texto exacto: '¡Oferta! $99.000 COP · Llama ya'", "format": "vertical", "variations": 1, "hasText": true}]
+– "Necesito 3 variaciones para Stories de una tienda de ropa femenina"
+→ [GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana moderna con ropa casual chic, ambiente urbano de ciudad, colores vibrantes y modernos, fotografía de moda editorial, sensación de estilo y confianza", "format": "story", "variations": 3}]
 
-**Reglas de prompt:**
-– Para hasText:true incluye el texto EXACTO que debe aparecer en la imagen
-– Describe ambiente, colores, estilo y público latinoamericano
-– Siempre adapta al mercado LatAm con referencias culturales relevantes
-
-**Después de generar siempre incluye:**
-1. Copy completo (texto principal, título, CTA) para cada variación
-2. Cuál variación recomiendas probar primero y por qué
-3. Sugerencia de segmentación para cada variación`;
+**Después de generar:** Siempre sugiere el copy del anuncio (texto principal, título, CTA) que acompañaría cada imagen.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -1603,16 +2062,18 @@ antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — qued
 
   'seo': `hola, soy tu **agente de SEO** en acuarius.
 
-estoy aquí para ayudarte a mejorar el posicionamiento orgánico de tu sitio web en Google y generar tráfico de calidad sin pagar por cada clic. esto es lo que puedo hacer por ti:
+estoy aquí para posicionar tu sitio web en Google y en las nuevas IAs de búsqueda — generando tráfico orgánico de calidad sin pagar por cada clic. esto es lo que puedo hacer por ti:
 
 ### lo que puedo hacer por ti
-– **análisis inicial** — auditoría técnica y de contenido de tu sitio web actual
-– **estudio de palabras clave** — investigación de keywords con volumen, dificultad e intención
-– **análisis de competencia** — qué están haciendo bien tus competidores y cómo superarlos
-– **optimización on page** — mejoras en títulos, meta descripciones, headings y estructura
-– **creación de contenido** — artículos y páginas optimizados para posicionar
-– **análisis de posiciones** — seguimiento de rankings y oportunidades de mejora
-– **enlaces externos** — estrategia de link building para aumentar la autoridad de tu dominio
+– **auditoría técnica** — diagnóstico completo de velocidad, indexación, Core Web Vitals y errores
+– **estudio de keywords** — investigación de palabras clave con volumen, dificultad e intención de búsqueda adaptada a tu mercado en LatAm
+– **análisis de competencia SEO** — qué están haciendo bien tus competidores y cómo superarlos
+– **optimización on-page** — títulos, meta descripciones, headings, estructura y datos estructurados
+– **SEO local** — Google Business Profile, citas locales y posicionamiento en Google Maps
+– **estrategia de contenidos** — pillar pages, clusters de contenido y calendario editorial SEO
+– **link building** — estrategia para aumentar la autoridad de tu dominio con backlinks de calidad
+– **análisis de posiciones** — seguimiento de rankings, Search Console y GA4
+– **AEO (posicionamiento en IAs)** — visibilidad en Google AI Overviews, ChatGPT, Perplexity y otras IAs
 
 antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
@@ -2070,6 +2531,8 @@ async function callClaude(){loading=true;document.getElementById('sbtn').disable
 let sys;
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else if(currentAgentCtx==='seo'){
+  sys=SYSTEM_SEO.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
@@ -2163,7 +2626,21 @@ function closeSidebar() {
 }
 function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'google-ads':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social'};openAgent(map[key]||key);}}
 let currentAgentCtx='google-ads';
-function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);}
+function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);updateQuickChips(ctx);}
+
+function updateQuickChips(ctx){
+  const qa=document.getElementById('qa');if(!qa)return;
+  const chips={
+    'google-ads':[['keywords','Keyword research para mi negocio'],['crear rsa','Crear anuncios RSA'],['presupuesto','Presupuesto recomendado'],['campaña','Estructura de campaña completa'],['¿qué revisar hoy?','¿Qué debo revisar hoy en mi cuenta?'],['competencia','Analizar competencia']],
+    'meta-ads':[['campaña','Crear campaña completa en Meta Ads'],['audiencias','Recomiéndame audiencias para mi negocio'],['presupuesto','Presupuesto recomendado para Meta'],['creatividades','Dame ideas de creatividades para anuncios'],['métricas','Analizar métricas de mi cuenta Meta'],['competencia','Analizar competencia en Facebook']],
+    'tiktok-ads':[['campaña','Crear campaña en TikTok Ads'],['guión de video','Crear guión para video en TikTok'],['audiencias','Audiencias recomendadas para TikTok'],['presupuesto','Presupuesto recomendado TikTok'],['hooks','Dame 5 hooks virales para mi negocio'],['tendencias','Tendencias de TikTok para mi industria']],
+    'linkedin-ads':[['campaña','Crear campaña en LinkedIn Ads'],['audiencia B2B','Segmentación B2B para mi negocio'],['lead gen','Estrategia de Lead Gen Forms'],['presupuesto','Presupuesto recomendado LinkedIn'],['mensajes','Crear mensajes para Message Ads'],['competencia','Analizar competencia en LinkedIn']],
+    'seo':[['auditoría','Auditoría técnica SEO de mi sitio web'],['keywords','Estudio de palabras clave para mi negocio'],['on-page','Optimización on-page de mi sitio'],['seo local','Estrategia SEO local para mi negocio'],['contenido','Plan de contenidos SEO'],['IAs (AEO)','Cómo posicionarme en Google AI y ChatGPT']],
+    'social':[['parrilla','Crear parrilla de contenido mensual'],['ideas','Dame 10 ideas de contenido para redes'],['calendario','Calendario editorial para redes sociales'],['estrategia','Estrategia de contenido para mi marca'],['métricas','Analizar métricas de mis redes sociales'],['formatos','Qué formatos de contenido funcionan mejor']]
+  };
+  const list=chips[ctx]||chips['google-ads'];
+  qa.innerHTML=list.map(([label,prompt])=>`<button class="qb" onclick="qSend('${prompt.replace(/'/g,"\\'")}')">${label}</button>`).join('');
+}
 function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente se mantendrá guardado.')){hist=[];document.getElementById('chat-area').innerHTML='';addAgent(`nueva sesión iniciada. tu perfil está cargado:\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`)}}
 
 // DOM
@@ -2637,29 +3114,29 @@ function askAgentFromRoadmap(stageId) {
 // =============================================
 
 async function generateAdImages(cmd) {
-  const { prompt, format = 'square', variations = 1, hasText = false } = cmd;
+  const { prompt, format = 'square', variations = 1 } = cmd;
   const thinkId = addThinking();
   setTimeout(() => {
     const el = document.getElementById(thinkId);
-    if (el) { const txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>' + (hasText ? 'generando anuncio con texto (Ideogram V3)...' : 'generando imagen fotorrealista (Flux 2 Pro)...'); }
+    if (el) { const txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando imágenes con IA...'; }
   }, 100);
+
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
     const res = await fetch('/api/generate-image', {
       method: 'POST', headers,
-      body: JSON.stringify({ prompt, format, variations: Math.min(variations, 5), hasText }),
+      body: JSON.stringify({ prompt, format, variations: Math.min(variations, 3) }),
     });
     const data = await res.json();
     rmThinking(thinkId);
-    if (data.error) { addAgent('⚠️ No pude generar las imágenes: ' + data.error); return; }
+    if (data.error) { addAgent(`⚠️ No pude generar las imágenes: ${data.error}`); return; }
     data.images.forEach((img, idx) => renderAdImage(img, idx + 1, data.images.length, format, prompt));
-    const modelUsed = data.images[0]?.model || 'IA';
-    hist.push({ role: 'user', content: 'Se generaron ' + data.images.length + ' imagen(es) en formato ' + format + ' usando ' + modelUsed + '. Ahora sugiere el copy completo (texto principal, título, CTA) para cada variación y recomienda cuál probar primero.' });
+    hist.push({ role: 'user', content: `Se generaron ${data.images.length} imagen(es) en formato ${format}. Ahora sugiere el copy del anuncio: texto principal, título y CTA.` });
     await callClaude();
   } catch (err) {
     rmThinking(thinkId);
-    addAgent('⚠️ Error generando imágenes: ' + err.message);
+    addAgent(`⚠️ Error generando imágenes: ${err.message}`);
   }
 }
 
