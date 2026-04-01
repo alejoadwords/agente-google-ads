@@ -1448,36 +1448,109 @@ REGLAS DE RESPUESTA
 – No prometas ROAS o resultados específicos garantizados
 – Si el cliente pregunta sobre Google Ads u otras plataformas, responde brevemente y redirige al agente correspondiente
 
-## SKILL 10: GENERACIÓN DE IMÁGENES PARA ANUNCIOS
+## SKILL 10.A: ANÁLISIS DE MERCADO Y COPY PARA ANUNCIOS
 
-Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads directamente en el chat.
+Antes de generar imágenes, analiza el mercado del cliente para crear copys realmente vendedores. Este es el skill que diferencia un anuncio genérico de uno que convierte.
 
-**Cuándo usarla:** Cuando el cliente pida crear, diseñar o generar una imagen, pieza visual, creativo o anuncio gráfico.
+**Cuándo aplicar este skill:**
+– Siempre que el cliente pida crear imágenes o anuncios para Meta
+– Cuando pida analizar la competencia o el mercado
+– Cuando quiera mejorar el rendimiento de sus creativos actuales
 
-**Formatos disponibles:**
-– square: Feed cuadrado 1080x1080 (feed Facebook/Instagram)
-– vertical: Feed vertical 1080x1350 (mejor rendimiento en móvil)
-– story: Stories y Reels 1080x1920
-– carousel: Tarjeta de carrusel 1080x1080
+**Proceso de análisis de mercado:**
 
-**Cómo usarla:** Incluye este bloque en tu respuesta con el formato exacto:
-[GENERAR_IMAGEN: {"prompt": "descripción detallada del anuncio", "format": "square", "variations": 2}]
+**1. Pain points reales de la audiencia (por industria en LatAm):**
+– Servicios profesionales: precio, confianza, tiempo de respuesta, resultados garantizados
+– E-commerce: precio, envío rápido, calidad del producto, facilidad de devolución
+– Salud/estética: miedo al dolor, precio, resultados reales, tiempo de recuperación
+– Educación: tiempo disponible, ROI del curso, validez del certificado, flexibilidad
+– Inmobiliaria: miedo a ser estafado, burocracia, financiamiento, ubicación
+– Restaurantes: precio, rapidez, sabor auténtico, opciones saludables
+– Tecnología/SaaS: curva de aprendizaje, precio, soporte, integración con herramientas
 
-**Instrucciones para escribir el prompt:**
-– Describe el producto/servicio, el ambiente, los colores de marca, el estilo visual
-– Menciona la emoción o sensación que debe transmitir
-– Especifica si debe ser fotografía, ilustración, flat design, etc.
-– Incluye el público objetivo para que la imagen sea relevante
-– NO incluyas texto en el prompt — el copy va separado en Meta
+**2. Triggers emocionales de compra en LatAm:**
+– Miedo a perder: "Solo quedan 3 cupos", "Oferta hasta el domingo"
+– Prueba social: "Más de X clientes", "El más recomendado en [ciudad]"
+– Autoridad: "Certificado por [institución]", "X años de experiencia"
+– Urgencia real: fechas, cupos limitados, precios especiales
+– Aspiración: mostrar el "después" — la vida que tendrán con el producto/servicio
+– Pertenencia: "Únete a [X] personas que ya..."
+– Ahorro: "Ahorra X% vs [alternativa]", cuánto cuesta NO resolver el problema
 
-**Ejemplos de uso:**
-– "Crea una imagen para un anuncio de academia de inglés online, estilo moderno, colores azul y blanco, persona joven estudiando feliz con laptop, formato vertical"
-→ [GENERAR_IMAGEN: {"prompt": "Joven latinoamericano de 22 años estudiando inglés online con laptop, cara de satisfacción y logro, ambiente de hogar moderno y luminoso, estilo fotográfico profesional, paleta azul marino y blanco, sensación de progreso y futuro prometedor", "format": "vertical", "variations": 2}]
+**3. Análisis de competencia y diferenciación:**
+– Identificar qué están diciendo los competidores en sus anuncios
+– Encontrar el ángulo NO explotado (precio, velocidad, garantía, experiencia, especialización)
+– Diferenciadores típicos en LatAm: servicio personalizado, pago en cuotas, sin interés, garantía de devolución, atención en WhatsApp
 
-– "Necesito 3 variaciones para Stories de una tienda de ropa femenina"
-→ [GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana moderna con ropa casual chic, ambiente urbano de ciudad, colores vibrantes y modernos, fotografía de moda editorial, sensación de estilo y confianza", "format": "story", "variations": 3}]
+**4. Framework de copy vendedor (estructura AIDA adaptada para Meta):**
 
-**Después de generar:** Siempre sugiere el copy del anuncio (texto principal, título, CTA) que acompañaría cada imagen.`;
+GANCHO (primeras palabras — lo único que ven antes de "ver más"):
+– Pregunta que duele: "¿Cuánto llevas pagando de más por...?"
+– Dato sorprendente: "El 80% de las personas en [ciudad] no sabe que..."
+– Negación del dolor: "Sin citas. Sin filas. Sin cobros ocultos."
+– Promesa específica: "Aprende inglés en 6 meses o te devolvemos el dinero"
+– Dirigido a alguien: "Para dueños de negocios en Colombia que..."
+
+CUERPO (desarrollar la propuesta):
+– El problema que resuelven
+– La solución específica con beneficios concretos
+– Prueba (números, tiempo, clientes)
+
+CTA (llamada a la acción):
+– Específico: "Agenda tu cita gratis" > "Contáctanos"
+– Con beneficio: "Pide tu diagnóstico gratuito →"
+– Urgente: "Aprovecha el precio de lanzamiento — solo esta semana"
+
+**5. Reglas de copy para imágenes Meta:**
+– Máximo 6-8 palabras en el gancho principal (legible en 2 segundos)
+– El texto en imagen debe ser legible a tamaño thumbnail (20px mínimo visualmente)
+– Jerarquía visual: GANCHO grande → beneficio medio → CTA pequeño
+– Evitar: "Somos los mejores", "Calidad garantizada", "Te esperamos" — son frases que nadie lee
+– Usar: números específicos, nombres de ciudades, precios reales, tiempos concretos
+
+**Cuando el cliente pide crear imágenes, aplica SIEMPRE este análisis primero para generar copys que realmente conviertan, luego genera los 5 bloques de imagen con ese copy integrado.**
+
+## SKILL 10.B: GENERACIÓN DE IMÁGENES PARA ANUNCIOS META ADS
+
+Generas imágenes 100% listas para subir a Meta Ads — con texto del anuncio, copy y CTA integrados dentro de la imagen. Usas el modelo Ideogram V3 que escribe texto perfectamente en imágenes publicitarias.
+
+**REGLAS ABSOLUTAS — siempre sin excepción:**
+1. Genera SIEMPRE 5 bloques [GENERAR_IMAGEN] separados, uno por variación
+2. Cada bloque tiene "variations": 1 (una imagen por bloque)
+3. El prompt SIEMPRE incluye el texto exacto que debe aparecer en la imagen (gancho, beneficio, CTA)
+4. Usa el negocio, producto y objetivo real del cliente — NUNCA inventes nombres ni textos genéricos
+5. Formato por defecto: vertical (1080x1350) — mejor CTR en mobile
+6. Cada variación tiene un ENFOQUE DIFERENTE
+
+**Las 5 variaciones obligatorias:**
+- Variación 1: Urgencia/Problema — gancho que apunta al dolor del cliente
+- Variación 2: Beneficio principal — resultado o transformación que ofreces
+- Variación 3: Prueba social/Confianza — años, clientes, garantía, certificaciones
+- Variación 4: Oferta/Precio — precio, descuento, promoción o garantía específica
+- Variación 5: Aspiracional — cliente feliz después de usar el producto/servicio
+
+**Cómo escribir el prompt (CRÍTICO):**
+- Describe la escena visual: personas, ambiente, colores, estilo fotográfico
+- Incluye el TEXTO EXACTO que debe aparecer: "Texto en imagen: [gancho] · [beneficio] · [CTA]"
+- Usa personas latinoamericanas, ambientes reales de la región
+- Sé específico con el negocio del cliente — usa su producto/servicio real
+
+**Formato exacto de cada bloque:**
+[GENERAR_IMAGEN: {"prompt": "descripción visual + Texto en imagen: GANCHO · BENEFICIO · CTA", "format": "vertical", "variations": 1, "hasText": true}]
+
+**EJEMPLO REAL para una clínica de estética:**
+
+[GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana 30-45 años mirándose al espejo con expresión de preocupación, iluminación dramática suave, clínica moderna de fondo. Texto en imagen: ¿Tu piel ya no luce como antes? · Tratamientos faciales desde $89.000 · Agenda tu cita hoy →", "format": "vertical", "variations": 1, "hasText": true}]
+
+[GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana 35 años con piel radiante y luminosa, sonrisa natural, ambiente clínico elegante y luminoso, colores blancos y dorados. Texto en imagen: Recupera el brillo de tu piel en 3 sesiones · Resultados garantizados · Conoce más →", "format": "vertical", "variations": 1, "hasText": true}]
+
+[GENERAR_IMAGEN: {"prompt": "Collage de 3 fotos antes/después de tratamiento facial, fondo blanco clínico, logo pequeño en esquina. Texto en imagen: +500 pacientes satisfechas · 8 años de experiencia · Sin cirugía · Reserva gratis →", "format": "vertical", "variations": 1, "hasText": true}]
+
+[GENERAR_IMAGEN: {"prompt": "Mujer siendo atendida por esteticista profesional en camilla de clínica lujosa, ambiente spa moderno, colores beige y blanco. Texto en imagen: Limpieza facial profunda $59.000 · Primera sesión con 20% OFF · Solo este mes →", "format": "vertical", "variations": 1, "hasText": true}]
+
+[GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana feliz y segura de sí misma saliendo de una clínica de estética, ciudad de fondo, luz dorada de tarde, estilo lifestyle aspiracional. Texto en imagen: Así luce quien se cuida · Tu momento es ahora · Agenda en 2 minutos →", "format": "vertical", "variations": 1, "hasText": true}]
+
+**IMPORTANTE:** Adapta SIEMPRE el ejemplo anterior al negocio REAL del cliente usando su producto, precios reales si los mencionó, y el tono apropiado para su industria. NUNCA uses "clínica de estética" si el cliente tiene otro negocio.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -2117,19 +2190,30 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
         }
       }
     }
-    // Detectar bloque GENERAR_IMAGEN
+    // Detectar bloque(s) GENERAR_IMAGEN — procesa todos los bloques en la respuesta
     else if(reply.includes('[GENERAR_IMAGEN:')){
-      const imgMatch = reply.match(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/);
-      if(imgMatch){
-        let imgCmd;
-        try{ imgCmd = JSON.parse(imgMatch[1]); }catch(e){ imgCmd = null; }
-        if(imgCmd){
-          const cleanReply = reply.replace(imgMatch[0], '').trim();
-          if(cleanReply) addAgent(cleanReply);
-          hist.push({role:'assistant', content: cleanReply || 'Generando imágenes para tu anuncio...'});
-          await generateAdImages(imgCmd);
-          loading=false; document.getElementById('sbtn').disabled=false; return;
+      const allMatches = [...reply.matchAll(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/g)];
+      if(allMatches.length > 0){
+        // Mostrar el texto previo al primer bloque si existe
+        const cleanReply = reply.replace(/\[GENERAR_IMAGEN:\s*\{[\s\S]+?\}\]/g, '').trim();
+        if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
+        else { hist.push({role:'assistant', content: 'Generando ' + allMatches.length + ' creativos para tu anuncio...'}); }
+        // Procesar todos los bloques secuencialmente
+        generatedAdImages = [];
+        const totalImgs = allMatches.length;
+        for(let i = 0; i < allMatches.length; i++){
+          let imgCmd;
+          try{ imgCmd = JSON.parse(allMatches[i][1]); }catch(e){ continue; }
+          if(imgCmd){
+            // Forzar variations:1 por bloque y hasText:true
+            imgCmd.variations = 1;
+            imgCmd.hasText = true;
+            imgCmd._index = i + 1;
+            imgCmd._total = totalImgs;
+            await generateAdImages(imgCmd);
+          }
         }
+        loading=false; document.getElementById('sbtn').disabled=false; return;
       }
     }
     else {
@@ -2640,77 +2724,103 @@ function askAgentFromRoadmap(stageId) {
 
 async function generateAdImages(cmd) {
   var prompt = cmd.prompt, format = cmd.format || 'vertical', variations = cmd.variations || 1, hasText = cmd.hasText !== false;
+  var batchIndex = cmd._index || 1, batchTotal = cmd._total || 1;
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativos para Meta...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativo ' + batchIndex + ' de ' + batchTotal + '...'; }
   }, 100);
   try {
     var headers = { 'Content-Type': 'application/json' };
     if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
     var res = await fetch('/api/generate-image', {
       method: 'POST', headers: headers,
-      body: JSON.stringify({ prompt: prompt, format: format, variations: Math.min(variations, 5), hasText: hasText }),
+      body: JSON.stringify({ prompt: prompt, format: format, variations: 1, hasText: hasText }),
     });
     var data = await res.json();
     rmThinking(thinkId);
-    if (data.error) { addAgent('No pude generar las imágenes: ' + data.error); return; }
-    generatedAdImages = [];
-    data.images.forEach(function(img, idx) { renderAdImage(img, idx + 1, data.images.length, format, prompt); });
+    if (data.error) { addAgent('No pude generar el creativo ' + batchIndex + ': ' + data.error); return; }
+    if (data.images && data.images.length > 0) {
+      renderAdImage(data.images[0], batchIndex, batchTotal, format, prompt);
+    }
   } catch (err) {
     rmThinking(thinkId);
-    addAgent('Error generando imágenes: ' + err.message);
+    addAgent('Error generando creativo ' + batchIndex + ': ' + err.message);
   }
 }
 
 var generatedAdImages = [];
+var adImgGridEl = null; // Contenedor grid compartido para todas las imágenes del batch
 
 function renderAdImage(img, index, total, format, prompt) {
   generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format });
 
   var fmtLabel = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories/Reels · 1080×1920', carousel:'Carrusel · 1080×1080' }[format] || format;
   var ratio = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' }[format] || '4/5';
-  var maxH = { square:'280px', vertical:'320px', story:'340px', carousel:'280px' }[format] || '320px';
-  var varLabel = total > 1 ? 'Variación ' + index + '/' + total + ' · ' : '';
+  var maxH = { square:'220px', vertical:'260px', story:'280px', carousel:'220px' }[format] || '260px';
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-  var dlIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-  var fbIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+  var dlIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  var fbIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
   var imgIdx = index - 1;
   var fn = 'anuncio_' + format + '_v' + index + '.png';
 
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.innerHTML =
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
-    '<div style="max-width:300px">' +
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">' + varLabel + fmtLabel +
-        '<span style="margin-left:6px;background:#ECFDF5;color:#059669;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700">Lista para Meta</span>' +
-      '</div>' +
-      '<div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center">' +
-        '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:10px">' +
-        '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + fn + '\')" style="flex:1;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' + dlIcon + ' Descargar</button>' +
-        '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:9px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' + fbIcon + ' Publicar</button>' +
-      '</div>' +
+  // Crear el contenedor grid la primera vez
+  if (index === 1) {
+    adImgGridEl = document.createElement('div');
+    adImgGridEl.className = 'msg';
+    adImgGridEl.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+
+    var gridHeader = document.createElement('div');
+    gridHeader.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:12px;width:100%';
+    gridHeader.innerHTML =
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);font-weight:500">' + fmtLabel +
+        '<span style="margin-left:8px;background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700">Listas para Meta</span>' +
+      '</div>';
+
+    var gridWrap = document.createElement('div');
+    gridWrap.id = 'ad-img-grid';
+    gridWrap.style.cssText = 'display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;padding-left:42px;width:calc(100% - 0px);scrollbar-width:thin';
+
+    adImgGridEl.appendChild(gridHeader);
+    adImgGridEl.appendChild(gridWrap);
+    document.getElementById('chat-area').appendChild(adImgGridEl);
+  }
+
+  // Agregar la imagen al grid
+  var grid = document.getElementById('ad-img-grid');
+  if (!grid) return;
+
+  var card = document.createElement('div');
+  card.style.cssText = 'flex-shrink:0;width:160px';
+  card.innerHTML =
+    '<div style="font-size:10px;color:var(--muted);margin-bottom:5px;font-weight:600;text-align:center">V' + index + '</div>' +
+    '<div style="border-radius:10px;overflow:hidden;border:1px solid var(--border);aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:var(--sidebar)">' +
+      '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
+    '</div>' +
+    '<div style="display:flex;gap:5px;margin-top:7px">' +
+      '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + fn + '\')" style="flex:1;padding:6px 4px;background:var(--blue);color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + dlIcon + ' Descargar</button>' +
+      '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:6px 4px;background:#1877F2;color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + fbIcon + ' Publicar</button>' +
     '</div>';
-  document.getElementById('chat-area').appendChild(el);
+  grid.appendChild(card);
   scrollB();
 
+  // Al completar todas las imágenes, agregar el botón de campaña
   if (index === total && total > 1) {
     setTimeout(function() {
+      var logoSvg2 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
       var allEl = document.createElement('div');
       allEl.className = 'msg';
       allEl.innerHTML =
-        '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
-        '<div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:18px 20px;max-width:320px">' +
-          '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:6px">Listo para publicar</div>' +
-          '<div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:14px">' + total + ' creativos listos para Meta Ads.</div>' +
-          '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:10px;background:white;color:#1877F2;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Crear campana con estas imagenes</button>' +
+        '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg2 + '</div>' +
+        '<div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:16px 18px;max-width:300px">' +
+          '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:4px">¿Listo para publicar?</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:12px">' + total + ' creativos listos para Meta Ads.</div>' +
+          '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:9px;background:white;color:#1877F2;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🚀 Crear campaña con estas imágenes</button>' +
         '</div>';
       document.getElementById('chat-area').appendChild(allEl);
       scrollB();
-      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero.' });
+      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero segun el objetivo del negocio.' });
       callClaude();
     }, 300);
   }
