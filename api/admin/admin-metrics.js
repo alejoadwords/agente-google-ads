@@ -2,6 +2,12 @@
 // GET /api/admin/metrics → métricas generales del dashboard
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type,x-admin-secret,Cache-Control,Pragma',
+};
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -22,8 +28,8 @@ async function supabase(path) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', 'https://admin.acuarius.app');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-admin-secret');
+  Object.entries(CORS).forEach(([k,v]) => res.setHeader(k,v));
+  
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (!authCheck(req)) return res.status(401).json({ error: 'Unauthorized' });
 

@@ -2,13 +2,19 @@
 // POST /api/admin/sync → sincroniza todos los usuarios de Clerk a Supabase
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type,x-admin-secret,Cache-Control,Pragma',
+};
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CLERK_SECRET = process.env.CLERK_SECRET_KEY;
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', 'https://admin.acuarius.app');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-admin-secret');
+  Object.entries(CORS).forEach(([k,v]) => res.setHeader(k,v));
+  
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.headers['x-admin-secret'] !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
