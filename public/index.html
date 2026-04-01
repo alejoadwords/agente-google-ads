@@ -2689,57 +2689,61 @@ async function generateAdImages(cmd) {
 let generatedAdImages = [];
 
 function renderAdImage(img, index, total, format, prompt) {
-  // Guardar imagen para uso posterior (publicar en Meta)
   if (index === 1) generatedAdImages = [];
-  generatedAdImages.push({ ...img, index, format, prompt });
+  generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format, prompt: prompt });
 
-  const formatLabels = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories / Reels · 1080×1920', carousel:'Carrusel · 1080×1080' };
-  const ratios = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' };
-  const ratio = ratios[format] || '4/5';
-  const maxH = { square:'280px', vertical:'320px', story:'340px', carousel:'280px' };
-  const imgId = 'adimg_' + Date.now() + '_' + index;
+  var formatLabels = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories / Reels · 1080×1920', carousel:'Carrusel · 1080×1080' };
+  var ratios = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' };
+  var ratio = ratios[format] || '4/5';
+  var maxH = { square:'280px', vertical:'320px', story:'340px', carousel:'280px' };
+  var varLabel = total > 1 ? 'Variación ' + index + '/' + total + ' · ' : '';
+  var fmtLabel = formatLabels[format] || format;
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var dlIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  var fbIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+  var imgIdx = index - 1;
+  var filename = 'anuncio_' + format + '_v' + index + '.png';
 
-  const el = document.createElement('div');
+  var el = document.createElement('div');
   el.className = 'msg';
-  el.innerHTML = `
-    <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div>
-    <div style="max-width:300px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">${total>1?'Variación '+index+'/'+total+' · ':''}${formatLabels[format]||format}<span style="margin-left:6px;background:#ECFDF5;color:#059669;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700">Lista para Meta</span></div>
-      <div id="${imgId}" style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:${ratio};max-height:${maxH[format]||'320px'};display:flex;align-items:center;justify-content:center">
-        <img src="data:${img.mediaType};base64,${img.base64}" alt="Anuncio ${index}" style="width:100%;height:100%;object-fit:cover;display:block"/>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button onclick="downloadAdImage('${img.base64}','${img.mediaType}','anuncio_${format}_v${index}.png')" style="flex:1;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Descargar
-        </button>
-        <button onclick="publishToMeta(${index-1})" style="flex:1;padding:9px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-          Publicar
-        </button>
-      </div>
-    </div>`;
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
+    '<div style="max-width:300px">' +
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">' + varLabel + fmtLabel +
+        '<span style="margin-left:6px;background:#ECFDF5;color:#059669;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700">Lista para Meta</span>' +
+      '</div>' +
+      '<div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:' + ratio + ';max-height:' + (maxH[format]||'320px') + ';display:flex;align-items:center;justify-content:center">' +
+        '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" alt="Anuncio ' + index + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px">' +
+        '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + filename + '\')" style="flex:1;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' +
+          dlIcon + ' Descargar' +
+        '</button>' +
+        '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:9px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' +
+          fbIcon + ' Publicar' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 
-  // Si es la última imagen, agregar el botón de "Publicar todas en campaña"
   if (index === total && total > 1) {
-    setTimeout(() => {
-      const allEl = document.createElement('div');
+    setTimeout(function() {
+      var allEl = document.createElement('div');
       allEl.className = 'msg';
-      allEl.innerHTML = `
-        <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div>
-        <div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:18px 20px;max-width:320px">
-          <div style="font-size:13px;font-weight:700;color:white;margin-bottom:6px">¿Listo para publicar?</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:14px">${total} creativos listos. Puedo crear y lanzar la campaña completa en Meta Ads ahora.</div>
-          <button onclick="launchMetaCampaignFlow()" style="width:100%;padding:10px;background:white;color:#1877F2;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
-            🚀 Crear campaña con estas imágenes
-          </button>
-        </div>`;
+      allEl.innerHTML =
+        '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
+        '<div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:18px 20px;max-width:320px">' +
+          '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:6px">¿Listo para publicar?</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:14px">' + total + ' creativos listos para Meta Ads.</div>' +
+          '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:10px;background:white;color:#1877F2;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">' +
+            '🚀 Crear campaña con estas imágenes' +
+          '</button>' +
+        '</div>';
       document.getElementById('chat-area').appendChild(allEl);
       scrollB();
-      // Llamar a Claude para el copy
-      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads en formato ' + format + '. Ahora dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero.' });
+      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Ahora dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero.' });
       callClaude();
     }, 300);
   }
