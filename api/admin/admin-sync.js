@@ -23,12 +23,15 @@ export default async function handler(req, res) {
     // Obtener todos los usuarios de Clerk
     let allClerkUsers = [];
     let offset = 0;
+    let clerkDebug = null;
     while (true) {
       const r = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}&order_by=-created_at`, {
         headers: { 'Authorization': `Bearer ${CLERK_SECRET}` }
       });
       const data = await r.json();
-      const users = data.data || data || [];
+      clerkDebug = { status: r.status, keys: Object.keys(data), hasData: !!data.data, isArray: Array.isArray(data) };
+      if (!r.ok) return res.status(500).json({ error: 'Clerk API error', status: r.status, detail: data });
+      const users = Array.isArray(data) ? data : (data.data || []);
       if (!users.length) break;
       allClerkUsers = allClerkUsers.concat(users);
       if (users.length < 100) break;
@@ -64,7 +67,7 @@ export default async function handler(req, res) {
       synced++;
     }
 
-    return res.json({ success: true, synced, total: allClerkUsers.length });
+    return res.json({ success: true, synced, total: allClerkUsers.length, clerkDebug });
   } catch (err) {
     console.error('Sync error:', err);
     return res.status(500).json({ error: err.message });
