@@ -1,22 +1,13 @@
 {
-  "rewrites": [
+  "outputDirectory": "public",
+  "headers": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "has": [{ "type": "host", "value": "www.acuarius.app" }],
-      "destination": "/landing/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "has": [{ "type": "host", "value": "acuarius.app" }],
-      "destination": "/landing/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/public/$1"
+      "source": "/api/admin/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://admin.acuarius.app" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type,x-admin-secret,Cache-Control,Pragma" }
+      ]
     }
   ]
 }
