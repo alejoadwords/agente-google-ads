@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 75 75'><rect width='75' height='75' fill='%231E2BCC' rx='8'/><path fill='%23fff' d='M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z'/><path fill='%23fff' d='M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z'/><circle fill='%23fff' cx='60.13' cy='10.7' r='5.3'/></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>acuarius — agente google ads</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1449,51 +1450,34 @@ REGLAS DE RESPUESTA
 
 ## SKILL 10: GENERACIÓN DE IMÁGENES PARA ANUNCIOS
 
-Tienes capacidad de generar imágenes 100% listas para subir a Meta Ads — con texto, copy, CTA y diseño profesional dentro de la misma imagen. Usa Ideogram V3 vía fal.ai, el mejor modelo para texto en imágenes.
+Tienes capacidad de generar imágenes profesionales para anuncios de Meta Ads directamente en el chat.
 
-**REGLA FUNDAMENTAL:** Cuando el cliente pida crear una imagen o anuncio, SIEMPRE:
-1. Genera **5 variaciones** automáticamente — nunca menos
-2. Usa **hasText: true** siempre — las imágenes deben incluir el texto del anuncio dentro
-3. Cada variación debe tener un enfoque creativo DIFERENTE (urgencia, beneficio, prueba social, precio, emocional)
-4. Las imágenes salen listas para subir a Meta sin necesidad de edición
+**Cuándo usarla:** Cuando el cliente pida crear, diseñar o generar una imagen, pieza visual, creativo o anuncio gráfico.
 
 **Formatos disponibles:**
-– square: Feed cuadrado 1080×1080
-– vertical: Feed vertical 1080×1350 (mejor CTR en móvil — usar por defecto)
-– story: Stories y Reels 1080×1920
-– carousel: Tarjeta de carrusel 1080×1080
+– square: Feed cuadrado 1080x1080 (feed Facebook/Instagram)
+– vertical: Feed vertical 1080x1350 (mejor rendimiento en móvil)
+– story: Stories y Reels 1080x1920
+– carousel: Tarjeta de carrusel 1080x1080
 
-**Cómo generar — 5 bloques, uno por variación:**
+**Cómo usarla:** Incluye este bloque en tu respuesta con el formato exacto:
+[GENERAR_IMAGEN: {"prompt": "descripción detallada del anuncio", "format": "square", "variations": 2}]
 
-[GENERAR_IMAGEN: {"prompt": "descripción + TEXTO EXACTO que debe aparecer en la imagen", "format": "vertical", "variations": 1, "hasText": true}]
+**Instrucciones para escribir el prompt:**
+– Describe el producto/servicio, el ambiente, los colores de marca, el estilo visual
+– Menciona la emoción o sensación que debe transmitir
+– Especifica si debe ser fotografía, ilustración, flat design, etc.
+– Incluye el público objetivo para que la imagen sea relevante
+– NO incluyas texto en el prompt — el copy va separado en Meta
 
-**Las 5 variaciones OBLIGATORIAS para cualquier campaña:**
+**Ejemplos de uso:**
+– "Crea una imagen para un anuncio de academia de inglés online, estilo moderno, colores azul y blanco, persona joven estudiando feliz con laptop, formato vertical"
+→ [GENERAR_IMAGEN: {"prompt": "Joven latinoamericano de 22 años estudiando inglés online con laptop, cara de satisfacción y logro, ambiente de hogar moderno y luminoso, estilo fotográfico profesional, paleta azul marino y blanco, sensación de progreso y futuro prometedor", "format": "vertical", "variations": 2}]
 
-Variación 1 — Urgencia/Problema:
-[GENERAR_IMAGEN: {"prompt": "imagen del problema/necesidad del cliente. Texto en imagen: gancho de urgencia + solución + CTA. Ej: '¿Tu [problema]? Nosotros lo resolvemos. Llama ahora →'", "format": "vertical", "variations": 1, "hasText": true}]
+– "Necesito 3 variaciones para Stories de una tienda de ropa femenina"
+→ [GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana moderna con ropa casual chic, ambiente urbano de ciudad, colores vibrantes y modernos, fotografía de moda editorial, sensación de estilo y confianza", "format": "story", "variations": 3}]
 
-Variación 2 — Beneficio principal:
-[GENERAR_IMAGEN: {"prompt": "imagen del resultado/beneficio. Texto: beneficio principal + diferenciador + CTA", "format": "vertical", "variations": 1, "hasText": true}]
-
-Variación 3 — Prueba social/Confianza:
-[GENERAR_IMAGEN: {"prompt": "imagen profesional del servicio/producto. Texto: dato de confianza (años, clientes, garantía) + CTA", "format": "vertical", "variations": 1, "hasText": true}]
-
-Variación 4 — Oferta/Precio:
-[GENERAR_IMAGEN: {"prompt": "imagen atractiva del producto/servicio. Texto: precio, oferta o garantía destacada + CTA", "format": "vertical", "variations": 1, "hasText": true}]
-
-Variación 5 — Emocional/Aspiracional:
-[GENERAR_IMAGEN: {"prompt": "imagen del cliente feliz después de usar el producto/servicio. Texto: mensaje aspiracional + CTA", "format": "vertical", "variations": 1, "hasText": true}]
-
-**Reglas para el prompt con texto:**
-– Incluye el texto EXACTO que debe aparecer: gancho, beneficio, precio, CTA
-– Describe colores, ambiente y estilo visual
-– Adapta al mercado LatAm: personas, ambientes y referencias culturales locales
-– Menciona el estilo: fotografía realista, moderno, minimalista, etc.
-
-**Ejemplo completo para servicio de reparación:**
-[GENERAR_IMAGEN: {"prompt": "Técnico latinoamericano en uniforme azul reparando lavadora en hogar moderno, ambiente luminoso. Texto en imagen: '¿Tu lavadora no funciona? Reparamos en 24h · Todas las marcas · Sin revisión no hay cobro · Llama Ya'", "format": "vertical", "variations": 1, "hasText": true}]
-
-**Después de generar las 5 imágenes:** proporciona el copy completo (texto principal, título, CTA) para cada variación y recomienda cuál probar primero según el objetivo del cliente.
+**Después de generar:** Siempre sugiere el copy del anuncio (texto principal, título, CTA) que acompañaría cada imagen.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -1661,22 +1645,16 @@ function openAgent(agentKey) {
   area.innerHTML = '';
   hist = [];
 
-  // Clave de perfil unificada por agente (sin depender de cuenta activa para agentes no-ads)
-  const nonAdsAgents = ['seo', 'social', 'tiktok-ads', 'linkedin-ads'];
-  const profileKey = (!nonAdsAgents.includes(agentKey) && typeof adsActiveAccount !== 'undefined' && adsActiveAccount)
+  // Clave de perfil: por cuenta activa o por agente
+  const profileKey = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount)
     ? `acuarius_profile_${adsActiveAccount.id}_${agentKey}`
     : `acuarius_profile_${agentKey}`;
 
-  // También buscar perfil por clave legacy de Meta
-  const metaLegacyKey = agentKey === 'meta-ads' && metaActiveAccount
-    ? `acuarius_profile_meta_${metaActiveAccount.id}`
-    : null;
+  const savedProfile = localStorage.getItem(profileKey);
 
-  const rawProfile = localStorage.getItem(profileKey) || (metaLegacyKey && localStorage.getItem(metaLegacyKey));
-
-  if (rawProfile) {
+  if (savedProfile) {
     try {
-      const profile = JSON.parse(rawProfile);
+      const profile = JSON.parse(savedProfile);
       Object.assign(mem, profile);
       updateMem();
       onDone = true;
@@ -1684,8 +1662,7 @@ function openAgent(agentKey) {
       document.getElementById('mem-card').style.display = 'block';
       document.getElementById('m-stage').textContent = clientStage;
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes'};
-      const negocio = mem.negocio || mem.producto || '—';
-      addAgent(`hola de nuevo. tu agente de **${agentLabels[agentKey]||agentKey}** está listo.\n\n**negocio:** ${negocio}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
+      addAgent(`hola de nuevo. agente de **${agentLabels[agentKey]||agentKey}** listo.\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
       return;
     } catch(e) { /* si falla el parse, lanzar onboarding */ }
   }
@@ -2662,47 +2639,44 @@ function askAgentFromRoadmap(stageId) {
 // =============================================
 
 async function generateAdImages(cmd) {
-  const { prompt, format = 'vertical', variations = 1, hasText = true } = cmd;
-  const thinkId = addThinking();
-  setTimeout(() => {
-    const el = document.getElementById(thinkId);
-    if (el) { const txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando anuncio listo para Meta...'; }
+  var prompt = cmd.prompt, format = cmd.format || 'vertical', variations = cmd.variations || 1, hasText = cmd.hasText !== false;
+  var thinkId = addThinking();
+  setTimeout(function() {
+    var el = document.getElementById(thinkId);
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativos para Meta...'; }
   }, 100);
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-    const res = await fetch('/api/generate-image', {
-      method: 'POST', headers,
-      body: JSON.stringify({ prompt, format, variations: Math.min(variations, 5), hasText }),
+    var headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+    var res = await fetch('/api/generate-image', {
+      method: 'POST', headers: headers,
+      body: JSON.stringify({ prompt: prompt, format: format, variations: Math.min(variations, 5), hasText: hasText }),
     });
-    const data = await res.json();
+    var data = await res.json();
     rmThinking(thinkId);
-    if (data.error) { addAgent('⚠️ No pude generar las imágenes: ' + data.error); return; }
-    data.images.forEach((img, idx) => renderAdImage(img, idx + 1, data.images.length, format, prompt));
+    if (data.error) { addAgent('No pude generar las imágenes: ' + data.error); return; }
+    generatedAdImages = [];
+    data.images.forEach(function(img, idx) { renderAdImage(img, idx + 1, data.images.length, format, prompt); });
   } catch (err) {
     rmThinking(thinkId);
-    addAgent('⚠️ Error generando imágenes: ' + err.message);
+    addAgent('Error generando imágenes: ' + err.message);
   }
 }
 
-// Almacenar imágenes generadas para publicar en Meta
-let generatedAdImages = [];
+var generatedAdImages = [];
 
 function renderAdImage(img, index, total, format, prompt) {
-  if (index === 1) generatedAdImages = [];
-  generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format, prompt: prompt });
+  generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format });
 
-  var formatLabels = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories / Reels · 1080×1920', carousel:'Carrusel · 1080×1080' };
-  var ratios = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' };
-  var ratio = ratios[format] || '4/5';
-  var maxH = { square:'280px', vertical:'320px', story:'340px', carousel:'280px' };
+  var fmtLabel = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories/Reels · 1080×1920', carousel:'Carrusel · 1080×1080' }[format] || format;
+  var ratio = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' }[format] || '4/5';
+  var maxH = { square:'280px', vertical:'320px', story:'340px', carousel:'280px' }[format] || '320px';
   var varLabel = total > 1 ? 'Variación ' + index + '/' + total + ' · ' : '';
-  var fmtLabel = formatLabels[format] || format;
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
   var dlIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
   var fbIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
   var imgIdx = index - 1;
-  var filename = 'anuncio_' + format + '_v' + index + '.png';
+  var fn = 'anuncio_' + format + '_v' + index + '.png';
 
   var el = document.createElement('div');
   el.className = 'msg';
@@ -2712,19 +2686,14 @@ function renderAdImage(img, index, total, format, prompt) {
       '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">' + varLabel + fmtLabel +
         '<span style="margin-left:6px;background:#ECFDF5;color:#059669;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700">Lista para Meta</span>' +
       '</div>' +
-      '<div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:' + ratio + ';max-height:' + (maxH[format]||'320px') + ';display:flex;align-items:center;justify-content:center">' +
-        '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" alt="Anuncio ' + index + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
+      '<div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--sidebar);aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center">' +
+        '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
-        '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + filename + '\')" style="flex:1;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' +
-          dlIcon + ' Descargar' +
-        '</button>' +
-        '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:9px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' +
-          fbIcon + ' Publicar' +
-        '</button>' +
+        '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + fn + '\')" style="flex:1;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' + dlIcon + ' Descargar</button>' +
+        '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:9px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:5px">' + fbIcon + ' Publicar</button>' +
       '</div>' +
     '</div>';
-
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 
@@ -2735,54 +2704,44 @@ function renderAdImage(img, index, total, format, prompt) {
       allEl.innerHTML =
         '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
         '<div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:18px 20px;max-width:320px">' +
-          '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:6px">¿Listo para publicar?</div>' +
+          '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:6px">Listo para publicar</div>' +
           '<div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:14px">' + total + ' creativos listos para Meta Ads.</div>' +
-          '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:10px;background:white;color:#1877F2;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">' +
-            '🚀 Crear campaña con estas imágenes' +
-          '</button>' +
+          '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:10px;background:white;color:#1877F2;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Crear campana con estas imagenes</button>' +
         '</div>';
       document.getElementById('chat-area').appendChild(allEl);
       scrollB();
-      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Ahora dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero.' });
+      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero.' });
       callClaude();
     }, 300);
   }
 }
 
 function downloadAdImage(base64, mediaType, filename) {
-  const a = document.createElement('a');
-  a.href = `data:${mediaType};base64,${base64}`;
+  var a = document.createElement('a');
+  a.href = 'data:' + mediaType + ';base64,' + base64;
   a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 function publishToMeta(imgIndex) {
-  const img = generatedAdImages[imgIndex];
+  var img = generatedAdImages[imgIndex];
   if (!img) return;
-  // Lanzar flujo conversacional para publicar esa imagen específica
-  const cin = document.getElementById('cin');
-  if (cin) {
-    cin.value = 'Quiero publicar la variación ' + img.index + ' en una campaña de Meta Ads. Guíame para configurar y lanzar la campaña con esta imagen.';
-    sendMsg();
-  }
+  var cin = document.getElementById('cin');
+  if (cin) { cin.value = 'Quiero publicar la variacion ' + img.index + ' en una campana de Meta Ads.'; sendMsg(); }
 }
 
 function launchMetaCampaignFlow() {
-  // Verificar que hay cuenta Meta conectada
   if (!metaActiveAccount) {
-    addAgent('Para publicar la campaña necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuración → Conexiones → Meta Ads** y conecta tu cuenta.');
+    addAgent('Para publicar necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuracion > Conexiones > Meta Ads**.');
     return;
   }
-  // Lanzar flujo conversacional con todas las imágenes
-  const count = generatedAdImages.length;
-  const formats = [...new Set(generatedAdImages.map(i => i.format))].join(', ');
-  hist.push({ role: 'user', content: 'Tengo ' + count + ' creativos listos (' + formats + ') y quiero crear una campaña completa en Meta Ads con todas estas imágenes. Necesito que me guíes paso a paso para configurar: objetivo, audiencia, presupuesto y lanzamiento. Tengo cuenta conectada.' });
+  hist.push({ role: 'user', content: 'Tengo ' + generatedAdImages.length + ' creativos listos y quiero crear una campana completa en Meta Ads. Guiame paso a paso: objetivo, audiencia, presupuesto y lanzamiento.' });
   callClaude();
 }
 
 function requestImageVariation(encodedPrompt, format) {
-  const cin = document.getElementById('cin');
-  if (cin) { cin.value = 'Genera una variación diferente de la imagen anterior, mismo concepto pero composición y texto distintos. Formato: ' + format + '.'; sendMsg(); }
+  var cin = document.getElementById('cin');
+  if (cin) { cin.value = 'Genera una variacion diferente, mismo concepto pero composicion distinta. Formato: ' + format + '.'; sendMsg(); }
 }
 
 // =============================================
