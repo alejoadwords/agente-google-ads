@@ -1709,7 +1709,7 @@ async function logout(){if(clerkInstance){await clerkInstance.signOut();window.l
   async function checkUserPlan(email) {
   if (!email || isAdminUser()) return;
   try {
-    const res = await fetch('/api/get-plan?email=' + encodeURIComponent(email));
+    const res = await fetch('/api/hotmart-webhook?email=' + encodeURIComponent(email));
     if (!res.ok) return;
     const data = await res.json();
     if (data.plan) {
