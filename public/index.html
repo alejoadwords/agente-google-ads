@@ -1512,49 +1512,144 @@ CTA (llamada a la acción):
 
 ## SKILL 10.B: GENERACIÓN DE IMÁGENES PARA ANUNCIOS META ADS
 
-Generas imágenes 100% listas para subir a Meta Ads — con texto del anuncio, copy y CTA integrados dentro de la imagen. Usas el modelo Ideogram V3 que escribe texto perfectamente en imágenes publicitarias.
+Generas imágenes de nivel profesional similares a agencias de diseño — con logo, jerarquía tipográfica, elementos gráficos y layout estructurado.
 
-**REGLAS ABSOLUTAS — siempre sin excepción:**
-1. Genera SIEMPRE 5 bloques [GENERAR_IMAGEN] separados, uno por variación
-2. Cada bloque tiene "variations": 1 (una imagen por bloque)
-3. El prompt SIEMPRE incluye el texto exacto que debe aparecer en la imagen (gancho, beneficio, CTA)
-4. Usa el negocio, producto y objetivo real del cliente — NUNCA inventes nombres ni textos genéricos
-5. Formato por defecto: vertical (1080x1350) — mejor CTR en mobile
-6. Cada variación tiene un ENFOQUE DIFERENTE
+**PROCESO OBLIGATORIO cuando el cliente pida crear imágenes/anuncios:**
 
-**Las 5 variaciones obligatorias:**
-- Variación 1: Urgencia/Problema — gancho que apunta al dolor del cliente
-- Variación 2: Beneficio principal — resultado o transformación que ofreces
-- Variación 3: Prueba social/Confianza — años, clientes, garantía, certificaciones
-- Variación 4: Oferta/Precio — precio, descuento, promoción o garantía específica
-- Variación 5: Aspiracional — cliente feliz después de usar el producto/servicio
+1. **PRIMERO:** Aplica SKILL 10.A (análisis de mercado y competencia)
+2. **LUEGO:** Usa el comando [DESIGN_QUESTIONNAIRE] para activar el cuestionario interactivo
+3. **FINALMENTE:** El sistema capturará los datos y enviará un prompt específico para que generes los 5 bloques [GENERAR_IMAGEN]
 
-**Cómo escribir el prompt (CRÍTICO):**
-- Describe la escena visual: personas, ambiente, colores, estilo fotográfico
-- Incluye el TEXTO EXACTO que debe aparecer: "Texto en imagen: [gancho] · [beneficio] · [CTA]"
-- Usa personas latinoamericanas, ambientes reales de la región
-- Sé específico con el negocio del cliente — usa su producto/servicio real
+**Cuándo activar el cuestionario:**
+- El cliente pide "crear imagen/anuncio/creativo para Meta"
+- Dice "necesito anuncios gráficos"
+- Cualquier solicitud de contenido visual para Meta Ads
 
-**Formato exacto de cada bloque:**
-[GENERAR_IMAGEN: {"prompt": "descripción visual + Texto en imagen: GANCHO · BENEFICIO · CTA", "format": "vertical", "variations": 1, "hasText": true}]
+**Respuesta cuando detectes que necesitas generar imágenes:**
 
-**EJEMPLO REAL para una clínica de estética:**
+Perfecto, voy a crear anuncios con diseño profesional para tu negocio. Primero necesito algunos datos específicos de tu marca para que las imágenes se vean como las de una agencia de diseño.
 
-[GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana 30-45 años mirándose al espejo con expresión de preocupación, iluminación dramática suave, clínica moderna de fondo. Texto en imagen: ¿Tu piel ya no luce como antes? · Tratamientos faciales desde $89.000 · Agenda tu cita hoy →", "format": "vertical", "variations": 1, "hasText": true}]
+[DESIGN_QUESTIONNAIRE]
 
-[GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana 35 años con piel radiante y luminosa, sonrisa natural, ambiente clínico elegante y luminoso, colores blancos y dorados. Texto en imagen: Recupera el brillo de tu piel en 3 sesiones · Resultados garantizados · Conoce más →", "format": "vertical", "variations": 1, "hasText": true}]
+**Después del cuestionario, el sistema enviará los datos y tú deberás:**
 
-[GENERAR_IMAGEN: {"prompt": "Collage de 3 fotos antes/después de tratamiento facial, fondo blanco clínico, logo pequeño en esquina. Texto en imagen: +500 pacientes satisfechas · 8 años de experiencia · Sin cirugía · Reserva gratis →", "format": "vertical", "variations": 1, "hasText": true}]
+Generar 5 bloques [GENERAR_IMAGEN] usando la estructura profesional:
 
-[GENERAR_IMAGEN: {"prompt": "Mujer siendo atendida por esteticista profesional en camilla de clínica lujosa, ambiente spa moderno, colores beige y blanco. Texto en imagen: Limpieza facial profunda $59.000 · Primera sesión con 20% OFF · Solo este mes →", "format": "vertical", "variations": 1, "hasText": true}]
+```
+[GENERAR_IMAGEN: {"prompt": "Diseño publicitario profesional estilo agencia premium. Layout: logo circular '{MARCA}' en parte superior, título principal '{VARIACIÓN_TÍTULO}' en tipografía serif elegante {COLOR_PRINCIPAL}, {DESCRIPCIÓN_VISUAL_ESPECÍFICA}, fondo degradado {COLORES_MARCA}, callout izquierdo '{BENEFICIO_1}' y derecho '{BENEFICIO_2}', CTA botón redondeado inferior '{OFERTA_CTA}', elementos decorativos minimalistas, composición alta calidad publicitaria", "format": "vertical", "variations": 1, "hasText": true}]
+```
 
-[GENERAR_IMAGEN: {"prompt": "Mujer latinoamericana feliz y segura de sí misma saliendo de una clínica de estética, ciudad de fondo, luz dorada de tarde, estilo lifestyle aspiracional. Texto en imagen: Así luce quien se cuida · Tu momento es ahora · Agenda en 2 minutos →", "format": "vertical", "variations": 1, "hasText": true}]
+**Las 5 variaciones usando los datos del cuestionario:**
 
-**IMPORTANTE:** Adapta SIEMPRE el ejemplo anterior al negocio REAL del cliente usando su producto, precios reales si los mencionó, y el tono apropiado para su industria. NUNCA uses "clínica de estética" si el cliente tiene otro negocio.`;
+1. **Urgencia/Problema** - Enfoca el dolor y la urgencia de solucionarlo
+2. **Beneficio Principal** - El resultado/transformación que ofreces  
+3. **Prueba Social** - Años, clientes, certificaciones
+4. **Oferta/Precio** - La promoción específica del cuestionario
+5. **Aspiracional** - La vida después de usar el servicio
+
+**DESPUÉS de generar las 5 imágenes verticales (feed), automáticamente genera 5 versiones para historias (stories) con formato 1080x1920 y layout adaptado verticalmente.**
+
+**NUNCA generes imágenes directamente sin pasar por el cuestionario primero** — esto es lo que garantiza el nivel profesional del diseño.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
+
+// Sistema de límites de imágenes
+let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
+
+// Funciones de límites
+function loadImageUsage() {
+  if (userPlan === 'pro') {
+    imageUsage = { generated: 0, limit: 999 }; // Ilimitado para Pro
+    return;
+  }
+  try {
+    const saved = localStorage.getItem('acuarius_image_usage');
+    if (saved) {
+      const data = JSON.parse(saved);
+      // Verificar si han pasado 7 días (reset del trial)
+      const now = Date.now();
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      if (now - data.timestamp > sevenDays) {
+        // Reset después de 7 días
+        imageUsage = { generated: 0, limit: 2, timestamp: now };
+        saveImageUsage();
+      } else {
+        imageUsage = { generated: data.generated || 0, limit: 2, timestamp: data.timestamp };
+      }
+    } else {
+      // Primera vez
+      imageUsage = { generated: 0, limit: 2, timestamp: Date.now() };
+      saveImageUsage();
+    }
+  } catch (e) {
+    imageUsage = { generated: 0, limit: 2, timestamp: Date.now() };
+  }
+}
+
+function saveImageUsage() {
+  try {
+    localStorage.setItem('acuarius_image_usage', JSON.stringify(imageUsage));
+  } catch (e) {}
+}
+
+function canGenerateImage() {
+  loadImageUsage();
+  return userPlan === 'pro' || imageUsage.generated < imageUsage.limit;
+}
+
+function incrementImageUsage() {
+  if (userPlan !== 'pro') {
+    imageUsage.generated++;
+    saveImageUsage();
+  }
+}
+
+function showImageLimitReached() {
+  const remaining = Math.max(0, imageUsage.limit - imageUsage.generated);
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = 
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
+    '</div>' +
+    '<div style="max-width:400px">' +
+      '<div style="background:linear-gradient(135deg,#EF4444,#DC2626);border-radius:14px;padding:20px;color:white;margin-bottom:12px">' +
+        '<div style="font-size:16px;font-weight:700;margin-bottom:6px">🔒 Límite de imágenes alcanzado</div>' +
+        '<div style="font-size:13px;margin-bottom:14px;opacity:0.9">Usaste tus ' + imageUsage.limit + ' imágenes gratuitas del período de prueba.</div>' +
+        '<div style="font-size:12px;background:rgba(255,255,255,0.15);padding:12px;border-radius:8px;margin-bottom:14px">' +
+          '<strong>Plan Pro - $19/mes:</strong><br>' +
+          '✓ Imágenes ilimitadas<br>' +
+          '✓ Diseño profesional con cuestionario<br>' +
+          '✓ Formatos feed + stories automático<br>' +
+          '✓ 5 variaciones por pedido' +
+        '</div>' +
+        '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="width:100%;padding:12px;background:white;color:#DC2626;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🚀 Actualizar a Pro</button>' +
+      '</div>' +
+      '<button onclick="showProPreview()" style="padding:8px 16px;background:var(--border);color:var(--muted);border:none;border-radius:8px;font-size:12px;cursor:pointer">Ver ejemplo de calidad Pro →</button>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function showProPreview() {
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = 
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
+    '</div>' +
+    '<div style="max-width:400px">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">🎨 Ejemplo de calidad Pro</div>' +
+      '<div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#f8f9fa">' +
+        '<img src="data:image/png;base64,/mnt/user-data/uploads/toxina_botulinica_1.png" style="width:100%;height:auto;display:block" alt="Ejemplo diseño Pro"/>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">Diseño profesional con logo integrado, jerarquía tipográfica y layout de agencia</div>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
 
 const obSteps=[
   {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
@@ -1992,6 +2087,10 @@ window.onload = async () => {
   } catch(e) {
     console.warn('initAuth error:', e.message);
   }
+  
+  // Inicializar límites de imágenes
+  loadImageUsage();
+  
   showView('home');
 };
 
@@ -2190,20 +2289,37 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
         }
       }
     }
+    // Detectar cuestionario de diseño
+    else if(reply.includes('[DESIGN_QUESTIONNAIRE]')){
+      const cleanReply = reply.replace(/\[DESIGN_QUESTIONNAIRE\]/g, '').trim();
+      if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
+      showDesignQuestionnaire();
+      loading=false; document.getElementById('sbtn').disabled=false; return;
+    }
     // Detectar bloque(s) GENERAR_IMAGEN — procesa todos los bloques en la respuesta
     else if(reply.includes('[GENERAR_IMAGEN:')){
+      // Verificar límites antes de generar
+      if (!canGenerateImage()) {
+        showImageLimitReached();
+        loading=false; document.getElementById('sbtn').disabled=false; return;
+      }
+      
       const allMatches = [...reply.matchAll(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/g)];
       if(allMatches.length > 0){
         // Mostrar el texto previo al primer bloque si existe
         const cleanReply = reply.replace(/\[GENERAR_IMAGEN:\s*\{[\s\S]+?\}\]/g, '').trim();
         if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
-        else { hist.push({role:'assistant', content: 'Generando ' + allMatches.length + ' creativos para tu anuncio...'}); }
+        else { hist.push({role:'assistant', content: 'Generando ' + Math.min(allMatches.length, userPlan === 'pro' ? 5 : 1) + ' creativos para tu anuncio...'}); }
+        
+        // En plan gratuito, solo procesar la primera imagen
+        const matchesToProcess = userPlan === 'pro' ? allMatches : allMatches.slice(0, 1);
+        
         // Procesar todos los bloques secuencialmente
         generatedAdImages = [];
-        const totalImgs = allMatches.length;
-        for(let i = 0; i < allMatches.length; i++){
+        const totalImgs = matchesToProcess.length;
+        for(let i = 0; i < matchesToProcess.length; i++){
           let imgCmd;
-          try{ imgCmd = JSON.parse(allMatches[i][1]); }catch(e){ continue; }
+          try{ imgCmd = JSON.parse(matchesToProcess[i][1]); }catch(e){ continue; }
           if(imgCmd){
             // Forzar variations:1 por bloque y hasText:true
             imgCmd.variations = 1;
@@ -2211,6 +2327,12 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
             imgCmd._index = i + 1;
             imgCmd._total = totalImgs;
             await generateAdImages(imgCmd);
+            
+            // Incrementar contador después de generar exitosamente
+            incrementImageUsage();
+            
+            // En plan gratuito, solo generar una imagen
+            if (userPlan !== 'pro') break;
           }
         }
         loading=false; document.getElementById('sbtn').disabled=false; return;
@@ -2854,6 +2976,154 @@ function requestImageVariation(encodedPrompt, format) {
   if (cin) { cin.value = 'Genera una variacion diferente, mismo concepto pero composicion distinta. Formato: ' + format + '.'; sendMsg(); }
 }
 
+// Sistema de cuestionario de diseño
+var designQData = {};
+
+function showDesignQuestionnaire() {
+  loadImageUsage();
+  
+  // Si no puede generar imágenes, mostrar límite alcanzado
+  if (!canGenerateImage()) {
+    showImageLimitReached();
+    return;
+  }
+
+  const remaining = userPlan === 'pro' ? '∞' : (imageUsage.limit - imageUsage.generated);
+  const isLimited = userPlan !== 'pro';
+  
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = 
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.52 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
+    '</div>' +
+    '<div style="max-width:450px">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+        (isLimited ? 
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+            '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔒 Diseño básico</h4>' +
+            '<div style="background:#FEE2E2;color:#DC2626;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">Restantes: ' + remaining + '</div>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Plan gratuito - diseño básico sin cuestionario personalizado</div>'
+        :
+          '<h4 style="margin:0 0 12px;font-size:14px;font-weight:700;color:var(--text)">🎨 Diseño profesional Pro</h4>' +
+          '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Cuestionario completo para diseño de nivel agencia</div>'
+        ) +
+        '<div id="design-q-step" class="design-step-1">' +
+          (isLimited ?
+            '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:12px">' +
+              '<div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:4px">⚠️ Modo básico activo</div>' +
+              '<div style="font-size:11px;color:#92400E">Se generará 1 imagen con diseño estándar. Para diseño profesional con logo y layout personalizado, actualiza a Pro.</div>' +
+            '</div>' +
+            '<button onclick="generateBasicImage()" style="width:100%;padding:12px;background:#F59E0B;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Generar imagen básica</button>' +
+            '<div style="text-align:center;margin-top:12px">' +
+              '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="padding:6px 12px;background:none;color:var(--blue);border:1px solid var(--blue);border-radius:6px;font-size:11px;cursor:pointer">🚀 Actualizar a Pro para diseño profesional</button>' +
+            '</div>'
+          :
+            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es el nombre de tu negocio/marca?</div>' +
+            '<input type="text" id="dq-brand" placeholder="Ej: Clínica Sorelle, Estética Miranda" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font)">' +
+            '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>'
+          ) +
+        '</div>' +
+        (isLimited ? '' :
+          '<div id="design-step-2" class="design-step" style="display:none">' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">2. ¿Qué colores representa tu marca?</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+              '<button onclick="selectColor(this,\'azul y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">azul y blanco</button>' +
+              '<button onclick="selectColor(this,\'dorado y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">dorado y blanco</button>' +
+              '<button onclick="selectColor(this,\'verde y beige\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">verde y beige</button>' +
+              '<button onclick="selectColor(this,\'rosa y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">rosa y blanco</button>' +
+            '</div>' +
+            '<input type="text" id="dq-colors" placeholder="O escribe otros colores..." style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
+            '<button onclick="nextDesignStep(2)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
+          '</div>' +
+          '<div id="design-step-3" class="design-step" style="display:none">' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">3. ¿Cuál es tu oferta específica para este anuncio?</div>' +
+            '<input type="text" id="dq-offer" placeholder="Ej: Consulta gratis, 20% OFF primera sesión, $150.000" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
+            '<button onclick="nextDesignStep(3)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
+          '</div>' +
+          '<div id="design-step-4" class="design-step" style="display:none">' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">4. ¿Qué prefieres mostrar en las imágenes?</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+              '<button onclick="selectFocus(this,\'resultado\')" class="focus-opt" style="flex:1;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🌟 Resultado<br><span style="font-size:10px;color:#666">Cliente feliz después</span></button>' +
+              '<button onclick="selectFocus(this,\'proceso\')" class="focus-opt" style="flex:1;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🔧 Proceso<br><span style="font-size:10px;color:#666">Servicio siendo realizado</span></button>' +
+            '</div>' +
+            '<button onclick="generateWithDesignData()" id="final-generate-btn" style="width:100%;padding:12px;background:#10B981;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer" disabled>🎨 Generar 5 anuncios profesionales</button>' +
+          '</div>'
+        ) +
+      '</div>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function nextDesignStep(step) {
+  var data = designQData;
+  if (step === 1) {
+    data.brand = document.getElementById('dq-brand').value.trim();
+    if (!data.brand) return;
+    document.getElementById('design-step-1').style.display = 'none';
+    document.getElementById('design-step-2').style.display = 'block';
+  } else if (step === 2) {
+    data.colors = document.getElementById('dq-colors').value.trim() || data.colors || 'azul y blanco';
+    document.getElementById('design-step-2').style.display = 'none';
+    document.getElementById('design-step-3').style.display = 'block';
+  } else if (step === 3) {
+    data.offer = document.getElementById('dq-offer').value.trim();
+    if (!data.offer) return;
+    document.getElementById('design-step-3').style.display = 'none';
+    document.getElementById('design-step-4').style.display = 'block';
+  }
+}
+
+function selectColor(btn, color) {
+  designQData.colors = color;
+  document.querySelectorAll('.color-opt').forEach(b => b.style.background = 'white');
+  btn.style.background = '#E0E7FF';
+  document.getElementById('dq-colors').value = color;
+}
+
+function selectFocus(btn, focus) {
+  designQData.focus = focus;
+  document.querySelectorAll('.focus-opt').forEach(b => b.style.background = 'white');
+  btn.style.background = '#E0E7FF';
+  document.getElementById('final-generate-btn').disabled = false;
+  document.getElementById('final-generate-btn').style.background = '#10B981';
+}
+
+function generateBasicImage() {
+  // Generar prompt básico sin datos personalizados
+  var prompt = 'Genera 1 imagen básica para anuncio de Meta Ads usando información general del negocio en mi perfil. Diseño estándar sin cuestionario personalizado.';
+  
+  hist.push({ role: 'user', content: prompt });
+  document.getElementById('cin').value = prompt;
+  sendMsg();
+  
+  // Incrementar contador
+  incrementImageUsage();
+}
+
+function generateWithDesignData() {
+  var data = designQData;
+  if (!data.brand || !data.offer || !data.focus) return;
+  
+  // Construir el prompt personalizado para el agente
+  var prompt = 'Genera 5 anuncios profesionales para Meta Ads con estos datos específicos:\n\n' +
+    '**Marca:** ' + data.brand + '\n' +
+    '**Colores:** ' + (data.colors || 'azul y blanco') + '\n' +
+    '**Oferta:** ' + data.offer + '\n' +
+    '**Enfoque:** ' + (data.focus === 'resultado' ? 'Mostrar cliente feliz después del servicio' : 'Mostrar el servicio siendo realizado') + '\n\n' +
+    'Usa estas especificaciones exactas para crear prompts con diseño profesional estilo agencia. Cada imagen debe incluir: logo "' + data.brand + '", los colores ' + (data.colors || 'azul y blanco') + ', la oferta "' + data.offer + '", y layout premium con elementos gráficos.';
+  
+  // Enviar como mensaje del usuario para que genere las imágenes
+  hist.push({ role: 'user', content: prompt });
+  document.getElementById('cin').value = prompt;
+  sendMsg();
+  
+  // Reset
+  designQData = {};
+}
+
 // =============================================
 // META ADS — Conexión OAuth + Selector de cuentas
 // =============================================
@@ -3279,8 +3549,8 @@ function finishObWithAccountSave() {
   clientStage = mapStage(mem.etapa);
   document.getElementById('m-stage').textContent = clientStage;
   hist = [];
-  const accountName = adsActiveAccount ? ` para **${adsActiveAccount.name}**` : '';
-  addAgent(`perfecto, ya tengo el perfil completo${accountName}:\n\n**negocio:** ${mem.negocio}\n**industria:** ${mem.industria}\n**producto:** ${mem.producto}\n**presupuesto mensual:** ${mem.presupuesto}\n**objetivo:** ${mem.objetivo}\n**mercado:** ${mem.mercado}\n**etapa:** ${clientStage}\n\ntodo guardado. ¿por dónde quieres empezar?`);
+  const accountName = adsActiveAccount ? ' para **' + adsActiveAccount.name + '**' : '';
+  addAgent('perfecto, ya tengo el perfil completo' + accountName + ':\\n\\n**negocio:** ' + mem.negocio + '\\n**industria:** ' + mem.industria + '\\n**producto:** ' + mem.producto + '\\n**presupuesto mensual:** ' + mem.presupuesto + '\\n**objetivo:** ' + mem.objetivo + '\\n**mercado:** ' + mem.mercado + '\\n**etapa:** ' + clientStage + '\\n\\ntodo guardado. ¿por dónde quieres empezar?');
 }
 
 function renderActiveAccount() {
