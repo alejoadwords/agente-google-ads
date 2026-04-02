@@ -1512,40 +1512,20 @@ CTA (llamada a la acción):
 
 ## SKILL 10.B: GENERACIÓN DE IMÁGENES PARA ANUNCIOS META ADS
 
-Generas imágenes de nivel profesional similares a agencias de diseño — con logo, jerarquía tipográfica, elementos gráficos y layout estructurado.
+**PROCESO SEGÚN EL PLAN DEL USUARIO:**
 
-**PROCESO OBLIGATORIO cuando el cliente pida crear imágenes/anuncios:**
+**Plan Pro:** Usa [DESIGN_QUESTIONNAIRE] para activar cuestionario completo de 4 pasos, luego genera 5 bloques [GENERAR_IMAGEN] con datos personalizados.
 
-1. **PRIMERO:** Aplica SKILL 10.A (análisis de mercado y competencia)
-2. **LUEGO:** Usa el comando [DESIGN_QUESTIONNAIRE] para activar el cuestionario interactivo
-3. **FINALMENTE:** El sistema capturará los datos y enviará un prompt específico para que generes los 5 bloques [GENERAR_IMAGEN]
+**Plan Gratuito:** Genera directamente 1 bloque [GENERAR_IMAGEN] usando datos básicos del perfil del usuario, sin cuestionario.
 
-**Cuándo activar el cuestionario:**
-- El cliente pide "crear imagen/anuncio/creativo para Meta"
-- Dice "necesito anuncios gráficos"
-- Cualquier solicitud de contenido visual para Meta Ads
+**Respuesta cuando detectes solicitud de imágenes:**
 
-**Respuesta cuando detectes que necesitas generar imágenes:**
+Para plan Pro: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca: [DESIGN_QUESTIONNAIRE]"
 
-Perfecto, voy a crear anuncios con diseño profesional para tu negocio. Primero necesito algunos datos específicos de tu marca para que las imágenes se vean como las de una agencia de diseño.
+Para plan gratuito: Genera directamente usando esta estructura:
+[GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO] en [INDUSTRIA], persona feliz, colores corporativos, diseño limpio, texto: '[NEGOCIO]' y '[CTA_GENÉRICO]'", "format": "vertical", "variations": 1, "hasText": true}]
 
-[DESIGN_QUESTIONNAIRE]
-
-**Después del cuestionario, el sistema enviará los datos y tú deberás:**
-
-Generar 5 bloques con el comando GENERAR_IMAGEN usando la estructura profesional.
-
-**Las 5 variaciones usando los datos del cuestionario:**
-
-1. **Urgencia/Problema** - Enfoca el dolor y la urgencia de solucionarlo
-2. **Beneficio Principal** - El resultado/transformación que ofreces  
-3. **Prueba Social** - Años, clientes, certificaciones
-4. **Oferta/Precio** - La promoción específica del cuestionario
-5. **Aspiracional** - La vida después de usar el servicio
-
-**DESPUÉS de generar las 5 imágenes verticales (feed), automáticamente genera 5 versiones para historias (stories) con formato 1080x1920 y layout adaptado verticalmente.**
-
-**NUNCA generes imágenes directamente sin pasar por el cuestionario primero** — esto es lo que garantiza el nivel profesional del diseño.`;
+**DESPUÉS de generar las imágenes, automáticamente genera versiones para stories (1080x1920) solo en plan Pro.**`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -3088,15 +3068,32 @@ function selectFocus(btn, focus) {
 }
 
 function generateBasicImage() {
-  // Generar prompt básico sin datos personalizados
-  var prompt = 'Genera 1 imagen básica para anuncio de Meta Ads usando información general del negocio en mi perfil. Diseño estándar sin cuestionario personalizado.';
+  // Obtener datos básicos del perfil del usuario
+  const negocio = mem.negocio || 'tu negocio';
+  const industria = mem.industria || 'servicios';
+  const objetivo = mem.objetivo || 'generar leads';
   
-  hist.push({ role: 'user', content: prompt });
-  document.getElementById('cin').value = prompt;
-  sendMsg();
+  // Generar prompt específico que fuerza la generación inmediata
+  const prompt = `[GENERAR_IMAGEN: {"prompt": "Anuncio profesional para ${negocio} en ${industria}, persona feliz usando el servicio, colores corporativos azul y blanco, diseño limpio y profesional, texto: '${negocio}' y 'Conoce más'", "format": "vertical", "variations": 1, "hasText": true}]`;
   
-  // Incrementar contador
-  incrementImageUsage();
+  // Enviar directamente el comando de generación (no como mensaje de usuario)
+  hist.push({role:'assistant', content: 'Generando imagen básica para tu negocio...'});
+  
+  // Procesar directamente el comando
+  const imgMatch = prompt.match(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/);
+  if(imgMatch){
+    try{
+      const imgCmd = JSON.parse(imgMatch[1]);
+      imgCmd.variations = 1;
+      imgCmd.hasText = true;
+      imgCmd._index = 1;
+      imgCmd._total = 1;
+      generateAdImages(imgCmd);
+      incrementImageUsage();
+    }catch(e){
+      addAgent('Error generando imagen básica');
+    }
+  }
 }
 
 function generateWithDesignData() {
