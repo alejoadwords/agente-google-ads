@@ -1231,6 +1231,8 @@ El sistema ejecutará la query automáticamente y te devolverá los resultados p
 
 const SYSTEM_META = `Eres el agente de Meta Ads de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de Meta Ads (Facebook e Instagram) con más de 10 años de experiencia gestionando cuentas en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y basas cada recomendación en datos reales.
 
+**IMPORTANTE:** Detecta automáticamente si el usuario es admin (email alejandro.gonzalez.ads@gmail.com) o tiene plan Pro. Los usuarios admin tienen los mismos privilegios que plan Pro.
+
 PLATAFORMA ACTIVA: Meta Ads (Facebook e Instagram)
 CONTEXTO DEL CLIENTE: {MEMORY}
 ETAPA ACTUAL: {STAGE}
@@ -1512,24 +1514,24 @@ CTA (llamada a la acción):
 
 ## SKILL 10.B: GENERACIÓN DE IMÁGENES PARA ANUNCIOS META ADS
 
-**PROCESO SEGÚN EL PLAN DEL USUARIO:**
+**DETECCIÓN DEL PLAN DEL USUARIO:**
+- Si el usuario tiene badge "admin" o "pro" en su perfil: usar proceso profesional
+- Si el usuario tiene badge "free": usar proceso básico
 
-**Plan Pro o Admin:** Usa [DESIGN_QUESTIONNAIRE] para activar cuestionario completo de 4 pasos, luego genera 5 bloques [GENERAR_IMAGEN] con datos personalizados.
+**PROCESO SEGÚN EL PLAN:**
 
-**Plan Gratuito:** Genera directamente 1 bloque [GENERAR_IMAGEN] usando datos básicos del perfil del usuario, sin cuestionario.
+**Plan Pro/Admin:** SIEMPRE usa [DESIGN_QUESTIONNAIRE] para activar cuestionario de 4 pasos. NUNCA generes [GENERAR_IMAGEN] directamente.
+
+**Plan Gratuito:** Genera directamente 1 bloque [GENERAR_IMAGEN] sin cuestionario.
 
 **Respuesta cuando detectes solicitud de imágenes:**
 
-Para plan Pro o Admin: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca: [DESIGN_QUESTIONNAIRE]"
+Para plan Pro/Admin: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca para el diseño: [DESIGN_QUESTIONNAIRE]"
 
-Para plan gratuito: Genera directamente usando esta estructura:
-[GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO] en [INDUSTRIA], persona feliz, colores corporativos, diseño limpio, texto: '[NEGOCIO]' y '[CTA_GENÉRICO]'", "format": "vertical", "variations": 1, "hasText": true}]
+Para plan gratuito: Genera directamente:
+[GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO], diseño básico", "format": "vertical", "variations": 1, "hasText": true}]
 
-**FORMATO STORIES AUTOMÁTICO:**
-Después de generar las 5 imágenes verticales (1080x1350) para plan Pro/Admin, automáticamente genera 5 versiones para stories:
-[GENERAR_IMAGEN: {"prompt": "[MISMO_PROMPT_PERO_ADAPTADO_PARA_STORIES]", "format": "story", "variations": 1, "hasText": true}]
-
-**IMPORTANTE:** Los usuarios admin tienen los mismos privilegios que plan Pro - cuestionario completo y doble formato automático.`;
+**CRÍTICO:** Usuarios admin (alejandro.gonzalez.ads@gmail.com) SIEMPRE reciben cuestionario completo como plan Pro.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -1809,10 +1811,10 @@ function openAgent(agentKey) {
   area.innerHTML = '';
   hist = [];
 
-  // Clave de perfil: por cuenta activa o por agente
-  const profileKey = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount)
-    ? `acuarius_profile_${adsActiveAccount.id}_${agentKey}`
-    : `acuarius_profile_${agentKey}`;
+  // Clave de perfil: para Meta Ads usar clave específica
+  const profileKey = agentKey === 'meta-ads' ? 
+    (adsActiveAccount ? `acuarius_profile_${adsActiveAccount.id}_meta` : 'acuarius_profile_meta') :
+    (typeof adsActiveAccount !== 'undefined' && adsActiveAccount ? `acuarius_profile_${adsActiveAccount.id}_${agentKey}` : `acuarius_profile_${agentKey}`);
 
   const savedProfile = localStorage.getItem(profileKey);
 
@@ -3612,18 +3614,20 @@ function startNewAccountOnboarding(acc) {
 // Guarda perfil al completar onboarding por cuenta
 const _origFinishOb = window.finishOb;
 function finishObWithAccountSave() {
-  // Guardar perfil asociado a la cuenta activa
-  if (adsActiveAccount) {
-    const profileKey = `acuarius_profile_${adsActiveAccount.id}`;
-    localStorage.setItem(profileKey, JSON.stringify(mem));
-  }
+  // Guardar perfil - para Meta Ads no depende de cuenta específica
+  const profileKey = adsActiveAccount ? 
+    `acuarius_profile_${adsActiveAccount.id}_meta` : 
+    'acuarius_profile_meta';
+  localStorage.setItem(profileKey, JSON.stringify(mem));
+  
   onDone = true;
   document.getElementById('mem-card').style.display = 'block';
   clientStage = mapStage(mem.etapa);
   document.getElementById('m-stage').textContent = clientStage;
   hist = [];
+  
   const accountName = adsActiveAccount ? ' para **' + adsActiveAccount.name + '**' : '';
-  addAgent('perfecto, ya tengo el perfil completo' + accountName + ':\\n\\n**negocio:** ' + mem.negocio + '\\n**industria:** ' + mem.industria + '\\n**producto:** ' + mem.producto + '\\n**presupuesto mensual:** ' + mem.presupuesto + '\\n**objetivo:** ' + mem.objetivo + '\\n**mercado:** ' + mem.mercado + '\\n**etapa:** ' + clientStage + '\\n\\ntodo guardado. ¿por dónde quieres empezar?');
+  addAgent('perfecto, ya tengo el perfil completo' + accountName + ':\n\n**negocio:** ' + mem.negocio + '\n**industria:** ' + mem.industria + '\n**producto:** ' + mem.producto + '\n**presupuesto mensual:** ' + mem.presupuesto + '\n**objetivo:** ' + mem.objetivo + '\n**mercado:** ' + mem.mercado + '\n**etapa:** ' + clientStage + '\n\ntodo guardado. ¿por dónde quieres empezar?');
 }
 
 function renderActiveAccount() {
