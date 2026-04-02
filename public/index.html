@@ -1514,18 +1514,22 @@ CTA (llamada a la acción):
 
 **PROCESO SEGÚN EL PLAN DEL USUARIO:**
 
-**Plan Pro:** Usa [DESIGN_QUESTIONNAIRE] para activar cuestionario completo de 4 pasos, luego genera 5 bloques [GENERAR_IMAGEN] con datos personalizados.
+**Plan Pro o Admin:** Usa [DESIGN_QUESTIONNAIRE] para activar cuestionario completo de 4 pasos, luego genera 5 bloques [GENERAR_IMAGEN] con datos personalizados.
 
 **Plan Gratuito:** Genera directamente 1 bloque [GENERAR_IMAGEN] usando datos básicos del perfil del usuario, sin cuestionario.
 
 **Respuesta cuando detectes solicitud de imágenes:**
 
-Para plan Pro: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca: [DESIGN_QUESTIONNAIRE]"
+Para plan Pro o Admin: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca: [DESIGN_QUESTIONNAIRE]"
 
 Para plan gratuito: Genera directamente usando esta estructura:
 [GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO] en [INDUSTRIA], persona feliz, colores corporativos, diseño limpio, texto: '[NEGOCIO]' y '[CTA_GENÉRICO]'", "format": "vertical", "variations": 1, "hasText": true}]
 
-**DESPUÉS de generar las imágenes, automáticamente genera versiones para stories (1080x1920) solo en plan Pro.**`;
+**FORMATO STORIES AUTOMÁTICO:**
+Después de generar las 5 imágenes verticales (1080x1350) para plan Pro/Admin, automáticamente genera 5 versiones para stories:
+[GENERAR_IMAGEN: {"prompt": "[MISMO_PROMPT_PERO_ADAPTADO_PARA_STORIES]", "format": "story", "variations": 1, "hasText": true}]
+
+**IMPORTANTE:** Los usuarios admin tienen los mismos privilegios que plan Pro - cuestionario completo y doble formato automático.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
@@ -2308,6 +2312,8 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
         
         // Procesar todos los bloques secuencialmente
         generatedAdImages = [];
+        currentBatchType = 'feed'; // Inicializar como feed
+        feedPrompts = []; // Limpiar prompts anteriores
         const totalImgs = matchesToProcess.length;
         for(let i = 0; i < matchesToProcess.length; i++){
           let imgCmd;
@@ -2865,9 +2871,16 @@ async function generateAdImages(cmd) {
 
 var generatedAdImages = [];
 var adImgGridEl = null; // Contenedor grid compartido para todas las imágenes del batch
+var currentBatchType = 'feed'; // 'feed' o 'stories' - para rastrear qué tipo de batch se está generando
+var feedPrompts = []; // Guardar prompts del feed para generar stories
 
 function renderAdImage(img, index, total, format, prompt) {
   generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format });
+
+  // Guardar prompt si es feed y es Pro/Admin para generar stories después
+  if (currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser())) {
+    feedPrompts[index - 1] = prompt;
+  }
 
   var fmtLabel = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories/Reels · 1080×1920', carousel:'Carrusel · 1080×1080' }[format] || format;
   var ratio = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' }[format] || '4/5';
@@ -2934,8 +2947,19 @@ function renderAdImage(img, index, total, format, prompt) {
         '</div>';
       document.getElementById('chat-area').appendChild(allEl);
       scrollB();
-      hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero segun el objetivo del negocio.' });
-      callClaude();
+      
+      // Si es batch de feed y usuario Pro/Admin, generar stories automáticamente
+      if (currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser()) && feedPrompts.length === total) {
+        currentBatchType = 'stories';
+        setTimeout(function() {
+          addAgent('Generando versiones para Stories automáticamente...');
+          generateStoriesFromFeed();
+        }, 1000);
+      } else {
+        // Solo enviar mensaje de copy si no va a generar stories
+        hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero segun el objetivo del negocio.' });
+        callClaude();
+      }
     }, 300);
   }
 }
@@ -3085,6 +3109,42 @@ function selectFocus(btn, focus) {
   btn.style.background = '#E0E7FF';
   document.getElementById('final-generate-btn').disabled = false;
   document.getElementById('final-generate-btn').style.background = '#10B981';
+}
+
+function generateStoriesFromFeed() {
+  if (feedPrompts.length === 0) return;
+  
+  // Generar todas las versiones stories basadas en los prompts feed
+  for (let i = 0; i < feedPrompts.length; i++) {
+    let feedPrompt = feedPrompts[i];
+    // Adaptar prompt para formato stories (más vertical)
+    let storiesPrompt = feedPrompt.replace(/Layout:/, 'Layout vertical extendido para stories:')
+                                 .replace(/1080x1350/g, '1080x1920')
+                                 .replace(/formato vertical/g, 'formato stories');
+    
+    let imgCmd = {
+      prompt: storiesPrompt,
+      format: 'story',
+      variations: 1,
+      hasText: true,
+      _index: i + 1,
+      _total: feedPrompts.length
+    };
+    
+    setTimeout(function(cmd) {
+      generateAdImages(cmd);
+    }, i * 500, imgCmd); // Generar con delay para no sobrecargar
+  }
+  
+  // Al finalizar stories, enviar mensaje de copy
+  setTimeout(function() {
+    hist.push({ role: 'user', content: 'Perfecto. Ahora tengo ' + (feedPrompts.length * 2) + ' creativos (' + feedPrompts.length + ' feed + ' + feedPrompts.length + ' stories). Dame el copy optimizado para cada variación y recomienda cuál probar primero.' });
+    callClaude();
+    
+    // Reset para próximo batch
+    currentBatchType = 'feed';
+    feedPrompts = [];
+  }, feedPrompts.length * 500 + 2000);
 }
 
 function generateBasicImage() {
