@@ -1534,10 +1534,22 @@ let clerkInstance=null,sessionToken=null,userPlan='free';
 // Sistema de límites de imágenes
 let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
 
+// Usuarios con acceso especial (admin/testing)
+const ADMIN_EMAILS = [
+  'alejandro@acuarius.app',
+  'admin@acuarius.app',
+  'test@acuarius.app'
+];
+
+function isAdminUser() {
+  if (!clerkInstance?.user?.primaryEmailAddress?.emailAddress) return false;
+  return ADMIN_EMAILS.includes(clerkInstance.user.primaryEmailAddress.emailAddress.toLowerCase());
+}
+
 // Funciones de límites
 function loadImageUsage() {
-  if (userPlan === 'pro') {
-    imageUsage = { generated: 0, limit: 999 }; // Ilimitado para Pro
+  if (userPlan === 'pro' || isAdminUser()) {
+    imageUsage = { generated: 0, limit: 999 }; // Ilimitado para Pro y Admin
     return;
   }
   try {
@@ -1572,11 +1584,11 @@ function saveImageUsage() {
 
 function canGenerateImage() {
   loadImageUsage();
-  return userPlan === 'pro' || imageUsage.generated < imageUsage.limit;
+  return userPlan === 'pro' || isAdminUser() || imageUsage.generated < imageUsage.limit;
 }
 
 function incrementImageUsage() {
-  if (userPlan !== 'pro') {
+  if (userPlan !== 'pro' && !isAdminUser()) {
     imageUsage.generated++;
     saveImageUsage();
   }
@@ -1677,7 +1689,10 @@ function updateUserUI(u){
   const initials=(u.firstName?.[0]||'')+(u.lastName?.[0]||'');
   document.getElementById('hdr-avatar').textContent=initials||'AC';
   const badge=document.getElementById('plan-badge');
-  if(badge)badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días';
+  if(badge){
+    if(isAdminUser()) badge.textContent='admin';
+    else badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días';
+  }
   const greeting=document.getElementById('home-greeting');
   if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
 }
@@ -2287,8 +2302,8 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
         if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
         else { hist.push({role:'assistant', content: 'Generando ' + Math.min(allMatches.length, userPlan === 'pro' ? 5 : 1) + ' creativos para tu anuncio...'}); }
         
-        // En plan gratuito, solo procesar la primera imagen
-        const matchesToProcess = userPlan === 'pro' ? allMatches : allMatches.slice(0, 1);
+        // En plan gratuito, solo procesar la primera imagen (excepto admin)
+        const matchesToProcess = (userPlan === 'pro' || isAdminUser()) ? allMatches : allMatches.slice(0, 1);
         
         // Procesar todos los bloques secuencialmente
         generatedAdImages = [];
@@ -2307,8 +2322,8 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
             // Incrementar contador después de generar exitosamente
             incrementImageUsage();
             
-            // En plan gratuito, solo generar una imagen
-            if (userPlan !== 'pro') break;
+            // En plan gratuito, solo generar una imagen (excepto admin)
+            if (userPlan !== 'pro' && !isAdminUser()) break;
           }
         }
         loading=false; document.getElementById('sbtn').disabled=false; return;
@@ -2964,8 +2979,9 @@ function showDesignQuestionnaire() {
     return;
   }
 
-  const remaining = userPlan === 'pro' ? '∞' : (imageUsage.limit - imageUsage.generated);
-  const isLimited = userPlan !== 'pro';
+  const isAdmin = isAdminUser();
+  const remaining = (userPlan === 'pro' || isAdmin) ? '∞' : (imageUsage.limit - imageUsage.generated);
+  const isLimited = userPlan !== 'pro' && !isAdmin;
   
   var el = document.createElement('div');
   el.className = 'msg';
@@ -2982,7 +2998,10 @@ function showDesignQuestionnaire() {
           '</div>' +
           '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Plan gratuito - diseño básico sin cuestionario personalizado</div>'
         :
-          '<h4 style="margin:0 0 12px;font-size:14px;font-weight:700;color:var(--text)">🎨 Diseño profesional Pro</h4>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+            '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🎨 Diseño profesional' + (isAdmin ? ' (Admin)' : ' Pro') + '</h4>' +
+            (isAdmin ? '<div style="background:#10B981;color:white;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">ADMIN</div>' : '') +
+          '</div>' +
           '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Cuestionario completo para diseño de nivel agencia</div>'
         ) +
         '<div id="design-q-step" class="design-step-1">' +
