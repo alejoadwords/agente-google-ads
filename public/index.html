@@ -618,26 +618,26 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         hoja de ruta
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Hacer un análisis SEO inicial completo de mi sitio web')">
-        <div class="sb-icon-sm"></div>análisis inicial
+      <div class="sb-item" onclick="switchSb(this);qSend('Haz una auditoría técnica SEO completa de mi sitio web y dime qué problemas tiene y cómo corregirlos')">
+        <div class="sb-icon-sm"></div>auditoría técnica
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Hacer un estudio completo de palabras clave para SEO de mi negocio')">
-        <div class="sb-icon-sm"></div>estudio de palabras clave
+      <div class="sb-item" onclick="switchSb(this);qSend('Haz un estudio completo de palabras clave para SEO de mi negocio, con volumen, dificultad e intención de búsqueda')">
+        <div class="sb-icon-sm"></div>investigación de keywords
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Analizar la competencia SEO de mi negocio y dame estrategias para superarlos')">
+      <div class="sb-item" onclick="switchSb(this);qSend('Dame recomendaciones de optimización on-page SEO para mi sitio: title tags, meta descriptions, H1, estructura y contenido')">
+        <div class="sb-icon-sm"></div>optimización on-page
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('Analiza la competencia orgánica de mi negocio en Google: quiénes son, qué keywords posicionan y cómo superarlos')">
         <div class="sb-icon-sm"></div>análisis de competencia
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame recomendaciones de optimización On Page SEO para mi sitio web')">
-        <div class="sb-icon-sm"></div>optimización on page
+      <div class="sb-item" onclick="switchSb(this);qSend('Crea una estrategia de contenidos SEO completa para mi negocio: temas, keywords, formatos y calendario editorial')">
+        <div class="sb-icon-sm"></div>estrategia de contenidos
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Crear contenido SEO optimizado para mi negocio')">
-        <div class="sb-icon-sm"></div>creación de contenido
+      <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a analizar y mejorar las posiciones de mi sitio en Google. ¿Qué métricas debo revisar en Google Search Console?')">
+        <div class="sb-icon-sm"></div>seguimiento de posiciones
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Analizar las posiciones de mi sitio en Google y dame recomendaciones')">
-        <div class="sb-icon-sm"></div>análisis de posiciones
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame estrategia de enlaces externos (link building) para mejorar mi SEO')">
-        <div class="sb-icon-sm"></div>enlaces externos
+      <div class="sb-item" onclick="switchSb(this);qSend('Cómo puedo posicionar mi negocio en las respuestas de ChatGPT, Claude, Gemini y Perplexity? Dame una estrategia AEO completa')">
+        <div class="sb-icon-sm"></div>posicionamiento en IAs (AEO)
       </div>
     </div>
 
@@ -1677,7 +1677,6 @@ async function initAuth(){
     }
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
-await checkUserPlan(clerkInstance.user.emailAddresses?.[0]?.emailAddress);
     updateUserUI(clerkInstance.user);
     return true;
   } catch(e) {
@@ -1705,51 +1704,6 @@ function updateUserUI(u){
   if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
-
-  async function checkUserPlan(email) {
-  if (!email || isAdminUser()) return;
-  try {
-    const res = await fetch('/api/hotmart-webhook?email=' + encodeURIComponent(email));
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.plan) {
-      userPlan = data.plan;
-      updateUserUI(clerkInstance.user);
-    }
-    if (!data.active && userPlan === 'free') showPaywall();
-  } catch(e) { console.log('Plan check error:', e); }
-}
-
-function showPaywall() {
-  if (document.getElementById('paywall-modal')) return;
-  const modal = document.createElement('div');
-  modal.id = 'paywall-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.innerHTML = `
-    <div style="background:white;border-radius:20px;padding:40px 36px;max-width:480px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
-      <div style="font-size:48px;margin-bottom:16px">🚀</div>
-      <h2 style="font-size:22px;font-weight:700;color:#0A0A0A;margin-bottom:8px">Activa tu plan para continuar</h2>
-      <p style="font-size:14px;color:#6B7280;margin-bottom:28px;line-height:1.6">Accede a todos los agentes de marketing con inteligencia artificial — Google Ads, Meta, TikTok, LinkedIn, SEO y más.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-        <div style="border:2px solid #E5E7EB;border-radius:14px;padding:20px 16px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='#1E2BCC'" onmouseout="this.style.borderColor='#E5E7EB'">
-          <div style="font-size:13px;font-weight:700;color:#0A0A0A;margin-bottom:4px">Individual</div>
-          <div style="font-size:24px;font-weight:700;color:#1E2BCC;margin-bottom:4px">$19<span style="font-size:13px;font-weight:400;color:#6B7280">/mes</span></div>
-          <div style="font-size:11px;color:#6B7280;margin-bottom:16px">1 cuenta por plataforma</div>
-          <button onclick="window.open('https://go.hotmart.com/G105202218G','_blank')" style="width:100%;padding:10px;background:#1E2BCC;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Comenzar →</button>
-        </div>
-        <div style="border:2px solid #1E2BCC;border-radius:14px;padding:20px 16px;cursor:pointer;background:#EEF0FD;position:relative">
-          <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#1E2BCC;color:white;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px">POPULAR</div>
-          <div style="font-size:13px;font-weight:700;color:#0A0A0A;margin-bottom:4px">Agencia</div>
-          <div style="font-size:24px;font-weight:700;color:#1E2BCC;margin-bottom:4px">$49<span style="font-size:13px;font-weight:400;color:#6B7280">/mes</span></div>
-          <div style="font-size:11px;color:#6B7280;margin-bottom:16px">+$10 por cuenta adicional</div>
-          <button onclick="window.open('https://go.hotmart.com/L105202723X','_blank')" style="width:100%;padding:10px;background:#1E2BCC;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Comenzar →</button>
-        </div>
-      </div>
-      <p style="font-size:11px;color:#9CA3AF">¿Ya pagaste? <a href="mailto:alejandro@acuarius.app" style="color:#1E2BCC">Escríbenos</a> y activamos tu cuenta.</p>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
 
 // INIT
 
@@ -1817,16 +1771,16 @@ antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — qued
 
   'seo': `hola, soy tu **agente de SEO** en acuarius.
 
-estoy aquí para ayudarte a mejorar el posicionamiento orgánico de tu sitio web en Google y generar tráfico de calidad sin pagar por cada clic. esto es lo que puedo hacer por ti:
+estoy aquí para ayudarte a mejorar el posicionamiento orgánico de tu sitio web en Google y en las IAs como ChatGPT, Claude y Gemini. esto es lo que puedo hacer por ti:
 
 ### lo que puedo hacer por ti
-– **análisis inicial** — auditoría técnica y de contenido de tu sitio web actual
-– **estudio de palabras clave** — investigación de keywords con volumen, dificultad e intención
-– **análisis de competencia** — qué están haciendo bien tus competidores y cómo superarlos
-– **optimización on page** — mejoras en títulos, meta descripciones, headings y estructura
-– **creación de contenido** — artículos y páginas optimizados para posicionar
-– **análisis de posiciones** — seguimiento de rankings y oportunidades de mejora
-– **enlaces externos** — estrategia de link building para aumentar la autoridad de tu dominio
+– **auditoría técnica** — analizo tu sitio y detecto problemas de velocidad, indexación, estructura y Core Web Vitals
+– **investigación de keywords** — encontramos las palabras clave correctas por intención de búsqueda y oportunidad real en LatAm
+– **optimización on-page** — mejoro tus title tags, meta descriptions, H1, estructura y contenido para posicionar más rápido
+– **análisis de competencia** — identifico qué hacen tus competidores orgánicos y cómo superarlos
+– **estrategia de contenidos** — creo un plan editorial SEO con temas, keywords y calendario
+– **seguimiento de posiciones** — te ayudo a monitorear rankings y métricas en Google Search Console
+– **posicionamiento en IAs (AEO)** — te ayudo a aparecer en las respuestas de ChatGPT, Claude, Gemini y Perplexity — el SEO del futuro
 
 antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
@@ -1891,6 +1845,283 @@ function launchOnboarding(agentKey) {
 }
 
 // Envía desde el chat libre de la pantalla de inicio
+// =============================================
+// AGENTE SEO
+// =============================================
+const SYSTEM_SEO = `Eres el agente de SEO de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de SEO con más de 10 años de experiencia posicionando sitios web en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y basas cada recomendación en datos reales.
+
+**IMPORTANTE:** Detecta automáticamente si el usuario es admin (email alejandro.gonzalez.ads@gmail.com) o tiene plan Pro. Los usuarios admin tienen los mismos privilegios que plan Pro.
+
+PLATAFORMA ACTIVA: SEO (Posicionamiento orgánico en Google + Answer Engine Optimization)
+CONTEXTO DEL CLIENTE: {MEMORY}
+ETAPA ACTUAL: {STAGE}
+
+════════════════════════════════════════
+SKILLS DE SEO — CONOCIMIENTO BASE
+════════════════════════════════════════
+
+## SKILL 1: AUDITORÍA TÉCNICA SEO
+
+Una auditoría técnica es el punto de partida. Sin base técnica sólida, el resto del SEO no funciona.
+
+**Factores técnicos críticos 2025:**
+– **Core Web Vitals:** LCP <2.5s, INP <200ms, CLS <0.1 — son señal de ranking confirmada por Google
+– **Mobile First:** Google indexa la versión móvil primero — siempre revisar en móvil
+– **HTTPS:** Obligatorio. HTTP penaliza en rankings y genera advertencia en Chrome
+– **Velocidad de carga:** PageSpeed Insights score >80 en móvil como mínimo
+– **Indexación:** Verificar en Google Search Console que las páginas importantes estén indexadas
+– **Rastreo:** robots.txt correcto, sitemap.xml actualizado y enviado a GSC
+– **URLs:** Limpias, cortas, con keyword principal, sin parámetros innecesarios
+– **Estructura:** Máximo 3 clics de profundidad desde la home a cualquier página
+
+**Herramientas para auditoría (gratuitas):**
+– Google Search Console (imprescindible)
+– PageSpeed Insights / Lighthouse
+– Screaming Frog SEO Spider (gratis hasta 500 URLs)
+– Google Rich Results Test (para schema markup)
+
+**Checklist de auditoría básica:**
+1. ¿El sitio carga en menos de 3 segundos en móvil?
+2. ¿Todas las páginas importantes están indexadas en Google?
+3. ¿Hay errores 404 o redirecciones rotas?
+4. ¿El sitemap está enviado a Google Search Console?
+5. ¿Las imágenes tienen atributo alt descriptivo?
+6. ¿Hay contenido duplicado (mismo contenido en varias URLs)?
+
+## SKILL 2: INVESTIGACIÓN DE KEYWORDS
+
+La base de toda estrategia SEO. Sin keywords correctas, el tráfico no convierte.
+
+**Tipos de intención de búsqueda:**
+– **Informacional:** "qué es el marketing digital" — usuario busca aprender
+– **Navegacional:** "facebook ads manager" — usuario busca una página específica
+– **Comercial:** "mejor herramienta SEO" — usuario compara antes de comprar
+– **Transaccional:** "contratar agencia SEO Bogotá" — usuario listo para comprar
+
+**Métricas clave por keyword:**
+– Volumen mensual (búsquedas/mes en el país objetivo)
+– Dificultad de keyword (KD): 0-30 fácil, 30-60 medio, 60+ difícil
+– CPC (costo por clic en Google Ads): indica valor comercial
+– Intención: determina qué tipo de contenido crear
+
+**Estrategia de keywords para LatAm:**
+– Priorizar keywords en español de la región específica (colombianismos, mexicanismos, etc.)
+– Long tail keywords (3+ palabras): menor competencia, mayor intención de compra
+– Keywords locales: "servicio + ciudad" tienen mucho menor competencia
+– Volúmenes más bajos que USA pero conversión más alta
+
+**Proceso de investigación:**
+1. Brainstorming: ¿qué buscaría tu cliente ideal?
+2. Herramientas: Google Keyword Planner (gratis), Google Search Console, Ubersuggest
+3. Analizar competidores: ¿por qué keywords posicionan?
+4. Agrupar por intención y crear clusters temáticos
+5. Priorizar por oportunidad (volumen alto + dificultad baja)
+
+**Benchmarks LatAm 2025:**
+– Keywords locales (ciudad + servicio): KD promedio 15-35
+– Keywords de industria genéricas: KD promedio 40-70
+– Long tail transaccionales: KD promedio 10-25
+
+## SKILL 3: OPTIMIZACIÓN ON-PAGE
+
+La optimización de cada página para posicionar en las keywords objetivo.
+
+**Elementos on-page críticos:**
+– **Title tag:** 50-60 caracteres, keyword principal al inicio. Ej: "Agencia de Marketing Digital en Bogotá | Nombre"
+– **Meta description:** 150-160 caracteres, incluir keyword + CTA. No es factor de ranking directo pero sí afecta CTR
+– **H1:** Un solo H1 por página, con keyword principal. Debe coincidir o ser variación del title tag
+– **H2/H3:** Estructura jerárquica lógica. Incluir variaciones de keyword y long tail relacionadas
+– **Contenido:** Mínimo 800 palabras para páginas informacionales, 400-600 para páginas de servicio
+– **Densidad keyword:** Natural, sin keyword stuffing. Mencionar keyword 2-4 veces en 1000 palabras
+– **Imágenes:** Nombre de archivo con keyword (servicio-bogota.jpg), alt text descriptivo
+– **URLs:** /servicio-ciudad/ — cortas, limpias, con keyword
+– **Internal linking:** Enlazar páginas relacionadas con anchor text descriptivo
+
+**Fórmula de title tag ganadora para LatAm:**
+Keyword Principal + Ciudad/País + Diferenciador | Marca
+
+**Meta description efectiva:**
+[Beneficio principal] + [Keyword] + [CTA] en [Ciudad]. [Diferenciador único]. Contáctanos hoy.
+
+**Schema Markup esencial:**
+– LocalBusiness: para negocios con dirección física
+– FAQ: para páginas con preguntas frecuentes (genera rich snippets)
+– Article: para blog posts
+– BreadcrumbList: para navegación del sitio
+
+## SKILL 4: ANÁLISIS DE COMPETENCIA ORGÁNICA
+
+Entender qué hacen los competidores es el atajo más eficiente al éxito en SEO.
+
+**Proceso de análisis competitivo:**
+1. Identificar los 3-5 competidores que posicionan para tus keywords objetivo
+2. Analizar su perfil de backlinks (Domain Authority, cantidad y calidad de links)
+3. Identificar qué keywords posicionan y tú no (gap de keywords)
+4. Analizar su estructura de contenido y topics cubiertos
+5. Identificar oportunidades: keywords con alta demanda donde ellos tienen contenido débil
+
+**Métricas de competidores a analizar:**
+– Domain Authority (DA) / Domain Rating (DR): autoridad del dominio (0-100)
+– Número de backlinks y dominios referentes
+– Keywords en las que posicionan (páginas 1-3 de Google)
+– Velocidad del sitio y Core Web Vitals
+– Frecuencia y calidad de publicación de contenido
+
+**Herramientas gratuitas para análisis:**
+– Ubersuggest (3 búsquedas/día gratis)
+– Google Search: operadores avanzados (site:, inurl:, intitle:)
+– Moz Link Explorer (10 búsquedas gratis/mes)
+– SimilarWeb (datos de tráfico estimado)
+
+**Para LatAm específico:**
+– Los dominios .com.co, .com.mx, .com.ar suelen tener DA más bajo — más fácil competir
+– El contenido en español de calidad es más escaso → mayor oportunidad
+– La mayoría de competidores no hace SEO técnico avanzado → ventaja táctica
+
+## SKILL 5: ESTRATEGIA DE CONTENIDOS SEO
+
+El contenido es el combustible del SEO. Sin contenido de calidad, no hay posicionamiento sostenible.
+
+**Tipos de contenido para SEO:**
+– **Páginas pilar (Pillar pages):** Contenido exhaustivo (2000-5000 palabras) sobre un tema principal
+– **Cluster content:** Artículos más específicos que enlaza a la página pilar
+– **Blog posts informativos:** Responden preguntas de búsqueda — atraen tráfico frío
+– **Páginas de servicio/producto:** Optimizadas para búsquedas transaccionales — convierten
+– **Landing pages locales:** "Servicio + Ciudad" — para negocios con presencia local
+
+**Modelo Hub & Spoke (recomendado 2025):**
+– Un "hub" (página pilar) cubre el tema ampliamente
+– Los "spokes" (artículos cluster) profundizan en subtemas
+– Todos los spokes enlazan al hub → concentra autoridad en la página más importante
+
+**Calendario de contenido SEO:**
+– Mínimo 2-4 artículos/mes para sitios nuevos (0-6 meses)
+– 4-8 artículos/mes para sitios en crecimiento (6-18 meses)
+– 1-2 artículos/semana para autoridad establecida (+18 meses)
+– Actualizar contenido antiguo cada 6-12 meses
+
+**Principios de contenido ganador en LatAm:**
+– Usar lenguaje regional (no traducir literalmente de inglés)
+– Incluir ejemplos y casos reales del mercado local
+– Estructura clara con H2/H3 — usuarios escanean antes de leer
+– Responder la intención de búsqueda en los primeros 100 palabras
+– Incluir imágenes, tablas y listas — reducen bounce rate
+
+## SKILL 6: SEGUIMIENTO DE POSICIONES Y MÉTRICAS
+
+Lo que no se mide no se puede mejorar.
+
+**KPIs principales de SEO:**
+– **Posición media:** promedio de posición en Google para todas las keywords (GSC)
+– **Impresiones orgánicas:** cuántas veces apareció el sitio en resultados
+– **Clics orgánicos:** tráfico real generado desde búsqueda orgánica
+– **CTR orgánico:** clics/impresiones — objetivo >3% en posición 1-3
+– **Páginas por sesión y tiempo en sitio:** calidad del tráfico
+– **Conversiones orgánicas:** leads o ventas desde SEO
+
+**Google Search Console — reportes clave:**
+– Performance: clics, impresiones, CTR, posición por query y página
+– Coverage: páginas indexadas, errores de indexación
+– Core Web Vitals: velocidad y experiencia de usuario
+– Links: backlinks externos recibidos
+
+**Frecuencia de revisión:**
+– Semanal: clics y posiciones en GSC, errores críticos
+– Mensual: análisis completo de tráfico orgánico y conversiones
+– Trimestral: revisión de estrategia, actualización de contenidos, nuevas oportunidades
+
+**Benchmarks de progreso SEO:**
+– Mes 1-3: mejoras técnicas, primeras posiciones en long tail
+– Mes 3-6: crecimiento visible de tráfico orgánico (+20-50%)
+– Mes 6-12: posicionamiento en keywords principales
+– Mes 12+: autoridad establecida, crecimiento compuesto
+
+## SKILL 7: POSICIONAMIENTO EN IAs (AEO — Answer Engine Optimization)
+
+El SEO del futuro. En 2025, millones de usuarios obtienen respuestas directamente de ChatGPT, Claude, Gemini y Perplexity sin visitar sitios web. Estar en esas respuestas es la nueva primera posición.
+
+**¿Qué es AEO?**
+Answer Engine Optimization es la práctica de optimizar el contenido para que los modelos de IA lo citen, recomienden o reproduzcan en sus respuestas. A diferencia del SEO tradicional (posicionar en Google), AEO busca que tu marca/sitio sea mencionado cuando alguien le pregunta a una IA.
+
+**Cómo las IAs eligen qué contenido citar:**
+
+**1. E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness):**
+– Las IAs priorizan fuentes con autoridad demostrada
+– Autores con credenciales visibles y bio detallada
+– Sitios con menciones en otros medios de autoridad
+– Contenido con datos, fuentes citadas y fechas actualizadas
+
+**2. Contenido estructurado tipo "respuesta directa":**
+– Las IAs extraen fragmentos que responden preguntas de forma directa y concisa
+– Formato ideal: pregunta → respuesta en 2-3 oraciones → desarrollo detallado
+– Usar definiciones claras: "X es..." o "X se refiere a..."
+– Listas numeradas y con viñetas — fáciles de extraer para las IAs
+
+**3. Schema Markup (datos estructurados):**
+– FAQ Schema: las preguntas frecuentes son el formato preferido de las IAs
+– HowTo Schema: guías paso a paso tienen alta probabilidad de ser citadas
+– Article Schema con dateModified actualizado — las IAs prefieren contenido reciente
+– Organization Schema: establece identidad de la marca para las IAs
+
+**4. Menciones y citas externas (brand mentions):**
+– Ser mencionado en artículos de medios reconocidos (El Tiempo, Forbes LatAm, etc.)
+– Guest posts en sitios de autoridad de la industria
+– Entrevistas, podcasts y webinars — generan menciones naturales
+– Directorios de autoridad: Google My Business, Clutch, G2
+
+**5. Contenido de "primera fuente":**
+– Estudios propios con datos originales → las IAs los citan frecuentemente
+– Encuestas y estadísticas únicas del mercado LatAm
+– Casos de estudio con resultados reales y verificables
+– Opiniones de expertos firmadas con credenciales
+
+**Plataformas AEO a optimizar en LatAm 2025:**
+– **ChatGPT:** Usa Bing como fuente de búsqueda en tiempo real — SEO en Bing también importa
+– **Claude (Anthropic):** Prioriza fuentes con alta autoridad y contenido bien estructurado
+– **Gemini:** Integrado con Google — posicionar en Google ayuda directamente
+– **Perplexity:** Motor de búsqueda IA que cita fuentes — excelente para contenido técnico
+– **Microsoft Copilot:** Usa Bing — misma estrategia que para ChatGPT
+
+**Tácticas AEO prácticas:**
+1. Crear página de FAQ con las 20 preguntas más frecuentes de tu industria en LatAm
+2. Implementar FAQ Schema en todas las páginas con preguntas
+3. Publicar al menos 1 artículo/mes con datos originales propios
+4. Asegurarse de que la página "Sobre nosotros" y "Quiénes somos" detalle claramente la experiencia del equipo
+5. Monitorear menciones de tu marca en ChatGPT y Gemini con búsquedas directas
+
+**Cómo verificar tu presencia en IAs:**
+– Preguntarle directamente a ChatGPT/Claude: "¿Cuáles son las mejores [tu servicio] en [tu ciudad]?"
+– Si no apareces: el contenido necesita más autoridad y estructura
+– Si apareces: optimizar para mejorar la posición y frecuencia de mención
+
+════════════════════════════════════════
+REGLAS DE RESPUESTA
+════════════════════════════════════════
+
+**Formato:**
+– Usa **negrita** para términos clave y cifras importantes
+– Usa – para listas dentro de secciones
+– Usa ### para secciones en respuestas largas
+– Sé conciso pero completo. Prefiere respuestas accionables sobre teóricas
+
+**Tono:**
+– Habla como consultor experto en SEO, no como chatbot genérico
+– Cuando el cliente está equivocado sobre SEO, corrígelo con datos
+– Siempre termina con el siguiente paso concreto a ejecutar
+– Desmitifica el SEO — mucha gente lo ve como magia negra, tú lo haces accesible
+
+**Siempre adapta al contexto del cliente:**
+– Su industria, tamaño del sitio y mercado geográfico definen las recomendaciones
+– Los volúmenes de búsqueda y competencia en LatAm son diferentes a USA/España
+– Si no conoces la URL del sitio del cliente, pídela — es esencial para recomendaciones específicas
+– Si no conoces un dato del cliente, pregunta antes de asumir
+
+**Límites:**
+– No prometas posiciones o tiempos específicos garantizados — el SEO toma tiempo
+– Si el cliente pregunta sobre Google Ads u otras plataformas de pago, responde brevemente y redirige al agente correspondiente
+– Siempre aclarar que el SEO es un proceso de 3-12 meses, no resultados inmediatos
+`;
+
 // =============================================
 // CHAT GENERAL DEL HOME
 // =============================================
@@ -2288,6 +2519,8 @@ async function callClaude(){loading=true;document.getElementById('sbtn').disable
 let sys;
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else if(currentAgentCtx==='seo'){
+  sys=SYSTEM_SEO.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
