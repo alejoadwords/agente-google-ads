@@ -462,6 +462,32 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
 
+    <!-- Consultor de Marketing -->
+    <div class="sb-agent-header" onclick="toggleAgent('consultor')">
+      <div class="sb-agent-icon" style="background:#F3F0FF;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#7C3AED"/></svg>
+      </div>
+      <span class="sb-agent-name">consultor</span>
+      <svg class="sb-chevron" id="chev-consultor" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="sb-agent-items sb-collapsed" id="ag-consultor">
+      <div class="sb-item" onclick="switchSb(this);qSend('Necesito una estrategia de marketing digital completa para mi negocio')">
+        <div class="sb-icon-sm"></div>estrategia integral
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a definir cuánto invertir en marketing digital y cómo distribuir el presupuesto')">
+        <div class="sb-icon-sm"></div>distribución de presupuesto
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('Analiza mi situación de marketing digital y dime qué canales debo priorizar')">
+        <div class="sb-icon-sm"></div>diagnóstico de canales
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('Explícame cómo medir el ROI de mis inversiones en marketing digital')">
+        <div class="sb-icon-sm"></div>medición y ROI
+      </div>
+      <div class="sb-item" onclick="switchSb(this);qSend('¿Qué herramientas de marketing digital necesito para mi negocio?')">
+        <div class="sb-icon-sm"></div>stack de herramientas
+      </div>
+    </div>
+
     <!-- Google Ads -->
     <div class="sb-agent-header" onclick="toggleAgent('ga')">
       <div class="sb-agent-icon" style="background:#EEF0FD;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -695,7 +721,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   <div class="view active" id="view-home">
     <div class="home-wrap">
       <div class="home-greeting" id="home-greeting">hola 👋</div>
-      <div class="home-sub">¿con qué agente quieres trabajar hoy?</div>
+
+      <!-- Hero Consultor -->
+      <div onclick="openAgent('consultor')" style="width:100%;max-width:740px;margin-bottom:16px;background:linear-gradient(135deg,#EDE9FE 0%,#F5F3FF 60%,#EEF2FF 100%);border:1.5px solid #C4B5FD;border-radius:16px;padding:22px 24px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:20px" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,.13)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <div style="width:48px;height:48px;border-radius:14px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#fff"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;color:#4C1D95;margin-bottom:3px;display:flex;align-items:center;gap:8px">
+            Consultor de Marketing
+            <span style="font-size:10px;font-weight:600;background:#7C3AED;color:#fff;padding:2px 8px;border-radius:20px;letter-spacing:.3px">RECOMENDADO</span>
+          </div>
+          <div style="font-size:12.5px;color:#6D28D9;line-height:1.45">Estrategia integral · distribución de presupuesto · diagnóstico de canales · ROI</div>
+          <div style="font-size:11.5px;color:#7C3AED;margin-top:6px;opacity:.8">¿No sabes por dónde empezar? El consultor analiza tu negocio y te dice exactamente qué hacer.</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.7"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+
+      <!-- Grid de agentes -->
+      <div style="width:100%;max-width:740px;font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">Agentes especializados</div>
       <div class="home-agents">
         <div class="home-agent-card" onclick="openAgent('google-ads')">
           <div class="home-agent-icon" style="background:#E8F0FE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg></div>
@@ -1646,15 +1690,69 @@ function showProPreview() {
   scrollB();
 }
 
-const obSteps=[
-  {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
-  {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
-  {q:'¿Cuál es tu producto o servicio principal?',ph:'Ej: Software de gestión contable para PYMEs',key:'producto',type:'input'},
-  {q:'¿Cuál es tu presupuesto mensual en Google Ads?',key:'presupuesto',type:'opts',opts:['Menos de $500 USD','$500 – $2.000 USD','$2.000 – $10.000 USD','Más de $10.000 USD']},
-  {q:'¿Cuál es tu objetivo principal de campaña?',key:'objetivo',type:'opts',opts:['Generar leads / contactos','Ventas directas (e-commerce)','Tráfico al sitio web','Llamadas telefónicas','Reconocimiento de marca']},
-  {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
-  {q:'¿En qué etapa estás con Google Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Campaña activa (menos de 1 mes)','Campaña activa 1–3 meses','Más de 3 meses de experiencia']}
-];
+const OB_STEPS_BY_AGENT = {
+  'google-ads': [
+    {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
+    {q:'¿Cuál es tu producto o servicio principal?',ph:'Ej: Software de gestión contable para PYMEs',key:'producto',type:'input'},
+    {q:'¿Cuál es tu presupuesto mensual en Google Ads?',key:'presupuesto',type:'opts',opts:['Menos de $500 USD','$500 – $2.000 USD','$2.000 – $10.000 USD','Más de $10.000 USD']},
+    {q:'¿Cuál es tu objetivo principal de campaña?',key:'objetivo',type:'opts',opts:['Generar leads / contactos','Ventas directas (e-commerce)','Tráfico al sitio web','Llamadas telefónicas','Reconocimiento de marca']},
+    {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
+    {q:'¿En qué etapa estás con Google Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Campaña activa (menos de 1 mes)','Campaña activa 1–3 meses','Más de 3 meses de experiencia']}
+  ],
+  'meta-ads': [
+    {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
+    {q:'¿Cuál es tu producto o servicio principal?',ph:'Ej: Ropa deportiva para mujeres',key:'producto',type:'input'},
+    {q:'¿Cuál es tu presupuesto mensual en Meta Ads?',key:'presupuesto',type:'opts',opts:['Menos de $300 USD','$300 – $1.000 USD','$1.000 – $5.000 USD','Más de $5.000 USD']},
+    {q:'¿Cuál es tu objetivo principal en Meta?',key:'objetivo',type:'opts',opts:['Generar leads / contactos','Ventas en tienda online','Mensajes por WhatsApp / DM','Tráfico al sitio web','Reconocimiento de marca']},
+    {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
+    {q:'¿En qué etapa estás con Meta Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']}
+  ],
+  'seo': [
+    {q:'¿Cuál es el nombre y URL de tu sitio web?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
+    {q:'¿Cuál es tu producto o servicio principal a posicionar?',ph:'Ej: Consultoría contable para PYMEs en Bogotá',key:'producto',type:'input'},
+    {q:'¿En qué país o ciudad quieres posicionarte principalmente?',ph:'Ej: Colombia, Bogotá, México DF, toda LatAm...',key:'mercado',type:'input'},
+    {q:'¿Cuál es tu objetivo principal con el SEO?',key:'objetivo',type:'opts',opts:['Atraer más visitas orgánicas','Generar leads desde Google','Posicionar mi marca localmente','Superar a mi competencia en Google','Aparecer en IAs como ChatGPT y Gemini']},
+    {q:'¿En qué etapa está tu SEO actualmente?',key:'etapa',type:'opts',opts:['Sitio nuevo, sin trabajo SEO previo','Tengo SEO básico pero sin resultados claros','Tengo tráfico orgánico pero quiero escalarlo','Tengo SEO activo y quiero auditarlo']},
+    {q:'¿Cuál es tu mayor desafío SEO hoy?',key:'desafio',type:'opts',opts:['No sé por qué keywords posicionar','Mi sitio no aparece en Google','Tengo visitas pero no convierten','No sé cómo crear contenido optimizado','Quiero aparecer en respuestas de IAs']}
+  ],
+  'tiktok-ads': [
+    {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
+    {q:'¿Cuál es tu producto o servicio principal?',ph:'Ej: Curso de maquillaje online',key:'producto',type:'input'},
+    {q:'¿Cuál es tu presupuesto mensual en TikTok Ads?',key:'presupuesto',type:'opts',opts:['Menos de $300 USD','$300 – $1.000 USD','$1.000 – $5.000 USD','Más de $5.000 USD']},
+    {q:'¿Cuál es tu objetivo principal en TikTok?',key:'objetivo',type:'opts',opts:['Ventas directas','Generar leads','Tráfico al sitio web','Reconocimiento de marca','Crecimiento de comunidad']},
+    {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
+    {q:'¿En qué etapa estás con TikTok Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']}
+  ],
+  'linkedin-ads': [
+    {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['Tecnología / SaaS','Consultoría / Servicios profesionales','Recursos Humanos / Reclutamiento','Finanzas / Seguros','Salud corporativa','Educación ejecutiva','Manufactura / Industrial','Otro sector B2B']},
+    {q:'¿Cuál es tu producto o servicio principal?',ph:'Ej: Software de gestión de proyectos para empresas',key:'producto',type:'input'},
+    {q:'¿Cuál es tu presupuesto mensual en LinkedIn Ads?',key:'presupuesto',type:'opts',opts:['Menos de $500 USD','$500 – $2.000 USD','$2.000 – $10.000 USD','Más de $10.000 USD']},
+    {q:'¿Cuál es tu objetivo principal en LinkedIn?',key:'objetivo',type:'opts',opts:['Generar leads B2B calificados','Reconocimiento de marca empresarial','Reclutar talento específico','Promover eventos o webinars','Nutrir contactos del pipeline']},
+    {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
+    {q:'¿En qué etapa estás con LinkedIn Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']}
+  ],
+  'consultor': [
+    {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
+    {q:'¿Cuál es tu presupuesto mensual total en marketing digital?',key:'presupuesto',type:'opts',opts:['Menos de $300 USD','$300 – $1.000 USD','$1.000 – $5.000 USD','Más de $5.000 USD']},
+    {q:'¿Cuál es tu objetivo principal de negocio ahora?',key:'objetivo',type:'opts',opts:['Conseguir más clientes / leads','Aumentar ventas online','Fortalecer la marca','Escalar a nuevos mercados','Reducir costo de adquisición']},
+    {q:'¿En qué canales de marketing estás activo actualmente?',key:'canales',type:'opts',opts:['Solo redes sociales orgánicas','Google Ads','Meta Ads (Facebook/Instagram)','SEO','Varios canales pagos','Ninguno todavía']},
+    {q:'¿Cuál es tu mayor reto en marketing hoy?',key:'desafio',type:'opts',opts:['No sé por dónde empezar','Tengo canales pero no dan resultados','No sé cómo distribuir el presupuesto','Quiero escalar pero sin desperdiciar dinero','Necesito medir mejor mis resultados']}
+  ]
+};
+
+// Retorna los pasos de onboarding según el agente activo
+function getObSteps() {
+  return OB_STEPS_BY_AGENT[currentAgentCtx] || OB_STEPS_BY_AGENT['google-ads'];
+}
+
+// Compatibilidad con código existente
+const obSteps = OB_STEPS_BY_AGENT['google-ads'];
 
 // AUTH
 function waitForClerk(t=6000){return new Promise((res,rej)=>{if(typeof Clerk!=='undefined')return res(window.Clerk);const s=Date.now(),iv=setInterval(()=>{if(typeof Clerk!=='undefined'){clearInterval(iv);res(window.Clerk)}else if(Date.now()-s>t){clearInterval(iv);rej(new Error('timeout'))}},50)})}
@@ -1794,7 +1892,20 @@ estoy aquí para ayudarte a construir una presencia sólida en redes sociales co
 – **publicación de contenido** — estructura y guía para publicar de forma consistente y estratégica
 – **análisis de rendimiento** — interpretación de métricas y recomendaciones para mejorar
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`
+antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+
+  'consultor': `hola, soy tu **consultor de marketing digital** en acuarius.
+
+pienso en tu negocio de forma integral — sin sesgos hacia un canal específico. te ayudo a tomar decisiones estratégicas sobre dónde invertir, qué medir y cómo crecer de forma sostenible.
+
+### lo que puedo hacer por ti
+– **estrategia integral** — plan de marketing 360° adaptado a tu negocio y presupuesto
+– **distribución de presupuesto** — cómo repartir tu inversión entre canales para maximizar ROI
+– **diagnóstico de canales** — qué plataformas te convienen y cuáles no para tu caso
+– **medición y ROI** — cómo saber si tu marketing está funcionando y qué ajustar
+– **stack de herramientas** — qué herramientas necesitas y cuáles son prescindibles
+
+antes de empezar, necesito entender tu situación. son 6 preguntas rápidas — quedarán guardadas en tu perfil.`
 };
 
 // Alias para compatibilidad
@@ -1827,7 +1938,7 @@ function openAgent(agentKey) {
       clientStage = mapStage(mem.etapa);
       document.getElementById('mem-card').style.display = 'block';
       document.getElementById('m-stage').textContent = clientStage;
-      const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes'};
+      const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
       addAgent(`hola de nuevo. agente de **${agentLabels[agentKey]||agentKey}** listo.\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
       return;
     } catch(e) { /* si falla el parse, lanzar onboarding */ }
@@ -2138,7 +2249,35 @@ REGLAS:
 – Si la pregunta es general o cubre varias plataformas, NO incluyas [AGENTE_SUGERIDO]
 – Nunca menciones que eres un agente de IA ni que tienes limitaciones`;
 
-let homeHist = []; // historial del chat general
+const SYSTEM_CONSULTOR = `Eres el Consultor de Marketing Digital de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un CMO (Chief Marketing Officer) externo con más de 10 años de experiencia ayudando empresas de Colombia, México, Argentina, Chile y toda la región a crecer de forma rentable.
+
+Tu diferencial frente a los otros agentes de Acuarius: piensas en el negocio completo, no en un canal específico. No tienes sesgos hacia Google Ads, Meta, SEO ni ninguna plataforma. Tu trabajo es ayudar al cliente a tomar las mejores decisiones estratégicas de marketing para su situación específica.
+
+PERFIL DEL CLIENTE:
+{MEMORY}
+
+ETAPA DEL CLIENTE: {STAGE}
+
+CAPACIDADES CLAVE:
+– **Estrategia integral**: plan de marketing 360° con canales priorizados, presupuesto asignado y cronograma de implementación
+– **Diagnóstico de canales**: análisis de qué plataformas convienen para el negocio y cuáles no (con justificación)
+– **Distribución de presupuesto**: cómo repartir la inversión entre canales para maximizar ROI según etapa del negocio
+– **Medición y KPIs**: qué métricas seguir, cómo leer los datos y qué decisiones tomar con ellos
+– **Stack de herramientas**: qué herramientas de marketing necesita el negocio y cuáles son prescindibles
+– **Benchmarks LatAm**: CPCs, CPMs, tasas de conversión y ROAS reales para la región
+
+REGLAS DE RESPUESTA:
+– Habla siempre en español, de forma directa y sin rodeos
+– Sé el consultor que dice la verdad aunque no sea lo que el cliente quiere escubrir: si su idea no es viable, dilo con datos
+– Usa **negrita** para cifras, conceptos clave y recomendaciones principales
+– Usa ### para secciones en respuestas largas
+– Usa – para listas
+– Siempre termina con un siguiente paso concreto y accionable
+– Si el cliente pregunta sobre algo muy específico de una plataforma (configurar una campaña, optimizar un anuncio, etc.), oriéntalo brevemente y sugiere que use el agente especializado correspondiente
+– Nunca menciones que eres IA ni que tienes limitaciones
+– Adapta todo al contexto de LatAm: presupuestos en USD/COP/MXN, benchmarks regionales, comportamiento del consumidor local`;
+
+ // historial del chat general
 let homeLoading = false;
 
 async function homeChat() {
@@ -2243,7 +2382,7 @@ function appendHomeMsgAgent(txt, suggestedAgent) {
   const agentLabels = {
     'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads',
     'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads',
-    'seo': 'SEO', 'social': 'Contenido para Redes'
+    'seo': 'SEO', 'social': 'Contenido para Redes', 'consultor': 'Consultor de Marketing'
   };
 
   const suggBtn = suggestedAgent ? `
@@ -2330,7 +2469,7 @@ function continueWithAgent(agentKey) {
   // Mensaje de transición
   const agentLabels = {
     'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads',
-    'linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes'
+    'linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'
   };
   addAgent(`continuamos en el agente de **${agentLabels[agentKey]||agentKey}**. ¿en qué más te ayudo?`);
 }
@@ -2370,9 +2509,9 @@ window.onload = async () => {
 };
 
 // ONBOARDING
-function renderOb(){const s=obSteps[obStep];const pct=(obStep/obSteps.length)*100;let inner=s.type==='input'?`<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`:`<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;const html=`<div class="ob-card" id="obc"><div class="ob-title">configuración del perfil</div><div class="ob-sub">paso ${obStep+1} de ${obSteps.length}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div><div class="step-lbl">pregunta ${obStep+1}</div><div class="step-q">${s.q}</div>${inner}<div class="step-nav">${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← atrás</button>':''}<button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''}>${obStep<obSteps.length-1?'continuar →':'iniciar →'}</button></div></div>`;appendRaw(html);if(s.type==='input')setTimeout(()=>document.getElementById('oi')?.focus(),80);scrollB()}
+function renderOb(){const steps=getObSteps();const s=steps[obStep];const pct=(obStep/steps.length)*100;let inner=s.type==='input'?`<input class="finput" id="oi" type="text" placeholder="${s.ph||''}" onkeydown="if(event.key==='Enter')nextStep()">`:`<div class="opts">${s.opts.map(o=>`<button class="opt" onclick="selOpt(this,'${o.replace(/'/g,"\\'")}')"><span>${o}</span></button>`).join('')}</div>`;const html=`<div class="ob-card" id="obc"><div class="ob-title">configuración del perfil</div><div class="ob-sub">paso ${obStep+1} de ${steps.length}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div><div class="step-lbl">pregunta ${obStep+1}</div><div class="step-q">${s.q}</div>${inner}<div class="step-nav">${obStep>0?'<button class="btn btn-g" onclick="prevStep()">← atrás</button>':''}<button class="btn btn-p" id="nxt" onclick="nextStep()" ${s.type==='opts'?'disabled':''}>${obStep<steps.length-1?'continuar →':'iniciar →'}</button></div></div>`;appendRaw(html);if(s.type==='input')setTimeout(()=>document.getElementById('oi')?.focus(),80);scrollB()}
 function selOpt(btn,val){btn.closest('.opts').querySelectorAll('.opt').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');btn.dataset.val=val;document.getElementById('nxt').disabled=false}
-function nextStep(){const s=obSteps[obStep];let val=s.type==='input'?document.getElementById('oi')?.value?.trim():document.querySelector('#obc .opt.sel')?.dataset?.val;if(!val)return;mem[s.key]=val;document.getElementById('obc')?.remove();addUser(val);if(obStep<obSteps.length-1){obStep++;setTimeout(renderOb,250)}else{updateMem();finishOb()}}
+function nextStep(){const steps=getObSteps();const s=steps[obStep];let val=s.type==='input'?document.getElementById('oi')?.value?.trim():document.querySelector('#obc .opt.sel')?.dataset?.val;if(!val)return;mem[s.key]=val;document.getElementById('obc')?.remove();addUser(val);if(obStep<steps.length-1){obStep++;setTimeout(renderOb,250)}else{updateMem();finishOb()}}
 function prevStep(){if(obStep>0){document.getElementById('obc')?.remove();obStep--;renderOb()}}
 function finishOb(){finishObWithAccountSave()}
 function mapStage(e){if(!e)return'sin definir';if(e.includes('cero'))return'día 1 — configuración';if(e.includes('menos de 1'))return'primera semana';if(e.includes('1–3'))return'meses 1–3';return'cuenta madura (+3 meses)'}
@@ -2514,13 +2653,15 @@ document.addEventListener('click',function(e){
 });
 function qSend(txt){if(!onDone||loading)return;showView('chat');document.getElementById('cin').value=txt;sendMsg()}
 function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuración del Día 1 de mi cuenta de Google Ads. Dime exactamente qué hacer primero.',semana:'Estoy en la primera semana de mi campaña. ¿Qué debería estar revisando ahora mismo y qué es lo más importante?',quincena:'Estoy terminando la primera quincena. ¿Cuáles son las optimizaciones más importantes que debo hacer ahora?',mes:'Se cumple el primer mes de mi campaña. ¿Qué métricas debo analizar y qué decisiones estratégicas debo tomar?',trimestre:'Llevo 2-3 meses con mi campaña. ¿Cómo escalo lo que está funcionando y qué nuevas campañas debería explorar?',semestre:'Tengo 6 meses de historial. Ayúdame a planificar el siguiente semestre y dame recomendaciones de cuenta madura.'};qSend(msgs[stage]||'Guíame en esta etapa de mi cuenta.')}
-async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales'};
+async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales','consultor':'Consultor de Marketing'};
 // Seleccionar system prompt según agente activo
 let sys;
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='seo'){
   sys=SYSTEM_SEO.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else if(currentAgentCtx==='consultor'){
+  sys=SYSTEM_CONSULTOR.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
@@ -2648,9 +2789,9 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'google-ads':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social'};openAgent(map[key]||key);}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'google-ads':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};openAgent(map[key]||key);}}
 let currentAgentCtx='google-ads';
-function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);}
+function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);}
 function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente se mantendrá guardado.')){hist=[];document.getElementById('chat-area').innerHTML='';addAgent(`nueva sesión iniciada. tu perfil está cargado:\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`)}}
 
 // DOM
@@ -2674,7 +2815,7 @@ function fmt(t){return esc(t).replace(/### (.*?)(\n|$)/g,'<h4>$1</h4>').replace(
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}}
 function autoR(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
-// Abrir Google Ads por defecto
+// Abrir home por defecto — sin expandir ningún agente en sidebar
 document.addEventListener('DOMContentLoaded',()=>{
   // Cerrar sidebar al hacer click en item (mobile)
   document.querySelectorAll('.sb-item').forEach(item => {
@@ -2689,16 +2830,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       }
     });
   });
-  const ga=document.getElementById('ag-ga');
-  const chev=document.getElementById('chev-ga');
-  if(ga)ga.classList.remove('sb-collapsed');
-  if(chev)chev.classList.add('open');
-  // Resaltar header de Google Ads
-  const gaHeader=null; // skip
-  if(gaHeader)gaHeader.classList.add('open');
-  // Activar primer item
-  const firstItem=ga?.querySelector('.sb-item');
-  if(firstItem)firstItem.classList.add('active');
+  // No expandir ningún agente automáticamente — el sidebar inicia compacto
 });
 
 // ── ROADMAP PANEL ──
