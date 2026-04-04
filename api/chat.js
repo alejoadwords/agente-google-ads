@@ -53,7 +53,6 @@ export default async function handler(req) {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'messages-2023-12-15',
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
@@ -66,11 +65,14 @@ export default async function handler(req) {
 
   if (!claudeRes.ok) {
     const err = await claudeRes.text();
+    console.error('Anthropic error:', claudeRes.status, err);
     return new Response(err, {
       status: claudeRes.status,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
+
+  console.log('Anthropic stream started, status:', claudeRes.status);
 
   // Transformar el stream SSE de Anthropic en un stream de texto acumulado,
   // y al final emitir el JSON completo que el frontend espera
