@@ -798,14 +798,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div class="chat-area" id="chat-area"></div>
 
     <div class="cin-area">
-      <div class="qa" id="qa">
-        <button class="qb" onclick="qSend('Keyword research para mi negocio')">keywords</button>
-        <button class="qb" onclick="qSend('Crear anuncios RSA')">crear rsa</button>
-        <button class="qb" onclick="qSend('Presupuesto recomendado')">presupuesto</button>
-        <button class="qb" onclick="qSend('Estructura de campaña completa')">campaña</button>
-        <button class="qb" onclick="qSend('¿Qué debo revisar hoy en mi cuenta?')">¿qué revisar hoy?</button>
-        <button class="qb" onclick="qSend('Analizar competencia')">competencia</button>
-      </div>
+      <div class="qa" id="qa"></div>
       <input type="file" id="img-file" accept="image/*" style="display:none" onchange="handleImgSelect(this)">
       <div id="chat-input-area">
         <div class="cin-wrap">
@@ -2703,63 +2696,7 @@ if(currentAgentCtx==='meta-ads'){
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
-if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}
-const headers={'Content-Type':'application/json'};
-if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;
-try{
-  const payload={messages:hist,system:sys,userPlan};
-  const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});
-  if(!r.ok){
-    const errData=await r.json().catch(()=>({}));
-    rmThinking(tid);
-    if(r.status===401){window.location.href='/login.html';return}
-    if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}
-    addAgent('error al procesar la respuesta. intenta de nuevo.');
-    loading=false;document.getElementById('sbtn').disabled=false;return;
-  }
-  // Leer stream SSE
-  rmThinking(tid);
-  const reader=r.body.getReader();
-  const dec=new TextDecoder();
-  let reply='';
-  let streamBubble=null;
-  let buf='';
-  while(true){
-    const {done,value}=await reader.read();
-    if(done)break;
-    buf+=dec.decode(value,{stream:true});
-    const lines=buf.split('\n');
-    buf=lines.pop();
-    for(const line of lines){
-      if(!line.startsWith('data: '))continue;
-      const data=line.slice(6).trim();
-      if(!data||data==='[DONE]')continue;
-      try{
-        const evt=JSON.parse(data);
-        if(evt.error){addAgent('error: '+evt.error);loading=false;document.getElementById('sbtn').disabled=false;return;}
-        if(evt.delta){
-          reply+=evt.delta;
-          // Mostrar burbuja de streaming
-          if(!streamBubble){
-            const el=document.createElement('div');el.className='msg';
-            el.innerHTML=`<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="bubble ag-bubble stream-bubble"></div>`;
-            document.getElementById('chat-area').appendChild(el);
-            streamBubble=el.querySelector('.stream-bubble');
-          }
-          streamBubble.innerHTML=fmt(reply);
-          scrollB();
-        }
-        if(evt.done){reply=evt.content?.[0]?.text||reply;}
-      }catch{}
-    }
-  }
-  // Si el stream terminó sin texto, es un error del servidor
-  if(!reply){
-    console.error('Stream vacío — posible error en chat.js');
-    addAgent('error al procesar la respuesta. intenta de nuevo.');
-    loading=false;document.getElementById('sbtn').disabled=false;return;
-  }
-  let replyFinal=reply;
+if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();rmThinking(tid);if(!r.ok){if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}let streamBubble=null;let replyFinal=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';
     // Detectar bloque GAQL (Google Ads)
     const gaqlMatch = replyFinal.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
     if(gaqlMatch){
@@ -2885,7 +2822,22 @@ function closeSidebar() {
 }
 function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'google-ads':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};openAgent(map[key]||key);}}
 let currentAgentCtx='google-ads';
-function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;if(showGuide)showAgentGuide(ctx);}
+function updateQaBar(ctx){
+  const QA={
+    'google-ads':[['keywords','Keyword research para mi negocio'],['crear rsa','Crear anuncios RSA'],['presupuesto','Presupuesto recomendado'],['campaña','Estructura de campaña completa'],['¿qué revisar hoy?','¿Qué debo revisar hoy en mi cuenta?'],['competencia','Analizar competencia']],
+    'meta-ads':[['crear anuncio','Crear un anuncio de Meta Ads para mi negocio'],['presupuesto','Presupuesto recomendado para Meta Ads'],['audiencias','Cómo definir audiencias en Meta Ads'],['creativos','Dame ideas de creativos para mis anuncios'],['analizar','Analizar rendimiento de mis campañas de Meta']],
+    'tiktok-ads':[['crear anuncio','Crear un anuncio para TikTok Ads'],['presupuesto','Presupuesto recomendado para TikTok'],['hooks','Dame ideas de hooks para mis videos'],['tendencias','Qué tendencias de TikTok puedo aprovechar']],
+    'linkedin-ads':[['crear anuncio','Crear un anuncio de LinkedIn Ads'],['presupuesto','Presupuesto recomendado para LinkedIn'],['audiencia B2B','Cómo segmentar audiencia B2B en LinkedIn'],['formatos','Qué formatos de anuncio funcionan mejor en LinkedIn']],
+    'seo':[['auditoría','Haz una auditoría SEO de mi sitio web'],['keywords','Estudio de palabras clave para mi negocio'],['contenido','Estrategia de contenido SEO para mi sitio'],['competencia','Analizar competencia SEO de mi negocio']],
+    'social':[['parrilla','Crear parrilla de contenido mensual'],['estudio de marca','Estudio de marca para mis redes sociales'],['ideas','Dame ideas de contenido para esta semana'],['formatos','Qué formatos funcionan mejor en redes']],
+    'consultor':[['diagnóstico','Analiza mi situación de marketing y dime qué canales priorizar'],['presupuesto','Cómo distribuir mi presupuesto de marketing'],['plan 90 días','Crea un plan de marketing para los próximos 90 días'],['métricas','Qué métricas debo medir en mi marketing']]
+  };
+  const bar=document.getElementById('qa');
+  if(!bar)return;
+  const items=QA[ctx]||QA['google-ads'];
+  bar.innerHTML=items.map(([label,prompt])=>`<button class="qb" onclick="qSend('${prompt.replace(/'/g,"\\'")}')"> ${label}</button>`).join('');
+}
+function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;updateQaBar(ctx);if(showGuide)showAgentGuide(ctx);}
 function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente se mantendrá guardado.')){hist=[];document.getElementById('chat-area').innerHTML='';addAgent(`nueva sesión iniciada. tu perfil está cargado:\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`)}}
 
 // DOM
