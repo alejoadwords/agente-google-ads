@@ -1920,6 +1920,18 @@ const SYSTEM_GUIDES = AGENT_GUIDES;
 
 function showAgentGuide(agentKey) { openAgent(agentKey); }
 
+// Genera clave de localStorage con userId para aislar perfiles por usuario
+function getProfileKey(agentKey) {
+  const uid = clerkInstance?.user?.id || 'anon';
+  if (agentKey === 'meta-ads') {
+    return adsActiveAccount ? `acuarius_profile_${uid}_${adsActiveAccount.id}_meta` : `acuarius_profile_${uid}_meta`;
+  }
+  if (adsActiveAccount && agentKey === 'google-ads') {
+    return `acuarius_profile_${uid}_${adsActiveAccount.id}_${agentKey}`;
+  }
+  return `acuarius_profile_${uid}_${agentKey}`;
+}
+
 // Abre un agente: carga perfil si existe, lanza onboarding si no
 function openAgent(agentKey) {
   setAgentContext(agentKey);
@@ -1941,10 +1953,7 @@ function openAgent(agentKey) {
   area.innerHTML = '';
   hist = [];
 
-  // Clave de perfil: para Meta Ads usar clave específica
-  const profileKey = agentKey === 'meta-ads' ? 
-    (adsActiveAccount ? `acuarius_profile_${adsActiveAccount.id}_meta` : 'acuarius_profile_meta') :
-    (typeof adsActiveAccount !== 'undefined' && adsActiveAccount ? `acuarius_profile_${adsActiveAccount.id}_${agentKey}` : `acuarius_profile_${agentKey}`);
+  const profileKey = getProfileKey(agentKey);
 
   const savedProfile = localStorage.getItem(profileKey);
 
@@ -2471,9 +2480,7 @@ function continueWithAgent(agentKey) {
   onDone = true; // no lanzar onboarding
 
   // Cargar perfil si existe
-  const profileKey = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount)
-    ? `acuarius_profile_${adsActiveAccount.id}_${agentKey}`
-    : `acuarius_profile_${agentKey}`;
+  const profileKey = getProfileKey(agentKey);
   const savedProfile = localStorage.getItem(profileKey);
   if (savedProfile) {
     try {
@@ -3743,7 +3750,7 @@ function selectMetaAccount(accountId) {
   renderMetaAccountSelector();
   closeSettings();
   setTimeout(() => {
-    const profileKey = `acuarius_profile_meta_${acc.id}`;
+    const profileKey = `acuarius_profile_${clerkInstance?.user?.id||'anon'}_meta_${acc.id}`;
     const saved = localStorage.getItem(profileKey);
     if (saved) {
       try {
@@ -4008,7 +4015,7 @@ function selectAdsAccount(accountId) {
   renderAccountSelector(); // re-render para marcar el activo
 
   // Verificar si esta cuenta tiene perfil guardado
-  const profileKey = `acuarius_profile_${acc.id}`;
+  const profileKey = `acuarius_profile_${clerkInstance?.user?.id||'anon'}_${acc.id}`;
   const savedProfile = localStorage.getItem(profileKey);
 
   // Notificar al agente del cambio de cuenta
@@ -4057,9 +4064,7 @@ function startNewAccountOnboarding(acc) {
 const _origFinishOb = window.finishOb;
 function finishObWithAccountSave() {
   // Guardar perfil
-  const profileKey = currentAgentCtx === 'meta-ads'
-    ? (adsActiveAccount ? `acuarius_profile_${adsActiveAccount.id}_meta` : 'acuarius_profile_meta')
-    : (adsActiveAccount ? `acuarius_profile_${adsActiveAccount.id}_${currentAgentCtx}` : `acuarius_profile_${currentAgentCtx}`);
+  const profileKey = getProfileKey(currentAgentCtx);
   localStorage.setItem(profileKey, JSON.stringify(mem));
 
   onDone = true;
