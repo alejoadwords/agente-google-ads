@@ -85,6 +85,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @media(max-width:640px){.home-agents{grid-template-columns:repeat(2,1fr)}}
 .home-agent-card{border:1.5px solid var(--border);border-radius:var(--rlg);padding:18px 16px;cursor:pointer;transition:all .15s;background:var(--bg)}
 .home-agent-card:hover{border-color:var(--blue-md);background:var(--blue-lt);transform:translateY(-2px);box-shadow:0 6px 16px rgba(30,43,204,.08)}
+.next-steps-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-width:520px}
+@media(max-width:500px){.next-steps-grid{grid-template-columns:1fr}}
+.next-step-card{border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--bg);transition:all .15s}
+.next-step-card:hover{border-color:var(--blue-md);background:var(--blue-lt);transform:translateY(-1px)}
+.next-step-icon{font-size:20px;margin-bottom:7px}
+.next-step-title{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:4px}
+.next-step-desc{font-size:11.5px;color:var(--muted2);line-height:1.45}
 .home-agent-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
 .home-agent-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
 .home-agent-desc{font-size:11px;color:var(--muted);line-height:1.4}
@@ -496,7 +503,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <span class="sb-agent-name">Google Ads</span>
       <svg class="sb-chevron" id="chev-ga" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
-    <div class="sb-agent-items" id="ag-ga">
+    <div class="sb-agent-items sb-collapsed" id="ag-ga">
       <div class="sb-item active" onclick="switchSb(this);setAgentContext('google-ads');showView('roadmap')">
         <div class="sb-icon-sm"></div>hoja de ruta
       </div>
@@ -1918,6 +1925,18 @@ function openAgent(agentKey) {
   setAgentContext(agentKey);
   showView('chat');
 
+  // Sincronizar sidebar: colapsar todos, expandir el activo
+  const keyMap = {'google-ads':'ga','meta-ads':'meta','tiktok-ads':'tiktok','linkedin-ads':'linkedin','seo':'seo','social':'social','consultor':'consultor'};
+  const sbKey = keyMap[agentKey];
+  document.querySelectorAll('.sb-agent-items').forEach(el => el.classList.add('sb-collapsed'));
+  document.querySelectorAll('.sb-chevron').forEach(el => el.classList.remove('open'));
+  if (sbKey) {
+    const items = document.getElementById('ag-' + sbKey);
+    const chev  = document.getElementById('chev-' + sbKey);
+    if (items) items.classList.remove('sb-collapsed');
+    if (chev)  chev.classList.add('open');
+  }
+
   const area = document.getElementById('chat-area');
   area.innerHTML = '';
   hist = [];
@@ -2251,31 +2270,40 @@ REGLAS:
 
 const SYSTEM_CONSULTOR = `Eres el Consultor de Marketing Digital de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un CMO (Chief Marketing Officer) externo con más de 10 años de experiencia ayudando empresas de Colombia, México, Argentina, Chile y toda la región a crecer de forma rentable.
 
-Tu diferencial frente a los otros agentes de Acuarius: piensas en el negocio completo, no en un canal específico. No tienes sesgos hacia Google Ads, Meta, SEO ni ninguna plataforma. Tu trabajo es ayudar al cliente a tomar las mejores decisiones estratégicas de marketing para su situación específica.
+Tu diferencial: piensas en el negocio completo, no en un canal específico. No tienes sesgos hacia Google Ads, Meta, SEO ni ninguna plataforma. Tu trabajo es ayudar al cliente a tomar las mejores decisiones de marketing para su situación específica.
 
 PERFIL DEL CLIENTE:
 {MEMORY}
 
 ETAPA DEL CLIENTE: {STAGE}
 
-CAPACIDADES CLAVE:
-– **Estrategia integral**: plan de marketing 360° con canales priorizados, presupuesto asignado y cronograma de implementación
-– **Diagnóstico de canales**: análisis de qué plataformas convienen para el negocio y cuáles no (con justificación)
-– **Distribución de presupuesto**: cómo repartir la inversión entre canales para maximizar ROI según etapa del negocio
-– **Medición y KPIs**: qué métricas seguir, cómo leer los datos y qué decisiones tomar con ellos
-– **Stack de herramientas**: qué herramientas de marketing necesita el negocio y cuáles son prescindibles
-– **Benchmarks LatAm**: CPCs, CPMs, tasas de conversión y ROAS reales para la región
+PRINCIPIO FUNDAMENTAL — LENGUAJE ACCESIBLE:
+Muchos de tus usuarios NO son expertos en marketing. Escribe como si le explicaras a un dueño de negocio inteligente pero sin formación técnica:
+– Evita jerga innecesaria. Si debes usar un término técnico (ROAS, CPM, funnel), explícalo en una frase simple la primera vez
+– Sé concreto: en vez de "optimiza tu presupuesto", di "de tus $500, pon $300 en Meta Ads y $200 en SEO porque..."
+– Usa ejemplos del mundo real de LatAm cuando sea posible
+– Prefiere listas cortas y accionables sobre párrafos largos teóricos
 
-REGLAS DE RESPUESTA:
-– Habla siempre en español, de forma directa y sin rodeos
-– Sé el consultor que dice la verdad aunque no sea lo que el cliente quiere escubrir: si su idea no es viable, dilo con datos
-– Usa **negrita** para cifras, conceptos clave y recomendaciones principales
-– Usa ### para secciones en respuestas largas
-– Usa – para listas
-– Siempre termina con un siguiente paso concreto y accionable
-– Si el cliente pregunta sobre algo muy específico de una plataforma (configurar una campaña, optimizar un anuncio, etc.), oriéntalo brevemente y sugiere que use el agente especializado correspondiente
+CAPACIDADES:
+– Estrategia integral: plan de marketing con canales priorizados, presupuesto asignado y próximos pasos
+– Diagnóstico: qué plataformas usar y cuáles no (con justificación clara)
+– Presupuesto: cómo repartir la inversión entre canales según etapa del negocio
+– Métricas: qué números mirar y qué significan en términos simples
+– Herramientas: qué necesita el negocio y qué es prescindible
+– Benchmarks LatAm: referencias reales de costos y resultados en la región
+
+FORMATO DE RESPUESTA:
+– Responde siempre en español
+– Para respuestas largas: usa ### para secciones y – para listas
+– Para respuestas cortas o conversacionales: párrafos directos, sin headers
+– Usa **negrita** para cifras importantes y recomendaciones clave
+– Termina siempre con un siguiente paso concreto, específico y fácil de ejecutar
+– Longitud ideal: suficiente para ser útil, nunca más larga de lo necesario
+
+LÍMITES:
+– Si preguntan sobre configuración técnica muy específica de una plataforma, da orientación general y sugiere el agente especializado
 – Nunca menciones que eres IA ni que tienes limitaciones
-– Adapta todo al contexto de LatAm: presupuestos en USD/COP/MXN, benchmarks regionales, comportamiento del consumidor local`;
+– Adapta al contexto LatAm: presupuestos, comportamiento del consumidor, plataformas más usadas en la región`;
 
  // historial del chat general
 let homeLoading = false;
@@ -4062,31 +4090,34 @@ function finishObWithAccountSave() {
   if (currentAgentCtx === 'consultor') {
     setTimeout(() => {
       const pasos = [
-        { icon: '🗺️', titulo: 'Diagnóstico de canales', desc: 'Analizo tu situación y te digo exactamente en qué plataformas invertir según tu negocio y presupuesto.', prompt: 'Analiza mi situación de marketing digital y dime qué canales debo priorizar para mi negocio' },
-        { icon: '💰', titulo: 'Distribución de presupuesto', desc: 'Te muestro cómo repartir tu inversión entre canales para maximizar resultados desde el primer mes.', prompt: 'Ayúdame a definir cómo distribuir mi presupuesto de marketing digital entre los mejores canales para mi negocio' },
-        { icon: '📋', titulo: 'Plan de marketing 90 días', desc: 'Un plan concreto con acciones semana a semana para los próximos 3 meses.', prompt: 'Crea un plan de marketing digital para los próximos 90 días adaptado a mi negocio y presupuesto' },
-        { icon: '📊', titulo: 'Métricas que debo medir', desc: 'Te explico qué KPIs seguir y cómo saber si tu marketing está funcionando.', prompt: 'Explícame qué métricas debo medir en mi marketing digital y cómo interpretarlas' },
+        { icon: '🗺️', titulo: 'Diagnóstico de canales', desc: '¿Dónde deberías invertir tu presupuesto? Te digo exactamente qué plataformas usar y cuáles evitar.', prompt: 'Analiza mi situación de marketing digital y dime qué canales debo priorizar para mi negocio' },
+        { icon: '💰', titulo: 'Distribución de presupuesto', desc: 'Cómo repartir tu dinero entre canales para conseguir el máximo resultado desde el primer mes.', prompt: 'Ayúdame a definir cómo distribuir mi presupuesto de marketing digital entre los mejores canales para mi negocio' },
+        { icon: '📋', titulo: 'Plan de 90 días', desc: 'Un plan concreto con acciones semanales para los próximos 3 meses, adaptado a tu presupuesto.', prompt: 'Crea un plan de marketing digital para los próximos 90 días para mi negocio' },
+        { icon: '📊', titulo: 'Métricas que importan', desc: 'Qué números seguir y cómo saber si tu marketing está funcionando o no.', prompt: 'Explícame qué métricas debo medir en mi marketing digital y cómo interpretarlas' },
       ];
 
       const cards = pasos.map(p => `
-        <div onclick="document.getElementById('obc-steps')?.remove();qSend('${p.prompt.replace(/'/g,"\\'")}');"
-          style="flex:1;min-width:200px;max-width:260px;border:1.5px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;background:var(--bg);transition:all .15s"
-          onmouseover="this.style.borderColor='var(--blue-md)';this.style.background='var(--blue-lt)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg)'">
-          <div style="font-size:22px;margin-bottom:8px">${p.icon}</div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">${p.titulo}</div>
-          <div style="font-size:11.5px;color:var(--muted2);line-height:1.45">${p.desc}</div>
+        <div class="next-step-card" onclick="document.getElementById('obc-steps')?.remove();qSend('${p.prompt.replace(/'/g,"\\'")}');">
+          <div class="next-step-icon">${p.icon}</div>
+          <div class="next-step-title">${p.titulo}</div>
+          <div class="next-step-desc">${p.desc}</div>
         </div>`).join('');
 
       const el = document.createElement('div');
       el.id = 'obc-steps';
+      el.style.cssText = 'display:flex;gap:10px;align-items:flex-start;margin-top:4px';
       el.innerHTML = `
-        <div style="display:flex;gap:10px;align-items:flex-start;margin-top:4px">
-          <div style="width:28px;flex-shrink:0"></div>
-          <div style="max-width:680px">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">¿por dónde quieres empezar?</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>
-          </div>
+        <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" style="width:28px;height:28px">
+            <rect width="75" height="75" fill="#1E2BCC" rx="8"/>
+            <path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/>
+            <path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/>
+            <circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/>
+          </svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--muted2);margin-bottom:10px">¿por dónde quieres empezar?</div>
+          <div class="next-steps-grid">${cards}</div>
         </div>`;
       document.getElementById('chat-area').appendChild(el);
       scrollB();
