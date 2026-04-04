@@ -1,13 +1,6 @@
 {
-  "outputDirectory": "public",
-  "headers": [
-    {
-      "source": "/api/admin/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "https://admin.acuarius.app" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type,x-admin-secret,Cache-Control,Pragma" }
-      ]
-    }
+  "rewrites": [
+    { "source": "/sso-callback", "destination": "/sso-callback.html" },
+    { "source": "/sso-callback/(.*)", "destination": "/sso-callback.html" }
   ]
 }
