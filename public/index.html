@@ -2753,7 +2753,13 @@ try{
       }catch{}
     }
   }
-  let replyFinal=reply||'error al procesar la respuesta. intenta de nuevo.';
+  // Si el stream terminó sin texto, es un error del servidor
+  if(!reply){
+    console.error('Stream vacío — posible error en chat.js');
+    addAgent('error al procesar la respuesta. intenta de nuevo.');
+    loading=false;document.getElementById('sbtn').disabled=false;return;
+  }
+  let replyFinal=reply;
     // Detectar bloque GAQL (Google Ads)
     const gaqlMatch = replyFinal.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
     if(gaqlMatch){
