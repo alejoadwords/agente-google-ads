@@ -678,28 +678,30 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     </div>
 
     <!-- Contenido para redes -->
-    <div class="sb-agent-header" onclick="showComingSoon('social')" style="opacity:.7">
+    <div class="sb-agent-header" onclick="toggleAgent('social')">
       <div class="sb-agent-icon" style="background:#FFFBEB;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
       <span class="sb-agent-name">Contenido para Redes</span>
-      <span style="font-size:9px;font-weight:600;background:#F3F4F6;color:#9CA3AF;padding:2px 7px;border-radius:10px;margin-left:auto;margin-right:4px;white-space:nowrap">Pronto</span>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-social">
       <div class="sb-item sb-roadmap" onclick="switchSb(this);openRoadmap()">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         hoja de ruta
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Hacer un estudio de marca completo para definir la identidad digital de mi negocio en redes sociales')">
-        <div class="sb-icon-sm"></div>estudio de marca
+      <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia y en cuáles no.')">
+        <div class="sb-icon-sm"></div>diagnóstico de redes
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Crear una parrilla de contenido mensual para mis redes sociales')">
-        <div class="sb-icon-sm"></div>planeación de contenido
+      <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea una parrilla de contenido completa para el próximo mes: semana a semana, con red, formato, tema e idea concreta para cada publicación.')">
+        <div class="sb-icon-sm"></div>parrilla mensual
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planificar y estructurar la publicación de contenido en mis redes sociales')">
-        <div class="sb-icon-sm"></div>publicación de contenido
+      <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea una estrategia de contenido completa para mi negocio: pilares temáticos, voz de marca, tipos de contenido y frecuencia recomendada por red.')">
+        <div class="sb-icon-sm"></div>estrategia de contenido
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mi contenido en redes sociales y dame recomendaciones')">
+      <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea copys y guiones listos para publicar: posts para feed, guiones para reels/TikTok y textos para stories.')">
+        <div class="sb-icon-sm"></div>copys y guiones
+      </div>
+      <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Ayúdame a entender qué métricas debo revisar en mis redes sociales y qué acciones tomar para mejorar mis resultados.')">
         <div class="sb-icon-sm"></div>análisis de rendimiento
       </div>
     </div>
@@ -778,11 +780,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <div class="home-agent-name">SEO</div>
           <div class="home-agent-desc">Posicionamiento orgánico en Google</div>
         </div>
-        <div class="home-agent-card coming-soon-card" onclick="showComingSoon('social')">
-          <div class="cs-badge">Próximamente</div>
-          <div class="home-agent-icon" style="background:#FFFBEB;opacity:.6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg></div>
-          <div class="home-agent-name" style="opacity:.6">Contenido</div>
-          <div class="home-agent-desc" style="opacity:.6">Contenido estratégico para redes sociales</div>
+        <div class="home-agent-card" onclick="openAgent('social')">
+          <div class="home-agent-icon" style="background:#FFFBEB"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <div class="home-agent-name">Contenido</div>
+          <div class="home-agent-desc">Contenido estratégico para redes sociales</div>
         </div>
       </div>
       <div class="home-or">o escribe directamente</div>
@@ -1749,6 +1750,15 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu objetivo principal de negocio ahora?',key:'objetivo',type:'opts',opts:['Conseguir más clientes / leads','Aumentar ventas online','Fortalecer la marca','Escalar a nuevos mercados','Reducir costo de adquisición']},
     {q:'¿En qué canales de marketing estás activo actualmente?',key:'canales',type:'multi',opts:['Ninguno todavía','Redes sociales orgánicas','Google Ads','Meta Ads (Facebook/Instagram)','TikTok','SEO','Email marketing','WhatsApp Business']},
     {q:'¿Cuál es tu mayor reto en marketing hoy?',key:'desafio',type:'opts',opts:['No sé por dónde empezar','Tengo canales pero no dan resultados','No sé cómo distribuir el presupuesto','Quiero escalar pero sin desperdiciar dinero','Necesito medir mejor mis resultados']}
+  ],
+  'social': [
+    {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Tienda · www.mitienda.com',key:'negocio',type:'input'},
+    {q:'¿En qué industria opera tu negocio?',key:'industria',type:'opts',opts:['E-commerce / Retail','Servicios profesionales','Salud / Bienestar','Educación / Cursos','Tecnología / SaaS','Inmobiliaria','Restaurantes / Food','Otro sector']},
+    {q:'¿Quién es tu cliente ideal?',ph:'Ej: Mujeres 25-40 años, Colombia, interesadas en moda sostenible',key:'audiencia',type:'input'},
+    {q:'¿Cuál es tu objetivo principal en redes sociales?',key:'objetivo',type:'opts',opts:['Atraer nuevos clientes','Construir comunidad y engagement','Posicionar mi marca','Vender directamente desde redes','Generar tráfico a mi web']},
+    {q:'¿En qué redes sociales tienes presencia actualmente?',key:'redes_actuales',type:'multi',opts:['Ninguna todavía','Instagram','Facebook','TikTok','LinkedIn','YouTube','X (Twitter)','Pinterest']},
+    {q:'¿Con qué frecuencia publicas contenido actualmente?',key:'frecuencia',type:'opts',opts:['No publico nada aún','Menos de 1 vez por semana','1-2 veces por semana','3-5 veces por semana','Diariamente']},
+    {q:'¿Tienes equipo o recursos para crear contenido?',key:'recursos',type:'opts',opts:['Solo yo, con el celular','Tengo diseñador o editor','Tengo agencia o community manager','Tengo presupuesto para contratar']}
   ]
 };
 
@@ -1890,13 +1900,14 @@ antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — qued
 
   'social': `hola, soy tu **agente de contenido para redes sociales** en acuarius.
 
-estoy aquí para ayudarte a construir una presencia sólida en redes sociales con contenido estratégico que conecte con tu audiencia y genere comunidad. esto es lo que puedo hacer por ti:
+mi trabajo es ayudarte a construir una estrategia de contenido real — no genérica. empezamos identificando en qué redes debes estar (y en cuáles no), definimos tu voz y tu parrilla, y te dejo con un plan listo para publicar.
 
 ### lo que puedo hacer por ti
-– **estudio de marca** — definición de voz, tono, valores y personalidad digital de tu marca
-– **planeación de contenido** — parrilla mensual con temas, formatos y fechas de publicación
-– **publicación de contenido** — estructura y guía para publicar de forma consistente y estratégica
-– **análisis de rendimiento** — interpretación de métricas y recomendaciones para mejorar
+– **diagnóstico de redes** — te digo exactamente en qué plataformas debe estar tu negocio y por qué
+– **estrategia de contenido** — pilares, formatos, tono de marca y calendario editorial personalizado
+– **parrilla mensual** — plan de publicación semana a semana con temas e ideas de contenido
+– **guiones y copys** — textos listos para reels, carruseles, stories y posts
+– **análisis de rendimiento** — qué métricas importan y cómo mejorar basado en datos
 
 antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
@@ -2275,6 +2286,144 @@ REGLAS:
   [AGENTE_SUGERIDO: google-ads] o [AGENTE_SUGERIDO: meta-ads] o [AGENTE_SUGERIDO: tiktok-ads] o [AGENTE_SUGERIDO: linkedin-ads] o [AGENTE_SUGERIDO: seo] o [AGENTE_SUGERIDO: social]
 – Si la pregunta es general o cubre varias plataformas, NO incluyas [AGENTE_SUGERIDO]
 – Nunca menciones que eres un agente de IA ni que tienes limitaciones`;
+
+const SYSTEM_SOCIAL = `Eres el agente de Contenido para Redes Sociales de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un estratega de contenido digital senior con más de 10 años de experiencia construyendo marcas en Instagram, TikTok, Facebook, LinkedIn y YouTube en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, creativo y práctico.
+
+PERFIL DEL CLIENTE:
+{MEMORY}
+
+ETAPA ACTUAL: {STAGE}
+
+════════════════════════════════════════
+PRINCIPIO FUNDAMENTAL — DIAGNÓSTICO DE REDES
+════════════════════════════════════════
+
+Antes de crear cualquier contenido, debes diagnosticar en qué redes debe estar el negocio. NO todos los negocios deben estar en todas partes. Tu trabajo es recomendar con criterio:
+
+INSTAGRAM: Ideal para negocios visuales, lifestyle, moda, gastronomía, salud, educación, servicios creativos. Audiencia 18-45 años. Formatos clave: Reels, Stories, Carruseles.
+TIKTOK: Ideal para marcas que apuntan a audiencia 15-35 años, productos de consumo, entretenimiento, educación informal, negocios dispuestos a invertir en video. Alto alcance orgánico.
+FACEBOOK: Ideal para negocios locales, audiencia 30-55 años, comunidades, servicios, retail. Mejor para anuncios que para orgánico. Grupos son clave.
+LINKEDIN: Exclusivo para B2B, servicios profesionales, tecnología, consultoría, educación ejecutiva, reclutamiento. Audiencia profesional.
+YOUTUBE: Ideal para contenido educativo largo, tutoriales, reviews, marcas con presupuesto para video. Alto SEO. Requiere mayor producción.
+PINTEREST: Ideal para decoración, moda, recetas, bodas, DIY, productos visuales. Tráfico a web muy alto.
+X (TWITTER): Útil para tecnología, política, noticias, marcas con voz de opinión fuerte. Bajo alcance orgánico en LatAm.
+
+════════════════════════════════════════
+SKILL 1: DIAGNÓSTICO Y ESTRATEGIA DE REDES
+════════════════════════════════════════
+
+Al completar el onboarding, el agente SIEMPRE debe:
+
+1. DIAGNÓSTICO DE REDES: Analizar industria, audiencia, recursos y objetivo del cliente para recomendar 2-3 redes prioritarias con justificación clara. Indicar cuáles NO usar y por qué.
+
+2. PILARES DE CONTENIDO: Definir 3-4 pilares temáticos específicos para el negocio. Cada pilar = un territorio de contenido con propósito claro (educar, inspirar, vender, conectar).
+
+3. VOZ DE MARCA: Definir tono (formal/cercano/divertido/experto), estilo visual y lenguaje según la audiencia.
+
+Formato de diagnóstico recomendado:
+### tus redes prioritarias
+**[Red 1]** — [Razón específica para este negocio]
+**[Red 2]** — [Razón específica para este negocio]
+❌ **[Red a evitar]** — [Por qué no tiene sentido para su caso]
+
+════════════════════════════════════════
+SKILL 2: PARRILLA DE CONTENIDO MENSUAL
+════════════════════════════════════════
+
+La parrilla es el entregable principal del agente. Debe ser:
+– Específica: temas concretos, no genéricos ("5 errores al comprar ropa online" no "tips de moda")
+– Balanceada: mezcla de contenido educativo (40%), inspiracional (30%) y comercial (30%)
+– Ejecutable: adaptada a los recursos del cliente (solo celular, con diseñador, etc.)
+– Estructurada por semanas con día, formato, red y tema/idea central
+
+Formato de parrilla:
+| Semana | Día | Red | Formato | Tema / Idea |
+|--------|-----|-----|---------|-------------|
+
+Frecuencia recomendada según recursos:
+– Solo / celular: 3-4 posts/semana (Instagram + 1 red más)
+– Con diseñador: 5-7 posts/semana distribuidos en 2-3 redes
+– Con agencia: 7-10 posts/semana en 3-4 redes
+
+════════════════════════════════════════
+SKILL 3: FORMATOS Y TIPOS DE CONTENIDO
+════════════════════════════════════════
+
+REELS / TIKTOK VIDEO:
+– Duración ideal LatAm: 15-30s para entretenimiento, 30-60s para educativo
+– Estructura: Hook (0-3s) → Desarrollo (3-25s) → CTA (últimos 3s)
+– Hook efectivo: pregunta, dato sorprendente, situación relatable o promesa clara
+– Subtítulos siempre activados (85% ve sin sonido en LatAm)
+
+CARRUSEL (Instagram/LinkedIn):
+– 5-10 slides máximo
+– Slide 1: portada con promesa clara y visual atractivo
+– Slides 2-9: desarrollo con 1 idea por slide
+– Último slide: CTA + invitación a guardar/compartir
+– Funciona para: listas, tutoriales paso a paso, antes/después, comparativas
+
+STORIES:
+– Vida: 24 horas → contenido más casual y auténtico
+– Ideal para: detrás de cámaras, encuestas, preguntas, ofertas flash, testimonios
+– Frecuencia: 3-7 stories/día en marcas activas
+
+POST ESTÁTICO:
+– Valor en engagement (comentarios) sobre alcance
+– Útil para frases, anuncios, testimonios, celebraciones
+
+════════════════════════════════════════
+SKILL 4: COPYS Y GUIONES
+════════════════════════════════════════
+
+COPYS PARA POSTS (caption):
+– Primera línea = gancho (las primeras 2 líneas se ven antes del "ver más")
+– Estructura: Gancho → Desarrollo → CTA
+– Emojis: usar con moderación según tono de marca
+– Hashtags Instagram: 5-10 relevantes y específicos (no genéricos como #love)
+– Longitud: varía según formato — Stories corto, feed puede ser más largo
+
+GUIONES PARA REELS/TIKTOK:
+– Estructura: [HOOK] → [PUNTO 1] → [PUNTO 2] → [PUNTO 3] → [CTA]
+– Escribir como se habla, no como se escribe
+– Incluir indicaciones de tono, gestos o visuales clave si aplica
+
+════════════════════════════════════════
+SKILL 5: MÉTRICAS Y ANÁLISIS
+════════════════════════════════════════
+
+Métricas clave por objetivo:
+– Alcance y reconocimiento: impresiones, alcance, nuevos seguidores
+– Engagement y comunidad: tasa de engagement (likes+comentarios+guardados/alcance), guardados, compartidos
+– Tráfico: clics en bio, swipe-ups en stories, visitas al perfil
+– Ventas: mensajes directos, clics en tienda, conversiones
+
+Benchmarks LatAm 2025:
+– Tasa de engagement Instagram: >3% buena, >6% excelente
+– Tasa de engagement TikTok: >5% buena, >10% excelente
+– Alcance orgánico Instagram (feed): 10-20% de seguidores
+– Alcance orgánico TikTok: altísimo para cuentas nuevas con contenido de calidad
+
+════════════════════════════════════════
+OPCIONES DE BIENVENIDA POST-ONBOARDING
+════════════════════════════════════════
+
+Cuando el usuario complete el onboarding, SIEMPRE presenta estas opciones de forma clara y visual usando el bloque [SOCIAL_OPTIONS]. El agente NO debe simplemente hacer preguntas — debe mostrar opciones accionables.
+
+Usa este bloque exacto al finalizar el onboarding:
+[SOCIAL_OPTIONS]
+
+════════════════════════════════════════
+FORMATO DE RESPUESTA
+════════════════════════════════════════
+
+– Responde siempre en español, tono cercano y profesional
+– Para estrategias largas: usa ### para secciones principales
+– Para parrillas: usa tablas markdown
+– Para copys y guiones: usa bloques claramente separados
+– Usa **negrita** para recomendaciones clave y nombres de redes
+– Termina siempre con un siguiente paso concreto
+– Nunca menciones que eres IA ni que tienes limitaciones
+– Adapta todo al contexto LatAm: plataformas preferidas, horarios de publicación, tendencias locales`;
 
 const SYSTEM_CONSULTOR = `Eres el Consultor de Marketing Digital de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un CMO (Chief Marketing Officer) externo con más de 10 años de experiencia ayudando empresas de Colombia, México, Argentina, Chile y toda la región a crecer de forma rentable.
 
@@ -2699,6 +2848,8 @@ if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_SEO.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='consultor'){
   sys=SYSTEM_CONSULTOR.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else if(currentAgentCtx==='social'){
+  sys=SYSTEM_SOCIAL.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
@@ -2743,6 +2894,13 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
           }
         }
       }
+    }
+    // Detectar opciones de bienvenida del agente Social
+    else if(replyFinal.includes('[SOCIAL_OPTIONS]')){
+      const cleanReply = replyFinal.replace(/\[SOCIAL_OPTIONS\]/g, '').trim();
+      if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
+      renderSocialOptions();
+      loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     // Detectar cuestionario de diseño
     else if(replyFinal.includes('[DESIGN_QUESTIONNAIRE]')){
@@ -2800,6 +2958,63 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
       if(!streamBubble)addAgent(replyFinal);
     }
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
+function renderSocialOptions() {
+  const area = document.getElementById('chat-area');
+  if (!area) return;
+
+  const options = [
+    { icon: '🗺️', label: 'diagnóstico de redes', desc: '¿en qué redes debo estar?', prompt: 'Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia y en cuáles no. Justifica cada recomendación.' },
+    { icon: '📅', label: 'parrilla mensual', desc: 'plan de contenido para 4 semanas', prompt: 'Crea una parrilla de contenido completa para el próximo mes: semana a semana, con red, formato, tema e idea concreta para cada publicación.' },
+    { icon: '🎯', label: 'estrategia de contenido', desc: 'pilares, voz y calendario editorial', prompt: 'Crea una estrategia de contenido completa para mi negocio: pilares temáticos, voz de marca, tipos de contenido y frecuencia recomendada por red.' },
+    { icon: '✍️', label: 'copys y guiones', desc: 'textos listos para publicar', prompt: 'Crea copys y guiones listos para publicar: posts para feed, guiones para reels/TikTok y textos para stories. Adapta el tono a mi marca.' },
+    { icon: '📊', label: 'análisis de rendimiento', desc: 'qué medir y cómo mejorar', prompt: 'Ayúdame a entender qué métricas debo revisar en mis redes sociales, cómo interpretarlas y qué acciones concretas tomar para mejorar mis resultados.' },
+    { icon: '🔥', label: 'ideas de contenido viral', desc: 'tendencias y formatos con alto alcance', prompt: 'Dame ideas de contenido con alto potencial de alcance orgánico para mi negocio: tendencias actuales, formatos que están funcionando y ángulos creativos adaptados a mi industria.' },
+  ];
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:4px 0 8px 0;';
+
+  const intro = document.createElement('div');
+  intro.style.cssText = 'font-size:12px;color:var(--muted);margin-bottom:4px;';
+  intro.textContent = '¿por dónde empezamos?';
+  wrap.appendChild(intro);
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;';
+
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `
+      display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+      padding:11px 13px;border-radius:10px;border:1.5px solid var(--border);
+      background:var(--bg);cursor:pointer;text-align:left;
+      font-family:var(--font);transition:all .15s;width:100%;
+    `;
+    btn.innerHTML = `
+      <span style="font-size:16px;line-height:1">${opt.icon}</span>
+      <span style="font-size:12px;font-weight:600;color:var(--text);line-height:1.3">${opt.label}</span>
+      <span style="font-size:11px;color:var(--muted);line-height:1.3">${opt.desc}</span>
+    `;
+    btn.onmouseover = () => { btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; };
+    btn.onmouseout  = () => { btn.style.borderColor = 'var(--border)'; btn.style.background = 'var(--bg)'; };
+    btn.onclick = () => {
+      wrap.remove();
+      document.getElementById('cin').value = opt.prompt;
+      sendMsg();
+    };
+    grid.appendChild(btn);
+  });
+
+  wrap.appendChild(grid);
+
+  // Insertar en el chat como burbuja del agente
+  const bubble = document.createElement('div');
+  bubble.className = 'msg agent';
+  bubble.appendChild(wrap);
+  area.appendChild(bubble);
+  area.scrollTop = area.scrollHeight;
+}
+
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 // ROADMAP
@@ -4427,11 +4642,11 @@ async function queryGoogleAds(gaqlQuery) {
     <p id="csm-desc" style="font-size:14px;color:var(--muted2);line-height:1.65;margin-bottom:28px"></p>
     <div id="csm-features" style="background:var(--sidebar);border-radius:12px;padding:16px 20px;margin-bottom:28px;text-align:left"></div>
     <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">¿Quieres que te avisemos cuando esté listo?</p>
-    <a href="mailto:alejandro@acuarius.app?subject=Avísame cuando esté listo" style="display:block;background:var(--blue);color:white;border-radius:10px;padding:13px;font-size:14px;font-weight:600;text-decoration:none;transition:all .15s" onmouseover="this.style.background='var(--blue-dark)'" onmouseout="this.style.background='var(--blue)'">Avisarme cuando esté disponible →</a>
+    <a href="/cdn-cgi/l/email-protection#a7c6cbc2cdc6c9c3d5c8e7c6c4d2c6d5ced2d489c6d7d798d4d2c5cdc2c4d39ae6d1640ad4c6cac287c4d2c6c9c3c887c2d4d3640e87cbced4d3c8" style="display:block;background:var(--blue);color:white;border-radius:10px;padding:13px;font-size:14px;font-weight:600;text-decoration:none;transition:all .15s" onmouseover="this.style.background='var(--blue-dark)'" onmouseout="this.style.background='var(--blue)'">Avisarme cuando esté disponible →</a>
   </div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 const COMING_SOON_DATA = {
   'tiktok-ads': {
     icon: `<svg width="32" height="32" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1-.09z"/></svg>`,
@@ -4490,11 +4705,4 @@ function showComingSoon(agentKey) {
 }
 
 function closeComingSoon() {
-  document.getElementById('coming-soon-modal').style.display = 'none';
-  document.body.style.overflow = '';
-}
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeComingSoon(); });
-</script>
-</body>
-</html>
+  document.getElementById('coming-soon-
