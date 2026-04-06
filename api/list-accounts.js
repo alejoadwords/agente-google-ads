@@ -1,6 +1,12 @@
 // api/list-accounts.js
-// Recibe el access_token del frontend y devuelve las cuentas
-// accesibles bajo el MCC usando Google Ads API v18
+// Recibe el access_token del usuario y devuelve sus cuentas de Google Ads.
+// Funciona para cualquier usuario: cuentas individuales, MCC propios, o cuentas
+// a las que tienen acceso. No depende del MCC de Acuarius.
+//
+// Flujo:
+// 1. customers:listAccessibleCustomers  →  obtiene resource names del usuario
+// 2. Por cada customer obtiene detalles (nombre, moneda, etc.)
+// 3. Si alguna cuenta es MCC, expande sus sub-cuentas nivel 1
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,94 +20,167 @@ export default async function handler(req, res) {
   }
 
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  const mccId          = process.env.GOOGLE_ADS_MCC_ID; // "2432598177" sin guiones
 
-  if (!developerToken || !mccId) {
-    return res.status(500).json({ error: 'Variables de entorno de Google Ads no configuradas' });
+  if (!developerToken) {
+    return res.status(500).json({ error: 'GOOGLE_ADS_DEVELOPER_TOKEN no configurado' });
   }
 
-  // Limpiar MCC ID (quitar guiones si los tiene)
-  const cleanMccId = mccId.replace(/-/g, '');
-
   try {
-    // Query GAQL: listar todas las cuentas accesibles bajo el MCC
-    const query = `
-      SELECT
-        customer_client.client_customer,
-        customer_client.descriptive_name,
-        customer_client.currency_code,
-        customer_client.time_zone,
-        customer_client.manager,
-        customer_client.test_account,
-        customer_client.status,
-        customer_client.id
-      FROM customer_client
-      WHERE customer_client.level = 1
-        AND customer_client.status = 'ENABLED'
-    `;
-
-    const response = await fetch(
-      `https://googleads.googleapis.com/v18/customers/${cleanMccId}/googleAds:searchStream`,
+    // ── Paso 1: listar customers accesibles por este usuario ──────────────
+    const listRes = await fetch(
+      'https://googleads.googleapis.com/v18/customers:listAccessibleCustomers',
       {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Authorization':    `Bearer ${accessToken}`,
-          'developer-token':  developerToken,
-          'login-customer-id': cleanMccId,
-          'Content-Type':     'application/json',
+          'Authorization':   `Bearer ${accessToken}`,
+          'developer-token': developerToken,
         },
-        body: JSON.stringify({ query }),
       }
     );
 
-    // searchStream devuelve un array de objetos con resultados
-    const rawText = await response.text();
+    const listText = await listRes.text();
 
-    if (!response.ok) {
-      console.error('Google Ads list-accounts error:', rawText);
-
-      // Si el developer token está en Test Access, solo puede ver
-      // cuentas de prueba — informamos claramente
-      if (rawText.includes('DEVELOPER_TOKEN_NOT_APPROVED')) {
+    if (!listRes.ok) {
+      console.error('listAccessibleCustomers error:', listText);
+      if (listText.includes('DEVELOPER_TOKEN_NOT_APPROVED')) {
         return res.status(403).json({
           error: 'developer_token_not_approved',
-          message: 'El developer token aún está en Test Access. Solo puedes ver cuentas de prueba hasta que Google apruebe el acceso Basic.',
+          message: 'El developer token está en Test Access. Solo funciona con cuentas de prueba.',
         });
       }
-
-      return res.status(response.status).json({
-        error: 'Error en Google Ads API',
-        details: rawText,
+      return res.status(listRes.status).json({
+        error: 'Error listando cuentas de Google Ads',
+        details: listText,
       });
     }
 
-    // searchStream devuelve un JSON array (una respuesta por "página")
-    let parsed;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      return res.status(500).json({ error: 'Respuesta inesperada de Google Ads API' });
+    const listData = JSON.parse(listText);
+    const resourceNames = listData.resourceNames || [];
+
+    if (resourceNames.length === 0) {
+      return res.status(200).json({ accounts: [] });
     }
 
-    // Aplanar resultados (searchStream devuelve array de batches)
-    const rows = Array.isArray(parsed)
-      ? parsed.flatMap(batch => batch.results || [])
-      : (parsed.results || []);
+    // ── Paso 2: obtener detalles de cada cuenta ───────────────────────────
+    const accountDetails = await Promise.all(
+      resourceNames.map(async (resourceName) => {
+        const customerId = resourceName.split('/').pop();
+        try {
+          const detailRes = await fetch(
+            `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:search`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization':     `Bearer ${accessToken}`,
+                'developer-token':   developerToken,
+                'login-customer-id': customerId,
+                'Content-Type':      'application/json',
+              },
+              body: JSON.stringify({
+                query: `
+                  SELECT
+                    customer.id,
+                    customer.descriptive_name,
+                    customer.currency_code,
+                    customer.time_zone,
+                    customer.manager,
+                    customer.test_account,
+                    customer.status
+                  FROM customer
+                  LIMIT 1
+                `,
+              }),
+            }
+          );
+          if (!detailRes.ok) return null;
+          const detailData = await detailRes.json();
+          const row = detailData.results?.[0]?.customer;
+          if (!row) return null;
+          return {
+            id:        row.id?.toString() || customerId,
+            name:      row.descriptiveName || '(sin nombre)',
+            currency:  row.currencyCode || '',
+            timezone:  row.timeZone || '',
+            isManager: row.manager === true,
+            isTest:    row.testAccount === true,
+            status:    row.status || '',
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
 
-    const accounts = rows.map(row => {
-      const cc = row.customerClient;
-      return {
-        id:         cc.id?.toString() || cc.clientCustomer?.split('/').pop() || '',
-        name:       cc.descriptiveName || '(sin nombre)',
-        currency:   cc.currencyCode || '',
-        timezone:   cc.timeZone || '',
-        isManager:  cc.manager === true,
-        isTest:     cc.testAccount === true,
-        resourceName: cc.clientCustomer || '',
-      };
-    });
+    // Filtrar nulos y canceladas/suspendidas
+    let accounts = accountDetails.filter(
+      a => a && a.status !== 'CANCELED' && a.status !== 'SUSPENDED'
+    );
 
-    // Ordenar: primero no-manager, luego manager; dentro de cada grupo por nombre
+    // ── Paso 3: expandir sub-cuentas de MCCs ─────────────────────────────
+    const subAccountsArrays = await Promise.all(
+      accounts
+        .filter(a => a.isManager)
+        .map(async (mcc) => {
+          try {
+            const subRes = await fetch(
+              `https://googleads.googleapis.com/v18/customers/${mcc.id}/googleAds:search`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization':     `Bearer ${accessToken}`,
+                  'developer-token':   developerToken,
+                  'login-customer-id': mcc.id,
+                  'Content-Type':      'application/json',
+                },
+                body: JSON.stringify({
+                  query: `
+                    SELECT
+                      customer_client.id,
+                      customer_client.descriptive_name,
+                      customer_client.currency_code,
+                      customer_client.time_zone,
+                      customer_client.manager,
+                      customer_client.test_account,
+                      customer_client.status,
+                      customer_client.level
+                    FROM customer_client
+                    WHERE customer_client.level = 1
+                      AND customer_client.status = 'ENABLED'
+                  `,
+                }),
+              }
+            );
+            if (!subRes.ok) return [];
+            const subData = await subRes.json();
+            return (subData.results || []).map(row => {
+              const cc = row.customerClient;
+              return {
+                id:         cc.id?.toString() || '',
+                name:       cc.descriptiveName || '(sin nombre)',
+                currency:   cc.currencyCode || '',
+                timezone:   cc.timeZone || '',
+                isManager:  cc.manager === true,
+                isTest:     cc.testAccount === true,
+                parentMcc:  mcc.id,
+                parentName: mcc.name,
+              };
+            });
+          } catch {
+            return [];
+          }
+        })
+    );
+
+    // Agregar sub-cuentas que no estén ya en la lista
+    const existingIds = new Set(accounts.map(a => a.id));
+    for (const sub of subAccountsArrays.flat()) {
+      if (sub.id && !existingIds.has(sub.id)) {
+        accounts.push(sub);
+        existingIds.add(sub.id);
+      }
+    }
+
+    // Ordenar: cuentas normales primero, MCC al final; dentro por nombre
     accounts.sort((a, b) => {
       if (a.isManager !== b.isManager) return a.isManager ? 1 : -1;
       return a.name.localeCompare(b.name);
