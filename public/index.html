@@ -126,6 +126,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .bubble strong,.bubble b{font-weight:600;color:var(--blue)}
 .usr-bubble strong,.usr-bubble b{color:rgba(255,255,255,.9)}
 .bubble code{font-family:monospace;font-size:12px;background:var(--blue-lt);color:var(--blue);padding:1px 5px;border-radius:4px}
+/* Social action cards */
+.sac-card{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;text-align:left;font-family:var(--font);transition:all .15s;width:100%}
+.sac-card:hover{border-color:var(--blue);background:var(--blue-lt);transform:translateY(-1px)}
+.sac-icon{font-size:15px;line-height:1;margin-bottom:2px}
+.sac-title{font-size:12px;font-weight:600;color:var(--text);line-height:1.3}
+.sac-desc{font-size:11px;color:var(--muted);line-height:1.3}
 .bubble ul{padding-left:16px;margin:4px 0}
 .bubble li{margin:3px 0;color:var(--muted)}
 .bubble li b{color:var(--text)}
@@ -803,6 +809,43 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   <!-- CHAT VIEW -->
   <div class="view" id="view-chat">
       <div class="chat-area" id="chat-area"></div>
+
+    <!-- Panel de acciones rápidas para el agente Social (siempre visible) -->
+    <div id="social-action-bar" style="display:none;flex-shrink:0;padding:10px 20px 0;background:var(--bg);border-top:1px solid var(--border2)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px">acciones rápidas</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
+        <button class="sac-card" onclick="qSend('Crea una parrilla de contenido completa para el próximo mes: semana a semana con red, formato, tema e idea concreta para cada publicación.')">
+          <span class="sac-icon">📅</span>
+          <span class="sac-title">Parrilla mensual</span>
+          <span class="sac-desc">Plan de contenido para 4 semanas</span>
+        </button>
+        <button class="sac-card" onclick="qSend('Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia, en cuáles no, y por qué. Luego define mi voz de marca y pilares de contenido.')">
+          <span class="sac-icon">🎯</span>
+          <span class="sac-title">Estrategia de marca</span>
+          <span class="sac-desc">Redes prioritarias, voz y pilares</span>
+        </button>
+        <button class="sac-card" onclick="qSend('Crea copys y guiones listos para publicar esta semana: posts para feed, guiones para reels y textos para stories. Adapta el tono a mi marca.')">
+          <span class="sac-icon">✍️</span>
+          <span class="sac-title">Copys y guiones</span>
+          <span class="sac-desc">Textos listos para publicar hoy</span>
+        </button>
+        <button class="sac-card" onclick="qSend('Dame 10 ideas de contenido con alto potencial de alcance orgánico para mi negocio: tendencias actuales, formatos que están funcionando y ángulos creativos adaptados a mi industria.')">
+          <span class="sac-icon">🔥</span>
+          <span class="sac-title">Ideas virales</span>
+          <span class="sac-desc">Tendencias y formatos de alto alcance</span>
+        </button>
+        <button class="sac-card" onclick="qSend('Ayúdame a entender qué métricas debo revisar en mis redes sociales, cómo interpretarlas y qué acciones concretas tomar para mejorar mis resultados.')">
+          <span class="sac-icon">📊</span>
+          <span class="sac-title">Analizar métricas</span>
+          <span class="sac-desc">Qué medir y cómo mejorar</span>
+        </button>
+        <button class="sac-card" onclick="qSend('Crea una estrategia completa de hashtags para mi negocio: qué hashtags usar en cada red, cuántos, cómo combinarlos y cuáles evitar.')">
+          <span class="sac-icon">🏷️</span>
+          <span class="sac-title">Estrategia hashtags</span>
+          <span class="sac-desc">Hashtags que aumentan alcance</span>
+        </button>
+      </div>
+    </div>
 
     <div class="cin-area">
       <div class="qa" id="qa"></div>
@@ -2853,42 +2896,83 @@ if(currentAgentCtx==='meta-ads'){
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
-if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});const d=await r.json();rmThinking(tid);if(!r.ok){if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(d);loading=false;document.getElementById('sbtn').disabled=false;return}addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}let streamBubble=null;let replyFinal=d.content?.[0]?.text||'error al procesar la respuesta. intenta de nuevo.';
+if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
+// Leer stream SSE
+let replyFinal='';
+let streamBubble=null;
+let streamEl=null;
+const reader=r.body.getReader();
+const decoder=new TextDecoder();
+let sseBuffer='';
+let streamDone=false;
+rmThinking(tid);
+while(!streamDone){
+  const {done,value}=await reader.read();
+  if(done)break;
+  sseBuffer+=decoder.decode(value,{stream:true});
+  const lines=sseBuffer.split('\n');
+  sseBuffer=lines.pop();
+  for(const line of lines){
+    if(!line.startsWith('data: '))continue;
+    const data=line.slice(6).trim();
+    try{
+      const evt=JSON.parse(data);
+      if(evt.error){rmThinking(tid);addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
+      if(evt.delta!==undefined){
+        // Mostrar tokens en tiempo real
+        if(!streamEl){
+          streamEl=document.createElement('div');
+          streamEl.className='msg';
+          streamEl.innerHTML='<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="bubble ag-bubble" id="stream-bubble-text"></div>';
+          document.getElementById('chat-area').appendChild(streamEl);
+        }
+        replyFinal+=evt.delta;
+        const bbl=document.getElementById('stream-bubble-text');
+        if(bbl)bbl.innerHTML=fmt(replyFinal);
+        scrollB();
+      }
+      if(evt.done&&evt.full!==undefined){replyFinal=evt.full;streamDone=true;}
+    }catch(_){}
+  }
+}
+// Remover burbuja de stream temporal (se reemplaza abajo con addAgent o lógica especial)
+if(streamEl)streamEl.remove();
+let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de nuevo.';
     // Detectar bloque GAQL (Google Ads)
-    const gaqlMatch = replyFinal.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
+    const gaqlMatch = replyFinalProcessed.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
     if(gaqlMatch){
       const gaqlQuery = gaqlMatch[1].trim();
-      replyFinal = replyFinal.replace(gaqlMatch[0], '').trim();
-      addAgent(replyFinal || 'Consultando tu cuenta de Google Ads...');
+      replyFinalProcessed = replyFinalProcessed.replace(gaqlMatch[0], '').trim();
+      addAgent(replyFinalProcessed || 'Consultando tu cuenta de Google Ads...');
       const gaqlResult = await queryGoogleAds(gaqlQuery);
       if(gaqlResult.error){
-        hist.push({role:'assistant',content:replyFinal});
+        hist.push({role:'assistant',content:replyFinalProcessed});
         hist.push({role:'user',content:`Error al consultar Google Ads API: ${gaqlResult.error}`});
         addAgent(`⚠️ No pude consultar tu cuenta: ${gaqlResult.error}`);
       } else {
         const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
-        hist.push({role:'assistant',content:replyFinal});
+        hist.push({role:'assistant',content:replyFinalProcessed});
         hist.push({role:'user',content:`Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
         await callClaude(); return;
       }
     }
     // Detectar bloque META_API
-    else if(replyFinal.includes('[META_API:')){
-      const metaMatch = replyFinal.match(/\[META_API:\s*(\{[\s\S]+?\})\]/);
+    else if(replyFinalProcessed.includes('[META_API:')){
+      const metaMatch = replyFinalProcessed.match(/\[META_API:\s*(\{[\s\S]+?\})\]/);
       if(metaMatch){
         let metaCmd;
         try{ metaCmd = JSON.parse(metaMatch[1]); }catch(e){ metaCmd = null; }
         if(metaCmd){
-          replyFinal = replyFinal.replace(metaMatch[0], '').trim();
-          addAgent(replyFinal || 'Ejecutando acción en Meta Ads...');
+          replyFinalProcessed = replyFinalProcessed.replace(metaMatch[0], '').trim();
+          addAgent(replyFinalProcessed || 'Ejecutando acción en Meta Ads...');
           const metaResult = await callMetaAPI(metaCmd.endpoint, metaCmd.method||'GET', metaCmd.params||{});
           if(metaResult.error){
-            hist.push({role:'assistant',content:replyFinal});
+            hist.push({role:'assistant',content:replyFinalProcessed});
             hist.push({role:'user',content:`Error en Meta API: ${metaResult.error}`});
             addAgent(`⚠️ No pude ejecutar la acción en Meta: ${metaResult.error}`);
           } else {
             const resultStr = JSON.stringify(metaResult, null, 2);
-            hist.push({role:'assistant',content:replyFinal});
+            hist.push({role:'assistant',content:replyFinalProcessed});
             hist.push({role:'user',content:`Resultado de Meta API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
             await callClaude(); return;
           }
@@ -2896,58 +2980,46 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
       }
     }
     // Detectar opciones de bienvenida del agente Social
-    else if(replyFinal.includes('[SOCIAL_OPTIONS]')){
-      const cleanReply = replyFinal.replace(/\[SOCIAL_OPTIONS\]/g, '').trim();
+    else if(replyFinalProcessed.includes('[SOCIAL_OPTIONS]')){
+      const cleanReply = replyFinalProcessed.replace(/\[SOCIAL_OPTIONS\]/g, '').trim();
       if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
-      onDone = true; // permitir que sendMsg funcione al elegir una ficha
+      onDone = true;
       renderSocialOptions();
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     // Detectar cuestionario de diseño
-    else if(replyFinal.includes('[DESIGN_QUESTIONNAIRE]')){
-      const cleanReply = replyFinal.replace(/\[DESIGN_QUESTIONNAIRE\]/g, '').trim();
+    else if(replyFinalProcessed.includes('[DESIGN_QUESTIONNAIRE]')){
+      const cleanReply = replyFinalProcessed.replace(/\[DESIGN_QUESTIONNAIRE\]/g, '').trim();
       if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
       showDesignQuestionnaire();
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
-    // Detectar bloque(s) GENERAR_IMAGEN — procesa todos los bloques en la respuesta
-    else if(replyFinal.includes('[GENERAR_IMAGEN:')){
-      // Verificar límites antes de generar
+    // Detectar bloque(s) GENERAR_IMAGEN
+    else if(replyFinalProcessed.includes('[GENERAR_IMAGEN:')){
       if (!canGenerateImage()) {
         showImageLimitReached();
         loading=false; document.getElementById('sbtn').disabled=false; return;
       }
-      
-      const allMatches = [...replyFinal.matchAll(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/g)];
+      const allMatches = [...replyFinalProcessed.matchAll(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/g)];
       if(allMatches.length > 0){
-        // Mostrar el texto previo al primer bloque si existe
-        const cleanReply = replyFinal.replace(/\[GENERAR_IMAGEN:\s*\{[\s\S]+?\}\]/g, '').trim();
+        const cleanReply = replyFinalProcessed.replace(/\[GENERAR_IMAGEN:\s*\{[\s\S]+?\}\]/g, '').trim();
         if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
         else { hist.push({role:'assistant', content: 'Generando ' + Math.min(allMatches.length, userPlan === 'pro' ? 5 : 1) + ' creativos para tu anuncio...'}); }
-        
-        // En plan gratuito, solo procesar la primera imagen (excepto admin)
         const matchesToProcess = (userPlan === 'pro' || isAdminUser()) ? allMatches : allMatches.slice(0, 1);
-        
-        // Procesar todos los bloques secuencialmente
         generatedAdImages = [];
-        currentBatchType = 'feed'; // Inicializar como feed
-        feedPrompts = []; // Limpiar prompts anteriores
+        currentBatchType = 'feed';
+        feedPrompts = [];
         const totalImgs = matchesToProcess.length;
         for(let i = 0; i < matchesToProcess.length; i++){
           let imgCmd;
           try{ imgCmd = JSON.parse(matchesToProcess[i][1]); }catch(e){ continue; }
           if(imgCmd){
-            // Forzar variations:1 por bloque y hasText:true
             imgCmd.variations = 1;
             imgCmd.hasText = true;
             imgCmd._index = i + 1;
             imgCmd._total = totalImgs;
             await generateAdImages(imgCmd);
-            
-            // Incrementar contador después de generar exitosamente
             incrementImageUsage();
-            
-            // En plan gratuito, solo generar una imagen (excepto admin)
             if (userPlan !== 'pro' && !isAdminUser()) break;
           }
         }
@@ -2955,8 +3027,8 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
       }
     }
     else {
-      hist.push({role:'assistant',content:replyFinal});
-      if(!streamBubble)addAgent(replyFinal);
+      hist.push({role:'assistant',content:replyFinalProcessed});
+      addAgent(replyFinalProcessed);
     }
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
 function renderSocialOptions() {
@@ -3059,7 +3131,24 @@ function updateQaBar(ctx){
   const items=QA[ctx]||QA['google-ads'];
   bar.innerHTML=items.map(([label,prompt])=>`<button class="qb" onclick="qSend('${prompt.replace(/'/g,"\\'")}')"> ${label}</button>`).join('');
 }
-function setAgentContext(ctx, showGuide=false){currentAgentCtx=ctx;const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;updateQaBar(ctx);if(showGuide)showAgentGuide(ctx);}
+function setAgentContext(ctx, showGuide=false){
+  currentAgentCtx=ctx;
+  const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};
+  const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;
+  const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;
+  // Mostrar/ocultar panel de acciones social vs píldoras QA
+  const socialBar=document.getElementById('social-action-bar');
+  const qaBar=document.getElementById('qa');
+  if(ctx==='social'){
+    if(socialBar)socialBar.style.display='block';
+    if(qaBar)qaBar.style.display='none';
+  } else {
+    if(socialBar)socialBar.style.display='none';
+    if(qaBar)qaBar.style.display='';
+    updateQaBar(ctx);
+  }
+  if(showGuide)showAgentGuide(ctx);
+}
 function newSession(){if(confirm('¿iniciar nueva sesión? el perfil del cliente se mantendrá guardado.')){hist=[];document.getElementById('chat-area').innerHTML='';addAgent(`nueva sesión iniciada. tu perfil está cargado:\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`)}}
 
 // DOM
@@ -4395,21 +4484,16 @@ function updateAdsUI(connected, email) {
   const emailSpan  = document.getElementById('adsEmail');
   const connBadge  = document.getElementById('connBadge');
   if (connected) {
-    badge.textContent = '● conectado';
-    badge.style.background = 'rgba(5,150,105,.1)';
-    badge.style.color = 'var(--success)';
-    disconnDiv.style.display = 'none';
-    connDiv.style.display = 'block';
+    if (badge) { badge.textContent = '● conectado'; badge.style.background = 'rgba(5,150,105,.1)'; badge.style.color = 'var(--success)'; }
+    if (disconnDiv) disconnDiv.style.display = 'none';
+    if (connDiv) connDiv.style.display = 'block';
     if (email && emailSpan) emailSpan.textContent = email;
     if (connBadge) connBadge.style.display = 'block';
-    // Cargar cuentas automáticamente si no las tenemos aún
     if (!adsAccounts.length && !adsActiveAccount) loadAdsAccounts();
   } else {
-    badge.textContent = 'sin conectar';
-    badge.style.background = 'var(--sidebar2)';
-    badge.style.color = 'var(--muted)';
-    disconnDiv.style.display = 'block';
-    connDiv.style.display = 'none';
+    if (badge) { badge.textContent = 'sin conectar'; badge.style.background = 'var(--sidebar2)'; badge.style.color = 'var(--muted)'; }
+    if (disconnDiv) disconnDiv.style.display = 'block';
+    if (connDiv) connDiv.style.display = 'none';
     if (connBadge) connBadge.style.display = 'none';
   }
 }
