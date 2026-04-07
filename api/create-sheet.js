@@ -20,6 +20,7 @@ async function getAccessToken() {
   const header = { alg: 'RS256', typ: 'JWT' };
   const payload = {
     iss: email,
+    sub: 'ceo@acuarius.app',
     scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
