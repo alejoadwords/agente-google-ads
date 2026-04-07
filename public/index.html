@@ -1630,6 +1630,7 @@ Para plan gratuito: Genera directamente:
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
+let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
 
 // Sistema de límites de imágenes
 let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
@@ -2465,12 +2466,14 @@ Cuando el usuario pida una parrilla de contenido (mensual, semanal, o cualquier 
 
 2. En la columna "Necesita imagen" marca con ✅ los posts que son: imagen estática, carrusel, post feed, frase, anuncio, testimonio, infografía. Marca con ➖ los que son: reels, videos, stories de texto, guiones.
 
-3. Al FINAL de la parrilla, siempre incluye este bloque exacto (sin modificarlo):
+3. Al FINAL de la parrilla, siempre incluye estos dos bloques exactos (sin modificarlos), en este orden:
+[PARRILLA_LISTA]
 [GENERAR_IMAGENES_PARRILLA]
 
-Esto activará automáticamente un botón que permite al usuario generar las imágenes de los posts marcados con ✅.
+[PARRILLA_LISTA] activa el botón para exportar la parrilla a Google Sheets.
+[GENERAR_IMAGENES_PARRILLA] activa el botón para generar las imágenes.
 
-IMPORTANTE: Solo incluir [GENERAR_IMAGENES_PARRILLA] cuando se entregue una parrilla real con tabla. No incluirlo en respuestas de estrategia, copys sueltos o análisis.
+IMPORTANTE: Solo incluir estos bloques cuando se entregue una parrilla real con tabla. No incluirlos en respuestas de estrategia, copys sueltos o análisis.
 
 ════════════════════════════════════════
 FORMATO DE RESPUESTA
@@ -3051,11 +3054,16 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         loading=false; document.getElementById('sbtn').disabled=false; return;
       }
     }
-    // Detectar parrilla con imágenes generables
-    else if(replyFinalProcessed.includes('[GENERAR_IMAGENES_PARRILLA]')){
-      const cleanReply = replyFinalProcessed.replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '').trim();
+    // Detectar parrilla con exportación a Sheets + imágenes generables
+    else if(replyFinalProcessed.includes('[PARRILLA_LISTA]') || replyFinalProcessed.includes('[GENERAR_IMAGENES_PARRILLA]')){
+      const cleanReply = replyFinalProcessed
+        .replace(/\[PARRILLA_LISTA\]/g, '')
+        .replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '')
+        .trim();
       hist.push({role:'assistant', content: cleanReply});
       addAgent(cleanReply);
+      // Guardar el texto de la parrilla para exportación
+      lastParrillaText = cleanReply;
       setTimeout(()=>renderParrillaImagenesBtn(), 300);
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
@@ -3135,22 +3143,30 @@ function renderParrillaImagenesBtn() {
 
   el.innerHTML = `
     <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">${logoSvg}</div>
-    <div style="background:linear-gradient(135deg,#EEF0FD 0%,#F5F3FF 100%);border:1.5px solid var(--blue-md);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:16px 18px;max-width:460px">
+    <div style="background:linear-gradient(135deg,#EEF0FD 0%,#F5F3FF 100%);border:1.5px solid var(--blue-md);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:16px 18px;max-width:500px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:18px">🎨</span>
-        <span style="font-size:14px;font-weight:700;color:var(--text)">Imágenes para esta parrilla</span>
+        <span style="font-size:18px">🎉</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text)">Parrilla lista</span>
       </div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">Puedo generar imágenes profesionales para todos los posts estáticos marcados con ✅ en la parrilla. Cada imagen incluirá el concepto del post adaptado a tu marca.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button onclick="generarImagenesParrilla(this)" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s" onmouseover="this.style.background='var(--blue-h)'" onmouseout="this.style.background='var(--blue)'">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">¿Qué quieres hacer con esta parrilla?</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button onclick="exportToSheets(this)" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#1a7340;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='#155c34'" onmouseout="this.style.background='#1a7340'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="white" stroke-width="1.5"/><path d="M3 9h18M9 9v12" stroke="white" stroke-width="1.5"/><path d="M6 6h.01M6 12h3M6 16h3M13 12h3M13 16h3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Abrir en Google Sheets
+        </button>
+        <button onclick="generarImagenesParrilla(this)" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='var(--blue-h)'" onmouseout="this.style.background='var(--blue)'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
           Crear imágenes de esta parrilla
         </button>
-        <button onclick="document.getElementById('parrilla-img-btn-wrap')?.remove()" style="padding:9px 14px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--font)">
+        <button onclick="document.getElementById('parrilla-img-btn-wrap')?.remove()" style="padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font);width:100%">
           Ahora no
         </button>
       </div>
     </div>`;
+
+  area.appendChild(el);
+  area.scrollTop = area.scrollHeight;
+}
 
   area.appendChild(el);
   area.scrollTop = area.scrollHeight;
@@ -3165,6 +3181,52 @@ async function generarImagenesParrilla(btn) {
 
   document.getElementById('cin').value = prompt;
   await sendMsg();
+}
+
+async function exportToSheets(btn) {
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Creando tu Sheet...';
+
+  try {
+    const userEmail = clerkInstance?.user?.primaryEmailAddress?.emailAddress || null;
+    const negocio = mem?.negocio || '';
+    const titulo = `Parrilla de contenido${negocio ? ' · ' + negocio.split('·')[0].trim() : ''} · ${new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' })}`;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+
+    const res = await fetch('/api/create-sheet', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ parrilla: lastParrillaText, titulo, userEmail, negocio }),
+    });
+
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    // Reemplazar el botón por el link al Sheet
+    const wrap = btn.closest('#parrilla-img-btn-wrap > div') || btn.parentElement;
+    btn.innerHTML = originalHTML;
+    btn.disabled = false;
+
+    // Mostrar enlace directo al Sheet creado
+    const linkEl = document.createElement('a');
+    linkEl.href = data.url;
+    linkEl.target = '_blank';
+    linkEl.rel = 'noopener noreferrer';
+    linkEl.style.cssText = 'display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#1a7340;color:white;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;width:100%;box-sizing:border-box;transition:background .15s';
+    linkEl.onmouseover = () => linkEl.style.background = '#155c34';
+    linkEl.onmouseout = () => linkEl.style.background = '#1a7340';
+    linkEl.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="white" stroke-width="1.5"/><path d="M3 9h18M9 9v12" stroke="white" stroke-width="1.5"/><path d="M6 6h.01M6 12h3M6 16h3M13 12h3M13 16h3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg> Abrir Sheet → ${data.title}`;
+    btn.replaceWith(linkEl);
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+    addAgent(`No pude crear el Sheet: ${err.message}. Verifica que las APIs de Google estén activadas.`);
+  }
 }
 
 // ROADMAP
