@@ -3036,10 +3036,13 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           let imgCmd;
           try{ imgCmd = JSON.parse(matchesToProcess[i][1]); }catch(e){ continue; }
           if(imgCmd){
+            // Forzar español en el texto de la imagen
+            imgCmd.prompt = imgCmd.prompt + '. IMPORTANTE: todos los textos en la imagen deben estar en español, sin palabras en inglés.';
             imgCmd.variations = 1;
             imgCmd.hasText = true;
             imgCmd._index = i + 1;
             imgCmd._total = totalImgs;
+            imgCmd._social = (currentAgentCtx === 'social');
             await generateAdImages(imgCmd);
             incrementImageUsage();
             if (userPlan !== 'pro' && !isAdminUser()) break;
@@ -3158,8 +3161,7 @@ async function generarImagenesParrilla(btn) {
   btn.textContent = 'Generando...';
   document.getElementById('parrilla-img-btn-wrap')?.remove();
 
-  // Pedir al agente que liste los posts con imagen y genere los bloques
-  const prompt = `Basándote en la parrilla que acabas de crear, identifica todos los posts marcados con ✅ (imagen estática, carrusel, post feed, frase, testimonio). Para cada uno, genera un bloque [GENERAR_IMAGEN] con un prompt de imagen profesional que refleje el concepto del post, la marca del negocio y el estilo visual apropiado para redes sociales. Genera máximo 5 imágenes, priorizando las más importantes. Formato: usa exactamente [GENERAR_IMAGEN: {"prompt":"...","format":"square","variations":1,"hasText":true}] para cada una.`;
+  const prompt = `Basándote en la parrilla que acabas de crear, identifica todos los posts marcados con ✅ (imagen estática, carrusel, post feed, frase, testimonio). Para cada uno, genera un bloque [GENERAR_IMAGEN] con un prompt de imagen profesional que refleje el concepto del post. IMPORTANTE: todos los textos dentro de las imágenes DEBEN estar en español, sin ninguna palabra en inglés. Genera máximo 5 imágenes, priorizando las más importantes. Formato exacto: [GENERAR_IMAGEN: {"prompt":"...todo en español...","format":"square","variations":1,"hasText":true}] para cada una.`;
 
   document.getElementById('cin').value = prompt;
   await sendMsg();
@@ -3693,6 +3695,7 @@ function askAgentFromRoadmap(stageId) {
 async function generateAdImages(cmd) {
   var prompt = cmd.prompt, format = cmd.format || 'vertical', variations = cmd.variations || 1, hasText = cmd.hasText !== false;
   var batchIndex = cmd._index || 1, batchTotal = cmd._total || 1;
+  var isSocial = cmd._social || false;
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
@@ -3709,7 +3712,7 @@ async function generateAdImages(cmd) {
     rmThinking(thinkId);
     if (data.error) { addAgent('No pude generar el creativo ' + batchIndex + ': ' + data.error); return; }
     if (data.images && data.images.length > 0) {
-      renderAdImage(data.images[0], batchIndex, batchTotal, format, prompt);
+      renderAdImage(data.images[0], batchIndex, batchTotal, format, prompt, isSocial);
     }
   } catch (err) {
     rmThinking(thinkId);
@@ -3722,11 +3725,11 @@ var adImgGridEl = null; // Contenedor grid compartido para todas las imágenes d
 var currentBatchType = 'feed'; // 'feed' o 'stories' - para rastrear qué tipo de batch se está generando
 var feedPrompts = []; // Guardar prompts del feed para generar stories
 
-function renderAdImage(img, index, total, format, prompt) {
+function renderAdImage(img, index, total, format, prompt, isSocial) {
   generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format });
 
-  // Guardar prompt si es feed y es Pro/Admin para generar stories después
-  if (currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser())) {
+  // Guardar prompt si es feed y es Pro/Admin para generar stories después (solo para Meta)
+  if (!isSocial && currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser())) {
     feedPrompts[index - 1] = prompt;
   }
 
@@ -3737,7 +3740,7 @@ function renderAdImage(img, index, total, format, prompt) {
   var dlIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
   var fbIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
   var imgIdx = index - 1;
-  var fn = 'anuncio_' + format + '_v' + index + '.png';
+  var fn = (isSocial ? 'post_' : 'anuncio_') + format + '_v' + index + '.png';
 
   // Crear el contenedor grid la primera vez
   if (index === 1) {
@@ -3747,11 +3750,12 @@ function renderAdImage(img, index, total, format, prompt) {
 
     var gridHeader = document.createElement('div');
     gridHeader.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:12px;width:100%';
+    var badge = isSocial
+      ? '<span style="margin-left:8px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700">Contenido orgánico</span>'
+      : '<span style="margin-left:8px;background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700">Listas para Meta</span>';
     gridHeader.innerHTML =
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-      '<div style="font-size:12px;color:var(--muted);font-weight:500">' + fmtLabel +
-        '<span style="margin-left:8px;background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700">Listas para Meta</span>' +
-      '</div>';
+      '<div style="font-size:12px;color:var(--muted);font-weight:500">' + fmtLabel + badge + '</div>';
 
     var gridWrap = document.createElement('div');
     gridWrap.id = 'ad-img-grid';
@@ -3768,45 +3772,48 @@ function renderAdImage(img, index, total, format, prompt) {
 
   var card = document.createElement('div');
   card.style.cssText = 'flex-shrink:0;width:160px';
+  // Social: solo botón descargar. Meta: descargar + publicar
+  var btnHtml = isSocial
+    ? '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + fn + '\')" style="width:100%;padding:6px 4px;background:var(--blue);color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + dlIcon + ' Descargar</button>'
+    : '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + fn + '\')" style="flex:1;padding:6px 4px;background:var(--blue);color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + dlIcon + ' Descargar</button>'
+    + '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:6px 4px;background:#1877F2;color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + fbIcon + ' Publicar</button>';
+
   card.innerHTML =
     '<div style="font-size:10px;color:var(--muted);margin-bottom:5px;font-weight:600;text-align:center">V' + index + '</div>' +
     '<div style="border-radius:10px;overflow:hidden;border:1px solid var(--border);aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:var(--sidebar)">' +
       '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
     '</div>' +
-    '<div style="display:flex;gap:5px;margin-top:7px">' +
-      '<button onclick="downloadAdImage(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'' + fn + '\')" style="flex:1;padding:6px 4px;background:var(--blue);color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + dlIcon + ' Descargar</button>' +
-      '<button onclick="publishToMeta(' + imgIdx + ')" style="flex:1;padding:6px 4px;background:#1877F2;color:white;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px">' + fbIcon + ' Publicar</button>' +
-    '</div>';
+    '<div style="display:flex;gap:5px;margin-top:7px">' + btnHtml + '</div>';
   grid.appendChild(card);
   scrollB();
 
-  // Al completar todas las imágenes, agregar el botón de campaña
+  // Al completar todas las imágenes
   if (index === total && total > 1) {
     setTimeout(function() {
-      var logoSvg2 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-      var allEl = document.createElement('div');
-      allEl.className = 'msg';
-      allEl.innerHTML =
-        '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg2 + '</div>' +
-        '<div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:16px 18px;max-width:300px">' +
-          '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:4px">¿Listo para publicar?</div>' +
-          '<div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:12px">' + total + ' creativos listos para Meta Ads.</div>' +
-          '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:9px;background:white;color:#1877F2;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🚀 Crear campaña con estas imágenes</button>' +
-        '</div>';
-      document.getElementById('chat-area').appendChild(allEl);
-      scrollB();
-      
-      // Si es batch de feed y usuario Pro/Admin, generar stories automáticamente
-      if (currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser()) && feedPrompts.length === total) {
-        currentBatchType = 'stories';
-        setTimeout(function() {
-          addAgent('Generando versiones para Stories automáticamente...');
-          generateStoriesFromFeed();
-        }, 1000);
+      if (isSocial) {
+        // Agente social: mensaje limpio sin campaña
+        addAgent('✅ ' + total + ' imágenes para tu parrilla listas. Descárgalas y úsalas en tus publicaciones orgánicas.');
       } else {
-        // Solo enviar mensaje de copy si no va a generar stories
-        hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero segun el objetivo del negocio.' });
-        callClaude();
+        // Agente Meta: banner de campaña + posibles stories
+        var logoSvg2 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+        var allEl = document.createElement('div');
+        allEl.className = 'msg';
+        allEl.innerHTML =
+          '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg2 + '</div>' +
+          '<div style="background:linear-gradient(135deg,#1877F2,#0d5cb8);border-radius:14px;padding:16px 18px;max-width:300px">' +
+            '<div style="font-size:13px;font-weight:700;color:white;margin-bottom:4px">¿Listo para publicar?</div>' +
+            '<div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:12px">' + total + ' creativos listos para Meta Ads.</div>' +
+            '<button onclick="launchMetaCampaignFlow()" style="width:100%;padding:9px;background:white;color:#1877F2;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🚀 Crear campaña con estas imágenes</button>' +
+          '</div>';
+        document.getElementById('chat-area').appendChild(allEl);
+        scrollB();
+        if (currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser()) && feedPrompts.length === total) {
+          currentBatchType = 'stories';
+          setTimeout(function() { addAgent('Generando versiones para Stories automáticamente...'); generateStoriesFromFeed(); }, 1000);
+        } else {
+          hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero segun el objetivo del negocio.' });
+          callClaude();
+        }
       }
     }, 300);
   }
