@@ -2899,6 +2899,7 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
     else if(replyFinal.includes('[SOCIAL_OPTIONS]')){
       const cleanReply = replyFinal.replace(/\[SOCIAL_OPTIONS\]/g, '').trim();
       if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply}); }
+      onDone = true; // permitir que sendMsg funcione al elegir una ficha
       renderSocialOptions();
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
@@ -3009,7 +3010,7 @@ function renderSocialOptions() {
 
   // Insertar en el chat como burbuja del agente
   const bubble = document.createElement('div');
-  bubble.className = 'msg agent';
+  bubble.className = 'msg';
   bubble.appendChild(wrap);
   area.appendChild(bubble);
   area.scrollTop = area.scrollHeight;
@@ -4674,19 +4675,6 @@ const COMING_SOON_DATA = {
       '🏢 Estrategia de Account-Based Marketing (ABM)',
     ]
   },
-  'social': {
-    icon: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg>`,
-    iconBg: '#FFFBEB',
-    title: 'Agente Contenido para Redes',
-    desc: 'Pronto tendrás un estratega de contenido que te ayudará a construir una presencia sólida en redes sociales con parrillas, copys y estrategias diseñadas para audiencias latinoamericanas.',
-    features: [
-      '📅 Parrillas de contenido mensuales por red social',
-      '✍️ Copys y textos para posts, stories y reels',
-      '🎨 Estudio de marca: voz, tono y personalidad digital',
-      '📊 Análisis de métricas y recomendaciones de mejora',
-      '💡 Ideas de contenido basadas en tendencias de LatAm',
-    ]
-  }
 };
 
 function showComingSoon(agentKey) {
