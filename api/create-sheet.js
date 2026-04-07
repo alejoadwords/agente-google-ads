@@ -122,6 +122,13 @@ export default async function handler(req) {
     const spreadsheetId = sheet.spreadsheetId;
     const sheetId = sheet.sheets[0].properties.sheetId;
 
+    // 1b. Mover el Sheet a la carpeta compartida de Acuarius
+    const FOLDER_ID = '1GbUmKxjsjyXeHgfMnquhu3imvaXcYENc';
+    await fetch(`https://www.googleapis.com/drive/v3/files/${spreadsheetId}?addParents=${FOLDER_ID}&removeParents=root&fields=id,parents`, {
+      method: 'PATCH',
+      headers: authHeader,
+    });
+
     // 2. Parsear y escribir datos
     const rows = parseParrilla(parrilla);
 
