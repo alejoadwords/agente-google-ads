@@ -52,17 +52,80 @@ export default async function handler(req) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
+        max_tokens: 4000,
+        stream: true,
         system: system || '',
         messages,
       }),
     });
 
-    const data = await claudeRes.json();
+    if (!claudeRes.ok) {
+      const errText = await claudeRes.text();
+      return new Response(
+        JSON.stringify({ error: `Anthropic error ${claudeRes.status}: ${errText}` }),
+        { status: claudeRes.status, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    return new Response(JSON.stringify(data), {
-      status: claudeRes.status,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+    // Retransmitir el stream de Anthropic directamente al cliente
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+
+    // Procesar el stream SSE de Anthropic y re-emitirlo
+    (async () => {
+      const reader = claudeRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // guardar línea incompleta
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') continue;
+
+            try {
+              const evt = JSON.parse(data);
+
+              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+                fullText += evt.delta.text;
+                // Emitir delta al cliente en formato SSE
+                await writer.write(encoder.encode(`data: ${JSON.stringify({ delta: evt.delta.text })}\n\n`));
+              }
+
+              if (evt.type === 'message_stop') {
+                // Emitir el texto completo al final para que el cliente pueda procesarlo
+                await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, full: fullText })}\n\n`));
+              }
+            } catch (_) {
+              // Ignorar líneas SSE no parseables
+            }
+          }
+        }
+      } catch (err) {
+        await writer.write(encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`));
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(readable, {
+      status: 200,
+      headers: {
+        ...CORS,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+      },
     });
 
   } catch (err) {
