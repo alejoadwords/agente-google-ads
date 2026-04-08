@@ -3168,6 +3168,10 @@ function renderParrillaImagenesBtn() {
   area.scrollTop = area.scrollHeight;
 }
 
+  area.appendChild(el);
+  area.scrollTop = area.scrollHeight;
+}
+
 async function generarImagenesParrilla(btn) {
   btn.disabled = true;
   btn.textContent = 'Generando...';
@@ -4920,4 +4924,9 @@ function showComingSoon(agentKey) {
 }
 
 function closeComingSoon() {
-  document.getElementById('coming-soon-
+  document.getElementById('coming-soon-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+</script>
+</body>
+</html>
