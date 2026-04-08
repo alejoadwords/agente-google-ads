@@ -1628,6 +1628,7 @@ Para plan gratuito: Genera directamente:
 **CRÍTICO:** Usuarios admin (alejandro.gonzalez.ads@gmail.com) SIEMPRE reciben cuestionario completo como plan Pro.`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
+const MAX_HIST_MESSAGES = 20; // máximo de mensajes enviados a Claude (10 turnos)
 let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
 let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
@@ -2583,7 +2584,7 @@ async function homeChat() {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        messages: homeHist,
+        messages: homeHist.length > MAX_HIST_MESSAGES ? homeHist.slice(homeHist.length - MAX_HIST_MESSAGES) : homeHist,
         system: SYSTEM_GENERAL,
         userPlan
       })
@@ -2950,7 +2951,11 @@ if(currentAgentCtx==='meta-ads'){
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
-if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{const payload={messages:hist,system:sys,userPlan};const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
+if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{// Truncar historial: mantener los últimos MAX_HIST_MESSAGES mensajes
+const histTruncated = hist.length > MAX_HIST_MESSAGES
+  ? hist.slice(hist.length - MAX_HIST_MESSAGES)
+  : hist;
+const payload={messages:histTruncated,system:sys,userPlan};const r=await fetch('/api/chat',{method:'POST',headers,body:JSON.stringify(payload)});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
 // Leer stream SSE
 let replyFinal='';
 let streamBubble=null;
