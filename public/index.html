@@ -3197,10 +3197,6 @@ function renderParrillaImagenesBtn() {
   area.scrollTop = area.scrollHeight;
 }
 
-  area.appendChild(el);
-  area.scrollTop = area.scrollHeight;
-}
-
 async function generarImagenesParrilla(btn) {
   btn.disabled = true;
   btn.textContent = 'Generando...';
@@ -4235,7 +4231,7 @@ function renderMetaAccountSelector() {
   if (metaActiveAccount) renderMetaActiveAccount();
 }
 
-function selectMetaAccount(accountId) {
+async function selectMetaAccount(accountId) {
   const acc = metaAccounts.find(a => a.id === accountId);
   if (!acc) return;
   metaActiveAccount = acc;
@@ -4244,7 +4240,7 @@ function selectMetaAccount(accountId) {
   renderMetaActiveAccount();
   renderMetaAccountSelector();
   closeSettings();
-  setTimeout(() => {
+  setTimeout(async () => {
     const saved = await dbLoadProfile('meta-ads');
     if (saved) {
       try {
