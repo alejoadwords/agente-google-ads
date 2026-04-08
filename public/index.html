@@ -2590,19 +2590,59 @@ async function homeChat() {
       })
     });
 
-    const d = await r.json();
+    if (!r.ok) {
+      removeHomeThinking(loadId);
+      appendHomeMsgAgent('error al procesar la respuesta. intenta de nuevo.', null);
+      homeLoading = false; return;
+    }
+
+    // Leer stream SSE
+    let homeReplyFinal = '';
+    let homeStreamEl = null;
+    const homeReader = r.body.getReader();
+    const homeDecoder = new TextDecoder();
+    let homeSseBuffer = '';
+    let homeStreamDone = false;
     removeHomeThinking(loadId);
 
-    let reply = d.content?.[0]?.text || 'error al procesar. intenta de nuevo.';
+    while (!homeStreamDone) {
+      const { done, value } = await homeReader.read();
+      if (done) break;
+      homeSseBuffer += homeDecoder.decode(value, { stream: true });
+      const lines = homeSseBuffer.split('\n');
+      homeSseBuffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const evt = JSON.parse(line.slice(6).trim());
+          if (evt.error) { appendHomeMsgAgent('error al procesar la respuesta. intenta de nuevo.', null); homeLoading = false; return; }
+          if (evt.delta !== undefined) {
+            if (!homeStreamEl) {
+              homeStreamEl = document.createElement('div');
+              homeStreamEl.style.cssText = 'display:flex;gap:10px;align-items:flex-start;';
+              homeStreamEl.innerHTML = `<div style="width:28px;height:28px;flex-shrink:0;overflow:hidden;border-radius:7px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" style="width:28px;height:28px;display:block"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div style="background:var(--bg);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:12px 14px;font-size:13.5px;line-height:1.6;color:var(--text);flex:1" id="home-stream-text"></div>`;
+              document.getElementById('home-chat-box').appendChild(homeStreamEl);
+            }
+            homeReplyFinal += evt.delta;
+            const bbl = document.getElementById('home-stream-text');
+            if (bbl) bbl.innerHTML = fmt(homeReplyFinal);
+            const box = document.getElementById('home-chat-box');
+            if (box) box.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+          if (evt.done && evt.full !== undefined) { homeReplyFinal = evt.full; homeStreamDone = true; }
+        } catch(_) {}
+      }
+    }
 
-    // Detectar agente sugerido
+    // Reemplazar burbuja de stream con burbuja final (que incluye botón de agente sugerido)
+    if (homeStreamEl) homeStreamEl.remove();
+    let reply = homeReplyFinal || 'error al procesar. intenta de nuevo.';
     const agentMatch = reply.match(/\[AGENTE_SUGERIDO:\s*([\w-]+)\]/);
     let suggestedAgent = null;
     if (agentMatch) {
       suggestedAgent = agentMatch[1].trim();
       reply = reply.replace(agentMatch[0], '').trim();
     }
-
     homeHist.push({ role: 'assistant', content: reply });
     appendHomeMsgAgent(reply, suggestedAgent);
 
