@@ -1986,8 +1986,42 @@ function getProfileKey(agentKey) {
   return `acuarius_profile_${uid}_${agentKey}`;
 }
 
+// ── Helpers de persistencia en Supabase ──────────────────────────────────────
+async function dbSaveProfile(agentKey, data) {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(agentKey)}`, {
+      method: 'POST', headers, body: JSON.stringify({ data })
+    });
+    // Mantener localStorage como fallback offline
+    localStorage.setItem(getProfileKey(agentKey), JSON.stringify(data));
+  } catch(e) {
+    console.warn('dbSaveProfile error:', e);
+    localStorage.setItem(getProfileKey(agentKey), JSON.stringify(data));
+  }
+}
+
+async function dbLoadProfile(agentKey) {
+  try {
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(agentKey)}`, { headers });
+    if (res.ok) {
+      const { data } = await res.json();
+      if (data && Object.keys(data).length > 0) return data;
+    }
+  } catch(e) {
+    console.warn('dbLoadProfile error:', e);
+  }
+  // Fallback a localStorage
+  const local = localStorage.getItem(getProfileKey(agentKey));
+  return local ? JSON.parse(local) : null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Abre un agente: carga perfil si existe, lanza onboarding si no
-function openAgent(agentKey) {
+async function openAgent(agentKey) {
   setAgentContext(agentKey);
   showView('chat');
 
@@ -2007,13 +2041,10 @@ function openAgent(agentKey) {
   area.innerHTML = '';
   hist = [];
 
-  const profileKey = getProfileKey(agentKey);
+  const profile = await dbLoadProfile(agentKey);
 
-  const savedProfile = localStorage.getItem(profileKey);
-
-  if (savedProfile) {
+  if (profile) {
     try {
-      const profile = JSON.parse(savedProfile);
       Object.assign(mem, profile);
       updateMem();
       onDone = true;
@@ -2023,7 +2054,7 @@ function openAgent(agentKey) {
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
       addAgent(`hola de nuevo. agente de **${agentLabels[agentKey]||agentKey}** listo.\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
       return;
-    } catch(e) { /* si falla el parse, lanzar onboarding */ }
+    } catch(e) { /* si falla, lanzar onboarding */ }
   }
   launchOnboarding(agentKey);
 }
@@ -2682,7 +2713,7 @@ function removeHomeThinking(id) {
 }
 
 // Continuar con agente específico — transfiere el historial
-function continueWithAgent(agentKey) {
+async function continueWithAgent(agentKey) {
   setAgentContext(agentKey);
   showView('chat');
 
@@ -2691,11 +2722,9 @@ function continueWithAgent(agentKey) {
   onDone = true; // no lanzar onboarding
 
   // Cargar perfil si existe
-  const profileKey = getProfileKey(agentKey);
-  const savedProfile = localStorage.getItem(profileKey);
-  if (savedProfile) {
+  const profile = await dbLoadProfile(agentKey);
+  if (profile) {
     try {
-      const profile = JSON.parse(savedProfile);
       Object.assign(mem, profile);
       updateMem();
       clientStage = mapStage(mem.etapa);
@@ -4216,12 +4245,10 @@ function selectMetaAccount(accountId) {
   renderMetaAccountSelector();
   closeSettings();
   setTimeout(() => {
-    const profileKey = `acuarius_profile_${clerkInstance?.user?.id||'anon'}_meta_${acc.id}`;
-    const saved = localStorage.getItem(profileKey);
+    const saved = await dbLoadProfile('meta-ads');
     if (saved) {
       try {
-        const profile = JSON.parse(saved);
-        Object.assign(mem, profile); updateMem(); onDone = true;
+        Object.assign(mem, saved); updateMem(); onDone = true;
         clientStage = mapStage(mem.etapa);
         document.getElementById('mem-card').style.display = 'block';
         document.getElementById('m-stage').textContent = clientStage;
@@ -4467,7 +4494,7 @@ function renderAccountSelector() {
   if (adsActiveAccount) renderActiveAccount();
 }
 
-function selectAdsAccount(accountId) {
+async function selectAdsAccount(accountId) {
   const acc = adsAccounts.find(a => a.id === accountId);
   if (!acc) return;
 
@@ -4481,8 +4508,7 @@ function selectAdsAccount(accountId) {
   renderAccountSelector(); // re-render para marcar el activo
 
   // Verificar si esta cuenta tiene perfil guardado
-  const profileKey = `acuarius_profile_${clerkInstance?.user?.id||'anon'}_${acc.id}`;
-  const savedProfile = localStorage.getItem(profileKey);
+  const savedProfile = await dbLoadProfile('google-ads');
 
   // Notificar al agente del cambio de cuenta
   const accountMsg = savedProfile
@@ -4528,10 +4554,9 @@ function startNewAccountOnboarding(acc) {
 
 // Guarda perfil al completar onboarding por cuenta
 const _origFinishOb = window.finishOb;
-function finishObWithAccountSave() {
-  // Guardar perfil
-  const profileKey = getProfileKey(currentAgentCtx);
-  localStorage.setItem(profileKey, JSON.stringify(mem));
+async function finishObWithAccountSave() {
+  // Guardar perfil en Supabase (con fallback a localStorage)
+  await dbSaveProfile(currentAgentCtx, mem);
 
   onDone = true;
   document.getElementById('mem-card').style.display = 'block';
