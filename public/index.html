@@ -4491,6 +4491,15 @@ var VARIATION_AXES = [
 
 
 // Nueva función de variaciones: Sonnet analiza → usuario confirma texto → se generan imágenes
+
+// =============================================
+// VARIACIONES CON REMIX — Flujo A/B Testing
+// 1. Sonnet extrae texto
+// 2. Usuario elige QUÉ variar (personaje/fondo/paleta/composición)
+// 3. Ideogram Remix image_weight 0.88 — mantiene 88% de la imagen base
+// 4. Canvas pinta el texto extraído encima
+// =============================================
+
 async function startVariationGeneration() {
   var data = variationUploadData;
   if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
@@ -4501,10 +4510,10 @@ async function startVariationGeneration() {
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con IA...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con Sonnet...'; }
   }, 100);
 
-  // PASO 1: Sonnet analiza imagen — texto Y visual en una llamada confiable
+  // Sonnet extrae texto del anuncio
   var analysisResult = null;
   try {
     var res = await fetch('/api/chat', {
@@ -4512,98 +4521,101 @@ async function startVariationGeneration() {
       headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: 'You are an expert at analyzing advertising images. Always respond with valid JSON only — no markdown, no backticks, no explanation.',
+        max_tokens: 800,
+        system: 'You analyze advertising images. Respond with valid JSON only — no markdown, no backticks, no explanation.',
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: 'Analyze this ad image and return a JSON object with these fields:\n- "headline": exact main title/headline text visible in the image (string)\n- "body_items": array of strings, each body text line or bullet point exactly as written\n- "logo": brand or company name text visible (string, empty if none)\n- "text_color": dominant text color e.g. "white" or "black"\n- "bg_dark": true if background is dark, false if light\n- "visual_style": photographic style and mood in English\n- "main_subject": person/object description without mentioning text\n- "background": setting and environment\n- "color_palette": 3-4 dominant hex colors\n- "lighting": lighting description\n- "overall_mood": emotional tone\nReturn ONLY the JSON object.' }
+          { type: 'text', text: 'Analyze this ad. Return ONLY JSON:\n{"headline":"exact main title text","body_items":["each bullet or body text line exactly as written"],"logo":"brand name text or empty","bg_dark":true,"visual_style":"style in english","overall_mood":"mood in english","color_palette":"3-4 hex colors"}' }
         ]}]
       })
     });
     if (res.ok) {
-      var resData = await res.json();
-      var raw = (resData.content?.[0]?.text || '').trim();
-      raw = raw.replace(/^data:\s*/, '').replace(/```json|```/g, '').trim();
-      var braceIdx = raw.indexOf('{');
-      if (braceIdx > 0) raw = raw.slice(braceIdx);
+      var rd = await res.json();
+      var raw = (rd.content?.[0]?.text || '').trim().replace(/^data:\s*/,'').replace(/```json|```/g,'').trim();
+      var bi = raw.indexOf('{'); if (bi > 0) raw = raw.slice(bi);
       analysisResult = JSON.parse(raw);
-      console.log('[Acuarius] Sonnet OK:', JSON.stringify(analysisResult));
+      console.log('[Acuarius] Análisis:', JSON.stringify(analysisResult));
     }
-  } catch(e) {
-    console.error('[Acuarius] Error análisis Sonnet:', e.message);
-  }
+  } catch(e) { console.error('[Acuarius] Error Sonnet:', e.message); }
 
   rmThinking(thinkId);
 
-  // Detectar formato por dimensiones reales
+  // Detectar formato
   var formatDetect = 'square';
   var tempImg = new Image();
   await new Promise(function(resolve) {
-    tempImg.onload = function() {
-      formatDetect = (tempImg.width / tempImg.height < 0.85) ? 'vertical' : 'square';
-      resolve();
-    };
+    tempImg.onload = function() { formatDetect = (tempImg.width / tempImg.height < 0.85) ? 'vertical' : 'square'; resolve(); };
     tempImg.onerror = resolve;
     tempImg.src = data.imageDataUrl;
   });
 
   if (!analysisResult) {
-    analysisResult = {
-      headline: '', body_items: [], logo: '', text_color: 'white', bg_dark: true,
-      visual_style: 'professional advertising photography', main_subject: 'latin adult professional person',
-      background: 'clean modern background', color_palette: '#1E2BCC, #ffffff',
-      lighting: 'soft studio lighting', overall_mood: 'professional and trustworthy'
-    };
+    analysisResult = { headline:'', body_items:[], logo:'', bg_dark:true, visual_style:'professional advertising photography', overall_mood:'professional', color_palette:'#1E2BCC, #ffffff' };
   }
 
-  // PASO 2: Mostrar tarjeta de confirmación editable
-  showTextConfirmCard(analysisResult, formatDetect, data.count);
+  showVariationAxisCard(analysisResult, formatDetect, data.count);
 }
 
-// Tarjeta editable para confirmar texto antes de generar
-function showTextConfirmCard(analysis, format, count) {
+// Tarjeta: elegir qué variar + confirmar texto
+function showVariationAxisCard(analysis, format, count) {
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
 
-  var hasText = !!(analysis.headline || (analysis.body_items && analysis.body_items.length) || analysis.logo);
-  var bodyVal = ((analysis.body_items || []).join('\n')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  var headlineVal = (analysis.headline || '').replace(/"/g, '&quot;').replace(/&/g,'&amp;');
-  var logoVal = (analysis.logo || '').replace(/"/g, '&quot;').replace(/&/g,'&amp;');
-
-  // Serializar analysis para pasar al onclick (safe)
+  var bodyVal = ((analysis.body_items || []).join('\n')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  var headlineVal = (analysis.headline || '').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
+  var logoVal = (analysis.logo || '').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
   var analysisEncoded = encodeURIComponent(JSON.stringify(analysis));
+
+  var AXES = [
+    { key:'subject',     emoji:'👤', label:'Personaje',   desc:'Varía género, edad y demografía del modelo manteniendo todo lo demás igual' },
+    { key:'background',  emoji:'🏙️', label:'Fondo',       desc:'Varía el escenario o ambiente manteniendo el personaje y composición iguales' },
+    { key:'palette',     emoji:'🎨', label:'Paleta',      desc:'Varía los colores dominantes del anuncio manteniendo la composición' },
+    { key:'composition', emoji:'📐', label:'Composición', desc:'Varía el encuadre y posición del sujeto manteniendo el estilo' },
+  ];
+
+  var axisHtml = AXES.map(function(ax) {
+    return '<div id="axis-' + ax.key + '" onclick="selectAxis(\'' + ax.key + '\')" style="border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;background:white;transition:all .15s" onmouseover="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\'}" onmouseout="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--border)\';this.style.background=\'white\'}">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">' +
+        '<span style="font-size:16px">' + ax.emoji + '</span>' +
+        '<span style="font-size:13px;font-weight:700;color:var(--text)">' + ax.label + '</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);line-height:1.4">' + ax.desc + '</div>' +
+    '</div>';
+  }).join('');
 
   var el = document.createElement('div');
   el.className = 'msg';
-  el.id = 'text-confirm-card';
+  el.id = 'variation-axis-card';
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-    '<div style="max-width:480px;width:100%">' +
+    '<div style="max-width:500px;width:100%">' +
       '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-        '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">✅ Anuncio analizado</div>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">' +
-          (hasText ? 'Detecté este texto en tu anuncio. Edítalo si es necesario antes de generar las variaciones.' :
-                     'No detecté texto visible. Escríbelo abajo si quieres incluirlo, o deja vacío para variaciones solo visuales.') +
+
+        // Título
+        '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px">✅ Anuncio analizado</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">Elige <strong>qué elemento quieres variar</strong> para el A/B testing. El resto del anuncio se mantiene igual.</div>' +
+
+        // Selector de eje
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">' + axisHtml + '</div>' +
+
+        // Texto detectado (colapsable/editable)
+        '<div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px">' +
+          '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Texto detectado en el anuncio</div>' +
+          '<div style="margin-bottom:8px">' +
+            '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Título</label>' +
+            '<input id="tc-headline" type="text" value="' + headlineVal + '" placeholder="Título principal..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
+          '</div>' +
+          '<div style="margin-bottom:8px">' +
+            '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Cuerpo <span style="opacity:.7">(un ítem por línea)</span></label>' +
+            '<textarea id="tc-body" rows="3" placeholder="Un ítem por línea..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none;resize:vertical;line-height:1.5" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' + bodyVal + '</textarea>' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Marca / Logo</label>' +
+            '<input id="tc-logo" type="text" value="' + logoVal + '" placeholder="Nombre de tu marca..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
+          '</div>' +
         '</div>' +
 
-        '<div style="margin-bottom:10px">' +
-          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Título / Headline</label>' +
-          '<input id="tc-headline" type="text" value="' + headlineVal + '" placeholder="Título principal del anuncio..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
-        '</div>' +
-
-        '<div style="margin-bottom:10px">' +
-          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Texto del cuerpo <span style="font-weight:400;text-transform:none">(un ítem por línea)</span></label>' +
-          '<textarea id="tc-body" rows="4" placeholder="Un ítem por línea..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none;resize:vertical;line-height:1.6" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' + bodyVal + '</textarea>' +
-        '</div>' +
-
-        '<div style="margin-bottom:16px">' +
-          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Marca / Logo</label>' +
-          '<input id="tc-logo" type="text" value="' + logoVal + '" placeholder="Nombre de tu marca..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
-        '</div>' +
-
-        '<div style="display:flex;gap:8px">' +
-          '<button onclick="confirmAndGenerate(\'' + analysisEncoded + '\',\'' + format + '\',' + count + ',false)" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar variaciones</button>' +
-          '<button onclick="confirmAndGenerate(\'' + analysisEncoded + '\',\'' + format + '\',' + count + ',true)" style="padding:10px 14px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)" title="Generar solo fondo/personaje sin texto">Sin texto</button>' +
-        '</div>' +
+        // Botón generar
+        '<button id="axis-generate-btn" onclick="launchAxisVariations(\'' + analysisEncoded + '\',\'' + format + '\',' + count + ')" disabled style="width:100%;padding:11px;background:#9CA3AF;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:var(--font);transition:all .2s">Selecciona qué variar ↑</button>' +
       '</div>' +
     '</div>';
 
@@ -4611,61 +4623,86 @@ function showTextConfirmCard(analysis, format, count) {
   scrollB();
 }
 
-// Recibe datos confirmados/editados y lanza la generación
-async function confirmAndGenerate(analysisEncoded, format, count, skipText) {
+var selectedAxis = null;
+function selectAxis(key) {
+  selectedAxis = key;
+  document.querySelectorAll('[id^="axis-"]').forEach(function(el) {
+    if (el.id === 'axis-' + key) {
+      el.style.borderColor = 'var(--blue)';
+      el.style.background = 'var(--blue-lt)';
+      el.classList.add('ax-sel');
+    } else if (el.id.startsWith('axis-') && !el.id.includes('generate') && !el.id.includes('card')) {
+      el.style.borderColor = 'var(--border)';
+      el.style.background = 'white';
+      el.classList.remove('ax-sel');
+    }
+  });
+  var labels = { subject:'Personaje', background:'Fondo', palette:'Paleta', composition:'Composición' };
+  var genBtn = document.getElementById('axis-generate-btn');
+  if (genBtn) {
+    genBtn.disabled = false;
+    genBtn.style.background = 'var(--blue)';
+    genBtn.style.cursor = 'pointer';
+    genBtn.textContent = '✨ Variar ' + (labels[key] || key) + ' — Generar variaciones';
+  }
+}
+
+// Genera variaciones usando Ideogram Remix con image_weight alto
+async function launchAxisVariations(analysisEncoded, format, count) {
   var analysis = JSON.parse(decodeURIComponent(analysisEncoded));
+  if (!selectedAxis) { return; }
 
   var headline  = ((document.getElementById('tc-headline') || {}).value || '').trim();
   var bodyRaw   = ((document.getElementById('tc-body') || {}).value || '').trim();
   var logo      = ((document.getElementById('tc-logo') || {}).value || '').trim();
   var bodyItems = bodyRaw ? bodyRaw.split('\n').map(function(s){ return s.trim(); }).filter(Boolean) : [];
 
-  var card = document.getElementById('text-confirm-card');
+  var card = document.getElementById('variation-axis-card');
   if (card) card.style.display = 'none';
 
   var adTextData = {
-    headline: skipText ? '' : headline,
-    bodyItems: skipText ? [] : bodyItems,
-    logo: skipText ? '' : logo,
+    headline: headline,
+    bodyItems: bodyItems,
+    logo: logo,
     darkBg: !!(analysis.bg_dark)
   };
-  var hasAdText = !skipText && !!(adTextData.headline || adTextData.bodyItems.length || adTextData.logo);
+  var hasAdText = !!(headline || bodyItems.length || logo);
 
-  addAgent('🎨 Generando **' + count + ' variaciones** con composiciones completamente nuevas...');
+  // Construir prompts de Remix según el eje elegido
+  // image_weight 0.88 = mantiene 88% de la imagen original, varía 12%
+  var axisPrompts = buildAxisPrompts(selectedAxis, analysis, count);
+
+  addAgent('🎨 Generando **' + count + ' variaciones** variando el **' + axisPrompts.label + '** de tu anuncio...');
 
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando ' + count + ' variaciones...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando variaciones con Ideogram Remix...'; }
   }, 100);
-
-  // Prompts con offset aleatorio
-  var rnd = Math.floor(Math.random() * 100);
-  var variantPrompts = [];
-  for (var v = 0; v < count; v++) {
-    variantPrompts.push(
-      (analysis.visual_style || 'professional advertising photography') + ', ' +
-      (analysis.overall_mood || 'professional') + ' mood. ' +
-      'Subject: ' + VARIATION_AXES[1].values[(v + rnd + 2) % VARIATION_AXES[1].values.length] + '. ' +
-      'Background: ' + VARIATION_AXES[0].values[(v + rnd) % VARIATION_AXES[0].values.length] + '. ' +
-      'Lighting: ' + VARIATION_AXES[2].values[(v + rnd) % VARIATION_AXES[2].values.length] + '. ' +
-      'Color palette: ' + VARIATION_AXES[3].values[(v + rnd + 1) % VARIATION_AXES[3].values.length] + '. ' +
-      'Composition: ' + VARIATION_AXES[4].values[(v + rnd) % VARIATION_AXES[4].values.length] + '. ' +
-      'Professional Meta Ads creative for Latin American market. NO text, NO words, NO typography — clean visual only.'
-    );
-  }
 
   generatedAdImages = [];
   adImgGridEl = null;
   var allImages = [];
+
   try {
-    var results = await Promise.all(variantPrompts.map(function(p) {
+    // Ideogram Remix: image_weight 0.88 mantiene la imagen base casi intacta,
+    // solo varía el elemento del prompt que cambiamos
+    var remixPromises = axisPrompts.prompts.map(function(p) {
       return fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-        body: JSON.stringify({ prompt: p, format: format, variations: 1, hasText: false })
+        body: JSON.stringify({
+          mode: 'remix',
+          referenceImage: variationUploadData.imageDataUrl,
+          prompt: p,
+          format: format,
+          imageWeight: 0.88,
+          remixCount: 1
+        })
       }).then(function(r) { return r.json(); });
-    }));
+    });
+
+    var results = await Promise.all(remixPromises);
     results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
   } catch(err) {
     rmThinking(thinkId);
@@ -4676,15 +4713,91 @@ async function confirmAndGenerate(analysisEncoded, format, count, skipText) {
   rmThinking(thinkId);
   if (!allImages.length) { addAgent('No se pudieron generar las variaciones. Intenta de nuevo.'); return; }
 
+  // Componer con Canvas si hay texto, renderizar directo si no
   if (hasAdText) {
     for (var i = 0; i < allImages.length; i++) {
       await composeAdWithCanvas(allImages[i], i + 1, allImages.length, format, adTextData);
     }
   } else {
     for (var i = 0; i < allImages.length; i++) {
-      renderAdImage(allImages[i], i + 1, allImages.length, format, variantPrompts[i], false);
+      renderAdImage(allImages[i], i + 1, allImages.length, format, axisPrompts.prompts[i], false);
     }
   }
+}
+
+// Construye prompts específicos para cada eje de variación
+function buildAxisPrompts(axis, analysis, count) {
+  var baseStyle = (analysis.visual_style || 'professional advertising photography') + ', ' + (analysis.overall_mood || 'professional') + ' mood';
+  var palette   = analysis.color_palette || '#1E2BCC, #ffffff';
+
+  var SUBJECTS = [
+    'young latin woman 25-30, warm confident smile, professional casual attire',
+    'mature latin man 40-45, trustworthy expression, business casual',
+    'young latin man 28-33, energetic approachable smile, modern casual',
+    'latin couple mid-30s, natural happy interaction',
+    'latin woman 35-40, empowered professional posture, elegant attire',
+    'latin senior woman 55-60, dignified warm expression, elegant',
+    'group of diverse latin professionals, collaborative positive energy',
+    'latin family, parents with young child, authentic warm moment'
+  ];
+  var BACKGROUNDS = [
+    'modern minimalist white studio, clean gradient, professional',
+    'warm coffee shop interior, wooden textures, golden ambient light',
+    'bright outdoor urban street, natural daylight, city architecture',
+    'contemporary office environment, glass walls, clean modern',
+    'lush outdoor park, green nature, soft dappled sunlight',
+    'elegant dark gradient background, dramatic rim lighting',
+    'modern home living room, warm cozy tones, comfortable',
+    'bright commercial space, clean retail environment'
+  ];
+  var PALETTES = [
+    'warm terracotta and cream tones, earthy and approachable',
+    'cool teal and white, fresh and trustworthy',
+    'rich navy blue and gold, premium professional',
+    'vibrant coral and off-white, energetic and modern',
+    'soft sage green and beige, calm and natural',
+    'deep burgundy and cream, sophisticated and bold',
+    'bright electric blue and white, dynamic and tech',
+    'warm amber and dark brown, authentic and grounded'
+  ];
+  var COMPOSITIONS = [
+    'subject centered, symmetrical framing, generous breathing room',
+    'subject left-aligned rule of thirds, open right space for text',
+    'close-up portrait framing, emotional shallow depth of field',
+    'wide environmental shot, subject integrated in setting',
+    'subject right-aligned, strong left negative space',
+    'low angle looking up, powerful and aspirational framing',
+    'overhead birds-eye perspective, clean flat lay composition',
+    'diagonal dynamic framing, energetic modern composition'
+  ];
+
+  var rnd = Math.floor(Math.random() * 100);
+  var prompts = [];
+  var label = '';
+
+  for (var v = 0; v < count; v++) {
+    var p = '';
+    if (axis === 'subject') {
+      label = 'Personaje';
+      var sub = SUBJECTS[(v + rnd) % SUBJECTS.length];
+      p = baseStyle + '. VARY ONLY THE PERSON: ' + sub + '. Keep EXACTLY the same background, composition, lighting, color palette, and overall layout as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+    } else if (axis === 'background') {
+      label = 'Fondo';
+      var bg = BACKGROUNDS[(v + rnd) % BACKGROUNDS.length];
+      p = baseStyle + '. VARY ONLY THE BACKGROUND AND SETTING: ' + bg + '. Keep EXACTLY the same person, composition, lighting angle, and overall layout as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+    } else if (axis === 'palette') {
+      label = 'Paleta de color';
+      var pal = PALETTES[(v + rnd) % PALETTES.length];
+      p = baseStyle + '. VARY ONLY THE COLOR PALETTE AND TONES: ' + pal + '. Keep EXACTLY the same composition, person, background type, and layout as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+    } else if (axis === 'composition') {
+      label = 'Composición';
+      var comp = COMPOSITIONS[(v + rnd) % COMPOSITIONS.length];
+      p = baseStyle + '. VARY ONLY THE FRAMING AND COMPOSITION: ' + comp + '. Keep EXACTLY the same person type, background, lighting mood, and color palette as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+    }
+    prompts.push(p);
+  }
+
+  return { label: label, prompts: prompts };
 }
 
 async function composeAdWithCanvas(imgData, index, total, format, textData) {
