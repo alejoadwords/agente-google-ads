@@ -1322,7 +1322,15 @@ El sistema ejecutará la query automáticamente y te devolverá los resultados p
 – Keywords top: SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.impressions, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.clicks DESC LIMIT 20
 – Search terms: SELECT search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.ctr, metrics.conversions FROM search_term_view WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.clicks DESC LIMIT 20
 
-**Si no hay cuenta conectada:** El sistema te avisará. En ese caso, pide al cliente que conecte su cuenta en Configuración → Conexiones.`;
+**Si no hay cuenta conectada:** El sistema te avisará. En ese caso, pide al cliente que conecte su cuenta en Configuración → Conexiones.
+
+SUGERENCIAS DE SEGUIMIENTO:
+Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea con el bloque:
+[SUGERENCIAS: opción1 | opción2 | opción3]
+– Máximo 3 sugerencias, mínimo 2
+– Cada opción: 3-6 palabras, accionable y específica al contexto
+– No uses comillas ni puntuación extra dentro del bloque
+– Ejemplos: [SUGERENCIAS: Ver keywords recomendadas | Estimar presupuesto | Analizar competencia]`;
 
 const SYSTEM_META = `Eres el agente de Meta Ads de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de Meta Ads (Facebook e Instagram) con más de 10 años de experiencia gestionando cuentas en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y basas cada recomendación en datos reales.
 
@@ -1626,7 +1634,15 @@ Para plan Pro/Admin: "Perfecto, voy a crear anuncios profesionales. Necesito dat
 Para plan gratuito: Genera directamente:
 [GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO], diseño básico", "format": "vertical", "variations": 1, "hasText": true}]
 
-**CRÍTICO:** Usuarios admin (alejandro.gonzalez.ads@gmail.com) SIEMPRE reciben cuestionario completo como plan Pro.`;
+**CRÍTICO:** Usuarios admin (alejandro.gonzalez.ads@gmail.com) SIEMPRE reciben cuestionario completo como plan Pro.
+
+SUGERENCIAS DE SEGUIMIENTO:
+Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea con el bloque:
+[SUGERENCIAS: opción1 | opción2 | opción3]
+– Máximo 3 sugerencias, mínimo 2
+– Cada opción: 3-6 palabras, accionable y específica al contexto
+– No uses comillas ni puntuación extra dentro del bloque
+– Ejemplos: [SUGERENCIAS: Ver keywords recomendadas | Estimar presupuesto | Analizar competencia]`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 const MAX_HIST_MESSAGES = 20; // máximo de mensajes enviados a Claude (10 turnos)
@@ -2519,7 +2535,15 @@ FORMATO DE RESPUESTA
 – Usa **negrita** para recomendaciones clave y nombres de redes
 – Termina siempre con un siguiente paso concreto
 – Nunca menciones que eres IA ni que tienes limitaciones
-– Adapta todo al contexto LatAm: plataformas preferidas, horarios de publicación, tendencias locales`;
+– Adapta todo al contexto LatAm: plataformas preferidas, horarios de publicación, tendencias locales
+
+SUGERENCIAS DE SEGUIMIENTO:
+Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea con el bloque:
+[SUGERENCIAS: opción1 | opción2 | opción3]
+– Máximo 3 sugerencias, mínimo 2
+– Cada opción: 3-6 palabras, accionable y específica al contexto
+– No uses comillas ni puntuación extra dentro del bloque
+– Ejemplos: [SUGERENCIAS: Ver keywords recomendadas | Estimar presupuesto | Analizar competencia]`;
 
 const SYSTEM_CONSULTOR = `Eres el Consultor de Marketing Digital de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un CMO (Chief Marketing Officer) externo con más de 10 años de experiencia ayudando empresas de Colombia, México, Argentina, Chile y toda la región a crecer de forma rentable.
 
@@ -2556,7 +2580,15 @@ FORMATO DE RESPUESTA:
 LÍMITES:
 – Si preguntan sobre configuración técnica muy específica de una plataforma, da orientación general y sugiere el agente especializado
 – Nunca menciones que eres IA ni que tienes limitaciones
-– Adapta al contexto LatAm: presupuestos, comportamiento del consumidor, plataformas más usadas en la región`;
+– Adapta al contexto LatAm: presupuestos, comportamiento del consumidor, plataformas más usadas en la región
+
+SUGERENCIAS DE SEGUIMIENTO:
+Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea con el bloque:
+[SUGERENCIAS: opción1 | opción2 | opción3]
+– Máximo 3 sugerencias, mínimo 2
+– Cada opción: 3-6 palabras, accionable y específica al contexto
+– No uses comillas ni puntuación extra dentro del bloque
+– Ejemplos: [SUGERENCIAS: Ver keywords recomendadas | Estimar presupuesto | Analizar competencia]`;
 
  // historial del chat general
 let homeLoading = false;
@@ -3038,6 +3070,14 @@ while(!streamDone){
 // Remover burbuja de stream temporal (se reemplaza abajo con addAgent o lógica especial)
 if(streamEl)streamEl.remove();
 let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de nuevo.';
+
+    // Extraer sugerencias de seguimiento
+    let sugerencias = [];
+    const sugMatch = replyFinalProcessed.match(/\[SUGERENCIAS:\s*([^\]]+)\]/);
+    if (sugMatch) {
+      sugerencias = sugMatch[1].split('|').map(s => s.trim()).filter(Boolean).slice(0, 3);
+      replyFinalProcessed = replyFinalProcessed.replace(sugMatch[0], '').trim();
+    }
     // Detectar bloque GAQL (Google Ads)
     const gaqlMatch = replyFinalProcessed.match(/\[GAQL_QUERY:\s*([\s\S]+?)\]/);
     if(gaqlMatch){
@@ -3137,6 +3177,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         .trim();
       hist.push({role:'assistant', content: cleanReply});
       addAgent(cleanReply);
+      if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
       // Guardar el texto de la parrilla para exportación
       lastParrillaText = cleanReply;
       setTimeout(()=>renderParrillaImagenesBtn(), 300);
@@ -3145,8 +3186,23 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
     else {
       hist.push({role:'assistant',content:replyFinalProcessed});
       addAgent(replyFinalProcessed);
+      if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
     }
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
+function renderSugerencias(opciones) {
+  const area = document.getElementById('chat-area');
+  if (!area || !opciones.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'msg';
+  wrap.id = 'sugerencias-wrap';
+  wrap.style.cssText = 'padding-left:42px;display:flex;flex-wrap:wrap;gap:7px;margin-top:-6px';
+  wrap.innerHTML = opciones.map(op =>
+    `<button onclick="qSend('${op.replace(/'/g,"\'")}');document.getElementById('sugerencias-wrap')?.remove()" style="padding:6px 13px;background:var(--bg);border:1.5px solid var(--blue-md);border-radius:20px;font-size:12px;color:var(--blue);cursor:pointer;font-family:var(--font);font-weight:500;transition:all .15s;white-space:nowrap" onmouseover="this.style.background='var(--blue-lt)'" onmouseout="this.style.background='var(--bg)'">${op}</button>`
+  ).join('');
+  area.appendChild(wrap);
+  scrollB();
+}
+
 function renderSocialOptions() {
   const area = document.getElementById('chat-area');
   if (!area) return;
