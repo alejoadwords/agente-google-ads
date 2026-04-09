@@ -3250,8 +3250,6 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         else { hist.push({role:'assistant', content: 'Generando ' + Math.min(allMatches.length, userPlan === 'pro' ? 5 : 1) + ' creativos para tu anuncio...'}); }
         const matchesToProcess = (userPlan === 'pro' || isAdminUser()) ? allMatches : allMatches.slice(0, 1);
         generatedAdImages = [];
-        currentBatchType = 'feed';
-        feedPrompts = [];
         const totalImgs = matchesToProcess.length;
         for(let i = 0; i < matchesToProcess.length; i++){
           let imgCmd;
@@ -4211,16 +4209,9 @@ async function generateAdImages(cmd) {
 
 var generatedAdImages = [];
 var adImgGridEl = null; // Contenedor grid compartido para todas las imágenes del batch
-var currentBatchType = 'feed'; // 'feed' o 'stories' - para rastrear qué tipo de batch se está generando
-var feedPrompts = []; // Guardar prompts del feed para generar stories
 
 function renderAdImage(img, index, total, format, prompt, isSocial) {
   generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format });
-
-  // Guardar prompt si es feed y es Pro/Admin para generar stories después (solo para Meta)
-  if (!isSocial && currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser())) {
-    feedPrompts[index - 1] = prompt;
-  }
 
   var fmtLabel = { square:'Feed cuadrado · 1080×1080', vertical:'Feed vertical · 1080×1350', story:'Stories/Reels · 1080×1920', carousel:'Carrusel · 1080×1080' }[format] || format;
   var ratio = { square:'1/1', vertical:'4/5', story:'9/16', carousel:'1/1' }[format] || '4/5';
@@ -4296,12 +4287,7 @@ function renderAdImage(img, index, total, format, prompt, isSocial) {
           '</div>';
         document.getElementById('chat-area').appendChild(allEl);
         scrollB();
-        if (currentBatchType === 'feed' && (userPlan === 'pro' || isAdminUser()) && feedPrompts.length === total) {
-          currentBatchType = 'stories';
-          setTimeout(function() { addAgent('Generando versiones para Stories automáticamente...'); generateStoriesFromFeed(); }, 1000);
-        } else {
-          setTimeout(function() { showCopysButton(total, 'feed'); }, 300);
-        }
+        setTimeout(function() { showCopysButton(total, 'feed'); }, 300);
       }
     }, 300);
   }
@@ -4371,27 +4357,33 @@ function requestImageVariation(encodedPrompt, format) {
 // VARIACIONES DE ANUNCIO EXISTENTE (Ideogram Remix)
 // =============================================
 
-var variationUploadData = { imageDataUrl: null, count: 5, style: 'balanced' };
+// =============================================
+// VARIACIONES DE ANUNCIO — Sistema JSON prompt-based
+// Descompone la imagen en componentes visuales (JSON),
+// genera N versiones modificando ejes distintos por variación,
+// y crea imágenes completamente nuevas (text-to-image) coherentes.
+// =============================================
+
+var variationUploadData = { imageDataUrl: null, count: 5 };
 
 function showVariationUploader() {
-  variationUploadData = { imageDataUrl: null, count: 5, style: 'balanced' };
+  variationUploadData = { imageDataUrl: null, count: 5 };
+
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
 
   var el = document.createElement('div');
   el.className = 'msg';
   el.id = 'variation-uploader-card';
   el.innerHTML =
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
-    '</div>' +
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
     '<div style="max-width:460px;width:100%">' +
       '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
           '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
-          '<div style="background:var(--blue-lt);color:var(--blue);padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">Ideogram V3 Remix</div>' +
+          '<div style="background:var(--blue-lt);color:var(--blue);padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">IA generativa</div>' +
         '</div>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Sube tu anuncio actual y la IA generará variaciones manteniendo tu identidad visual.</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">La IA analiza tu anuncio, lo descompone en componentes visuales y genera imágenes nuevas con variaciones reales de fondo, personaje, estilo y paleta — sin distorsionar texto.</div>' +
 
-        // Zona de upload
         '<div class="var-upload-zone" id="var-upload-zone" onclick="document.getElementById(\'var-file-input\').click()" ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ondragleave="this.classList.remove(\'drag-over\')" ondrop="handleVariationDrop(event)">' +
           '<div id="var-upload-placeholder">' +
             '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
@@ -4402,27 +4394,14 @@ function showVariationUploader() {
           '<input type="file" id="var-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleVariationFile(this.files[0])">' +
         '</div>' +
 
-        // Opciones (ocultas hasta que se sube imagen)
         '<div id="var-options" style="display:none;margin-top:14px">' +
           '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">¿Cuántas variaciones?</div>' +
-          '<div style="display:flex;gap:6px;margin-bottom:14px">' +
-            [5,6,7,8,9,10].map(function(n){
+          '<div style="display:flex;gap:6px;margin-bottom:16px">' +
+            [3,4,5,6,8].map(function(n){
               return '<div class="var-count-chip' + (n===5?' selected':'') + '" onclick="selectVarCount(this,' + n + ')">' + n + '</div>';
             }).join('') +
           '</div>' +
-          '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Estilo de variación</div>' +
-          '<div style="display:flex;gap:6px;margin-bottom:16px">' +
-            '<button class="var-style-btn selected" id="vstyle-conservative" onclick="selectVarStyle(this,\'conservative\')">' +
-              '🎯 Conservadora<br><span style="font-size:10px;font-weight:400;color:inherit;opacity:.7">Cambios sutiles</span>' +
-            '</button>' +
-            '<button class="var-style-btn" id="vstyle-balanced" onclick="selectVarStyle(this,\'balanced\')">' +
-              '⚖️ Balanceada<br><span style="font-size:10px;font-weight:400;color:inherit;opacity:.7">Estilo y fondo</span>' +
-            '</button>' +
-            '<button class="var-style-btn" id="vstyle-creative" onclick="selectVarStyle(this,\'creative\')">' +
-              '🚀 Creativa<br><span style="font-size:10px;font-weight:400;color:inherit;opacity:.7">Reinterpretación</span>' +
-            '</button>' +
-          '</div>' +
-          '<button onclick="startVariationGeneration()" id="var-generate-btn" style="width:100%;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar variaciones</button>' +
+          '<button onclick="startVariationGeneration()" id="var-generate-btn" style="width:100%;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Analizar y generar variaciones</button>' +
         '</div>' +
 
       '</div>' +
@@ -4440,18 +4419,11 @@ function handleVariationDrop(event) {
 }
 
 function handleVariationFile(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    addAgent('Por favor sube una imagen en formato JPG, PNG o WebP.');
-    return;
-  }
-  if (file.size > 8 * 1024 * 1024) {
-    addAgent('La imagen debe ser menor a 8 MB.');
-    return;
-  }
+  if (!file || !file.type.startsWith('image/')) { addAgent('Por favor sube una imagen en formato JPG, PNG o WebP.'); return; }
+  if (file.size > 8 * 1024 * 1024) { addAgent('La imagen debe ser menor a 8 MB.'); return; }
   var reader = new FileReader();
   reader.onload = function(e) {
     variationUploadData.imageDataUrl = e.target.result;
-    // Mostrar preview
     var zone = document.getElementById('var-upload-zone');
     var placeholder = document.getElementById('var-upload-placeholder');
     var preview = document.getElementById('var-preview');
@@ -4459,7 +4431,6 @@ function handleVariationFile(file) {
     placeholder.style.display = 'none';
     preview.src = e.target.result;
     preview.style.display = 'block';
-    // Mostrar opciones
     document.getElementById('var-options').style.display = 'block';
     scrollB();
   };
@@ -4472,30 +4443,73 @@ function selectVarCount(el, n) {
   el.classList.add('selected');
 }
 
-function selectVarStyle(el, style) {
-  variationUploadData.style = style;
-  document.querySelectorAll('.var-style-btn').forEach(function(b){ b.classList.remove('selected'); });
-  el.classList.add('selected');
-}
+// Ejes de variación: qué dimensión visual cambiar en cada variación
+var VARIATION_AXES = [
+  { field: 'background', values: [
+    'modern minimalist studio with soft white and beige tones, clean gradient',
+    'warm coffee shop interior with wooden textures and ambient golden light',
+    'bright outdoor urban setting with natural daylight, city architecture in background',
+    'elegant dark background with dramatic professional rim lighting',
+    'lush green nature park setting with soft bokeh and dappled natural light',
+    'contemporary home living room with modern furniture and warm ambient tones',
+    'vibrant abstract gradient background in complementary accent colors',
+    'professional office environment with glass walls and clean steel aesthetic'
+  ]},
+  { field: 'subject', values: [
+    'young latin woman, 25-30 years old, warm genuine smile, confident relaxed posture',
+    'mature latin man, 40-45 years old, professional demeanor, trustworthy friendly expression',
+    'young latin man, 28-33 years old, casual energetic, approachable open smile',
+    'latin couple, mid-30s, natural happy interaction, authentic connection',
+    'latin woman, 35-40 years old, professional business attire, empowered poised expression',
+    'diverse group of latin professionals, collaborative positive energy, teamwork',
+    'latin family with child, warm authentic moment, genuine happiness',
+    'latin senior woman, 55-60 years old, elegant dignified serene expression'
+  ]},
+  { field: 'lighting', values: [
+    'soft diffused studio lighting, even flattering illumination, clean shadows',
+    'warm golden hour sunlight streaming from side, cinematic and emotive quality',
+    'bright clean daylight, fresh energetic feel, high key',
+    'dramatic side lighting with rich shadows, premium editorial feel',
+    'cool blue-toned professional lighting, modern trustworthy atmosphere'
+  ]},
+  { field: 'color_accent', values: [
+    'warm terracotta and cream color palette',
+    'refreshing teal and white color palette',
+    'rich emerald green and gold color palette',
+    'vibrant coral and off-white color palette',
+    'deep navy blue and silver color palette',
+    'soft lavender and warm white color palette'
+  ]},
+  { field: 'composition', values: [
+    'centered subject with generous negative space, clean symmetrical framing',
+    'rule of thirds, subject left-aligned, open space for text on right',
+    'close-up portrait framing, emotional connection, shallow depth of field',
+    'wide environmental shot, subject integrated into setting, storytelling composition',
+    'dynamic diagonal composition, energetic and modern feel'
+  ]}
+];
 
 async function startVariationGeneration() {
   var data = variationUploadData;
   if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
 
-  // Deshabilitar botón
   var btn = document.getElementById('var-generate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
 
-  // 1. Analizar la imagen con Claude para extraer un prompt descriptivo
+  // PASO 1: Claude analiza la imagen y devuelve un JSON de componentes visuales
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con IA...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>descomponiendo tu anuncio en componentes visuales...'; }
   }, 100);
 
-  var analysisPrompt = 'Analiza este anuncio de Meta Ads y describe en inglés (para un prompt de generación de imágenes) ÚNICAMENTE sus elementos visuales no-textuales: composición y layout general, paleta de colores dominantes (da los hex aproximados si los identificas), estilo fotográfico o ilustrativo (realismo, plano, editorial, lifestyle, etc.), tipo de personas o modelos mostrados (demografía, postura, expresión), productos o servicios mostrados sin texto, fondos y ambientación, iluminación y ambiente emocional. MUY IMPORTANTE: NO describas ningún texto, tipografía, títulos, precios, ni elementos de texto que aparezcan en la imagen — solo los elementos visuales puros. Máximo 130 palabras. Solo devuelve la descripción en inglés, sin explicaciones ni formato adicional.';
+  var analysisSystemPrompt = 'You are an expert visual analyst for advertising creatives. Analyze ad images and return ONLY a valid JSON object. Never include markdown, backticks, or text outside the JSON.';
 
-  var remixPrompt = 'Professional Meta Ads creative visual composition for Latin American market, clean advertising photography, NO text overlays, no typography, no words';
+  var analysisUserPrompt = 'Analyze this Meta Ads creative and return ONLY a JSON object with these exact fields (in English, be specific):\n{"ad_format":"square or vertical","visual_style":"overall photographic/illustrative style and mood","main_subject":"describe person/object WITHOUT any text — demographics clothing posture expression","background":"environment setting textures atmosphere","color_palette":"3-5 dominant hex colors approximately","lighting":"type direction temperature mood","composition":"layout subject position framing depth of field","props_elements":"objects or visual elements besides main subject","overall_mood":"emotional tone conveyed"}\nCRITICAL: Do NOT describe any text, words, typography, prices, or headlines. Only visual elements. Return valid JSON only, no markdown.';
+
+  var baseJson = null;
+  var formatDetect = 'square';
+
   try {
     var analyzeRes = await fetch('/api/chat', {
       method: 'POST',
@@ -4503,88 +4517,99 @@ async function startVariationGeneration() {
       body: JSON.stringify({
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: analysisPrompt }
+          { type: 'text', text: analysisUserPrompt }
         ]}],
-        system: 'Eres un experto en análisis visual de creativos publicitarios.',
+        system: analysisSystemPrompt,
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200
+        max_tokens: 600
       })
     });
     if (analyzeRes.ok) {
       var analyzeData = await analyzeRes.json();
-      var extracted = analyzeData.content?.[0]?.text || '';
-      if (extracted.length > 20) {
-        remixPrompt = extracted + '. Professional Meta Ads creative for Latin American market, high-converting advertising photography, vibrant mobile-optimized. IMPORTANT: absolutely no text, no typography, no words, no numbers, no price tags, no headlines — pure visual composition only. Vary the background scene, lighting mood, model pose or demographic, and color accent palette to create distinct variations.';
-      }
+      var rawText = analyzeData.content?.[0]?.text || '';
+      var clean = rawText.replace(/```json|```/g, '').trim();
+      try { baseJson = JSON.parse(clean); } catch(e) { baseJson = null; }
     }
-  } catch(e) { /* usar prompt genérico */ }
+  } catch(e) { /* usar fallback */ }
 
   rmThinking(thinkId);
 
-  // 2. Mapear estilo a image_weight
-  var weightMap = { conservative: 0.75, balanced: 0.50, creative: 0.25 };
-  var imageWeight = weightMap[data.style] || 0.50;
-
-  // 3. Determinar formato del anuncio (detectar si es vertical, cuadrado o story)
+  // Detectar formato por dimensiones reales
   var tempImg = new Image();
-  var formatDetect = 'vertical';
   await new Promise(function(resolve) {
     tempImg.onload = function() {
       var ratio = tempImg.width / tempImg.height;
-      if (ratio > 1.2) formatDetect = 'square';
-      else if (ratio < 0.65) formatDetect = 'story';
-      else if (ratio >= 0.65 && ratio < 0.9) formatDetect = 'vertical';
-      else formatDetect = 'square';
+      formatDetect = (ratio >= 0.85 && ratio <= 1.15) ? 'square' : (ratio < 0.85 ? 'vertical' : 'square');
       resolve();
     };
     tempImg.onerror = resolve;
     tempImg.src = data.imageDataUrl;
   });
 
-  // Resetear grid para las variaciones
+  // Fallback JSON si el análisis falló
+  if (!baseJson) {
+    baseJson = {
+      visual_style: 'professional lifestyle advertising photography, clean modern',
+      main_subject: 'latin adult person, professional and approachable',
+      background: 'clean studio background with soft gradient',
+      color_palette: '#ffffff, #1E2BCC, #f5f5f5',
+      lighting: 'soft diffused studio lighting, flattering and even',
+      composition: 'centered subject with clean negative space',
+      props_elements: 'minimal props',
+      overall_mood: 'professional, trustworthy, modern'
+    };
+  }
+
+  // PASO 2: Construir N prompts variados, cada uno modificando 2 ejes distintos
+  var total = data.count;
   generatedAdImages = [];
   adImgGridEl = null;
 
-  // 4. Mostrar mensaje de inicio
-  addAgent('🔄 Generando **' + data.count + ' variaciones** de tu anuncio... (' + { conservative:'conservadoras', balanced:'balanceadas', creative:'creativas' }[data.style] + ')');
-
-  // 5. Llamar al endpoint en lotes paralelos (máx 4 por llamada)
-  var total = data.count;
-  var batchSize = 4;
-  var batches = Math.ceil(total / batchSize);
-  var allImages = [];
+  addAgent('🎨 Anuncio analizado. Generando **' + total + ' variaciones** con composiciones completamente nuevas...');
 
   var thinkId2 = addThinking();
   setTimeout(function() {
     var el2 = document.getElementById(thinkId2);
-    if (el2) { var txt2 = el2.querySelector('.thinking-bbl'); if (txt2) txt2.innerHTML = '<div class="spinner"></div>generando ' + total + ' variaciones con Ideogram V3 Remix...'; }
+    if (el2) { var txt2 = el2.querySelector('.thinking-bbl'); if (txt2) txt2.innerHTML = '<div class="spinner"></div>generando ' + total + ' variaciones...'; }
   }, 100);
 
-  try {
-    var batchPromises = [];
-    for (var b = 0; b < batches; b++) {
-      var numInBatch = Math.min(batchSize, total - b * batchSize);
-      batchPromises.push(
-        fetch('/api/generate-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-          body: JSON.stringify({
-            mode: 'remix',
-            referenceImage: data.imageDataUrl,
-            prompt: remixPrompt,
-            format: formatDetect,
-            imageWeight: imageWeight,
-            remixCount: numInBatch,
-          })
-        }).then(function(r){ return r.json(); })
-      );
-    }
+  var variantPrompts = [];
+  for (var v = 0; v < total; v++) {
+    // Cada variación cambia 2 ejes con offsets distintos para máxima diversidad
+    var bgVal     = VARIATION_AXES[0].values[v % VARIATION_AXES[0].values.length];
+    var subjectVal = VARIATION_AXES[1].values[(v + 2) % VARIATION_AXES[1].values.length];
+    var lightVal  = VARIATION_AXES[2].values[v % VARIATION_AXES[2].values.length];
+    var colorVal  = VARIATION_AXES[3].values[(v + 1) % VARIATION_AXES[3].values.length];
+    var compVal   = VARIATION_AXES[4].values[v % VARIATION_AXES[4].values.length];
 
-    var batchResults = await Promise.all(batchPromises);
-    for (var br of batchResults) {
-      if (br.images) allImages = allImages.concat(br.images);
-    }
-    allImages = allImages.slice(0, total);
+    variantPrompts.push(
+      baseJson.visual_style + ', ' + baseJson.overall_mood + ' mood. ' +
+      'Subject: ' + subjectVal + '. ' +
+      'Background: ' + bgVal + '. ' +
+      'Lighting: ' + lightVal + '. ' +
+      'Color palette: ' + colorVal + '. ' +
+      'Composition: ' + compVal + '. ' +
+      (baseJson.props_elements && baseJson.props_elements !== 'minimal props' ? 'Props: ' + baseJson.props_elements + '. ' : '') +
+      'Professional Meta Ads creative for Latin American market, high-converting advertising photography, vibrant mobile-optimized. ' +
+      'CRITICAL: NO text, NO words, NO numbers, NO typography, NO price tags, NO headlines — pure visual composition only.'
+    );
+  }
+
+  // PASO 3: Lanzar todas las generaciones en paralelo (text-to-image puro)
+  var allImages = [];
+  try {
+    var imgPromises = variantPrompts.map(function(vPrompt) {
+      return fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
+        body: JSON.stringify({ prompt: vPrompt, format: formatDetect, variations: 1, hasText: false })
+      }).then(function(r) { return r.json(); });
+    });
+
+    var results = await Promise.all(imgPromises);
+    results.forEach(function(r) {
+      if (r.images && r.images.length > 0) allImages.push(r.images[0]);
+    });
   } catch(err) {
     rmThinking(thinkId2);
     addAgent('Error generando variaciones: ' + err.message);
@@ -4594,21 +4619,18 @@ async function startVariationGeneration() {
   rmThinking(thinkId2);
 
   if (!allImages.length) {
-    addAgent('No se pudieron generar las variaciones. Intenta con otra imagen.');
+    addAgent('No se pudieron generar las variaciones. Intenta de nuevo.');
     return;
   }
 
-  // 6. Renderizar imágenes en el grid existente
   for (var i = 0; i < allImages.length; i++) {
     allImages[i].index = i + 1;
-    renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, remixPrompt, false);
+    renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, variantPrompts[i], false);
   }
 
-  // 7. Botón para crear copys (no automático)
-  setTimeout(function() {
-    showCopysButton(allImages.length, 'variaciones');
-  }, 500);
+  setTimeout(function() { showCopysButton(allImages.length, 'variaciones'); }, 500);
 }
+
 
 // Sistema de cuestionario de diseño
 var designQData = {};
@@ -4734,40 +4756,6 @@ function selectFocus(btn, focus) {
   btn.style.background = '#E0E7FF';
   document.getElementById('final-generate-btn').disabled = false;
   document.getElementById('final-generate-btn').style.background = '#10B981';
-}
-
-function generateStoriesFromFeed() {
-  if (feedPrompts.length === 0) return;
-  
-  // Generar todas las versiones stories basadas en los prompts feed
-  for (let i = 0; i < feedPrompts.length; i++) {
-    let feedPrompt = feedPrompts[i];
-    // Adaptar prompt para formato stories (más vertical)
-    let storiesPrompt = feedPrompt.replace(/Layout:/, 'Layout vertical extendido para stories:')
-                                 .replace(/1080x1350/g, '1080x1920')
-                                 .replace(/formato vertical/g, 'formato stories');
-    
-    let imgCmd = {
-      prompt: storiesPrompt,
-      format: 'story',
-      variations: 1,
-      hasText: true,
-      _index: i + 1,
-      _total: feedPrompts.length
-    };
-    
-    setTimeout(function(cmd) {
-      generateAdImages(cmd);
-    }, i * 500, imgCmd); // Generar con delay para no sobrecargar
-  }
-  
-  // Al finalizar stories, mostrar botón de copys
-  setTimeout(function() {
-    showCopysButton(feedPrompts.length * 2, 'stories');
-    // Reset para próximo batch
-    currentBatchType = 'feed';
-    feedPrompts = [];
-  }, feedPrompts.length * 500 + 2000);
 }
 
 function generateBasicImage() {
