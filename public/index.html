@@ -4660,24 +4660,21 @@ async function launchAxisVariations(analysisEncoded, format, count) {
   var card = document.getElementById('variation-axis-card');
   if (card) card.style.display = 'none';
 
-  var adTextData = {
-    headline: headline,
-    bodyItems: bodyItems,
-    logo: logo,
-    darkBg: !!(analysis.bg_dark)
-  };
+  var adTextData = { headline: headline, bodyItems: bodyItems, logo: logo, darkBg: !!(analysis.bg_dark) };
   var hasAdText = !!(headline || bodyItems.length || logo);
 
-  // Construir prompts de Remix según el eje elegido
-  // image_weight 0.88 = mantiene 88% de la imagen original, varía 12%
-  var axisPrompts = buildAxisPrompts(selectedAxis, analysis, count);
+  // Estrategia diferenciada por eje:
+  // subject / background → text-to-image PURO: imagen limpia nueva + Canvas pinta el texto
+  // palette / composition → Remix image_weight 0.35: varía solo color/encuadre, preserva contenido y texto original
+  var useRemix = (selectedAxis === 'palette' || selectedAxis === 'composition');
 
+  var axisPrompts = buildAxisPrompts(selectedAxis, analysis, count);
   addAgent('🎨 Generando **' + count + ' variaciones** variando el **' + axisPrompts.label + '** de tu anuncio...');
 
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando variaciones con Ideogram Remix...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando variaciones...'; }
   }, 100);
 
   generatedAdImages = [];
@@ -4685,24 +4682,18 @@ async function launchAxisVariations(analysisEncoded, format, count) {
   var allImages = [];
 
   try {
-    // Ideogram Remix: image_weight 0.88 mantiene la imagen base casi intacta,
-    // solo varía el elemento del prompt que cambiamos
-    var remixPromises = axisPrompts.prompts.map(function(p) {
+    var imgPromises = axisPrompts.prompts.map(function(p) {
+      var body = useRemix
+        ? { mode: 'remix', referenceImage: variationUploadData.imageDataUrl, prompt: p, format: format, imageWeight: 0.35, remixCount: 1 }
+        : { prompt: p, format: format, variations: 1, hasText: false };
       return fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-        body: JSON.stringify({
-          mode: 'remix',
-          referenceImage: variationUploadData.imageDataUrl,
-          prompt: p,
-          format: format,
-          imageWeight: 0.88,
-          remixCount: 1
-        })
+        body: JSON.stringify(body)
       }).then(function(r) { return r.json(); });
     });
 
-    var results = await Promise.all(remixPromises);
+    var results = await Promise.all(imgPromises);
     results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
   } catch(err) {
     rmThinking(thinkId);
@@ -4713,62 +4704,62 @@ async function launchAxisVariations(analysisEncoded, format, count) {
   rmThinking(thinkId);
   if (!allImages.length) { addAgent('No se pudieron generar las variaciones. Intenta de nuevo.'); return; }
 
-  // Componer con Canvas si hay texto, renderizar directo si no
-  if (hasAdText) {
+  if (!useRemix && hasAdText) {
+    // text-to-image (subject/background): imagen limpia → Canvas pinta texto encima
     for (var i = 0; i < allImages.length; i++) {
       await composeAdWithCanvas(allImages[i], i + 1, allImages.length, format, adTextData);
     }
   } else {
+    // Remix (palette/composition): texto ya en la imagen base → renderizar directo sin Canvas
     for (var i = 0; i < allImages.length; i++) {
       renderAdImage(allImages[i], i + 1, allImages.length, format, axisPrompts.prompts[i], false);
     }
   }
 }
 
-// Construye prompts específicos para cada eje de variación
+// Prompts específicos por eje de variación
 function buildAxisPrompts(axis, analysis, count) {
   var baseStyle = (analysis.visual_style || 'professional advertising photography') + ', ' + (analysis.overall_mood || 'professional') + ' mood';
   var palette   = analysis.color_palette || '#1E2BCC, #ffffff';
+  var bg        = analysis.background || 'clean professional background';
+  var subject   = analysis.main_subject || 'latin adult professional person';
+  var lighting  = analysis.lighting || 'soft studio lighting';
 
   var SUBJECTS = [
-    'young latin woman 25-30, warm confident smile, professional casual attire',
-    'mature latin man 40-45, trustworthy expression, business casual',
-    'young latin man 28-33, energetic approachable smile, modern casual',
-    'latin couple mid-30s, natural happy interaction',
-    'latin woman 35-40, empowered professional posture, elegant attire',
-    'latin senior woman 55-60, dignified warm expression, elegant',
-    'group of diverse latin professionals, collaborative positive energy',
-    'latin family, parents with young child, authentic warm moment'
+    'young latin woman 25-30, warm confident smile, professional casual attire, looking at camera',
+    'mature latin man 42-48, trustworthy calm expression, business casual, looking at camera',
+    'young latin man 28-33, energetic approachable smile, modern casual shirt, looking at camera',
+    'latin woman 35-40, empowered professional posture, elegant blazer, looking at camera',
+    'latin senior man 55-62, experienced dignified expression, professional attire, looking at camera',
+    'latin woman 45-50, warm motherly expression, smart casual, looking at camera',
+    'young latin woman 22-27, fresh enthusiastic expression, colorful casual, looking at camera',
+    'latin man 30-35, confident modern style, casual shirt open collar, looking at camera'
   ];
   var BACKGROUNDS = [
-    'modern minimalist white studio, clean gradient, professional',
-    'warm coffee shop interior, wooden textures, golden ambient light',
-    'bright outdoor urban street, natural daylight, city architecture',
-    'contemporary office environment, glass walls, clean modern',
-    'lush outdoor park, green nature, soft dappled sunlight',
-    'elegant dark gradient background, dramatic rim lighting',
-    'modern home living room, warm cozy tones, comfortable',
-    'bright commercial space, clean retail environment'
+    'modern minimalist white studio, soft clean gradient, professional',
+    'warm coffee shop interior, wooden textures, golden bokeh ambient light',
+    'bright outdoor urban setting, natural daylight, blurred city architecture',
+    'contemporary home interior, comfortable living room, warm tones',
+    'lush outdoor park, soft green nature, dappled sunlight bokeh',
+    'elegant dark teal gradient background, subtle professional lighting',
+    'bright airy office environment, clean glass walls, modern',
+    'vibrant colorful mural background, urban creative energy'
   ];
   var PALETTES = [
-    'warm terracotta and cream tones, earthy and approachable',
-    'cool teal and white, fresh and trustworthy',
-    'rich navy blue and gold, premium professional',
-    'vibrant coral and off-white, energetic and modern',
-    'soft sage green and beige, calm and natural',
-    'deep burgundy and cream, sophisticated and bold',
-    'bright electric blue and white, dynamic and tech',
-    'warm amber and dark brown, authentic and grounded'
+    'shift overall tones to warm terracotta and cream, keep layout and content exactly',
+    'shift overall tones to cool teal and white, keep layout and content exactly',
+    'shift overall tones to rich navy blue and gold, keep layout and content exactly',
+    'shift overall tones to vibrant coral and off-white, keep layout and content exactly',
+    'shift overall tones to deep forest green and beige, keep layout and content exactly',
+    'shift overall tones to soft lavender and white, keep layout and content exactly'
   ];
   var COMPOSITIONS = [
-    'subject centered, symmetrical framing, generous breathing room',
-    'subject left-aligned rule of thirds, open right space for text',
-    'close-up portrait framing, emotional shallow depth of field',
-    'wide environmental shot, subject integrated in setting',
-    'subject right-aligned, strong left negative space',
-    'low angle looking up, powerful and aspirational framing',
-    'overhead birds-eye perspective, clean flat lay composition',
-    'diagonal dynamic framing, energetic modern composition'
+    'reframe with subject centered, symmetrical layout, generous breathing room around subject',
+    'reframe with subject left-aligned rule of thirds, strong open space on the right',
+    'reframe as close-up portrait, emotional tight crop, shallow depth of field',
+    'reframe as wide environmental shot, subject smaller integrated in setting',
+    'reframe with subject right-aligned, strong negative space on left',
+    'reframe with dynamic diagonal composition, energetic modern framing'
   ];
 
   var rnd = Math.floor(Math.random() * 100);
@@ -4780,19 +4771,39 @@ function buildAxisPrompts(axis, analysis, count) {
     if (axis === 'subject') {
       label = 'Personaje';
       var sub = SUBJECTS[(v + rnd) % SUBJECTS.length];
-      p = baseStyle + '. VARY ONLY THE PERSON: ' + sub + '. Keep EXACTLY the same background, composition, lighting, color palette, and overall layout as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+      // Text-to-image: reconstruir la escena con nuevo personaje, mismo fondo y estilo
+      p = baseStyle + '. ' +
+          'Person: ' + sub + '. ' +
+          'Background: ' + bg + '. ' +
+          'Lighting: ' + lighting + '. ' +
+          'Color palette: ' + palette + '. ' +
+          'Same professional ad layout and composition style as a Meta Ads creative for Latin American market. ' +
+          'High quality advertising photography. NO text, NO words, NO numbers — clean visual only.';
     } else if (axis === 'background') {
       label = 'Fondo';
-      var bg = BACKGROUNDS[(v + rnd) % BACKGROUNDS.length];
-      p = baseStyle + '. VARY ONLY THE BACKGROUND AND SETTING: ' + bg + '. Keep EXACTLY the same person, composition, lighting angle, and overall layout as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+      var bgNew = BACKGROUNDS[(v + rnd) % BACKGROUNDS.length];
+      // Text-to-image: mismo personaje y estilo, fondo nuevo
+      p = baseStyle + '. ' +
+          'Person: ' + subject + '. ' +
+          'Background: ' + bgNew + '. ' +
+          'Lighting: ' + lighting + '. ' +
+          'Color palette: ' + palette + '. ' +
+          'Same professional ad layout and composition style as a Meta Ads creative for Latin American market. ' +
+          'High quality advertising photography. NO text, NO words, NO numbers — clean visual only.';
     } else if (axis === 'palette') {
       label = 'Paleta de color';
       var pal = PALETTES[(v + rnd) % PALETTES.length];
-      p = baseStyle + '. VARY ONLY THE COLOR PALETTE AND TONES: ' + pal + '. Keep EXACTLY the same composition, person, background type, and layout as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+      // Remix: varía solo el color, mantiene todo lo demás (incluido texto de imagen)
+      p = baseStyle + '. ' + pal + '. ' +
+          'Keep all composition, layout, people, and elements exactly as in the reference. ' +
+          'Professional Meta Ads creative.';
     } else if (axis === 'composition') {
       label = 'Composición';
       var comp = COMPOSITIONS[(v + rnd) % COMPOSITIONS.length];
-      p = baseStyle + '. VARY ONLY THE FRAMING AND COMPOSITION: ' + comp + '. Keep EXACTLY the same person type, background, lighting mood, and color palette as the reference image. Professional Meta Ads creative, Latin American market. NO text, NO words.';
+      // Remix: varía solo el encuadre/composición, mantiene todo lo demás (incluido texto)
+      p = baseStyle + '. ' + comp + '. ' +
+          'Keep the same person, background, colors, and visual style as in the reference. ' +
+          'Professional Meta Ads creative.';
     }
     prompts.push(p);
   }
