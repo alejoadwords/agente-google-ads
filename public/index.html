@@ -4506,6 +4506,36 @@ var VARIATION_AXES = [
 // usuario elige eje → Ideogram genera fondo → Canvas compone
 // =============================================
 
+// Helper: lee SSE de /api/chat y devuelve el texto completo
+// El proxy siempre devuelve streaming — no se puede usar .json() directamente
+async function fetchChatFull(payload) {
+  var headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+  var res = await fetch('/api/chat', { method: 'POST', headers: headers, body: JSON.stringify(payload) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  var reader = res.body.getReader();
+  var decoder = new TextDecoder();
+  var buffer = '', fullText = '', done = false;
+  while (!done) {
+    var chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    var lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line.startsWith('data: ')) continue;
+      try {
+        var evt = JSON.parse(line.slice(6).trim());
+        if (evt.delta !== undefined) fullText += evt.delta;
+        if (evt.done && evt.full !== undefined) { fullText = evt.full; done = true; }
+        if (evt.error) throw new Error(evt.error);
+      } catch(e) { /* continuar */ }
+    }
+  }
+  return fullText;
+}
+
 async function startVariationGeneration() {
   var data = variationUploadData;
   if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
@@ -4521,56 +4551,19 @@ async function startVariationGeneration() {
 
   var design = null;
   try {
-    var res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: 'You are an expert at analyzing ad design and returning precise JSON. No markdown, no backticks, only valid JSON.',
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: `Analyze this ad image in detail and return ONLY a JSON object with this exact structure:
-{
-  "format": "square or vertical",
-  "text_zone": "left or right or center or top or bottom",
-  "text_zone_width_pct": 0.55,
-  "overlay_color": "#000000",
-  "overlay_opacity": 0.6,
-  "headline": "exact headline text",
-  "headline_size_pct": 0.07,
-  "headline_color": "#ffffff",
-  "headline_weight": "bold",
-  "body_items": ["exact item 1", "exact item 2"],
-  "body_size_pct": 0.035,
-  "body_color": "#ffffff",
-  "bullet_style": "dot or dash or number or none",
-  "logo": "brand name text or empty",
-  "logo_position": "bottom-left or bottom-right or top-left or top-right",
-  "logo_size_pct": 0.04,
-  "logo_color": "#ffffff",
-  "bg_dark": true,
-  "visual_style": "describe visual style in english",
-  "main_subject": "describe main person or object",
-  "background": "describe background setting",
-  "color_palette": "#hex1, #hex2, #hex3",
-  "lighting": "lighting description",
-  "overall_mood": "mood"
-}
-text_zone_width_pct: fraction of image width occupied by text (0.0 to 1.0).
-overlay_opacity: how dark the text background overlay is (0.0 to 1.0).
-headline_size_pct / body_size_pct / logo_size_pct: font size as fraction of image width.
-Return ONLY the JSON.` }
-        ]}]
-      })
+    var fullText = await fetchChatFull({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      system: 'You are an expert at analyzing ad design and returning precise JSON. No markdown, no backticks, only valid JSON.',
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
+        { type: 'text', text: 'Analyze this ad image and return ONLY a JSON with these fields: {"format":"square or vertical","text_zone":"left or right or center","text_zone_width_pct":0.55,"overlay_color":"#000000","overlay_opacity":0.6,"headline":"exact headline text","headline_size_pct":0.07,"headline_color":"#ffffff","headline_weight":"bold","body_items":["item1","item2"],"body_size_pct":0.035,"body_color":"#ffffff","bullet_style":"dot or dash or number or none","logo":"brand name or empty","logo_position":"bottom-left or bottom-right or top-left or top-right","logo_size_pct":0.04,"logo_color":"#ffffff","bg_dark":true,"visual_style":"style in english","main_subject":"person or object description","background":"background description","color_palette":"#hex1, #hex2","lighting":"lighting description","overall_mood":"mood"}. Return ONLY valid JSON.' }
+      ]}]
     });
-    if (res.ok) {
-      var rd = await res.json();
-      var raw = (rd.content?.[0]?.text || '').trim().replace(/^data:\s*/,'').replace(/```json|```/g,'').trim();
-      var bi = raw.indexOf('{'); if (bi > 0) raw = raw.slice(bi);
-      design = JSON.parse(raw);
-      console.log('[Acuarius] Design JSON:', JSON.stringify(design, null, 2));
-    }
+    var clean = fullText.replace(/```json|```/g, '').trim();
+    var bi = clean.indexOf('{'); if (bi > 0) clean = clean.slice(bi);
+    design = JSON.parse(clean);
+    console.log('[Acuarius] Design JSON OK:', JSON.stringify(design, null, 2));
   } catch(e) { console.error('[Acuarius] Error análisis:', e.message); }
 
   rmThinking(thinkId);
@@ -4621,8 +4614,8 @@ function showVariationAxisCard(design, format, count) {
   var AXES = [
     { key:'subject',     emoji:'👤', label:'Personaje',   desc:'Cambia modelo manteniendo fondo, texto y diseño idénticos' },
     { key:'background',  emoji:'🏙️', label:'Fondo',       desc:'Cambia escenario manteniendo personaje, texto y diseño idénticos' },
-    { key:'palette',     emoji:'🎨', label:'Paleta',      desc:'Varía colores dominantes (Remix — preserva texto original)' },
-    { key:'composition', emoji:'📐', label:'Composición', desc:'Varía encuadre y framing (Remix — preserva texto original)' },
+    { key:'palette',     emoji:'🎨', label:'Paleta',      desc:'Varía los colores dominantes manteniendo composición y texto idénticos' },
+    { key:'composition', emoji:'📐', label:'Composición', desc:'Varía encuadre y posición del sujeto manteniendo estilo y texto idénticos' },
   ];
   var axisHtml = AXES.map(function(ax) {
     return '<div id="axis-' + ax.key + '" onclick="selectAxis(\'' + ax.key + '\')" style="border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;background:white;transition:all .15s" onmouseover="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\'}" onmouseout="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--border)\';this.style.background=\'white\'}">' +
@@ -4679,7 +4672,7 @@ async function launchAxisVariations(designEncoded, format, count) {
 
   // subject/background → text-to-image + plantilla Canvas
   // palette/composition → Remix (preserva texto en imagen original)
-  var useRemix = (selectedAxis === 'palette' || selectedAxis === 'composition');
+  var useRemix = false; // Todos los ejes usan text-to-image + Canvas para evitar distorsión de texto
 
   var prompts = buildAxisPrompts(selectedAxis, design, count);
   addAgent('🎨 Generando **' + count + ' variaciones** variando el **' + prompts.label + '**...');
@@ -4696,9 +4689,7 @@ async function launchAxisVariations(designEncoded, format, count) {
 
   try {
     var imgPromises = prompts.list.map(function(p) {
-      var body = useRemix
-        ? { mode: 'remix', referenceImage: variationUploadData.imageDataUrl, prompt: p, format: format, imageWeight: 0.30, remixCount: 1 }
-        : { prompt: p, format: format, variations: 1, hasText: false };
+      var body = { prompt: p, format: format, variations: 1, hasText: false };
       return fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
@@ -4716,16 +4707,9 @@ async function launchAxisVariations(designEncoded, format, count) {
   rmThinking(thinkId);
   if (!allImages.length) { addAgent('No se pudieron generar las variaciones. Intenta de nuevo.'); return; }
 
-  if (!useRemix) {
-    // text-to-image: Canvas reconstruye el diseño tipográfico original encima
-    for (var i = 0; i < allImages.length; i++) {
-      await composeWithDesignTemplate(allImages[i], i + 1, allImages.length, format, design);
-    }
-  } else {
-    // Remix: texto ya en imagen → renderizar directo
-    for (var i = 0; i < allImages.length; i++) {
-      renderAdImage(allImages[i], i + 1, allImages.length, format, prompts.list[i], false);
-    }
+  // Siempre text-to-image + Canvas — imagen limpia + diseño tipográfico idéntico
+  for (var i = 0; i < allImages.length; i++) {
+    await composeWithDesignTemplate(allImages[i], i + 1, allImages.length, format, design);
   }
 }
 
