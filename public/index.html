@@ -4564,10 +4564,23 @@ async function startVariationGeneration() {
     };
   }
 
-  // PASO 2: Construir N prompts variados, cada uno modificando 2 ejes distintos
+
+  // PASO 2: Extraer texto del JSON para overlay Canvas, generar imágenes limpias
   var total = data.count;
   generatedAdImages = [];
   adImgGridEl = null;
+
+  // Datos de texto para superponer con Canvas después de generar
+  var adTextData = {
+    headline: (baseJson.headline_text || '').trim(),
+    bodyItems: (baseJson.body_text || '').split('|').map(function(s){ return s.trim(); }).filter(Boolean),
+    logo: (baseJson.logo_text || '').trim(),
+    darkBg: (baseJson.text_style || '').toLowerCase().indexOf('dark') !== -1 ||
+            (baseJson.color_palette || '').toLowerCase().indexOf('#0') !== -1 ||
+            (baseJson.color_palette || '').toLowerCase().indexOf('dark') !== -1 ||
+            (baseJson.color_palette || '').toLowerCase().indexOf('navy') !== -1
+  };
+  var hasAdText = !!(adTextData.headline || adTextData.bodyItems.length || adTextData.logo);
 
   addAgent('🎨 Anuncio analizado. Generando **' + total + ' variaciones** con composiciones completamente nuevas...');
 
@@ -4577,38 +4590,14 @@ async function startVariationGeneration() {
     if (el2) { var txt2 = el2.querySelector('.thinking-bbl'); if (txt2) txt2.innerHTML = '<div class="spinner"></div>generando ' + total + ' variaciones...'; }
   }, 100);
 
+  // Construir prompts limpios — el texto se agrega como overlay en Canvas
   var variantPrompts = [];
-
-  // Construir bloque de texto a incluir en cada variación
-  var hasHeadline = baseJson.headline_text && baseJson.headline_text.trim().length > 0;
-  var hasBody = baseJson.body_text && baseJson.body_text.trim().length > 0;
-  var hasLogo = baseJson.logo_text && baseJson.logo_text.trim().length > 0;
-  var textStyle = baseJson.text_style || 'bold white sans-serif';
-
-  var textBlock = '';
-  if (hasHeadline) {
-    textBlock += 'Include this exact headline text rendered in the image: "' + baseJson.headline_text.replace(/\n/g, ' / ') + '". ';
-  }
-  if (hasBody) {
-    var bodyItems = baseJson.body_text.split('|').map(function(s){ return s.trim(); }).filter(Boolean);
-    if (bodyItems.length > 0) {
-      textBlock += 'Include these exact body text items with icons/bullets: ' + bodyItems.map(function(t){ return '"' + t + '"'; }).join(', ') + '. ';
-    }
-  }
-  if (hasLogo) {
-    textBlock += 'Include the brand logo/name "' + baseJson.logo_text + '" in the bottom area. ';
-  }
-  if (textBlock.length > 0) {
-    textBlock += 'Text style: ' + textStyle + '. Render all text clearly and legibly in Spanish. ';
-  }
-
   for (var v = 0; v < total; v++) {
     var bgVal      = VARIATION_AXES[0].values[v % VARIATION_AXES[0].values.length];
     var subjectVal = VARIATION_AXES[1].values[(v + 2) % VARIATION_AXES[1].values.length];
     var lightVal   = VARIATION_AXES[2].values[v % VARIATION_AXES[2].values.length];
     var colorVal   = VARIATION_AXES[3].values[(v + 1) % VARIATION_AXES[3].values.length];
     var compVal    = VARIATION_AXES[4].values[v % VARIATION_AXES[4].values.length];
-
     variantPrompts.push(
       baseJson.visual_style + ', ' + baseJson.overall_mood + ' mood. ' +
       'Subject: ' + subjectVal + '. ' +
@@ -4617,13 +4606,12 @@ async function startVariationGeneration() {
       'Color palette: ' + colorVal + '. ' +
       'Composition: ' + compVal + '. ' +
       (baseJson.props_elements && baseJson.props_elements !== 'minimal props' ? 'Props: ' + baseJson.props_elements + '. ' : '') +
-      textBlock +
-      'Professional Meta Ads creative for Latin American market, high-converting advertising design, mobile optimized. ' +
-      'Maintain the same overall layout and text structure as the original ad, only vary the visual background and subject.'
+      'Professional Meta Ads creative for Latin American market, high-converting advertising photography, mobile optimized. ' +
+      'NO text, NO words, NO numbers, NO typography — clean visual only, text overlay will be added separately.'
     );
   }
 
-  // PASO 3: Lanzar todas las generaciones en paralelo (text-to-image puro)
+  // PASO 3: Generar todas las imágenes en paralelo
   var allImages = [];
   try {
     var imgPromises = variantPrompts.map(function(vPrompt) {
@@ -4633,7 +4621,6 @@ async function startVariationGeneration() {
         body: JSON.stringify({ prompt: vPrompt, format: formatDetect, variations: 1, hasText: false })
       }).then(function(r) { return r.json(); });
     });
-
     var results = await Promise.all(imgPromises);
     results.forEach(function(r) {
       if (r.images && r.images.length > 0) allImages.push(r.images[0]);
@@ -4651,13 +4638,123 @@ async function startVariationGeneration() {
     return;
   }
 
-  for (var i = 0; i < allImages.length; i++) {
-    allImages[i].index = i + 1;
-    renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, variantPrompts[i], false);
+  // PASO 4: Si hay texto extraído, superponerlo con Canvas; si no, renderizar directo
+  if (hasAdText) {
+    // Componer imagen + texto en Canvas para cada variación
+    for (var i = 0; i < allImages.length; i++) {
+      await composeAdWithCanvas(allImages[i], i + 1, allImages.length, formatDetect, adTextData);
+    }
+  } else {
+    for (var i = 0; i < allImages.length; i++) {
+      allImages[i].index = i + 1;
+      renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, variantPrompts[i], false);
+    }
   }
-
-  setTimeout(function() { showCopysButton(allImages.length, 'variaciones'); }, 500);
+  // showCopysButton ya es llamado por renderAdImage al completar el batch
 }
+
+// Compone imagen base + overlay de texto con Canvas HTML5
+async function composeAdWithCanvas(imgData, index, total, format, textData) {
+  return new Promise(function(resolve) {
+    var canvas = document.createElement('canvas');
+    var size = format === 'vertical' ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 };
+    canvas.width = size.w;
+    canvas.height = size.h;
+    var ctx = canvas.getContext('2d');
+
+    var img = new Image();
+    img.onload = function() {
+      // Dibujar imagen base
+      ctx.drawImage(img, 0, 0, size.w, size.h);
+
+      // Detectar si el fondo es oscuro para elegir color de texto
+      var isDark = textData.darkBg;
+      var textColor = isDark ? '#FFFFFF' : '#FFFFFF';
+      var shadowColor = isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.6)';
+
+      // Overlay semitransparente izquierdo para legibilidad del texto
+      if (textData.headline || textData.bodyItems.length) {
+        var overlayW = Math.round(size.w * 0.55);
+        ctx.fillStyle = 'rgba(0, 0, 20, 0.55)';
+        ctx.fillRect(0, 0, overlayW, size.h);
+      }
+
+      var margin = Math.round(size.w * 0.055);
+      var maxTextW = Math.round(size.w * 0.48);
+      var y = Math.round(size.h * 0.1);
+
+      // HEADLINE
+      if (textData.headline) {
+        var headlineSize = Math.round(size.w * 0.072);
+        ctx.font = 'bold ' + headlineSize + 'px Arial, sans-serif';
+        ctx.fillStyle = textColor;
+        ctx.shadowColor = shadowColor;
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+
+        var lines = textData.headline.split('\n');
+        lines.forEach(function(line) {
+          // Word wrap si es muy largo
+          var words = line.split(' ');
+          var currentLine = '';
+          words.forEach(function(word) {
+            var testLine = currentLine + (currentLine ? ' ' : '') + word;
+            if (ctx.measureText(testLine).width > maxTextW && currentLine) {
+              ctx.fillText(currentLine, margin, y);
+              y += headlineSize * 1.2;
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          });
+          if (currentLine) { ctx.fillText(currentLine, margin, y); y += headlineSize * 1.2; }
+        });
+        y += Math.round(headlineSize * 0.5);
+      }
+
+      // BODY ITEMS (lista con bullet)
+      if (textData.bodyItems.length) {
+        var bodySize = Math.round(size.w * 0.038);
+        ctx.font = '600 ' + bodySize + 'px Arial, sans-serif';
+        ctx.fillStyle = textColor;
+        ctx.shadowBlur = 4;
+
+        textData.bodyItems.forEach(function(item) {
+          var bullet = '• ';
+          ctx.fillText(bullet + item, margin, y);
+          y += bodySize * 1.6;
+        });
+        y += Math.round(bodySize * 0.5);
+      }
+
+      // LOGO / BRAND NAME — bottom left
+      if (textData.logo) {
+        var logoSize = Math.round(size.w * 0.042);
+        ctx.font = 'bold ' + logoSize + 'px Arial, sans-serif';
+        ctx.fillStyle = textColor;
+        ctx.shadowBlur = 4;
+        var logoY = size.h - Math.round(size.h * 0.06);
+        ctx.fillText(textData.logo, margin, logoY);
+      }
+
+      // Exportar canvas a base64
+      var composedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      var base64 = composedDataUrl.split(',')[1];
+      var composedImg = { base64: base64, mediaType: 'image/jpeg', index: index };
+      renderAdImage(composedImg, index, total, format, 'variación compuesta', false);
+      resolve();
+    };
+    img.onerror = function() {
+      // Si falla la composición, renderizar imagen base sin texto
+      imgData.index = index;
+      renderAdImage(imgData, index, total, format, 'variación', false);
+      resolve();
+    };
+    img.src = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
+  });
+}
+
 
 
 // Sistema de cuestionario de diseño
