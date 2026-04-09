@@ -4500,6 +4500,12 @@ var VARIATION_AXES = [
 // 4. Canvas pinta el texto extraído encima
 // =============================================
 
+// =============================================
+// VARIACIONES CON PLANTILLA CANVAS
+// Flujo: Sonnet analiza diseño → plantilla Canvas fiel →
+// usuario elige eje → Ideogram genera fondo → Canvas compone
+// =============================================
+
 async function startVariationGeneration() {
   var data = variationUploadData;
   if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
@@ -4510,22 +4516,51 @@ async function startVariationGeneration() {
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con Sonnet...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando diseño del anuncio con Sonnet...'; }
   }, 100);
 
-  // Sonnet extrae texto del anuncio
-  var analysisResult = null;
+  var design = null;
   try {
     var res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 800,
-        system: 'You analyze advertising images. Respond with valid JSON only — no markdown, no backticks, no explanation.',
+        max_tokens: 1500,
+        system: 'You are an expert at analyzing ad design and returning precise JSON. No markdown, no backticks, only valid JSON.',
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: 'Analyze this ad. Return ONLY JSON:\n{"headline":"exact main title text","body_items":["each bullet or body text line exactly as written"],"logo":"brand name text or empty","bg_dark":true,"visual_style":"style in english","overall_mood":"mood in english","color_palette":"3-4 hex colors"}' }
+          { type: 'text', text: `Analyze this ad image in detail and return ONLY a JSON object with this exact structure:
+{
+  "format": "square or vertical",
+  "text_zone": "left or right or center or top or bottom",
+  "text_zone_width_pct": 0.55,
+  "overlay_color": "#000000",
+  "overlay_opacity": 0.6,
+  "headline": "exact headline text",
+  "headline_size_pct": 0.07,
+  "headline_color": "#ffffff",
+  "headline_weight": "bold",
+  "body_items": ["exact item 1", "exact item 2"],
+  "body_size_pct": 0.035,
+  "body_color": "#ffffff",
+  "bullet_style": "dot or dash or number or none",
+  "logo": "brand name text or empty",
+  "logo_position": "bottom-left or bottom-right or top-left or top-right",
+  "logo_size_pct": 0.04,
+  "logo_color": "#ffffff",
+  "bg_dark": true,
+  "visual_style": "describe visual style in english",
+  "main_subject": "describe main person or object",
+  "background": "describe background setting",
+  "color_palette": "#hex1, #hex2, #hex3",
+  "lighting": "lighting description",
+  "overall_mood": "mood"
+}
+text_zone_width_pct: fraction of image width occupied by text (0.0 to 1.0).
+overlay_opacity: how dark the text background overlay is (0.0 to 1.0).
+headline_size_pct / body_size_pct / logo_size_pct: font size as fraction of image width.
+Return ONLY the JSON.` }
         ]}]
       })
     });
@@ -4533,14 +4568,14 @@ async function startVariationGeneration() {
       var rd = await res.json();
       var raw = (rd.content?.[0]?.text || '').trim().replace(/^data:\s*/,'').replace(/```json|```/g,'').trim();
       var bi = raw.indexOf('{'); if (bi > 0) raw = raw.slice(bi);
-      analysisResult = JSON.parse(raw);
-      console.log('[Acuarius] Análisis:', JSON.stringify(analysisResult));
+      design = JSON.parse(raw);
+      console.log('[Acuarius] Design JSON:', JSON.stringify(design, null, 2));
     }
-  } catch(e) { console.error('[Acuarius] Error Sonnet:', e.message); }
+  } catch(e) { console.error('[Acuarius] Error análisis:', e.message); }
 
   rmThinking(thinkId);
 
-  // Detectar formato
+  // Detectar formato real por dimensiones
   var formatDetect = 'square';
   var tempImg = new Image();
   await new Promise(function(resolve) {
@@ -4549,35 +4584,49 @@ async function startVariationGeneration() {
     tempImg.src = data.imageDataUrl;
   });
 
-  if (!analysisResult) {
-    analysisResult = { headline:'', body_items:[], logo:'', bg_dark:true, visual_style:'professional advertising photography', overall_mood:'professional', color_palette:'#1E2BCC, #ffffff' };
+  if (!design) {
+    design = {
+      format: formatDetect, text_zone: 'left', text_zone_width_pct: 0.55,
+      overlay_color: '#000000', overlay_opacity: 0.6,
+      headline: '', headline_size_pct: 0.07, headline_color: '#ffffff', headline_weight: 'bold',
+      body_items: [], body_size_pct: 0.035, body_color: '#ffffff', bullet_style: 'dot',
+      logo: '', logo_position: 'bottom-left', logo_size_pct: 0.04, logo_color: '#ffffff',
+      bg_dark: true, visual_style: 'professional advertising photography',
+      main_subject: 'latin adult professional person', background: 'clean studio background',
+      color_palette: '#1E2BCC, #ffffff', lighting: 'soft studio lighting', overall_mood: 'professional'
+    };
   }
+  design.format = formatDetect;
 
-  showVariationAxisCard(analysisResult, formatDetect, data.count);
+  showVariationAxisCard(design, formatDetect, variationUploadData.count);
 }
 
-// Tarjeta: elegir qué variar + confirmar texto
-function showVariationAxisCard(analysis, format, count) {
+// Tarjeta: elegir eje + ver texto detectado (solo lectura, editable si necesita)
+function showVariationAxisCard(design, format, count) {
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
 
-  var bodyVal = ((analysis.body_items || []).join('\n')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  var headlineVal = (analysis.headline || '').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
-  var logoVal = (analysis.logo || '').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
-  var analysisEncoded = encodeURIComponent(JSON.stringify(analysis));
+  var designEncoded = encodeURIComponent(JSON.stringify(design));
+  var hasText = !!(design.headline || (design.body_items && design.body_items.length) || design.logo);
+
+  var detectedHtml = '<div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:12px 14px;margin-bottom:14px">' +
+    '<div style="font-size:11px;font-weight:600;color:#0369A1;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Diseño detectado</div>';
+  if (design.headline) detectedHtml += '<div style="font-size:12px;color:#0C4A6E;margin-bottom:4px"><strong>Título:</strong> ' + design.headline.replace(/</g,'&lt;') + '</div>';
+  if (design.body_items && design.body_items.length) {
+    detectedHtml += '<div style="font-size:12px;color:#0C4A6E;margin-bottom:4px"><strong>Items (' + design.body_items.length + '):</strong> ' + design.body_items.slice(0,3).map(function(i){ return i.replace(/</g,'&lt;'); }).join(', ') + (design.body_items.length > 3 ? '...' : '') + '</div>';
+  }
+  if (design.logo) detectedHtml += '<div style="font-size:12px;color:#0C4A6E"><strong>Marca:</strong> ' + design.logo.replace(/</g,'&lt;') + '</div>';
+  if (!hasText) detectedHtml += '<div style="font-size:12px;color:#0C4A6E">No se detectó texto (se generarán variaciones solo visuales)</div>';
+  detectedHtml += '</div>';
 
   var AXES = [
-    { key:'subject',     emoji:'👤', label:'Personaje',   desc:'Varía género, edad y demografía del modelo manteniendo todo lo demás igual' },
-    { key:'background',  emoji:'🏙️', label:'Fondo',       desc:'Varía el escenario o ambiente manteniendo el personaje y composición iguales' },
-    { key:'palette',     emoji:'🎨', label:'Paleta',      desc:'Varía los colores dominantes del anuncio manteniendo la composición' },
-    { key:'composition', emoji:'📐', label:'Composición', desc:'Varía el encuadre y posición del sujeto manteniendo el estilo' },
+    { key:'subject',     emoji:'👤', label:'Personaje',   desc:'Cambia modelo manteniendo fondo, texto y diseño idénticos' },
+    { key:'background',  emoji:'🏙️', label:'Fondo',       desc:'Cambia escenario manteniendo personaje, texto y diseño idénticos' },
+    { key:'palette',     emoji:'🎨', label:'Paleta',      desc:'Varía colores dominantes (Remix — preserva texto original)' },
+    { key:'composition', emoji:'📐', label:'Composición', desc:'Varía encuadre y framing (Remix — preserva texto original)' },
   ];
-
   var axisHtml = AXES.map(function(ax) {
     return '<div id="axis-' + ax.key + '" onclick="selectAxis(\'' + ax.key + '\')" style="border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;background:white;transition:all .15s" onmouseover="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\'}" onmouseout="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--border)\';this.style.background=\'white\'}">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">' +
-        '<span style="font-size:16px">' + ax.emoji + '</span>' +
-        '<span style="font-size:13px;font-weight:700;color:var(--text)">' + ax.label + '</span>' +
-      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:16px">' + ax.emoji + '</span><span style="font-size:13px;font-weight:700;color:var(--text)">' + ax.label + '</span></div>' +
       '<div style="font-size:11px;color:var(--muted);line-height:1.4">' + ax.desc + '</div>' +
     '</div>';
   }).join('');
@@ -4587,37 +4636,14 @@ function showVariationAxisCard(analysis, format, count) {
   el.id = 'variation-axis-card';
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-    '<div style="max-width:500px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-
-        // Título
-        '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px">✅ Anuncio analizado</div>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">Elige <strong>qué elemento quieres variar</strong> para el A/B testing. El resto del anuncio se mantiene igual.</div>' +
-
-        // Selector de eje
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">' + axisHtml + '</div>' +
-
-        // Texto detectado (colapsable/editable)
-        '<div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px">' +
-          '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Texto detectado en el anuncio</div>' +
-          '<div style="margin-bottom:8px">' +
-            '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Título</label>' +
-            '<input id="tc-headline" type="text" value="' + headlineVal + '" placeholder="Título principal..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
-          '</div>' +
-          '<div style="margin-bottom:8px">' +
-            '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Cuerpo <span style="opacity:.7">(un ítem por línea)</span></label>' +
-            '<textarea id="tc-body" rows="3" placeholder="Un ítem por línea..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none;resize:vertical;line-height:1.5" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' + bodyVal + '</textarea>' +
-          '</div>' +
-          '<div>' +
-            '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Marca / Logo</label>' +
-            '<input id="tc-logo" type="text" value="' + logoVal + '" placeholder="Nombre de tu marca..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
-          '</div>' +
-        '</div>' +
-
-        // Botón generar
-        '<button id="axis-generate-btn" onclick="launchAxisVariations(\'' + analysisEncoded + '\',\'' + format + '\',' + count + ')" disabled style="width:100%;padding:11px;background:#9CA3AF;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:var(--font);transition:all .2s">Selecciona qué variar ↑</button>' +
-      '</div>' +
-    '</div>';
+    '<div style="max-width:500px;width:100%"><div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px">✅ Anuncio analizado</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">El diseño tipográfico quedará <strong>idéntico al original</strong>. Solo elige qué elemento visual variar.</div>' +
+      detectedHtml +
+      '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Qué quieres variar?</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' + axisHtml + '</div>' +
+      '<button id="axis-generate-btn" onclick="launchAxisVariations(\'' + designEncoded + '\',\'' + format + '\',' + count + ')" disabled style="width:100%;padding:11px;background:#9CA3AF;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:var(--font)">Selecciona qué variar ↑</button>' +
+    '</div></div>';
 
   document.getElementById('chat-area').appendChild(el);
   scrollB();
@@ -4626,50 +4652,37 @@ function showVariationAxisCard(analysis, format, count) {
 var selectedAxis = null;
 function selectAxis(key) {
   selectedAxis = key;
+  var labels = { subject:'Personaje', background:'Fondo', palette:'Paleta', composition:'Composición' };
   document.querySelectorAll('[id^="axis-"]').forEach(function(el) {
-    if (el.id === 'axis-' + key) {
-      el.style.borderColor = 'var(--blue)';
-      el.style.background = 'var(--blue-lt)';
-      el.classList.add('ax-sel');
-    } else if (el.id.startsWith('axis-') && !el.id.includes('generate') && !el.id.includes('card')) {
-      el.style.borderColor = 'var(--border)';
-      el.style.background = 'white';
-      el.classList.remove('ax-sel');
+    if (!el.id.includes('generate') && !el.id.includes('card')) {
+      var isSelected = el.id === 'axis-' + key;
+      el.style.borderColor = isSelected ? 'var(--blue)' : 'var(--border)';
+      el.style.background = isSelected ? 'var(--blue-lt)' : 'white';
+      isSelected ? el.classList.add('ax-sel') : el.classList.remove('ax-sel');
     }
   });
-  var labels = { subject:'Personaje', background:'Fondo', palette:'Paleta', composition:'Composición' };
   var genBtn = document.getElementById('axis-generate-btn');
   if (genBtn) {
     genBtn.disabled = false;
     genBtn.style.background = 'var(--blue)';
     genBtn.style.cursor = 'pointer';
-    genBtn.textContent = '✨ Variar ' + (labels[key] || key) + ' — Generar variaciones';
+    genBtn.textContent = '✨ Variar ' + (labels[key] || key) + ' — Generar ' + (variationUploadData.count || 3) + ' variaciones';
   }
 }
 
-// Genera variaciones usando Ideogram Remix con image_weight alto
-async function launchAxisVariations(analysisEncoded, format, count) {
-  var analysis = JSON.parse(decodeURIComponent(analysisEncoded));
-  if (!selectedAxis) { return; }
-
-  var headline  = ((document.getElementById('tc-headline') || {}).value || '').trim();
-  var bodyRaw   = ((document.getElementById('tc-body') || {}).value || '').trim();
-  var logo      = ((document.getElementById('tc-logo') || {}).value || '').trim();
-  var bodyItems = bodyRaw ? bodyRaw.split('\n').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+async function launchAxisVariations(designEncoded, format, count) {
+  var design = JSON.parse(decodeURIComponent(designEncoded));
+  if (!selectedAxis) return;
 
   var card = document.getElementById('variation-axis-card');
   if (card) card.style.display = 'none';
 
-  var adTextData = { headline: headline, bodyItems: bodyItems, logo: logo, darkBg: !!(analysis.bg_dark) };
-  var hasAdText = !!(headline || bodyItems.length || logo);
-
-  // Estrategia diferenciada por eje:
-  // subject / background → text-to-image PURO: imagen limpia nueva + Canvas pinta el texto
-  // palette / composition → Remix image_weight 0.35: varía solo color/encuadre, preserva contenido y texto original
+  // subject/background → text-to-image + plantilla Canvas
+  // palette/composition → Remix (preserva texto en imagen original)
   var useRemix = (selectedAxis === 'palette' || selectedAxis === 'composition');
 
-  var axisPrompts = buildAxisPrompts(selectedAxis, analysis, count);
-  addAgent('🎨 Generando **' + count + ' variaciones** variando el **' + axisPrompts.label + '** de tu anuncio...');
+  var prompts = buildAxisPrompts(selectedAxis, design, count);
+  addAgent('🎨 Generando **' + count + ' variaciones** variando el **' + prompts.label + '**...');
 
   var thinkId = addThinking();
   setTimeout(function() {
@@ -4682,9 +4695,9 @@ async function launchAxisVariations(analysisEncoded, format, count) {
   var allImages = [];
 
   try {
-    var imgPromises = axisPrompts.prompts.map(function(p) {
+    var imgPromises = prompts.list.map(function(p) {
       var body = useRemix
-        ? { mode: 'remix', referenceImage: variationUploadData.imageDataUrl, prompt: p, format: format, imageWeight: 0.35, remixCount: 1 }
+        ? { mode: 'remix', referenceImage: variationUploadData.imageDataUrl, prompt: p, format: format, imageWeight: 0.30, remixCount: 1 }
         : { prompt: p, format: format, variations: 1, hasText: false };
       return fetch('/api/generate-image', {
         method: 'POST',
@@ -4692,7 +4705,6 @@ async function launchAxisVariations(analysisEncoded, format, count) {
         body: JSON.stringify(body)
       }).then(function(r) { return r.json(); });
     });
-
     var results = await Promise.all(imgPromises);
     results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
   } catch(err) {
@@ -4704,223 +4716,203 @@ async function launchAxisVariations(analysisEncoded, format, count) {
   rmThinking(thinkId);
   if (!allImages.length) { addAgent('No se pudieron generar las variaciones. Intenta de nuevo.'); return; }
 
-  if (!useRemix && hasAdText) {
-    // text-to-image (subject/background): imagen limpia → Canvas pinta texto encima
+  if (!useRemix) {
+    // text-to-image: Canvas reconstruye el diseño tipográfico original encima
     for (var i = 0; i < allImages.length; i++) {
-      await composeAdWithCanvas(allImages[i], i + 1, allImages.length, format, adTextData);
+      await composeWithDesignTemplate(allImages[i], i + 1, allImages.length, format, design);
     }
   } else {
-    // Remix (palette/composition): texto ya en la imagen base → renderizar directo sin Canvas
+    // Remix: texto ya en imagen → renderizar directo
     for (var i = 0; i < allImages.length; i++) {
-      renderAdImage(allImages[i], i + 1, allImages.length, format, axisPrompts.prompts[i], false);
+      renderAdImage(allImages[i], i + 1, allImages.length, format, prompts.list[i], false);
     }
   }
 }
 
-// Prompts específicos por eje de variación
-function buildAxisPrompts(axis, analysis, count) {
-  var baseStyle = (analysis.visual_style || 'professional advertising photography') + ', ' + (analysis.overall_mood || 'professional') + ' mood';
-  var palette   = analysis.color_palette || '#1E2BCC, #ffffff';
-  var bg        = analysis.background || 'clean professional background';
-  var subject   = analysis.main_subject || 'latin adult professional person';
-  var lighting  = analysis.lighting || 'soft studio lighting';
+function buildAxisPrompts(axis, design, count) {
+  var baseStyle = (design.visual_style || 'professional advertising photography') + ', ' + (design.overall_mood || 'professional') + ' mood';
+  var rnd = Math.floor(Math.random() * 100);
 
   var SUBJECTS = [
-    'young latin woman 25-30, warm confident smile, professional casual attire, looking at camera',
-    'mature latin man 42-48, trustworthy calm expression, business casual, looking at camera',
-    'young latin man 28-33, energetic approachable smile, modern casual shirt, looking at camera',
+    'young latin woman 25-30, warm confident smile, professional casual attire, arms crossed, looking at camera',
+    'mature latin man 42-48, trustworthy calm expression, business casual shirt, looking at camera',
+    'young latin man 28-33, energetic approachable smile, modern casual open collar, looking at camera',
     'latin woman 35-40, empowered professional posture, elegant blazer, looking at camera',
-    'latin senior man 55-62, experienced dignified expression, professional attire, looking at camera',
-    'latin woman 45-50, warm motherly expression, smart casual, looking at camera',
-    'young latin woman 22-27, fresh enthusiastic expression, colorful casual, looking at camera',
-    'latin man 30-35, confident modern style, casual shirt open collar, looking at camera'
+    'latin senior man 55-62, experienced dignified calm expression, professional attire, looking at camera',
+    'latin woman 45-50, warm approachable expression, smart casual blouse, looking at camera',
+    'young latin woman 22-27, fresh enthusiastic smile, colorful casual attire, looking at camera',
+    'latin man 30-36, confident modern style, casual button shirt, arms crossed, looking at camera'
   ];
   var BACKGROUNDS = [
-    'modern minimalist white studio, soft clean gradient, professional',
-    'warm coffee shop interior, wooden textures, golden bokeh ambient light',
-    'bright outdoor urban setting, natural daylight, blurred city architecture',
-    'contemporary home interior, comfortable living room, warm tones',
-    'lush outdoor park, soft green nature, dappled sunlight bokeh',
-    'elegant dark teal gradient background, subtle professional lighting',
-    'bright airy office environment, clean glass walls, modern',
-    'vibrant colorful mural background, urban creative energy'
+    'modern minimalist white studio, soft clean gradient wall, professional',
+    'warm coffee shop interior, wooden bokeh background, golden ambient light',
+    'bright outdoor city setting, natural daylight, blurred urban architecture',
+    'contemporary living room, comfortable modern home interior, warm ambient',
+    'lush outdoor park, soft green nature bokeh, dappled natural sunlight',
+    'elegant dark teal to black gradient, subtle professional rim light',
+    'bright modern office, clean glass and white walls, airy professional',
+    'outdoor rooftop urban view, city skyline bokeh background, golden hour'
   ];
   var PALETTES = [
-    'shift overall tones to warm terracotta and cream, keep layout and content exactly',
-    'shift overall tones to cool teal and white, keep layout and content exactly',
-    'shift overall tones to rich navy blue and gold, keep layout and content exactly',
-    'shift overall tones to vibrant coral and off-white, keep layout and content exactly',
-    'shift overall tones to deep forest green and beige, keep layout and content exactly',
-    'shift overall tones to soft lavender and white, keep layout and content exactly'
+    'shift all tones to warm terracotta and cream color palette',
+    'shift all tones to cool teal and fresh white color palette',
+    'shift all tones to rich navy blue and gold color palette',
+    'shift all tones to vibrant coral and off-white color palette',
+    'shift all tones to deep forest green and warm beige color palette',
+    'shift all tones to soft lavender and clean white color palette'
   ];
   var COMPOSITIONS = [
-    'reframe with subject centered, symmetrical layout, generous breathing room around subject',
-    'reframe with subject left-aligned rule of thirds, strong open space on the right',
-    'reframe as close-up portrait, emotional tight crop, shallow depth of field',
-    'reframe as wide environmental shot, subject smaller integrated in setting',
-    'reframe with subject right-aligned, strong negative space on left',
-    'reframe with dynamic diagonal composition, energetic modern framing'
+    'reframe centered symmetrical, generous breathing room, subject prominent',
+    'reframe subject left rule of thirds, open right space',
+    'reframe close-up portrait tight crop, emotional shallow depth of field',
+    'reframe subject right, strong open left negative space',
+    'reframe environmental wide shot, subject integrated in setting',
+    'reframe dynamic diagonal, energetic modern composition'
   ];
 
-  var rnd = Math.floor(Math.random() * 100);
-  var prompts = [];
+  var list = [];
   var label = '';
-
   for (var v = 0; v < count; v++) {
     var p = '';
     if (axis === 'subject') {
       label = 'Personaje';
-      var sub = SUBJECTS[(v + rnd) % SUBJECTS.length];
-      // Text-to-image: reconstruir la escena con nuevo personaje, mismo fondo y estilo
-      p = baseStyle + '. ' +
-          'Person: ' + sub + '. ' +
-          'Background: ' + bg + '. ' +
-          'Lighting: ' + lighting + '. ' +
-          'Color palette: ' + palette + '. ' +
-          'Same professional ad layout and composition style as a Meta Ads creative for Latin American market. ' +
-          'High quality advertising photography. NO text, NO words, NO numbers — clean visual only.';
+      p = baseStyle + '. Person: ' + SUBJECTS[(v + rnd) % SUBJECTS.length] + '. Background: ' + (design.background || 'professional background') + '. Lighting: ' + (design.lighting || 'soft studio lighting') + '. Color palette: ' + (design.color_palette || '#1E2BCC') + '. Professional Meta Ads creative, Latin American market. NO text, NO words — clean visual only.';
     } else if (axis === 'background') {
       label = 'Fondo';
-      var bgNew = BACKGROUNDS[(v + rnd) % BACKGROUNDS.length];
-      // Text-to-image: mismo personaje y estilo, fondo nuevo
-      p = baseStyle + '. ' +
-          'Person: ' + subject + '. ' +
-          'Background: ' + bgNew + '. ' +
-          'Lighting: ' + lighting + '. ' +
-          'Color palette: ' + palette + '. ' +
-          'Same professional ad layout and composition style as a Meta Ads creative for Latin American market. ' +
-          'High quality advertising photography. NO text, NO words, NO numbers — clean visual only.';
+      p = baseStyle + '. Person: ' + (design.main_subject || 'latin professional person looking at camera') + '. Background: ' + BACKGROUNDS[(v + rnd) % BACKGROUNDS.length] + '. Lighting: ' + (design.lighting || 'soft studio lighting') + '. Color palette: ' + (design.color_palette || '#1E2BCC') + '. Professional Meta Ads creative, Latin American market. NO text, NO words — clean visual only.';
     } else if (axis === 'palette') {
-      label = 'Paleta de color';
-      var pal = PALETTES[(v + rnd) % PALETTES.length];
-      // Remix: varía solo el color, mantiene todo lo demás (incluido texto de imagen)
-      p = baseStyle + '. ' + pal + '. ' +
-          'Keep all composition, layout, people, and elements exactly as in the reference. ' +
-          'Professional Meta Ads creative.';
+      label = 'Paleta';
+      p = PALETTES[(v + rnd) % PALETTES.length] + '. Keep all composition, people, layout and elements exactly as in the reference image. Professional Meta Ads creative.';
     } else if (axis === 'composition') {
       label = 'Composición';
-      var comp = COMPOSITIONS[(v + rnd) % COMPOSITIONS.length];
-      // Remix: varía solo el encuadre/composición, mantiene todo lo demás (incluido texto)
-      p = baseStyle + '. ' + comp + '. ' +
-          'Keep the same person, background, colors, and visual style as in the reference. ' +
-          'Professional Meta Ads creative.';
+      p = baseStyle + '. ' + COMPOSITIONS[(v + rnd) % COMPOSITIONS.length] + '. Keep same person, background, colors as reference image. Professional Meta Ads creative.';
     }
-    prompts.push(p);
+    list.push(p);
   }
-
-  return { label: label, prompts: prompts };
+  return { label: label, list: list };
 }
 
-async function composeAdWithCanvas(imgData, index, total, format, textData) {
+// Canvas reconstruye el diseño tipográfico original sobre la nueva imagen base
+async function composeWithDesignTemplate(imgData, index, total, format, design) {
   return new Promise(function(resolve) {
-    console.log('[Acuarius] Componiendo canvas', index, '/', total, '| headline:', textData.headline, '| items:', textData.bodyItems.length, '| logo:', textData.logo);
-
     var canvas = document.createElement('canvas');
-    var size = format === 'vertical' ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 };
-    canvas.width = size.w;
-    canvas.height = size.h;
+    var W = 1080, H = format === 'vertical' ? 1350 : 1080;
+    canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext('2d');
 
-    var imgSrc = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
     var img = new Image();
     img.crossOrigin = 'anonymous';
-
     img.onload = function() {
       try {
-        // 1. Dibujar imagen base
-        ctx.drawImage(img, 0, 0, size.w, size.h);
+        // 1. Imagen base
+        ctx.drawImage(img, 0, 0, W, H);
 
-        var margin = Math.round(size.w * 0.055);
-        var maxTextW = Math.round(size.w * 0.50);
+        var zone = design.text_zone || 'left';
+        var zonePct = Math.min(Math.max(design.text_zone_width_pct || 0.55, 0.3), 0.75);
+        var zoneW = Math.round(W * zonePct);
+        var zoneX = (zone === 'right') ? (W - zoneW) : 0;
 
-        // 2. Overlay oscuro en zona de texto (izquierda/arriba) para legibilidad
-        if (textData.headline || textData.bodyItems.length) {
-          var grad = ctx.createLinearGradient(0, 0, maxTextW + margin, 0);
-          grad.addColorStop(0, 'rgba(0,0,10,0.72)');
-          grad.addColorStop(1, 'rgba(0,0,10,0)');
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, size.w, size.h);
-        }
+        // 2. Overlay semitransparente en zona de texto
+        var overlayColor = design.overlay_color || '#000000';
+        var overlayOpacity = Math.min(Math.max(design.overlay_opacity || 0.6, 0.35), 0.82);
+        var r = parseInt(overlayColor.slice(1,3)||'00',16);
+        var g = parseInt(overlayColor.slice(3,5)||'00',16);
+        var b = parseInt(overlayColor.slice(5,7)||'00',16);
 
-        var y = Math.round(size.h * 0.10);
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        // Gradiente para overlay más natural
+        var grad = ctx.createLinearGradient(
+          zone === 'right' ? zoneX + zoneW : zoneX, 0,
+          zone === 'right' ? zoneX : zoneX + zoneW, 0
+        );
+        grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + overlayOpacity + ')');
+        grad.addColorStop(0.75, 'rgba(' + r + ',' + g + ',' + b + ',' + (overlayOpacity * 0.85) + ')');
+        grad.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(zoneX, 0, zoneW + Math.round(W * 0.08), H);
 
-        // 3. HEADLINE — texto grande en blanco
-        if (textData.headline) {
-          var headlineSize = Math.round(size.w * 0.075);
-          ctx.font = 'bold ' + headlineSize + 'px Arial, sans-serif';
-          ctx.fillStyle = '#FFFFFF';
-          ctx.shadowBlur = 8;
-          ctx.shadowOffsetX = 2;
-          ctx.shadowOffsetY = 2;
+        var margin = Math.round(W * 0.055);
+        var textX = (zone === 'right') ? zoneX + margin : margin;
+        var maxW = zoneW - margin * 2;
+        var y = Math.round(H * 0.10);
 
-          var hlLines = textData.headline.split('\n');
-          hlLines.forEach(function(line) {
-            var words = line.split(' ');
-            var cur = '';
+        // Helper: word wrap
+        function drawWrapped(text, fontSize, color, weight, yPos) {
+          ctx.font = (weight || 'bold') + ' ' + fontSize + 'px Arial, sans-serif';
+          ctx.fillStyle = color || '#ffffff';
+          ctx.shadowColor = 'rgba(0,0,0,0.75)';
+          ctx.shadowBlur = 6; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
+          var lines = text.split('\n');
+          lines.forEach(function(line) {
+            var words = line.split(' '), cur = '';
             words.forEach(function(word) {
               var test = cur ? cur + ' ' + word : word;
-              if (ctx.measureText(test).width > maxTextW && cur) {
-                ctx.fillText(cur, margin, y);
-                y += Math.round(headlineSize * 1.25);
+              if (ctx.measureText(test).width > maxW && cur) {
+                ctx.fillText(cur, textX, yPos);
+                yPos += Math.round(fontSize * 1.25);
                 cur = word;
-              } else { cur = test; }
+              } else cur = test;
             });
-            if (cur) { ctx.fillText(cur, margin, y); y += Math.round(headlineSize * 1.25); }
+            if (cur) { ctx.fillText(cur, textX, yPos); yPos += Math.round(fontSize * 1.25); }
           });
-          y += Math.round(headlineSize * 0.6);
+          return yPos;
         }
 
-        // 4. BODY ITEMS — lista con bullet
-        if (textData.bodyItems.length) {
-          var bodySize = Math.round(size.w * 0.040);
-          ctx.font = '600 ' + bodySize + 'px Arial, sans-serif';
-          ctx.fillStyle = '#FFFFFF';
-          ctx.shadowBlur = 5;
-          ctx.shadowOffsetX = 1;
-          ctx.shadowOffsetY = 1;
+        // 3. HEADLINE
+        if (design.headline) {
+          var hlSize = Math.round(W * Math.min(Math.max(design.headline_size_pct || 0.07, 0.045), 0.10));
+          y = drawWrapped(design.headline, hlSize, design.headline_color || '#ffffff', design.headline_weight || 'bold', y);
+          y += Math.round(hlSize * 0.5);
+        }
 
-          textData.bodyItems.forEach(function(item) {
-            ctx.fillText('• ' + item, margin, y);
-            y += Math.round(bodySize * 1.7);
+        // 4. BODY ITEMS
+        if (design.body_items && design.body_items.length) {
+          var bSize = Math.round(W * Math.min(Math.max(design.body_size_pct || 0.035, 0.025), 0.055));
+          ctx.font = '600 ' + bSize + 'px Arial, sans-serif';
+          ctx.fillStyle = design.body_color || '#ffffff';
+          ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
+
+          var bullet = design.bullet_style === 'dash' ? '— ' : design.bullet_style === 'number' ? '' : '• ';
+          design.body_items.forEach(function(item, idx) {
+            var prefix = design.bullet_style === 'number' ? (idx + 1) + '. ' : bullet;
+            // Word wrap para items
+            var fullItem = prefix + item;
+            var words = fullItem.split(' '), cur = '';
+            words.forEach(function(word) {
+              var test = cur ? cur + ' ' + word : word;
+              if (ctx.measureText(test).width > maxW && cur) {
+                ctx.fillText(cur, textX, y);
+                y += Math.round(bSize * 1.4);
+                cur = '  ' + word; // indent continuación
+              } else cur = test;
+            });
+            if (cur) { ctx.fillText(cur, textX, y); y += Math.round(bSize * 1.6); }
           });
         }
 
-        // 5. LOGO — abajo a la izquierda
-        if (textData.logo) {
-          var logoSize = Math.round(size.w * 0.044);
-          ctx.font = 'bold ' + logoSize + 'px Arial, sans-serif';
-          ctx.fillStyle = '#FFFFFF';
-          ctx.shadowBlur = 6;
-          ctx.shadowOffsetX = 1;
-          ctx.shadowOffsetY = 1;
-          ctx.fillText(textData.logo, margin, size.h - Math.round(size.h * 0.055));
+        // 5. LOGO
+        if (design.logo) {
+          var lSize = Math.round(W * Math.min(Math.max(design.logo_size_pct || 0.04, 0.028), 0.06));
+          var logoPos = design.logo_position || 'bottom-left';
+          var logoX = logoPos.includes('right') ? (W - margin - ctx.measureText(design.logo).width) : margin;
+          var logoY = logoPos.includes('top') ? Math.round(H * 0.08) : H - Math.round(H * 0.055);
+          ctx.font = 'bold ' + lSize + 'px Arial, sans-serif';
+          ctx.fillStyle = design.logo_color || '#ffffff';
+          ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
+          ctx.fillText(design.logo, logoX, logoY);
         }
 
-        // 6. Exportar
-        var composedUrl = canvas.toDataURL('image/jpeg', 0.92);
-        var b64 = composedUrl.split(',')[1];
-        console.log('[Acuarius] Canvas compuesto OK, imagen', index);
+        var b64 = canvas.toDataURL('image/jpeg', 0.93).split(',')[1];
         renderAdImage({ base64: b64, mediaType: 'image/jpeg' }, index, total, format, 'variación', false);
       } catch(err) {
-        console.error('[Acuarius] Error en Canvas draw:', err);
+        console.error('[Acuarius] Canvas error:', err);
         renderAdImage(imgData, index, total, format, 'variación', false);
       }
       resolve();
     };
-
-    img.onerror = function(e) {
-      console.error('[Acuarius] Error cargando imagen en Canvas:', e);
-      // Renderizar sin overlay como fallback
-      renderAdImage(imgData, index, total, format, 'variación', false);
-      resolve();
-    };
-
-    img.src = imgSrc;
+    img.onerror = function() { renderAdImage(imgData, index, total, format, 'variación', false); resolve(); };
+    img.src = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
   });
 }
-
-
 
 // Sistema de cuestionario de diseño
 var designQData = {};
