@@ -4496,47 +4496,70 @@ async function startVariationGeneration() {
   var btn = document.getElementById('var-generate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
 
-  // PASO 1: Claude analiza la imagen y devuelve un JSON de componentes visuales
+  // PASO 1A: Extraer texto exacto del anuncio (llamada dedicada, prompt simple)
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
     if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>descomponiendo tu anuncio en componentes visuales...'; }
   }, 100);
 
-  var analysisSystemPrompt = 'You are an expert analyst of advertising creatives. Analyze ad images and return ONLY a valid JSON object with no markdown, backticks, or extra text.';
-
-  var analysisUserPrompt = 'Analyze this Meta Ads creative carefully and return ONLY a JSON object with these exact fields:\n{"ad_format":"square or vertical","visual_style":"overall photographic or illustrative style and mood","main_subject":"describe the person or object — demographics, clothing, posture, expression","background":"background environment, setting, textures, colors","color_palette":"list 3-5 dominant hex colors approximately","lighting":"lighting type, direction, temperature, mood","composition":"layout, subject position, framing, depth of field, text placement zones","props_elements":"any objects or visual elements besides the main subject","overall_mood":"emotional tone conveyed","headline_text":"copy EXACTLY all visible headline or title text from the image, preserving capitalization and line breaks using \\n","body_text":"copy EXACTLY all visible body text, bullet points, list items from the image, each item separated by | character","logo_text":"copy EXACTLY the brand name or logo text visible in the image, or empty string if none","text_style":"describe text color, font weight, style used in the ad (e.g. bold white sans-serif on dark background)"}\nReturn valid JSON only, no markdown, no backticks.';
-
-  var baseJson = null;
-  var formatDetect = 'square';
+  var extractedText = { headline: '', bodyItems: [], logo: '', textStyle: 'bold white sans-serif on dark background' };
 
   try {
-    var analyzeRes = await fetch('/api/chat', {
+    var textRes = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
       body: JSON.stringify({
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: analysisUserPrompt }
+          { type: 'text', text: 'Read ALL text visible in this image carefully. Return ONLY a JSON with exactly these 4 fields:\n{"headline":"the main title or headline text, exactly as written","body":"all other text items separated by | character","logo":"brand name or company name text","text_style":"color and style of text, e.g. bold white on dark blue"}\nCopy text exactly as it appears. No markdown, no explanation, just the JSON.' }
         ]}],
-        system: analysisSystemPrompt,
+        system: 'You read text from images and return JSON. Never add explanations or markdown.',
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600
+        max_tokens: 400
       })
     });
-    if (analyzeRes.ok) {
-      var analyzeData = await analyzeRes.json();
-      var rawText = analyzeData.content?.[0]?.text || '';
-      var clean = rawText.replace(/```json|```/g, '').trim();
+    if (textRes.ok) {
+      var textData = await textRes.json();
+      var rawT = (textData.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
       try {
-        baseJson = JSON.parse(clean);
-        console.log('[Acuarius] JSON analizado:', JSON.stringify(baseJson, null, 2));
-      } catch(e) {
-        console.warn('[Acuarius] Error parseando JSON:', clean);
-        baseJson = null;
-      }
+        var parsed = JSON.parse(rawT);
+        extractedText.headline = parsed.headline || '';
+        extractedText.bodyItems = (parsed.body || '').split('|').map(function(s){ return s.trim(); }).filter(Boolean);
+        extractedText.logo = parsed.logo || '';
+        extractedText.textStyle = parsed.text_style || extractedText.textStyle;
+        console.log('[Acuarius] Texto extraído:', JSON.stringify(extractedText));
+      } catch(e) { console.warn('[Acuarius] Error parseando texto:', rawT); }
     }
-  } catch(e) { /* usar fallback */ }
+  } catch(e) { console.warn('[Acuarius] Error extrayendo texto:', e); }
+
+  // PASO 1B: Analizar componentes visuales (sin pedir texto)
+  var baseJson = null;
+  var formatDetect = 'square';
+
+  try {
+    var visualRes = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
+          { type: 'text', text: 'Analyze the VISUAL elements of this ad image (ignore all text). Return ONLY JSON:\n{"ad_format":"square or vertical","visual_style":"photo or illustration style and mood","main_subject":"person or object description","background":"environment and setting","color_palette":"3-4 hex colors","lighting":"lighting type and mood","composition":"layout and framing","overall_mood":"emotional tone"}\nNo markdown, just JSON.' }
+        ]}],
+        system: 'You analyze visual elements of images and return JSON. Never add markdown.',
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400
+      })
+    });
+    if (visualRes.ok) {
+      var visualData = await visualRes.json();
+      var rawV = (visualData.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+      try {
+        baseJson = JSON.parse(rawV);
+        console.log('[Acuarius] Visual JSON:', JSON.stringify(baseJson));
+      } catch(e) { console.warn('[Acuarius] Error parseando visual:', rawV); }
+    }
+  } catch(e) { console.warn('[Acuarius] Error analizando visual:', e); }
 
   rmThinking(thinkId);
 
@@ -4552,7 +4575,7 @@ async function startVariationGeneration() {
     tempImg.src = data.imageDataUrl;
   });
 
-  // Fallback JSON si el análisis falló
+  // Fallback visual si el análisis falló
   if (!baseJson) {
     baseJson = {
       visual_style: 'professional lifestyle advertising photography, clean modern',
@@ -4562,11 +4585,7 @@ async function startVariationGeneration() {
       lighting: 'soft diffused studio lighting, flattering and even',
       composition: 'centered subject with clean negative space',
       props_elements: 'minimal props',
-      overall_mood: 'professional, trustworthy, modern',
-      headline_text: '',
-      body_text: '',
-      logo_text: '',
-      text_style: 'bold white sans-serif'
+      overall_mood: 'professional, trustworthy, modern'
     };
   }
 
@@ -4576,23 +4595,25 @@ async function startVariationGeneration() {
   generatedAdImages = [];
   adImgGridEl = null;
 
-  // Asegurar que baseJson tiene todos los campos de texto (Haiku puede omitirlos)
-  baseJson.headline_text = baseJson.headline_text || '';
-  baseJson.body_text = baseJson.body_text || '';
-  baseJson.logo_text = baseJson.logo_text || '';
-  baseJson.text_style = baseJson.text_style || 'bold white sans-serif on dark background';
+  // Asegurar campos visuales mínimos
+  baseJson.visual_style = baseJson.visual_style || 'professional advertising photography';
+  baseJson.overall_mood = baseJson.overall_mood || 'professional, trustworthy';
+  baseJson.props_elements = baseJson.props_elements || '';
 
-  // Datos de texto para superponer con Canvas después de generar
+  // PASO 2: Extraer texto del JSON para overlay Canvas, generar imágenes limpias
+  var total = data.count;
+  generatedAdImages = [];
+  adImgGridEl = null;
+
   var adTextData = {
-    headline: baseJson.headline_text.trim(),
-    bodyItems: baseJson.body_text.split('|').map(function(s){ return s.trim(); }).filter(Boolean),
-    logo: baseJson.logo_text.trim(),
-    darkBg: (baseJson.text_style || '').toLowerCase().indexOf('dark') !== -1 ||
-            (baseJson.color_palette || '').toLowerCase().indexOf('navy') !== -1 ||
-            (baseJson.color_palette || '').indexOf('#0') !== -1
+    headline: extractedText.headline,
+    bodyItems: extractedText.bodyItems,
+    logo: extractedText.logo,
+    darkBg: extractedText.textStyle.toLowerCase().indexOf('dark') !== -1 ||
+            extractedText.textStyle.toLowerCase().indexOf('white') !== -1
   };
   var hasAdText = !!(adTextData.headline || adTextData.bodyItems.length || adTextData.logo);
-  console.log('[Acuarius] adTextData:', JSON.stringify(adTextData), '| hasAdText:', hasAdText);
+  console.log('[Acuarius] adTextData final:', JSON.stringify(adTextData), '| hasAdText:', hasAdText);
 
   addAgent('🎨 Anuncio analizado. Generando **' + total + ' variaciones** con composiciones completamente nuevas...');
 
@@ -4603,13 +4624,15 @@ async function startVariationGeneration() {
   }, 100);
 
   // Construir prompts limpios — el texto se agrega como overlay en Canvas
+  // Offset aleatorio para que cada sesión dé variaciones distintas
+  var rnd = Math.floor(Math.random() * 100);
   var variantPrompts = [];
   for (var v = 0; v < total; v++) {
-    var bgVal      = VARIATION_AXES[0].values[v % VARIATION_AXES[0].values.length];
-    var subjectVal = VARIATION_AXES[1].values[(v + 2) % VARIATION_AXES[1].values.length];
-    var lightVal   = VARIATION_AXES[2].values[v % VARIATION_AXES[2].values.length];
-    var colorVal   = VARIATION_AXES[3].values[(v + 1) % VARIATION_AXES[3].values.length];
-    var compVal    = VARIATION_AXES[4].values[v % VARIATION_AXES[4].values.length];
+    var bgVal      = VARIATION_AXES[0].values[(v + rnd) % VARIATION_AXES[0].values.length];
+    var subjectVal = VARIATION_AXES[1].values[(v + rnd + 2) % VARIATION_AXES[1].values.length];
+    var lightVal   = VARIATION_AXES[2].values[(v + rnd) % VARIATION_AXES[2].values.length];
+    var colorVal   = VARIATION_AXES[3].values[(v + rnd + 1) % VARIATION_AXES[3].values.length];
+    var compVal    = VARIATION_AXES[4].values[(v + rnd) % VARIATION_AXES[4].values.length];
     variantPrompts.push(
       baseJson.visual_style + ', ' + baseJson.overall_mood + ' mood. ' +
       'Subject: ' + subjectVal + '. ' +
