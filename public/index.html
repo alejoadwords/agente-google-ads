@@ -2081,6 +2081,7 @@ async function openAgent(agentKey) {
       document.getElementById('m-stage').textContent = clientStage;
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
       addAgent(`hola de nuevo. agente de **${agentLabels[agentKey]||agentKey}** listo.\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
+      if (agentKey === 'meta-ads') { setTimeout(showMetaActionCards, 400); }
       return;
     } catch(e) { /* si falla, lanzar onboarding */ }
   }
@@ -2091,9 +2092,101 @@ async function openAgent(agentKey) {
 function launchOnboarding(agentKey) {
   mem = {}; hist = []; onDone = false; obStep = 0;
   document.getElementById('mem-card').style.display = 'none';
+  if (agentKey === 'meta-ads') {
+    addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
+    setTimeout(showMetaActionCards, 400);
+    return;
+  }
   const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
   addAgent(guide);
   setTimeout(() => renderOb(), 600);
+}
+
+// Cards de acción para Meta Ads
+function showMetaActionCards() {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
+
+      // Card 1: Crear anuncios de imagen
+      '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios de imagen</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Genera creativos profesionales para Facebook e Instagram</div>' +
+      '</div>' +
+
+      // Card 2: Planear campaña
+      '<div onclick="dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">📋</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planear campaña</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Estructura, audiencias, objetivo y presupuesto</div>' +
+      '</div>' +
+
+      // Card 3: Analizar campañas
+      '<div onclick="dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">📊</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar campañas</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Métricas, optimización y recomendaciones</div>' +
+      '</div>' +
+
+      // Card 4: Copys para anuncios
+      '<div onclick="dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear copys</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Textos persuasivos para feed, stories y carrusel</div>' +
+      '</div>' +
+
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function showMetaImageSubCards(parentCard) {
+  // Ocultar las cards principales
+  parentCard.closest('.msg').style.display = 'none';
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">🖼️ Crear anuncios de imagen</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
+
+      // Opción 1: Crear desde cero
+      '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:22px;margin-bottom:8px">✨</div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear desde cero</div>' +
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos profesionales a partir de tu marca y oferta</div>' +
+      '</div>' +
+
+      // Opción 2: Variaciones de anuncio existente
+      '<div onclick="dismissMetaCards(this);showVariationUploader()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:22px;margin-bottom:8px">🔄</div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Variaciones de mi anuncio</div>' +
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">Sube un anuncio existente y genera variaciones de fondo, estilo y composición</div>' +
+      '</div>' +
+
+    '</div>' +
+    '<div style="padding-left:40px;margin-top:8px">' +
+      '<button onclick="this.closest(\'.msg\').remove();showMetaActionCards()" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:var(--font);padding:4px 0">← volver</button>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function dismissMetaCards(el) {
+  var msg = el.closest('.msg');
+  if (msg) msg.style.display = 'none';
 }
 
 // Envía desde el chat libre de la pantalla de inicio
@@ -4207,12 +4300,43 @@ function renderAdImage(img, index, total, format, prompt, isSocial) {
           currentBatchType = 'stories';
           setTimeout(function() { addAgent('Generando versiones para Stories automáticamente...'); generateStoriesFromFeed(); }, 1000);
         } else {
-          hist.push({ role: 'user', content: 'Se generaron ' + total + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, titulo, CTA) para cada variacion y recomienda cual probar primero segun el objetivo del negocio.' });
-          callClaude();
+          setTimeout(function() { showCopysButton(total, 'feed'); }, 300);
         }
       }
     }, 300);
   }
+}
+
+function showCopysButton(count, type) {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var isVariations = type === 'variaciones';
+  var isStories = type === 'stories';
+  var promptText = isVariations
+    ? 'Se generaron ' + count + ' variaciones de mi anuncio. Dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero según principios de testing A/B para Meta Ads.'
+    : isStories
+      ? 'Tengo ' + count + ' creativos (' + Math.round(count/2) + ' feed + ' + Math.round(count/2) + ' stories). Dame el copy optimizado para cada variación y recomienda cuál probar primero.'
+      : 'Se generaron ' + count + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, título, CTA) para cada creativo y recomienda cuál probar primero según el objetivo del negocio.';
+
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
+    '<div style="background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;max-width:320px">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">¿también quieres los copys?</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Puedo generar el texto principal, título y CTA optimizados para cada creativo.</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button onclick="requestCopys(this,\'' + promptText.replace(/'/g, "\\'") + '\')" style="flex:1;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">✍️ Sí, crear copys</button>' +
+        '<button onclick="this.closest(\'.msg\').remove()" style="padding:9px 12px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">No, gracias</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function requestCopys(btn, promptText) {
+  btn.closest('.msg').remove();
+  hist.push({ role: 'user', content: promptText });
+  callClaude();
 }
 
 function downloadAdImage(base64, mediaType, filename) {
@@ -4369,9 +4493,9 @@ async function startVariationGeneration() {
     if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con IA...'; }
   }, 100);
 
-  var analysisPrompt = 'Analiza este anuncio de Meta Ads y describe en inglés (para prompt de IA de imágenes) sus elementos visuales clave: composición, colores dominantes, estilo fotográfico o ilustrativo, elementos de marca, tipografía, producto o servicio mostrado, ambiente y tono emocional. Sé específico y detallado (máximo 120 palabras). Solo devuelve la descripción, sin explicaciones ni formato adicional.';
+  var analysisPrompt = 'Analiza este anuncio de Meta Ads y describe en inglés (para un prompt de generación de imágenes) ÚNICAMENTE sus elementos visuales no-textuales: composición y layout general, paleta de colores dominantes (da los hex aproximados si los identificas), estilo fotográfico o ilustrativo (realismo, plano, editorial, lifestyle, etc.), tipo de personas o modelos mostrados (demografía, postura, expresión), productos o servicios mostrados sin texto, fondos y ambientación, iluminación y ambiente emocional. MUY IMPORTANTE: NO describas ningún texto, tipografía, títulos, precios, ni elementos de texto que aparezcan en la imagen — solo los elementos visuales puros. Máximo 130 palabras. Solo devuelve la descripción en inglés, sin explicaciones ni formato adicional.';
 
-  var remixPrompt = 'Professional Meta Ads creative for Latin American market, same visual concept and brand identity';
+  var remixPrompt = 'Professional Meta Ads creative visual composition for Latin American market, clean advertising photography, NO text overlays, no typography, no words';
   try {
     var analyzeRes = await fetch('/api/chat', {
       method: 'POST',
@@ -4390,7 +4514,7 @@ async function startVariationGeneration() {
       var analyzeData = await analyzeRes.json();
       var extracted = analyzeData.content?.[0]?.text || '';
       if (extracted.length > 20) {
-        remixPrompt = extracted + '. Professional Meta Ads creative for Latin American market, high-converting design, vibrant mobile-optimized.';
+        remixPrompt = extracted + '. Professional Meta Ads creative for Latin American market, high-converting advertising photography, vibrant mobile-optimized. IMPORTANT: absolutely no text, no typography, no words, no numbers, no price tags, no headlines — pure visual composition only. Vary the background scene, lighting mood, model pose or demographic, and color accent palette to create distinct variations.';
       }
     }
   } catch(e) { /* usar prompt genérico */ }
@@ -4480,10 +4604,9 @@ async function startVariationGeneration() {
     renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, remixPrompt, false);
   }
 
-  // 7. Mensaje final con copy sugerido
+  // 7. Botón para crear copys (no automático)
   setTimeout(function() {
-    hist.push({ role: 'user', content: 'Se generaron ' + allImages.length + ' variaciones de mi anuncio existente con Ideogram V3 Remix. Dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero según principios de testing A/B para Meta Ads.' });
-    callClaude();
+    showCopysButton(allImages.length, 'variaciones');
   }, 500);
 }
 
@@ -4638,11 +4761,9 @@ function generateStoriesFromFeed() {
     }, i * 500, imgCmd); // Generar con delay para no sobrecargar
   }
   
-  // Al finalizar stories, enviar mensaje de copy
+  // Al finalizar stories, mostrar botón de copys
   setTimeout(function() {
-    hist.push({ role: 'user', content: 'Perfecto. Ahora tengo ' + (feedPrompts.length * 2) + ' creativos (' + feedPrompts.length + ' feed + ' + feedPrompts.length + ' stories). Dame el copy optimizado para cada variación y recomienda cuál probar primero.' });
-    callClaude();
-    
+    showCopysButton(feedPrompts.length * 2, 'stories');
     // Reset para próximo batch
     currentBatchType = 'feed';
     feedPrompts = [];
