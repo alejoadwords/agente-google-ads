@@ -145,14 +145,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
 
 /* ── VARIACIONES DE ANUNCIO ── */
-.var-upload-zone{border:2px dashed var(--border);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sidebar)}
-.var-upload-zone:hover,.var-upload-zone.drag-over{border-color:var(--blue);background:var(--blue-lt)}
-.var-upload-zone.has-image{border-style:solid;border-color:var(--blue);background:var(--blue-lt);padding:14px}
-.var-preview-img{width:100%;max-height:160px;object-fit:contain;border-radius:8px;display:block}
-.var-count-chip{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;background:white;color:var(--muted)}
-.var-count-chip.selected{background:var(--blue);color:white;border-color:var(--blue)}
-.var-style-btn{flex:1;padding:10px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;background:white;text-align:center;color:var(--muted)}
-.var-style-btn.selected{border-color:var(--blue);background:var(--blue-lt);color:var(--blue)}
+
 
 /* Onboarding card */
 .ob-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:22px 24px;max-width:520px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
@@ -1639,7 +1632,7 @@ CTA (llamada a la acción):
 
 **Respuesta cuando detectes solicitud de imágenes:**
 
-Para plan Pro/Admin: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca para el diseño: [DESIGN_QUESTIONNAIRE]"
+Para plan Pro/Admin: "[DESIGN_QUESTIONNAIRE]"
 
 Para plan gratuito: Genera directamente:
 [GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO], diseño básico", "format": "vertical", "variations": 1, "hasText": true}]
@@ -1741,7 +1734,6 @@ function showImageLimitReached() {
           '✓ Imágenes ilimitadas<br>' +
           '✓ Diseño profesional con cuestionario<br>' +
           '✓ Formatos feed + stories automático<br>' +
-          '✓ 5 variaciones por pedido' +
         '</div>' +
         '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="width:100%;padding:12px;background:white;color:#DC2626;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🚀 Actualizar a Pro</button>' +
       '</div>' +
@@ -2113,31 +2105,31 @@ function showMetaActionCards() {
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
       '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
+    '<div style="display:flex;gap:8px;width:100%;max-width:800px;padding-left:40px">' +
 
       // Card 1: Crear anuncios de imagen
-      '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;flex:1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios de imagen</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Genera creativos profesionales para Facebook e Instagram</div>' +
       '</div>' +
 
       // Card 2: Planear campaña
-      '<div onclick="dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;flex:1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">📋</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planear campaña</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Estructura, audiencias, objetivo y presupuesto</div>' +
       '</div>' +
 
       // Card 3: Analizar campañas
-      '<div onclick="dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;flex:1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">📊</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar campañas</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Métricas, optimización y recomendaciones</div>' +
       '</div>' +
 
       // Card 4: Copys para anuncios
-      '<div onclick="dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;flex:1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear copys</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Textos persuasivos para feed, stories y carrusel</div>' +
@@ -2146,47 +2138,6 @@ function showMetaActionCards() {
     '</div>';
   document.getElementById('chat-area').appendChild(el);
   scrollB();
-}
-
-function showMetaImageSubCards(parentCard) {
-  // Ocultar las cards principales
-  parentCard.closest('.msg').style.display = 'none';
-  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
-  el.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
-      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-      '<div style="font-size:13px;font-weight:600;color:var(--text)">🖼️ Crear anuncios de imagen</div>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
-
-      // Opción 1: Crear desde cero
-      '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:22px;margin-bottom:8px">✨</div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear desde cero</div>' +
-        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos profesionales a partir de tu marca y oferta</div>' +
-      '</div>' +
-
-      // Opción 2: Variaciones de anuncio existente
-      '<div onclick="dismissMetaCards(this);showVariationUploader()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:22px;margin-bottom:8px">🔄</div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Variaciones de mi anuncio</div>' +
-        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">Sube un anuncio existente y genera variaciones de fondo, estilo y composición</div>' +
-      '</div>' +
-
-    '</div>' +
-    '<div style="padding-left:40px;margin-top:8px">' +
-      '<button onclick="this.closest(\'.msg\').remove();showMetaActionCards()" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:var(--font);padding:4px 0">← volver</button>' +
-    '</div>';
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-}
-
-function dismissMetaCards(el) {
-  var msg = el.closest('.msg');
-  if (msg) msg.style.display = 'none';
 }
 
 // Envía desde el chat libre de la pantalla de inicio
@@ -4295,12 +4246,9 @@ function renderAdImage(img, index, total, format, prompt, isSocial) {
 
 function showCopysButton(count, type) {
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-  var isVariations = type === 'variaciones';
   var isStories = type === 'stories';
-  var promptText = isVariations
-    ? 'Se generaron ' + count + ' variaciones de mi anuncio. Dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero según principios de testing A/B para Meta Ads.'
-    : isStories
-      ? 'Tengo ' + count + ' creativos (' + Math.round(count/2) + ' feed + ' + Math.round(count/2) + ' stories). Dame el copy optimizado para cada variación y recomienda cuál probar primero.'
+  var promptText = isStories
+      ? 'Tengo ' + count + ' creativos (' + Math.round(count/2) + ' feed + ' + Math.round(count/2) + ' stories). Dame el copy optimizado para cada creativo y recomienda cuál probar primero.'
       : 'Se generaron ' + count + ' creativos listos para Meta Ads. Dame el copy optimizado (texto principal, título, CTA) para cada creativo y recomienda cuál probar primero según el objetivo del negocio.';
 
   var el = document.createElement('div');
@@ -4336,7 +4284,7 @@ function publishToMeta(imgIndex) {
   var img = generatedAdImages[imgIndex];
   if (!img) return;
   var cin = document.getElementById('cin');
-  if (cin) { cin.value = 'Quiero publicar la variacion ' + img.index + ' en una campana de Meta Ads.'; sendMsg(); }
+  if (cin) { cin.value = 'Quiero publicar el creativo ' + img.index + ' en una campaña de Meta Ads.'; sendMsg(); }
 }
 
 function launchMetaCampaignFlow() {
@@ -4347,150 +4295,6 @@ function launchMetaCampaignFlow() {
   hist.push({ role: 'user', content: 'Tengo ' + generatedAdImages.length + ' creativos listos y quiero crear una campana completa en Meta Ads. Guiame paso a paso: objetivo, audiencia, presupuesto y lanzamiento.' });
   callClaude();
 }
-
-function requestImageVariation(encodedPrompt, format) {
-  var cin = document.getElementById('cin');
-  if (cin) { cin.value = 'Genera una variacion diferente, mismo concepto pero composicion distinta. Formato: ' + format + '.'; sendMsg(); }
-}
-
-// =============================================
-// VARIACIONES DE ANUNCIO EXISTENTE (Ideogram Remix)
-// =============================================
-
-// =============================================
-// VARIACIONES DE ANUNCIO — Sistema JSON prompt-based
-// Descompone la imagen en componentes visuales (JSON),
-// genera N versiones modificando ejes distintos por variación,
-// y crea imágenes completamente nuevas (text-to-image) coherentes.
-// =============================================
-
-var variationUploadData = { imageDataUrl: null, count: 5 };
-
-function showVariationUploader() {
-  variationUploadData = { imageDataUrl: null, count: 5 };
-
-  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.id = 'variation-uploader-card';
-  el.innerHTML =
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
-    '<div style="max-width:460px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-          '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
-          '<div style="background:var(--blue-lt);color:var(--blue);padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">IA generativa</div>' +
-        '</div>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">La IA analiza tu anuncio, lo descompone en componentes visuales y genera imágenes nuevas con variaciones reales de fondo, personaje, estilo y paleta — sin distorsionar texto.</div>' +
-
-        '<div class="var-upload-zone" id="var-upload-zone" onclick="document.getElementById(\'var-file-input\').click()" ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ondragleave="this.classList.remove(\'drag-over\')" ondrop="handleVariationDrop(event)">' +
-          '<div id="var-upload-placeholder">' +
-            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px">Sube tu anuncio</div>' +
-            '<div style="font-size:11px;color:var(--muted2)">JPG, PNG o WebP · máx 8 MB</div>' +
-          '</div>' +
-          '<img id="var-preview" class="var-preview-img" style="display:none" src="" alt="preview"/>' +
-          '<input type="file" id="var-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleVariationFile(this.files[0])">' +
-        '</div>' +
-
-        '<div id="var-options" style="display:none;margin-top:14px">' +
-          '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">¿Cuántas variaciones?</div>' +
-          '<div style="display:flex;gap:6px;margin-bottom:16px">' +
-            [3,4,5,6,8].map(function(n){
-              return '<div class="var-count-chip' + (n===5?' selected':'') + '" onclick="selectVarCount(this,' + n + ')">' + n + '</div>';
-            }).join('') +
-          '</div>' +
-          '<button onclick="startVariationGeneration()" id="var-generate-btn" style="width:100%;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Analizar y generar variaciones</button>' +
-        '</div>' +
-
-      '</div>' +
-    '</div>';
-
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-}
-
-function handleVariationDrop(event) {
-  event.preventDefault();
-  document.getElementById('var-upload-zone').classList.remove('drag-over');
-  var file = event.dataTransfer.files[0];
-  if (file) handleVariationFile(file);
-}
-
-function handleVariationFile(file) {
-  if (!file || !file.type.startsWith('image/')) { addAgent('Por favor sube una imagen en formato JPG, PNG o WebP.'); return; }
-  if (file.size > 8 * 1024 * 1024) { addAgent('La imagen debe ser menor a 8 MB.'); return; }
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    variationUploadData.imageDataUrl = e.target.result;
-    var zone = document.getElementById('var-upload-zone');
-    var placeholder = document.getElementById('var-upload-placeholder');
-    var preview = document.getElementById('var-preview');
-    zone.classList.add('has-image');
-    placeholder.style.display = 'none';
-    preview.src = e.target.result;
-    preview.style.display = 'block';
-    document.getElementById('var-options').style.display = 'block';
-    scrollB();
-  };
-  reader.readAsDataURL(file);
-}
-
-function selectVarCount(el, n) {
-  variationUploadData.count = n;
-  document.querySelectorAll('.var-count-chip').forEach(function(c){ c.classList.remove('selected'); });
-  el.classList.add('selected');
-}
-
-// Ejes de variación: qué dimensión visual cambiar en cada variación
-var VARIATION_AXES = [
-  { field: 'background', values: [
-    'modern minimalist studio with soft white and beige tones, clean gradient',
-    'warm coffee shop interior with wooden textures and ambient golden light',
-    'bright outdoor urban setting with natural daylight, city architecture in background',
-    'elegant dark background with dramatic professional rim lighting',
-    'lush green nature park setting with soft bokeh and dappled natural light',
-    'contemporary home living room with modern furniture and warm ambient tones',
-    'vibrant abstract gradient background in complementary accent colors',
-    'professional office environment with glass walls and clean steel aesthetic'
-  ]},
-  { field: 'subject', values: [
-    'young latin woman, 25-30 years old, warm genuine smile, confident relaxed posture',
-    'mature latin man, 40-45 years old, professional demeanor, trustworthy friendly expression',
-    'young latin man, 28-33 years old, casual energetic, approachable open smile',
-    'latin couple, mid-30s, natural happy interaction, authentic connection',
-    'latin woman, 35-40 years old, professional business attire, empowered poised expression',
-    'diverse group of latin professionals, collaborative positive energy, teamwork',
-    'latin family with child, warm authentic moment, genuine happiness',
-    'latin senior woman, 55-60 years old, elegant dignified serene expression'
-  ]},
-  { field: 'lighting', values: [
-    'soft diffused studio lighting, even flattering illumination, clean shadows',
-    'warm golden hour sunlight streaming from side, cinematic and emotive quality',
-    'bright clean daylight, fresh energetic feel, high key',
-    'dramatic side lighting with rich shadows, premium editorial feel',
-    'cool blue-toned professional lighting, modern trustworthy atmosphere'
-  ]},
-  { field: 'color_accent', values: [
-    'warm terracotta and cream color palette',
-    'refreshing teal and white color palette',
-    'rich emerald green and gold color palette',
-    'vibrant coral and off-white color palette',
-    'deep navy blue and silver color palette',
-    'soft lavender and warm white color palette'
-  ]},
-  { field: 'composition', values: [
-    'centered subject with generous negative space, clean symmetrical framing',
-    'rule of thirds, subject left-aligned, open space for text on right',
-    'close-up portrait framing, emotional connection, shallow depth of field',
-    'wide environmental shot, subject integrated into setting, storytelling composition',
-    'dynamic diagonal composition, energetic and modern feel'
-  ]}
-];
-
-
-// Nueva función de variaciones: Sonnet analiza → usuario confirma texto → se generan imágenes
 
 // =============================================
 // VARIACIONES CON REMIX — Flujo A/B Testing
@@ -4534,246 +4338,6 @@ async function fetchChatFull(payload) {
     }
   }
   return fullText;
-}
-
-async function startVariationGeneration() {
-  var data = variationUploadData;
-  if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
-
-  var btn = document.getElementById('var-generate-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
-
-  var thinkId = addThinking();
-  setTimeout(function() {
-    var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando diseño del anuncio con Sonnet...'; }
-  }, 100);
-
-  var design = null;
-  try {
-    var fullText = await fetchChatFull({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      system: 'You are an expert at analyzing ad design and returning precise JSON. No markdown, no backticks, only valid JSON.',
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-        { type: 'text', text: 'Analyze this ad image and return ONLY a JSON with these fields: {"format":"square or vertical","text_zone":"left or right or center","text_zone_width_pct":0.55,"overlay_color":"#000000","overlay_opacity":0.6,"headline":"exact headline text","headline_size_pct":0.07,"headline_color":"#ffffff","headline_weight":"bold","body_items":["item1","item2"],"body_size_pct":0.035,"body_color":"#ffffff","bullet_style":"dot or dash or number or none","logo":"brand name or empty","logo_position":"bottom-left or bottom-right or top-left or top-right","logo_size_pct":0.04,"logo_color":"#ffffff","bg_dark":true,"visual_style":"style in english","main_subject":"person or object description","background":"background description","color_palette":"#hex1, #hex2","lighting":"lighting description","overall_mood":"mood"}. Return ONLY valid JSON.' }
-      ]}]
-    });
-    var clean = fullText.replace(/```json|```/g, '').trim();
-    var bi = clean.indexOf('{'); if (bi > 0) clean = clean.slice(bi);
-    design = JSON.parse(clean);
-    console.log('[Acuarius] Design JSON OK:', JSON.stringify(design, null, 2));
-  } catch(e) { console.error('[Acuarius] Error análisis:', e.message); }
-
-  rmThinking(thinkId);
-
-  // Detectar formato real por dimensiones
-  var formatDetect = 'square';
-  var tempImg = new Image();
-  await new Promise(function(resolve) {
-    tempImg.onload = function() { formatDetect = (tempImg.width / tempImg.height < 0.85) ? 'vertical' : 'square'; resolve(); };
-    tempImg.onerror = resolve;
-    tempImg.src = data.imageDataUrl;
-  });
-
-  if (!design) {
-    design = {
-      format: formatDetect, text_zone: 'left', text_zone_width_pct: 0.55,
-      overlay_color: '#000000', overlay_opacity: 0.6,
-      headline: '', headline_size_pct: 0.07, headline_color: '#ffffff', headline_weight: 'bold',
-      body_items: [], body_size_pct: 0.035, body_color: '#ffffff', bullet_style: 'dot',
-      logo: '', logo_position: 'bottom-left', logo_size_pct: 0.04, logo_color: '#ffffff',
-      bg_dark: true, visual_style: 'professional advertising photography',
-      main_subject: 'latin adult professional person', background: 'clean studio background',
-      color_palette: '#1E2BCC, #ffffff', lighting: 'soft studio lighting', overall_mood: 'professional'
-    };
-  }
-  design.format = formatDetect;
-
-  showVariationAxisCard(design, formatDetect, variationUploadData.count);
-}
-
-// Tarjeta: elegir eje + ver texto detectado (solo lectura, editable si necesita)
-function showVariationAxisCard(design, format, count) {
-  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-
-  var designEncoded = encodeURIComponent(JSON.stringify(design));
-  var hasText = !!(design.headline || (design.body_items && design.body_items.length) || design.logo);
-
-  var detectedHtml = '<div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:12px 14px;margin-bottom:14px">' +
-    '<div style="font-size:11px;font-weight:600;color:#0369A1;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Diseño detectado</div>';
-  if (design.headline) detectedHtml += '<div style="font-size:12px;color:#0C4A6E;margin-bottom:4px"><strong>Título:</strong> ' + design.headline.replace(/</g,'&lt;') + '</div>';
-  if (design.body_items && design.body_items.length) {
-    detectedHtml += '<div style="font-size:12px;color:#0C4A6E;margin-bottom:4px"><strong>Items (' + design.body_items.length + '):</strong> ' + design.body_items.slice(0,3).map(function(i){ return i.replace(/</g,'&lt;'); }).join(', ') + (design.body_items.length > 3 ? '...' : '') + '</div>';
-  }
-  if (design.logo) detectedHtml += '<div style="font-size:12px;color:#0C4A6E"><strong>Marca:</strong> ' + design.logo.replace(/</g,'&lt;') + '</div>';
-  if (!hasText) detectedHtml += '<div style="font-size:12px;color:#0C4A6E">No se detectó texto (se generarán variaciones solo visuales)</div>';
-  detectedHtml += '</div>';
-
-  var AXES = [
-    { key:'subject',     emoji:'👤', label:'Personaje',   desc:'Cambia modelo manteniendo fondo, texto y diseño idénticos' },
-    { key:'background',  emoji:'🏙️', label:'Fondo',       desc:'Cambia escenario manteniendo personaje, texto y diseño idénticos' },
-    { key:'palette',     emoji:'🎨', label:'Paleta',      desc:'Varía los colores dominantes manteniendo composición y texto idénticos' },
-    { key:'composition', emoji:'📐', label:'Composición', desc:'Varía encuadre y posición del sujeto manteniendo estilo y texto idénticos' },
-  ];
-  var axisHtml = AXES.map(function(ax) {
-    return '<div id="axis-' + ax.key + '" onclick="selectAxis(\'' + ax.key + '\')" style="border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;background:white;transition:all .15s" onmouseover="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\'}" onmouseout="if(!this.classList.contains(\'ax-sel\')){this.style.borderColor=\'var(--border)\';this.style.background=\'white\'}">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:16px">' + ax.emoji + '</span><span style="font-size:13px;font-weight:700;color:var(--text)">' + ax.label + '</span></div>' +
-      '<div style="font-size:11px;color:var(--muted);line-height:1.4">' + ax.desc + '</div>' +
-    '</div>';
-  }).join('');
-
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.id = 'variation-axis-card';
-  el.innerHTML =
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-    '<div style="max-width:500px;width:100%"><div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-      '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px">✅ Anuncio analizado</div>' +
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">El diseño tipográfico quedará <strong>idéntico al original</strong>. Solo elige qué elemento visual variar.</div>' +
-      detectedHtml +
-      '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Qué quieres variar?</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' + axisHtml + '</div>' +
-      '<button id="axis-generate-btn" onclick="launchAxisVariations(\'' + designEncoded + '\',\'' + format + '\',' + count + ')" disabled style="width:100%;padding:11px;background:#9CA3AF;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:var(--font)">Selecciona qué variar ↑</button>' +
-    '</div></div>';
-
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-}
-
-var selectedAxis = null;
-function selectAxis(key) {
-  selectedAxis = key;
-  var labels = { subject:'Personaje', background:'Fondo', palette:'Paleta', composition:'Composición' };
-  document.querySelectorAll('[id^="axis-"]').forEach(function(el) {
-    if (!el.id.includes('generate') && !el.id.includes('card')) {
-      var isSelected = el.id === 'axis-' + key;
-      el.style.borderColor = isSelected ? 'var(--blue)' : 'var(--border)';
-      el.style.background = isSelected ? 'var(--blue-lt)' : 'white';
-      isSelected ? el.classList.add('ax-sel') : el.classList.remove('ax-sel');
-    }
-  });
-  var genBtn = document.getElementById('axis-generate-btn');
-  if (genBtn) {
-    genBtn.disabled = false;
-    genBtn.style.background = 'var(--blue)';
-    genBtn.style.cursor = 'pointer';
-    genBtn.textContent = '✨ Variar ' + (labels[key] || key) + ' — Generar ' + (variationUploadData.count || 3) + ' variaciones';
-  }
-}
-
-async function launchAxisVariations(designEncoded, format, count) {
-  var design = JSON.parse(decodeURIComponent(designEncoded));
-  if (!selectedAxis) return;
-
-  var card = document.getElementById('variation-axis-card');
-  if (card) card.style.display = 'none';
-
-  // subject/background → text-to-image + plantilla Canvas
-  // palette/composition → Remix (preserva texto en imagen original)
-  var useRemix = false; // Todos los ejes usan text-to-image + Canvas para evitar distorsión de texto
-
-  var prompts = buildAxisPrompts(selectedAxis, design, count);
-  addAgent('🎨 Generando **' + count + ' variaciones** variando el **' + prompts.label + '**...');
-
-  var thinkId = addThinking();
-  setTimeout(function() {
-    var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando variaciones...'; }
-  }, 100);
-
-  generatedAdImages = [];
-  adImgGridEl = null;
-  var allImages = [];
-
-  try {
-    var imgPromises = prompts.list.map(function(p) {
-      var body = { prompt: p, format: format, variations: 1, hasText: false };
-      return fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-        body: JSON.stringify(body)
-      }).then(function(r) { return r.json(); });
-    });
-    var results = await Promise.all(imgPromises);
-    results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
-  } catch(err) {
-    rmThinking(thinkId);
-    addAgent('Error generando variaciones: ' + err.message);
-    return;
-  }
-
-  rmThinking(thinkId);
-  if (!allImages.length) { addAgent('No se pudieron generar las variaciones. Intenta de nuevo.'); return; }
-
-  // Siempre text-to-image + Canvas — imagen limpia + diseño tipográfico idéntico
-  for (var i = 0; i < allImages.length; i++) {
-    await composeWithDesignTemplate(allImages[i], i + 1, allImages.length, format, design);
-  }
-}
-
-function buildAxisPrompts(axis, design, count) {
-  var baseStyle = (design.visual_style || 'professional advertising photography') + ', ' + (design.overall_mood || 'professional') + ' mood';
-  var rnd = Math.floor(Math.random() * 100);
-
-  var SUBJECTS = [
-    'young latin woman 25-30, warm confident smile, professional casual attire, arms crossed, looking at camera',
-    'mature latin man 42-48, trustworthy calm expression, business casual shirt, looking at camera',
-    'young latin man 28-33, energetic approachable smile, modern casual open collar, looking at camera',
-    'latin woman 35-40, empowered professional posture, elegant blazer, looking at camera',
-    'latin senior man 55-62, experienced dignified calm expression, professional attire, looking at camera',
-    'latin woman 45-50, warm approachable expression, smart casual blouse, looking at camera',
-    'young latin woman 22-27, fresh enthusiastic smile, colorful casual attire, looking at camera',
-    'latin man 30-36, confident modern style, casual button shirt, arms crossed, looking at camera'
-  ];
-  var BACKGROUNDS = [
-    'modern minimalist white studio, soft clean gradient wall, professional',
-    'warm coffee shop interior, wooden bokeh background, golden ambient light',
-    'bright outdoor city setting, natural daylight, blurred urban architecture',
-    'contemporary living room, comfortable modern home interior, warm ambient',
-    'lush outdoor park, soft green nature bokeh, dappled natural sunlight',
-    'elegant dark teal to black gradient, subtle professional rim light',
-    'bright modern office, clean glass and white walls, airy professional',
-    'outdoor rooftop urban view, city skyline bokeh background, golden hour'
-  ];
-  var PALETTES = [
-    'shift all tones to warm terracotta and cream color palette',
-    'shift all tones to cool teal and fresh white color palette',
-    'shift all tones to rich navy blue and gold color palette',
-    'shift all tones to vibrant coral and off-white color palette',
-    'shift all tones to deep forest green and warm beige color palette',
-    'shift all tones to soft lavender and clean white color palette'
-  ];
-  var COMPOSITIONS = [
-    'reframe centered symmetrical, generous breathing room, subject prominent',
-    'reframe subject left rule of thirds, open right space',
-    'reframe close-up portrait tight crop, emotional shallow depth of field',
-    'reframe subject right, strong open left negative space',
-    'reframe environmental wide shot, subject integrated in setting',
-    'reframe dynamic diagonal, energetic modern composition'
-  ];
-
-  var list = [];
-  var label = '';
-  for (var v = 0; v < count; v++) {
-    var p = '';
-    if (axis === 'subject') {
-      label = 'Personaje';
-      p = baseStyle + '. Person: ' + SUBJECTS[(v + rnd) % SUBJECTS.length] + '. Background: ' + (design.background || 'professional background') + '. Lighting: ' + (design.lighting || 'soft studio lighting') + '. Color palette: ' + (design.color_palette || '#1E2BCC') + '. Professional Meta Ads creative, Latin American market. NO text, NO words — clean visual only.';
-    } else if (axis === 'background') {
-      label = 'Fondo';
-      p = baseStyle + '. Person: ' + (design.main_subject || 'latin professional person looking at camera') + '. Background: ' + BACKGROUNDS[(v + rnd) % BACKGROUNDS.length] + '. Lighting: ' + (design.lighting || 'soft studio lighting') + '. Color palette: ' + (design.color_palette || '#1E2BCC') + '. Professional Meta Ads creative, Latin American market. NO text, NO words — clean visual only.';
-    } else if (axis === 'palette') {
-      label = 'Paleta';
-      p = PALETTES[(v + rnd) % PALETTES.length] + '. Keep all composition, people, layout and elements exactly as in the reference image. Professional Meta Ads creative.';
-    } else if (axis === 'composition') {
-      label = 'Composición';
-      p = baseStyle + '. ' + COMPOSITIONS[(v + rnd) % COMPOSITIONS.length] + '. Keep same person, background, colors as reference image. Professional Meta Ads creative.';
-    }
-    list.push(p);
-  }
-  return { label: label, list: list };
 }
 
 // Canvas reconstruye el diseño tipográfico original sobre la nueva imagen base
@@ -4886,14 +4450,14 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
         }
 
         var b64 = canvas.toDataURL('image/jpeg', 0.93).split(',')[1];
-        renderAdImage({ base64: b64, mediaType: 'image/jpeg' }, index, total, format, 'variación', false);
+        renderAdImage({ base64: b64, mediaType: 'image/jpeg' }, index, total, format, 'creativo', false);
       } catch(err) {
         console.error('[Acuarius] Canvas error:', err);
-        renderAdImage(imgData, index, total, format, 'variación', false);
+        renderAdImage(imgData, index, total, format, 'creativo', false);
       }
       resolve();
     };
-    img.onerror = function() { renderAdImage(imgData, index, total, format, 'variación', false); resolve(); };
+    img.onerror = function() { renderAdImage(imgData, index, total, format, 'creativo', false); resolve(); };
     img.src = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
   });
 }
@@ -4949,13 +4513,6 @@ function showDesignQuestionnaire() {
             '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es el nombre de tu negocio/marca?</div>' +
             '<input type="text" id="dq-brand" placeholder="Ej: Clínica Sorelle, Estética Miranda" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font)">' +
             '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
-            '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
-              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">¿Ya tienes un anuncio creado?</div>' +
-              '<button onclick="showVariationUploader()" style="width:100%;padding:10px;background:white;color:var(--blue);border:1.5px solid var(--blue);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px">' +
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
-                'Generar variaciones de mi anuncio existente' +
-              '</button>' +
-            '</div>'
           ) +
         '</div>' +
         (isLimited ? '' :
