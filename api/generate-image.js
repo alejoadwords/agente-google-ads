@@ -8,9 +8,14 @@ export default async function handler(req, res) {
 
   const {
     prompt,
-    format     = 'square',
-    variations = 1,
-    hasText    = false,
+    format        = 'square',
+    variations    = 1,
+    hasText       = false,
+    // Modo remix: genera variaciones a partir de imagen de referencia
+    mode          = 'generate',   // 'generate' | 'remix'
+    referenceImage,               // base64 data URI de la imagen de referencia
+    imageWeight   = 0.5,          // 0.1=libre … 0.9=muy fiel al original
+    remixCount    = 5,            // cuántas variaciones generar (5–10)
   } = req.body;
 
   if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
@@ -28,6 +33,72 @@ export default async function handler(req, res) {
   const spec  = formatSpecs[format] || formatSpecs.square;
   const count = Math.min(Math.max(1, variations), 5);
   const useIdeogram = hasText;
+
+  // ── MODO REMIX ────────────────────────────────────────────────────────────
+  if (mode === 'remix') {
+    if (!referenceImage) return res.status(400).json({ error: 'referenceImage requerido para modo remix' });
+
+    const totalVariations = Math.min(Math.max(5, remixCount), 10);
+    const results = [];
+
+    // Ideogram V3 Remix – hasta 4 imágenes por llamada; hacemos lotes paralelos
+    const batchSize = 4;
+    const batches = Math.ceil(totalVariations / batchSize);
+    const batchPromises = [];
+
+    for (let b = 0; b < batches; b++) {
+      const numInBatch = Math.min(batchSize, totalVariations - b * batchSize);
+      batchPromises.push(
+        fetch('https://fal.run/fal-ai/ideogram/v3/remix', {
+          method: 'POST',
+          headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_url:        referenceImage,
+            prompt:           prompt,
+            image_weight:     imageWeight,
+            num_images:       numInBatch,
+            aspect_ratio:     spec.ratio,
+            rendering_speed:  'BALANCED',
+            expand_prompt:    false,
+          }),
+        })
+      );
+    }
+
+    const batchResponses = await Promise.all(batchPromises);
+
+    for (const remixRes of batchResponses) {
+      const remixData = await remixRes.json();
+      if (!remixRes.ok) {
+        const errMsg = remixData.detail?.[0]?.msg || remixData.error || 'Error en Ideogram Remix';
+        return res.status(500).json({ error: errMsg });
+      }
+
+      const images = remixData.images || [];
+      for (const imgObj of images) {
+        const imgUrl = imgObj.url;
+        if (!imgUrl) continue;
+        const imgRes    = await fetch(imgUrl);
+        const imgBuffer = await imgRes.arrayBuffer();
+        const base64    = Buffer.from(imgBuffer).toString('base64');
+        const mediaType = imgRes.headers.get('content-type') || 'image/jpeg';
+        results.push({
+          index:     results.length + 1,
+          format:    spec.label,
+          size:      `${spec.w}x${spec.h}`,
+          base64,
+          mediaType,
+          model:     'Ideogram V3 Remix',
+          url:       imgUrl,
+        });
+        if (results.length >= totalVariations) break;
+      }
+      if (results.length >= totalVariations) break;
+    }
+
+    return res.status(200).json({ images: results, format: spec, mode: 'remix' });
+  }
+  // ── FIN MODO REMIX ────────────────────────────────────────────────────────
 
   try {
     const results = [];
