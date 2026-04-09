@@ -144,6 +144,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
 
+/* ── VARIACIONES DE ANUNCIO ── */
+.var-upload-zone{border:2px dashed var(--border);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sidebar)}
+.var-upload-zone:hover,.var-upload-zone.drag-over{border-color:var(--blue);background:var(--blue-lt)}
+.var-upload-zone.has-image{border-style:solid;border-color:var(--blue);background:var(--blue-lt);padding:14px}
+.var-preview-img{width:100%;max-height:160px;object-fit:contain;border-radius:8px;display:block}
+.var-count-chip{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;background:white;color:var(--muted)}
+.var-count-chip.selected{background:var(--blue);color:white;border-color:var(--blue)}
+.var-style-btn{flex:1;padding:10px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;background:white;text-align:center;color:var(--muted)}
+.var-style-btn.selected{border-color:var(--blue);background:var(--blue-lt);color:var(--blue)}
+
 /* Onboarding card */
 .ob-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:22px 24px;max-width:520px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 .ob-title{font-size:17px;font-weight:600;margin-bottom:3px}
@@ -4233,6 +4243,250 @@ function requestImageVariation(encodedPrompt, format) {
   if (cin) { cin.value = 'Genera una variacion diferente, mismo concepto pero composicion distinta. Formato: ' + format + '.'; sendMsg(); }
 }
 
+// =============================================
+// VARIACIONES DE ANUNCIO EXISTENTE (Ideogram Remix)
+// =============================================
+
+var variationUploadData = { imageDataUrl: null, count: 5, style: 'balanced' };
+
+function showVariationUploader() {
+  variationUploadData = { imageDataUrl: null, count: 5, style: 'balanced' };
+
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'variation-uploader-card';
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
+    '</div>' +
+    '<div style="max-width:460px;width:100%">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+          '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
+          '<div style="background:var(--blue-lt);color:var(--blue);padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">Ideogram V3 Remix</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Sube tu anuncio actual y la IA generará variaciones manteniendo tu identidad visual.</div>' +
+
+        // Zona de upload
+        '<div class="var-upload-zone" id="var-upload-zone" onclick="document.getElementById(\'var-file-input\').click()" ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ondragleave="this.classList.remove(\'drag-over\')" ondrop="handleVariationDrop(event)">' +
+          '<div id="var-upload-placeholder">' +
+            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px">Sube tu anuncio</div>' +
+            '<div style="font-size:11px;color:var(--muted2)">JPG, PNG o WebP · máx 8 MB</div>' +
+          '</div>' +
+          '<img id="var-preview" class="var-preview-img" style="display:none" src="" alt="preview"/>' +
+          '<input type="file" id="var-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleVariationFile(this.files[0])">' +
+        '</div>' +
+
+        // Opciones (ocultas hasta que se sube imagen)
+        '<div id="var-options" style="display:none;margin-top:14px">' +
+          '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">¿Cuántas variaciones?</div>' +
+          '<div style="display:flex;gap:6px;margin-bottom:14px">' +
+            [5,6,7,8,9,10].map(function(n){
+              return '<div class="var-count-chip' + (n===5?' selected':'') + '" onclick="selectVarCount(this,' + n + ')">' + n + '</div>';
+            }).join('') +
+          '</div>' +
+          '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Estilo de variación</div>' +
+          '<div style="display:flex;gap:6px;margin-bottom:16px">' +
+            '<button class="var-style-btn selected" id="vstyle-conservative" onclick="selectVarStyle(this,\'conservative\')">' +
+              '🎯 Conservadora<br><span style="font-size:10px;font-weight:400;color:inherit;opacity:.7">Cambios sutiles</span>' +
+            '</button>' +
+            '<button class="var-style-btn" id="vstyle-balanced" onclick="selectVarStyle(this,\'balanced\')">' +
+              '⚖️ Balanceada<br><span style="font-size:10px;font-weight:400;color:inherit;opacity:.7">Estilo y fondo</span>' +
+            '</button>' +
+            '<button class="var-style-btn" id="vstyle-creative" onclick="selectVarStyle(this,\'creative\')">' +
+              '🚀 Creativa<br><span style="font-size:10px;font-weight:400;color:inherit;opacity:.7">Reinterpretación</span>' +
+            '</button>' +
+          '</div>' +
+          '<button onclick="startVariationGeneration()" id="var-generate-btn" style="width:100%;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar variaciones</button>' +
+        '</div>' +
+
+      '</div>' +
+    '</div>';
+
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function handleVariationDrop(event) {
+  event.preventDefault();
+  document.getElementById('var-upload-zone').classList.remove('drag-over');
+  var file = event.dataTransfer.files[0];
+  if (file) handleVariationFile(file);
+}
+
+function handleVariationFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    addAgent('Por favor sube una imagen en formato JPG, PNG o WebP.');
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    addAgent('La imagen debe ser menor a 8 MB.');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    variationUploadData.imageDataUrl = e.target.result;
+    // Mostrar preview
+    var zone = document.getElementById('var-upload-zone');
+    var placeholder = document.getElementById('var-upload-placeholder');
+    var preview = document.getElementById('var-preview');
+    zone.classList.add('has-image');
+    placeholder.style.display = 'none';
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    // Mostrar opciones
+    document.getElementById('var-options').style.display = 'block';
+    scrollB();
+  };
+  reader.readAsDataURL(file);
+}
+
+function selectVarCount(el, n) {
+  variationUploadData.count = n;
+  document.querySelectorAll('.var-count-chip').forEach(function(c){ c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function selectVarStyle(el, style) {
+  variationUploadData.style = style;
+  document.querySelectorAll('.var-style-btn').forEach(function(b){ b.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+async function startVariationGeneration() {
+  var data = variationUploadData;
+  if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
+
+  // Deshabilitar botón
+  var btn = document.getElementById('var-generate-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
+
+  // 1. Analizar la imagen con Claude para extraer un prompt descriptivo
+  var thinkId = addThinking();
+  setTimeout(function() {
+    var el = document.getElementById(thinkId);
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con IA...'; }
+  }, 100);
+
+  var analysisPrompt = 'Analiza este anuncio de Meta Ads y describe en inglés (para prompt de IA de imágenes) sus elementos visuales clave: composición, colores dominantes, estilo fotográfico o ilustrativo, elementos de marca, tipografía, producto o servicio mostrado, ambiente y tono emocional. Sé específico y detallado (máximo 120 palabras). Solo devuelve la descripción, sin explicaciones ni formato adicional.';
+
+  var remixPrompt = 'Professional Meta Ads creative for Latin American market, same visual concept and brand identity';
+  try {
+    var analyzeRes = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
+          { type: 'text', text: analysisPrompt }
+        ]}],
+        system: 'Eres un experto en análisis visual de creativos publicitarios.',
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200
+      })
+    });
+    if (analyzeRes.ok) {
+      var analyzeData = await analyzeRes.json();
+      var extracted = analyzeData.content?.[0]?.text || '';
+      if (extracted.length > 20) {
+        remixPrompt = extracted + '. Professional Meta Ads creative for Latin American market, high-converting design, vibrant mobile-optimized.';
+      }
+    }
+  } catch(e) { /* usar prompt genérico */ }
+
+  rmThinking(thinkId);
+
+  // 2. Mapear estilo a image_weight
+  var weightMap = { conservative: 0.75, balanced: 0.50, creative: 0.25 };
+  var imageWeight = weightMap[data.style] || 0.50;
+
+  // 3. Determinar formato del anuncio (detectar si es vertical, cuadrado o story)
+  var tempImg = new Image();
+  var formatDetect = 'vertical';
+  await new Promise(function(resolve) {
+    tempImg.onload = function() {
+      var ratio = tempImg.width / tempImg.height;
+      if (ratio > 1.2) formatDetect = 'square';
+      else if (ratio < 0.65) formatDetect = 'story';
+      else if (ratio >= 0.65 && ratio < 0.9) formatDetect = 'vertical';
+      else formatDetect = 'square';
+      resolve();
+    };
+    tempImg.onerror = resolve;
+    tempImg.src = data.imageDataUrl;
+  });
+
+  // Resetear grid para las variaciones
+  generatedAdImages = [];
+  adImgGridEl = null;
+
+  // 4. Mostrar mensaje de inicio
+  addAgent('🔄 Generando **' + data.count + ' variaciones** de tu anuncio... (' + { conservative:'conservadoras', balanced:'balanceadas', creative:'creativas' }[data.style] + ')');
+
+  // 5. Llamar al endpoint en lotes paralelos (máx 4 por llamada)
+  var total = data.count;
+  var batchSize = 4;
+  var batches = Math.ceil(total / batchSize);
+  var allImages = [];
+
+  var thinkId2 = addThinking();
+  setTimeout(function() {
+    var el2 = document.getElementById(thinkId2);
+    if (el2) { var txt2 = el2.querySelector('.thinking-bbl'); if (txt2) txt2.innerHTML = '<div class="spinner"></div>generando ' + total + ' variaciones con Ideogram V3 Remix...'; }
+  }, 100);
+
+  try {
+    var batchPromises = [];
+    for (var b = 0; b < batches; b++) {
+      var numInBatch = Math.min(batchSize, total - b * batchSize);
+      batchPromises.push(
+        fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
+          body: JSON.stringify({
+            mode: 'remix',
+            referenceImage: data.imageDataUrl,
+            prompt: remixPrompt,
+            format: formatDetect,
+            imageWeight: imageWeight,
+            remixCount: numInBatch,
+          })
+        }).then(function(r){ return r.json(); })
+      );
+    }
+
+    var batchResults = await Promise.all(batchPromises);
+    for (var br of batchResults) {
+      if (br.images) allImages = allImages.concat(br.images);
+    }
+    allImages = allImages.slice(0, total);
+  } catch(err) {
+    rmThinking(thinkId2);
+    addAgent('Error generando variaciones: ' + err.message);
+    return;
+  }
+
+  rmThinking(thinkId2);
+
+  if (!allImages.length) {
+    addAgent('No se pudieron generar las variaciones. Intenta con otra imagen.');
+    return;
+  }
+
+  // 6. Renderizar imágenes en el grid existente
+  for (var i = 0; i < allImages.length; i++) {
+    allImages[i].index = i + 1;
+    renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, remixPrompt, false);
+  }
+
+  // 7. Mensaje final con copy sugerido
+  setTimeout(function() {
+    hist.push({ role: 'user', content: 'Se generaron ' + allImages.length + ' variaciones de mi anuncio existente con Ideogram V3 Remix. Dame el copy optimizado (texto principal, título, CTA) para cada variación y recomienda cuál probar primero según principios de testing A/B para Meta Ads.' });
+    callClaude();
+  }, 500);
+}
+
 // Sistema de cuestionario de diseño
 var designQData = {};
 
@@ -4283,7 +4537,14 @@ function showDesignQuestionnaire() {
           :
             '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es el nombre de tu negocio/marca?</div>' +
             '<input type="text" id="dq-brand" placeholder="Ej: Clínica Sorelle, Estética Miranda" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font)">' +
-            '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>'
+            '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
+            '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
+              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">¿Ya tienes un anuncio creado?</div>' +
+              '<button onclick="showVariationUploader()" style="width:100%;padding:10px;background:white;color:var(--blue);border:1.5px solid var(--blue);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+                'Generar variaciones de mi anuncio existente' +
+              '</button>' +
+            '</div>'
           ) +
         '</div>' +
         (isLimited ? '' :
