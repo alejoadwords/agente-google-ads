@@ -1342,10 +1342,11 @@ DETECCIÓN DE INTENCIONES ESPECÍFICAS
 Detecta cuando el usuario pide: "analizar", "optimizar", "revisar", "auditoría", "qué mejorar", "recomendaciones"
 
 Estructura de respuesta:
-1. **Análisis inicial con GAQL**: Usa queries para obtener datos de campañas, métricas, keywords y search terms
-2. **Diagnóstico profesional**: Identifica problemas específicos (bajo CTR, alto CPC, 0 conversiones, etc.)
-3. **Recomendaciones priorizadas**: Lista de 3-5 acciones ordenadas por impacto
-4. **Timeline de implementación**: Qué hacer esta semana vs próximo mes
+1. **VERIFICAR cuenta conectada PRIMERO**: Si no hay cuenta de Google Ads conectada, pedir que la conecte en Configuración → Conexiones antes de continuar
+2. **Análisis inicial con GAQL**: Solo si hay cuenta conectada, usar queries para obtener datos
+3. **Diagnóstico profesional**: Identifica problemas específicos (bajo CTR, alto CPC, 0 conversiones, etc.)
+4. **Recomendaciones priorizadas**: Lista de 3-5 acciones ordenadas por impacto
+5. **Timeline de implementación**: Qué hacer esta semana vs próximo mes
 
 **PLANIFICAR CAMPAÑA:**
 Detecta cuando el usuario pide: "planear", "crear campaña", "estrategia", "estructura", "presupuesto"
@@ -3770,7 +3771,7 @@ function toggleAgent(key){const items=document.getElementById('ag-'+key);const c
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
-    'google-ads':[['keywords','Keyword research para mi negocio'],['crear rsa','Crear anuncios RSA'],['presupuesto','Presupuesto recomendado'],['campaña','Estructura de campaña completa'],['¿qué revisar hoy?','¿Qué debo revisar hoy en mi cuenta?'],['competencia','Analizar competencia']],
+    'google-ads':[],
     'meta-ads':[['crear anuncio','Crear un anuncio de Meta Ads para mi negocio'],['presupuesto','Presupuesto recomendado para Meta Ads'],['audiencias','Cómo definir audiencias en Meta Ads'],['creativos','Dame ideas de creativos para mis anuncios'],['analizar','Analizar rendimiento de mis campañas de Meta']],
     'tiktok-ads':[['crear anuncio','Crear un anuncio para TikTok Ads'],['presupuesto','Presupuesto recomendado para TikTok'],['hooks','Dame ideas de hooks para mis videos'],['tendencias','Qué tendencias de TikTok puedo aprovechar']],
     'linkedin-ads':[['crear anuncio','Crear un anuncio de LinkedIn Ads'],['presupuesto','Presupuesto recomendado para LinkedIn'],['audiencia B2B','Cómo segmentar audiencia B2B en LinkedIn'],['formatos','Qué formatos de anuncio funcionan mejor en LinkedIn']],
