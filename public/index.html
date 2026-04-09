@@ -4528,7 +4528,13 @@ async function startVariationGeneration() {
       var analyzeData = await analyzeRes.json();
       var rawText = analyzeData.content?.[0]?.text || '';
       var clean = rawText.replace(/```json|```/g, '').trim();
-      try { baseJson = JSON.parse(clean); } catch(e) { baseJson = null; }
+      try {
+        baseJson = JSON.parse(clean);
+        console.log('[Acuarius] JSON analizado:', JSON.stringify(baseJson, null, 2));
+      } catch(e) {
+        console.warn('[Acuarius] Error parseando JSON:', clean);
+        baseJson = null;
+      }
     }
   } catch(e) { /* usar fallback */ }
 
@@ -4570,17 +4576,23 @@ async function startVariationGeneration() {
   generatedAdImages = [];
   adImgGridEl = null;
 
+  // Asegurar que baseJson tiene todos los campos de texto (Haiku puede omitirlos)
+  baseJson.headline_text = baseJson.headline_text || '';
+  baseJson.body_text = baseJson.body_text || '';
+  baseJson.logo_text = baseJson.logo_text || '';
+  baseJson.text_style = baseJson.text_style || 'bold white sans-serif on dark background';
+
   // Datos de texto para superponer con Canvas después de generar
   var adTextData = {
-    headline: (baseJson.headline_text || '').trim(),
-    bodyItems: (baseJson.body_text || '').split('|').map(function(s){ return s.trim(); }).filter(Boolean),
-    logo: (baseJson.logo_text || '').trim(),
+    headline: baseJson.headline_text.trim(),
+    bodyItems: baseJson.body_text.split('|').map(function(s){ return s.trim(); }).filter(Boolean),
+    logo: baseJson.logo_text.trim(),
     darkBg: (baseJson.text_style || '').toLowerCase().indexOf('dark') !== -1 ||
-            (baseJson.color_palette || '').toLowerCase().indexOf('#0') !== -1 ||
-            (baseJson.color_palette || '').toLowerCase().indexOf('dark') !== -1 ||
-            (baseJson.color_palette || '').toLowerCase().indexOf('navy') !== -1
+            (baseJson.color_palette || '').toLowerCase().indexOf('navy') !== -1 ||
+            (baseJson.color_palette || '').indexOf('#0') !== -1
   };
   var hasAdText = !!(adTextData.headline || adTextData.bodyItems.length || adTextData.logo);
+  console.log('[Acuarius] adTextData:', JSON.stringify(adTextData), '| hasAdText:', hasAdText);
 
   addAgent('🎨 Anuncio analizado. Generando **' + total + ' variaciones** con composiciones completamente nuevas...');
 
@@ -4656,102 +4668,110 @@ async function startVariationGeneration() {
 // Compone imagen base + overlay de texto con Canvas HTML5
 async function composeAdWithCanvas(imgData, index, total, format, textData) {
   return new Promise(function(resolve) {
+    console.log('[Acuarius] Componiendo canvas', index, '/', total, '| headline:', textData.headline, '| items:', textData.bodyItems.length, '| logo:', textData.logo);
+
     var canvas = document.createElement('canvas');
     var size = format === 'vertical' ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 };
     canvas.width = size.w;
     canvas.height = size.h;
     var ctx = canvas.getContext('2d');
 
+    var imgSrc = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
     var img = new Image();
+    img.crossOrigin = 'anonymous';
+
     img.onload = function() {
-      // Dibujar imagen base
-      ctx.drawImage(img, 0, 0, size.w, size.h);
+      try {
+        // 1. Dibujar imagen base
+        ctx.drawImage(img, 0, 0, size.w, size.h);
 
-      // Detectar si el fondo es oscuro para elegir color de texto
-      var isDark = textData.darkBg;
-      var textColor = isDark ? '#FFFFFF' : '#FFFFFF';
-      var shadowColor = isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.6)';
+        var margin = Math.round(size.w * 0.055);
+        var maxTextW = Math.round(size.w * 0.50);
 
-      // Overlay semitransparente izquierdo para legibilidad del texto
-      if (textData.headline || textData.bodyItems.length) {
-        var overlayW = Math.round(size.w * 0.55);
-        ctx.fillStyle = 'rgba(0, 0, 20, 0.55)';
-        ctx.fillRect(0, 0, overlayW, size.h);
-      }
+        // 2. Overlay oscuro en zona de texto (izquierda/arriba) para legibilidad
+        if (textData.headline || textData.bodyItems.length) {
+          var grad = ctx.createLinearGradient(0, 0, maxTextW + margin, 0);
+          grad.addColorStop(0, 'rgba(0,0,10,0.72)');
+          grad.addColorStop(1, 'rgba(0,0,10,0)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, size.w, size.h);
+        }
 
-      var margin = Math.round(size.w * 0.055);
-      var maxTextW = Math.round(size.w * 0.48);
-      var y = Math.round(size.h * 0.1);
+        var y = Math.round(size.h * 0.10);
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
 
-      // HEADLINE
-      if (textData.headline) {
-        var headlineSize = Math.round(size.w * 0.072);
-        ctx.font = 'bold ' + headlineSize + 'px Arial, sans-serif';
-        ctx.fillStyle = textColor;
-        ctx.shadowColor = shadowColor;
-        ctx.shadowBlur = 6;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
+        // 3. HEADLINE — texto grande en blanco
+        if (textData.headline) {
+          var headlineSize = Math.round(size.w * 0.075);
+          ctx.font = 'bold ' + headlineSize + 'px Arial, sans-serif';
+          ctx.fillStyle = '#FFFFFF';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetX = 2;
+          ctx.shadowOffsetY = 2;
 
-        var lines = textData.headline.split('\n');
-        lines.forEach(function(line) {
-          // Word wrap si es muy largo
-          var words = line.split(' ');
-          var currentLine = '';
-          words.forEach(function(word) {
-            var testLine = currentLine + (currentLine ? ' ' : '') + word;
-            if (ctx.measureText(testLine).width > maxTextW && currentLine) {
-              ctx.fillText(currentLine, margin, y);
-              y += headlineSize * 1.2;
-              currentLine = word;
-            } else {
-              currentLine = testLine;
-            }
+          var hlLines = textData.headline.split('\n');
+          hlLines.forEach(function(line) {
+            var words = line.split(' ');
+            var cur = '';
+            words.forEach(function(word) {
+              var test = cur ? cur + ' ' + word : word;
+              if (ctx.measureText(test).width > maxTextW && cur) {
+                ctx.fillText(cur, margin, y);
+                y += Math.round(headlineSize * 1.25);
+                cur = word;
+              } else { cur = test; }
+            });
+            if (cur) { ctx.fillText(cur, margin, y); y += Math.round(headlineSize * 1.25); }
           });
-          if (currentLine) { ctx.fillText(currentLine, margin, y); y += headlineSize * 1.2; }
-        });
-        y += Math.round(headlineSize * 0.5);
+          y += Math.round(headlineSize * 0.6);
+        }
+
+        // 4. BODY ITEMS — lista con bullet
+        if (textData.bodyItems.length) {
+          var bodySize = Math.round(size.w * 0.040);
+          ctx.font = '600 ' + bodySize + 'px Arial, sans-serif';
+          ctx.fillStyle = '#FFFFFF';
+          ctx.shadowBlur = 5;
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+
+          textData.bodyItems.forEach(function(item) {
+            ctx.fillText('• ' + item, margin, y);
+            y += Math.round(bodySize * 1.7);
+          });
+        }
+
+        // 5. LOGO — abajo a la izquierda
+        if (textData.logo) {
+          var logoSize = Math.round(size.w * 0.044);
+          ctx.font = 'bold ' + logoSize + 'px Arial, sans-serif';
+          ctx.fillStyle = '#FFFFFF';
+          ctx.shadowBlur = 6;
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+          ctx.fillText(textData.logo, margin, size.h - Math.round(size.h * 0.055));
+        }
+
+        // 6. Exportar
+        var composedUrl = canvas.toDataURL('image/jpeg', 0.92);
+        var b64 = composedUrl.split(',')[1];
+        console.log('[Acuarius] Canvas compuesto OK, imagen', index);
+        renderAdImage({ base64: b64, mediaType: 'image/jpeg' }, index, total, format, 'variación', false);
+      } catch(err) {
+        console.error('[Acuarius] Error en Canvas draw:', err);
+        renderAdImage(imgData, index, total, format, 'variación', false);
       }
-
-      // BODY ITEMS (lista con bullet)
-      if (textData.bodyItems.length) {
-        var bodySize = Math.round(size.w * 0.038);
-        ctx.font = '600 ' + bodySize + 'px Arial, sans-serif';
-        ctx.fillStyle = textColor;
-        ctx.shadowBlur = 4;
-
-        textData.bodyItems.forEach(function(item) {
-          var bullet = '• ';
-          ctx.fillText(bullet + item, margin, y);
-          y += bodySize * 1.6;
-        });
-        y += Math.round(bodySize * 0.5);
-      }
-
-      // LOGO / BRAND NAME — bottom left
-      if (textData.logo) {
-        var logoSize = Math.round(size.w * 0.042);
-        ctx.font = 'bold ' + logoSize + 'px Arial, sans-serif';
-        ctx.fillStyle = textColor;
-        ctx.shadowBlur = 4;
-        var logoY = size.h - Math.round(size.h * 0.06);
-        ctx.fillText(textData.logo, margin, logoY);
-      }
-
-      // Exportar canvas a base64
-      var composedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      var base64 = composedDataUrl.split(',')[1];
-      var composedImg = { base64: base64, mediaType: 'image/jpeg', index: index };
-      renderAdImage(composedImg, index, total, format, 'variación compuesta', false);
       resolve();
     };
-    img.onerror = function() {
-      // Si falla la composición, renderizar imagen base sin texto
-      imgData.index = index;
+
+    img.onerror = function(e) {
+      console.error('[Acuarius] Error cargando imagen en Canvas:', e);
+      // Renderizar sin overlay como fallback
       renderAdImage(imgData, index, total, format, 'variación', false);
       resolve();
     };
-    img.src = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
+
+    img.src = imgSrc;
   });
 }
 
