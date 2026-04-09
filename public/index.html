@@ -2141,6 +2141,12 @@ function showMetaActionCards() {
 }
 
 // Envía desde el chat libre de la pantalla de inicio
+
+function dismissMetaCards(el) {
+  var msg = el.closest('.msg');
+  if (msg) msg.style.display = 'none';
+}
+
 // =============================================
 // AGENTE SEO
 // =============================================
