@@ -4489,6 +4489,8 @@ var VARIATION_AXES = [
   ]}
 ];
 
+
+// Nueva función de variaciones: Sonnet analiza → usuario confirma texto → se generan imágenes
 async function startVariationGeneration() {
   var data = variationUploadData;
   if (!data.imageDataUrl) { addAgent('Primero sube tu anuncio.'); return; }
@@ -4496,199 +4498,195 @@ async function startVariationGeneration() {
   var btn = document.getElementById('var-generate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
 
-  // PASO 1A: Extraer texto exacto del anuncio (llamada dedicada, prompt simple)
   var thinkId = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>descomponiendo tu anuncio en componentes visuales...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con IA...'; }
   }, 100);
 
-  var extractedText = { headline: '', bodyItems: [], logo: '', textStyle: 'bold white sans-serif on dark background' };
-
+  // PASO 1: Sonnet analiza imagen — texto Y visual en una llamada confiable
+  var analysisResult = null;
   try {
-    var textRes = await fetch('/api/chat', {
+    var res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
       body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: 'You are an expert at analyzing advertising images. Always respond with valid JSON only — no markdown, no backticks, no explanation.',
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: 'Read ALL text visible in this image carefully. Return ONLY a JSON with exactly these 4 fields:\n{"headline":"the main title or headline text, exactly as written","body":"all other text items separated by | character","logo":"brand name or company name text","text_style":"color and style of text, e.g. bold white on dark blue"}\nCopy text exactly as it appears. No markdown, no explanation, just the JSON.' }
-        ]}],
-        system: 'You read text from images and return JSON. Never add explanations or markdown.',
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400
+          { type: 'text', text: 'Analyze this ad image and return a JSON object with these fields:\n- "headline": exact main title/headline text visible in the image (string)\n- "body_items": array of strings, each body text line or bullet point exactly as written\n- "logo": brand or company name text visible (string, empty if none)\n- "text_color": dominant text color e.g. "white" or "black"\n- "bg_dark": true if background is dark, false if light\n- "visual_style": photographic style and mood in English\n- "main_subject": person/object description without mentioning text\n- "background": setting and environment\n- "color_palette": 3-4 dominant hex colors\n- "lighting": lighting description\n- "overall_mood": emotional tone\nReturn ONLY the JSON object.' }
+        ]}]
       })
     });
-    if (textRes.ok) {
-      var textData = await textRes.json();
-      var rawT = (textData.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-      try {
-        var parsed = JSON.parse(rawT);
-        extractedText.headline = parsed.headline || '';
-        extractedText.bodyItems = (parsed.body || '').split('|').map(function(s){ return s.trim(); }).filter(Boolean);
-        extractedText.logo = parsed.logo || '';
-        extractedText.textStyle = parsed.text_style || extractedText.textStyle;
-        console.log('[Acuarius] Texto extraído:', JSON.stringify(extractedText));
-      } catch(e) { console.warn('[Acuarius] Error parseando texto:', rawT); }
+    if (res.ok) {
+      var resData = await res.json();
+      var raw = (resData.content?.[0]?.text || '').trim();
+      raw = raw.replace(/^data:\s*/, '').replace(/```json|```/g, '').trim();
+      var braceIdx = raw.indexOf('{');
+      if (braceIdx > 0) raw = raw.slice(braceIdx);
+      analysisResult = JSON.parse(raw);
+      console.log('[Acuarius] Sonnet OK:', JSON.stringify(analysisResult));
     }
-  } catch(e) { console.warn('[Acuarius] Error extrayendo texto:', e); }
-
-  // PASO 1B: Analizar componentes visuales (sin pedir texto)
-  var baseJson = null;
-  var formatDetect = 'square';
-
-  try {
-    var visualRes = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: data.imageDataUrl.split(';')[0].split(':')[1], data: data.imageDataUrl.split(',')[1] } },
-          { type: 'text', text: 'Analyze the VISUAL elements of this ad image (ignore all text). Return ONLY JSON:\n{"ad_format":"square or vertical","visual_style":"photo or illustration style and mood","main_subject":"person or object description","background":"environment and setting","color_palette":"3-4 hex colors","lighting":"lighting type and mood","composition":"layout and framing","overall_mood":"emotional tone"}\nNo markdown, just JSON.' }
-        ]}],
-        system: 'You analyze visual elements of images and return JSON. Never add markdown.',
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400
-      })
-    });
-    if (visualRes.ok) {
-      var visualData = await visualRes.json();
-      var rawV = (visualData.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-      try {
-        baseJson = JSON.parse(rawV);
-        console.log('[Acuarius] Visual JSON:', JSON.stringify(baseJson));
-      } catch(e) { console.warn('[Acuarius] Error parseando visual:', rawV); }
-    }
-  } catch(e) { console.warn('[Acuarius] Error analizando visual:', e); }
+  } catch(e) {
+    console.error('[Acuarius] Error análisis Sonnet:', e.message);
+  }
 
   rmThinking(thinkId);
 
   // Detectar formato por dimensiones reales
+  var formatDetect = 'square';
   var tempImg = new Image();
   await new Promise(function(resolve) {
     tempImg.onload = function() {
-      var ratio = tempImg.width / tempImg.height;
-      formatDetect = (ratio >= 0.85 && ratio <= 1.15) ? 'square' : (ratio < 0.85 ? 'vertical' : 'square');
+      formatDetect = (tempImg.width / tempImg.height < 0.85) ? 'vertical' : 'square';
       resolve();
     };
     tempImg.onerror = resolve;
     tempImg.src = data.imageDataUrl;
   });
 
-  // Fallback visual si el análisis falló
-  if (!baseJson) {
-    baseJson = {
-      visual_style: 'professional lifestyle advertising photography, clean modern',
-      main_subject: 'latin adult person, professional and approachable',
-      background: 'clean studio background with soft gradient',
-      color_palette: '#ffffff, #1E2BCC, #f5f5f5',
-      lighting: 'soft diffused studio lighting, flattering and even',
-      composition: 'centered subject with clean negative space',
-      props_elements: 'minimal props',
-      overall_mood: 'professional, trustworthy, modern'
+  if (!analysisResult) {
+    analysisResult = {
+      headline: '', body_items: [], logo: '', text_color: 'white', bg_dark: true,
+      visual_style: 'professional advertising photography', main_subject: 'latin adult professional person',
+      background: 'clean modern background', color_palette: '#1E2BCC, #ffffff',
+      lighting: 'soft studio lighting', overall_mood: 'professional and trustworthy'
     };
   }
 
+  // PASO 2: Mostrar tarjeta de confirmación editable
+  showTextConfirmCard(analysisResult, formatDetect, data.count);
+}
 
-  // PASO 2: Extraer texto del JSON para overlay Canvas, generar imágenes limpias
-  var total = data.count;
-  generatedAdImages = [];
-  adImgGridEl = null;
+// Tarjeta editable para confirmar texto antes de generar
+function showTextConfirmCard(analysis, format, count) {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
 
-  // Asegurar campos visuales mínimos
-  baseJson.visual_style = baseJson.visual_style || 'professional advertising photography';
-  baseJson.overall_mood = baseJson.overall_mood || 'professional, trustworthy';
-  baseJson.props_elements = baseJson.props_elements || '';
+  var hasText = !!(analysis.headline || (analysis.body_items && analysis.body_items.length) || analysis.logo);
+  var bodyVal = ((analysis.body_items || []).join('\n')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var headlineVal = (analysis.headline || '').replace(/"/g, '&quot;').replace(/&/g,'&amp;');
+  var logoVal = (analysis.logo || '').replace(/"/g, '&quot;').replace(/&/g,'&amp;');
 
-  // PASO 2: Extraer texto del JSON para overlay Canvas, generar imágenes limpias
-  var total = data.count;
-  generatedAdImages = [];
-  adImgGridEl = null;
+  // Serializar analysis para pasar al onclick (safe)
+  var analysisEncoded = encodeURIComponent(JSON.stringify(analysis));
+
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'text-confirm-card';
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+    '<div style="max-width:480px;width:100%">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+        '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">✅ Anuncio analizado</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">' +
+          (hasText ? 'Detecté este texto en tu anuncio. Edítalo si es necesario antes de generar las variaciones.' :
+                     'No detecté texto visible. Escríbelo abajo si quieres incluirlo, o deja vacío para variaciones solo visuales.') +
+        '</div>' +
+
+        '<div style="margin-bottom:10px">' +
+          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Título / Headline</label>' +
+          '<input id="tc-headline" type="text" value="' + headlineVal + '" placeholder="Título principal del anuncio..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
+        '</div>' +
+
+        '<div style="margin-bottom:10px">' +
+          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Texto del cuerpo <span style="font-weight:400;text-transform:none">(un ítem por línea)</span></label>' +
+          '<textarea id="tc-body" rows="4" placeholder="Un ítem por línea..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);color:var(--text);background:white;outline:none;resize:vertical;line-height:1.6" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' + bodyVal + '</textarea>' +
+        '</div>' +
+
+        '<div style="margin-bottom:16px">' +
+          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Marca / Logo</label>' +
+          '<input id="tc-logo" type="text" value="' + logoVal + '" placeholder="Nombre de tu marca..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);color:var(--text);background:white;outline:none" onfocus="this.style.borderColor=\'var(--blue)\'" onblur="this.style.borderColor=\'var(--border)\'">' +
+        '</div>' +
+
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="confirmAndGenerate(\'' + analysisEncoded + '\',\'' + format + '\',' + count + ',false)" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar variaciones</button>' +
+          '<button onclick="confirmAndGenerate(\'' + analysisEncoded + '\',\'' + format + '\',' + count + ',true)" style="padding:10px 14px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)" title="Generar solo fondo/personaje sin texto">Sin texto</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+// Recibe datos confirmados/editados y lanza la generación
+async function confirmAndGenerate(analysisEncoded, format, count, skipText) {
+  var analysis = JSON.parse(decodeURIComponent(analysisEncoded));
+
+  var headline  = ((document.getElementById('tc-headline') || {}).value || '').trim();
+  var bodyRaw   = ((document.getElementById('tc-body') || {}).value || '').trim();
+  var logo      = ((document.getElementById('tc-logo') || {}).value || '').trim();
+  var bodyItems = bodyRaw ? bodyRaw.split('\n').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+
+  var card = document.getElementById('text-confirm-card');
+  if (card) card.style.display = 'none';
 
   var adTextData = {
-    headline: extractedText.headline,
-    bodyItems: extractedText.bodyItems,
-    logo: extractedText.logo,
-    darkBg: extractedText.textStyle.toLowerCase().indexOf('dark') !== -1 ||
-            extractedText.textStyle.toLowerCase().indexOf('white') !== -1
+    headline: skipText ? '' : headline,
+    bodyItems: skipText ? [] : bodyItems,
+    logo: skipText ? '' : logo,
+    darkBg: !!(analysis.bg_dark)
   };
-  var hasAdText = !!(adTextData.headline || adTextData.bodyItems.length || adTextData.logo);
-  console.log('[Acuarius] adTextData final:', JSON.stringify(adTextData), '| hasAdText:', hasAdText);
+  var hasAdText = !skipText && !!(adTextData.headline || adTextData.bodyItems.length || adTextData.logo);
 
-  addAgent('🎨 Anuncio analizado. Generando **' + total + ' variaciones** con composiciones completamente nuevas...');
+  addAgent('🎨 Generando **' + count + ' variaciones** con composiciones completamente nuevas...');
 
-  var thinkId2 = addThinking();
+  var thinkId = addThinking();
   setTimeout(function() {
-    var el2 = document.getElementById(thinkId2);
-    if (el2) { var txt2 = el2.querySelector('.thinking-bbl'); if (txt2) txt2.innerHTML = '<div class="spinner"></div>generando ' + total + ' variaciones...'; }
+    var el = document.getElementById(thinkId);
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando ' + count + ' variaciones...'; }
   }, 100);
 
-  // Construir prompts limpios — el texto se agrega como overlay en Canvas
-  // Offset aleatorio para que cada sesión dé variaciones distintas
+  // Prompts con offset aleatorio
   var rnd = Math.floor(Math.random() * 100);
   var variantPrompts = [];
-  for (var v = 0; v < total; v++) {
-    var bgVal      = VARIATION_AXES[0].values[(v + rnd) % VARIATION_AXES[0].values.length];
-    var subjectVal = VARIATION_AXES[1].values[(v + rnd + 2) % VARIATION_AXES[1].values.length];
-    var lightVal   = VARIATION_AXES[2].values[(v + rnd) % VARIATION_AXES[2].values.length];
-    var colorVal   = VARIATION_AXES[3].values[(v + rnd + 1) % VARIATION_AXES[3].values.length];
-    var compVal    = VARIATION_AXES[4].values[(v + rnd) % VARIATION_AXES[4].values.length];
+  for (var v = 0; v < count; v++) {
     variantPrompts.push(
-      baseJson.visual_style + ', ' + baseJson.overall_mood + ' mood. ' +
-      'Subject: ' + subjectVal + '. ' +
-      'Background: ' + bgVal + '. ' +
-      'Lighting: ' + lightVal + '. ' +
-      'Color palette: ' + colorVal + '. ' +
-      'Composition: ' + compVal + '. ' +
-      (baseJson.props_elements && baseJson.props_elements !== 'minimal props' ? 'Props: ' + baseJson.props_elements + '. ' : '') +
-      'Professional Meta Ads creative for Latin American market, high-converting advertising photography, mobile optimized. ' +
-      'NO text, NO words, NO numbers, NO typography — clean visual only, text overlay will be added separately.'
+      (analysis.visual_style || 'professional advertising photography') + ', ' +
+      (analysis.overall_mood || 'professional') + ' mood. ' +
+      'Subject: ' + VARIATION_AXES[1].values[(v + rnd + 2) % VARIATION_AXES[1].values.length] + '. ' +
+      'Background: ' + VARIATION_AXES[0].values[(v + rnd) % VARIATION_AXES[0].values.length] + '. ' +
+      'Lighting: ' + VARIATION_AXES[2].values[(v + rnd) % VARIATION_AXES[2].values.length] + '. ' +
+      'Color palette: ' + VARIATION_AXES[3].values[(v + rnd + 1) % VARIATION_AXES[3].values.length] + '. ' +
+      'Composition: ' + VARIATION_AXES[4].values[(v + rnd) % VARIATION_AXES[4].values.length] + '. ' +
+      'Professional Meta Ads creative for Latin American market. NO text, NO words, NO typography — clean visual only.'
     );
   }
 
-  // PASO 3: Generar todas las imágenes en paralelo
+  generatedAdImages = [];
+  adImgGridEl = null;
   var allImages = [];
   try {
-    var imgPromises = variantPrompts.map(function(vPrompt) {
+    var results = await Promise.all(variantPrompts.map(function(p) {
       return fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
-        body: JSON.stringify({ prompt: vPrompt, format: formatDetect, variations: 1, hasText: false })
+        body: JSON.stringify({ prompt: p, format: format, variations: 1, hasText: false })
       }).then(function(r) { return r.json(); });
-    });
-    var results = await Promise.all(imgPromises);
-    results.forEach(function(r) {
-      if (r.images && r.images.length > 0) allImages.push(r.images[0]);
-    });
+    }));
+    results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
   } catch(err) {
-    rmThinking(thinkId2);
+    rmThinking(thinkId);
     addAgent('Error generando variaciones: ' + err.message);
     return;
   }
 
-  rmThinking(thinkId2);
+  rmThinking(thinkId);
+  if (!allImages.length) { addAgent('No se pudieron generar las variaciones. Intenta de nuevo.'); return; }
 
-  if (!allImages.length) {
-    addAgent('No se pudieron generar las variaciones. Intenta de nuevo.');
-    return;
-  }
-
-  // PASO 4: Si hay texto extraído, superponerlo con Canvas; si no, renderizar directo
   if (hasAdText) {
-    // Componer imagen + texto en Canvas para cada variación
     for (var i = 0; i < allImages.length; i++) {
-      await composeAdWithCanvas(allImages[i], i + 1, allImages.length, formatDetect, adTextData);
+      await composeAdWithCanvas(allImages[i], i + 1, allImages.length, format, adTextData);
     }
   } else {
     for (var i = 0; i < allImages.length; i++) {
-      allImages[i].index = i + 1;
-      renderAdImage(allImages[i], i + 1, allImages.length, formatDetect, variantPrompts[i], false);
+      renderAdImage(allImages[i], i + 1, allImages.length, format, variantPrompts[i], false);
     }
   }
-  // showCopysButton ya es llamado por renderAdImage al completar el batch
 }
 
-// Compone imagen base + overlay de texto con Canvas HTML5
 async function composeAdWithCanvas(imgData, index, total, format, textData) {
   return new Promise(function(resolve) {
     console.log('[Acuarius] Componiendo canvas', index, '/', total, '| headline:', textData.headline, '| items:', textData.bodyItems.length, '| logo:', textData.logo);
