@@ -3211,71 +3211,180 @@ function exportToPDF(txt, filename) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', putOnlyUsedFonts: true });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 20;
-  const maxW = pageW - margin * 2;
-  let y = margin;
+  const marginL = 22, marginR = 22, marginT = 28, marginB = 22;
+  const maxW = pageW - marginL - marginR;
+  const blue = [30, 43, 204];
+  const blueLt = [238, 240, 253];
+  const dark = [15, 15, 15];
+  const muted = [120, 120, 130];
+  const border = [220, 221, 230];
+  let y = marginT;
 
-  // Encabezado
-  doc.setFontSize(9);
-  doc.setTextColor(150);
-  doc.text('acuarius.app · ' + new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' }), margin, y);
-  y += 10;
+  function checkPage(needed) {
+    if (y + needed > pageH - marginB) { doc.addPage(); y = marginT; drawHeader(); }
+  }
+  function drawHeader() {
+    // Franja azul top
+    doc.setFillColor(...blue);
+    doc.rect(0, 0, pageW, 12, 'F');
+    // Logo texto
+    doc.setFontSize(8);
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold');
+    doc.text('acuarius', marginL, 8);
+    // Fecha derecha
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(7.5);
+    doc.text(new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}), pageW - marginR, 8, {align:'right'});
+  }
 
-  // Línea separadora
-  doc.setDrawColor(220);
-  doc.line(margin, y, pageW - margin, y);
-  y += 8;
+  // Header primera página
+  drawHeader();
+  y = 20;
 
-  // Procesar texto: limpiar markdown básico
-  const clean = txt
-    .replace(/#{1,6}\s+/g, '')         // headers
-    .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
-    .replace(/\*([^*]+)\*/g, '$1')     // italic
-    .replace(/`([^`]+)`/g, '$1')       // inline code
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
-    .replace(/^[-•]\s+/gm, '  • ')    // bullets
-    .replace(/^\d+\.\s+/gm, (m) => '  ' + m); // numbered lists
+  // Parsear líneas con tipo
+  const rawLines = txt.split('\n');
+  const parsed = rawLines.map(line => {
+    const h1 = line.match(/^###\s+(.+)/);
+    const h2 = line.match(/^##\s+(.+)/);
+    const h3 = line.match(/^#\s+(.+)/);
+    const bold = line.match(/^\*\*(.+)\*\*$/);
+    const bullet = line.match(/^[-•*]\s+(.+)/);
+    const num = line.match(/^(\d+)\.\s+(.+)/);
+    const empty = line.trim() === '';
+    if (h1) return { type: 'h1', text: h1[1].replace(/\*\*/g,'') };
+    if (h2) return { type: 'h2', text: h2[1].replace(/\*\*/g,'') };
+    if (h3) return { type: 'h3', text: h3[1].replace(/\*\*/g,'') };
+    if (bold) return { type: 'bold', text: bold[1] };
+    if (bullet) return { type: 'bullet', text: bullet[1].replace(/\*\*/g,'') };
+    if (num) return { type: 'num', n: num[1], text: num[2].replace(/\*\*/g,'') };
+    if (empty) return { type: 'empty' };
+    return { type: 'body', text: line.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1') };
+  });
 
-  const lines = clean.split('\n');
+  for (let i = 0; i < parsed.length; i++) {
+    const p = parsed[i];
 
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd();
+    if (p.type === 'empty') { y += 3; continue; }
 
-    // Detectar si es encabezado (línea corta que era ##)
-    const isHeader = rawLine.match(/^#{1,3}\s/) !== null;
-
-    if (isHeader) {
+    if (p.type === 'h1') {
+      checkPage(16);
+      if (i > 0) y += 4;
+      // Bloque azul oscuro full width
+      doc.setFillColor(...blue);
+      doc.roundedRect(marginL, y, maxW, 11, 2, 2, 'F');
       doc.setFontSize(12);
-      doc.setTextColor(30, 43, 204);
-      doc.setFont('helvetica', 'bold');
-    } else if (line === '') {
-      y += 4;
+      doc.setTextColor(255,255,255);
+      doc.setFont('helvetica','bold');
+      doc.text(p.text, marginL + 5, y + 7.5);
+      y += 16;
       continue;
-    } else {
-      doc.setFontSize(10);
-      doc.setTextColor(30);
-      doc.setFont('helvetica', 'normal');
     }
 
-    const wrapped = doc.splitTextToSize(line, maxW);
-    for (const wline of wrapped) {
-      if (y + 7 > pageH - margin) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(wline, margin, y);
-      y += isHeader ? 7 : 5.5;
+    if (p.type === 'h2') {
+      checkPage(14);
+      if (i > 0) y += 3;
+      // Bloque azul claro
+      doc.setFillColor(...blueLt);
+      doc.roundedRect(marginL, y, maxW, 9, 1.5, 1.5, 'F');
+      doc.setDrawColor(...blue);
+      doc.setLineWidth(0.5);
+      doc.line(marginL, y + 9, marginL + maxW, y + 9);
+      doc.setFontSize(10.5);
+      doc.setTextColor(...blue);
+      doc.setFont('helvetica','bold');
+      doc.text(p.text, marginL + 4, y + 6.2);
+      y += 13;
+      continue;
     }
-    if (isHeader) y += 2;
+
+    if (p.type === 'h3') {
+      checkPage(10);
+      if (i > 0) y += 2;
+      doc.setFontSize(10);
+      doc.setTextColor(...dark);
+      doc.setFont('helvetica','bold');
+      // Línea azul izquierda
+      doc.setFillColor(...blue);
+      doc.rect(marginL, y - 3.5, 2.5, 7, 'F');
+      const wrapped = doc.splitTextToSize(p.text, maxW - 6);
+      doc.text(wrapped, marginL + 5, y);
+      y += wrapped.length * 5.5 + 3;
+      continue;
+    }
+
+    if (p.type === 'bold') {
+      checkPage(8);
+      y += 1;
+      doc.setFontSize(10);
+      doc.setTextColor(...dark);
+      doc.setFont('helvetica','bold');
+      const wrapped = doc.splitTextToSize(p.text, maxW);
+      for (const w of wrapped) { checkPage(6); doc.text(w, marginL, y); y += 5.5; }
+      continue;
+    }
+
+    if (p.type === 'bullet') {
+      checkPage(7);
+      doc.setFillColor(...blue);
+      doc.circle(marginL + 3, y - 1.5, 1, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(...dark);
+      doc.setFont('helvetica','normal');
+      const wrapped = doc.splitTextToSize(p.text, maxW - 8);
+      for (let wi = 0; wi < wrapped.length; wi++) {
+        checkPage(6);
+        doc.text(wrapped[wi], marginL + 7, y);
+        y += 5.5;
+      }
+      y += 0.5;
+      continue;
+    }
+
+    if (p.type === 'num') {
+      checkPage(7);
+      doc.setFillColor(...blueLt);
+      doc.circle(marginL + 3.5, y - 1.5, 3, 'F');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...blue);
+      doc.setFont('helvetica','bold');
+      doc.text(p.n, marginL + 3.5, y - 0.5, {align:'center'});
+      doc.setFontSize(10);
+      doc.setTextColor(...dark);
+      doc.setFont('helvetica','normal');
+      const wrapped = doc.splitTextToSize(p.text, maxW - 10);
+      for (let wi = 0; wi < wrapped.length; wi++) {
+        checkPage(6);
+        doc.text(wrapped[wi], marginL + 9, y);
+        y += 5.5;
+      }
+      y += 0.5;
+      continue;
+    }
+
+    if (p.type === 'body') {
+      checkPage(7);
+      doc.setFontSize(10);
+      doc.setTextColor(...dark);
+      doc.setFont('helvetica','normal');
+      const wrapped = doc.splitTextToSize(p.text, maxW);
+      for (const w of wrapped) { checkPage(6); doc.text(w, marginL, y); y += 5.5; }
+      continue;
+    }
   }
 
   // Footer en cada página
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(180);
-    doc.text(`Página ${i} de ${totalPages}`, pageW - margin, pageH - 10, { align: 'right' });
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.3);
+    doc.line(marginL, pageH - marginB + 2, pageW - marginR, pageH - marginB + 2);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...muted);
+    doc.setFont('helvetica','normal');
+    doc.text('acuarius.app', marginL, pageH - marginB + 7);
+    doc.text(`${i} / ${totalPages}`, pageW - marginR, pageH - marginB + 7, {align:'right'});
   }
 
   doc.save(filename || 'acuarius-estrategia.pdf');
