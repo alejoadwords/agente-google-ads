@@ -1639,7 +1639,7 @@ CTA (llamada a la acción):
 
 **Respuesta cuando detectes solicitud de imágenes:**
 
-Para plan Pro/Admin: "[DESIGN_QUESTIONNAIRE]"
+Para plan Pro/Admin: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca para el diseño: [DESIGN_QUESTIONNAIRE]"
 
 Para plan gratuito: Genera directamente:
 [GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO], diseño básico", "format": "vertical", "variations": 1, "hasText": true}]
@@ -2116,7 +2116,7 @@ function showMetaActionCards() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
       // Card 1: Crear anuncios de imagen
-      '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios de imagen</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Genera creativos profesionales para Facebook e Instagram</div>' +
@@ -4949,6 +4949,13 @@ function showDesignQuestionnaire() {
             '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es el nombre de tu negocio/marca?</div>' +
             '<input type="text" id="dq-brand" placeholder="Ej: Clínica Sorelle, Estética Miranda" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font)">' +
             '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
+            '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
+              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">¿Ya tienes un anuncio creado?</div>' +
+              '<button onclick="showVariationUploader()" style="width:100%;padding:10px;background:white;color:var(--blue);border:1.5px solid var(--blue);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+                'Generar variaciones de mi anuncio existente' +
+              '</button>' +
+            '</div>'
           ) +
         '</div>' +
         (isLimited ? '' :
