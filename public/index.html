@@ -4503,9 +4503,9 @@ async function startVariationGeneration() {
     if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>descomponiendo tu anuncio en componentes visuales...'; }
   }, 100);
 
-  var analysisSystemPrompt = 'You are an expert visual analyst for advertising creatives. Analyze ad images and return ONLY a valid JSON object. Never include markdown, backticks, or text outside the JSON.';
+  var analysisSystemPrompt = 'You are an expert analyst of advertising creatives. Analyze ad images and return ONLY a valid JSON object with no markdown, backticks, or extra text.';
 
-  var analysisUserPrompt = 'Analyze this Meta Ads creative and return ONLY a JSON object with these exact fields (in English, be specific):\n{"ad_format":"square or vertical","visual_style":"overall photographic/illustrative style and mood","main_subject":"describe person/object WITHOUT any text — demographics clothing posture expression","background":"environment setting textures atmosphere","color_palette":"3-5 dominant hex colors approximately","lighting":"type direction temperature mood","composition":"layout subject position framing depth of field","props_elements":"objects or visual elements besides main subject","overall_mood":"emotional tone conveyed"}\nCRITICAL: Do NOT describe any text, words, typography, prices, or headlines. Only visual elements. Return valid JSON only, no markdown.';
+  var analysisUserPrompt = 'Analyze this Meta Ads creative carefully and return ONLY a JSON object with these exact fields:\n{"ad_format":"square or vertical","visual_style":"overall photographic or illustrative style and mood","main_subject":"describe the person or object — demographics, clothing, posture, expression","background":"background environment, setting, textures, colors","color_palette":"list 3-5 dominant hex colors approximately","lighting":"lighting type, direction, temperature, mood","composition":"layout, subject position, framing, depth of field, text placement zones","props_elements":"any objects or visual elements besides the main subject","overall_mood":"emotional tone conveyed","headline_text":"copy EXACTLY all visible headline or title text from the image, preserving capitalization and line breaks using \\n","body_text":"copy EXACTLY all visible body text, bullet points, list items from the image, each item separated by | character","logo_text":"copy EXACTLY the brand name or logo text visible in the image, or empty string if none","text_style":"describe text color, font weight, style used in the ad (e.g. bold white sans-serif on dark background)"}\nReturn valid JSON only, no markdown, no backticks.';
 
   var baseJson = null;
   var formatDetect = 'square';
@@ -4556,7 +4556,11 @@ async function startVariationGeneration() {
       lighting: 'soft diffused studio lighting, flattering and even',
       composition: 'centered subject with clean negative space',
       props_elements: 'minimal props',
-      overall_mood: 'professional, trustworthy, modern'
+      overall_mood: 'professional, trustworthy, modern',
+      headline_text: '',
+      body_text: '',
+      logo_text: '',
+      text_style: 'bold white sans-serif'
     };
   }
 
@@ -4574,13 +4578,36 @@ async function startVariationGeneration() {
   }, 100);
 
   var variantPrompts = [];
+
+  // Construir bloque de texto a incluir en cada variación
+  var hasHeadline = baseJson.headline_text && baseJson.headline_text.trim().length > 0;
+  var hasBody = baseJson.body_text && baseJson.body_text.trim().length > 0;
+  var hasLogo = baseJson.logo_text && baseJson.logo_text.trim().length > 0;
+  var textStyle = baseJson.text_style || 'bold white sans-serif';
+
+  var textBlock = '';
+  if (hasHeadline) {
+    textBlock += 'Include this exact headline text rendered in the image: "' + baseJson.headline_text.replace(/\n/g, ' / ') + '". ';
+  }
+  if (hasBody) {
+    var bodyItems = baseJson.body_text.split('|').map(function(s){ return s.trim(); }).filter(Boolean);
+    if (bodyItems.length > 0) {
+      textBlock += 'Include these exact body text items with icons/bullets: ' + bodyItems.map(function(t){ return '"' + t + '"'; }).join(', ') + '. ';
+    }
+  }
+  if (hasLogo) {
+    textBlock += 'Include the brand logo/name "' + baseJson.logo_text + '" in the bottom area. ';
+  }
+  if (textBlock.length > 0) {
+    textBlock += 'Text style: ' + textStyle + '. Render all text clearly and legibly in Spanish. ';
+  }
+
   for (var v = 0; v < total; v++) {
-    // Cada variación cambia 2 ejes con offsets distintos para máxima diversidad
-    var bgVal     = VARIATION_AXES[0].values[v % VARIATION_AXES[0].values.length];
+    var bgVal      = VARIATION_AXES[0].values[v % VARIATION_AXES[0].values.length];
     var subjectVal = VARIATION_AXES[1].values[(v + 2) % VARIATION_AXES[1].values.length];
-    var lightVal  = VARIATION_AXES[2].values[v % VARIATION_AXES[2].values.length];
-    var colorVal  = VARIATION_AXES[3].values[(v + 1) % VARIATION_AXES[3].values.length];
-    var compVal   = VARIATION_AXES[4].values[v % VARIATION_AXES[4].values.length];
+    var lightVal   = VARIATION_AXES[2].values[v % VARIATION_AXES[2].values.length];
+    var colorVal   = VARIATION_AXES[3].values[(v + 1) % VARIATION_AXES[3].values.length];
+    var compVal    = VARIATION_AXES[4].values[v % VARIATION_AXES[4].values.length];
 
     variantPrompts.push(
       baseJson.visual_style + ', ' + baseJson.overall_mood + ' mood. ' +
@@ -4590,8 +4617,9 @@ async function startVariationGeneration() {
       'Color palette: ' + colorVal + '. ' +
       'Composition: ' + compVal + '. ' +
       (baseJson.props_elements && baseJson.props_elements !== 'minimal props' ? 'Props: ' + baseJson.props_elements + '. ' : '') +
-      'Professional Meta Ads creative for Latin American market, high-converting advertising photography, vibrant mobile-optimized. ' +
-      'CRITICAL: NO text, NO words, NO numbers, NO typography, NO price tags, NO headlines — pure visual composition only.'
+      textBlock +
+      'Professional Meta Ads creative for Latin American market, high-converting advertising design, mobile optimized. ' +
+      'Maintain the same overall layout and text structure as the original ad, only vary the visual background and subject.'
     );
   }
 
