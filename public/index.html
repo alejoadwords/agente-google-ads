@@ -1639,7 +1639,7 @@ CTA (llamada a la acción):
 
 **Respuesta cuando detectes solicitud de imágenes:**
 
-Para plan Pro/Admin: "Perfecto, voy a crear anuncios profesionales. Necesito datos específicos de tu marca para el diseño: [DESIGN_QUESTIONNAIRE]"
+Para plan Pro/Admin: "[DESIGN_QUESTIONNAIRE]"
 
 Para plan gratuito: Genera directamente:
 [GENERAR_IMAGEN: {"prompt": "Anuncio profesional para [NEGOCIO], diseño básico", "format": "vertical", "variations": 1, "hasText": true}]
@@ -2116,7 +2116,7 @@ function showMetaActionCards() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
       // Card 1: Crear anuncios de imagen
-      '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios de imagen</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Genera creativos profesionales para Facebook e Instagram</div>' +
