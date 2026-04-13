@@ -2567,14 +2567,17 @@ function dismissMetaCards(el) {
 }
 
 // ── MÓDULO DIAGNÓSTICO ──────────────────────────────────────────────────────
+var diagImages = []; // array de { base64, mediaType, dataUrl, name }
+
 function showDiagnosticInput(agent) {
   var isGoogle = agent === 'google-ads';
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
   var agentLabel = isGoogle ? 'Google Ads' : 'Meta Ads';
   var metricsHint = isGoogle
-    ? 'Ej: impresiones, clics, CTR, CPC promedio, conversiones, tasa de conversión, CPA, presupuesto diario...'
-    : 'Ej: alcance, impresiones, frecuencia, CPM, CTR, CPC, conversiones, ROAS, costo por resultado...';
+    ? 'Ej: impresiones 37,812 | clics 8,690 | CTR 22.98% | CPC COP479 | conversiones 144 | CPA COP28,740 | presupuesto COP85,000/día...'
+    : 'Ej: alcance 45,000 | impresiones 120,000 | frecuencia 2.7 | CPM $8.50 | CTR 1.2% | ROAS 3.1 | conversiones 89 | costo/resultado $12...';
   var cancelFn = isGoogle ? 'showGoogleAdsActionCards()' : 'showMetaActionCards()';
+  diagImages = [];
 
   var el = document.createElement('div');
   el.id = 'diagnostic-input-panel';
@@ -2586,37 +2589,56 @@ function showDiagnosticInput(agent) {
   html += '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>';
   html += '<div>';
   html += '<div style="font-size:13px;font-weight:700;color:var(--text)">🩺 Diagnóstico de ' + agentLabel + '</div>';
-  html += '<div style="font-size:11px;color:var(--muted2);margin-top:1px">Pega tus métricas o sube una captura del administrador de anuncios</div>';
+  html += '<div style="font-size:11px;color:var(--muted2);margin-top:1px">Sube hasta 4 capturas o pega tus métricas — el agente analiza los datos reales</div>';
   html += '</div></div>';
 
-  html += '<div style="padding-left:40px;width:100%;max-width:560px">';
+  html += '<div style="padding-left:40px;width:100%;max-width:580px">';
+
+  // Banner cuenta conectada / no conectada (solo Google)
+  if (isGoogle) {
+    if (adsActiveAccount) {
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:10px;margin-bottom:14px">';
+      html += '<div style="font-size:16px">✅</div>';
+      html += '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:#065F46">Cuenta conectada: ' + adsActiveAccount.name + '</div>';
+      html += '<div style="font-size:11px;color:#047857;margin-top:1px">Puedes subir capturas de pantalla de cualquier sección de tu cuenta</div></div>';
+      html += '</div>';
+    } else {
+      html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:10px;margin-bottom:14px">';
+      html += '<div style="font-size:16px">🔗</div>';
+      html += '<div style="flex:1">';
+      html += '<div style="font-size:12px;font-weight:600;color:#92400E">Conecta tu cuenta para diagnóstico automático</div>';
+      html += '<div style="font-size:11px;color:#B45309;margin-top:2px;margin-bottom:8px">Sin conexión, puedes subir capturas manualmente. Con tu cuenta conectada, el agente accede a los datos directamente.</div>';
+      html += '<button onclick="showView('settings');document.getElementById('diagnostic-input-panel').remove()" style="padding:6px 12px;background:#F97316;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar cuenta de Google Ads →</button>';
+      html += '</div></div>';
+    }
+  }
+
   html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
 
-  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Opción 1 — Pega tus métricas aquí</div>';
-  html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:110px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
-
-  html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
-  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
-  html += '<div style="font-size:11px;color:var(--muted2)">o</div>';
-  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
-  html += '</div>';
-
-  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Opción 2 — Sube una captura de pantalla</div>';
-  html += '<label id="diag-upload-label" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer">';
-  html += '<div style="font-size:20px">📷</div>';
-  html += '<div><div style="font-size:12px;font-weight:600;color:var(--text)">Captura del administrador de anuncios</div>';
-  html += '<div style="font-size:11px;color:var(--muted2);margin-top:1px">PNG, JPG — máx. 5MB</div></div>';
-  html += '<input type="file" id="diag-file-input" accept="image/*" style="display:none" onchange="diagPreviewImage(this)">';
+  // Sección capturas — multi-imagen
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📷 Capturas de pantalla <span style="font-weight:400;color:var(--muted2)">(hasta 4 — campañas, grupos, anuncios, keywords...)</span></div>';
+  html += '<div id="diag-img-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px"></div>';
+  html += '<label id="diag-add-img-btn" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;transition:background .15s">';
+  html += '<div style="font-size:16px">➕</div>';
+  html += '<div style="font-size:12px;color:var(--muted)">Agregar captura <span style="color:var(--muted2)">(PNG, JPG)</span></div>';
+  html += '<input type="file" id="diag-file-input" accept="image/*" multiple style="display:none" onchange="diagAddImages(this)">';
   html += '</label>';
 
-  html += '<div id="diag-img-preview" style="display:none;margin-top:8px;position:relative">';
-  html += '<img id="diag-img" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">';
-  html += '<button onclick="diagClearImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.5);border:none;border-radius:6px;color:white;font-size:11px;padding:3px 8px;cursor:pointer">✕ quitar</button>';
+  // Separador
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">o también</div>';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
   html += '</div>';
 
-  html += '<div style="display:flex;gap:8px;margin-top:16px">';
-  html += '<button onclick="runDiagnostic(\'' + agent + '\')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
-  html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
+  // Textarea métricas
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">📋 Pega tus métricas en texto</div>';
+  html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:90px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
+
+  // Botones
+  html += '<div style="display:flex;gap:8px;margin-top:14px">';
+  html += '<button onclick="runDiagnostic('' + agent + '')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
+  html += '<button onclick="document.getElementById('diagnostic-input-panel').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
   html += '</div>';
 
   html += '</div></div>';
@@ -2626,79 +2648,117 @@ function showDiagnosticInput(agent) {
   scrollB();
 }
 
-var diagImgBase64 = null;
-
-function diagPreviewImage(input) {
-  var file = input.files[0];
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    diagImgBase64 = e.target.result.split(',')[1];
-    document.getElementById('diag-img').src = e.target.result;
-    document.getElementById('diag-img-preview').style.display = 'block';
-    document.getElementById('diag-upload-label').style.display = 'none';
-  };
-  reader.readAsDataURL(file);
+function diagAddImages(input) {
+  var files = Array.from(input.files);
+  var remaining = 4 - diagImages.length;
+  if (remaining <= 0) return;
+  files.slice(0, remaining).forEach(function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      // Comprimir igual que el sistema principal
+      var img = new Image();
+      img.onload = function() {
+        var MAX = 1280;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        var base64 = dataUrl.split(',')[1];
+        var entry = { base64: base64, mediaType: 'image/jpeg', dataUrl: dataUrl, name: file.name };
+        diagImages.push(entry);
+        diagRenderGrid();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
 }
 
-function diagClearImage() {
-  diagImgBase64 = null;
-  document.getElementById('diag-img').src = '';
-  document.getElementById('diag-img-preview').style.display = 'none';
-  document.getElementById('diag-upload-label').style.display = 'flex';
-  document.getElementById('diag-file-input').value = '';
+function diagRenderGrid() {
+  var grid = document.getElementById('diag-img-grid');
+  var addBtn = document.getElementById('diag-add-img-btn');
+  if (!grid) return;
+  grid.innerHTML = '';
+  diagImages.forEach(function(img, i) {
+    var cell = document.createElement('div');
+    cell.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);aspect-ratio:16/9;background:#F3F4F6';
+    cell.innerHTML = '<img src="' + img.dataUrl + '" style="width:100%;height:100%;object-fit:cover">' +
+      '<button onclick="diagRemoveImage(' + i + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);border:none;border-radius:5px;color:white;font-size:10px;padding:2px 7px;cursor:pointer">✕</button>' +
+      '<div style="position:absolute;bottom:4px;left:6px;font-size:10px;color:white;background:rgba(0,0,0,.4);padding:1px 5px;border-radius:4px;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + img.name + '</div>';
+    grid.appendChild(cell);
+  });
+  if (addBtn) addBtn.style.display = diagImages.length >= 4 ? 'none' : 'flex';
+}
+
+function diagRemoveImage(i) {
+  diagImages.splice(i, 1);
+  diagRenderGrid();
 }
 
 async function runDiagnostic(agent) {
   var textarea = document.getElementById('diag-textarea');
   var metricsText = textarea ? textarea.value.trim() : '';
-  var hasImage = !!diagImgBase64;
+  var hasImages = diagImages.length > 0;
 
-  if (!metricsText && !hasImage) {
-    textarea.style.borderColor = 'var(--danger)';
-    textarea.placeholder = '⚠️ Pega tus métricas aquí o sube una captura para continuar';
+  if (!metricsText && !hasImages) {
+    if (textarea) {
+      textarea.style.borderColor = 'var(--danger)';
+      textarea.placeholder = '⚠️ Agrega al menos una captura o pega tus métricas para continuar';
+    }
     return;
   }
 
-  // Ocultar panel de input
+  // Ocultar panel
   var panel = document.getElementById('diagnostic-input-panel');
   if (panel) panel.remove();
 
   var isGoogle = agent === 'google-ads';
   var agentLabel = isGoogle ? 'Google Ads' : 'Meta Ads';
 
-  // Construir el prompt de diagnóstico estructurado
+  // Construir prompt
   var diagPrompt = 'DIAGNÓSTICO DE CUENTA — ' + agentLabel.toUpperCase() + '\n\n';
-  diagPrompt += 'Actúa como un auditor experto en ' + agentLabel + '. Con base en los datos que te proporciono a continuación, genera un diagnóstico profesional estructurado en exactamente este formato:\n\n';
+  diagPrompt += 'Analiza los datos de ' + agentLabel + ' que te proporciono a continuación (capturas de pantalla y/o métricas en texto). ';
+  diagPrompt += 'Lee cada imagen con atención — extrae todos los números, nombres de campañas, estados y tendencias que puedas ver. ';
+  diagPrompt += 'Luego entrega un diagnóstico profesional con exactamente este formato:\n\n';
   diagPrompt += '## 🩺 Diagnóstico de ' + agentLabel + '\n\n';
-  diagPrompt += '### 🔴 Problema #1: [nombre del problema]\n';
-  diagPrompt += '**Qué está pasando:** [descripción clara en 1-2 oraciones]\n';
-  diagPrompt += '**Impacto estimado:** [presupuesto desperdiciado o ingreso perdido, con cifra aproximada si los datos lo permiten]\n';
+  diagPrompt += '**Datos detectados:** [lista brevemente las métricas clave que lograste leer de las capturas/texto]\n\n';
+  diagPrompt += '### 🔴 Problema #1: [nombre concreto]\n';
+  diagPrompt += '**Qué está pasando:** [descripción en 1-2 oraciones basada en los datos reales]\n';
+  diagPrompt += '**Impacto estimado:** [cuánto presupuesto se está desperdiciando o cuánta conversión se está perdiendo, con cifras si los datos lo permiten]\n';
   diagPrompt += '**Acción inmediata:** [qué hacer esta semana, específico y ejecutable]\n\n';
-  diagPrompt += '### 🟡 Problema #2: [nombre del problema]\n';
-  diagPrompt += '(mismo formato)\n\n';
-  diagPrompt += '### 🟢 Problema #3: [nombre del problema]\n';
-  diagPrompt += '(mismo formato)\n\n';
-  diagPrompt += '### ✅ Plan de acción prioritario\n';
-  diagPrompt += 'Lista las 3 acciones más importantes en orden de impacto, con semana estimada de implementación.\n\n';
+  diagPrompt += '### 🟡 Problema #2: [nombre concreto]\n';
+  diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
+  diagPrompt += '### 🟢 Problema #3: [nombre concreto]\n';
+  diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
+  diagPrompt += '### ✅ Plan de acción — próximas 2 semanas\n';
+  diagPrompt += 'Las 3 acciones más importantes en orden de impacto, con semana estimada.\n\n';
   diagPrompt += '---\n';
-  diagPrompt += 'Sé directo, usa números cuando puedas y habla en español LatAm. Si los datos son insuficientes para algún punto, indícalo y pide los datos específicos que necesitas.\n\n';
+  diagPrompt += 'Habla en español LatAm. Sé directo y usa los números reales que ves en los datos. Si algo no está claro en las capturas, indícalo y pide el dato específico.';
 
   if (metricsText) {
-    diagPrompt += '**DATOS PROPORCIONADOS:**\n' + metricsText;
+    diagPrompt += '\n\n**MÉTRICAS EN TEXTO:**\n' + metricsText;
   }
-  if (hasImage) {
-    diagPrompt += metricsText ? '\n\n**CAPTURA ADJUNTA:** Ver imagen.' : '**CAPTURA ADJUNTA:** Ver imagen.';
-  }
-
-  // Si hay imagen, usar pendingImg para que callClaude la incluya
-  if (hasImage) {
-    pendingImg = diagImgBase64;
-    diagImgBase64 = null;
+  if (hasImages) {
+    diagPrompt += '\n\n**CAPTURAS ADJUNTAS:** ' + diagImages.length + ' imagen(es). Analiza cada una en detalle.';
   }
 
-  // Inyectar en hist sin mostrar mensaje del usuario
-  hist.push({ role: 'user', content: diagPrompt });
+  // Construir content array con imágenes incluidas directamente (igual que sendMsg)
+  var msgContent = [];
+  diagImages.forEach(function(img) {
+    msgContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } });
+  });
+  msgContent.push({ type: 'text', text: diagPrompt });
+
+  diagImages = [];
+
+  // Push a hist y llamar directamente — sin addUser (el prompt no aparece en el chat)
+  hist.push({ role: 'user', content: msgContent });
   await callClaude();
 }
 // ── FIN MÓDULO DIAGNÓSTICO ───────────────────────────────────────────────────
