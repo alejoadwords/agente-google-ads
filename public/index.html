@@ -1818,7 +1818,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu presupuesto mensual en Google Ads?',key:'presupuesto',type:'opts',opts:['Menos de $500 USD','$500 – $2.000 USD','$2.000 – $10.000 USD','Más de $10.000 USD']},
     {q:'¿Cuál es tu objetivo principal de campaña?',key:'objetivo',type:'opts',opts:['Generar leads / contactos','Ventas directas (e-commerce)','Tráfico al sitio web','Llamadas telefónicas','Reconocimiento de marca']},
     {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
-    {q:'¿En qué etapa estás con Google Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Campaña activa (menos de 1 mes)','Campaña activa 1–3 meses','Más de 3 meses de experiencia']}
+    {q:'¿En qué etapa estás con Google Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Campaña activa (menos de 1 mes)','Campaña activa 1–3 meses','Más de 3 meses de experiencia']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores?',ph:'Ej: Empresa A, Empresa B (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ],
   'meta-ads': [
     {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
@@ -1827,7 +1829,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu presupuesto mensual en Meta Ads?',key:'presupuesto',type:'opts',opts:['Menos de $300 USD','$300 – $1.000 USD','$1.000 – $5.000 USD','Más de $5.000 USD']},
     {q:'¿Cuál es tu objetivo principal en Meta?',key:'objetivo',type:'opts',opts:['Generar leads / contactos','Ventas en tienda online','Mensajes por WhatsApp / DM','Tráfico al sitio web','Reconocimiento de marca']},
     {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
-    {q:'¿En qué etapa estás con Meta Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']}
+    {q:'¿En qué etapa estás con Meta Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores?',ph:'Ej: Empresa A, Empresa B (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ],
   'seo': [
     {q:'¿Cuál es el nombre y URL de tu sitio web?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
@@ -1836,7 +1840,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿En qué país o ciudad quieres posicionarte principalmente?',ph:'Ej: Colombia, Bogotá, México DF, toda LatAm...',key:'mercado',type:'input'},
     {q:'¿Cuál es tu objetivo principal con el SEO?',key:'objetivo',type:'opts',opts:['Atraer más visitas orgánicas','Generar leads desde Google','Posicionar mi marca localmente','Superar a mi competencia en Google','Aparecer en IAs como ChatGPT y Gemini']},
     {q:'¿En qué etapa está tu SEO actualmente?',key:'etapa',type:'opts',opts:['Sitio nuevo, sin trabajo SEO previo','Tengo SEO básico pero sin resultados claros','Tengo tráfico orgánico pero quiero escalarlo','Tengo SEO activo y quiero auditarlo']},
-    {q:'¿Cuál es tu mayor desafío SEO hoy?',key:'desafio',type:'opts',opts:['No sé por qué keywords posicionar','Mi sitio no aparece en Google','Tengo visitas pero no convierten','No sé cómo crear contenido optimizado','Quiero aparecer en respuestas de IAs']}
+    {q:'¿Cuál es tu mayor desafío SEO hoy?',key:'desafio',type:'opts',opts:['No sé por qué keywords posicionar','Mi sitio no aparece en Google','Tengo visitas pero no convierten','No sé cómo crear contenido optimizado','Quiero aparecer en respuestas de IAs']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores online?',ph:'Ej: Empresa A, Empresa B (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ],
   'tiktok-ads': [
     {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
@@ -1845,7 +1851,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu presupuesto mensual en TikTok Ads?',key:'presupuesto',type:'opts',opts:['Menos de $300 USD','$300 – $1.000 USD','$1.000 – $5.000 USD','Más de $5.000 USD']},
     {q:'¿Cuál es tu objetivo principal en TikTok?',key:'objetivo',type:'opts',opts:['Ventas directas','Generar leads','Tráfico al sitio web','Reconocimiento de marca','Crecimiento de comunidad']},
     {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
-    {q:'¿En qué etapa estás con TikTok Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']}
+    {q:'¿En qué etapa estás con TikTok Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores?',ph:'Ej: Empresa A, Empresa B (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ],
   'linkedin-ads': [
     {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
@@ -1854,7 +1862,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu presupuesto mensual en LinkedIn Ads?',key:'presupuesto',type:'opts',opts:['Menos de $500 USD','$500 – $2.000 USD','$2.000 – $10.000 USD','Más de $10.000 USD']},
     {q:'¿Cuál es tu objetivo principal en LinkedIn?',key:'objetivo',type:'opts',opts:['Generar leads B2B calificados','Reconocimiento de marca empresarial','Reclutar talento específico','Promover eventos o webinars','Nutrir contactos del pipeline']},
     {q:'¿Cuál es tu mercado geográfico objetivo?',ph:'Ej: Colombia, México, toda Latinoamérica...',key:'mercado',type:'input'},
-    {q:'¿En qué etapa estás con LinkedIn Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']}
+    {q:'¿En qué etapa estás con LinkedIn Ads?',key:'etapa',type:'opts',opts:['Empezando desde cero','Cuenta activa (menos de 1 mes)','Cuenta activa 1–3 meses','Más de 3 meses de experiencia']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores?',ph:'Ej: Empresa A, Empresa B (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ],
   'consultor': [
     {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Empresa · www.miempresa.com',key:'negocio',type:'input'},
@@ -1862,7 +1872,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu presupuesto mensual total en marketing digital?',key:'presupuesto',type:'opts',opts:['No lo tengo claro aún','Menos de $300 USD','$300 – $1.000 USD','$1.000 – $5.000 USD','Más de $5.000 USD']},
     {q:'¿Cuál es tu objetivo principal de negocio ahora?',key:'objetivo',type:'opts',opts:['Conseguir más clientes / leads','Aumentar ventas online','Fortalecer la marca','Escalar a nuevos mercados','Reducir costo de adquisición']},
     {q:'¿En qué canales de marketing estás activo actualmente?',key:'canales',type:'multi',opts:['Ninguno todavía','Redes sociales orgánicas','Google Ads','Meta Ads (Facebook/Instagram)','TikTok','SEO','Email marketing','WhatsApp Business']},
-    {q:'¿Cuál es tu mayor reto en marketing hoy?',key:'desafio',type:'opts',opts:['No sé por dónde empezar','Tengo canales pero no dan resultados','No sé cómo distribuir el presupuesto','Quiero escalar pero sin desperdiciar dinero','Necesito medir mejor mis resultados']}
+    {q:'¿Cuál es tu mayor reto en marketing hoy?',key:'desafio',type:'opts',opts:['No sé por dónde empezar','Tengo canales pero no dan resultados','No sé cómo distribuir el presupuesto','Quiero escalar pero sin desperdiciar dinero','Necesito medir mejor mis resultados']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores?',ph:'Ej: Empresa A, Empresa B (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ],
   'social': [
     {q:'¿Cuál es el nombre y URL de tu negocio?',ph:'Ej: Mi Tienda · www.mitienda.com',key:'negocio',type:'input'},
@@ -1871,7 +1883,9 @@ const OB_STEPS_BY_AGENT = {
     {q:'¿Cuál es tu objetivo principal en redes sociales?',key:'objetivo',type:'opts',opts:['Atraer nuevos clientes','Construir comunidad y engagement','Posicionar mi marca','Vender directamente desde redes','Generar tráfico a mi web']},
     {q:'¿En qué redes sociales tienes presencia actualmente?',key:'redes_actuales',type:'multi',opts:['Ninguna todavía','Instagram','Facebook','TikTok','LinkedIn','YouTube','X (Twitter)','Pinterest']},
     {q:'¿Con qué frecuencia publicas contenido actualmente?',key:'frecuencia',type:'opts',opts:['No publico nada aún','Menos de 1 vez por semana','1-2 veces por semana','3-5 veces por semana','Diariamente']},
-    {q:'¿Tienes equipo o recursos para crear contenido?',key:'recursos',type:'opts',opts:['Solo yo, con el celular','Tengo diseñador o editor','Tengo agencia o community manager','Tengo presupuesto para contratar']}
+    {q:'¿Tienes equipo o recursos para crear contenido?',key:'recursos',type:'opts',opts:['Solo yo, con el celular','Tengo diseñador o editor','Tengo agencia o community manager','Tengo presupuesto para contratar']},
+    {q:'¿Cuál es el tono de comunicación de tu marca?',key:'tono',type:'opts',opts:['Profesional y formal','Cercano y conversacional','Moderno y aspiracional','Directo y sin rodeos','Divertido y creativo']},
+    {q:'¿Quiénes son tus 2–3 principales competidores en redes?',ph:'Ej: @competidor1, @competidor2 (deja en blanco si no los conoces)',key:'competidores',type:'input'}
   ]
 };
 
@@ -1949,7 +1963,7 @@ estoy aquí para ayudarte a crear y optimizar campañas de Google Ads que genere
 – **reportes** — informes completos de rendimiento de tu cuenta
 – **hoja de ruta** — guía paso a paso de qué revisar en cada etapa (día 1, semana, mes...)
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil para todas las sesiones.`,
+antes de empezar, necesito conocer tu negocio. son 9 preguntas rápidas — quedarán guardadas en tu perfil para todas las sesiones.`,
 
   'meta-ads': `hola, soy tu **agente de Meta Ads** en acuarius.
 
@@ -1964,7 +1978,7 @@ estoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram qu
 – **análisis y optimización** — interpretación de métricas del Administrador de anuncios
 – **reportes** — informes de rendimiento con conclusiones y próximos pasos
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+antes de empezar, necesito conocer tu negocio. son 9 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
   'tiktok-ads': `hola, soy tu **agente de TikTok Ads** en acuarius.
 
@@ -1979,7 +1993,7 @@ estoy aquí para ayudarte a crear campañas en TikTok que impacten a audiencias 
 – **análisis y optimización** — métricas clave del TikTok Ads Manager
 – **reportes** — informes de rendimiento adaptados a la plataforma
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+antes de empezar, necesito conocer tu negocio. son 9 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
   'linkedin-ads': `hola, soy tu **agente de LinkedIn Ads** en acuarius.
 
@@ -1994,7 +2008,7 @@ estoy aquí para ayudarte a crear campañas B2B de alto impacto en LinkedIn, la 
 – **análisis y optimización** — métricas del Campaign Manager de LinkedIn
 – **reportes** — informes de rendimiento con enfoque en pipeline y lead quality
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+antes de empezar, necesito conocer tu negocio. son 9 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
   'seo': `hola, soy tu **agente de SEO** en acuarius.
 
@@ -2009,7 +2023,7 @@ estoy aquí para ayudarte a mejorar el posicionamiento orgánico de tu sitio web
 – **seguimiento de posiciones** — te ayudo a monitorear rankings y métricas en Google Search Console
 – **posicionamiento en IAs (AEO)** — te ayudo a aparecer en las respuestas de ChatGPT, Claude, Gemini y Perplexity — el SEO del futuro
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+antes de empezar, necesito conocer tu negocio. son 9 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
   'social': `hola, soy tu **agente de contenido para redes sociales** en acuarius.
 
@@ -2022,7 +2036,7 @@ mi trabajo es ayudarte a construir una estrategia de contenido real — no gené
 – **guiones y copys** — textos listos para reels, carruseles, stories y posts
 – **análisis de rendimiento** — qué métricas importan y cómo mejorar basado en datos
 
-antes de empezar, necesito conocer tu negocio. son 7 preguntas rápidas — quedarán guardadas en tu perfil.`,
+antes de empezar, necesito conocer tu negocio. son 9 preguntas rápidas — quedarán guardadas en tu perfil.`,
 
   'consultor': `hola, soy tu **consultor de marketing digital** en acuarius.
 
@@ -2035,7 +2049,7 @@ pienso en tu negocio de forma integral — sin sesgos hacia un canal específico
 – **medición y ROI** — cómo saber si tu marketing está funcionando y qué ajustar
 – **stack de herramientas** — qué herramientas necesitas y cuáles son prescindibles
 
-antes de empezar, necesito entender tu situación. son 6 preguntas rápidas — quedarán guardadas en tu perfil.`
+antes de empezar, necesito entender tu situación. son 8 preguntas rápidas — quedarán guardadas en tu perfil.`
 };
 
 // Alias para compatibilidad
@@ -3314,7 +3328,42 @@ function mapStage(e){if(!e)return'sin definir';if(e.includes('cero'))return'día
 function updateMem(){document.getElementById('m-neg').textContent=mem.negocio?.split('·')[0]?.trim()||'—';document.getElementById('m-ind').textContent=mem.industria||'—';document.getElementById('m-pre').textContent=mem.presupuesto||'—';document.getElementById('m-obj').textContent=mem.objetivo?.split('/')[0]?.trim()||'—'}
 
 // CHAT
-function memCtx(){return Object.keys(mem).length?Object.entries(mem).map(([k,v])=>`${k}: ${v}`).join('\n'):'perfil no completado aún.'}
+function memCtx(){
+  if(!Object.keys(mem).length) return 'perfil no completado aún.';
+  const labelMap = {
+    negocio: 'Negocio / URL',
+    industria: 'Industria',
+    producto: 'Producto o servicio principal',
+    presupuesto: 'Presupuesto mensual',
+    objetivo: 'Objetivo principal',
+    mercado: 'Mercado geográfico',
+    etapa: 'Etapa con el canal',
+    desafio: 'Mayor reto actual',
+    canales: 'Canales activos',
+    audiencia: 'Cliente ideal',
+    redes_actuales: 'Redes sociales actuales',
+    frecuencia: 'Frecuencia de publicación',
+    recursos: 'Recursos de contenido',
+    tono: 'Tono de marca',
+    competidores: 'Competidores principales'
+  };
+  const brandFields = ['tono','competidores'];
+  const coreLines = [];
+  const brandLines = [];
+  Object.entries(mem).forEach(([k,v]) => {
+    if(!v) return;
+    const label = labelMap[k] || k;
+    if(brandFields.includes(k)) brandLines.push(`${label}: ${v}`);
+    else coreLines.push(`${label}: ${v}`);
+  });
+  let ctx = coreLines.join('\n');
+  if(brandLines.length){
+    ctx += '\n\n--- CONTEXTO DE MARCA (aplicar en TODOS los outputs) ---\n' + brandLines.join('\n');
+    if(mem.tono) ctx += '\nIMPORTANTE: Usa siempre el tono "' + mem.tono + '" en copys, anuncios y recomendaciones. No uses un tono genérico.';
+    if(mem.competidores && mem.competidores.trim()) ctx += '\nIMPORTANTE: Los competidores (' + mem.competidores + ') son referencia para diferenciación. Adapta las recomendaciones para destacar frente a ellos.';
+  }
+  return ctx;
+}
 async function sendMsg(){
   if(loading||((!onDone)&&!pendingImg))return;
   const el=document.getElementById('cin');
