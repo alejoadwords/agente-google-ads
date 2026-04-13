@@ -2114,18 +2114,25 @@ async function openAgent(agentKey) {
 
   if (profile) {
     try {
-      Object.assign(mem, profile);
+      Object.assign(mem, typeof profile === 'string' ? JSON.parse(profile) : profile);
       updateMem();
       onDone = true;
       clientStage = mapStage(mem.etapa);
       document.getElementById('mem-card').style.display = 'block';
       document.getElementById('m-stage').textContent = clientStage;
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
-      addAgent(`hola de nuevo. agente de **${agentLabels[agentKey]||agentKey}** listo.\n\n**negocio:** ${mem.negocio||'—'}\n**objetivo:** ${mem.objetivo||'—'}\n\n¿en qué trabajamos hoy?`);
-      if (agentKey === 'meta-ads') { setTimeout(showMetaActionCards, 400); }
-      if (agentKey === 'google-ads') { setTimeout(showGoogleAdsActionCards, 400); }
+      const negocioShort = mem.negocio ? mem.negocio.split('·')[0].trim() : '—';
+      addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
+      if (agentKey === 'meta-ads')    { setTimeout(showMetaActionCards, 400); }
+      if (agentKey === 'google-ads')  { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'consultor')   { setTimeout(showConsultorActionCards, 400); }
+      if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
+      if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
       return;
-    } catch(e) { /* si falla, lanzar onboarding */ }
+    } catch(e) {
+      console.warn('openAgent profile load error:', e);
+      // si falla, lanzar onboarding
+    }
   }
   launchOnboarding(agentKey);
 }
@@ -2393,6 +2400,93 @@ Personaliza todo según el mercado de ${planningData.mercado} y el objetivo de $
 function dismissGoogleAdsCards(el) {
   var msg = el.closest('.msg');
   if (msg) msg.style.display = 'none';
+}
+
+// Cards de retorno — Consultor de Marketing
+function showConsultorActionCards() {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var pasos = [
+    { icon: '🗺️', titulo: 'Diagnóstico de canales', desc: '¿Dónde invertir tu presupuesto? Te digo qué plataformas priorizar.', prompt: 'Analiza mi situación y dime qué canales de marketing digital debo priorizar ahora mismo' },
+    { icon: '💰', titulo: 'Distribución de presupuesto', desc: 'Cómo repartir tu inversión entre canales para el máximo resultado.', prompt: 'Ayúdame a definir cómo distribuir mi presupuesto de marketing digital entre los mejores canales' },
+    { icon: '📋', titulo: 'Plan de 30 días', desc: 'Acciones concretas para las próximas 4 semanas, listas para ejecutar.', prompt: 'Crea un plan de marketing digital detallado para los próximos 30 días para mi negocio, con acciones semanales específicas' },
+    { icon: '📊', titulo: 'Métricas que importan', desc: 'Qué números seguir y cómo interpretar si tu marketing funciona.', prompt: 'Explícame qué métricas clave debo medir en mi marketing digital y cómo interpretarlas para tomar mejores decisiones' },
+  ];
+  var cards = pasos.map(function(p) {
+    return '<div class="next-step-card" onclick="this.closest(\'.msg\').style.display=\'none\';qSend(\'' + p.prompt.replace(/'/g,"\\'") + '\')">' +
+      '<div class="next-step-icon">' + p.icon + '</div>' +
+      '<div class="next-step-title">' + p.titulo + '</div>' +
+      '<div class="next-step-desc">' + p.desc + '</div>' +
+    '</div>';
+  }).join('');
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿por dónde empezamos?</div>' +
+    '</div>' +
+    '<div style="padding-left:40px"><div class="next-steps-grid">' + cards + '</div></div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+// Cards de retorno — SEO
+function showSeoActionCards() {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var pasos = [
+    { icon: '🔍', titulo: 'Investigación de keywords', desc: 'Palabras clave con mayor potencial para tu negocio y mercado.', prompt: 'Haz una investigación de palabras clave para mi negocio y dime cuáles priorizar' },
+    { icon: '🏥', titulo: 'Auditoría SEO rápida', desc: 'Los problemas técnicos que más están afectando tu posicionamiento.', prompt: 'Ayúdame a identificar los principales problemas SEO de mi sitio web y cómo corregirlos' },
+    { icon: '✍️', titulo: 'Estrategia de contenido', desc: 'Qué artículos crear para atraer tráfico orgánico calificado.', prompt: 'Crea una estrategia de contenido SEO para los próximos 3 meses para mi negocio' },
+    { icon: '🤖', titulo: 'Optimización para IAs (AEO)', desc: 'Cómo aparecer cuando alguien le pregunta a ChatGPT o Gemini sobre tu industria.', prompt: 'Explícame cómo optimizar mi sitio para que aparezca en las respuestas de IAs como ChatGPT, Claude y Gemini' },
+  ];
+  var cards = pasos.map(function(p) {
+    return '<div class="next-step-card" onclick="this.closest(\'.msg\').style.display=\'none\';qSend(\'' + p.prompt.replace(/'/g,"\\'") + '\')">' +
+      '<div class="next-step-icon">' + p.icon + '</div>' +
+      '<div class="next-step-title">' + p.titulo + '</div>' +
+      '<div class="next-step-desc">' + p.desc + '</div>' +
+    '</div>';
+  }).join('');
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué trabajamos hoy?</div>' +
+    '</div>' +
+    '<div style="padding-left:40px"><div class="next-steps-grid">' + cards + '</div></div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+// Cards de retorno — Social Media
+function showSocialActionCards() {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var pasos = [
+    { icon: '🎯', titulo: 'Estrategia de contenido', desc: 'Pilares temáticos, voz de marca y frecuencia por red social.', prompt: 'Crea una estrategia de contenido completa para mi negocio: pilares temáticos, voz de marca, tipos de contenido y frecuencia recomendada por red.' },
+    { icon: '✍️', titulo: 'Copys y guiones', desc: 'Textos listos para publicar esta semana en tus redes.', prompt: 'Crea copys y guiones listos para publicar: posts para feed, guiones para reels y textos para stories. Adapta el tono a mi marca.' },
+    { icon: '📅', titulo: 'Calendario editorial', desc: 'Plan de publicaciones para los próximos 30 días.', prompt: 'Crea un calendario editorial de 30 días para mis redes sociales con temas, formatos y días de publicación' },
+    { icon: '📈', titulo: 'Análisis de métricas', desc: 'Qué números medir y cómo mejorar tu alcance orgánico.', prompt: 'Explícame qué métricas de redes sociales debo medir y cómo mejorar mi alcance orgánico' },
+  ];
+  var cards = pasos.map(function(p) {
+    return '<div class="next-step-card" onclick="this.closest(\'.msg\').style.display=\'none\';qSend(\'' + p.prompt.replace(/'/g,"\\'") + '\')">' +
+      '<div class="next-step-icon">' + p.icon + '</div>' +
+      '<div class="next-step-title">' + p.titulo + '</div>' +
+      '<div class="next-step-desc">' + p.desc + '</div>' +
+    '</div>';
+  }).join('');
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué creamos hoy?</div>' +
+    '</div>' +
+    '<div style="padding-left:40px"><div class="next-steps-grid">' + cards + '</div></div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
 }
 
 function showMetaImageSubCards(parentCard) {
@@ -5699,7 +5793,7 @@ async function selectAdsAccount(accountId) {
     if (savedProfile) {
       // Restaurar perfil de esta cuenta
       try {
-        const profile = JSON.parse(savedProfile);
+        const profile = typeof savedProfile === 'string' ? JSON.parse(savedProfile) : savedProfile;
         Object.assign(mem, profile);
         updateMem();
         onDone = true;
