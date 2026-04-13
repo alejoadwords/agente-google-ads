@@ -2211,6 +2211,17 @@ function showMetaActionCards() {
         '<div style="font-size:11px;color:var(--muted2)">Textos persuasivos para feed, stories y carrusel</div>' +
       '</div>' +
 
+      // Card 5: Diagnosticar campañas — full width, destacada
+      '<div onclick="dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🩺</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar campañas</div>' +
+            '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
     '</div>';
   document.getElementById('chat-area').appendChild(el);
   scrollB();
@@ -2251,10 +2262,21 @@ function showGoogleAdsActionCards() {
       '</div>' +
 
       // Card 4: Crear anuncios RSA
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR ANUNCIOS RSA - Para generar los headlines y descriptions más efectivos, necesito saber: ¿Para qué producto/servicio específico son estos anuncios RSA? ¿Tienes keywords principales ya definidas? ¿Es para una campaña nueva o reemplazo de anuncios existentes?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR ANUNCIOS RSA - Para generar los headlines y descriptions más efectivos, necesito saber: ¿Para qué producto/servicio específico son estos anuncios RSA? ¿Tienes keywords principales ya definidas? ¿Es para una campaña nueva o reemplazo de anuncios existentes?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'\'>' +
         '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios RSA</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Headlines y descriptions con estructura AIDA</div>' +
+      '</div>' +
+
+      // Card 5: Diagnosticar cuenta — full width, destacada
+      '<div onclick="dismissGoogleAdsCards(this);showDiagnosticInput(\'google-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'\'>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🩺</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar cuenta</div>' +
+            '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
 
     '</div>';
@@ -2543,6 +2565,144 @@ function dismissMetaCards(el) {
   var msg = el.closest('.msg');
   if (msg) msg.style.display = 'none';
 }
+
+// ── MÓDULO DIAGNÓSTICO ──────────────────────────────────────────────────────
+function showDiagnosticInput(agent) {
+  var isGoogle = agent === 'google-ads';
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var agentLabel = isGoogle ? 'Google Ads' : 'Meta Ads';
+  var metricsHint = isGoogle
+    ? 'Ej: impresiones, clics, CTR, CPC promedio, conversiones, tasa de conversión, CPA, presupuesto diario...'
+    : 'Ej: alcance, impresiones, frecuencia, CPM, CTR, CPC, conversiones, ROAS, costo por resultado...';
+  var cancelFn = isGoogle ? 'showGoogleAdsActionCards()' : 'showMetaActionCards()';
+
+  var el = document.createElement('div');
+  el.id = 'diagnostic-input-panel';
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+
+  var html = '';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">';
+  html += '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>';
+  html += '<div>';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--text)">🩺 Diagnóstico de ' + agentLabel + '</div>';
+  html += '<div style="font-size:11px;color:var(--muted2);margin-top:1px">Pega tus métricas o sube una captura del administrador de anuncios</div>';
+  html += '</div></div>';
+
+  html += '<div style="padding-left:40px;width:100%;max-width:560px">';
+  html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
+
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Opción 1 — Pega tus métricas aquí</div>';
+  html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:110px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
+
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">o</div>';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+  html += '</div>';
+
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Opción 2 — Sube una captura de pantalla</div>';
+  html += '<label id="diag-upload-label" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer">';
+  html += '<div style="font-size:20px">📷</div>';
+  html += '<div><div style="font-size:12px;font-weight:600;color:var(--text)">Captura del administrador de anuncios</div>';
+  html += '<div style="font-size:11px;color:var(--muted2);margin-top:1px">PNG, JPG — máx. 5MB</div></div>';
+  html += '<input type="file" id="diag-file-input" accept="image/*" style="display:none" onchange="diagPreviewImage(this)">';
+  html += '</label>';
+
+  html += '<div id="diag-img-preview" style="display:none;margin-top:8px;position:relative">';
+  html += '<img id="diag-img" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">';
+  html += '<button onclick="diagClearImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.5);border:none;border-radius:6px;color:white;font-size:11px;padding:3px 8px;cursor:pointer">✕ quitar</button>';
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:8px;margin-top:16px">';
+  html += '<button onclick="runDiagnostic(\'' + agent + '\')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
+  html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
+  html += '</div>';
+
+  html += '</div></div>';
+
+  el.innerHTML = html;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+var diagImgBase64 = null;
+
+function diagPreviewImage(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    diagImgBase64 = e.target.result.split(',')[1];
+    document.getElementById('diag-img').src = e.target.result;
+    document.getElementById('diag-img-preview').style.display = 'block';
+    document.getElementById('diag-upload-label').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function diagClearImage() {
+  diagImgBase64 = null;
+  document.getElementById('diag-img').src = '';
+  document.getElementById('diag-img-preview').style.display = 'none';
+  document.getElementById('diag-upload-label').style.display = 'flex';
+  document.getElementById('diag-file-input').value = '';
+}
+
+async function runDiagnostic(agent) {
+  var textarea = document.getElementById('diag-textarea');
+  var metricsText = textarea ? textarea.value.trim() : '';
+  var hasImage = !!diagImgBase64;
+
+  if (!metricsText && !hasImage) {
+    textarea.style.borderColor = 'var(--danger)';
+    textarea.placeholder = '⚠️ Pega tus métricas aquí o sube una captura para continuar';
+    return;
+  }
+
+  // Ocultar panel de input
+  var panel = document.getElementById('diagnostic-input-panel');
+  if (panel) panel.remove();
+
+  var isGoogle = agent === 'google-ads';
+  var agentLabel = isGoogle ? 'Google Ads' : 'Meta Ads';
+
+  // Construir el prompt de diagnóstico estructurado
+  var diagPrompt = 'DIAGNÓSTICO DE CUENTA — ' + agentLabel.toUpperCase() + '\n\n';
+  diagPrompt += 'Actúa como un auditor experto en ' + agentLabel + '. Con base en los datos que te proporciono a continuación, genera un diagnóstico profesional estructurado en exactamente este formato:\n\n';
+  diagPrompt += '## 🩺 Diagnóstico de ' + agentLabel + '\n\n';
+  diagPrompt += '### 🔴 Problema #1: [nombre del problema]\n';
+  diagPrompt += '**Qué está pasando:** [descripción clara en 1-2 oraciones]\n';
+  diagPrompt += '**Impacto estimado:** [presupuesto desperdiciado o ingreso perdido, con cifra aproximada si los datos lo permiten]\n';
+  diagPrompt += '**Acción inmediata:** [qué hacer esta semana, específico y ejecutable]\n\n';
+  diagPrompt += '### 🟡 Problema #2: [nombre del problema]\n';
+  diagPrompt += '(mismo formato)\n\n';
+  diagPrompt += '### 🟢 Problema #3: [nombre del problema]\n';
+  diagPrompt += '(mismo formato)\n\n';
+  diagPrompt += '### ✅ Plan de acción prioritario\n';
+  diagPrompt += 'Lista las 3 acciones más importantes en orden de impacto, con semana estimada de implementación.\n\n';
+  diagPrompt += '---\n';
+  diagPrompt += 'Sé directo, usa números cuando puedas y habla en español LatAm. Si los datos son insuficientes para algún punto, indícalo y pide los datos específicos que necesitas.\n\n';
+
+  if (metricsText) {
+    diagPrompt += '**DATOS PROPORCIONADOS:**\n' + metricsText;
+  }
+  if (hasImage) {
+    diagPrompt += metricsText ? '\n\n**CAPTURA ADJUNTA:** Ver imagen.' : '**CAPTURA ADJUNTA:** Ver imagen.';
+  }
+
+  // Si hay imagen, usar pendingImg para que callClaude la incluya
+  if (hasImage) {
+    pendingImg = diagImgBase64;
+    diagImgBase64 = null;
+  }
+
+  // Inyectar en hist sin mostrar mensaje del usuario
+  hist.push({ role: 'user', content: diagPrompt });
+  await callClaude();
+}
+// ── FIN MÓDULO DIAGNÓSTICO ───────────────────────────────────────────────────
+
 
 // Envía desde el chat libre de la pantalla de inicio
 // =============================================
