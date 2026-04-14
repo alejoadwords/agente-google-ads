@@ -5892,24 +5892,66 @@ function generateBasicImage() {
   }
 }
 
-function generateWithDesignData() {
+async function generateWithDesignData() {
   var data = designQData;
   if (!data.brand || !data.offer || !data.focus) return;
-  
-  // Construir el prompt personalizado para el agente
-  var prompt = 'Genera 5 anuncios profesionales para Meta Ads con estos datos específicos:\n\n' +
-    '**Marca:** ' + data.brand + '\n' +
-    '**Colores:** ' + (data.colors || 'azul y blanco') + '\n' +
-    '**Oferta:** ' + data.offer + '\n' +
-    '**Enfoque:** ' + (data.focus === 'resultado' ? 'Mostrar cliente feliz después del servicio' : 'Mostrar el servicio siendo realizado') + '\n\n' +
-    'Usa estas especificaciones exactas para crear prompts con diseño profesional estilo agencia. Cada imagen debe incluir: logo "' + data.brand + '", los colores ' + (data.colors || 'azul y blanco') + ', la oferta "' + data.offer + '", y layout premium con elementos gráficos.';
-  
-  // Enviar como mensaje del usuario para que genere las imágenes
-  hist.push({ role: 'user', content: prompt });
-  document.getElementById('cin').value = prompt;
-  sendMsg();
-  
-  // Reset
+
+  var brand   = data.brand;
+  var colors  = data.colors || 'azul y blanco';
+  var offer   = data.offer;
+  var focus   = data.focus === 'resultado'
+    ? 'persona sonriente y satisfecha mostrando el resultado del servicio, expresion genuina de felicidad y confianza'
+    : 'profesional realizando el servicio con precision, ambiente moderno y limpio';
+  var colorsDesc = colors + ' con acentos blancos y tipografia bold moderna';
+
+  var concepts = [
+    {
+      label: 'Transformacion dramatica',
+      prompt: 'Anuncio profesional Meta Ads estilo agencia premium para "' + brand + '", ' + focus + ', fondo degradado ' + colors + ' elegante y sofisticado, logo "' + brand + '" prominente esquina superior derecha en blanco, texto principal "' + offer + '" en tipografia bold moderna sans-serif grande centrada, subtitulo elegante, boton CTA "Conoce mas" en blanco con esquinas redondeadas en la parte inferior, composicion vertical 4:5, iluminacion cinematografica, calidad publicitaria profesional nivel Mailchimp o Glossier, diseno limpio con espacio negativo, elementos graficos sutiles'
+    },
+    {
+      label: 'Antes y despues',
+      prompt: 'Anuncio Meta Ads split-screen premium para "' + brand + '", lado izquierdo oscuro con problema, lado derecho brillante con solucion usando ' + focus + ', paleta ' + colorsDesc + ', logo "' + brand + '" integrado en banner inferior, oferta "' + offer + '" destacada en overlay semitransparente, tipografia elegante, flechas direccionales sutiles entre los dos lados, composicion vertical optimizada movil, calidad ads premium nivel agencia'
+    },
+    {
+      label: 'Testimonio visual',
+      prompt: 'Anuncio estilo testimonio premium para "' + brand + '", ' + focus + ', fondo solido ' + colors + ' suave y claro, marco de cita o comillas grandes en esquina superior, texto de oferta "' + offer + '" en tipografia bold grande, logo "' + brand + '" esquina inferior derecha pequeno y elegante, estrellas de calificacion doradas visibles, diseno minimalista premium formato vertical 4:5, calidad publicitaria nivel agencia'
+    },
+    {
+      label: 'Oferta urgente',
+      prompt: 'Anuncio de oferta urgente premium Meta Ads para "' + brand + '", ' + focus + ' en segundo plano con overlay de color, badge prominente con "' + offer + '" en tipografia extra-bold color contrastante, banner inferior con logo "' + brand + '" y CTA "Reserva ahora", paleta ' + colorsDesc + ', gradiente dinamico, composicion vertical 4:5, estetica publicitaria moderna nivel agencia premium'
+    },
+    {
+      label: 'Lifestyle premium',
+      prompt: 'Anuncio lifestyle aspiracional premium para "' + brand + '", ' + focus + ' en entorno aspiracional moderno y elegante, paleta ' + colorsDesc + ', composicion fotografica de revista, logo "' + brand + '" integrado sutilmente en la parte superior, tagline corto con la oferta "' + offer + '" en tipografia bold, CTA button redondeado en esquina inferior, formato vertical 4:5, calidad Glossier o Allbirds ads, luz natural suave'
+    }
+  ];
+
+  addAgent('generando **' + concepts.length + ' creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*');
+  hist.push({role:'assistant', content: 'Generando 5 creativos profesionales para ' + brand});
+
+  generatedAdImages = [];
+  loading = true;
+  document.getElementById('sbtn').disabled = true;
+
+  for (var i = 0; i < concepts.length; i++) {
+    var c = concepts[i];
+    var imgCmd = {
+      prompt: c.prompt + '. IMPORTANTE: todos los textos visibles en la imagen deben estar en espanol. Diseno nivel agencia premium.',
+      format: 'vertical',
+      variations: 1,
+      hasText: true,
+      _index: i + 1,
+      _total: concepts.length,
+      _social: false
+    };
+    await generateAdImages(imgCmd);
+    incrementImageUsage();
+    if (userPlan !== 'pro' && !isAdminUser()) break;
+  }
+
+  loading = false;
+  document.getElementById('sbtn').disabled = false;
   designQData = {};
 }
 
