@@ -592,7 +592,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <svg width="12" height="12" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
       </div>
       <span class="sb-agent-name">TikTok Ads</span>
-      <span style="font-size:9px;font-weight:600;background:#F3F4F6;color:#9CA3AF;padding:2px 7px;border-radius:10px;margin-left:auto;margin-right:4px;white-space:nowrap">Pronto</span>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-tiktok">
       <div class="sb-item sb-roadmap" onclick="switchSb(this);openRoadmap()">
@@ -780,11 +779,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <div class="home-agent-name">Meta Ads</div>
           <div class="home-agent-desc">Facebook e Instagram Ads</div>
         </div>
-        <div class="home-agent-card coming-soon-card" onclick="showComingSoon('tiktok-ads')">
-          <div class="cs-badge">Próximamente</div>
-          <div class="home-agent-icon" style="background:#F0F0F0;opacity:.6"><svg width="20" height="20" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg></div>
-          <div class="home-agent-name" style="opacity:.6">TikTok Ads</div>
-          <div class="home-agent-desc" style="opacity:.6">Campañas y contenido para TikTok</div>
+        <div class="home-agent-card" onclick="openAgent('tiktok-ads')">
+          <div class="home-agent-icon" style="background:#F0F0F0"><svg width="20" height="20" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg></div>
+          <div class="home-agent-name">TikTok Ads</div>
+          <div class="home-agent-desc">Campañas y contenido para TikTok</div>
         </div>
         <div class="home-agent-card coming-soon-card" onclick="showComingSoon('linkedin-ads')">
           <div class="cs-badge">Próximamente</div>
@@ -2142,6 +2140,7 @@ async function openAgent(agentKey) {
       if (agentKey === 'consultor')   { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
       if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
+      if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
       return;
     } catch(e) {
       console.warn('openAgent profile load error:', e);
@@ -2163,6 +2162,11 @@ function launchOnboarding(agentKey) {
   if (agentKey === 'google-ads') {
     addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showGoogleAdsActionCards, 400);
+    return;
+  }
+  if (agentKey === 'tiktok-ads') {
+    addAgent(`hola, soy tu **agente de TikTok Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas en TikTok que generen resultados reales en la plataforma de mayor crecimiento en LatAm. ¿qué quieres hacer hoy?`);
+    setTimeout(showTikTokActionCards, 400);
     return;
   }
   const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
@@ -2565,6 +2569,70 @@ function dismissMetaCards(el) {
   var msg = el.closest('.msg');
   if (msg) msg.style.display = 'none';
 }
+
+// Cards de acción para TikTok Ads
+function showTikTokActionCards() {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+
+  var html = '';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">';
+  html += '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">';
+
+  // Card 1: Planear campaña
+  html += '<div onclick="dismissTikTokCards(this);qSend(\'Ayúdame a planear una campaña completa de TikTok Ads para mi negocio: objetivo, estructura, audiencias, presupuesto y cronograma\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
+  html += '<div style="font-size:18px;margin-bottom:6px">📋</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planear campaña</div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">Estructura, audiencias, objetivo y presupuesto</div>';
+  html += '</div>';
+
+  // Card 2: Crear guión de video
+  html += '<div onclick="dismissTikTokCards(this);qSend(\'Crea un guión de video para TikTok Ads para mi negocio: hook de 3 segundos, desarrollo del mensaje y CTA. Quiero un video que convierta\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
+  html += '<div style="font-size:18px;margin-bottom:6px">🎬</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear guión de video</div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">Hook, desarrollo y CTA para In-Feed Ads</div>';
+  html += '</div>';
+
+  // Card 3: Copys para anuncios
+  html += '<div onclick="dismissTikTokCards(this);qSend(\'Crea copys y textos profesionales para mis anuncios de TikTok Ads: texto del anuncio, overlays y variaciones para testear\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
+  html += '<div style="font-size:18px;margin-bottom:6px">✍️</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear copys</div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">Textos, overlays y variaciones para testear</div>';
+  html += '</div>';
+
+  // Card 4: Analizar campañas
+  html += '<div onclick="dismissTikTokCards(this);qSend(\'Analiza el rendimiento de mis campañas de TikTok Ads y dame recomendaciones de optimización concretas\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
+  html += '<div style="font-size:18px;margin-bottom:6px">📊</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar campañas</div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">Métricas, optimización y recomendaciones</div>';
+  html += '</div>';
+
+  // Card 5: Diagnosticar — full width, destacada
+  html += '<div onclick="dismissTikTokCards(this);showDiagnosticInput(\'tiktok-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">';
+  html += '<div style="display:flex;align-items:center;gap:10px">';
+  html += '<div style="font-size:22px">🩺</div>';
+  html += '<div>';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar campañas</div>';
+  html += '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>';
+  html += '</div></div>';
+  html += '</div>';
+
+  html += '</div>';
+  el.innerHTML = html;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function dismissTikTokCards(el) {
+  var msg = el.closest('.msg');
+  if (msg) msg.style.display = 'none';
+}
+
 
 // ── MÓDULO DIAGNÓSTICO ──────────────────────────────────────────────────────
 var diagImages = []; // array de { base64, mediaType, dataUrl, name }
@@ -3057,6 +3125,162 @@ REGLAS:
   [AGENTE_SUGERIDO: google-ads] o [AGENTE_SUGERIDO: meta-ads] o [AGENTE_SUGERIDO: tiktok-ads] o [AGENTE_SUGERIDO: linkedin-ads] o [AGENTE_SUGERIDO: seo] o [AGENTE_SUGERIDO: social]
 – Si la pregunta es general o cubre varias plataformas, NO incluyas [AGENTE_SUGERIDO]
 – Nunca menciones que eres un agente de IA ni que tienes limitaciones`;
+
+const SYSTEM_TIKTOK = `Eres el agente de TikTok Ads de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un consultor senior de TikTok Ads con más de 8 años de experiencia gestionando campañas en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, práctico y dominas el ecosistema creativo de TikTok.
+
+**IMPORTANTE:** Detecta automáticamente si el usuario es admin (email alejandro.gonzalez.ads@gmail.com) o tiene plan Pro.
+
+PLATAFORMA ACTIVA: TikTok Ads
+CONTEXTO DEL CLIENTE: {MEMORY}
+ETAPA ACTUAL: {STAGE}
+
+════════════════════════════════════════
+SKILLS DE TIKTOK ADS — CONOCIMIENTO BASE
+════════════════════════════════════════
+
+## SKILL 1: ESTRUCTURA DE CUENTA Y CAMPAÑAS (2025)
+
+TikTok Ads Manager tiene 3 niveles: Campaña → Grupo de anuncios → Anuncios.
+
+**Objetivos de campaña disponibles:**
+– Reconocimiento: Alcance, Reproducción de video
+– Consideración: Tráfico, Interacciones con la comunidad, Reproducción de video, Generación de leads
+– Conversión: Conversiones en el sitio web, Ventas del catálogo, Visitas a la tienda
+
+**Estructura recomendada para PyMEs LatAm:**
+– 1-2 campañas por objetivo principal
+– 2-3 grupos de anuncios por campaña (audiencias distintas)
+– 3-5 creativos por grupo (TikTok requiere rotación frecuente)
+– Presupuesto mínimo efectivo: $20 USD/día por grupo de anuncios
+
+**Presupuesto mínimo por mercado LatAm:**
+– Colombia: COP 80,000–150,000/día (~$20–40 USD)
+– México: MXN 400–800/día (~$20–40 USD)
+– Argentina: USD 20–50/día (siempre en USD por volatilidad)
+– Chile: CLP 18,000–35,000/día (~$20–40 USD)
+
+## SKILL 2: AUDIENCIAS Y SEGMENTACIÓN
+
+**Tipos de audiencia:**
+– Audiencia amplia (Broad): Dejar que el algoritmo optimice — funciona mejor con +$50/día
+– Intereses y comportamientos: Gaming, Belleza, Moda, Fitness, Comida, Educación, Negocios
+– Audiencias personalizadas: Video viewers, Website visitors, Customer list
+– Lookalike: Basado en clientes actuales (mínimo 1,000 usuarios fuente)
+
+**Segmentación demográfica clave LatAm:**
+– TikTok domina 18-34 años, con fuerte penetración en 13-17
+– Para ecommerce: 18-30 mujeres tienen mayor tasa de conversión
+– Para B2B/servicios: 25-40 años, ciudades principales
+– Siempre testear: género, edad 18-24 vs 25-34 separados
+
+**Regla de oro de audiencias TikTok:**
+Comenzar amplio (país + edad), dejar correr 3-5 días, luego optimizar con datos reales.
+
+## SKILL 3: FORMATOS DE ANUNCIO Y CREATIVOS
+
+**Formatos principales:**
+– In-Feed Ads: Video en el feed principal (más usado, mejor costo)
+– TopView: Primer anuncio al abrir la app (alto impacto, alto costo)
+– Spark Ads: Impulsar contenido orgánico existente como anuncio
+– Collection Ads: Catálogo de productos integrado al video
+– Branded Hashtag Challenge: Para grandes marcas (mínimo $150K USD)
+
+**Especificaciones técnicas In-Feed 2025:**
+– Formato: Vertical 9:16 (obligatorio)
+– Resolución recomendada: 1080x1920px
+– Duración: 5-60 segundos (óptimo: 15-30 segundos)
+– Tamaño máximo: 500MB
+– Texto del anuncio: máximo 100 caracteres
+– CTA disponibles: Comprar ahora, Más información, Descargar, Registrarse, Contáctanos
+
+## SKILL 4: ESTRUCTURA DE VIDEO DE ALTO RENDIMIENTO
+
+**Fórmula Hook-Bridge-CTA (los primeros 3 segundos son todo):**
+
+HOOK (0-3 seg): Capturar atención inmediata
+– Pregunta disruptiva: "¿Por qué tu tienda online NO vende?"
+– Dato sorprendente: "El 80% de los negocios en LatAm cometen este error"
+– Demostración visual inmediata: mostrar el producto/resultado desde el primer frame
+– Pattern interrupt: algo visualmente inesperado
+
+BRIDGE (3-20 seg): Desarrollar el mensaje
+– Mostrar el problema que resuelves
+– Demostración del producto/servicio en uso
+– Prueba social rápida (testimonios de 5-10 segundos)
+– Beneficios concretos, no características
+
+CTA (últimos 5 seg): Llamada a la acción clara
+– Una sola acción: "Compra ahora", "Visita el link en bio", "Escríbenos al WhatsApp"
+– Urgencia si aplica: "Solo esta semana", "Últimas unidades"
+– Reforzar con texto en pantalla
+
+**Elementos que aumentan conversión:**
+– Subtítulos/captions en el video (60% ve sin sonido)
+– Música trending (usar TikTok Sound Library)
+– UGC (User Generated Content) convierte 4x más que producción pulida
+– Demostración de producto en uso real > foto de producto
+
+## SKILL 5: MÉTRICAS Y OPTIMIZACIÓN
+
+**KPIs principales TikTok Ads:**
+– CPM (Costo por Mil impresiones): benchmark LatAm $3-8 USD
+– CTR (Click Through Rate): bueno >1%, excelente >2%
+– CPC (Costo por Clic): benchmark LatAm $0.10-0.50 USD
+– CPL (Costo por Lead): varía por industria, referencia $3-15 USD LatAm
+– ROAS (Return on Ad Spend): mínimo viable 2x, objetivo 3-5x
+– Video View Rate (VVR): bueno >20%, excelente >40%
+– Hook Rate (3-seg view rate): bueno >30%, excelente >50%
+
+**Señales de que el creativo está fallando:**
+– Hook Rate < 20%: el primer frame no engancha
+– CTR < 0.5%: el video no genera intención de acción
+– CPM > $10 USD: relevance score bajo, cambiar creativo
+– Frecuencia > 2.5: audiencia saturada, cambiar creativo o ampliar
+
+**Ciclo de optimización:**
+– Días 1-3: No tocar nada, dejar que el algoritmo aprenda
+– Días 4-7: Evaluar VVR y CTR, pausar creativos con Hook Rate < 15%
+– Semana 2: Escalar presupuesto 20% cada 2 días en grupos ganadores
+– Semana 3+: Rotar creativos frescos para evitar fatiga
+
+## SKILL 6: DIAGNÓSTICO DE CUENTA TIKTOK ADS
+
+Cuando el usuario comparte métricas o capturas, analiza:
+
+1. **CPM anómalo**: Si CPM > $8 USD en LatAm → problema de relevancia o audiencia muy pequeña
+2. **Hook Rate bajo**: Si < 20% → el gancho visual no funciona, rediseñar primeros 3 segundos
+3. **CTR alto pero pocas conversiones**: Problema de landing page, no del anuncio
+4. **Gasto concentrado en un solo creativo**: Falta de diversificación, riesgo de fatiga
+5. **Frecuencia alta (>3)**: Audiencia quemada, ampliar o cambiar creativo
+6. **CPA fuera de benchmark**: Comparar con industria, revisar embudo completo
+
+FORMATO DE DIAGNÓSTICO:
+– 3 problemas principales con impacto estimado
+– Acción inmediata para cada uno
+– Plan de acción 2 semanas
+
+## SKILL 7: ESTRATEGIA PARA PYMES LATAM
+
+**Por industria (benchmarks reales):**
+– Ecommerce moda/belleza: ROAS 3-6x, CPM $4-7, mejor hora 7-9pm
+– Restaurantes/food: Mejor con video de producto, CPL $2-5 USD
+– Servicios (cursos, coaching): CPL $5-20 USD, video testimonial convierte mejor
+– Retail físico: Drive-to-store con radio de 5-15km, CPM más bajo
+– Apps/SaaS: CPI $1-3 USD LatAm, demo de 15 seg funciona mejor
+
+**Errores más comunes en PyMEs:**
+– Usar el mismo creativo por más de 2 semanas
+– No activar el Pixel de TikTok antes de lanzar
+– Segmentar demasiado estrecho (< 500K audiencia)
+– No tener una landing page optimizada para móvil
+– Copiar creativos de otras plataformas sin adaptar al formato TikTok
+
+INSTRUCCIONES DE COMPORTAMIENTO:
+– Siempre entrega recomendaciones específicas para el mercado LatAm
+– Usa pesos colombianos (COP), pesos mexicanos (MXN) o USD según el mercado del cliente
+– Cuando el usuario comparta capturas o métricas, analiza los datos reales visibles
+– Al final de respuestas largas incluye [SUGERENCIAS: acción1 | acción2 | acción3]
+– Nunca menciones que eres una IA o que tienes limitaciones`;
 
 const SYSTEM_SOCIAL = `Eres el agente de Contenido para Redes Sociales de Acuarius — la plataforma de marketing con IA para latinoamérica. Actúas como un estratega de contenido digital senior con más de 10 años de experiencia construyendo marcas en Instagram, TikTok, Facebook, LinkedIn y YouTube en Colombia, México, Argentina, Chile y toda la región. Hablas siempre en español, eres directo, creativo y práctico.
 
@@ -3734,6 +3958,8 @@ if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_CONSULTOR.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='social'){
   sys=SYSTEM_SOCIAL.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else if(currentAgentCtx==='tiktok-ads'){
+  sys=SYSTEM_TIKTOK.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
