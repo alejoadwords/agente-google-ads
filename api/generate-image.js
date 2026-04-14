@@ -23,11 +23,12 @@ export default async function handler(req, res) {
   const falKey = process.env.FAL_API_KEY;
   if (!falKey) return res.status(500).json({ error: 'FAL_API_KEY no configurado' });
 
+  // Ideogram V3 usa image_size con objeto {width,height} para dimensiones exactas de ads
   const formatSpecs = {
-    square:   { w: 1080, h: 1080, ratio: '1:1',  label: 'Feed cuadrado · 1080×1080',   fluxRatio: '1:1'  },
-    vertical: { w: 1080, h: 1350, ratio: '4:5',  label: 'Feed vertical · 1080×1350',   fluxRatio: '4:5'  },
-    story:    { w: 1080, h: 1920, ratio: '9:16', label: 'Stories / Reels · 1080×1920', fluxRatio: '9:16' },
-    carousel: { w: 1080, h: 1080, ratio: '1:1',  label: 'Carrusel · 1080×1080',        fluxRatio: '1:1'  },
+    square:   { w: 1080, h: 1080, imgSize: { width: 1080, height: 1080 }, label: 'Feed cuadrado · 1080×1080',   fluxRatio: '1:1'  },
+    vertical: { w: 1080, h: 1350, imgSize: { width: 1080, height: 1350 }, label: 'Feed vertical · 1080×1350',   fluxRatio: '4:5'  },
+    story:    { w: 1080, h: 1920, imgSize: { width: 1080, height: 1920 }, label: 'Stories / Reels · 1080×1920', fluxRatio: '9:16' },
+    carousel: { w: 1080, h: 1080, imgSize: { width: 1080, height: 1080 }, label: 'Carrusel · 1080×1080',        fluxRatio: '1:1'  },
   };
 
   const spec  = formatSpecs[format] || formatSpecs.square;
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
     const totalVariations = Math.min(Math.max(5, remixCount), 10);
     const results = [];
 
-    // Ideogram V3 Remix – hasta 4 imágenes por llamada; hacemos lotes paralelos
+    // Ideogram V3 Remix — strength reemplaza a image_weight en V3
     const batchSize = 4;
     const batches = Math.ceil(totalVariations / batchSize);
     const batchPromises = [];
@@ -55,9 +56,9 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             image_url:        referenceImage,
             prompt:           prompt,
-            image_weight:     imageWeight,
+            strength:         imageWeight,   // V3 usa 'strength', no 'image_weight'
             num_images:       numInBatch,
-            aspect_ratio:     spec.ratio,
+            image_size:       spec.imgSize,
             rendering_speed:  'BALANCED',
             expand_prompt:    false,
           }),
@@ -107,24 +108,28 @@ export default async function handler(req, res) {
       let imageUrl, imageBase64, mediaType = 'image/jpeg';
 
       if (useIdeogram) {
-        // IDEOGRAM V3 — mejor para texto legible en imagen
+        // IDEOGRAM V3 — image_size con objeto {width,height}, NO aspect_ratio
         const ideogramRes = await fetch('https://fal.run/fal-ai/ideogram/v3', {
           method:  'POST',
           headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt:       buildIdeogramPrompt(prompt, format),
-            aspect_ratio: spec.ratio,
-            style:        'REALISTIC',
-            magic_prompt: 'AUTO',
-            seed:         Math.floor(Math.random() * 999999),
+            prompt:          buildIdeogramPrompt(prompt, format),
+            image_size:      spec.imgSize,          // ← V3: objeto {width,height}
+            style:           'REALISTIC',
+            rendering_speed: 'QUALITY',             // máxima calidad para ads
+            expand_prompt:   false,                 // prompt ya es detallado
+            seed:            Math.floor(Math.random() * 999999),
           }),
         });
         const ideogramData = await ideogramRes.json();
-        if (!ideogramRes.ok) throw new Error(ideogramData.detail?.[0]?.msg || ideogramData.error || 'Error en Ideogram');
+        if (!ideogramRes.ok) {
+          const errMsg = ideogramData.detail?.[0]?.msg || ideogramData.error || 'Error en Ideogram';
+          throw new Error(errMsg);
+        }
         imageUrl = ideogramData.images?.[0]?.url;
 
       } else {
-        // FLUX 2 PRO — mejor para fotografía lifestyle
+        // FLUX 2 PRO — mejor para fotografía lifestyle sin texto
         const fluxRes = await fetch('https://fal.run/fal-ai/flux-pro/v1.1', {
           method:  'POST',
           headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
@@ -167,14 +172,14 @@ export default async function handler(req, res) {
 
 function buildIdeogramPrompt(userPrompt, format) {
   const notes = {
-    square:   'square 1:1 composition, balanced layout with space for text overlays',
-    vertical: 'vertical 4:5 composition, text zones at top and bottom thirds',
-    story:    'full vertical 9:16 immersive, text in upper and lower safe zones',
-    carousel: 'clean square composition, well-distributed text elements',
+    square:   'square 1:1 composition, balanced layout with text zones',
+    vertical: 'vertical 4:5 composition optimized for mobile feed, text at top and bottom thirds',
+    story:    'full vertical 9:16 immersive story format, text in upper and lower safe zones',
+    carousel: 'clean square composition, well-distributed visual elements',
   };
   return `Professional Meta Ads creative for Latin American market. ${userPrompt}.
-Format: ${notes[format] || notes.square}.
-Requirements: High contrast text, bold readable typography in Spanish, vibrant colors for mobile feed, strong call-to-action visually prominent, modern advertising design that converts, photorealistic premium quality. All text must be in Spanish and clearly legible.`;
+Format: ${notes[format] || notes.vertical}.
+Design requirements: High contrast bold readable typography in Spanish, vibrant brand colors, strong CTA visually prominent, modern advertising design optimized for mobile conversion, photorealistic premium quality, agency-level composition. All visible text must be in Spanish and clearly legible.`;
 }
 
 function buildFluxPrompt(userPrompt, format) {
@@ -185,5 +190,5 @@ function buildFluxPrompt(userPrompt, format) {
     carousel: 'clean square composition',
   };
   return `Professional advertising photograph for Meta Ads. ${userPrompt}.
-${notes[format] || notes.square}. Commercial photography quality, studio lighting, vibrant colors that pop in social media feed, authentic Latin American aesthetic, no text overlays, sharp focus, high-converting visual style optimized for mobile.`;
+${notes[format] || notes.vertical}. Commercial photography quality, studio lighting, vibrant colors that pop in social media feed, authentic Latin American aesthetic, no text overlays, sharp focus, high-converting visual style optimized for mobile.`;
 }
