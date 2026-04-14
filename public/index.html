@@ -2155,16 +2155,19 @@ function launchOnboarding(agentKey) {
   mem = {}; hist = []; onDone = false; obStep = 0;
   document.getElementById('mem-card').style.display = 'none';
   if (agentKey === 'meta-ads') {
+    onDone = true;
     addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showMetaActionCards, 400);
     return;
   }
   if (agentKey === 'google-ads') {
+    onDone = true;
     addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showGoogleAdsActionCards, 400);
     return;
   }
   if (agentKey === 'tiktok-ads') {
+    onDone = true;
     addAgent(`hola, soy tu **agente de TikTok Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas en TikTok que generen resultados reales en la plataforma de mayor crecimiento en LatAm. ¿qué quieres hacer hoy?`);
     setTimeout(showTikTokActionCards, 400);
     return;
