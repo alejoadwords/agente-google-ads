@@ -1008,18 +1008,19 @@ async function saveCurrentConversation() {
     if (res.ok) {
       const data = await res.json();
       if (data.id && !currentConvId) currentConvId = data.id;
-      loadConvHistory(currentAgentCtx);
+      loadRecentConversations();
     }
   } catch(e) { console.warn('saveCurrentConversation error:', e); }
 }
 
-async function loadConvHistory(agentKey) {
-  const listEl = document.getElementById('hist-list-' + agentKey);
-  const sectionEl = document.getElementById('hist-section-' + agentKey);
+
+async function loadRecentConversations() {
+  const sectionEl = document.getElementById('recientes-section');
+  const listEl = document.getElementById('recientes-list');
   if (!listEl || !sectionEl) return;
   try {
     const headers = await getAuthHeaders();
-    const res = await fetch('/api/profile?type=conversations&action=list&agent=' + agentKey + '&limit=15', { headers: headers });
+    const res = await fetch('/api/profile?type=conversations&action=list&limit=20', { headers: headers });
     if (!res.ok) return;
     const data = await res.json();
     const convs = data.conversations || [];
@@ -1027,14 +1028,24 @@ async function loadConvHistory(agentKey) {
     sectionEl.style.display = 'block';
     listEl.innerHTML = convs.map(function(c) {
       const isActive = c.id === currentConvId;
-      return '<div class="sb-hist-item' + (isActive ? ' active' : '') + '" onclick="loadConversation(\'' + c.id + '\',\'' + agentKey + '\')" title="' + esc(c.title || '') + '">' +
-        '<div class="sb-hist-dot"></div>' +
-        '<div class="sb-hist-title">' + esc(c.title || 'Conversaci\u00f3n') + '</div>' +
-        '<span class="sb-hist-del" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\',\'' + agentKey + '\')" title="eliminar">&#x2715;</span>' +
+      const label = agentLabelsHist[c.agent] || c.agent;
+      const title = esc(c.title || 'Conversación');
+      return '<div class="sb-hist-item' + (isActive ? ' active' : '') + '" onclick="loadConversation(\'' + c.id + '\',\'' + c.agent + '\')" title="' + title + '">' +
+        '<div style="display:flex;flex-direction:column;flex:1;min-width:0;gap:1px">' +
+        '<div class="sb-hist-title" style="font-size:11px">' + title + '</div>' +
+        '<div style="font-size:10px;color:var(--muted2)">' + label + '</div>' +
+        '</div>' +
+        '<span class="sb-hist-del" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\',\'' + c.agent + '\')" title="eliminar">×</span>' +
         '</div>';
     }).join('');
-  } catch(e) { console.warn('loadConvHistory error:', e); }
+  } catch(e) { console.warn('loadRecentConversations error:', e); }
 }
+
+// loadConvHistory: load global recents (agent-specific section hidden)
+async function loadConvHistory(agentKey) {
+  return loadRecentConversations();
+}
+
 
 async function loadConversation(convId, agentKey) {
   if (convId === currentConvId) return;
@@ -1061,7 +1072,7 @@ async function loadConversation(convId, agentKey) {
       }
     }
     onDone = true;
-    loadConvHistory(agentKey);
+    loadRecentConversations();
     scrollB();
   } catch(e) { console.warn('loadConversation error:', e); }
 }
@@ -1077,10 +1088,47 @@ async function deleteConversation(convId, agentKey) {
     const headers = await getAuthHeaders();
     await fetch('/api/profile?type=conversations&action=delete&id=' + convId, { method: 'DELETE', headers: headers });
     if (convId === currentConvId) currentConvId = null;
-    loadConvHistory(agentKey);
+    loadRecentConversations();
   } catch(e) { console.warn('deleteConversation error:', e); }
 }
 
+
+// ── RECIENTES GLOBALES ────────────────────────────────────────────────────────
+var agentShortLabel = {
+  'google-ads': 'Google Ads',
+  'meta-ads': 'Meta Ads',
+  'seo': 'SEO',
+  'social': 'Redes',
+  'consultor': 'Consultor',
+  'tiktok-ads': 'TikTok'
+};
+
+async function loadRecentConversations() {
+  var panel = document.getElementById('sb-recents-panel');
+  var listEl = document.getElementById('sb-recents-list');
+  if (!panel || !listEl) return;
+  try {
+    var headers = await getAuthHeaders();
+    var res = await fetch('/api/profile?type=conversations&action=list&limit=15', { headers: headers });
+    if (!res.ok) return;
+    var data = await res.json();
+    var convs = data.conversations || [];
+    if (convs.length === 0) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    listEl.innerHTML = convs.map(function(c) {
+      var isActive = c.id === currentConvId;
+      var title = esc(c.title || 'Conversación');
+      var badge = agentShortLabel[c.agent] || c.agent;
+      return '<div class="sb-recent-item' + (isActive ? ' active' : '') + '" onclick="loadConversation(\'' + c.id + '\',\'' + c.agent + '\')" title="' + title + '">' +
+        '<div class="sb-hist-dot"></div>' +
+        '<div class="sb-recent-title">' + title + '</div>' +
+        '<span class="sb-recent-badge">' + badge + '</span>' +
+        '<span class="sb-recent-del" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\',\'' + c.agent + '\');loadRecentConversations()" title="eliminar">×</span>' +
+        '</div>';
+    }).join('');
+  } catch(e) { console.warn('loadRecentConversations error:', e); }
+}
+// ── FIN RECIENTES ─────────────────────────────────────────────────────────────
 async function dbSaveProfile(agentKey, data) {
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -1189,7 +1237,7 @@ async function openAgent(agentKey) {
       if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
       if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
-      setTimeout(function(){ loadConvHistory(agentKey); }, 700);
+      setTimeout(function(){ loadRecentConversations(); }, 700);
       return;
     } catch(e) {
       console.warn('openAgent profile load error:', e);
@@ -1207,14 +1255,14 @@ function launchOnboarding(agentKey) {
     onDone = true;
     addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showMetaActionCards, 400);
-    setTimeout(function(){ loadConvHistory('meta-ads'); }, 700);
+    setTimeout(function(){ loadRecentConversations(); }, 700);
     return;
   }
   if (agentKey === 'google-ads') {
     onDone = true;
     addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showGoogleAdsActionCards, 400);
-    setTimeout(function(){ loadConvHistory('google-ads'); }, 700);
+    setTimeout(function(){ loadRecentConversations(); }, 700);
     return;
   }
   if (agentKey === 'tiktok-ads') {
@@ -3560,7 +3608,7 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(function(){loadConvHistory(agKey);},700);}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(function(){loadConvHistory(agKey);loadRecentConversations();},700);}}
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
