@@ -567,8 +567,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
-        <div class="sb-item" onclick="startNewConversation('google-ads')">
-          <div class="sb-icon-sm"></div>hoja de ruta
+        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='google-ads')openAgent('google-ads');setTimeout(openRoadmap,400)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          hoja de ruta
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Google Ads para mi negocio')">
           <div class="sb-icon-sm"></div>planeación de campaña
@@ -605,7 +606,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="startNewConversation('meta-ads')">
+        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='meta-ads')openAgent('meta-ads');setTimeout(openRoadmap,400)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
@@ -625,37 +626,40 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     </div>
 
     <!-- TikTok Ads -->
-    <div class="sb-agent-header" onclick="showComingSoon('tiktok-ads')" style="opacity:.7">
+    <div class="sb-agent-header" onclick="toggleAgent('tiktok')">
       <div class="sb-agent-icon" style="background:#F0F0F0;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
       </div>
       <span class="sb-agent-name">TikTok Ads</span>
+      <svg class="sb-chevron" id="chev-tiktok" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-tiktok">
-      <div class="sb-item sb-roadmap" onclick="switchSb(this);if(currentAgentCtx!=='tiktok-ads')openAgent('tiktok-ads')">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        hoja de ruta
+      <!-- Nueva conversación -->
+      <div class="sb-new-conv" onclick="startNewConversation('tiktok-ads')">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        nueva conversación
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de TikTok Ads para mi negocio')">
-        <div class="sb-icon-sm"></div>planeación de campaña
+      <!-- Historial -->
+      <div class="sb-hist-section" id="hist-section-tiktok-ads" style="display:none">
+        <div class="sb-section-label">historial</div>
+        <div id="hist-list-tiktok-ads"></div>
       </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto para TikTok Ads según mi negocio y objetivos')">
-        <div class="sb-icon-sm"></div>presupuesto
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Crear copys y textos profesionales para anuncios de TikTok Ads')">
-        <div class="sb-icon-sm"></div>copys
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame especificaciones y textos para anuncios gráficos en TikTok')">
-        <div class="sb-icon-sm"></div>anuncios gráficos
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame guión, hooks y estrategia para anuncios de video en TikTok Ads')">
-        <div class="sb-icon-sm"></div>anuncios de video
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mis campañas de TikTok Ads y dame recomendaciones de optimización')">
-        <div class="sb-icon-sm"></div>análisis y optimización
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Generar reporte completo de mis campañas de TikTok Ads')">
-        <div class="sb-icon-sm"></div>reportes
+      <!-- Acciones rápidas -->
+      <div class="sb-actions-section">
+        <div class="sb-section-label">acciones</div>
+        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='tiktok-ads')openAgent('tiktok-ads');setTimeout(openRoadmap,400)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          hoja de ruta
+        </div>
+        <div class="sb-item" onclick="qSend('Ayúdame a planear una campaña completa de TikTok Ads para mi negocio')">
+          <div class="sb-icon-sm"></div>planeación de campaña
+        </div>
+        <div class="sb-item" onclick="qSend('Dame guión, hooks y estrategia para anuncios de video en TikTok Ads')">
+          <div class="sb-icon-sm"></div>anuncios de video
+        </div>
+        <div class="sb-item" onclick="qSend('Analizar el rendimiento de mis campañas de TikTok Ads y dame recomendaciones')">
+          <div class="sb-icon-sm"></div>análisis y optimización
+        </div>
       </div>
     </div>
 
@@ -712,7 +716,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="startNewConversation('seo')">
+        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='seo')openAgent('seo');setTimeout(openRoadmap,400)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
@@ -748,7 +752,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="startNewConversation('social')">
+        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='social')openAgent('social');setTimeout(openRoadmap,400)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
