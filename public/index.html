@@ -2393,7 +2393,7 @@ async function openAgent(agentKey) {
       if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
       // Cargar historial en sidebar
-      setTimeout(() => loadConvHistory(agentKey), 300);
+      setTimeout(() => loadConvHistory(agentKey), 600);
       return;
     } catch(e) {
       console.warn('openAgent profile load error:', e);
@@ -2411,14 +2411,14 @@ function launchOnboarding(agentKey) {
     onDone = true;
     addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showMetaActionCards, 400);
-    setTimeout(() => loadConvHistory('meta-ads'), 300);
+    setTimeout(() => loadConvHistory('meta-ads'), 600);
     return;
   }
   if (agentKey === 'google-ads') {
     onDone = true;
     addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showGoogleAdsActionCards, 400);
-    setTimeout(() => loadConvHistory('google-ads'), 300);
+    setTimeout(() => loadConvHistory('google-ads'), 600);
     return;
   }
   if (agentKey === 'tiktok-ads') {
@@ -4765,7 +4765,7 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};openAgent(map[key]||key);}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(()=>loadConvHistory(agKey),700);}}
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
@@ -4832,7 +4832,7 @@ function rmThinking(id){document.getElementById(id)?.remove()}
 function appendRaw(html){const a=document.getElementById('chat-area');const d=document.createElement('div');d.innerHTML=html;a.appendChild(d.firstElementChild)}
 function scrollB(){const a=document.getElementById('chat-area');setTimeout(()=>{a.scrollTop=a.scrollHeight},50)}
 function fmt(t){return esc(t).replace(/### (.*?)(\n|$)/g,'<h4>$1</h4>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/`(.*?)`/g,'<code>$1</code>').replace(/^– (.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>').replace(/\n\n/g,'</p><p style="margin-top:7px">').replace(/\n/g,'<br>').replace(/^/,'<p>').replace(/$/,'</p>')}
-function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}}
 function autoR(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
 // Abrir home por defecto — sin expandir ningún agente en sidebar
