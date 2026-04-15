@@ -1698,6 +1698,8 @@ const MAX_HIST_MESSAGES = 20; // máximo de mensajes enviados a Claude (10 turno
 let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
 let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
+// Declaración temprana para evitar ReferenceError en getProfileKey
+let adsActiveAccount = null;
 
 // Sistema de límites de imágenes
 let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
@@ -6104,19 +6106,15 @@ function updateMetaUI(connected, name) {
   const connDiv   = document.getElementById('metaConnected');
   const nameSpan  = document.getElementById('metaUserName');
   if (connected) {
-    badge.textContent = '● conectado';
-    badge.style.background = 'rgba(5,150,105,.1)';
-    badge.style.color = 'var(--success)';
-    discDiv.style.display = 'none';
-    connDiv.style.display = 'block';
+    if (badge) { badge.textContent = '● conectado'; badge.style.background = 'rgba(5,150,105,.1)'; badge.style.color = 'var(--success)'; }
+    if (discDiv) discDiv.style.display = 'none';
+    if (connDiv) connDiv.style.display = 'block';
     if (name && nameSpan) nameSpan.textContent = name;
     if (!metaAccounts.length && !metaActiveAccount) loadMetaAccounts();
   } else {
-    badge.textContent = 'sin conectar';
-    badge.style.background = 'var(--sidebar2)';
-    badge.style.color = 'var(--muted)';
-    discDiv.style.display = 'block';
-    connDiv.style.display = 'none';
+    if (badge) { badge.textContent = 'sin conectar'; badge.style.background = 'var(--sidebar2)'; badge.style.color = 'var(--muted)'; }
+    if (discDiv) discDiv.style.display = 'block';
+    if (connDiv) connDiv.style.display = 'none';
   }
 }
 
@@ -6183,7 +6181,7 @@ function switchSettingsTab(tab) {
 
 // Estado global de cuentas
 let adsAccounts = [];       // todas las cuentas accesibles
-let adsActiveAccount = null; // { id, name, currency, timezone, isManager }
+// adsActiveAccount declarado al inicio del script para evitar ReferenceError
 
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
