@@ -1185,7 +1185,13 @@ function tourStart() {
   if (tourActive) return;
   tourActive = true;
   tourStep = 0;
-  document.getElementById('tour-overlay').classList.add('active');
+  var overlay = document.getElementById('tour-overlay');
+  var tooltip = document.getElementById('tour-tooltip');
+  var spotlight = document.getElementById('tour-spotlight');
+  overlay.style.display = 'block';
+  if (tooltip) tooltip.style.display = '';
+  if (spotlight) { spotlight.style.opacity = ''; spotlight.style.boxShadow = ''; }
+  overlay.classList.add('active');
   document.getElementById('tour-backdrop').classList.add('active');
   
   // Build dots
@@ -1301,15 +1307,27 @@ function tourEnd() {
   var overlay = document.getElementById('tour-overlay');
   var backdrop = document.getElementById('tour-backdrop');
   var spotlight = document.getElementById('tour-spotlight');
+  var tooltip = document.getElementById('tour-tooltip');
   overlay.classList.remove('active');
   backdrop.classList.remove('active');
   spotlight.style.opacity = '0';
+  spotlight.style.boxShadow = 'none';
+  if (tooltip) tooltip.style.display = 'none';
+  if (overlay) overlay.style.display = 'none';
   // Mark as seen
-  try { localStorage.setItem('acuarius_tour_done', '1'); } catch(e) {}
+  try {
+    localStorage.setItem('acuarius_tour_done', '1');
+    sessionStorage.setItem('acuarius_tour_done', '1');
+  } catch(e) {}
 }
 
 function tourShouldShow() {
-  try { return !localStorage.getItem('acuarius_tour_done'); } catch(e) { return false; }
+  try {
+    // Check both localStorage and sessionStorage
+    if (localStorage.getItem('acuarius_tour_done')) return false;
+    if (sessionStorage.getItem('acuarius_tour_done')) return false;
+    return true;
+  } catch(e) { return false; }
 }
 
 // ── FIN TOUR ──────────────────────────────────────────────────────────────────
