@@ -1132,7 +1132,12 @@ async function loadRecentConversations() {
 
 // ── PRODUCT TOUR ──────────────────────────────────────────────────────────────
 
-var TOUR_STEPS = [
+function tourIsMobile() {
+  return window.innerWidth <= 768;
+}
+
+// Pasos desktop (sidebar siempre visible, panels laterales)
+var TOUR_STEPS_DESKTOP = [
   {
     title: 'Bienvenido a Acuarius 👋',
     desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
@@ -1193,6 +1198,56 @@ var TOUR_STEPS = [
   }
 ];
 
+// Pasos móvil: flujo simplificado sin abrir sidebar ni panels de pantalla completa
+var TOUR_STEPS_MOBILE = [
+  {
+    title: 'Bienvenido a Acuarius 👋',
+    desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
+    target: null,
+    position: 'center'
+  },
+  {
+    title: 'Tu centro de comando',
+    desc: 'Desde aquí eliges el agente con el que quieres trabajar. Cada uno domina un canal de marketing diferente.',
+    target: 'view-home',
+    position: 'center'
+  },
+  {
+    title: 'Consultor de Marketing',
+    desc: '¿No sabes por dónde empezar? El Consultor analiza tu negocio y te dice qué canales priorizar y qué hacer primero.',
+    target: 'home-consultor-hero',
+    position: 'bottom'
+  },
+  {
+    title: 'Agentes especializados',
+    desc: 'Google Ads, Meta Ads, SEO, TikTok y más. Toca cualquier agente para empezar a trabajar con él de inmediato.',
+    target: 'home-agents-grid',
+    position: 'bottom'
+  },
+  {
+    title: 'Menú lateral',
+    desc: 'Toca el ícono ☰ para abrir el menú. Desde allí accedes a todos los agentes, tu historial y la configuración.',
+    target: 'mob-menu-btn',
+    position: 'below-header'
+  },
+  {
+    title: 'Conecta tus plataformas',
+    desc: 'Dentro del menú, ve a Configuración para conectar Google Ads y Meta Ads. Así los agentes leen tus datos en tiempo real.',
+    target: null,
+    position: 'center'
+  },
+  {
+    title: '¡Listo para empezar! 🚀',
+    desc: 'Tu perfil de negocio se guarda automáticamente y cada agente lo usa para darte respuestas personalizadas. ¡Elige un agente y empieza!',
+    target: null,
+    position: 'center'
+  }
+];
+
+function tourGetSteps() {
+  return tourIsMobile() ? TOUR_STEPS_MOBILE : TOUR_STEPS_DESKTOP;
+}
+
 var tourStep = 0;
 var tourActive = false;
 
@@ -1208,41 +1263,49 @@ function tourStart() {
   if (spotlight) { spotlight.style.opacity = ''; spotlight.style.boxShadow = ''; }
   overlay.classList.add('active');
   document.getElementById('tour-backdrop').classList.add('active');
-  
+
+  // En móvil, asegurarse de que el sidebar esté cerrado antes de empezar
+  if (tourIsMobile()) {
+    var sb = document.getElementById('sidebar');
+    if (sb) sb.classList.remove('mob-open');
+  }
+
   // Build dots
+  var steps = tourGetSteps();
   var dots = document.getElementById('tour-dots');
-  dots.innerHTML = TOUR_STEPS.map(function(_, i) {
+  dots.innerHTML = steps.map(function(_, i) {
     return '<div class="tour-dot" id="tour-dot-' + i + '"></div>';
   }).join('');
-  
+
   tourShow(0);
 }
 
 function tourShow(idx) {
+  var steps = tourGetSteps();
   // Call onExit of previous step
-  var prevStep = TOUR_STEPS[tourStep];
+  var prevStep = steps[tourStep];
   if (idx !== tourStep && prevStep && prevStep.onExit) {
     try { prevStep.onExit(); } catch(e) {}
   }
   tourStep = idx;
-  var step = TOUR_STEPS[idx];
-  var total = TOUR_STEPS.length;
+  var step = steps[idx];
+  var total = steps.length;
   // Call onEnter of new step
   if (step.onEnter) {
     setTimeout(function() { try { step.onEnter(); } catch(e) {} }, 100);
   }
-  
+
   // Update text
   document.getElementById('tour-step-label').textContent = 'paso ' + (idx + 1) + ' de ' + total;
   document.getElementById('tour-title').textContent = step.title;
   document.getElementById('tour-desc').textContent = step.desc;
-  
+
   // Update dots
-  TOUR_STEPS.forEach(function(_, i) {
+  steps.forEach(function(_, i) {
     var d = document.getElementById('tour-dot-' + i);
     if (d) d.className = 'tour-dot' + (i === idx ? ' active' : '');
   });
-  
+
   // Update button
   var btn = document.getElementById('tour-btn-next');
   if (idx === total - 1) {
@@ -1250,7 +1313,7 @@ function tourShow(idx) {
   } else {
     btn.innerHTML = 'siguiente <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
-  
+
   // Position spotlight and tooltip
   tourPosition(step);
 }
@@ -1259,9 +1322,25 @@ function tourPosition(step) {
   var spotlight = document.getElementById('tour-spotlight');
   var tooltip = document.getElementById('tour-tooltip');
   var pad = 8;
-  
+  var isMob = tourIsMobile();
+
+  // Ancho del tooltip: adaptativo en móvil
+  var ttw = isMob ? Math.min(272, window.innerWidth - 32) : 300;
+  var tth = 210; // altura aproximada
+  var margin = isMob ? 10 : 16;
+  var winH = window.innerHeight;
+  var winW = window.innerWidth;
+
+  // Helper: centrar horizontalmente de forma segura
+  function centerH() {
+    tooltip.style.left = Math.max(16, Math.round((winW - ttw) / 2)) + 'px';
+    tooltip.style.right = 'auto';
+  }
+
+  // Aplicar ancho dinámico en móvil
+  tooltip.style.width = ttw + 'px';
+
   if (step.position === 'center') {
-    // No spotlight — just center tooltip
     spotlight.style.opacity = '0';
     spotlight.style.width = '0';
     spotlight.style.height = '0';
@@ -1272,87 +1351,172 @@ function tourPosition(step) {
     tooltip.style.bottom = 'auto';
     return;
   }
-  
+
+  // Posición exclusiva de móvil: spotlight sobre el botón hamburguesa, tooltip debajo
+  if (step.position === 'below-header') {
+    var el = document.getElementById(step.target);
+    if (el) {
+      var r = el.getBoundingClientRect();
+      spotlight.style.opacity = '1';
+      spotlight.style.left = (r.left - pad) + 'px';
+      spotlight.style.top = (r.top - pad) + 'px';
+      spotlight.style.width = (r.width + pad * 2) + 'px';
+      spotlight.style.height = (r.height + pad * 2) + 'px';
+      tooltip.style.top = (r.bottom + margin + pad) + 'px';
+      tooltip.style.left = Math.max(16, r.left) + 'px';
+    } else {
+      spotlight.style.opacity = '0';
+      spotlight.style.width = '0';
+      spotlight.style.height = '0';
+      tooltip.style.top = (60 + margin) + 'px';
+      tooltip.style.left = '16px';
+    }
+    tooltip.style.transform = 'none';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+    return;
+  }
+
   var el = document.getElementById(step.target);
   if (!el) {
     spotlight.style.opacity = '0';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
     tooltip.style.top = '50%';
     tooltip.style.left = '50%';
     tooltip.style.transform = 'translate(-50%, -50%)';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
     return;
   }
-  
+
   var rect = el.getBoundingClientRect();
-  
-  // Spotlight
+
+  // Si el elemento está fuera de pantalla (ej: sidebar cerrado en móvil), centrar tooltip
+  var isOffscreen = rect.width === 0 || rect.height === 0 ||
+                    rect.right <= 0 || rect.left >= winW ||
+                    rect.bottom <= 0 || rect.top >= winH;
+
+  if (isOffscreen) {
+    spotlight.style.opacity = '0';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
+    tooltip.style.top = '50%';
+    tooltip.style.left = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+    return;
+  }
+
+  // Spotlight sobre el elemento
   spotlight.style.opacity = '1';
   spotlight.style.left = (rect.left - pad) + 'px';
   spotlight.style.top = (rect.top - pad) + 'px';
   spotlight.style.width = (rect.width + pad * 2) + 'px';
   spotlight.style.height = (rect.height + pad * 2) + 'px';
   tooltip.style.transform = 'none';
-  
-  var ttw = 300;
-  var tth = 200; // approx
-  var margin = 16;
-  
-  var winH = window.innerHeight;
-  var winW = window.innerWidth;
-  if (step.position === 'left') {
-    tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
-    tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
-    tooltip.style.right = 'auto';
+
+  if (step.position === 'bottom') {
+    var topB = rect.bottom + margin + pad;
+    // Si no cabe abajo, intentar arriba
+    if (topB + tth > winH - 16 && rect.top - tth - margin - pad > 16) {
+      topB = rect.top - tth - margin - pad;
+    }
+    tooltip.style.top = Math.min(topB, winH - tth - 16) + 'px';
+    if (isMob) { centerH(); } else {
+      tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
+      tooltip.style.right = 'auto';
+    }
     tooltip.style.bottom = 'auto';
-  } else if (step.position === 'left-panel') {
-    tooltip.style.left = Math.max(16, rect.left - ttw - margin) + 'px';
-    tooltip.style.top = Math.max(80, Math.min(rect.top + 80, winH - tth - 16)) + 'px';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
-  } else if (step.position === 'settings') {
-    // Position tooltip just to the left of the settings panel, near top
-    setTimeout(function() {
-      var panel = document.getElementById('settings-panel');
-      if (!panel) return;
-      var pr = panel.getBoundingClientRect();
-      var tt = document.getElementById('tour-tooltip');
-      tt.style.left = Math.max(16, pr.left - ttw - 20) + 'px';
-      tt.style.top = Math.max(80, pr.top + 60) + 'px';
-      tt.style.right = 'auto';
-      tt.style.bottom = 'auto';
-    }, 400);
-    // Initial position while panel animates in
-    tooltip.style.left = (winW - 520 - ttw - 20) + 'px';
-    tooltip.style.top = '80px';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
-  } else if (step.position === 'right') {
-    tooltip.style.left = (rect.right + margin + pad) + 'px';
-    tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
-  } else if (step.position === 'right-safe') {
-    // Sidebar elements — always visible, never below viewport
-    tooltip.style.left = Math.min(rect.right + margin + pad, winW - ttw - 16) + 'px';
-    tooltip.style.top = Math.max(80, Math.min(rect.top, winH - tth - 24)) + 'px';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
-    // Scroll element into view
-    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  } else if (step.position === 'bottom') {
-    tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
-    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
+
   } else if (step.position === 'top') {
-    tooltip.style.top = Math.max(16, rect.top - tth - margin - pad) + 'px';
-    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
+    var topT = rect.top - tth - margin - pad;
+    // Si no cabe arriba, poner abajo
+    if (topT < 16) topT = rect.bottom + margin + pad;
+    tooltip.style.top = Math.max(16, topT) + 'px';
+    if (isMob) { centerH(); } else {
+      tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
+      tooltip.style.right = 'auto';
+    }
+    tooltip.style.bottom = 'auto';
+
+  } else if (step.position === 'left') {
+    if (isMob) {
+      // En móvil no hay espacio lateral, poner debajo centrado
+      tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
+      centerH();
+    } else {
+      tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
+      tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
+    }
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+
+  } else if (step.position === 'left-panel') {
+    if (isMob) {
+      tooltip.style.top = Math.min(rect.bottom + margin, winH - tth - 16) + 'px';
+      centerH();
+    } else {
+      tooltip.style.left = Math.max(16, rect.left - ttw - margin) + 'px';
+      tooltip.style.top = Math.max(80, Math.min(rect.top + 80, winH - tth - 16)) + 'px';
+    }
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+
+  } else if (step.position === 'settings') {
+    if (isMob) {
+      // El panel ocupa toda la pantalla en móvil: tooltip centrado en la parte superior visible
+      tooltip.style.top = '80px';
+      centerH();
+      tooltip.style.right = 'auto';
+      tooltip.style.bottom = 'auto';
+    } else {
+      setTimeout(function() {
+        var panel = document.getElementById('settings-panel');
+        if (!panel) return;
+        var pr = panel.getBoundingClientRect();
+        var tt = document.getElementById('tour-tooltip');
+        tt.style.left = Math.max(16, pr.left - ttw - 20) + 'px';
+        tt.style.top = Math.max(80, pr.top + 60) + 'px';
+        tt.style.right = 'auto';
+        tt.style.bottom = 'auto';
+      }, 400);
+      tooltip.style.left = (winW - 520 - ttw - 20) + 'px';
+      tooltip.style.top = '80px';
+      tooltip.style.right = 'auto';
+      tooltip.style.bottom = 'auto';
+    }
+
+  } else if (step.position === 'right') {
+    if (isMob) {
+      // Sin espacio lateral en móvil: debajo centrado
+      tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
+      centerH();
+    } else {
+      tooltip.style.left = (rect.right + margin + pad) + 'px';
+      tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
+    }
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+
+  } else if (step.position === 'right-safe') {
+    if (isMob) {
+      tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
+      centerH();
+    } else {
+      tooltip.style.left = Math.min(rect.right + margin + pad, winW - ttw - 16) + 'px';
+      tooltip.style.top = Math.max(80, Math.min(rect.top, winH - tth - 24)) + 'px';
+      if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   }
 }
 
 function tourNext() {
-  if (tourStep >= TOUR_STEPS.length - 1) {
+  var steps = tourGetSteps();
+  if (tourStep >= steps.length - 1) {
     tourEnd();
     return;
   }
@@ -1365,8 +1529,9 @@ function tourSkip() {
 
 function tourEnd() {
   tourActive = false;
+  var steps = tourGetSteps();
   // Call onExit of current step if any
-  var curStep = TOUR_STEPS[tourStep];
+  var curStep = steps[tourStep];
   if (curStep && curStep.onExit) { try { curStep.onExit(); } catch(e) {} }
   var overlay = document.getElementById('tour-overlay');
   var backdrop = document.getElementById('tour-backdrop');
@@ -1378,7 +1543,7 @@ function tourEnd() {
   spotlight.style.boxShadow = 'none';
   spotlight.style.width = '0';
   spotlight.style.height = '0';
-  if (tooltip) tooltip.style.display = 'none';
+  if (tooltip) { tooltip.style.display = 'none'; tooltip.style.width = ''; }
   if (overlay) { overlay.style.display = 'none'; overlay.style.pointerEvents = 'none'; }
   if (backdrop) { backdrop.style.background = 'rgba(0,0,0,0)'; backdrop.style.pointerEvents = 'none'; }
   // Mark as seen
@@ -1390,7 +1555,6 @@ function tourEnd() {
 
 function tourShouldShow() {
   try {
-    // Check both localStorage and sessionStorage
     if (localStorage.getItem('acuarius_tour_done')) return false;
     if (sessionStorage.getItem('acuarius_tour_done')) return false;
     return true;

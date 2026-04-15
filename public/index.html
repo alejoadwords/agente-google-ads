@@ -499,6 +499,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .tour-btn-next{padding:8px 18px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:6px}
 .tour-btn-next:hover{background:#1a24b8}
 .tour-arrow{position:fixed;z-index:9003;width:0;height:0;transition:all .4s cubic-bezier(.4,0,.2,1)}
+@media(max-width:768px){
+  .tour-tooltip{max-width:calc(100vw - 32px);width:272px !important;padding:16px 18px}
+  .tour-tooltip-title{font-size:14px}
+  .tour-tooltip-desc{font-size:12.5px;margin-bottom:14px}
+  .tour-btn-next{padding:7px 14px;font-size:12px}
+  .tour-btn-skip{font-size:11px}
+}
 /* ── FIN TOUR ────────────────────────────────────────────────────────────────── */
 </style>
 </head>
