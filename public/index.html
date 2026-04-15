@@ -2128,11 +2128,13 @@ async function dbLoadProfile(agentKey) {
 async function openAgent(agentKey) {
   setAgentContext(agentKey);
   showView('chat');
-  // Esperar a que Clerk esté listo antes de cargar perfil
-  if (!clerkInstance) {
+  // Esperar a que Clerk esté listo Y tenga usuario antes de cargar perfil
+  if (!clerkInstance?.user?.id) {
     await new Promise(res => {
-      const iv = setInterval(() => { if (clerkInstance) { clearInterval(iv); res(); } }, 100);
-      setTimeout(() => { clearInterval(iv); res(); }, 3000); // max 3s
+      const iv = setInterval(() => {
+        if (clerkInstance?.user?.id) { clearInterval(iv); res(); }
+      }, 100);
+      setTimeout(() => { clearInterval(iv); res(); }, 5000); // max 5s
     });
   }
 
