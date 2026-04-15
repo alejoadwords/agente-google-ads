@@ -3600,7 +3600,41 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;const isOpen=!items.classList.contains('sb-collapsed');if(currentAgentCtx===agKey&&isOpen){items.classList.add('sb-collapsed');if(chev)chev.classList.remove('open');return;}document.querySelectorAll('.sb-agent-items').forEach(el=>el.classList.add('sb-collapsed'));document.querySelectorAll('.sb-chevron').forEach(el=>el.classList.remove('open'));items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');openAgent(agKey);setTimeout(function(){loadRecentConversations();},700);}
+function toggleAgent(key){
+  const items=document.getElementById('ag-'+key);
+  const chev=document.getElementById('chev-'+key);
+  if(!items)return;
+  const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};
+  const agKey=map[key]||key;
+  const isOpen=!items.classList.contains('sb-collapsed');
+  console.log('[toggleAgent]',key,'isOpen:',isOpen,'currentAgent:',currentAgentCtx);
+  
+  // If already open and same agent — just collapse (hide submenu)
+  if(currentAgentCtx===agKey&&isOpen){
+    items.classList.add('sb-collapsed');
+    if(chev)chev.classList.remove('open');
+    return;
+  }
+  
+  // Collapse all
+  document.querySelectorAll('.sb-agent-items').forEach(el=>el.classList.add('sb-collapsed'));
+  document.querySelectorAll('.sb-chevron').forEach(el=>el.classList.remove('open'));
+  
+  // Open this one
+  items.classList.remove('sb-collapsed');
+  if(chev)chev.classList.add('open');
+  console.log('[toggleAgent] after open, classes:',items.className);
+  
+  // If different agent, load it
+  if(currentAgentCtx!==agKey){
+    openAgent(agKey);
+  }
+  
+  setTimeout(function(){
+    console.log('[toggleAgent] after timeout, classes:',items.className);
+    loadRecentConversations();
+  },700);
+}
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
