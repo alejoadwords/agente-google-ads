@@ -2060,12 +2060,8 @@ function showAgentGuide(agentKey) { openAgent(agentKey); }
 // Genera clave de localStorage con userId para aislar perfiles por usuario
 function getProfileKey(agentKey) {
   const uid = clerkInstance?.user?.id || 'anon';
-  if (agentKey === 'meta-ads') {
-    return adsActiveAccount ? `acuarius_profile_${uid}_${adsActiveAccount.id}_meta` : `acuarius_profile_${uid}_meta`;
-  }
-  if (adsActiveAccount && agentKey === 'google-ads') {
-    return `acuarius_profile_${uid}_${adsActiveAccount.id}_${agentKey}`;
-  }
+  // Clave simple por usuario+agente — no incluir adsActiveAccount.id
+  // para evitar que cambie según el estado de conexión
   return `acuarius_profile_${uid}_${agentKey}`;
 }
 
