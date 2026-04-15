@@ -1201,17 +1201,7 @@ async function openAgent(agentKey) {
     });
   }
 
-  // Sincronizar sidebar: colapsar todos, expandir el activo
-  const keyMap = {'google-ads':'ga','meta-ads':'meta','tiktok-ads':'tiktok','linkedin-ads':'linkedin','seo':'seo','social':'social','consultor':'consultor'};
-  const sbKey = keyMap[agentKey];
-  document.querySelectorAll('.sb-agent-items').forEach(el => el.classList.add('sb-collapsed'));
-  document.querySelectorAll('.sb-chevron').forEach(el => el.classList.remove('open'));
-  if (sbKey) {
-    const items = document.getElementById('ag-' + sbKey);
-    const chev  = document.getElementById('chev-' + sbKey);
-    if (items) items.classList.remove('sb-collapsed');
-    if (chev)  chev.classList.add('open');
-  }
+  // Sidebar sync is handled by toggleAgent — openAgent only manages chat
 
   const area = document.getElementById('chat-area');
   area.innerHTML = '';
