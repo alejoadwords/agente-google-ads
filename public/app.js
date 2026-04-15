@@ -1136,15 +1136,14 @@ var TOUR_STEPS = [
   {
     title: 'Bienvenido a Acuarius 👋',
     desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
-    target: 'view-home',
+    target: null,
     position: 'center'
   },
   {
     title: 'Tu centro de comando',
     desc: 'Desde esta pantalla puedes elegir el agente con el que quieres trabajar. También puedes hacerlo desde el menú lateral — es exactamente lo mismo.',
     target: 'view-home',
-    position: 'center',
-    highlight: true
+    position: 'center'
   },
   {
     title: 'Consultor de Marketing',
@@ -1165,14 +1164,30 @@ var TOUR_STEPS = [
     position: 'right'
   },
   {
+    title: 'Hoja de ruta',
+    desc: 'Cada agente tiene una hoja de ruta con checklists por etapa: qué configurar, qué optimizar y qué métricas revisar según en qué momento estás.',
+    target: 'rm-panel',
+    position: 'left',
+    onEnter: function() { openAgent('google-ads'); setTimeout(openRoadmap, 600); },
+    onExit: function() { document.getElementById('rm-panel').classList.remove('open'); document.getElementById('rm-panel-overlay').classList.remove('open'); }
+  },
+  {
+    title: 'Conecta tus plataformas',
+    desc: 'Desde Configuración puedes conectar tu cuenta de Google Ads y Meta Ads. Cuando están conectadas, los agentes pueden leer tus datos en tiempo real.',
+    target: 'settings-panel',
+    position: 'left',
+    onEnter: function() { openSettings(); },
+    onExit: function() { document.getElementById('settings-panel').style.display='none'; document.getElementById('settings-overlay').style.display='none'; }
+  },
+  {
     title: 'Historial de conversaciones',
     desc: 'Todas tus consultas quedan guardadas aquí. Puedes retomar cualquier conversación anterior exactamente donde la dejaste.',
     target: 'sb-recents-panel',
     position: 'right'
   },
   {
-    title: 'Perfil del cliente',
-    desc: 'Cada agente recuerda el perfil de tu negocio — industria, presupuesto y objetivos — para darte respuestas personalizadas siempre.',
+    title: '¡Listo para empezar! 🚀',
+    desc: 'El perfil de tu negocio se guarda automáticamente. Cada agente lo usa para darte respuestas personalizadas siempre. ¡Elige un agente y empieza!',
     target: 'mem-card',
     position: 'right'
   }
@@ -1204,9 +1219,18 @@ function tourStart() {
 }
 
 function tourShow(idx) {
+  // Call onExit of previous step
+  var prevStep = TOUR_STEPS[tourStep];
+  if (idx !== tourStep && prevStep && prevStep.onExit) {
+    try { prevStep.onExit(); } catch(e) {}
+  }
   tourStep = idx;
   var step = TOUR_STEPS[idx];
   var total = TOUR_STEPS.length;
+  // Call onEnter of new step
+  if (step.onEnter) {
+    setTimeout(function() { try { step.onEnter(); } catch(e) {} }, 100);
+  }
   
   // Update text
   document.getElementById('tour-step-label').textContent = 'paso ' + (idx + 1) + ' de ' + total;
@@ -1272,7 +1296,12 @@ function tourPosition(step) {
   var tth = 200; // approx
   var margin = 16;
   
-  if (step.position === 'right') {
+  if (step.position === 'left') {
+    tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
+    tooltip.style.top = Math.max(16, rect.top + rect.height / 2 - tth / 2) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  } else if (step.position === 'right') {
     tooltip.style.left = (rect.right + margin + pad) + 'px';
     tooltip.style.top = Math.max(16, rect.top + rect.height / 2 - tth / 2) + 'px';
     tooltip.style.right = 'auto';
@@ -1304,6 +1333,9 @@ function tourSkip() {
 
 function tourEnd() {
   tourActive = false;
+  // Call onExit of current step if any
+  var curStep = TOUR_STEPS[tourStep];
+  if (curStep && curStep.onExit) { try { curStep.onExit(); } catch(e) {} }
   var overlay = document.getElementById('tour-overlay');
   var backdrop = document.getElementById('tour-backdrop');
   var spotlight = document.getElementById('tour-spotlight');
