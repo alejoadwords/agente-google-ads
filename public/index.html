@@ -479,6 +479,27 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 
   .rm-panel-body { padding: 12px 14px; }
 }
+
+/* ── PRODUCT TOUR ────────────────────────────────────────────────────────────── */
+.tour-overlay{position:fixed;inset:0;z-index:9000;pointer-events:none;transition:opacity .3s}
+.tour-overlay.active{pointer-events:all}
+.tour-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0);transition:background .4s;z-index:9001}
+.tour-backdrop.active{background:rgba(0,0,0,.55)}
+.tour-spotlight{position:fixed;z-index:9002;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.55);transition:all .4s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.tour-tooltip{position:fixed;z-index:9003;background:#fff;border-radius:16px;padding:20px 22px;width:300px;box-shadow:0 8px 40px rgba(0,0,0,.18);transition:all .4s cubic-bezier(.4,0,.2,1)}
+.tour-tooltip-step{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px}
+.tour-tooltip-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3}
+.tour-tooltip-desc{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:18px}
+.tour-tooltip-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tour-dots{display:flex;gap:5px;align-items:center}
+.tour-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);transition:all .2s}
+.tour-dot.active{width:18px;border-radius:4px;background:var(--blue)}
+.tour-btn-skip{font-size:12px;color:var(--muted2);cursor:pointer;background:none;border:none;font-family:var(--font);padding:0;transition:color .15s}
+.tour-btn-skip:hover{color:var(--text)}
+.tour-btn-next{padding:8px 18px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:6px}
+.tour-btn-next:hover{background:#1a24b8}
+.tour-arrow{position:fixed;z-index:9003;width:0;height:0;transition:all .4s cubic-bezier(.4,0,.2,1)}
+/* ── FIN TOUR ────────────────────────────────────────────────────────────────── */
 </style>
 </head>
 <body>
@@ -793,6 +814,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
     </div>
 
+    <div onclick="tourStart()" style="display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:var(--r);cursor:pointer;font-size:11px;color:var(--muted2);transition:all .15s;margin-top:2px" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--muted2)'">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      ver tour de bienvenida
+    </div>
     <div id="mem-card" class="mem-card" style="display:none;margin-top:12px">
       <div class="mem-title">perfil del cliente</div>
       <div class="mem-row"><span class="mem-label">negocio</span><span class="mem-val" id="m-neg">—</span></div>
@@ -811,7 +836,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div class="home-greeting" id="home-greeting">hola 👋</div>
 
       <!-- Hero Consultor -->
-      <div onclick="openAgent('consultor')" style="width:100%;max-width:740px;margin-bottom:16px;background:linear-gradient(135deg,#EDE9FE 0%,#F5F3FF 60%,#EEF2FF 100%);border:1.5px solid #C4B5FD;border-radius:16px;padding:22px 24px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:20px" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,.13)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div id="home-consultor-hero" onclick="openAgent('consultor')" style="width:100%;max-width:740px;margin-bottom:16px;background:linear-gradient(135deg,#EDE9FE 0%,#F5F3FF 60%,#EEF2FF 100%);border:1.5px solid #C4B5FD;border-radius:16px;padding:22px 24px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:20px" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,.13)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
         <div style="width:48px;height:48px;border-radius:14px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#fff"/></svg>
         </div>
@@ -828,7 +853,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 
       <!-- Grid de agentes -->
       <div style="width:100%;max-width:740px;font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">Agentes especializados</div>
-      <div class="home-agents">
+      <div class="home-agents" id="home-agents-grid">
         <div class="home-agent-card" onclick="openAgent('google-ads')">
           <div class="home-agent-icon" style="background:#E8F0FE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg></div>
           <div class="home-agent-name">Google Ads</div>
@@ -1361,5 +1386,26 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 </div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+
+<!-- ── PRODUCT TOUR ────────────────────────────────────────────────────────── -->
+<div class="tour-overlay" id="tour-overlay">
+  <div class="tour-backdrop" id="tour-backdrop" onclick="tourSkip()"></div>
+  <div class="tour-spotlight" id="tour-spotlight"></div>
+  <div class="tour-tooltip" id="tour-tooltip">
+    <div class="tour-tooltip-step" id="tour-step-label">paso 1 de 7</div>
+    <div class="tour-tooltip-title" id="tour-title">Bienvenido a Acuarius</div>
+    <div class="tour-tooltip-desc" id="tour-desc">Tu plataforma de agentes de marketing con IA.</div>
+    <div class="tour-tooltip-footer">
+      <button class="tour-btn-skip" onclick="tourSkip()">omitir tour</button>
+      <div class="tour-dots" id="tour-dots"></div>
+      <button class="tour-btn-next" id="tour-btn-next" onclick="tourNext()">
+        siguiente
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+<!-- ── FIN TOUR ────────────────────────────────────────────────────────────── -->
+
 </body>
 </html>

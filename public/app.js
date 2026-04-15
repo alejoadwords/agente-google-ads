@@ -1129,6 +1129,191 @@ async function loadRecentConversations() {
   } catch(e) { console.warn('loadRecentConversations error:', e); }
 }
 // ── FIN RECIENTES ─────────────────────────────────────────────────────────────
+
+// ── PRODUCT TOUR ──────────────────────────────────────────────────────────────
+
+var TOUR_STEPS = [
+  {
+    title: 'Bienvenido a Acuarius 👋',
+    desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
+    target: 'view-home',
+    position: 'center'
+  },
+  {
+    title: 'Tu centro de comando',
+    desc: 'Desde esta pantalla puedes elegir el agente con el que quieres trabajar. También puedes hacerlo desde el menú lateral — es exactamente lo mismo.',
+    target: 'view-home',
+    position: 'center',
+    highlight: true
+  },
+  {
+    title: 'Consultor de Marketing',
+    desc: '¿No sabes por dónde empezar? El Consultor analiza tu negocio y te dice qué canales priorizar, cómo distribuir tu presupuesto y qué hacer primero.',
+    target: 'home-consultor-hero',
+    position: 'bottom'
+  },
+  {
+    title: 'Agentes especializados',
+    desc: 'Cada agente domina un canal: Google Ads, Meta Ads, SEO, TikTok y más. Haz clic en cualquiera para empezar a trabajar con él.',
+    target: 'home-agents-grid',
+    position: 'top'
+  },
+  {
+    title: 'Menú lateral',
+    desc: 'Aquí tienes acceso rápido a todos los agentes. Haz clic en cualquiera para ver sus acciones disponibles y empezar una conversación.',
+    target: 'sidebar',
+    position: 'right'
+  },
+  {
+    title: 'Historial de conversaciones',
+    desc: 'Todas tus consultas quedan guardadas aquí. Puedes retomar cualquier conversación anterior exactamente donde la dejaste.',
+    target: 'sb-recents-panel',
+    position: 'right'
+  },
+  {
+    title: 'Perfil del cliente',
+    desc: 'Cada agente recuerda el perfil de tu negocio — industria, presupuesto y objetivos — para darte respuestas personalizadas siempre.',
+    target: 'mem-card',
+    position: 'right'
+  }
+];
+
+var tourStep = 0;
+var tourActive = false;
+
+function tourStart() {
+  if (tourActive) return;
+  tourActive = true;
+  tourStep = 0;
+  document.getElementById('tour-overlay').classList.add('active');
+  document.getElementById('tour-backdrop').classList.add('active');
+  
+  // Build dots
+  var dots = document.getElementById('tour-dots');
+  dots.innerHTML = TOUR_STEPS.map(function(_, i) {
+    return '<div class="tour-dot" id="tour-dot-' + i + '"></div>';
+  }).join('');
+  
+  tourShow(0);
+}
+
+function tourShow(idx) {
+  tourStep = idx;
+  var step = TOUR_STEPS[idx];
+  var total = TOUR_STEPS.length;
+  
+  // Update text
+  document.getElementById('tour-step-label').textContent = 'paso ' + (idx + 1) + ' de ' + total;
+  document.getElementById('tour-title').textContent = step.title;
+  document.getElementById('tour-desc').textContent = step.desc;
+  
+  // Update dots
+  TOUR_STEPS.forEach(function(_, i) {
+    var d = document.getElementById('tour-dot-' + i);
+    if (d) d.className = 'tour-dot' + (i === idx ? ' active' : '');
+  });
+  
+  // Update button
+  var btn = document.getElementById('tour-btn-next');
+  if (idx === total - 1) {
+    btn.innerHTML = 'empezar <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  } else {
+    btn.innerHTML = 'siguiente <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+  
+  // Position spotlight and tooltip
+  tourPosition(step);
+}
+
+function tourPosition(step) {
+  var spotlight = document.getElementById('tour-spotlight');
+  var tooltip = document.getElementById('tour-tooltip');
+  var pad = 8;
+  
+  if (step.position === 'center') {
+    // No spotlight — just center tooltip
+    spotlight.style.opacity = '0';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
+    tooltip.style.top = '50%';
+    tooltip.style.left = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+    return;
+  }
+  
+  var el = document.getElementById(step.target);
+  if (!el) {
+    spotlight.style.opacity = '0';
+    tooltip.style.top = '50%';
+    tooltip.style.left = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+    return;
+  }
+  
+  var rect = el.getBoundingClientRect();
+  
+  // Spotlight
+  spotlight.style.opacity = '1';
+  spotlight.style.left = (rect.left - pad) + 'px';
+  spotlight.style.top = (rect.top - pad) + 'px';
+  spotlight.style.width = (rect.width + pad * 2) + 'px';
+  spotlight.style.height = (rect.height + pad * 2) + 'px';
+  tooltip.style.transform = 'none';
+  
+  var ttw = 300;
+  var tth = 200; // approx
+  var margin = 16;
+  
+  if (step.position === 'right') {
+    tooltip.style.left = (rect.right + margin + pad) + 'px';
+    tooltip.style.top = Math.max(16, rect.top + rect.height / 2 - tth / 2) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  } else if (step.position === 'bottom') {
+    tooltip.style.top = (rect.bottom + margin + pad) + 'px';
+    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, window.innerWidth - ttw - 16)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  } else if (step.position === 'top') {
+    tooltip.style.top = Math.max(16, rect.top - tth - margin - pad) + 'px';
+    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, window.innerWidth - ttw - 16)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  }
+}
+
+function tourNext() {
+  if (tourStep >= TOUR_STEPS.length - 1) {
+    tourEnd();
+    return;
+  }
+  tourShow(tourStep + 1);
+}
+
+function tourSkip() {
+  tourEnd();
+}
+
+function tourEnd() {
+  tourActive = false;
+  var overlay = document.getElementById('tour-overlay');
+  var backdrop = document.getElementById('tour-backdrop');
+  var spotlight = document.getElementById('tour-spotlight');
+  overlay.classList.remove('active');
+  backdrop.classList.remove('active');
+  spotlight.style.opacity = '0';
+  // Mark as seen
+  try { localStorage.setItem('acuarius_tour_done', '1'); } catch(e) {}
+}
+
+function tourShouldShow() {
+  try { return !localStorage.getItem('acuarius_tour_done'); } catch(e) { return false; }
+}
+
+// ── FIN TOUR ──────────────────────────────────────────────────────────────────
+
 async function dbSaveProfile(agentKey, data) {
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -2851,6 +3036,8 @@ window.onload = async () => {
   showView('home');
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
+  // Mostrar tour si es la primera vez
+  setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
 };
 
 // ONBOARDING
