@@ -9,11 +9,12 @@ export default function handler(req, res) {
     client_id:     clientId,
     redirect_uri:  'https://app.acuarius.app/api/meta-callback',
     scope: [
-      'ads_management',       // Crear/editar campañas, ad sets, anuncios
-      'ads_read',             // Leer métricas y configuración
-      'business_management',  // Gestionar Business Manager
-      'pages_read_engagement',// Leer páginas de Facebook
-      'instagram_basic',      // Acceso básico a Instagram
+      'ads_management',        // Crear/editar campañas, ad sets, anuncios
+      'ads_read',              // Leer métricas y configuración
+      'business_management',   // Gestionar Business Manager
+      'pages_read_engagement', // Leer páginas de Facebook
+      'pages_show_list',       // Listar páginas del usuario
+      'public_profile',        // Perfil básico del usuario
     ].join(','),
     response_type: 'code',
     state: 'meta_ads_connect',
