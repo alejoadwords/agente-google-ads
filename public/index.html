@@ -59,7 +59,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .sb-chevron{color:var(--muted2);transition:transform .2s;flex-shrink:0}
 .sb-chevron.open{transform:rotate(180deg)}
 .sb-agent-items{display:flex;flex-direction:column;gap:1px;overflow:hidden;transition:all .25s ease;padding-left:8px}
-.sb-collapsed{display:none}
+.sb-collapsed{display:none}.sb-agent-items.sb-active{display:flex!important}
 .sb-item{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent}
 .sb-item:hover{background:var(--sidebar2);color:var(--text)}
 .sb-item.active{background:var(--blue-lt);color:var(--blue);border-color:var(--blue-md);font-weight:500}
@@ -2359,12 +2359,12 @@ async function openAgent(agentKey) {
   // Sincronizar sidebar: colapsar todos, expandir el activo
   const keyMap = {'google-ads':'ga','meta-ads':'meta','tiktok-ads':'tiktok','linkedin-ads':'linkedin','seo':'seo','social':'social','consultor':'consultor'};
   const sbKey = keyMap[agentKey];
-  document.querySelectorAll('.sb-agent-items').forEach(el => el.classList.add('sb-collapsed'));
+  document.querySelectorAll('.sb-agent-items').forEach(el => { el.classList.add('sb-collapsed'); el.classList.remove('sb-active'); });
   document.querySelectorAll('.sb-chevron').forEach(el => el.classList.remove('open'));
   if (sbKey) {
     const items = document.getElementById('ag-' + sbKey);
     const chev  = document.getElementById('chev-' + sbKey);
-    if (items) items.classList.remove('sb-collapsed');
+    if (items) { items.classList.remove('sb-collapsed'); items.classList.add('sb-active'); }
     if (chev)  chev.classList.add('open');
   }
 
@@ -4765,7 +4765,7 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(()=>loadConvHistory(agKey),700);}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(()=>loadConvHistory(agKey),700);}}
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
