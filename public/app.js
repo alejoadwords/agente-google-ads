@@ -1175,7 +1175,7 @@ var TOUR_STEPS = [
     title: 'Conecta tus plataformas',
     desc: 'Desde Configuración puedes conectar tu cuenta de Google Ads y Meta Ads. Cuando están conectadas, los agentes pueden leer tus datos en tiempo real.',
     target: 'settings-panel',
-    position: 'left-panel',
+    position: 'settings',
     onEnter: function() { openSettings(); },
     onExit: function() { document.getElementById('settings-panel').style.display='none'; document.getElementById('settings-overlay').style.display='none'; }
   },
@@ -1304,9 +1304,25 @@ function tourPosition(step) {
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   } else if (step.position === 'left-panel') {
-    // For panels that slide in from the right — tooltip goes to left of panel
     tooltip.style.left = Math.max(16, rect.left - ttw - margin) + 'px';
     tooltip.style.top = Math.max(80, Math.min(rect.top + 80, winH - tth - 16)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  } else if (step.position === 'settings') {
+    // Position tooltip just to the left of the settings panel, near top
+    setTimeout(function() {
+      var panel = document.getElementById('settings-panel');
+      if (!panel) return;
+      var pr = panel.getBoundingClientRect();
+      var tt = document.getElementById('tour-tooltip');
+      tt.style.left = Math.max(16, pr.left - ttw - 20) + 'px';
+      tt.style.top = Math.max(80, pr.top + 60) + 'px';
+      tt.style.right = 'auto';
+      tt.style.bottom = 'auto';
+    }, 400);
+    // Initial position while panel animates in
+    tooltip.style.left = (winW - 520 - ttw - 20) + 'px';
+    tooltip.style.top = '80px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   } else if (step.position === 'right') {
@@ -1360,8 +1376,11 @@ function tourEnd() {
   backdrop.classList.remove('active');
   spotlight.style.opacity = '0';
   spotlight.style.boxShadow = 'none';
+  spotlight.style.width = '0';
+  spotlight.style.height = '0';
   if (tooltip) tooltip.style.display = 'none';
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) { overlay.style.display = 'none'; overlay.style.pointerEvents = 'none'; }
+  if (backdrop) { backdrop.style.background = 'rgba(0,0,0,0)'; backdrop.style.pointerEvents = 'none'; }
   // Mark as seen
   try {
     localStorage.setItem('acuarius_tour_done', '1');
