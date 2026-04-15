@@ -3610,8 +3610,8 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const isActive=items.classList.contains('sb-active');const collapsed=items.classList.contains('sb-collapsed');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;if(isActive){return;}// already open, do nothing
-document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');openAgent(agKey);setTimeout(function(){loadConvHistory(agKey);loadRecentConversations();},700);}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;const isCurrentAgent=currentAgentCtx===agKey;const isCollapsed=items.classList.contains('sb-collapsed')&&!items.classList.contains('sb-active');if(isCurrentAgent&&!isCollapsed){// toggle submenu visibility for active agent
+items.classList.toggle('sb-collapsed');if(chev)chev.classList.toggle('open');return;}document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');openAgent(agKey);setTimeout(function(){loadConvHistory(agKey);loadRecentConversations();},700);}
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
