@@ -66,6 +66,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .sb-icon-sm{width:4px;height:4px;border-radius:50%;background:var(--border2);flex-shrink:0;margin-left:4px}
 .sb-item.active .sb-icon-sm{background:var(--blue)}
 
+.sb-hist-section{padding:4px 0 2px;border-top:1px solid var(--border);margin-top:4px}
+.sb-hist-label{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);padding:6px 10px 4px;display:flex;align-items:center;justify-content:space-between}
+.sb-hist-item{display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:11px;color:var(--muted);transition:all .15s;border:1px solid transparent;line-height:1.3}
+.sb-hist-item:hover{background:var(--sidebar2);color:var(--text)}
+.sb-hist-item.active{background:var(--blue-lt);color:var(--blue);border-color:var(--blue-md)}
+.sb-hist-dot{width:4px;height:4px;border-radius:50%;background:var(--border2);flex-shrink:0;margin-left:4px}
+.sb-hist-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-hist-del{opacity:0;padding:2px 4px;border-radius:4px;color:var(--muted2);font-size:10px;flex-shrink:0;transition:opacity .15s}
+.sb-hist-item:hover .sb-hist-del{opacity:1}
+.sb-hist-del:hover{color:#EF4444;background:#FEF2F2}
+.sb-hist-new{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:11px;color:var(--blue);transition:all .15s;font-weight:500}
+.sb-hist-new:hover{background:var(--blue-lt)}
 .mem-card{margin-top:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:12px 14px}
 .mem-title{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:10px}
 .mem-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border2)}
@@ -513,6 +525,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div class="sb-item" onclick="switchSb(this);qSend('¿Qué herramientas de marketing digital necesito para mi negocio?')">
         <div class="sb-icon-sm"></div>stack de herramientas
       </div>
+      <!-- Historial Consultor -->
+      <div class="sb-hist-section" id="hist-section-consultor" style="display:none">
+        <div class="sb-hist-label">historial
+          <span class="sb-hist-new" onclick="startNewConversation('consultor')">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            nueva
+          </span>
+        </div>
+        <div id="hist-list-consultor"></div>
+      </div>
     </div>
 
     <!-- Google Ads -->
@@ -547,6 +569,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Generar reporte completo de mi cuenta de Google Ads')">
         <div class="sb-icon-sm"></div>reportes
+      </div>
+      <!-- Historial Google Ads -->
+      <div class="sb-hist-section" id="hist-section-google-ads" style="display:none">
+        <div class="sb-hist-label">historial
+          <span class="sb-hist-new" onclick="startNewConversation('google-ads')">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            nueva
+          </span>
+        </div>
+        <div id="hist-list-google-ads"></div>
       </div>
     </div>
 
@@ -583,6 +615,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Generar reporte completo de mis campañas de Meta Ads')">
         <div class="sb-icon-sm"></div>reportes
+      </div>
+      <!-- Historial Meta Ads -->
+      <div class="sb-hist-section" id="hist-section-meta-ads" style="display:none">
+        <div class="sb-hist-label">historial
+          <span class="sb-hist-new" onclick="startNewConversation('meta-ads')">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            nueva
+          </span>
+        </div>
+        <div id="hist-list-meta-ads"></div>
       </div>
     </div>
 
@@ -691,6 +733,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div class="sb-item" onclick="switchSb(this);qSend('Cómo puedo posicionar mi negocio en las respuestas de ChatGPT, Claude, Gemini y Perplexity? Dame una estrategia AEO completa')">
         <div class="sb-icon-sm"></div>posicionamiento en IAs (AEO)
       </div>
+      <!-- Historial SEO -->
+      <div class="sb-hist-section" id="hist-section-seo" style="display:none">
+        <div class="sb-hist-label">historial
+          <span class="sb-hist-new" onclick="startNewConversation('seo')">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            nueva
+          </span>
+        </div>
+        <div id="hist-list-seo"></div>
+      </div>
     </div>
 
     <!-- Contenido para redes -->
@@ -719,6 +771,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
       <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Ayúdame a entender qué métricas debo revisar en mis redes sociales y qué acciones tomar para mejorar mis resultados.')">
         <div class="sb-icon-sm"></div>análisis de rendimiento
+      </div>
+      <!-- Historial Social -->
+      <div class="sb-hist-section" id="hist-section-social" style="display:none">
+        <div class="sb-hist-label">historial
+          <span class="sb-hist-new" onclick="startNewConversation('social')">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            nueva
+          </span>
+        </div>
+        <div id="hist-list-social"></div>
       </div>
     </div>
 
@@ -2066,6 +2128,162 @@ function getProfileKey(agentKey) {
 }
 
 // ── Helpers de persistencia en Supabase ──────────────────────────────────────
+// ── HISTORIAL DE CONVERSACIONES ──────────────────────────────────────────────
+
+let currentConvId = null;   // ID de la conversación activa en Supabase
+let convSaveTimer = null;   // debounce para auto-save
+
+// Obtener headers de autenticación
+async function getAuthHeaders() {
+  let sessionToken = null;
+  if (clerkInstance?.session) {
+    try { sessionToken = await clerkInstance.session.getToken(); } catch {}
+  }
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+  return headers;
+}
+
+// Guardar conversación actual (debounced, llamado después de cada respuesta)
+async function saveCurrentConversation() {
+  if (!hist || hist.length < 2) return;  // mínimo 1 turno completo
+  if (!currentAgentCtx) return;
+  try {
+    const headers = await getAuthHeaders();
+    const body = {
+      agent: currentAgentCtx,
+      messages: hist,
+      conversationId: currentConvId || undefined
+    };
+    const res = await fetch('/api/conversations?action=save', {
+      method: 'POST', headers, body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.id && !currentConvId) {
+        currentConvId = data.id;
+      }
+      // Refrescar lista en sidebar
+      loadConvHistory(currentAgentCtx);
+    }
+  } catch (e) {
+    console.warn('saveCurrentConversation error:', e);
+  }
+}
+
+// Cargar historial de un agente y renderizarlo en sidebar
+async function loadConvHistory(agentKey) {
+  const listEl = document.getElementById('hist-list-' + agentKey);
+  const sectionEl = document.getElementById('hist-section-' + agentKey);
+  if (!listEl || !sectionEl) return;
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/conversations?action=list&agent=${agentKey}&limit=15`, { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    const convs = data.conversations || [];
+    if (convs.length === 0) { sectionEl.style.display = 'none'; return; }
+    sectionEl.style.display = '';
+    listEl.innerHTML = convs.map(c => {
+      const isActive = c.id === currentConvId;
+      const date = formatHistDate(c.updated_at);
+      return `<div class="sb-hist-item${isActive ? ' active' : ''}" onclick="loadConversation('${c.id}','${agentKey}')" title="${esc(c.title || '')}">
+        <div class="sb-hist-dot"></div>
+        <div class="sb-hist-title">${esc(c.title || 'Conversación')}</div>
+        <span class="sb-hist-del" onclick="event.stopPropagation();deleteConversation('${c.id}','${agentKey}')" title="eliminar">✕</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.warn('loadConvHistory error:', e);
+  }
+}
+
+// Formatear fecha relativa para el sidebar
+function formatHistDate(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return 'ahora';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd';
+  return d.toLocaleDateString('es', { day:'numeric', month:'short' });
+}
+
+// Cargar una conversación pasada (modo lectura + continuar)
+async function loadConversation(convId, agentKey) {
+  if (convId === currentConvId) return;
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/conversations?action=get&id=${convId}`, { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    const conv = data.conversation;
+    if (!conv) return;
+
+    // Guardar conversación actual antes de cambiar
+    if (currentConvId && hist.length >= 2) await saveCurrentConversation();
+
+    // Cambiar al agente correcto si es necesario
+    if (currentAgentCtx !== agentKey) {
+      await openAgent(agentKey);
+    }
+
+    // Restaurar historial
+    currentConvId = convId;
+    hist = conv.messages || [];
+
+    // Renderizar mensajes en el chat
+    const area = document.getElementById('chat-area');
+    area.innerHTML = '';
+    for (const msg of hist) {
+      if (msg.role === 'user') {
+        const txt = typeof msg.content === 'string' ? msg.content : (msg.content.find?.(c => c.type === 'text')?.text || '[imagen]');
+        addUser(txt);
+      } else if (msg.role === 'assistant') {
+        addAgent(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
+      }
+    }
+    onDone = true;
+
+    // Marcar activo en sidebar
+    loadConvHistory(agentKey);
+    scrollB();
+  } catch (e) {
+    console.warn('loadConversation error:', e);
+  }
+}
+
+// Nueva conversación (reset)
+async function startNewConversation(agentKey) {
+  // Guardar la actual antes de resetear
+  if (currentConvId && hist.length >= 2) await saveCurrentConversation();
+  currentConvId = null;
+  if (currentAgentCtx !== agentKey) {
+    await openAgent(agentKey);
+  } else {
+    // Re-abrir el mismo agente (reset limpio)
+    await openAgent(agentKey);
+  }
+}
+
+// Eliminar conversación
+async function deleteConversation(convId, agentKey) {
+  try {
+    const headers = await getAuthHeaders();
+    await fetch(`/api/conversations?action=delete&id=${convId}`, { method: 'DELETE', headers });
+    if (convId === currentConvId) {
+      currentConvId = null;
+    }
+    loadConvHistory(agentKey);
+  } catch (e) {
+    console.warn('deleteConversation error:', e);
+  }
+}
+
+// ── FIN HISTORIAL ─────────────────────────────────────────────────────────────
+
 async function dbSaveProfile(agentKey, data) {
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -2153,6 +2371,7 @@ async function openAgent(agentKey) {
   const area = document.getElementById('chat-area');
   area.innerHTML = '';
   hist = [];
+  currentConvId = null;
 
   const profile = await dbLoadProfile(agentKey);
 
@@ -2173,6 +2392,8 @@ async function openAgent(agentKey) {
       if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
       if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
+      // Cargar historial en sidebar
+      setTimeout(() => loadConvHistory(agentKey), 300);
       return;
     } catch(e) {
       console.warn('openAgent profile load error:', e);
@@ -2190,12 +2411,14 @@ function launchOnboarding(agentKey) {
     onDone = true;
     addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showMetaActionCards, 400);
+    setTimeout(() => loadConvHistory('meta-ads'), 300);
     return;
   }
   if (agentKey === 'google-ads') {
     onDone = true;
     addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showGoogleAdsActionCards, 400);
+    setTimeout(() => loadConvHistory('google-ads'), 300);
     return;
   }
   if (agentKey === 'tiktok-ads') {
@@ -4160,6 +4383,8 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       addAgent(replyFinalProcessed);
       if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
     }
+    // Auto-save conversación después de cada respuesta
+    setTimeout(() => saveCurrentConversation(), 500);
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
 function renderSugerencias(opciones) {
   const area = document.getElementById('chat-area');
