@@ -2093,9 +2093,34 @@ async function dbLoadProfile(agentKey) {
   } catch(e) {
     console.warn('dbLoadProfile error:', e);
   }
-  // Fallback a localStorage
-  const local = localStorage.getItem(getProfileKey(agentKey));
-  return local ? JSON.parse(local) : null;
+  // Fallback a localStorage — buscar con clave actual y todas las variantes posibles
+  const uid = clerkInstance?.user?.id || 'anon';
+  const keysToTry = [
+    `acuarius_profile_${uid}_${agentKey}`,           // clave actual
+    `acuarius_profile_anon_${agentKey}`,              // clave sin uid
+  ];
+  // Buscar también claves que incluyan account ID (clave legacy)
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.includes(`_${agentKey}`) && k.startsWith('acuarius_profile_')) {
+      if (!keysToTry.includes(k)) keysToTry.push(k);
+    }
+  }
+  for (const key of keysToTry) {
+    const val = localStorage.getItem(key);
+    if (val) {
+      try {
+        const parsed = JSON.parse(val);
+        if (parsed && Object.keys(parsed).length > 0) {
+          // Migrar a clave actual si es diferente
+          const currentKey = `acuarius_profile_${uid}_${agentKey}`;
+          if (key !== currentKey) localStorage.setItem(currentKey, val);
+          return parsed;
+        }
+      } catch {}
+    }
+  }
+  return null;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
