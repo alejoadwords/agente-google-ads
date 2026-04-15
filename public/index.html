@@ -42,7 +42,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .layout{display:flex;flex:1;overflow:hidden}
 
 /* ── SIDEBAR ── */
-.sidebar{width:228px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:12px 10px;gap:2px;overflow-y:auto;flex-shrink:0}
+.sidebar{width:228px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:12px 10px;gap:2px;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .sidebar::-webkit-scrollbar{width:0}
 .sb-sec{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:12px 10px 5px}
 .sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:13px;color:var(--muted);transition:all .15s;border:1px solid transparent}
@@ -70,7 +70,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .sb-new-conv:hover{background:#dde0fb}
 .sb-section-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:8px 10px 3px;display:flex;align-items:center;gap:6px}
 .sb-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
-.sb-hist-section{padding:0;margin:0}
+.sb-hist-section{padding:0;margin:0}.sb-hist-list{max-height:130px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .sb-hist-item{display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent;line-height:1.3}
 .sb-hist-item:hover{background:var(--sidebar2);color:var(--text)}
 .sb-hist-item.active{background:var(--blue-lt);color:var(--blue);border-color:var(--blue-md)}
@@ -520,7 +520,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Historial -->
       <div class="sb-hist-section" id="hist-section-consultor" style="display:none">
         <div class="sb-section-label">historial</div>
-        <div id="hist-list-consultor"></div>
+        <div id="hist-list-consultor" class="sb-hist-list"></div>
       </div>
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
@@ -560,7 +560,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Historial -->
       <div class="sb-hist-section" id="hist-section-google-ads" style="display:none">
         <div class="sb-section-label">historial</div>
-        <div id="hist-list-google-ads"></div>
+        <div id="hist-list-google-ads" class="sb-hist-list"></div>
       </div>
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
@@ -603,7 +603,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Historial -->
       <div class="sb-hist-section" id="hist-section-meta-ads" style="display:none">
         <div class="sb-section-label">historial</div>
-        <div id="hist-list-meta-ads"></div>
+        <div id="hist-list-meta-ads" class="sb-hist-list"></div>
       </div>
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
@@ -715,7 +715,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Historial -->
       <div class="sb-hist-section" id="hist-section-seo" style="display:none">
         <div class="sb-section-label">historial</div>
-        <div id="hist-list-seo"></div>
+        <div id="hist-list-seo" class="sb-hist-list"></div>
       </div>
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
@@ -755,7 +755,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Historial -->
       <div class="sb-hist-section" id="hist-section-social" style="display:none">
         <div class="sb-section-label">historial</div>
-        <div id="hist-list-social"></div>
+        <div id="hist-list-social" class="sb-hist-list"></div>
       </div>
       <!-- Acciones rápidas -->
       <div class="sb-actions-section">
