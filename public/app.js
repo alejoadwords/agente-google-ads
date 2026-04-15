@@ -979,161 +979,107 @@ function getProfileKey(agentKey) {
 }
 
 // ── Helpers de persistencia en Supabase ──────────────────────────────────────
+
 // ── HISTORIAL DE CONVERSACIONES ──────────────────────────────────────────────
 
-let currentConvId = null;   // ID de la conversación activa en Supabase
-let convSaveTimer = null;   // debounce para auto-save
+let currentConvId = null;
+let convSaveTimer = null;
 
-// Obtener headers de autenticación
 async function getAuthHeaders() {
   let sessionToken = null;
-  if (clerkInstance?.session) {
-    try { sessionToken = await clerkInstance.session.getToken(); } catch {}
+  if (clerkInstance && clerkInstance.session) {
+    try { sessionToken = await clerkInstance.session.getToken(); } catch(e) {}
   }
   const headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
   return headers;
 }
 
-// Guardar conversación actual (debounced, llamado después de cada respuesta)
 async function saveCurrentConversation() {
-  if (!hist || hist.length < 2) return;  // mínimo 1 turno completo
+  if (!hist || hist.length < 2) return;
   if (!currentAgentCtx) return;
   try {
     const headers = await getAuthHeaders();
-    const body = {
-      agent: currentAgentCtx,
-      messages: hist,
-      conversationId: currentConvId || undefined
-    };
+    const body = { agent: currentAgentCtx, messages: hist };
+    if (currentConvId) body.conversationId = currentConvId;
     const res = await fetch('/api/profile?type=conversations&action=save', {
-      method: 'POST', headers, body: JSON.stringify(body)
+      method: 'POST', headers: headers, body: JSON.stringify(body)
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.id && !currentConvId) {
-        currentConvId = data.id;
-      }
-      // Refrescar lista en sidebar
+      if (data.id && !currentConvId) currentConvId = data.id;
       loadConvHistory(currentAgentCtx);
     }
-  } catch (e) {
-    console.warn('saveCurrentConversation error:', e);
-  }
+  } catch(e) { console.warn('saveCurrentConversation error:', e); }
 }
 
-// Cargar historial de un agente y renderizarlo en sidebar
 async function loadConvHistory(agentKey) {
   const listEl = document.getElementById('hist-list-' + agentKey);
   const sectionEl = document.getElementById('hist-section-' + agentKey);
   if (!listEl || !sectionEl) return;
   try {
     const headers = await getAuthHeaders();
-    const res = await fetch(`/api/profile?type=conversations&action=list&agent=${agentKey}&limit=15`, { headers });
+    const res = await fetch('/api/profile?type=conversations&action=list&agent=' + agentKey + '&limit=15', { headers: headers });
     if (!res.ok) return;
     const data = await res.json();
     const convs = data.conversations || [];
     if (convs.length === 0) { sectionEl.style.display = 'none'; return; }
     sectionEl.style.display = 'block';
-    listEl.innerHTML = convs.map(c => {
+    listEl.innerHTML = convs.map(function(c) {
       const isActive = c.id === currentConvId;
-      const date = formatHistDate(c.updated_at);
-      return `<div class="sb-hist-item${isActive ? ' active' : ''}" onclick="loadConversation('${c.id}','${agentKey}')" title="${esc(c.title || '')}">
-        <div class="sb-hist-dot"></div>
-        <div class="sb-hist-title">${esc(c.title || 'Conversación')}</div>
-        <span class="sb-hist-del" onclick="event.stopPropagation();deleteConversation('${c.id}','${agentKey}')" title="eliminar">✕</span>
-      </div>`;
+      return '<div class="sb-hist-item' + (isActive ? ' active' : '') + '" onclick="loadConversation(\'' + c.id + '\',\'' + agentKey + '\')" title="' + esc(c.title || '') + '">' +
+        '<div class="sb-hist-dot"></div>' +
+        '<div class="sb-hist-title">' + esc(c.title || 'Conversaci\u00f3n') + '</div>' +
+        '<span class="sb-hist-del" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\',\'' + agentKey + '\')" title="eliminar">&#x2715;</span>' +
+        '</div>';
     }).join('');
-  } catch (e) {
-    console.warn('loadConvHistory error:', e);
-  }
+  } catch(e) { console.warn('loadConvHistory error:', e); }
 }
 
-// Formatear fecha relativa para el sidebar
-function formatHistDate(isoStr) {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  const now = new Date();
-  const diff = (now - d) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-  if (diff < 604800) return Math.floor(diff / 86400) + 'd';
-  return d.toLocaleDateString('es', { day:'numeric', month:'short' });
-}
-
-// Cargar una conversación pasada (modo lectura + continuar)
 async function loadConversation(convId, agentKey) {
   if (convId === currentConvId) return;
   try {
     const headers = await getAuthHeaders();
-    const res = await fetch(`/api/profile?type=conversations&action=get&id=${convId}`, { headers });
+    const res = await fetch('/api/profile?type=conversations&action=get&id=' + convId, { headers: headers });
     if (!res.ok) return;
     const data = await res.json();
     const conv = data.conversation;
     if (!conv) return;
-
-    // Guardar conversación actual antes de cambiar
     if (currentConvId && hist.length >= 2) await saveCurrentConversation();
-
-    // Cambiar al agente correcto si es necesario
-    if (currentAgentCtx !== agentKey) {
-      await openAgent(agentKey);
-    }
-
-    // Restaurar historial
+    if (currentAgentCtx !== agentKey) await openAgent(agentKey);
     currentConvId = convId;
     hist = conv.messages || [];
-
-    // Renderizar mensajes en el chat
     const area = document.getElementById('chat-area');
     area.innerHTML = '';
-    for (const msg of hist) {
+    for (var i = 0; i < hist.length; i++) {
+      const msg = hist[i];
       if (msg.role === 'user') {
-        const txt = typeof msg.content === 'string' ? msg.content : (msg.content.find?.(c => c.type === 'text')?.text || '[imagen]');
+        const txt = typeof msg.content === 'string' ? msg.content : ((msg.content.find && msg.content.find(function(c){return c.type==='text';})) || {text:'[imagen]'}).text;
         addUser(txt);
       } else if (msg.role === 'assistant') {
         addAgent(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
       }
     }
     onDone = true;
-
-    // Marcar activo en sidebar
     loadConvHistory(agentKey);
     scrollB();
-  } catch (e) {
-    console.warn('loadConversation error:', e);
-  }
+  } catch(e) { console.warn('loadConversation error:', e); }
 }
 
-// Nueva conversación (reset)
 async function startNewConversation(agentKey) {
-  // Guardar la actual antes de resetear
   if (currentConvId && hist.length >= 2) await saveCurrentConversation();
   currentConvId = null;
-  if (currentAgentCtx !== agentKey) {
-    await openAgent(agentKey);
-  } else {
-    // Re-abrir el mismo agente (reset limpio)
-    await openAgent(agentKey);
-  }
+  await openAgent(agentKey);
 }
 
-// Eliminar conversación
 async function deleteConversation(convId, agentKey) {
   try {
     const headers = await getAuthHeaders();
-    await fetch(`/api/profile?type=conversations&action=delete&id=${convId}`, { method: 'DELETE', headers });
-    if (convId === currentConvId) {
-      currentConvId = null;
-    }
+    await fetch('/api/profile?type=conversations&action=delete&id=' + convId, { method: 'DELETE', headers: headers });
+    if (convId === currentConvId) currentConvId = null;
     loadConvHistory(agentKey);
-  } catch (e) {
-    console.warn('deleteConversation error:', e);
-  }
+  } catch(e) { console.warn('deleteConversation error:', e); }
 }
-
-// ── FIN HISTORIAL ─────────────────────────────────────────────────────────────
 
 async function dbSaveProfile(agentKey, data) {
   try {
@@ -1243,8 +1189,7 @@ async function openAgent(agentKey) {
       if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
       if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
-      // Cargar historial en sidebar
-      setTimeout(() => loadConvHistory(agentKey), 600);
+      setTimeout(function(){ loadConvHistory(agentKey); }, 700);
       return;
     } catch(e) {
       console.warn('openAgent profile load error:', e);
@@ -1262,14 +1207,14 @@ function launchOnboarding(agentKey) {
     onDone = true;
     addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showMetaActionCards, 400);
-    setTimeout(() => loadConvHistory('meta-ads'), 600);
+    setTimeout(function(){ loadConvHistory('meta-ads'); }, 700);
     return;
   }
   if (agentKey === 'google-ads') {
     onDone = true;
     addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
     setTimeout(showGoogleAdsActionCards, 400);
-    setTimeout(() => loadConvHistory('google-ads'), 600);
+    setTimeout(function(){ loadConvHistory('google-ads'); }, 700);
     return;
   }
   if (agentKey === 'tiktok-ads') {
@@ -1375,7 +1320,7 @@ function showGoogleAdsActionCards() {
       '</div>' +
 
       // Card 4: Crear anuncios RSA
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR ANUNCIOS RSA - Para generar los headlines y descriptions más efectivos, necesito saber: ¿Para qué producto/servicio específico son estos anuncios RSA? ¿Tienes keywords principales ya definidas? ¿Es para una campaña nueva o reemplazo de anuncios existentes?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR ANUNCIOS RSA - Para generar los headlines y descriptions más efectivos, necesito saber: ¿Para qué producto/servicio específico son estos anuncios RSA? ¿Tienes keywords principales ya definidas? ¿Es para una campaña nueva o reemplazo de anuncios existentes?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'>' +
         '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios RSA</div>' +
         '<div style="font-size:11px;color:var(--muted2)">Headlines y descriptions con estructura AIDA</div>' +
@@ -3234,8 +3179,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       addAgent(replyFinalProcessed);
       if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
     }
-    // Auto-save conversación después de cada respuesta
-    setTimeout(() => saveCurrentConversation(), 500);
+    setTimeout(function(){ saveCurrentConversation(); }, 500);
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
 function renderSugerencias(opciones) {
   const area = document.getElementById('chat-area');
@@ -3616,7 +3560,7 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(()=>loadConvHistory(agKey),700);}}
+function toggleAgent(key){const items=document.getElementById('ag-'+key);const chev=document.getElementById('chev-'+key);if(!items)return;const collapsed=items.classList.contains('sb-collapsed');document.querySelectorAll('.sb-agent-items').forEach(el=>{el.classList.add('sb-collapsed');el.classList.remove('sb-active')});document.querySelectorAll('.sb-chevron').forEach(el=>{el.classList.remove('open')});if(collapsed){items.classList.remove('sb-collapsed');items.classList.add('sb-active');if(chev)chev.classList.add('open');const map={'ga':'google-ads','meta':'meta-ads','tiktok':'tiktok-ads','linkedin':'linkedin-ads','seo':'seo','social':'social','consultor':'consultor'};const agKey=map[key]||key;openAgent(agKey);setTimeout(function(){loadConvHistory(agKey);},700);}}
 let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
@@ -5616,7 +5560,6 @@ async function queryGoogleAds(gaqlQuery) {
     return { error: err.message };
   }
 }
-
 
 
 const COMING_SOON_DATA = {
