@@ -2155,7 +2155,7 @@ async function saveCurrentConversation() {
       messages: hist,
       conversationId: currentConvId || undefined
     };
-    const res = await fetch('/api/conversations?action=save', {
+    const res = await fetch('/api/profile?type=conversations&action=save', {
       method: 'POST', headers, body: JSON.stringify(body)
     });
     if (res.ok) {
@@ -2178,7 +2178,7 @@ async function loadConvHistory(agentKey) {
   if (!listEl || !sectionEl) return;
   try {
     const headers = await getAuthHeaders();
-    const res = await fetch(`/api/conversations?action=list&agent=${agentKey}&limit=15`, { headers });
+    const res = await fetch(`/api/profile?type=conversations&action=list&agent=${agentKey}&limit=15`, { headers });
     if (!res.ok) return;
     const data = await res.json();
     const convs = data.conversations || [];
@@ -2216,7 +2216,7 @@ async function loadConversation(convId, agentKey) {
   if (convId === currentConvId) return;
   try {
     const headers = await getAuthHeaders();
-    const res = await fetch(`/api/conversations?action=get&id=${convId}`, { headers });
+    const res = await fetch(`/api/profile?type=conversations&action=get&id=${convId}`, { headers });
     if (!res.ok) return;
     const data = await res.json();
     const conv = data.conversation;
@@ -2272,7 +2272,7 @@ async function startNewConversation(agentKey) {
 async function deleteConversation(convId, agentKey) {
   try {
     const headers = await getAuthHeaders();
-    await fetch(`/api/conversations?action=delete&id=${convId}`, { method: 'DELETE', headers });
+    await fetch(`/api/profile?type=conversations&action=delete&id=${convId}`, { method: 'DELETE', headers });
     if (convId === currentConvId) {
       currentConvId = null;
     }
