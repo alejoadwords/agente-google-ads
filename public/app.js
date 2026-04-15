@@ -1175,7 +1175,7 @@ var TOUR_STEPS = [
     title: 'Conecta tus plataformas',
     desc: 'Desde Configuración puedes conectar tu cuenta de Google Ads y Meta Ads. Cuando están conectadas, los agentes pueden leer tus datos en tiempo real.',
     target: 'settings-panel',
-    position: 'left',
+    position: 'left-panel',
     onEnter: function() { openSettings(); },
     onExit: function() { document.getElementById('settings-panel').style.display='none'; document.getElementById('settings-overlay').style.display='none'; }
   },
@@ -1183,13 +1183,13 @@ var TOUR_STEPS = [
     title: 'Historial de conversaciones',
     desc: 'Todas tus consultas quedan guardadas aquí. Puedes retomar cualquier conversación anterior exactamente donde la dejaste.',
     target: 'sb-recents-panel',
-    position: 'right'
+    position: 'right-safe'
   },
   {
     title: '¡Listo para empezar! 🚀',
-    desc: 'El perfil de tu negocio se guarda automáticamente. Cada agente lo usa para darte respuestas personalizadas siempre. ¡Elige un agente y empieza!',
+    desc: 'Tu perfil de negocio se guarda automáticamente. Cada agente lo usa para darte respuestas personalizadas. ¡Elige un agente y empieza!',
     target: 'mem-card',
-    position: 'right'
+    position: 'right-safe'
   }
 ];
 
@@ -1296,24 +1296,40 @@ function tourPosition(step) {
   var tth = 200; // approx
   var margin = 16;
   
+  var winH = window.innerHeight;
+  var winW = window.innerWidth;
   if (step.position === 'left') {
     tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
-    tooltip.style.top = Math.max(16, rect.top + rect.height / 2 - tth / 2) + 'px';
+    tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  } else if (step.position === 'left-panel') {
+    // For panels that slide in from the right — tooltip goes to left of panel
+    tooltip.style.left = Math.max(16, rect.left - ttw - margin) + 'px';
+    tooltip.style.top = Math.max(80, Math.min(rect.top + 80, winH - tth - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   } else if (step.position === 'right') {
     tooltip.style.left = (rect.right + margin + pad) + 'px';
-    tooltip.style.top = Math.max(16, rect.top + rect.height / 2 - tth / 2) + 'px';
+    tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
+  } else if (step.position === 'right-safe') {
+    // Sidebar elements — always visible, never below viewport
+    tooltip.style.left = Math.min(rect.right + margin + pad, winW - ttw - 16) + 'px';
+    tooltip.style.top = Math.max(80, Math.min(rect.top, winH - tth - 24)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+    // Scroll element into view
+    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } else if (step.position === 'bottom') {
-    tooltip.style.top = (rect.bottom + margin + pad) + 'px';
-    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, window.innerWidth - ttw - 16)) + 'px';
+    tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
+    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   } else if (step.position === 'top') {
     tooltip.style.top = Math.max(16, rect.top - tth - margin - pad) + 'px';
-    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, window.innerWidth - ttw - 16)) + 'px';
+    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   }
