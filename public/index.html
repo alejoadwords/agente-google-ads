@@ -554,26 +554,57 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .agency-limit-fill.danger{background:var(--danger)}
 
 /* Modal nuevo cliente */
-.agency-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
-.agency-modal{background:var(--bg);border-radius:var(--rlg);padding:24px;width:100%;max-width:440px;border:1px solid var(--border);box-shadow:0 16px 48px rgba(0,0,0,.15)}
-.agency-modal-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px}
-.agency-modal-sub{font-size:12.5px;color:var(--muted);margin-bottom:20px}
+.agency-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+.agency-modal{background:var(--bg);border-radius:var(--rlg);width:100%;max-width:600px;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:calc(100vh - 32px);overflow:hidden}
+.agency-modal-header{padding:22px 24px 0;flex-shrink:0}
+.agency-modal-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:2px}
+.agency-modal-sub{font-size:12.5px;color:var(--muted);margin-bottom:0}
+/* Steps nav */
+.agency-steps-nav{display:flex;gap:0;padding:16px 24px 0;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.agency-steps-nav::-webkit-scrollbar{display:none}
+.agency-step-pill{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted2);padding:6px 10px;border-radius:20px;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.agency-step-pill.active{background:var(--blue-lt);color:var(--blue)}
+.agency-step-pill.done{color:var(--success)}
+.agency-step-num{width:18px;height:18px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--muted);transition:all .15s;flex-shrink:0}
+.agency-step-pill.active .agency-step-num{background:var(--blue);color:#fff}
+.agency-step-pill.done .agency-step-num{background:var(--success);color:#fff}
+/* Progress bar */
+.agency-brief-progress{height:3px;background:var(--border);margin:10px 24px 0;border-radius:2px;flex-shrink:0}
+.agency-brief-progress-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .3s}
+/* Body */
+.agency-modal-body{flex:1;overflow-y:auto;padding:20px 24px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.agency-step-panel{display:none}
+.agency-step-panel.active{display:block}
+.agency-step-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px}
+.agency-step-desc{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5}
+/* Fields */
 .agency-field{margin-bottom:14px}
 .agency-field label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
 .agency-field input,.agency-field textarea,.agency-field select{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;color:var(--text);background:var(--bg);font-family:var(--font);transition:border-color .15s;resize:none}
 .agency-field input:focus,.agency-field textarea:focus,.agency-field select:focus{outline:none;border-color:var(--blue-md)}
+.agency-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Option chips */
+.agency-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.agency-chip{padding:6px 12px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .15s;user-select:none}
+.agency-chip:hover{border-color:var(--blue-md);color:var(--blue)}
+.agency-chip.sel{background:var(--blue-lt);border-color:var(--blue-md);color:var(--blue);font-weight:600}
+/* Health picker */
 .agency-health-picker{display:flex;gap:8px}
 .agency-health-opt{flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--border);cursor:pointer;text-align:center;font-size:12px;font-weight:600;transition:all .15s}
 .agency-health-opt.selected-verde{background:#ECFDF5;border-color:#059669;color:#065F46}
 .agency-health-opt.selected-amarillo{background:#FFFBEB;border-color:#D97706;color:#92400E}
 .agency-health-opt.selected-rojo{background:#FEF2F2;border-color:#DC2626;color:#991B1B}
 .agency-health-opt.selected-gris{background:var(--sidebar);border-color:var(--border2);color:var(--muted)}
-.agency-modal-footer{display:flex;gap:8px;margin-top:20px}
-.agency-modal-cancel{flex:1;padding:10px;border:1.5px solid var(--border);border-radius:var(--r);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s}
+/* Footer */
+.agency-modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;background:var(--bg)}
+.agency-modal-cancel{padding:10px 16px;border:1.5px solid var(--border);border-radius:var(--r);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s;flex-shrink:0}
 .agency-modal-cancel:hover{background:var(--sidebar)}
-.agency-modal-save{flex:2;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s}
-.agency-modal-save:hover{background:var(--blue-h)}
-.agency-modal-save:disabled{opacity:.5;cursor:not-allowed}
+.agency-modal-prev{padding:10px 16px;border:1.5px solid var(--border);border-radius:var(--r);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s;flex-shrink:0}
+.agency-modal-prev:hover{background:var(--sidebar)}
+.agency-modal-next{flex:1;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s}
+.agency-modal-next:hover{background:var(--blue-h)}
+.agency-modal-next:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:640px){.agency-field-row{grid-template-columns:1fr}.agency-modal{max-height:calc(100svh - 32px)}}
 
 /* Contexto activo de cliente en chat */
 .agency-ctx-bar{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--blue-lt);border-bottom:1px solid var(--blue-md);font-size:12px;color:var(--blue);flex-shrink:0}
@@ -1050,38 +1081,332 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     </div>
   </div>
 
-  <!-- MODAL NUEVO / EDITAR CLIENTE -->
+  <!-- MODAL BRIEF PROFESIONAL DE CLIENTE -->
   <div class="agency-modal-overlay" id="agency-modal" style="display:none" onclick="if(event.target===this)agencyCloseModal()">
     <div class="agency-modal">
-      <div class="agency-modal-title" id="agency-modal-title">Agregar cliente</div>
-      <div class="agency-modal-sub">La información se usa para que el agente tenga contexto de cada cuenta</div>
 
-      <div class="agency-field">
-        <label>nombre del cliente *</label>
-        <input type="text" id="ag-f-name" placeholder="ej. Restaurante El Mesón" maxlength="80">
+      <!-- Header -->
+      <div class="agency-modal-header">
+        <div class="agency-modal-title" id="agency-modal-title">Brief de cliente</div>
+        <div class="agency-modal-sub" id="agency-modal-sub">Completa el perfil para que todos los agentes tengan contexto desde el inicio</div>
       </div>
-      <div class="agency-field">
-        <label>negocio / industria</label>
-        <input type="text" id="ag-f-business" placeholder="ej. Restaurante en Bogotá, 3 sedes" maxlength="120">
+
+      <!-- Steps nav -->
+      <div class="agency-steps-nav" id="agency-steps-nav">
+        <div class="agency-step-pill active" id="sp-0" onclick="agencyGoStep(0)"><span class="agency-step-num">1</span>General</div>
+        <div class="agency-step-pill" id="sp-1" onclick="agencyGoStep(1)"><span class="agency-step-num">2</span>Negocio</div>
+        <div class="agency-step-pill" id="sp-2" onclick="agencyGoStep(2)"><span class="agency-step-num">3</span>Audiencia</div>
+        <div class="agency-step-pill" id="sp-3" onclick="agencyGoStep(3)"><span class="agency-step-num">4</span>Marketing</div>
+        <div class="agency-step-pill" id="sp-4" onclick="agencyGoStep(4)"><span class="agency-step-num">5</span>Objetivos</div>
+        <div class="agency-step-pill" id="sp-5" onclick="agencyGoStep(5)"><span class="agency-step-num">6</span>Marca</div>
       </div>
-      <div class="agency-field">
-        <label>notas internas</label>
-        <textarea id="ag-f-notes" rows="2" placeholder="Presupuesto mensual, objetivos, canales activos..." maxlength="400"></textarea>
-      </div>
-      <div class="agency-field">
-        <label>estado de salud</label>
-        <div class="agency-health-picker">
-          <div class="agency-health-opt" data-val="verde" onclick="agencySelectHealth('verde')">🟢 Bien</div>
-          <div class="agency-health-opt" data-val="amarillo" onclick="agencySelectHealth('amarillo')">🟡 Atención</div>
-          <div class="agency-health-opt" data-val="rojo" onclick="agencySelectHealth('rojo')">🔴 Urgente</div>
-          <div class="agency-health-opt selected-gris" data-val="gris" onclick="agencySelectHealth('gris')">⬜ Sin definir</div>
+      <div class="agency-brief-progress"><div class="agency-brief-progress-fill" id="brief-progress" style="width:16.6%"></div></div>
+
+      <!-- Body con pasos -->
+      <div class="agency-modal-body">
+
+        <!-- PASO 1: Identificación general -->
+        <div class="agency-step-panel active" id="step-panel-0">
+          <div class="agency-step-title">Identificación del cliente</div>
+          <div class="agency-step-desc">Datos básicos para reconocer al cliente dentro del panel.</div>
+          <div class="agency-field">
+            <label>Nombre del cliente / marca *</label>
+            <input type="text" id="ag-f-name" placeholder="ej. Forest Living, Clínica Derma+" maxlength="80">
+          </div>
+          <div class="agency-field-row">
+            <div class="agency-field">
+              <label>País</label>
+              <select id="ag-f-pais">
+                <option value="">Seleccionar...</option>
+                <option>Colombia</option><option>México</option><option>Argentina</option>
+                <option>Chile</option><option>Perú</option><option>Ecuador</option>
+                <option>Venezuela</option><option>Bolivia</option><option>Uruguay</option>
+                <option>Paraguay</option><option>Costa Rica</option><option>Guatemala</option>
+                <option>Panamá</option><option>Honduras</option><option>El Salvador</option>
+                <option>Rep. Dominicana</option><option>Otro</option>
+              </select>
+            </div>
+            <div class="agency-field">
+              <label>Ciudad principal</label>
+              <input type="text" id="ag-f-ciudad" placeholder="ej. Bogotá, CDMX">
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>Sitio web / landing page</label>
+            <input type="url" id="ag-f-web" placeholder="https://www.ejemplo.com">
+          </div>
+          <div class="agency-field">
+            <label>Estado de la cuenta</label>
+            <div class="agency-health-picker">
+              <div class="agency-health-opt" data-val="verde" onclick="agencySelectHealth('verde')">🟢 Bien</div>
+              <div class="agency-health-opt" data-val="amarillo" onclick="agencySelectHealth('amarillo')">🟡 Atención</div>
+              <div class="agency-health-opt" data-val="rojo" onclick="agencySelectHealth('rojo')">🔴 Urgente</div>
+              <div class="agency-health-opt selected-gris" data-val="gris" onclick="agencySelectHealth('gris')">⬜ Sin definir</div>
+            </div>
+          </div>
         </div>
-      </div>
 
+        <!-- PASO 2: Negocio -->
+        <div class="agency-step-panel" id="step-panel-1">
+          <div class="agency-step-title">Información del negocio</div>
+          <div class="agency-step-desc">Contexto del negocio que los agentes usarán en cada análisis y recomendación.</div>
+          <div class="agency-field">
+            <label>¿Qué hace el negocio? (descripción clara)</label>
+            <textarea id="ag-f-descripcion" rows="2" placeholder="ej. Inmobiliaria especializada en proyectos de vivienda nueva en Bogotá norte. 8 años en el mercado, 3 proyectos activos." maxlength="300"></textarea>
+          </div>
+          <div class="agency-field-row">
+            <div class="agency-field">
+              <label>Industria / sector</label>
+              <select id="ag-f-industria">
+                <option value="">Seleccionar...</option>
+                <option>Inmobiliaria / Construcción</option>
+                <option>Salud / Clínicas / Bienestar</option>
+                <option>Educación / Cursos</option>
+                <option>E-commerce / Retail</option>
+                <option>Restaurantes / Gastronomía</option>
+                <option>Servicios B2B</option>
+                <option>Tecnología / SaaS</option>
+                <option>Automotriz</option>
+                <option>Turismo / Hotelería</option>
+                <option>Finanzas / Seguros</option>
+                <option>Belleza / Estética</option>
+                <option>Deporte / Fitness</option>
+                <option>Legal / Consultoría</option>
+                <option>Otro</option>
+              </select>
+            </div>
+            <div class="agency-field">
+              <label>Modelo de negocio</label>
+              <select id="ag-f-modelo">
+                <option value="">Seleccionar...</option>
+                <option>B2C (vende a personas)</option>
+                <option>B2B (vende a empresas)</option>
+                <option>B2B2C (ambos)</option>
+                <option>E-commerce</option>
+                <option>SaaS / Suscripción</option>
+                <option>Marketplace</option>
+                <option>Franquicia</option>
+              </select>
+            </div>
+          </div>
+          <div class="agency-field-row">
+            <div class="agency-field">
+              <label>Ticket promedio de venta</label>
+              <select id="ag-f-ticket">
+                <option value="">Seleccionar...</option>
+                <option>Menos de $50 USD</option>
+                <option>$50 – $200 USD</option>
+                <option>$200 – $1,000 USD</option>
+                <option>$1,000 – $10,000 USD</option>
+                <option>Más de $10,000 USD</option>
+              </select>
+            </div>
+            <div class="agency-field">
+              <label>Ciclo de venta</label>
+              <select id="ag-f-ciclo">
+                <option value="">Seleccionar...</option>
+                <option>Inmediato (mismo día)</option>
+                <option>Corto (1–7 días)</option>
+                <option>Medio (1–4 semanas)</option>
+                <option>Largo (1–6 meses)</option>
+                <option>Muy largo (+6 meses)</option>
+              </select>
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>Principales competidores</label>
+            <input type="text" id="ag-f-competidores" placeholder="ej. Constructora Bolívar, Metrocuadrado, Properati" maxlength="200">
+          </div>
+        </div>
+
+        <!-- PASO 3: Audiencia -->
+        <div class="agency-step-panel" id="step-panel-2">
+          <div class="agency-step-title">Audiencia objetivo</div>
+          <div class="agency-step-desc">Quién es el cliente ideal — esto guía la segmentación en Google Ads, Meta y el tono de contenidos.</div>
+          <div class="agency-field">
+            <label>Descripción del cliente ideal</label>
+            <textarea id="ag-f-audiencia" rows="2" placeholder="ej. Familias de estrato 4-6 en Bogotá, 30-50 años, con capacidad de crédito hipotecario, buscan primera vivienda o inversión." maxlength="300"></textarea>
+          </div>
+          <div class="agency-field-row">
+            <div class="agency-field">
+              <label>Rango de edad principal</label>
+              <select id="ag-f-edad">
+                <option value="">Seleccionar...</option>
+                <option>18 – 24 años</option>
+                <option>25 – 34 años</option>
+                <option>35 – 44 años</option>
+                <option>45 – 54 años</option>
+                <option>55+ años</option>
+                <option>Todas las edades</option>
+              </select>
+            </div>
+            <div class="agency-field">
+              <label>Género predominante</label>
+              <select id="ag-f-genero">
+                <option value="">Seleccionar...</option>
+                <option>Masculino</option>
+                <option>Femenino</option>
+                <option>Mixto / Sin diferencia</option>
+              </select>
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>¿Qué problema resuelve el producto/servicio al cliente?</label>
+            <textarea id="ag-f-problema" rows="2" placeholder="ej. Les permite acceder a vivienda propia con planes de financiación flexibles sin necesitar el 30% inicial en efectivo." maxlength="250"></textarea>
+          </div>
+          <div class="agency-field">
+            <label>¿Qué motiva la compra? Diferenciadores clave</label>
+            <textarea id="ag-f-diferenciador" rows="2" placeholder="ej. Ubicación privilegiada, zonas comunes de lujo, precio por m² más bajo que la competencia directa." maxlength="250"></textarea>
+          </div>
+        </div>
+
+        <!-- PASO 4: Historial de marketing -->
+        <div class="agency-step-panel" id="step-panel-3">
+          <div class="agency-step-title">Historial de marketing</div>
+          <div class="agency-step-desc">Qué han hecho antes — evita repetir errores y permite capitalizar lo que funcionó.</div>
+          <div class="agency-field">
+            <label>Canales activos actualmente</label>
+            <div class="agency-chips" id="chips-canales">
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">Google Ads</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">Meta Ads</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">TikTok Ads</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">LinkedIn Ads</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">SEO orgánico</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">Email marketing</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">Contenido / RRSS</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">WhatsApp Business</div>
+              <div class="agency-chip" data-g="canales" onclick="agencyToggleChip(this)">Sin historial previo</div>
+            </div>
+          </div>
+          <div class="agency-field-row">
+            <div class="agency-field">
+              <label>Presupuesto mensual total (USD)</label>
+              <select id="ag-f-presupuesto">
+                <option value="">Seleccionar...</option>
+                <option>Menos de $500</option>
+                <option>$500 – $1,500</option>
+                <option>$1,500 – $5,000</option>
+                <option>$5,000 – $15,000</option>
+                <option>$15,000 – $50,000</option>
+                <option>Más de $50,000</option>
+              </select>
+            </div>
+            <div class="agency-field">
+              <label>¿Tienen pixel / etiquetas instaladas?</label>
+              <select id="ag-f-pixel">
+                <option value="">Seleccionar...</option>
+                <option>Sí, todo instalado</option>
+                <option>Parcialmente</option>
+                <option>No tienen nada</option>
+                <option>No sé / por confirmar</option>
+              </select>
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>¿Qué ha funcionado bien? (opcional)</label>
+            <input type="text" id="ag-f-funciono" placeholder="ej. Campañas de remarketing en Meta, keywords de marca en Google" maxlength="200">
+          </div>
+          <div class="agency-field">
+            <label>¿Qué NO ha funcionado o se debe evitar?</label>
+            <input type="text" id="ag-f-nofunciono" placeholder="ej. Campañas de display sin segmentación, audiencias frías sin contenido de valor" maxlength="200">
+          </div>
+        </div>
+
+        <!-- PASO 5: Objetivos y KPIs -->
+        <div class="agency-step-panel" id="step-panel-4">
+          <div class="agency-step-title">Objetivos y KPIs</div>
+          <div class="agency-step-desc">Define qué medir para determinar el éxito de cada agente.</div>
+          <div class="agency-field">
+            <label>Objetivo principal de marketing</label>
+            <div class="agency-chips">
+              <div class="agency-chip" data-g="objetivo" onclick="agencyToggleChipSingle(this)">Generar leads calificados</div>
+              <div class="agency-chip" data-g="objetivo" onclick="agencyToggleChipSingle(this)">Aumentar ventas directas</div>
+              <div class="agency-chip" data-g="objetivo" onclick="agencyToggleChipSingle(this)">Posicionamiento de marca</div>
+              <div class="agency-chip" data-g="objetivo" onclick="agencyToggleChipSingle(this)">Tráfico al sitio web</div>
+              <div class="agency-chip" data-g="objetivo" onclick="agencyToggleChipSingle(this)">Retención / fidelización</div>
+              <div class="agency-chip" data-g="objetivo" onclick="agencyToggleChipSingle(this)">Lanzamiento de producto</div>
+            </div>
+          </div>
+          <div class="agency-field-row">
+            <div class="agency-field">
+              <label>KPI primario de paid media</label>
+              <select id="ag-f-kpi">
+                <option value="">Seleccionar...</option>
+                <option>CPA (costo por adquisición)</option>
+                <option>CPL (costo por lead)</option>
+                <option>ROAS (retorno en pauta)</option>
+                <option>CTR (tasa de clics)</option>
+                <option>Conversiones totales</option>
+                <option>Alcance / Impresiones</option>
+                <option>CAC (costo adquisición cliente)</option>
+              </select>
+            </div>
+            <div class="agency-field">
+              <label>Meta de costo por resultado</label>
+              <input type="text" id="ag-f-meta-costo" placeholder="ej. CPL < $15 USD, ROAS > 3x">
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>¿Tienen CRM o sistema de seguimiento de leads?</label>
+            <select id="ag-f-crm">
+              <option value="">Seleccionar...</option>
+              <option>Sí — HubSpot</option>
+              <option>Sí — Salesforce</option>
+              <option>Sí — Zoho CRM</option>
+              <option>Sí — otro CRM</option>
+              <option>Solo hoja de cálculo</option>
+              <option>WhatsApp / manual</option>
+              <option>No tienen</option>
+            </select>
+          </div>
+          <div class="agency-field">
+            <label>Resultados mínimos esperados por mes</label>
+            <input type="text" id="ag-f-resultados" placeholder="ej. 50 leads mensuales, 5 cierres, ROAS 4x sobre pauta Google" maxlength="200">
+          </div>
+        </div>
+
+        <!-- PASO 6: Marca y tono -->
+        <div class="agency-step-panel" id="step-panel-5">
+          <div class="agency-step-title">Identidad de marca y tono</div>
+          <div class="agency-step-desc">Define la voz que deben usar los agentes en copys, anuncios y contenidos.</div>
+          <div class="agency-field">
+            <label>Tono de comunicación</label>
+            <div class="agency-chips">
+              <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Profesional y serio</div>
+              <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Cercano y amigable</div>
+              <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Inspirador / aspiracional</div>
+              <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Directo y urgente</div>
+              <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Técnico / experto</div>
+              <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Divertido / creativo</div>
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>Propuesta de valor única (en 1 frase)</label>
+            <input type="text" id="ag-f-propuesta" placeholder="ej. La única inmobiliaria en Bogotá que te da el apartamento con el 10% inicial" maxlength="200">
+          </div>
+          <div class="agency-field">
+            <label>Palabras o frases que SIEMPRE se deben usar</label>
+            <input type="text" id="ag-f-keywords-marca" placeholder="ej. 'proyecto de vida', 'inversión segura', nombre de los proyectos" maxlength="200">
+          </div>
+          <div class="agency-field">
+            <label>Palabras o temas que se deben EVITAR</label>
+            <input type="text" id="ag-f-evitar" placeholder="ej. No mencionar precios directamente, evitar comparar con competidores" maxlength="200">
+          </div>
+          <div class="agency-field">
+            <label>Notas internas del account manager</label>
+            <textarea id="ag-f-notas" rows="2" placeholder="Observaciones, contexto especial, acuerdos con el cliente..." maxlength="400"></textarea>
+          </div>
+        </div>
+
+      </div><!-- /body -->
+
+      <!-- Footer -->
       <div class="agency-modal-footer">
         <button class="agency-modal-cancel" onclick="agencyCloseModal()">cancelar</button>
-        <button class="agency-modal-save" id="agency-modal-save" onclick="agencySaveClient()">guardar cliente</button>
+        <button class="agency-modal-prev" id="brief-btn-prev" onclick="agencyBriefPrev()" style="display:none">← atrás</button>
+        <button class="agency-modal-next" id="brief-btn-next" onclick="agencyBriefNext()">continuar →</button>
       </div>
+
     </div>
   </div>
 

@@ -1303,7 +1303,10 @@ function agencyUpdateSidebarCount() {
   if (el) el.textContent = agencyClients.length;
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
+// ── Brief profesional multi-paso ─────────────────────────────────────────────
+let briefCurrentStep = 0;
+const BRIEF_TOTAL_STEPS = 6;
+
 function agencyOpenModal(editId = null) {
   const limit = isAdminUser() ? 999 : AGENCY_CLIENT_LIMIT;
   if (!editId && agencyClients.length >= limit) {
@@ -1312,36 +1315,148 @@ function agencyOpenModal(editId = null) {
   }
   agencyEditingId = editId;
   agencySelectedHealth = 'gris';
+  briefCurrentStep = 0;
 
-  const modal = document.getElementById('agency-modal');
-  const title = document.getElementById('agency-modal-title');
-  title.textContent = editId ? 'Editar cliente' : 'Agregar cliente';
+  document.getElementById('agency-modal-title').textContent = editId ? 'Editar brief de cliente' : 'Brief de cliente';
+  document.getElementById('agency-modal-sub').textContent = editId
+    ? 'Actualiza la información del perfil del cliente'
+    : 'Completa el perfil para que todos los agentes tengan contexto desde el inicio';
 
-  // Reset fields
-  document.getElementById('ag-f-name').value = '';
-  document.getElementById('ag-f-business').value = '';
-  document.getElementById('ag-f-notes').value = '';
+  // Reset todos los campos
+  const fieldIds = ['ag-f-name','ag-f-pais','ag-f-ciudad','ag-f-web',
+    'ag-f-descripcion','ag-f-industria','ag-f-modelo','ag-f-ticket','ag-f-ciclo','ag-f-competidores',
+    'ag-f-audiencia','ag-f-edad','ag-f-genero','ag-f-problema','ag-f-diferenciador',
+    'ag-f-presupuesto','ag-f-pixel','ag-f-funciono','ag-f-nofunciono',
+    'ag-f-kpi','ag-f-meta-costo','ag-f-crm','ag-f-resultados',
+    'ag-f-propuesta','ag-f-keywords-marca','ag-f-evitar','ag-f-notas'];
+  fieldIds.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  // Reset chips
+  document.querySelectorAll('.agency-chip').forEach(c => c.classList.remove('sel'));
+  // Reset health
   document.querySelectorAll('.agency-health-opt').forEach(o => o.className = 'agency-health-opt');
   document.querySelector('[data-val="gris"]').className = 'agency-health-opt selected-gris';
 
-  // Fill if editing
+  // Cargar datos si es edición
   if (editId) {
     const c = agencyClients.find(x => x.id === editId);
-    if (c) {
-      document.getElementById('ag-f-name').value = c.name || '';
-      document.getElementById('ag-f-business').value = c.business || '';
-      document.getElementById('ag-f-notes').value = c.notes || '';
-      agencySelectHealth(c.health || 'gris');
-    }
+    if (c) briefFillForm(c);
   }
 
-  modal.style.display = 'flex';
-  setTimeout(() => document.getElementById('ag-f-name').focus(), 50);
+  briefGoStep(0);
+  document.getElementById('agency-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('ag-f-name')?.focus(), 100);
+}
+
+function briefFillForm(c) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+  set('ag-f-name', c.name);
+  set('ag-f-pais', c.pais);
+  set('ag-f-ciudad', c.ciudad);
+  set('ag-f-web', c.web);
+  set('ag-f-descripcion', c.descripcion);
+  set('ag-f-industria', c.industria);
+  set('ag-f-modelo', c.modelo);
+  set('ag-f-ticket', c.ticket);
+  set('ag-f-ciclo', c.ciclo);
+  set('ag-f-competidores', c.competidores);
+  set('ag-f-audiencia', c.audiencia);
+  set('ag-f-edad', c.edad);
+  set('ag-f-genero', c.genero);
+  set('ag-f-problema', c.problema);
+  set('ag-f-diferenciador', c.diferenciador);
+  set('ag-f-presupuesto', c.presupuesto);
+  set('ag-f-pixel', c.pixel);
+  set('ag-f-funciono', c.funciono);
+  set('ag-f-nofunciono', c.nofunciono);
+  set('ag-f-kpi', c.kpi);
+  set('ag-f-meta-costo', c.metaCosto);
+  set('ag-f-crm', c.crm);
+  set('ag-f-resultados', c.resultados);
+  set('ag-f-propuesta', c.propuesta);
+  set('ag-f-keywords-marca', c.keywordsMarca);
+  set('ag-f-evitar', c.evitar);
+  set('ag-f-notas', c.notes);
+  // Chips
+  if (c.canales) c.canales.split(', ').forEach(v => {
+    document.querySelectorAll('[data-g="canales"]').forEach(ch => { if (ch.textContent.trim() === v) ch.classList.add('sel'); });
+  });
+  if (c.objetivo) document.querySelectorAll('[data-g="objetivo"]').forEach(ch => { if (ch.textContent.trim() === c.objetivo) ch.classList.add('sel'); });
+  if (c.tono) document.querySelectorAll('[data-g="tono"]').forEach(ch => { if (ch.textContent.trim() === c.tono) ch.classList.add('sel'); });
+  agencySelectHealth(c.health || 'gris');
+}
+
+function briefGoStep(step) {
+  briefCurrentStep = step;
+  // Panels
+  document.querySelectorAll('.agency-step-panel').forEach((p, i) => {
+    p.classList.toggle('active', i === step);
+  });
+  // Pills nav
+  document.querySelectorAll('.agency-step-pill').forEach((p, i) => {
+    p.className = 'agency-step-pill' + (i === step ? ' active' : i < step ? ' done' : '');
+  });
+  // Progress bar
+  const pct = Math.round(((step + 1) / BRIEF_TOTAL_STEPS) * 100);
+  const fill = document.getElementById('brief-progress');
+  if (fill) fill.style.width = pct + '%';
+  // Buttons
+  const prev = document.getElementById('brief-btn-prev');
+  const next = document.getElementById('brief-btn-next');
+  if (prev) prev.style.display = step === 0 ? 'none' : 'block';
+  if (next) {
+    if (step === BRIEF_TOTAL_STEPS - 1) {
+      next.textContent = 'guardar cliente';
+    } else {
+      next.textContent = 'continuar →';
+    }
+  }
+  // Scroll body al top
+  const body = document.querySelector('.agency-modal-body');
+  if (body) body.scrollTop = 0;
+}
+
+function agencyGoStep(step) {
+  // Solo permite ir a pasos ya completados (hacia atrás) o el actual
+  if (step <= briefCurrentStep) briefGoStep(step);
+}
+
+function agencyBriefNext() {
+  // Validar paso actual antes de avanzar
+  if (briefCurrentStep === 0) {
+    const name = document.getElementById('ag-f-name')?.value.trim();
+    if (!name) {
+      document.getElementById('ag-f-name')?.focus();
+      document.getElementById('ag-f-name')?.style && (document.getElementById('ag-f-name').style.borderColor = 'var(--danger)');
+      setTimeout(() => { const el = document.getElementById('ag-f-name'); if (el) el.style.borderColor = ''; }, 2000);
+      return;
+    }
+  }
+  if (briefCurrentStep < BRIEF_TOTAL_STEPS - 1) {
+    briefGoStep(briefCurrentStep + 1);
+  } else {
+    agencySaveClient();
+  }
+}
+
+function agencyBriefPrev() {
+  if (briefCurrentStep > 0) briefGoStep(briefCurrentStep - 1);
+}
+
+function agencyToggleChip(chip) {
+  chip.classList.toggle('sel');
+}
+
+function agencyToggleChipSingle(chip) {
+  const group = chip.dataset.g;
+  document.querySelectorAll(`.agency-chip[data-g="${group}"]`).forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
 }
 
 function agencyCloseModal() {
   document.getElementById('agency-modal').style.display = 'none';
   agencyEditingId = null;
+  briefCurrentStep = 0;
 }
 
 function agencySelectHealth(val) {
@@ -1351,44 +1466,66 @@ function agencySelectHealth(val) {
   });
 }
 
+function briefReadForm() {
+  const val = id => document.getElementById(id)?.value.trim() || '';
+  const chips = g => [...document.querySelectorAll(`.agency-chip[data-g="${g}"].sel`)].map(c => c.textContent.trim()).join(', ');
+  return {
+    name:          val('ag-f-name'),
+    pais:          val('ag-f-pais'),
+    ciudad:        val('ag-f-ciudad'),
+    web:           val('ag-f-web'),
+    descripcion:   val('ag-f-descripcion'),
+    industria:     val('ag-f-industria'),
+    modelo:        val('ag-f-modelo'),
+    ticket:        val('ag-f-ticket'),
+    ciclo:         val('ag-f-ciclo'),
+    competidores:  val('ag-f-competidores'),
+    audiencia:     val('ag-f-audiencia'),
+    edad:          val('ag-f-edad'),
+    genero:        val('ag-f-genero'),
+    problema:      val('ag-f-problema'),
+    diferenciador: val('ag-f-diferenciador'),
+    canales:       chips('canales'),
+    presupuesto:   val('ag-f-presupuesto'),
+    pixel:         val('ag-f-pixel'),
+    funciono:      val('ag-f-funciono'),
+    nofunciono:    val('ag-f-nofunciono'),
+    objetivo:      chips('objetivo'),
+    kpi:           val('ag-f-kpi'),
+    metaCosto:     val('ag-f-meta-costo'),
+    crm:           val('ag-f-crm'),
+    resultados:    val('ag-f-resultados'),
+    tono:          chips('tono'),
+    propuesta:     val('ag-f-propuesta'),
+    keywordsMarca: val('ag-f-keywords-marca'),
+    evitar:        val('ag-f-evitar'),
+    notes:         val('ag-f-notas'),
+    health:        agencySelectedHealth,
+    // Campos legacy para compatibilidad con renderCard
+    business:      val('ag-f-industria') || val('ag-f-descripcion').slice(0, 60),
+  };
+}
+
 async function agencySaveClient() {
-  const name = document.getElementById('ag-f-name').value.trim();
-  if (!name) { document.getElementById('ag-f-name').focus(); return; }
-
-  const btn = document.getElementById('agency-modal-save');
-  btn.disabled = true; btn.textContent = 'guardando...';
-
+  const btn = document.getElementById('brief-btn-next');
+  if (btn) { btn.disabled = true; btn.textContent = 'guardando...'; }
   const now = new Date().toISOString();
-
+  const data = briefReadForm();
+  if (!data.name) {
+    if (btn) { btn.disabled = false; btn.textContent = 'guardar cliente'; }
+    briefGoStep(0);
+    return;
+  }
   if (agencyEditingId) {
     const idx = agencyClients.findIndex(c => c.id === agencyEditingId);
-    if (idx !== -1) {
-      agencyClients[idx] = {
-        ...agencyClients[idx],
-        name,
-        business: document.getElementById('ag-f-business').value.trim(),
-        notes:    document.getElementById('ag-f-notes').value.trim(),
-        health:   agencySelectedHealth,
-        updatedAt: now
-      };
-    }
+    if (idx !== -1) agencyClients[idx] = { ...agencyClients[idx], ...data, updatedAt: now };
   } else {
-    agencyClients.push({
-      id:        'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-      name,
-      business:  document.getElementById('ag-f-business').value.trim(),
-      notes:     document.getElementById('ag-f-notes').value.trim(),
-      health:    agencySelectedHealth,
-      createdAt: now,
-      updatedAt: now
-    });
+    agencyClients.push({ id: 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), ...data, createdAt: now, updatedAt: now });
   }
-
   await agencyPersist();
   agencyCloseModal();
   agencyRender();
-
-  btn.disabled = false; btn.textContent = 'guardar cliente';
+  if (btn) { btn.disabled = false; btn.textContent = 'guardar cliente'; }
 }
 
 function agencyEditClient(id) {
@@ -1919,7 +2056,114 @@ async function openAgent(agentKey) {
 }
 
 // Lanza onboarding para agente sin perfil
+function briefBuildMem(client) {
+  // Construye el objeto mem del agente a partir del brief profesional del cliente
+  const parts = [];
+  if (client.descripcion) parts.push(client.descripcion);
+  if (client.industria) parts.push('Industria: ' + client.industria);
+  if (client.modelo) parts.push('Modelo: ' + client.modelo);
+  if (client.pais) parts.push((client.ciudad ? client.ciudad + ', ' : '') + client.pais);
+  return {
+    negocio:       client.name || '',
+    industria:     client.industria || client.business || '',
+    descripcion:   client.descripcion || '',
+    objetivo:      client.objetivo || '',
+    presupuesto:   client.presupuesto || '',
+    etapa:         '',
+    // Campos extendidos del brief
+    web:           client.web || '',
+    audiencia:     client.audiencia || '',
+    edad:          client.edad || '',
+    genero:        client.genero || '',
+    problema:      client.problema || '',
+    diferenciador: client.diferenciador || '',
+    canales:       client.canales || '',
+    kpi:           client.kpi || '',
+    metaCosto:     client.metaCosto || '',
+    crm:           client.crm || '',
+    resultados:    client.resultados || '',
+    tono:          client.tono || '',
+    propuesta:     client.propuesta || '',
+    keywordsMarca: client.keywordsMarca || '',
+    evitar:        client.evitar || '',
+    competidores:  client.competidores || '',
+    ciclo:         client.ciclo || '',
+    ticket:        client.ticket || '',
+    funciono:      client.funciono || '',
+    nofunciono:    client.nofunciono || '',
+    pixel:         client.pixel || '',
+    notas:         client.notes || '',
+    pais:          client.pais || '',
+    ciudad:        client.ciudad || '',
+  };
+}
+
+function briefSummaryForAgent(client, agentKey) {
+  // Genera un saludo y resumen inicial personalizado por agente usando los datos del brief
+  const nombre = client.name || 'el cliente';
+  const negocio = client.descripcion || client.business || client.industria || '';
+  const pais = [client.ciudad, client.pais].filter(Boolean).join(', ');
+  const presupuesto = client.presupuesto ? `Presupuesto: **${client.presupuesto}/mes**` : '';
+  const objetivo = client.objetivo ? `Objetivo: **${client.objetivo}**` : '';
+  const kpi = client.kpi ? `KPI principal: **${client.kpi}**${client.metaCosto ? ' · Meta: ' + client.metaCosto : ''}` : '';
+  const audiencia = client.audiencia ? `Audiencia: ${client.audiencia}` : '';
+  const canales = client.canales ? `Canales activos: ${client.canales}` : '';
+  const competidores = client.competidores ? `Competidores: ${client.competidores}` : '';
+  const tono = client.tono ? `Tono de marca: **${client.tono}**` : '';
+  const propuesta = client.propuesta ? `Propuesta de valor: *"${client.propuesta}"*` : '';
+  const funciono = client.funciono ? `Lo que ha funcionado: ${client.funciono}` : '';
+  const nofunciono = client.nofunciono ? `Lo que NO ha funcionado: ${client.nofunciono}` : '';
+  const resultados = client.resultados ? `Resultados esperados: ${client.resultados}` : '';
+
+  const parts = [];
+  parts.push('perfil cargado para **' + nombre + '**' + (pais ? ' \u00b7 ' + pais : '') + '.');
+  if (negocio) parts.push(negocio);
+  const kpis = [presupuesto, objetivo, kpi].filter(Boolean).join(' \u00b7 ');
+  if (kpis) parts.push(kpis);
+  const ctx2 = [audiencia, canales, competidores].filter(Boolean).join(' | ');
+  if (ctx2) parts.push(ctx2);
+  const brand = [tono, propuesta, funciono, nofunciono, resultados].filter(Boolean).join(' | ');
+  if (brand) parts.push(brand);
+  const lines = parts.join('\n').trim();
+
+  const agentGreetings = {
+    'google-ads':  '\n\n¿con qué empezamos en Google Ads?',
+    'meta-ads':    '\n\n¿qué trabajamos hoy en Meta Ads?',
+    'seo':         '\n\n¿por dónde arrancamos con el SEO?',
+    'social':      '\n\n¿qué contenido creamos hoy?',
+    'consultor':   '\n\n¿en qué te puedo ayudar?',
+    'tiktok-ads':  '\n\n¿arrancamos con TikTok Ads?',
+  };
+  return lines + (agentGreetings[agentKey] || '\n\n¿en qué trabajamos hoy?');
+}
+
 function launchOnboarding(agentKey) {
+  // Si hay un cliente de agencia activo con brief completo, no hacer onboarding — usar brief como contexto
+  if (agencyActiveClientId) {
+    const client = agencyClients.find(c => c.id === agencyActiveClientId);
+    if (client && client.name) {
+      mem = briefBuildMem(client);
+      hist = [];
+      onDone = true;
+      obStep = 0;
+      updateMem();
+      document.getElementById('mem-card').style.display = 'block';
+      document.getElementById('m-stage').textContent = clientStage;
+      const summary = briefSummaryForAgent(client, agentKey);
+      addAgent(summary);
+      if (agentKey === 'meta-ads')   { setTimeout(showMetaActionCards, 400); }
+      if (agentKey === 'google-ads') { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'consultor')  { setTimeout(showConsultorActionCards, 400); }
+      if (agentKey === 'seo')        { setTimeout(showSeoActionCards, 400); }
+      if (agentKey === 'social')     { setTimeout(showSocialActionCards, 400); }
+      if (agentKey === 'tiktok-ads') { setTimeout(showTikTokActionCards, 400); }
+      setTimeout(function(){ loadRecentConversations(); }, 700);
+      // Guardar el perfil del brief como perfil del agente para este cliente
+      setTimeout(function(){ dbSaveProfile(agentKey, mem); }, 800);
+      return;
+    }
+  }
+  // Sin cliente de agencia — flujo normal
   mem = {}; hist = []; onDone = false; obStep = 0;
   document.getElementById('mem-card').style.display = 'none';
   if (agentKey === 'meta-ads') {
@@ -3554,39 +3798,66 @@ function updateMem(){document.getElementById('m-neg').textContent=mem.negocio?.s
 // CHAT
 function memCtx(){
   if(!Object.keys(mem).length) return 'perfil no completado aún.';
-  const labelMap = {
-    negocio: 'Negocio / URL',
-    industria: 'Industria',
-    producto: 'Producto o servicio principal',
-    presupuesto: 'Presupuesto mensual',
-    objetivo: 'Objetivo principal',
-    mercado: 'Mercado geográfico',
-    etapa: 'Etapa con el canal',
-    desafio: 'Mayor reto actual',
-    canales: 'Canales activos',
-    audiencia: 'Cliente ideal',
-    redes_actuales: 'Redes sociales actuales',
-    frecuencia: 'Frecuencia de publicación',
-    recursos: 'Recursos de contenido',
-    tono: 'Tono de marca',
-    competidores: 'Competidores principales'
+  // Campos del brief profesional de agencia
+  const coreMap = {
+    negocio:       'Cliente / Marca',
+    descripcion:   'Descripción del negocio',
+    industria:     'Industria / Sector',
+    modelo:        'Modelo de negocio',
+    pais:          'País',
+    ciudad:        'Ciudad',
+    web:           'Sitio web',
+    ticket:        'Ticket promedio',
+    ciclo:         'Ciclo de venta',
+    presupuesto:   'Presupuesto mensual',
+    objetivo:      'Objetivo principal',
+    kpi:           'KPI primario',
+    metaCosto:     'Meta de costo por resultado',
+    resultados:    'Resultados esperados',
+    crm:           'CRM / Seguimiento de leads',
+    pixel:         'Pixel / Etiquetas instaladas',
+    canales:       'Canales activos',
+    audiencia:     'Audiencia objetivo',
+    edad:          'Rango de edad',
+    genero:        'Género predominante',
+    problema:      'Problema que resuelve',
+    diferenciador: 'Diferenciador / USP',
+    competidores:  'Competidores',
+    funciono:      'Lo que ha funcionado',
+    nofunciono:    'Lo que NO ha funcionado / evitar',
+    // Campos legacy de onboarding normal
+    producto:      'Producto o servicio principal',
+    mercado:       'Mercado geográfico',
+    etapa:         'Etapa con el canal',
+    desafio:       'Mayor reto actual',
+    redes_actuales:'Redes sociales actuales',
+    frecuencia:    'Frecuencia de publicación',
+    recursos:      'Recursos de contenido',
   };
-  const brandFields = ['tono','competidores'];
+  const brandMap = {
+    tono:          'Tono de marca',
+    propuesta:     'Propuesta de valor única',
+    keywordsMarca: 'Palabras clave de marca (usar siempre)',
+    evitar:        'Palabras / temas a EVITAR',
+    notas:         'Notas internas del account manager',
+  };
   const coreLines = [];
   const brandLines = [];
   Object.entries(mem).forEach(([k,v]) => {
-    if(!v) return;
-    const label = labelMap[k] || k;
-    if(brandFields.includes(k)) brandLines.push(`${label}: ${v}`);
-    else coreLines.push(`${label}: ${v}`);
+    if(!v || !v.toString().trim()) return;
+    if(brandMap[k]) brandLines.push(`${brandMap[k]}: ${v}`);
+    else if(coreMap[k]) coreLines.push(`${coreMap[k]}: ${v}`);
   });
   let ctx = coreLines.join('\n');
   if(brandLines.length){
-    ctx += '\n\n--- CONTEXTO DE MARCA (aplicar en TODOS los outputs) ---\n' + brandLines.join('\n');
-    if(mem.tono) ctx += '\nIMPORTANTE: Usa siempre el tono "' + mem.tono + '" en copys, anuncios y recomendaciones. No uses un tono genérico.';
-    if(mem.competidores && mem.competidores.trim()) ctx += '\nIMPORTANTE: Los competidores (' + mem.competidores + ') son referencia para diferenciación. Adapta las recomendaciones para destacar frente a ellos.';
+    ctx += '\n\n--- IDENTIDAD DE MARCA (aplicar en TODOS los outputs) ---\n' + brandLines.join('\n');
+    if(mem.tono) ctx += '\nIMPORTANTE: Usa SIEMPRE el tono "' + mem.tono + '" en copys, anuncios y recomendaciones.';
+    if(mem.evitar && mem.evitar.trim()) ctx += '\nIMPORTANTE: Evitar en todos los outputs: ' + mem.evitar;
+    if(mem.keywordsMarca && mem.keywordsMarca.trim()) ctx += '\nIMPORTANTE: Incorporar estas palabras/frases clave de marca cuando sea relevante: ' + mem.keywordsMarca;
+    if(mem.competidores && mem.competidores.trim()) ctx += '\nCOMPETIDORES para diferenciación: ' + mem.competidores;
+    if(mem.nofunciono && mem.nofunciono.trim()) ctx += '\nEVITAR (no ha funcionado): ' + mem.nofunciono;
   }
-  return ctx;
+  return ctx || 'perfil no completado aún.';
 }
 async function sendMsg(){
   if(loading||((!onDone)&&!pendingImg))return;
