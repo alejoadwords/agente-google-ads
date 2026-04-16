@@ -1243,13 +1243,17 @@ function agencyRender() {
     rendered.add(client.id);
     const color = AGENCY_COLORS[idx % AGENCY_COLORS.length];
     const initials = (client.name || '?').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+    const avatarStyle = client.logo
+      ? `background:${color};background-image:url('${client.logo}');background-size:cover;background-position:center`
+      : `background:${color}`;
+    const avatarContent = client.logo ? '' : initials;
     const healthClass = client.health || 'gris';
     const healthLabels = { verde: 'Bien', amarillo: 'Atención', rojo: 'Urgente', gris: 'Sin definir' };
     const dateStr = client.createdAt ? new Date(client.createdAt).toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' }) : '';
 
     const html = `
       <div class="agency-card-top">
-        <div class="agency-card-avatar" style="background:${color}">${initials}</div>
+        <div class="agency-card-avatar" style="${avatarStyle}">${avatarContent}</div>
         <div class="agency-card-menu">
           <button class="agency-card-menu-btn" onclick="agencyToggleDropdown(event,'dd-${client.id}')" title="opciones">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
@@ -1305,7 +1309,8 @@ function agencyUpdateSidebarCount() {
 
 // ── Brief profesional multi-paso ─────────────────────────────────────────────
 let briefCurrentStep = 0;
-const BRIEF_TOTAL_STEPS = 6;
+const BRIEF_TOTAL_STEPS = 8;
+let briefLogoDataUrl = null; // base64 del logo del cliente
 
 function agencyOpenModal(editId = null) {
   const limit = isAdminUser() ? 999 : AGENCY_CLIENT_LIMIT;
@@ -1316,6 +1321,7 @@ function agencyOpenModal(editId = null) {
   agencyEditingId = editId;
   agencySelectedHealth = 'gris';
   briefCurrentStep = 0;
+  briefLogoDataUrl = null;
 
   document.getElementById('agency-modal-title').textContent = editId ? 'Editar brief de cliente' : 'Brief de cliente';
   document.getElementById('agency-modal-sub').textContent = editId
@@ -1336,6 +1342,8 @@ function agencyOpenModal(editId = null) {
   // Reset health
   document.querySelectorAll('.agency-health-opt').forEach(o => o.className = 'agency-health-opt');
   document.querySelector('[data-val="gris"]').className = 'agency-health-opt selected-gris';
+  // Reset logo preview
+  agencyResetLogoPreview();
 
   // Cargar datos si es edición
   if (editId) {
@@ -1383,6 +1391,24 @@ function briefFillForm(c) {
   });
   if (c.objetivo) document.querySelectorAll('[data-g="objetivo"]').forEach(ch => { if (ch.textContent.trim() === c.objetivo) ch.classList.add('sel'); });
   if (c.tono) document.querySelectorAll('[data-g="tono"]').forEach(ch => { if (ch.textContent.trim() === c.tono) ch.classList.add('sel'); });
+  // Chips multiselección edad
+  if (c.edad) c.edad.split(', ').forEach(v => {
+    document.querySelectorAll('[data-g="edad"]').forEach(ch => { if (ch.textContent.trim() === v) ch.classList.add('sel'); });
+  });
+  // Chips reporte
+  if (c.frecuenciaReporte) document.querySelectorAll('[data-g="frecuencia-reporte"]').forEach(ch => { if (ch.textContent.trim() === c.frecuenciaReporte) ch.classList.add('sel'); });
+  if (c.canalReporte) document.querySelectorAll('[data-g="canal-reporte"]').forEach(ch => { if (ch.textContent.trim() === c.canalReporte) ch.classList.add('sel'); });
+  // Contacto
+  set('ag-f-contacto-nombre', c.contactoNombre);
+  set('ag-f-contacto-cargo', c.contactoCargo);
+  set('ag-f-whatsapp', c.whatsapp);
+  set('ag-f-email', c.email);
+  set('ag-f-contacto2', c.contacto2);
+  // Logo
+  if (c.logo) {
+    briefLogoDataUrl = c.logo;
+    agencyShowLogoPreview(c.logo);
+  }
   agencySelectHealth(c.health || 'gris');
 }
 
@@ -1457,6 +1483,68 @@ function agencyCloseModal() {
   document.getElementById('agency-modal').style.display = 'none';
   agencyEditingId = null;
   briefCurrentStep = 0;
+  briefLogoDataUrl = null;
+}
+
+// ── Logo del cliente ──────────────────────────────────────────────────────────
+function agencyHandleLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { alert('El logo debe ser menor a 2MB.'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    briefLogoDataUrl = e.target.result;
+    agencyShowLogoPreview(briefLogoDataUrl);
+  };
+  reader.readAsDataURL(file);
+  input.value = ''; // reset so same file can be re-selected
+}
+
+function agencyShowLogoPreview(dataUrl) {
+  const preview = document.getElementById('logo-preview');
+  const placeholder = document.getElementById('logo-placeholder');
+  const removeWrap = document.getElementById('logo-remove-wrap');
+  if (!preview) return;
+  placeholder.style.display = 'none';
+  // Remove old img if any
+  const oldImg = preview.querySelector('img');
+  if (oldImg) oldImg.remove();
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:10px';
+  preview.appendChild(img);
+  if (removeWrap) removeWrap.style.display = '';
+}
+
+function agencyRemoveLogo() {
+  briefLogoDataUrl = null;
+  agencyResetLogoPreview();
+}
+
+function agencyResetLogoPreview() {
+  const preview = document.getElementById('logo-preview');
+  const placeholder = document.getElementById('logo-placeholder');
+  const removeWrap = document.getElementById('logo-remove-wrap');
+  if (!preview) return;
+  const oldImg = preview.querySelector('img');
+  if (oldImg) oldImg.remove();
+  if (placeholder) placeholder.style.display = '';
+  if (removeWrap) removeWrap.style.display = 'none';
+}
+
+// ── Conectar plataformas desde el brief ───────────────────────────────────────
+function agencyConnectPlatform(platform) {
+  // Si hay un cliente activo (editando), redirigir a Settings con contexto
+  // Si no, guardar nota y redirigir a Settings general
+  agencyCloseModal();
+  openSettings();
+  // Mostrar mensaje orientador
+  setTimeout(function() {
+    const msg = platform === 'google'
+      ? 'Ve a la sección Google Ads en configuración para conectar la cuenta de este cliente.'
+      : 'Ve a la sección Meta Ads en configuración para conectar la cuenta de este cliente.';
+    alert(msg);
+  }, 600);
 }
 
 function agencySelectHealth(val) {
@@ -1470,39 +1558,49 @@ function briefReadForm() {
   const val = id => document.getElementById(id)?.value.trim() || '';
   const chips = g => [...document.querySelectorAll(`.agency-chip[data-g="${g}"].sel`)].map(c => c.textContent.trim()).join(', ');
   return {
-    name:          val('ag-f-name'),
-    pais:          val('ag-f-pais'),
-    ciudad:        val('ag-f-ciudad'),
-    web:           val('ag-f-web'),
-    descripcion:   val('ag-f-descripcion'),
-    industria:     val('ag-f-industria'),
-    modelo:        val('ag-f-modelo'),
-    ticket:        val('ag-f-ticket'),
-    ciclo:         val('ag-f-ciclo'),
-    competidores:  val('ag-f-competidores'),
-    audiencia:     val('ag-f-audiencia'),
-    edad:          val('ag-f-edad'),
-    genero:        val('ag-f-genero'),
-    problema:      val('ag-f-problema'),
-    diferenciador: val('ag-f-diferenciador'),
-    canales:       chips('canales'),
-    presupuesto:   val('ag-f-presupuesto'),
-    pixel:         val('ag-f-pixel'),
-    funciono:      val('ag-f-funciono'),
-    nofunciono:    val('ag-f-nofunciono'),
-    objetivo:      chips('objetivo'),
-    kpi:           val('ag-f-kpi'),
-    metaCosto:     val('ag-f-meta-costo'),
-    crm:           val('ag-f-crm'),
-    resultados:    val('ag-f-resultados'),
-    tono:          chips('tono'),
-    propuesta:     val('ag-f-propuesta'),
-    keywordsMarca: val('ag-f-keywords-marca'),
-    evitar:        val('ag-f-evitar'),
-    notes:         val('ag-f-notas'),
-    health:        agencySelectedHealth,
+    name:             val('ag-f-name'),
+    pais:             val('ag-f-pais'),
+    ciudad:           val('ag-f-ciudad'),
+    web:              val('ag-f-web'),
+    descripcion:      val('ag-f-descripcion'),
+    industria:        val('ag-f-industria'),
+    modelo:           val('ag-f-modelo'),
+    ticket:           val('ag-f-ticket'),
+    ciclo:            val('ag-f-ciclo'),
+    competidores:     val('ag-f-competidores'),
+    audiencia:        val('ag-f-audiencia'),
+    edad:             chips('edad'),       // multiselección via chips
+    genero:           val('ag-f-genero'),
+    problema:         val('ag-f-problema'),
+    diferenciador:    val('ag-f-diferenciador'),
+    canales:          chips('canales'),
+    presupuesto:      val('ag-f-presupuesto'),
+    pixel:            val('ag-f-pixel'),
+    funciono:         val('ag-f-funciono'),
+    nofunciono:       val('ag-f-nofunciono'),
+    objetivo:         chips('objetivo'),
+    kpi:              val('ag-f-kpi'),
+    metaCosto:        val('ag-f-meta-costo'),
+    crm:              val('ag-f-crm'),
+    resultados:       val('ag-f-resultados'),
+    tono:             chips('tono'),
+    propuesta:        val('ag-f-propuesta'),
+    keywordsMarca:    val('ag-f-keywords-marca'),
+    evitar:           val('ag-f-evitar'),
+    notes:            val('ag-f-notas'),
+    // Paso 7 — Contacto
+    contactoNombre:   val('ag-f-contacto-nombre'),
+    contactoCargo:    val('ag-f-contacto-cargo'),
+    whatsapp:         val('ag-f-whatsapp'),
+    email:            val('ag-f-email'),
+    contacto2:        val('ag-f-contacto2'),
+    frecuenciaReporte:chips('frecuencia-reporte'),
+    canalReporte:     chips('canal-reporte'),
+    // Logo
+    logo:             briefLogoDataUrl || null,
+    health:           agencySelectedHealth,
     // Campos legacy para compatibilidad con renderCard
-    business:      val('ag-f-industria') || val('ag-f-descripcion').slice(0, 60),
+    business:         val('ag-f-industria') || val('ag-f-descripcion').slice(0, 60),
   };
 }
 
@@ -2095,6 +2193,12 @@ function briefBuildMem(client) {
     notas:         client.notes || '',
     pais:          client.pais || '',
     ciudad:        client.ciudad || '',
+    // Contacto (útil para reportes y seguimiento)
+    whatsapp:      client.whatsapp || '',
+    email:         client.email || '',
+    contacto:      client.contactoNombre ? (client.contactoNombre + (client.contactoCargo ? ' · ' + client.contactoCargo : '')) : '',
+    frecuenciaReporte: client.frecuenciaReporte || '',
+    canalReporte:  client.canalReporte || '',
   };
 }
 
