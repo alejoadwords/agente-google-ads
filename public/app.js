@@ -973,8 +973,10 @@ function showAgentGuide(agentKey) { openAgent(agentKey); }
 // Genera clave de localStorage con userId para aislar perfiles por usuario
 function getProfileKey(agentKey) {
   const uid = clerkInstance?.user?.id || 'anon';
-  // Clave simple por usuario+agente — no incluir adsActiveAccount.id
-  // para evitar que cambie según el estado de conexión
+  // Si hay un cliente de agencia activo, el perfil es independiente por cliente
+  if (agencyActiveClientId) {
+    return `acuarius_profile_${uid}_${agencyActiveClientId}_${agentKey}`;
+  }
   return `acuarius_profile_${uid}_${agentKey}`;
 }
 
@@ -1426,23 +1428,22 @@ function agencyChangeHealth(id) {
 }
 
 // ── Abrir cliente en contexto de chat ────────────────────────────────────────
-function agencyOpenClient(id) {
+async function agencyOpenClient(id) {
   agencyCloseAllDropdowns();
   const c = agencyClients.find(x => x.id === id);
   if (!c) return;
 
+  // IMPORTANTE: setear el clientId ANTES de llamar openAgent
+  // para que getProfileKey y dbLoadProfile usen la clave del cliente
   agencyActiveClientId = id;
 
-  // Cargar historial específico del cliente (prefijo client_id)
-  // El historial se guarda con clave que incluye el client_id
-  showView('chat');
-  openAgent(currentAgentCtx || 'google-ads');
+  // openAgent usa dbLoadProfile que ahora está scopeado por clientId:
+  // - Si el cliente tiene perfil guardado → saluda con "hola de nuevo"
+  // - Si no tiene perfil → lanza el onboarding del agente para este cliente
+  await openAgent(currentAgentCtx || 'google-ads');
 
-  // Mostrar barra de contexto en el chat
+  // Mostrar barra de contexto encima del chat (después de que openAgent renderizó)
   agencyShowContextBar(c);
-
-  // Inyectar el perfil del cliente en la memoria del agente
-  agencyInjectClientContext(c);
 }
 
 function agencyShowContextBar(client) {
@@ -1450,8 +1451,8 @@ function agencyShowContextBar(client) {
   const existing = document.getElementById('agency-ctx-bar');
   if (existing) existing.remove();
 
-  const chatArea = document.getElementById('view-chat');
-  if (!chatArea) return;
+  const chatView = document.getElementById('view-chat');
+  if (!chatView) return;
 
   const bar = document.createElement('div');
   bar.className = 'agency-ctx-bar';
@@ -1462,35 +1463,8 @@ function agencyShowContextBar(client) {
     <span style="color:var(--muted);font-size:11px">${esc(client.business || '')}</span>
     <button class="agency-ctx-exit" onclick="agencyExitClientContext()" title="Salir del contexto de este cliente">✕ salir</button>
   `;
-  chatArea.insertBefore(bar, chatArea.firstChild);
-}
-
-function agencyInjectClientContext(client) {
-  // Sobrescribir la memoria del agente con el perfil del cliente
-  const mem = {
-    negocio:     client.name,
-    industria:   client.business || '',
-    objetivo:    client.notes    || '',
-    presupuesto: '',
-    etapa:       ''
-  };
-  // Actualizar la UI de la mem-card
-  const mNeg = document.getElementById('m-neg');
-  const mInd = document.getElementById('m-ind');
-  const mPre = document.getElementById('m-pre');
-  const mObj = document.getElementById('m-obj');
-  if (mNeg) mNeg.textContent = mem.negocio || '—';
-  if (mInd) mInd.textContent = mem.industria || '—';
-  if (mPre) mPre.textContent = mem.presupuesto || '—';
-  if (mObj) mObj.textContent = mem.objetivo || '—';
-
-  // Limpiar chat para el nuevo cliente y cargar historial específico
-  const chatArea = document.getElementById('chat-area');
-  if (chatArea) chatArea.innerHTML = '';
-  hist = [];
-
-  // Cargar historial de conversaciones propio de este cliente
-  agencyLoadClientHistory(client.id);
+  // Insertar después de la barra de navegación (nav), antes del chat-area
+  chatView.insertBefore(bar, chatView.firstChild);
 }
 
 function agencyLoadClientHistory(clientId) {
@@ -1525,14 +1499,12 @@ function agencySaveClientHistory() {
 }
 
 function agencyExitClientContext() {
+  // Limpiar contexto de cliente
   agencyActiveClientId = null;
   const bar = document.getElementById('agency-ctx-bar');
   if (bar) bar.remove();
-  // Limpiar chat y volver al perfil propio
-  const chatArea = document.getElementById('chat-area');
-  if (chatArea) chatArea.innerHTML = '';
-  hist = [];
-  showView('home');
+  // Volver al panel de clientes
+  showView('agency');
 }
 
 // ── Dropdown ──────────────────────────────────────────────────────────────────
@@ -1828,13 +1800,14 @@ function tourShouldShow() {
 // ── FIN TOUR ──────────────────────────────────────────────────────────────────
 
 async function dbSaveProfile(agentKey, data) {
+  // Clave de Supabase incluye el clientId si hay cliente de agencia activo
+  const scopedAgent = agencyActiveClientId ? `client_${agencyActiveClientId}_${agentKey}` : agentKey;
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-    await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(agentKey)}`, {
+    await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, {
       method: 'POST', headers, body: JSON.stringify({ data })
     });
-    // Mantener localStorage como fallback offline
     localStorage.setItem(getProfileKey(agentKey), JSON.stringify(data));
   } catch(e) {
     console.warn('dbSaveProfile error:', e);
@@ -1843,10 +1816,11 @@ async function dbSaveProfile(agentKey, data) {
 }
 
 async function dbLoadProfile(agentKey) {
+  const scopedAgent = agencyActiveClientId ? `client_${agencyActiveClientId}_${agentKey}` : agentKey;
   try {
     const headers = {};
     if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-    const res = await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(agentKey)}`, { headers });
+    const res = await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, { headers });
     if (res.ok) {
       const { data } = await res.json();
       if (data && Object.keys(data).length > 0) return data;
@@ -1854,28 +1828,37 @@ async function dbLoadProfile(agentKey) {
   } catch(e) {
     console.warn('dbLoadProfile error:', e);
   }
-  // Fallback a localStorage — buscar con clave actual y todas las variantes posibles
+  // Fallback localStorage — clave exacta incluye clientId si hay cliente activo
+  const exactKey = getProfileKey(agentKey);
+  const val = localStorage.getItem(exactKey);
+  if (val) {
+    try {
+      const parsed = JSON.parse(val);
+      if (parsed && Object.keys(parsed).length > 0) return parsed;
+    } catch {}
+  }
+  // Si hay clientId activo, NO hacer fallback al perfil del usuario principal → lanzar onboarding
+  if (agencyActiveClientId) return null;
+  // Fallback legacy solo para usuario principal
   const uid = clerkInstance?.user?.id || 'anon';
   const keysToTry = [
-    `acuarius_profile_${uid}_${agentKey}`,           // clave actual
-    `acuarius_profile_anon_${agentKey}`,              // clave sin uid
+    `acuarius_profile_${uid}_${agentKey}`,
+    `acuarius_profile_anon_${agentKey}`,
   ];
-  // Buscar también claves que incluyan account ID (clave legacy)
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && k.includes(`_${agentKey}`) && k.startsWith('acuarius_profile_')) {
+    if (k && k.includes(`_${agentKey}`) && k.startsWith('acuarius_profile_') && !k.includes('_client_')) {
       if (!keysToTry.includes(k)) keysToTry.push(k);
     }
   }
   for (const key of keysToTry) {
-    const val = localStorage.getItem(key);
-    if (val) {
+    const v = localStorage.getItem(key);
+    if (v) {
       try {
-        const parsed = JSON.parse(val);
+        const parsed = JSON.parse(v);
         if (parsed && Object.keys(parsed).length > 0) {
-          // Migrar a clave actual si es diferente
           const currentKey = `acuarius_profile_${uid}_${agentKey}`;
-          if (key !== currentKey) localStorage.setItem(currentKey, val);
+          if (key !== currentKey) localStorage.setItem(currentKey, v);
           return parsed;
         }
       } catch {}
