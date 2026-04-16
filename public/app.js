@@ -1282,7 +1282,7 @@ function agencyRender() {
           ${healthLabels[healthClass] || 'Sin definir'}
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <button class="agency-report-btn" onclick="waReportOpen('${client.id}')" title="Generar reporte para WhatsApp">
+          <button class="agency-report-btn" onclick="warOpen('${client.id}')" title="Generar reporte para WhatsApp">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
             reporte
           </button>
@@ -1702,7 +1702,7 @@ function agencyShowContextBar(client) {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3.87-3.87"/></svg>
     <span class="agency-ctx-name">Trabajando con: <strong>${esc(client.name)}</strong></span>
     <span style="color:var(--muted);font-size:11px">${esc(client.business || '')}</span>
-    <button class="agency-ctx-report" onclick="waReportOpen('${agencyActiveClientId}')" title="Generar reporte para WhatsApp">
+    <button class="agency-ctx-report" onclick="warOpen(agencyActiveClientId)" title="Generar reporte para WhatsApp">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
       reporte WA
     </button>
@@ -1777,243 +1777,500 @@ function agencyOnMessageReceived() {
 
 // ── REPORTE WHATSAPP ──────────────────────────────────────────────────────────
 
-let waReportClientId = null;
-let waReportGeneratedText = null;
-let waReportPeriod = 'mes';
+const WAR_PLATFORMS = {
+  google:   { name: 'Google Ads',   color: '#4285F4' },
+  meta:     { name: 'Meta Ads',     color: '#1877F2' },
+  tiktok:   { name: 'TikTok Ads',  color: '#010101' },
+  linkedin: { name: 'LinkedIn Ads', color: '#0A66C2' },
+};
 
-function waReportOpen(clientId) {
+// KPIs por plataforma — los más relevantes de cada una
+const WAR_KPIS_BY_PLATFORM = {
+  google: [
+    { id:'inversion',      label:'Inversión total',   prefix:'$' },
+    { id:'impresiones',    label:'Impresiones' },
+    { id:'clics',          label:'Clics' },
+    { id:'ctr',            label:'CTR',               suffix:'%' },
+    { id:'cpc',            label:'CPC promedio',      prefix:'$' },
+    { id:'conversiones',   label:'Conversiones' },
+    { id:'cpa',            label:'CPA',               prefix:'$' },
+    { id:'roas',           label:'ROAS',              suffix:'x' },
+    { id:'quality_score',  label:'Quality Score' },
+    { id:'impression_share',label:'Impression Share', suffix:'%' },
+  ],
+  meta: [
+    { id:'inversion',      label:'Inversión total',   prefix:'$' },
+    { id:'alcance',        label:'Alcance' },
+    { id:'impresiones',    label:'Impresiones' },
+    { id:'frecuencia',     label:'Frecuencia' },
+    { id:'cpm',            label:'CPM',               prefix:'$' },
+    { id:'clics',          label:'Clics (link)' },
+    { id:'ctr',            label:'CTR (link)',         suffix:'%' },
+    { id:'leads',          label:'Leads' },
+    { id:'cpr',            label:'Costo por resultado',prefix:'$' },
+    { id:'roas',           label:'ROAS',              suffix:'x' },
+  ],
+  tiktok: [
+    { id:'inversion',      label:'Inversión total',   prefix:'$' },
+    { id:'impresiones',    label:'Impresiones' },
+    { id:'alcance',        label:'Alcance' },
+    { id:'reproducciones', label:'Reproducciones' },
+    { id:'vtr',            label:'VTR (View-Through)', suffix:'%' },
+    { id:'cpv',            label:'CPV',               prefix:'$' },
+    { id:'clics',          label:'Clics' },
+    { id:'ctr',            label:'CTR',               suffix:'%' },
+    { id:'conversiones',   label:'Conversiones' },
+    { id:'cpa',            label:'CPA',               prefix:'$' },
+  ],
+  linkedin: [
+    { id:'inversion',      label:'Inversión total',   prefix:'$' },
+    { id:'impresiones',    label:'Impresiones' },
+    { id:'clics',          label:'Clics' },
+    { id:'ctr',            label:'CTR',               suffix:'%' },
+    { id:'cpc',            label:'CPC',               prefix:'$' },
+    { id:'leads_b2b',      label:'Leads calificados' },
+    { id:'cpl_b2b',        label:'CPL',               prefix:'$' },
+    { id:'aperturas',      label:'Aperturas de mensaje' },
+    { id:'conexiones',     label:'Solicitudes de conexión' },
+  ],
+};
+
+// Estado de KPIs seleccionados por plataforma (incluye personalizados)
+let warSelectedKpis = {}; // { google: ['inversion','clics',...], meta: [...] }
+let warCustomKpis   = {}; // { google: [{id:'custom_0', label:'Mi métrica'}], ... }
+
+let warClientId = null;
+let warStep = 0;
+let warPeriod = 'mes';
+let warGeneratedText = null;
+const WAR_TOTAL_STEPS = 5;
+
+function warOpen(clientId) {
   const client = agencyClients.find(c => c.id === clientId);
   if (!client) return;
-  waReportClientId = clientId;
-  waReportGeneratedText = null;
+  warClientId = clientId;
+  warStep = 0;
+  warPeriod = 'mes';
+  warGeneratedText = null;
+  warSelectedKpis = {};
+  warCustomKpis   = {};
 
-  // Actualizar header con datos del cliente
-  document.getElementById('wa-report-title').textContent = `Reporte: ${client.name}`;
+  // Pre-seleccionar KPIs más importantes de cada plataforma
+  Object.keys(WAR_KPIS_BY_PLATFORM).forEach(plat => {
+    const defaults = ['inversion','clics','conversiones','cpa','roas','leads','ctr','alcance'];
+    warSelectedKpis[plat] = WAR_KPIS_BY_PLATFORM[plat]
+      .filter(k => defaults.includes(k.id))
+      .map(k => k.id);
+    warCustomKpis[plat] = [];
+  });
+
+  document.getElementById('war-title').textContent = 'Reporte: ' + client.name;
   const hasWa = client.whatsapp;
-  document.getElementById('wa-report-sub').textContent = hasWa
-    ? `Se enviará a ${client.contactoNombre || client.name} · ${client.whatsapp}`
-    : 'Completa el WhatsApp del cliente en el brief para envío directo';
+  document.getElementById('war-sub').textContent = hasWa
+    ? 'Se enviará a ' + (client.contactoNombre || client.name) + ' · ' + client.whatsapp
+    : 'Genera el reporte y cópialo para enviarlo por WhatsApp';
 
-  // Reset estado
-  document.getElementById('wa-report-empty').style.display = 'block';
-  document.getElementById('wa-report-generating').style.display = 'none';
-  document.getElementById('wa-report-preview-wrap').style.display = 'none';
-  document.getElementById('wa-report-generate-btn').style.display = 'flex';
-  document.getElementById('wa-report-wa-btn').style.display = 'none';
-  document.getElementById('wa-report-copy-btn').style.display = 'none';
-  document.getElementById('wa-report-generate-btn').innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-    Generar reporte`;
+  // Reset preview
+  document.getElementById('war-generating').style.display = 'none';
+  document.getElementById('war-preview-wrap').style.display = 'none';
 
-  document.getElementById('wa-report-overlay').style.display = 'flex';
-  // Inicializar estilos de checkboxes
-  setTimeout(waReportInitCheckboxStyles, 50);
+  warGoStep(0);
+  document.getElementById('war-overlay').style.display = 'flex';
 }
 
-function waReportSetPeriod(btn) {
-  document.querySelectorAll('.wa-report-period-btn').forEach(b => b.classList.remove('active'));
+function warGoStep(step) {
+  warStep = step;
+  document.querySelectorAll('.war-step').forEach((s, i) => s.classList.toggle('active', i === step));
+  document.querySelectorAll('.war-tab').forEach((t, i) => {
+    t.className = 'war-tab' + (i === step ? ' active' : i < step ? ' done' : '');
+  });
+
+  // Footer buttons
+  const prev = document.getElementById('war-btn-prev');
+  const next = document.getElementById('war-btn-next');
+  const copy = document.getElementById('war-btn-copy');
+  const wa   = document.getElementById('war-btn-wa');
+  const info = document.getElementById('war-footer-info');
+
+  prev.style.display = step === 0 ? 'none' : 'block';
+  copy.style.display = 'none';
+  wa.style.display   = 'none';
+
+  if (step === WAR_TOTAL_STEPS - 1) {
+    next.style.display = 'none';
+    if (warGeneratedText) {
+      copy.style.display = 'flex';
+      const client = agencyClients.find(c => c.id === warClientId);
+      if (client?.whatsapp) wa.style.display = 'flex';
+    } else {
+      next.style.display = 'block';
+      next.textContent = 'Generar reporte';
+      next.style.background = '#25D366';
+    }
+    info.textContent = warGeneratedText ? 'Reporte listo ✓' : '';
+  } else {
+    next.style.display = 'block';
+    next.textContent = 'continuar →';
+    next.style.background = '';
+    info.textContent = '';
+  }
+
+  // Build KPI step when arriving at step 1
+  if (step === 1) warBuildKpiStep();
+  // Build metrics form when arriving at step 3
+  if (step === 3) warBuildMetricsForm();
+
+  // Scroll to top
+  const body = document.querySelector('.war-body');
+  if (body) body.scrollTop = 0;
+}
+
+function warNext() {
+  if (warStep === 0) {
+    const sel = document.querySelectorAll('.war-platform-card.sel');
+    if (sel.length === 0) { alert('Selecciona al menos una plataforma.'); return; }
+  }
+  if (warStep === 1) {
+    const sel = document.querySelectorAll('.war-kpi-chip.sel');
+    if (sel.length === 0) { alert('Selecciona al menos un KPI.'); return; }
+  }
+  if (warStep === 2 && warPeriod === 'custom') {
+    const from = document.getElementById('war-date-from')?.value;
+    const to   = document.getElementById('war-date-to')?.value;
+    if (!from || !to) { alert('Selecciona el rango de fechas.'); return; }
+  }
+  if (warStep === WAR_TOTAL_STEPS - 1) {
+    warGenerate(); return;
+  }
+  if (warStep < WAR_TOTAL_STEPS - 1) warGoStep(warStep + 1);
+}
+
+function warPrev() {
+  if (warStep > 0) {
+    warGeneratedText = null;
+    warGoStep(warStep - 1);
+  }
+}
+
+function warTogglePlatform(card) {
+  card.classList.toggle('sel');
+}
+
+function warToggleKpi(chip) {
+  const plat = chip.dataset.plat;
+  const kpi  = chip.dataset.kpi;
+  chip.classList.toggle('sel');
+  if (chip.classList.contains('sel')) {
+    if (!warSelectedKpis[plat]) warSelectedKpis[plat] = [];
+    if (!warSelectedKpis[plat].includes(kpi)) warSelectedKpis[plat].push(kpi);
+  } else {
+    warSelectedKpis[plat] = (warSelectedKpis[plat] || []).filter(k => k !== kpi);
+  }
+}
+
+function warAddCustomKpi(plat) {
+  const label = prompt('Nombre de la métrica personalizada:');
+  if (!label || !label.trim()) return;
+  const id = 'custom_' + Date.now();
+  if (!warCustomKpis[plat]) warCustomKpis[plat] = [];
+  warCustomKpis[plat].push({ id, label: label.trim() });
+  if (!warSelectedKpis[plat]) warSelectedKpis[plat] = [];
+  warSelectedKpis[plat].push(id);
+  // Re-render KPI step
+  warBuildKpiStep();
+}
+
+function warBuildKpiStep() {
+  const container = document.getElementById('war-kpi-sections');
+  if (!container) return;
+  const platforms = [...document.querySelectorAll('.war-platform-card.sel')].map(c => c.dataset.plat);
+
+  const platIcons = {
+    google:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>',
+    meta:     '<svg width="14" height="14" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+    tiktok:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>',
+    linkedin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452z"/></svg>',
+  };
+
+  container.innerHTML = platforms.map(plat => {
+    const platInfo = WAR_PLATFORMS[plat] || { name: plat };
+    const kpis     = WAR_KPIS_BY_PLATFORM[plat] || [];
+    const customs  = warCustomKpis[plat] || [];
+    const selected = warSelectedKpis[plat] || [];
+
+    const standardChips = kpis.map(k =>
+      '<div class="war-kpi-chip' + (selected.includes(k.id) ? ' sel' : '') + '" data-plat="' + plat + '" data-kpi="' + k.id + '" onclick="warToggleKpi(this)">' + k.label + '</div>'
+    ).join('');
+
+    const customChips = customs.map(k =>
+      '<div class="war-kpi-chip sel" style="border-style:dashed" data-plat="' + plat + '" data-kpi="' + k.id + '" onclick="warToggleKpi(this)">' + k.label + ' ✕</div>'
+    ).join('');
+
+    return '<div style="margin-bottom:18px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--text)">' + (platIcons[plat]||'') + platInfo.name + '</div>' +
+        '<button onclick="warAddCustomKpi(\'' + plat + '\')" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:var(--font);font-weight:600">+ personalizada</button>' +
+      '</div>' +
+      '<div class="war-kpi-grid">' + standardChips + customChips + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function warSetPeriod(btn) {
+  document.querySelectorAll('.war-period-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  waReportPeriod = btn.dataset.p;
+  warPeriod = btn.dataset.p;
+  const customDates = document.getElementById('war-custom-dates');
+  if (customDates) customDates.style.display = warPeriod === 'custom' ? 'block' : 'none';
 }
 
-async function waReportGenerate() {
-  const client = agencyClients.find(c => c.id === waReportClientId);
+function warBuildMetricsForm() {
+  const container = document.getElementById('war-metrics-container');
+  if (!container) return;
+  const platforms = [...document.querySelectorAll('.war-platform-card.sel')].map(c => c.dataset.plat);
+  const platIcons = {
+    google:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>',
+    meta:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+    tiktok:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>',
+    linkedin:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452z"/></svg>',
+  };
+  container.innerHTML = platforms.map(plat => {
+    const platInfo = WAR_PLATFORMS[plat] || { name: plat };
+    const selKpis  = warSelectedKpis[plat] || [];
+    const customK  = warCustomKpis[plat]   || [];
+    const allKpis  = [...(WAR_KPIS_BY_PLATFORM[plat] || []), ...customK];
+    const labelMap = {};
+    allKpis.forEach(k => { labelMap[k.id] = k.label; });
+    const fields = selKpis.map(kid => {
+      const label = labelMap[kid] || kid;
+      return '<div class="war-metric-field"><label>' + label + '</label><input type="text" id="war-' + plat + '-' + kid + '" placeholder="ej. 1200"></div>';
+    }).join('');
+    return '<div class="war-platform-section"><div class="war-platform-header">' + (platIcons[plat]||'') + '<span class="war-platform-label">' + platInfo.name + '</span></div><div class="war-metrics-grid">' + fields + '</div></div>';
+  }).join('');
+}
+
+function warGetMetricData() {
+  const platforms = [...document.querySelectorAll('.war-platform-card.sel')].map(c => c.dataset.plat);
+  const result = {};
+  const kpisPerPlat = {};
+  platforms.forEach(plat => {
+    result[plat] = {};
+    kpisPerPlat[plat] = warSelectedKpis[plat] || [];
+    kpisPerPlat[plat].forEach(kpi => {
+      const el = document.getElementById('war-' + plat + '-' + kpi);
+      result[plat][kpi] = el?.value.trim() || '';
+    });
+  });
+  return { platforms, kpis: kpisPerPlat, data: result };
+}
+
+function warPeriodLabel() {
+  const labels = { semana: 'última semana', mes: 'último mes', trimestre: 'último trimestre' };
+  if (warPeriod === 'custom') {
+    const from = document.getElementById('war-date-from')?.value || '';
+    const to   = document.getElementById('war-date-to')?.value   || '';
+    return from && to ? from + ' al ' + to : 'período personalizado';
+  }
+  return labels[warPeriod] || 'último mes';
+}
+
+let warReportUrl = null; // URL pública del reporte guardado en Supabase
+
+async function warGenerate() {
+  const client = agencyClients.find(c => c.id === warClientId);
   if (!client) return;
 
-  const genBtn = document.getElementById('wa-report-generate-btn');
-  genBtn.style.display = 'none';
-  document.getElementById('wa-report-copy-btn').style.display = 'none';
-  document.getElementById('wa-report-wa-btn').style.display = 'none';
-  document.getElementById('wa-report-empty').style.display = 'none';
-  document.getElementById('wa-report-preview-wrap').style.display = 'none';
-  document.getElementById('wa-report-generating').style.display = 'block';
+  const { platforms, kpis, data } = warGetMetricData();
+  const periodo = warPeriodLabel();
 
-  const periodLabels = { semana: 'última semana', mes: 'último mes', trimestre: 'último trimestre' };
-  const periodo = periodLabels[waReportPeriod] || 'último mes';
+  // Build metrics summary for prompt — usa los labels reales de cada plataforma
+  const metricsText = platforms.map(plat => {
+    const platName = WAR_PLATFORMS[plat]?.name || plat;
+    const selKpis  = kpis[plat] || [];
+    const allKpisInfo = [...(WAR_KPIS_BY_PLATFORM[plat] || []), ...(warCustomKpis[plat] || [])];
+    const labelMap = {};
+    allKpisInfo.forEach(k => { labelMap[k.id] = { label: k.label, prefix: k.prefix, suffix: k.suffix }; });
 
-  const incKpi    = document.getElementById('wa-inc-kpi')?.checked;
-  const incLogros = document.getElementById('wa-inc-logros')?.checked;
-  const incSig    = document.getElementById('wa-inc-sig')?.checked;
+    const vals = selKpis.map(kid => {
+      const v = data[plat][kid];
+      if (!v) return null;
+      const info = labelMap[kid] || { label: kid };
+      const formatted = info.prefix ? info.prefix + v : v + (info.suffix || '');
+      return info.label + ': ' + formatted;
+    }).filter(Boolean).join(' | ');
+    return platName + ':\n' + (vals || 'Sin datos ingresados');
+  }).join('\n\n');
 
-  // Construir contexto del cliente para el prompt
-  const ctx = [
-    `Cliente: ${client.name}`,
-    client.descripcion  ? `Negocio: ${client.descripcion}` : '',
-    client.industria    ? `Industria: ${client.industria}` : '',
-    client.web          ? `Web: ${client.web}` : '',
-    client.objetivo     ? `Objetivo principal: ${client.objetivo}` : '',
-    client.kpi          ? `KPI primario: ${client.kpi}${client.metaCosto ? ' · Meta: ' + client.metaCosto : ''}` : '',
-    client.presupuesto  ? `Presupuesto mensual: ${client.presupuesto}` : '',
-    client.canales      ? `Canales activos: ${client.canales}` : '',
-    client.resultados   ? `Resultados esperados: ${client.resultados}` : '',
-    client.propuesta    ? `Propuesta de valor: ${client.propuesta}` : '',
-    client.audiencia    ? `Audiencia: ${client.audiencia}` : '',
-    client.competidores ? `Competidores: ${client.competidores}` : '',
-    client.notas || client.notes ? `Notas internas: ${client.notas || client.notes}` : '',
+  // Client context from brief
+  const clientCtx = [
+    'Cliente: ' + client.name,
+    client.industria  ? 'Industria: ' + client.industria : '',
+    client.objetivo   ? 'Objetivo principal: ' + client.objetivo : '',
+    client.kpi        ? 'KPI acordado: ' + client.kpi + (client.metaCosto ? ' · Meta: ' + client.metaCosto : '') : '',
+    client.resultados ? 'Resultados esperados: ' + client.resultados : '',
+    client.propuesta  ? 'Propuesta de valor: ' + client.propuesta : '',
   ].filter(Boolean).join('\n');
 
-  const incluirSecciones = [
-    incKpi    ? '- Estado de KPIs y métricas clave del período' : '',
-    incLogros ? '- Logros y avances más importantes' : '',
-    incSig    ? '- Próximos pasos y acciones para el siguiente período' : '',
-  ].filter(Boolean).join('\n');
+  const prompt =
+    'Eres el especialista de marketing de una agencia digital. Redacta el mensaje de WhatsApp que acompaña el envío del reporte de campañas del ' + periodo + ' al cliente.\n\n' +
+    'CONTEXTO DEL CLIENTE:\n' + clientCtx + '\n\n' +
+    'DATOS DEL PERÍODO (' + periodo + '):\n' + metricsText + '\n\n' +
+    'INSTRUCCIONES:\n' +
+    '- Saludo breve (1 línea) con el período\n' +
+    '- Para cada plataforma, resume 2-3 métricas clave con *negritas* en los números (formato WhatsApp)\n' +
+    '- 1-2 líneas de interpretación: si los resultados van bien, regular o necesitan ajuste\n' +
+    '- Menciona que adjuntas el reporte completo con el enlace que vendrá a continuación\n' +
+    '- Cierre con disposición para reunión o preguntas\n' +
+    '- Máximo 200 palabras, tono profesional pero cercano\n' +
+    '- NO menciones "Acuarius"\n' +
+    '- Emojis con moderación (máx 4)\n\n' +
+    'Devuelve ÚNICAMENTE el texto del mensaje WhatsApp, sin comillas ni explicaciones.';
 
-  const prompt = `Eres el especialista de marketing de una agencia digital que envía un reporte ejecutivo por WhatsApp a su cliente al final del ${periodo}.
-
-DATOS DEL CLIENTE:
-${ctx}
-
-PERÍODO: ${periodo}
-
-Genera un mensaje de WhatsApp profesional pero cercano para el cliente. El mensaje debe:
-- Empezar con un saludo breve (no más de 1 línea)
-- Usar *negritas* con asteriscos para resaltar números y datos importantes (formato WhatsApp)
-- Ser conciso: máximo 200 palabras en total
-- Incluir las siguientes secciones:
-${incluirSecciones}
-- Cerrar con una frase de cierre cordial y disposición para reunión o consulta
-- Usar emojis con moderación (máx 3-4 en todo el mensaje)
-- NO incluir saludos de agencia ni mencionar "Acuarius" — el mensaje sale en nombre de la agencia del usuario
-- Tono: profesional pero humano, como si fuera de un estratega de confianza al cliente
-
-IMPORTANTE: Como no tienes datos reales de campañas (la integración con plataformas está en proceso), basa el reporte en el contexto del cliente, menciona los canales que están trabajando, y agrega una nota natural de que los datos específicos se comparten en el informe adjunto o en la próxima reunión. No inventes métricas específicas.
-
-Devuelve ÚNICAMENTE el texto del mensaje, sin explicaciones ni comillas.`;
+  // Show loading
+  warReportUrl = null;
+  document.getElementById('war-btn-next').style.display = 'none';
+  document.getElementById('war-generating').style.display = 'block';
+  document.getElementById('war-preview-wrap').style.display = 'none';
 
   try {
-    // Usar /api/chat igual que el chat normal — evita CORS y reutiliza autenticación
+    // 1. Generar texto con IA
     const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
 
     const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers,
+      method: 'POST', headers,
       body: JSON.stringify({
         messages: [{ role: 'user', content: prompt }],
-        system: 'Eres un especialista en marketing digital que redacta reportes ejecutivos para clientes de agencias de marketing digital en Latinoamérica. Siempre respondes en español, de forma concisa y profesional.',
+        system: 'Eres un especialista en marketing digital que redacta reportes ejecutivos concisos para agencias en Latinoamérica. Respondes siempre en español.',
         userPlan
       })
     });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
 
-    if (!r.ok) {
-      throw new Error('HTTP ' + r.status);
-    }
-
-    // Leer stream igual que el chat normal
+    // Leer stream SSE
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
-    let fullText = '';
-
-    while (true) {
+    let sseBuffer = '', fullText = '', streamDone = false;
+    while (!streamDone) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-      for (const line of lines) {
+      sseBuffer += decoder.decode(value, { stream: true });
+      const sseLines = sseBuffer.split('\n');
+      sseBuffer = sseLines.pop();
+      for (const line of sseLines) {
         if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6).trim();
-        if (raw === '[DONE]') continue;
         try {
-          const parsed = JSON.parse(raw);
-          const delta = parsed.delta?.text || parsed.choices?.[0]?.delta?.content || '';
-          fullText += delta;
+          const evt = JSON.parse(line.slice(6).trim());
+          if (evt.delta !== undefined) fullText += evt.delta;
+          if (evt.done && evt.full !== undefined) { fullText = evt.full; streamDone = true; }
         } catch {}
       }
     }
-
     const text = fullText.trim();
-    if (!text) throw new Error('Sin respuesta');
+    if (!text) throw new Error('Sin respuesta del modelo');
 
-    waReportGeneratedText = text;
-    waReportShowPreview(text);
+    warGeneratedText = text;
+
+    // 2. Guardar reporte en Supabase y obtener URL pública
+    try {
+      const dateFrom = document.getElementById('war-date-from')?.value || null;
+      const dateTo   = document.getElementById('war-date-to')?.value   || null;
+      const rptHeaders = { 'Content-Type': 'application/json' };
+      if (sessionToken) rptHeaders['Authorization'] = 'Bearer ' + sessionToken;
+
+      const rptRes = await fetch('/api/report', {
+        method: 'POST', headers: rptHeaders,
+        body: JSON.stringify({
+          clientId:    client.id,
+          clientName:  client.name,
+          agencyName:  null, // futuro: nombre de la agencia del usuario
+          platforms,
+          kpis,           // { google: ['inversion','clics',...], meta: [...] }
+          metrics:     data,
+          period:      warPeriod,
+          dateFrom,
+          dateTo,
+          summary:     text,
+        })
+      });
+      if (rptRes.ok) {
+        const { url } = await rptRes.json();
+        warReportUrl = url || null;
+      }
+    } catch (e) {
+      console.warn('warGenerate: no se pudo guardar el reporte en Supabase:', e);
+      // No es fatal — el texto ya está generado
+    }
+
+    warShowPreview(text, warReportUrl);
 
   } catch (err) {
-    console.error('waReport error:', err);
-    document.getElementById('wa-report-generating').style.display = 'none';
-    document.getElementById('wa-report-empty').style.display = 'block';
-    document.getElementById('wa-report-empty').innerHTML =
-      '<div style="font-size:13px;color:var(--danger);margin-bottom:8px">Error al generar el reporte</div>' +
-      '<div style="font-size:12px;color:var(--muted)">Verifica tu conexión e intenta de nuevo.</div>';
-    genBtn.style.display = 'flex';
+    console.error('warGenerate error:', err);
+    document.getElementById('war-generating').style.display = 'none';
+    document.getElementById('war-btn-next').style.display = 'block';
+    document.getElementById('war-btn-next').textContent = 'Generar reporte';
+    document.getElementById('war-btn-next').style.background = '#25D366';
+    alert('Error al generar el reporte. Verifica tu conexión e intenta de nuevo.');
   }
 }
 
-function waReportShowPreview(text) {
-  document.getElementById('wa-report-generating').style.display = 'none';
-  document.getElementById('wa-report-empty').style.display = 'none';
+function warShowPreview(text, reportUrl) {
+  document.getElementById('war-generating').style.display = 'none';
 
-  // Render WhatsApp formatting: *bold* → <b>, _italic_ → <i>
-  const formatted = text
-    .replace(/\*(.*?)\*/g, '<b>$1</b>')
-    .replace(/_(.*?)_/g, '<i>$1</i>')
-    .replace(/\n/g, '<br>');
+  // Texto completo del mensaje WA = resumen IA + link al reporte
+  const fullMessage = reportUrl
+    ? text + '\n\n📊 Ver reporte completo: ' + reportUrl
+    : text;
+  warGeneratedText = fullMessage;
 
-  document.getElementById('wa-report-text').innerHTML = formatted;
+  const formatted = fullMessage
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*(.*?)\*/g,'<b>$1</b>')
+    .replace(/_(.*?)_/g,'<i>$1</i>')
+    .replace(/\n/g,'<br>');
 
+  document.getElementById('war-bubble-text').innerHTML = formatted;
   const now = new Date();
-  document.getElementById('wa-report-time').textContent =
+  document.getElementById('war-bubble-time').textContent =
     now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ' ✓✓';
 
-  document.getElementById('wa-report-preview-wrap').style.display = 'block';
+  document.getElementById('war-preview-wrap').style.display = 'block';
 
-  // Show action buttons
-  document.getElementById('wa-report-generate-btn').style.display = 'none';
-  document.getElementById('wa-report-copy-btn').style.display = 'flex';
-
-  const client = agencyClients.find(c => c.id === waReportClientId);
-  if (client && client.whatsapp) {
-    document.getElementById('wa-report-wa-btn').style.display = 'flex';
-  }
+  // Footer
+  document.getElementById('war-btn-copy').style.display = 'flex';
+  const client = agencyClients.find(c => c.id === warClientId);
+  if (client?.whatsapp) document.getElementById('war-btn-wa').style.display = 'flex';
+  const infoEl = document.getElementById('war-footer-info');
+  infoEl.innerHTML = reportUrl
+    ? 'Reporte guardado · <a href="' + reportUrl + '" target="_blank" style="color:var(--blue);text-decoration:none;font-weight:600">ver enlace</a>'
+    : 'Reporte listo ✓';
 }
 
-function waReportSend() {
-  if (!waReportGeneratedText) return;
-  const client = agencyClients.find(c => c.id === waReportClientId);
-  const phone = client?.whatsapp?.replace(/[\s\-\(\)]/g, '') || '';
-  const encoded = encodeURIComponent(waReportGeneratedText);
+function warSend() {
+  if (!warGeneratedText) return;
+  const client = agencyClients.find(c => c.id === warClientId);
+  const phone  = client?.whatsapp?.replace(/[\s\-\(\)]/g,'') || '';
   const url = phone
-    ? `https://wa.me/${phone}?text=${encoded}`
-    : `https://wa.me/?text=${encoded}`;
+    ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(warGeneratedText)
+    : 'https://wa.me/?text=' + encodeURIComponent(warGeneratedText);
   window.open(url, '_blank');
 }
 
-function waReportCopy() {
-  if (!waReportGeneratedText) return;
-  navigator.clipboard.writeText(waReportGeneratedText).then(() => {
-    const btn = document.getElementById('wa-report-copy-btn');
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> copiado`;
-    setTimeout(() => {
-      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> copiar`;
-    }, 2000);
+function warCopy() {
+  if (!warGeneratedText) return;
+  navigator.clipboard.writeText(warGeneratedText).then(() => {
+    const btn = document.getElementById('war-btn-copy');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ copiado';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
   });
 }
 
-function waReportStyleLabel(checkbox, labelId) {
-  const lbl = document.getElementById(labelId);
-  if (!lbl) return;
-  if (checkbox.checked) {
-    lbl.style.borderColor = 'var(--blue-md)';
-    lbl.style.background = 'var(--blue-lt)';
-    lbl.style.color = 'var(--blue)';
-  } else {
-    lbl.style.borderColor = 'var(--border)';
-    lbl.style.background = '';
-    lbl.style.color = 'var(--text)';
-  }
-}
-
-// Inicializar estilos de checkboxes al abrir el modal
-function waReportInitCheckboxStyles() {
-  [['wa-inc-kpi','lbl-kpi'],['wa-inc-logros','lbl-logros'],['wa-inc-sig','lbl-sig']].forEach(([cbId, lblId]) => {
-    const cb = document.getElementById(cbId);
-    if (cb) waReportStyleLabel(cb, lblId);
-  });
-}
-
-function waReportClose() {
-  document.getElementById('wa-report-overlay').style.display = 'none';
-  waReportClientId = null;
-  waReportGeneratedText = null;
+function warClose() {
+  document.getElementById('war-overlay').style.display = 'none';
+  warClientId = null;
+  warGeneratedText = null;
+  warReportUrl = null;
 }
 
 // ── FIN REPORTE WHATSAPP ──────────────────────────────────────────────────────
