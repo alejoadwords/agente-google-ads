@@ -2064,14 +2064,52 @@ function warGetMetricData() {
   return { platforms, kpis: kpisPerPlat, data: result };
 }
 
-function warPeriodLabel() {
-  const labels = { semana: 'última semana', mes: 'último mes', trimestre: 'último trimestre' };
+function warCalcDates() {
+  // Calcula las fechas reales según el período seleccionado
+  const today = new Date();
+  const fmt = d => d.toISOString().slice(0, 10); // YYYY-MM-DD
+  const fmtHuman = d => d.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+
   if (warPeriod === 'custom') {
     const from = document.getElementById('war-date-from')?.value || '';
     const to   = document.getElementById('war-date-to')?.value   || '';
-    return from && to ? from + ' al ' + to : 'período personalizado';
+    if (from && to) {
+      const dFrom = new Date(from + 'T00:00:00');
+      const dTo   = new Date(to   + 'T00:00:00');
+      return { from, to, label: fmtHuman(dFrom) + ' al ' + fmtHuman(dTo) };
+    }
+    return { from: null, to: null, label: 'período personalizado' };
   }
-  return labels[warPeriod] || 'último mes';
+
+  let dFrom, dTo;
+  if (warPeriod === 'semana') {
+    // Lunes al domingo de la semana anterior
+    const day = today.getDay(); // 0=dom, 1=lun...
+    const diffToLastMonday = day === 0 ? 6 : day - 1; // días desde el lunes actual
+    dTo   = new Date(today); dTo.setDate(today.getDate() - diffToLastMonday - 1); // domingo anterior
+    dFrom = new Date(dTo);   dFrom.setDate(dTo.getDate() - 6);                    // lunes anterior
+  } else if (warPeriod === 'mes') {
+    // Mes calendario anterior completo
+    dFrom = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    dTo   = new Date(today.getFullYear(), today.getMonth(), 0);
+  } else { // trimestre
+    // Trimestre anterior completo
+    const q = Math.floor(today.getMonth() / 3); // 0-3
+    const qStart = q === 0 ? -3 : (q - 1) * 3; // mes inicio trimestre anterior
+    dFrom = new Date(today.getFullYear(), qStart < 0 ? today.getFullYear() - 1 : today.getFullYear(), qStart < 0 ? 9 : qStart, 1);
+    dFrom = new Date(today.getFullYear() - (q === 0 ? 1 : 0), q === 0 ? 9 : (q - 1) * 3, 1);
+    dTo   = new Date(today.getFullYear() - (q === 0 ? 1 : 0), q === 0 ? 12 : q * 3, 0);
+  }
+
+  return {
+    from:  fmt(dFrom),
+    to:    fmt(dTo),
+    label: fmtHuman(dFrom) + ' al ' + fmtHuman(dTo)
+  };
+}
+
+function warPeriodLabel() {
+  return warCalcDates().label;
 }
 
 let warReportUrl = null; // URL pública del reporte guardado en Supabase
@@ -2081,7 +2119,8 @@ async function warGenerate() {
   if (!client) return;
 
   const { platforms, kpis, data } = warGetMetricData();
-  const periodo = warPeriodLabel();
+  const dates  = warCalcDates(); // fechas reales calculadas
+  const periodo = dates.label;   // "3 de noviembre al 17 de noviembre de 2025"
 
   // Build metrics summary for prompt — usa los labels reales de cada plataforma
   const metricsText = platforms.map(plat => {
@@ -2173,8 +2212,8 @@ async function warGenerate() {
 
     // 2. Guardar reporte en Supabase y obtener URL pública
     try {
-      const dateFrom = document.getElementById('war-date-from')?.value || null;
-      const dateTo   = document.getElementById('war-date-to')?.value   || null;
+      const dateFrom = dates.from || document.getElementById('war-date-from')?.value || null;
+      const dateTo   = dates.to   || document.getElementById('war-date-to')?.value   || null;
       const rptHeaders = { 'Content-Type': 'application/json' };
       if (sessionToken) rptHeaders['Authorization'] = 'Bearer ' + sessionToken;
 
