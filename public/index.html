@@ -1622,15 +1622,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <div>
             <div class="wa-report-opt-label">Incluir en el reporte</div>
           </div>
-          <div style="display:flex;gap:10px;font-size:12px">
-            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--muted)">
-              <input type="checkbox" id="wa-inc-kpi" checked style="cursor:pointer"> KPIs
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text);padding:4px 10px;border:1.5px solid var(--border);border-radius:20px;transition:all .15s" id="lbl-kpi">
+              <input type="checkbox" id="wa-inc-kpi" checked onchange="waReportStyleLabel(this,'lbl-kpi')" style="cursor:pointer;accent-color:var(--blue)"> KPIs
             </label>
-            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--muted)">
-              <input type="checkbox" id="wa-inc-logros" checked style="cursor:pointer"> Logros
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text);padding:4px 10px;border:1.5px solid var(--border);border-radius:20px;transition:all .15s" id="lbl-logros">
+              <input type="checkbox" id="wa-inc-logros" checked onchange="waReportStyleLabel(this,'lbl-logros')" style="cursor:pointer;accent-color:var(--blue)"> Logros
             </label>
-            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--muted)">
-              <input type="checkbox" id="wa-inc-sig" checked style="cursor:pointer"> Próximos pasos
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text);padding:4px 10px;border:1.5px solid var(--border);border-radius:20px;transition:all .15s" id="lbl-sig">
+              <input type="checkbox" id="wa-inc-sig" checked onchange="waReportStyleLabel(this,'lbl-sig')" style="cursor:pointer;accent-color:var(--blue)"> Próximos pasos
             </label>
           </div>
         </div>

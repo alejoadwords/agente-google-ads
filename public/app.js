@@ -1806,6 +1806,8 @@ function waReportOpen(clientId) {
     Generar reporte`;
 
   document.getElementById('wa-report-overlay').style.display = 'flex';
+  // Inicializar estilos de checkboxes
+  setTimeout(waReportInitCheckboxStyles, 50);
 }
 
 function waReportSetPeriod(btn) {
@@ -1879,19 +1881,47 @@ IMPORTANTE: Como no tienes datos reales de campañas (la integración con plataf
 Devuelve ÚNICAMENTE el texto del mensaje, sin explicaciones ni comillas.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Usar /api/chat igual que el chat normal — evita CORS y reutiliza autenticación
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+
+    const r = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: prompt }],
+        system: 'Eres un especialista en marketing digital que redacta reportes ejecutivos para clientes de agencias de marketing digital en Latinoamérica. Siempre respondes en español, de forma concisa y profesional.',
+        userPlan
       })
     });
 
-    const data = await response.json();
-    const text = data.content?.[0]?.text?.trim() || '';
+    if (!r.ok) {
+      throw new Error('HTTP ' + r.status);
+    }
 
+    // Leer stream igual que el chat normal
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const delta = parsed.delta?.text || parsed.choices?.[0]?.delta?.content || '';
+          fullText += delta;
+        } catch {}
+      }
+    }
+
+    const text = fullText.trim();
     if (!text) throw new Error('Sin respuesta');
 
     waReportGeneratedText = text;
@@ -1901,9 +1931,9 @@ Devuelve ÚNICAMENTE el texto del mensaje, sin explicaciones ni comillas.`;
     console.error('waReport error:', err);
     document.getElementById('wa-report-generating').style.display = 'none';
     document.getElementById('wa-report-empty').style.display = 'block';
-    document.getElementById('wa-report-empty').innerHTML = `
-      <div style="font-size:13px;color:var(--danger);margin-bottom:8px">Error al generar el reporte</div>
-      <div style="font-size:12px;color:var(--muted)">Verifica tu conexión e intenta de nuevo.</div>`;
+    document.getElementById('wa-report-empty').innerHTML =
+      '<div style="font-size:13px;color:var(--danger);margin-bottom:8px">Error al generar el reporte</div>' +
+      '<div style="font-size:12px;color:var(--muted)">Verifica tu conexión e intenta de nuevo.</div>';
     genBtn.style.display = 'flex';
   }
 }
@@ -1955,6 +1985,28 @@ function waReportCopy() {
     setTimeout(() => {
       btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> copiar`;
     }, 2000);
+  });
+}
+
+function waReportStyleLabel(checkbox, labelId) {
+  const lbl = document.getElementById(labelId);
+  if (!lbl) return;
+  if (checkbox.checked) {
+    lbl.style.borderColor = 'var(--blue-md)';
+    lbl.style.background = 'var(--blue-lt)';
+    lbl.style.color = 'var(--blue)';
+  } else {
+    lbl.style.borderColor = 'var(--border)';
+    lbl.style.background = '';
+    lbl.style.color = 'var(--text)';
+  }
+}
+
+// Inicializar estilos de checkboxes al abrir el modal
+function waReportInitCheckboxStyles() {
+  [['wa-inc-kpi','lbl-kpi'],['wa-inc-logros','lbl-logros'],['wa-inc-sig','lbl-sig']].forEach(([cbId, lblId]) => {
+    const cb = document.getElementById(cbId);
+    if (cb) waReportStyleLabel(cb, lblId);
   });
 }
 
