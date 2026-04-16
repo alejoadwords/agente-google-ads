@@ -1281,7 +1281,13 @@ function agencyRender() {
           <div class="agency-health-dot"></div>
           ${healthLabels[healthClass] || 'Sin definir'}
         </div>
-        <button class="agency-open-btn" onclick="agencyOpenClient('${client.id}')">abrir →</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="agency-report-btn" onclick="waReportOpen('${client.id}')" title="Generar reporte para WhatsApp">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            reporte
+          </button>
+          <button class="agency-open-btn" onclick="agencyOpenClient('${client.id}')">abrir →</button>
+        </div>
       </div>
     `;
 
@@ -1696,6 +1702,10 @@ function agencyShowContextBar(client) {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3.87-3.87"/></svg>
     <span class="agency-ctx-name">Trabajando con: <strong>${esc(client.name)}</strong></span>
     <span style="color:var(--muted);font-size:11px">${esc(client.business || '')}</span>
+    <button class="agency-ctx-report" onclick="waReportOpen('${agencyActiveClientId}')" title="Generar reporte para WhatsApp">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      reporte WA
+    </button>
     <button class="agency-ctx-exit" onclick="agencyExitClientContext()" title="Salir del contexto de este cliente">✕ salir</button>
   `;
   // Insertar después de la barra de navegación (nav), antes del chat-area
@@ -1764,6 +1774,197 @@ function agencyOnMessageReceived() {
 }
 
 // ── FIN PANEL AGENCIA ─────────────────────────────────────────────────────────
+
+// ── REPORTE WHATSAPP ──────────────────────────────────────────────────────────
+
+let waReportClientId = null;
+let waReportGeneratedText = null;
+let waReportPeriod = 'mes';
+
+function waReportOpen(clientId) {
+  const client = agencyClients.find(c => c.id === clientId);
+  if (!client) return;
+  waReportClientId = clientId;
+  waReportGeneratedText = null;
+
+  // Actualizar header con datos del cliente
+  document.getElementById('wa-report-title').textContent = `Reporte: ${client.name}`;
+  const hasWa = client.whatsapp;
+  document.getElementById('wa-report-sub').textContent = hasWa
+    ? `Se enviará a ${client.contactoNombre || client.name} · ${client.whatsapp}`
+    : 'Completa el WhatsApp del cliente en el brief para envío directo';
+
+  // Reset estado
+  document.getElementById('wa-report-empty').style.display = 'block';
+  document.getElementById('wa-report-generating').style.display = 'none';
+  document.getElementById('wa-report-preview-wrap').style.display = 'none';
+  document.getElementById('wa-report-generate-btn').style.display = 'flex';
+  document.getElementById('wa-report-wa-btn').style.display = 'none';
+  document.getElementById('wa-report-copy-btn').style.display = 'none';
+  document.getElementById('wa-report-generate-btn').innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    Generar reporte`;
+
+  document.getElementById('wa-report-overlay').style.display = 'flex';
+}
+
+function waReportSetPeriod(btn) {
+  document.querySelectorAll('.wa-report-period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  waReportPeriod = btn.dataset.p;
+}
+
+async function waReportGenerate() {
+  const client = agencyClients.find(c => c.id === waReportClientId);
+  if (!client) return;
+
+  const genBtn = document.getElementById('wa-report-generate-btn');
+  genBtn.style.display = 'none';
+  document.getElementById('wa-report-copy-btn').style.display = 'none';
+  document.getElementById('wa-report-wa-btn').style.display = 'none';
+  document.getElementById('wa-report-empty').style.display = 'none';
+  document.getElementById('wa-report-preview-wrap').style.display = 'none';
+  document.getElementById('wa-report-generating').style.display = 'block';
+
+  const periodLabels = { semana: 'última semana', mes: 'último mes', trimestre: 'último trimestre' };
+  const periodo = periodLabels[waReportPeriod] || 'último mes';
+
+  const incKpi    = document.getElementById('wa-inc-kpi')?.checked;
+  const incLogros = document.getElementById('wa-inc-logros')?.checked;
+  const incSig    = document.getElementById('wa-inc-sig')?.checked;
+
+  // Construir contexto del cliente para el prompt
+  const ctx = [
+    `Cliente: ${client.name}`,
+    client.descripcion  ? `Negocio: ${client.descripcion}` : '',
+    client.industria    ? `Industria: ${client.industria}` : '',
+    client.web          ? `Web: ${client.web}` : '',
+    client.objetivo     ? `Objetivo principal: ${client.objetivo}` : '',
+    client.kpi          ? `KPI primario: ${client.kpi}${client.metaCosto ? ' · Meta: ' + client.metaCosto : ''}` : '',
+    client.presupuesto  ? `Presupuesto mensual: ${client.presupuesto}` : '',
+    client.canales      ? `Canales activos: ${client.canales}` : '',
+    client.resultados   ? `Resultados esperados: ${client.resultados}` : '',
+    client.propuesta    ? `Propuesta de valor: ${client.propuesta}` : '',
+    client.audiencia    ? `Audiencia: ${client.audiencia}` : '',
+    client.competidores ? `Competidores: ${client.competidores}` : '',
+    client.notas || client.notes ? `Notas internas: ${client.notas || client.notes}` : '',
+  ].filter(Boolean).join('\n');
+
+  const incluirSecciones = [
+    incKpi    ? '- Estado de KPIs y métricas clave del período' : '',
+    incLogros ? '- Logros y avances más importantes' : '',
+    incSig    ? '- Próximos pasos y acciones para el siguiente período' : '',
+  ].filter(Boolean).join('\n');
+
+  const prompt = `Eres el especialista de marketing de una agencia digital que envía un reporte ejecutivo por WhatsApp a su cliente al final del ${periodo}.
+
+DATOS DEL CLIENTE:
+${ctx}
+
+PERÍODO: ${periodo}
+
+Genera un mensaje de WhatsApp profesional pero cercano para el cliente. El mensaje debe:
+- Empezar con un saludo breve (no más de 1 línea)
+- Usar *negritas* con asteriscos para resaltar números y datos importantes (formato WhatsApp)
+- Ser conciso: máximo 200 palabras en total
+- Incluir las siguientes secciones:
+${incluirSecciones}
+- Cerrar con una frase de cierre cordial y disposición para reunión o consulta
+- Usar emojis con moderación (máx 3-4 en todo el mensaje)
+- NO incluir saludos de agencia ni mencionar "Acuarius" — el mensaje sale en nombre de la agencia del usuario
+- Tono: profesional pero humano, como si fuera de un estratega de confianza al cliente
+
+IMPORTANTE: Como no tienes datos reales de campañas (la integración con plataformas está en proceso), basa el reporte en el contexto del cliente, menciona los canales que están trabajando, y agrega una nota natural de que los datos específicos se comparten en el informe adjunto o en la próxima reunión. No inventes métricas específicas.
+
+Devuelve ÚNICAMENTE el texto del mensaje, sin explicaciones ni comillas.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+
+    if (!text) throw new Error('Sin respuesta');
+
+    waReportGeneratedText = text;
+    waReportShowPreview(text);
+
+  } catch (err) {
+    console.error('waReport error:', err);
+    document.getElementById('wa-report-generating').style.display = 'none';
+    document.getElementById('wa-report-empty').style.display = 'block';
+    document.getElementById('wa-report-empty').innerHTML = `
+      <div style="font-size:13px;color:var(--danger);margin-bottom:8px">Error al generar el reporte</div>
+      <div style="font-size:12px;color:var(--muted)">Verifica tu conexión e intenta de nuevo.</div>`;
+    genBtn.style.display = 'flex';
+  }
+}
+
+function waReportShowPreview(text) {
+  document.getElementById('wa-report-generating').style.display = 'none';
+  document.getElementById('wa-report-empty').style.display = 'none';
+
+  // Render WhatsApp formatting: *bold* → <b>, _italic_ → <i>
+  const formatted = text
+    .replace(/\*(.*?)\*/g, '<b>$1</b>')
+    .replace(/_(.*?)_/g, '<i>$1</i>')
+    .replace(/\n/g, '<br>');
+
+  document.getElementById('wa-report-text').innerHTML = formatted;
+
+  const now = new Date();
+  document.getElementById('wa-report-time').textContent =
+    now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ' ✓✓';
+
+  document.getElementById('wa-report-preview-wrap').style.display = 'block';
+
+  // Show action buttons
+  document.getElementById('wa-report-generate-btn').style.display = 'none';
+  document.getElementById('wa-report-copy-btn').style.display = 'flex';
+
+  const client = agencyClients.find(c => c.id === waReportClientId);
+  if (client && client.whatsapp) {
+    document.getElementById('wa-report-wa-btn').style.display = 'flex';
+  }
+}
+
+function waReportSend() {
+  if (!waReportGeneratedText) return;
+  const client = agencyClients.find(c => c.id === waReportClientId);
+  const phone = client?.whatsapp?.replace(/[\s\-\(\)]/g, '') || '';
+  const encoded = encodeURIComponent(waReportGeneratedText);
+  const url = phone
+    ? `https://wa.me/${phone}?text=${encoded}`
+    : `https://wa.me/?text=${encoded}`;
+  window.open(url, '_blank');
+}
+
+function waReportCopy() {
+  if (!waReportGeneratedText) return;
+  navigator.clipboard.writeText(waReportGeneratedText).then(() => {
+    const btn = document.getElementById('wa-report-copy-btn');
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> copiado`;
+    setTimeout(() => {
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> copiar`;
+    }, 2000);
+  });
+}
+
+function waReportClose() {
+  document.getElementById('wa-report-overlay').style.display = 'none';
+  waReportClientId = null;
+  waReportGeneratedText = null;
+}
+
+// ── FIN REPORTE WHATSAPP ──────────────────────────────────────────────────────
 
 // ── PRODUCT TOUR ──────────────────────────────────────────────────────────────
 
