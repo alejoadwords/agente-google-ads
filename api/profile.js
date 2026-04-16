@@ -119,6 +119,51 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Acción no válida' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
+  // ── AGENCY CLIENTS ───────────────────────────────────────────────────────
+  if (type === 'agency_clients') {
+    if (req.method === 'GET') {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/agency_clients?user_id=eq.${userId}&select=clients_data&limit=1`,
+        { headers: sbHeaders() }
+      );
+      const rows = await res.json();
+      const data = rows?.[0]?.clients_data ?? [];
+      return new Response(JSON.stringify({ data }), {
+        status: 200, headers: { ...CORS, 'Content-Type': 'application/json' }
+      });
+    }
+    if (req.method === 'POST') {
+      let body;
+      try { body = await req.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Body inválido' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
+        });
+      }
+      const payload = {
+        user_id: userId,
+        clients_data: body.data,
+        updated_at: new Date().toISOString(),
+      };
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/agency_clients`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        return new Response(JSON.stringify({ error: err }), {
+          status: 500, headers: { ...CORS, 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200, headers: { ...CORS, 'Content-Type': 'application/json' }
+      });
+    }
+    return new Response(JSON.stringify({ error: 'Método no permitido' }), {
+      status: 405, headers: { ...CORS, 'Content-Type': 'application/json' }
+    });
+  }
+
   // ── PROFILE / HISTORY ─────────────────────────────────────────────────────
   const agentKey = url.searchParams.get('agent');
   if (!type || !agentKey) {
