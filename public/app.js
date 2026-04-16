@@ -1130,14 +1130,437 @@ async function loadRecentConversations() {
 }
 // ── FIN RECIENTES ─────────────────────────────────────────────────────────────
 
-// ── PRODUCT TOUR ──────────────────────────────────────────────────────────────
+// ── PANEL MULTI-CLIENTE (AGENCIA) ─────────────────────────────────────────────
 
-function tourIsMobile() {
-  return window.innerWidth <= 768;
+const AGENCY_CLIENT_LIMIT = 10; // Plan Agencia estándar
+const AGENCY_COLORS = ['#1E2BCC','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#DB2777','#65A30D','#9333EA','#EA580C'];
+
+let agencyClients = [];         // lista cargada de Supabase / localStorage
+let agencyEditingId = null;     // null = nuevo, string = editando
+let agencySelectedHealth = 'gris';
+let agencyActiveClientId = null; // cliente en contexto de chat actual
+
+// ── Inicialización ──────────────────────────────────────────────────────────
+async function agencyInit() {
+  const isAgency = userPlan === 'agency' || isAdminUser();
+  const btn = document.getElementById('sb-agency-btn');
+  if (btn) btn.style.display = isAgency ? 'block' : 'none';
+  if (!isAgency) return;
+  await agencyLoadClients();
+  agencyUpdateSidebarCount();
 }
 
-// Pasos desktop (sidebar siempre visible, panels laterales)
-var TOUR_STEPS_DESKTOP = [
+// ── CRUD ─────────────────────────────────────────────────────────────────────
+function agencyGetStorageKey() {
+  const uid = clerkInstance?.user?.id || 'anon';
+  return `acuarius_agency_clients_${uid}`;
+}
+
+async function agencyLoadClients() {
+  try {
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch('/api/profile?type=agency_clients', { headers });
+    if (res.ok) {
+      const { data } = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        agencyClients = data;
+        agencyPersistLocal();
+        return;
+      }
+    }
+  } catch(e) {}
+  // Fallback localStorage
+  try {
+    const raw = localStorage.getItem(agencyGetStorageKey());
+    agencyClients = raw ? JSON.parse(raw) : [];
+  } catch(e) { agencyClients = []; }
+}
+
+async function agencyPersistRemote() {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    await fetch('/api/profile?type=agency_clients', {
+      method: 'POST', headers,
+      body: JSON.stringify({ data: agencyClients })
+    });
+  } catch(e) {}
+}
+
+function agencyPersistLocal() {
+  try { localStorage.setItem(agencyGetStorageKey(), JSON.stringify(agencyClients)); } catch(e) {}
+}
+
+async function agencyPersist() {
+  agencyPersistLocal();
+  await agencyPersistRemote();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function agencyRender() {
+  const grid = document.getElementById('agency-grid');
+  const empty = document.getElementById('agency-empty');
+  const total = agencyClients.length;
+  const limit = isAdminUser() ? 999 : AGENCY_CLIENT_LIMIT;
+
+  // Stats
+  document.getElementById('ag-stat-total').textContent = total;
+  document.getElementById('ag-stat-verde').textContent = agencyClients.filter(c => c.health === 'verde').length;
+  document.getElementById('ag-stat-alerta').textContent = agencyClients.filter(c => c.health === 'amarillo' || c.health === 'rojo').length;
+
+  // Limit bar
+  const pct = Math.min(100, Math.round((total / limit) * 100));
+  const fill = document.getElementById('agency-limit-fill');
+  const txt  = document.getElementById('agency-limit-text');
+  if (fill) { fill.style.width = pct + '%'; fill.className = 'agency-limit-fill' + (pct >= 100 ? ' danger' : pct >= 80 ? ' warning' : ''); }
+  if (txt)  txt.textContent = `${total} / ${limit === 999 ? '∞' : limit} clientes`;
+
+  // Add btn state
+  const addBtn = document.getElementById('agency-add-btn');
+  if (addBtn) { addBtn.disabled = total >= limit && !isAdminUser(); }
+
+  // Sidebar count
+  agencyUpdateSidebarCount();
+
+  if (total === 0) {
+    if (empty) empty.style.display = 'block';
+    // Clear cards except empty
+    const cards = grid.querySelectorAll('.agency-card');
+    cards.forEach(c => c.remove());
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  // Build cards
+  const existing = {};
+  grid.querySelectorAll('.agency-card').forEach(c => { existing[c.dataset.id] = c; });
+  const rendered = new Set();
+
+  agencyClients.forEach((client, idx) => {
+    rendered.add(client.id);
+    const color = AGENCY_COLORS[idx % AGENCY_COLORS.length];
+    const initials = (client.name || '?').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+    const healthClass = client.health || 'gris';
+    const healthLabels = { verde: 'Bien', amarillo: 'Atención', rojo: 'Urgente', gris: 'Sin definir' };
+    const dateStr = client.createdAt ? new Date(client.createdAt).toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' }) : '';
+
+    const html = `
+      <div class="agency-card-top">
+        <div class="agency-card-avatar" style="background:${color}">${initials}</div>
+        <div class="agency-card-menu">
+          <button class="agency-card-menu-btn" onclick="agencyToggleDropdown(event,'dd-${client.id}')" title="opciones">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+          </button>
+          <div class="agency-card-dropdown" id="dd-${client.id}">
+            <div class="agency-card-dd-item" onclick="agencyEditClient('${client.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              editar
+            </div>
+            <div class="agency-card-dd-item" onclick="agencyChangeHealth('${client.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              cambiar estado
+            </div>
+            <div class="agency-card-dd-item danger" onclick="agencyDeleteClient('${client.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              eliminar
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="agency-card-name" title="${esc(client.name)}">${esc(client.name)}</div>
+      <div class="agency-card-business">${esc(client.business || 'Sin descripción')}</div>
+      <div class="agency-card-footer">
+        <div class="agency-health ${healthClass}" onclick="agencyChangeHealth('${client.id}')">
+          <div class="agency-health-dot"></div>
+          ${healthLabels[healthClass] || 'Sin definir'}
+        </div>
+        <button class="agency-open-btn" onclick="agencyOpenClient('${client.id}')">abrir →</button>
+      </div>
+    `;
+
+    if (existing[client.id]) {
+      existing[client.id].innerHTML = html;
+    } else {
+      const card = document.createElement('div');
+      card.className = 'agency-card';
+      card.dataset.id = client.id;
+      card.innerHTML = html;
+      grid.appendChild(card);
+    }
+  });
+
+  // Remove stale cards
+  Object.keys(existing).forEach(id => {
+    if (!rendered.has(id)) existing[id].remove();
+  });
+}
+
+function agencyUpdateSidebarCount() {
+  const el = document.getElementById('sb-agency-count');
+  if (el) el.textContent = agencyClients.length;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function agencyOpenModal(editId = null) {
+  const limit = isAdminUser() ? 999 : AGENCY_CLIENT_LIMIT;
+  if (!editId && agencyClients.length >= limit) {
+    alert(`Has alcanzado el límite de ${limit} clientes en tu plan. Contacta a soporte para ampliar tu plan.`);
+    return;
+  }
+  agencyEditingId = editId;
+  agencySelectedHealth = 'gris';
+
+  const modal = document.getElementById('agency-modal');
+  const title = document.getElementById('agency-modal-title');
+  title.textContent = editId ? 'Editar cliente' : 'Agregar cliente';
+
+  // Reset fields
+  document.getElementById('ag-f-name').value = '';
+  document.getElementById('ag-f-business').value = '';
+  document.getElementById('ag-f-notes').value = '';
+  document.querySelectorAll('.agency-health-opt').forEach(o => o.className = 'agency-health-opt');
+  document.querySelector('[data-val="gris"]').className = 'agency-health-opt selected-gris';
+
+  // Fill if editing
+  if (editId) {
+    const c = agencyClients.find(x => x.id === editId);
+    if (c) {
+      document.getElementById('ag-f-name').value = c.name || '';
+      document.getElementById('ag-f-business').value = c.business || '';
+      document.getElementById('ag-f-notes').value = c.notes || '';
+      agencySelectHealth(c.health || 'gris');
+    }
+  }
+
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('ag-f-name').focus(), 50);
+}
+
+function agencyCloseModal() {
+  document.getElementById('agency-modal').style.display = 'none';
+  agencyEditingId = null;
+}
+
+function agencySelectHealth(val) {
+  agencySelectedHealth = val;
+  document.querySelectorAll('.agency-health-opt').forEach(o => {
+    o.className = 'agency-health-opt' + (o.dataset.val === val ? ` selected-${val}` : '');
+  });
+}
+
+async function agencySaveClient() {
+  const name = document.getElementById('ag-f-name').value.trim();
+  if (!name) { document.getElementById('ag-f-name').focus(); return; }
+
+  const btn = document.getElementById('agency-modal-save');
+  btn.disabled = true; btn.textContent = 'guardando...';
+
+  const now = new Date().toISOString();
+
+  if (agencyEditingId) {
+    const idx = agencyClients.findIndex(c => c.id === agencyEditingId);
+    if (idx !== -1) {
+      agencyClients[idx] = {
+        ...agencyClients[idx],
+        name,
+        business: document.getElementById('ag-f-business').value.trim(),
+        notes:    document.getElementById('ag-f-notes').value.trim(),
+        health:   agencySelectedHealth,
+        updatedAt: now
+      };
+    }
+  } else {
+    agencyClients.push({
+      id:        'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      name,
+      business:  document.getElementById('ag-f-business').value.trim(),
+      notes:     document.getElementById('ag-f-notes').value.trim(),
+      health:    agencySelectedHealth,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+
+  await agencyPersist();
+  agencyCloseModal();
+  agencyRender();
+
+  btn.disabled = false; btn.textContent = 'guardar cliente';
+}
+
+function agencyEditClient(id) {
+  agencyCloseAllDropdowns();
+  agencyOpenModal(id);
+}
+
+async function agencyDeleteClient(id) {
+  agencyCloseAllDropdowns();
+  const c = agencyClients.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`¿Eliminar al cliente "${c.name}"? Se perderá su historial de conversaciones en este dispositivo.`)) return;
+  agencyClients = agencyClients.filter(x => x.id !== id);
+  // Limpiar historial local del cliente
+  try {
+    const uid = clerkInstance?.user?.id || 'anon';
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.includes(`_${id}`)) localStorage.removeItem(k);
+    }
+  } catch(e) {}
+  await agencyPersist();
+  agencyRender();
+}
+
+// ── Health change inline ──────────────────────────────────────────────────────
+function agencyChangeHealth(id) {
+  agencyCloseAllDropdowns();
+  const c = agencyClients.find(x => x.id === id);
+  if (!c) return;
+  const order = ['verde','amarillo','rojo','gris'];
+  const next = order[(order.indexOf(c.health || 'gris') + 1) % order.length];
+  c.health = next;
+  c.updatedAt = new Date().toISOString();
+  agencyPersist();
+  agencyRender();
+}
+
+// ── Abrir cliente en contexto de chat ────────────────────────────────────────
+function agencyOpenClient(id) {
+  agencyCloseAllDropdowns();
+  const c = agencyClients.find(x => x.id === id);
+  if (!c) return;
+
+  agencyActiveClientId = id;
+
+  // Cargar historial específico del cliente (prefijo client_id)
+  // El historial se guarda con clave que incluye el client_id
+  showView('chat');
+  openAgent(currentAgentCtx || 'google-ads');
+
+  // Mostrar barra de contexto en el chat
+  agencyShowContextBar(c);
+
+  // Inyectar el perfil del cliente en la memoria del agente
+  agencyInjectClientContext(c);
+}
+
+function agencyShowContextBar(client) {
+  // Remover barra anterior si existe
+  const existing = document.getElementById('agency-ctx-bar');
+  if (existing) existing.remove();
+
+  const chatArea = document.getElementById('view-chat');
+  if (!chatArea) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'agency-ctx-bar';
+  bar.id = 'agency-ctx-bar';
+  bar.innerHTML = `
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3.87-3.87"/></svg>
+    <span class="agency-ctx-name">Trabajando con: <strong>${esc(client.name)}</strong></span>
+    <span style="color:var(--muted);font-size:11px">${esc(client.business || '')}</span>
+    <button class="agency-ctx-exit" onclick="agencyExitClientContext()" title="Salir del contexto de este cliente">✕ salir</button>
+  `;
+  chatArea.insertBefore(bar, chatArea.firstChild);
+}
+
+function agencyInjectClientContext(client) {
+  // Sobrescribir la memoria del agente con el perfil del cliente
+  const mem = {
+    negocio:     client.name,
+    industria:   client.business || '',
+    objetivo:    client.notes    || '',
+    presupuesto: '',
+    etapa:       ''
+  };
+  // Actualizar la UI de la mem-card
+  const mNeg = document.getElementById('m-neg');
+  const mInd = document.getElementById('m-ind');
+  const mPre = document.getElementById('m-pre');
+  const mObj = document.getElementById('m-obj');
+  if (mNeg) mNeg.textContent = mem.negocio || '—';
+  if (mInd) mInd.textContent = mem.industria || '—';
+  if (mPre) mPre.textContent = mem.presupuesto || '—';
+  if (mObj) mObj.textContent = mem.objetivo || '—';
+
+  // Limpiar chat para el nuevo cliente y cargar historial específico
+  const chatArea = document.getElementById('chat-area');
+  if (chatArea) chatArea.innerHTML = '';
+  hist = [];
+
+  // Cargar historial de conversaciones propio de este cliente
+  agencyLoadClientHistory(client.id);
+}
+
+function agencyLoadClientHistory(clientId) {
+  try {
+    const uid = clerkInstance?.user?.id || 'anon';
+    const key = `acuarius_history_${uid}_${clientId}_${currentAgentCtx || 'google-ads'}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      hist = saved;
+      // Renderizar mensajes anteriores brevemente
+      if (saved.length > 0) {
+        const chatArea = document.getElementById('chat-area');
+        if (chatArea) {
+          const note = document.createElement('div');
+          note.style.cssText = 'text-align:center;padding:12px 0;font-size:12px;color:var(--muted2);border-bottom:1px solid var(--border2);margin-bottom:8px';
+          note.textContent = `${saved.filter(m=>m.role==='user').length} consultas anteriores con este cliente`;
+          chatArea.appendChild(note);
+        }
+      }
+    }
+  } catch(e) {}
+}
+
+function agencySaveClientHistory() {
+  if (!agencyActiveClientId) return;
+  try {
+    const uid = clerkInstance?.user?.id || 'anon';
+    const key = `acuarius_history_${uid}_${agencyActiveClientId}_${currentAgentCtx || 'google-ads'}`;
+    localStorage.setItem(key, JSON.stringify(hist.slice(-40))); // últimos 40 mensajes
+  } catch(e) {}
+}
+
+function agencyExitClientContext() {
+  agencyActiveClientId = null;
+  const bar = document.getElementById('agency-ctx-bar');
+  if (bar) bar.remove();
+  // Limpiar chat y volver al perfil propio
+  const chatArea = document.getElementById('chat-area');
+  if (chatArea) chatArea.innerHTML = '';
+  hist = [];
+  showView('home');
+}
+
+// ── Dropdown ──────────────────────────────────────────────────────────────────
+function agencyToggleDropdown(event, ddId) {
+  event.stopPropagation();
+  agencyCloseAllDropdowns();
+  const dd = document.getElementById(ddId);
+  if (dd) dd.classList.toggle('open');
+}
+
+function agencyCloseAllDropdowns() {
+  document.querySelectorAll('.agency-card-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+// Cerrar dropdowns al hacer click fuera
+document.addEventListener('click', agencyCloseAllDropdowns);
+
+// ── Hook en sendMsg para guardar historial del cliente activo ─────────────────
+// (Se engancha al flujo existente de sendMsg — guardado al recibir respuesta)
+function agencyOnMessageReceived() {
+  if (agencyActiveClientId) agencySaveClientHistory();
+}
+
+// ── FIN PANEL AGENCIA ─────────────────────────────────────────────────────────
+
+// ── PRODUCT TOUR ──────────────────────────────────────────────────────────────
+
+var TOUR_STEPS = [
   {
     title: 'Bienvenido a Acuarius 👋',
     desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
@@ -1198,56 +1621,6 @@ var TOUR_STEPS_DESKTOP = [
   }
 ];
 
-// Pasos móvil: flujo simplificado sin abrir sidebar ni panels de pantalla completa
-var TOUR_STEPS_MOBILE = [
-  {
-    title: 'Bienvenido a Acuarius 👋',
-    desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
-    target: null,
-    position: 'center'
-  },
-  {
-    title: 'Tu centro de comando',
-    desc: 'Desde aquí eliges el agente con el que quieres trabajar. Cada uno domina un canal de marketing diferente.',
-    target: 'view-home',
-    position: 'center'
-  },
-  {
-    title: 'Consultor de Marketing',
-    desc: '¿No sabes por dónde empezar? El Consultor analiza tu negocio y te dice qué canales priorizar y qué hacer primero.',
-    target: 'home-consultor-hero',
-    position: 'bottom'
-  },
-  {
-    title: 'Agentes especializados',
-    desc: 'Google Ads, Meta Ads, SEO, TikTok y más. Toca cualquier agente para empezar a trabajar con él de inmediato.',
-    target: 'home-agents-grid',
-    position: 'bottom'
-  },
-  {
-    title: 'Menú lateral',
-    desc: 'Toca el ícono ☰ para abrir el menú. Desde allí accedes a todos los agentes, tu historial y la configuración.',
-    target: 'mob-menu-btn',
-    position: 'below-header'
-  },
-  {
-    title: 'Conecta tus plataformas',
-    desc: 'Dentro del menú, ve a Configuración para conectar Google Ads y Meta Ads. Así los agentes leen tus datos en tiempo real.',
-    target: null,
-    position: 'center'
-  },
-  {
-    title: '¡Listo para empezar! 🚀',
-    desc: 'Tu perfil de negocio se guarda automáticamente y cada agente lo usa para darte respuestas personalizadas. ¡Elige un agente y empieza!',
-    target: null,
-    position: 'center'
-  }
-];
-
-function tourGetSteps() {
-  return tourIsMobile() ? TOUR_STEPS_MOBILE : TOUR_STEPS_DESKTOP;
-}
-
 var tourStep = 0;
 var tourActive = false;
 
@@ -1263,49 +1636,41 @@ function tourStart() {
   if (spotlight) { spotlight.style.opacity = ''; spotlight.style.boxShadow = ''; }
   overlay.classList.add('active');
   document.getElementById('tour-backdrop').classList.add('active');
-
-  // En móvil, asegurarse de que el sidebar esté cerrado antes de empezar
-  if (tourIsMobile()) {
-    var sb = document.getElementById('sidebar');
-    if (sb) sb.classList.remove('mob-open');
-  }
-
+  
   // Build dots
-  var steps = tourGetSteps();
   var dots = document.getElementById('tour-dots');
-  dots.innerHTML = steps.map(function(_, i) {
+  dots.innerHTML = TOUR_STEPS.map(function(_, i) {
     return '<div class="tour-dot" id="tour-dot-' + i + '"></div>';
   }).join('');
-
+  
   tourShow(0);
 }
 
 function tourShow(idx) {
-  var steps = tourGetSteps();
   // Call onExit of previous step
-  var prevStep = steps[tourStep];
+  var prevStep = TOUR_STEPS[tourStep];
   if (idx !== tourStep && prevStep && prevStep.onExit) {
     try { prevStep.onExit(); } catch(e) {}
   }
   tourStep = idx;
-  var step = steps[idx];
-  var total = steps.length;
+  var step = TOUR_STEPS[idx];
+  var total = TOUR_STEPS.length;
   // Call onEnter of new step
   if (step.onEnter) {
     setTimeout(function() { try { step.onEnter(); } catch(e) {} }, 100);
   }
-
+  
   // Update text
   document.getElementById('tour-step-label').textContent = 'paso ' + (idx + 1) + ' de ' + total;
   document.getElementById('tour-title').textContent = step.title;
   document.getElementById('tour-desc').textContent = step.desc;
-
+  
   // Update dots
-  steps.forEach(function(_, i) {
+  TOUR_STEPS.forEach(function(_, i) {
     var d = document.getElementById('tour-dot-' + i);
     if (d) d.className = 'tour-dot' + (i === idx ? ' active' : '');
   });
-
+  
   // Update button
   var btn = document.getElementById('tour-btn-next');
   if (idx === total - 1) {
@@ -1313,7 +1678,7 @@ function tourShow(idx) {
   } else {
     btn.innerHTML = 'siguiente <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
-
+  
   // Position spotlight and tooltip
   tourPosition(step);
 }
@@ -1322,25 +1687,9 @@ function tourPosition(step) {
   var spotlight = document.getElementById('tour-spotlight');
   var tooltip = document.getElementById('tour-tooltip');
   var pad = 8;
-  var isMob = tourIsMobile();
-
-  // Ancho del tooltip: adaptativo en móvil
-  var ttw = isMob ? Math.min(272, window.innerWidth - 32) : 300;
-  var tth = 210; // altura aproximada
-  var margin = isMob ? 10 : 16;
-  var winH = window.innerHeight;
-  var winW = window.innerWidth;
-
-  // Helper: centrar horizontalmente de forma segura
-  function centerH() {
-    tooltip.style.left = Math.max(16, Math.round((winW - ttw) / 2)) + 'px';
-    tooltip.style.right = 'auto';
-  }
-
-  // Aplicar ancho dinámico en móvil
-  tooltip.style.width = ttw + 'px';
-
+  
   if (step.position === 'center') {
+    // No spotlight — just center tooltip
     spotlight.style.opacity = '0';
     spotlight.style.width = '0';
     spotlight.style.height = '0';
@@ -1351,172 +1700,87 @@ function tourPosition(step) {
     tooltip.style.bottom = 'auto';
     return;
   }
-
-  // Posición exclusiva de móvil: spotlight sobre el botón hamburguesa, tooltip debajo
-  if (step.position === 'below-header') {
-    var el = document.getElementById(step.target);
-    if (el) {
-      var r = el.getBoundingClientRect();
-      spotlight.style.opacity = '1';
-      spotlight.style.left = (r.left - pad) + 'px';
-      spotlight.style.top = (r.top - pad) + 'px';
-      spotlight.style.width = (r.width + pad * 2) + 'px';
-      spotlight.style.height = (r.height + pad * 2) + 'px';
-      tooltip.style.top = (r.bottom + margin + pad) + 'px';
-      tooltip.style.left = Math.max(16, r.left) + 'px';
-    } else {
-      spotlight.style.opacity = '0';
-      spotlight.style.width = '0';
-      spotlight.style.height = '0';
-      tooltip.style.top = (60 + margin) + 'px';
-      tooltip.style.left = '16px';
-    }
-    tooltip.style.transform = 'none';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
-    return;
-  }
-
+  
   var el = document.getElementById(step.target);
   if (!el) {
     spotlight.style.opacity = '0';
-    spotlight.style.width = '0';
-    spotlight.style.height = '0';
     tooltip.style.top = '50%';
     tooltip.style.left = '50%';
     tooltip.style.transform = 'translate(-50%, -50%)';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
     return;
   }
-
+  
   var rect = el.getBoundingClientRect();
-
-  // Si el elemento está fuera de pantalla (ej: sidebar cerrado en móvil), centrar tooltip
-  var isOffscreen = rect.width === 0 || rect.height === 0 ||
-                    rect.right <= 0 || rect.left >= winW ||
-                    rect.bottom <= 0 || rect.top >= winH;
-
-  if (isOffscreen) {
-    spotlight.style.opacity = '0';
-    spotlight.style.width = '0';
-    spotlight.style.height = '0';
-    tooltip.style.top = '50%';
-    tooltip.style.left = '50%';
-    tooltip.style.transform = 'translate(-50%, -50%)';
-    tooltip.style.right = 'auto';
-    tooltip.style.bottom = 'auto';
-    return;
-  }
-
-  // Spotlight sobre el elemento
+  
+  // Spotlight
   spotlight.style.opacity = '1';
   spotlight.style.left = (rect.left - pad) + 'px';
   spotlight.style.top = (rect.top - pad) + 'px';
   spotlight.style.width = (rect.width + pad * 2) + 'px';
   spotlight.style.height = (rect.height + pad * 2) + 'px';
   tooltip.style.transform = 'none';
-
-  if (step.position === 'bottom') {
-    var topB = rect.bottom + margin + pad;
-    // Si no cabe abajo, intentar arriba
-    if (topB + tth > winH - 16 && rect.top - tth - margin - pad > 16) {
-      topB = rect.top - tth - margin - pad;
-    }
-    tooltip.style.top = Math.min(topB, winH - tth - 16) + 'px';
-    if (isMob) { centerH(); } else {
-      tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
-      tooltip.style.right = 'auto';
-    }
-    tooltip.style.bottom = 'auto';
-
-  } else if (step.position === 'top') {
-    var topT = rect.top - tth - margin - pad;
-    // Si no cabe arriba, poner abajo
-    if (topT < 16) topT = rect.bottom + margin + pad;
-    tooltip.style.top = Math.max(16, topT) + 'px';
-    if (isMob) { centerH(); } else {
-      tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
-      tooltip.style.right = 'auto';
-    }
-    tooltip.style.bottom = 'auto';
-
-  } else if (step.position === 'left') {
-    if (isMob) {
-      // En móvil no hay espacio lateral, poner debajo centrado
-      tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
-      centerH();
-    } else {
-      tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
-      tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
-    }
+  
+  var ttw = 300;
+  var tth = 200; // approx
+  var margin = 16;
+  
+  var winH = window.innerHeight;
+  var winW = window.innerWidth;
+  if (step.position === 'left') {
+    tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
+    tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
-
   } else if (step.position === 'left-panel') {
-    if (isMob) {
-      tooltip.style.top = Math.min(rect.bottom + margin, winH - tth - 16) + 'px';
-      centerH();
-    } else {
-      tooltip.style.left = Math.max(16, rect.left - ttw - margin) + 'px';
-      tooltip.style.top = Math.max(80, Math.min(rect.top + 80, winH - tth - 16)) + 'px';
-    }
+    tooltip.style.left = Math.max(16, rect.left - ttw - margin) + 'px';
+    tooltip.style.top = Math.max(80, Math.min(rect.top + 80, winH - tth - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
-
   } else if (step.position === 'settings') {
-    if (isMob) {
-      // El panel ocupa toda la pantalla en móvil: tooltip centrado en la parte superior visible
-      tooltip.style.top = '80px';
-      centerH();
-      tooltip.style.right = 'auto';
-      tooltip.style.bottom = 'auto';
-    } else {
-      setTimeout(function() {
-        var panel = document.getElementById('settings-panel');
-        if (!panel) return;
-        var pr = panel.getBoundingClientRect();
-        var tt = document.getElementById('tour-tooltip');
-        tt.style.left = Math.max(16, pr.left - ttw - 20) + 'px';
-        tt.style.top = Math.max(80, pr.top + 60) + 'px';
-        tt.style.right = 'auto';
-        tt.style.bottom = 'auto';
-      }, 400);
-      tooltip.style.left = (winW - 520 - ttw - 20) + 'px';
-      tooltip.style.top = '80px';
-      tooltip.style.right = 'auto';
-      tooltip.style.bottom = 'auto';
-    }
-
-  } else if (step.position === 'right') {
-    if (isMob) {
-      // Sin espacio lateral en móvil: debajo centrado
-      tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
-      centerH();
-    } else {
-      tooltip.style.left = (rect.right + margin + pad) + 'px';
-      tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
-    }
+    // Position tooltip just to the left of the settings panel, near top
+    setTimeout(function() {
+      var panel = document.getElementById('settings-panel');
+      if (!panel) return;
+      var pr = panel.getBoundingClientRect();
+      var tt = document.getElementById('tour-tooltip');
+      tt.style.left = Math.max(16, pr.left - ttw - 20) + 'px';
+      tt.style.top = Math.max(80, pr.top + 60) + 'px';
+      tt.style.right = 'auto';
+      tt.style.bottom = 'auto';
+    }, 400);
+    // Initial position while panel animates in
+    tooltip.style.left = (winW - 520 - ttw - 20) + 'px';
+    tooltip.style.top = '80px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
-
+  } else if (step.position === 'right') {
+    tooltip.style.left = (rect.right + margin + pad) + 'px';
+    tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
   } else if (step.position === 'right-safe') {
-    if (isMob) {
-      tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
-      centerH();
-    } else {
-      tooltip.style.left = Math.min(rect.right + margin + pad, winW - ttw - 16) + 'px';
-      tooltip.style.top = Math.max(80, Math.min(rect.top, winH - tth - 24)) + 'px';
-      if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    // Sidebar elements — always visible, never below viewport
+    tooltip.style.left = Math.min(rect.right + margin + pad, winW - ttw - 16) + 'px';
+    tooltip.style.top = Math.max(80, Math.min(rect.top, winH - tth - 24)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+    // Scroll element into view
+    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else if (step.position === 'bottom') {
+    tooltip.style.top = Math.min(rect.bottom + margin + pad, winH - tth - 16) + 'px';
+    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.bottom = 'auto';
+  } else if (step.position === 'top') {
+    tooltip.style.top = Math.max(16, rect.top - tth - margin - pad) + 'px';
+    tooltip.style.left = Math.max(16, Math.min(rect.left + rect.width / 2 - ttw / 2, winW - ttw - 16)) + 'px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
   }
 }
 
 function tourNext() {
-  var steps = tourGetSteps();
-  if (tourStep >= steps.length - 1) {
+  if (tourStep >= TOUR_STEPS.length - 1) {
     tourEnd();
     return;
   }
@@ -1529,9 +1793,8 @@ function tourSkip() {
 
 function tourEnd() {
   tourActive = false;
-  var steps = tourGetSteps();
   // Call onExit of current step if any
-  var curStep = steps[tourStep];
+  var curStep = TOUR_STEPS[tourStep];
   if (curStep && curStep.onExit) { try { curStep.onExit(); } catch(e) {} }
   var overlay = document.getElementById('tour-overlay');
   var backdrop = document.getElementById('tour-backdrop');
@@ -1543,7 +1806,7 @@ function tourEnd() {
   spotlight.style.boxShadow = 'none';
   spotlight.style.width = '0';
   spotlight.style.height = '0';
-  if (tooltip) { tooltip.style.display = 'none'; tooltip.style.width = ''; }
+  if (tooltip) tooltip.style.display = 'none';
   if (overlay) { overlay.style.display = 'none'; overlay.style.pointerEvents = 'none'; }
   if (backdrop) { backdrop.style.background = 'rgba(0,0,0,0)'; backdrop.style.pointerEvents = 'none'; }
   // Mark as seen
@@ -1555,6 +1818,7 @@ function tourEnd() {
 
 function tourShouldShow() {
   try {
+    // Check both localStorage and sessionStorage
     if (localStorage.getItem('acuarius_tour_done')) return false;
     if (sessionStorage.getItem('acuarius_tour_done')) return false;
     return true;
@@ -3281,7 +3545,10 @@ window.onload = async () => {
   
   // Inicializar límites de imágenes
   loadImageUsage();
-  
+
+  // Inicializar panel de agencia si aplica
+  setTimeout(function(){ agencyInit().then(function(){ if(document.getElementById('view-agency').classList.contains('active')) agencyRender(); }); }, 400);
+
   showView('home');
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
@@ -3655,7 +3922,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       addAgent(replyFinalProcessed);
       if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
     }
-    setTimeout(function(){ saveCurrentConversation(); }, 500);
+    setTimeout(function(){ saveCurrentConversation(); agencyOnMessageReceived(); }, 500);
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
 function renderSugerencias(opciones) {
   const area = document.getElementById('chat-area');
@@ -4019,7 +4286,7 @@ function toggleCheck(item){item.classList.toggle('done');updateProgress()}
 function updateProgress(){const all=document.querySelectorAll('.stage-panel.active .cl-item').length;const done=document.querySelectorAll('.stage-panel.active .cl-item.done').length;document.getElementById('pt-count').textContent=`${done} / ${all} tareas`;document.getElementById('pt-fill').style.width=all?`${(done/all)*100}%`:'0%'}
 
 // VIEWS
-function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();}
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();if(id==='agency')agencyRender();}
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');

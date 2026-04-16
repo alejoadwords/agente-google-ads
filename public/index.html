@@ -499,14 +499,94 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .tour-btn-next{padding:8px 18px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:6px}
 .tour-btn-next:hover{background:#1a24b8}
 .tour-arrow{position:fixed;z-index:9003;width:0;height:0;transition:all .4s cubic-bezier(.4,0,.2,1)}
-@media(max-width:768px){
-  .tour-tooltip{max-width:calc(100vw - 32px);width:272px !important;padding:16px 18px}
-  .tour-tooltip-title{font-size:14px}
-  .tour-tooltip-desc{font-size:12.5px;margin-bottom:14px}
-  .tour-btn-next{padding:7px 14px;font-size:12px}
-  .tour-btn-skip{font-size:11px}
-}
 /* ── FIN TOUR ────────────────────────────────────────────────────────────────── */
+
+/* ── PANEL AGENCIA ─────────────────────────────────────────────────────────── */
+.agency-wrap{flex:1;overflow-y:auto;padding:32px 28px;background:var(--bg)}
+.agency-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap}
+.agency-title{font-size:20px;font-weight:700;letter-spacing:-.4px;color:var(--text)}
+.agency-subtitle{font-size:13px;color:var(--muted);margin-top:2px}
+.agency-add-btn{display:flex;align-items:center;gap:7px;padding:9px 16px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;flex-shrink:0}
+.agency-add-btn:hover{background:var(--blue-h)}
+.agency-add-btn:disabled{opacity:.5;cursor:not-allowed}
+.agency-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+.agency-stat{background:var(--sidebar);border-radius:var(--r);padding:12px 14px}
+.agency-stat-val{font-size:22px;font-weight:700;color:var(--text);line-height:1}
+.agency-stat-lbl{font-size:11px;color:var(--muted);margin-top:4px}
+.agency-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.agency-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rlg);padding:16px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden}
+.agency-card:hover{border-color:var(--blue-md);box-shadow:0 4px 16px rgba(30,43,204,.08);transform:translateY(-1px)}
+.agency-card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.agency-card-avatar{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0}
+.agency-card-menu{position:relative}
+.agency-card-menu-btn{width:24px;height:24px;border:none;background:none;cursor:pointer;color:var(--muted2);display:flex;align-items:center;justify-content:center;border-radius:6px;transition:all .15s;font-family:var(--font)}
+.agency-card-menu-btn:hover{background:var(--sidebar2);color:var(--text)}
+.agency-card-dropdown{position:absolute;right:0;top:28px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:4px;min-width:140px;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,.1);display:none}
+.agency-card-dropdown.open{display:block}
+.agency-card-dd-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .15s}
+.agency-card-dd-item:hover{background:var(--sidebar);color:var(--text)}
+.agency-card-dd-item.danger{color:var(--danger)}
+.agency-card-dd-item.danger:hover{background:#FEF2F2}
+.agency-card-name{font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agency-card-business{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:10px}
+.agency-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border2)}
+.agency-health{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;cursor:pointer}
+.agency-health.verde{background:#ECFDF5;color:#065F46}
+.agency-health.amarillo{background:#FFFBEB;color:#92400E}
+.agency-health.rojo{background:#FEF2F2;color:#991B1B}
+.agency-health.gris{background:var(--sidebar);color:var(--muted)}
+.agency-health-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.agency-health.verde .agency-health-dot{background:#059669}
+.agency-health.amarillo .agency-health-dot{background:#D97706}
+.agency-health.rojo .agency-health-dot{background:#DC2626}
+.agency-health.gris .agency-health-dot{background:var(--muted2)}
+.agency-card-date{font-size:10px;color:var(--muted2)}
+.agency-open-btn{font-size:11px;font-weight:600;color:var(--blue);background:none;border:none;cursor:pointer;font-family:var(--font);padding:0;transition:opacity .15s}
+.agency-open-btn:hover{opacity:.7}
+.agency-empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.agency-empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
+.agency-empty-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+.agency-empty-desc{font-size:13px;line-height:1.55}
+.agency-limit-bar{background:var(--sidebar);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.agency-limit-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.agency-limit-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .3s}
+.agency-limit-fill.warning{background:var(--warning)}
+.agency-limit-fill.danger{background:var(--danger)}
+
+/* Modal nuevo cliente */
+.agency-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
+.agency-modal{background:var(--bg);border-radius:var(--rlg);padding:24px;width:100%;max-width:440px;border:1px solid var(--border);box-shadow:0 16px 48px rgba(0,0,0,.15)}
+.agency-modal-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px}
+.agency-modal-sub{font-size:12.5px;color:var(--muted);margin-bottom:20px}
+.agency-field{margin-bottom:14px}
+.agency-field label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.agency-field input,.agency-field textarea,.agency-field select{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;color:var(--text);background:var(--bg);font-family:var(--font);transition:border-color .15s;resize:none}
+.agency-field input:focus,.agency-field textarea:focus,.agency-field select:focus{outline:none;border-color:var(--blue-md)}
+.agency-health-picker{display:flex;gap:8px}
+.agency-health-opt{flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--border);cursor:pointer;text-align:center;font-size:12px;font-weight:600;transition:all .15s}
+.agency-health-opt.selected-verde{background:#ECFDF5;border-color:#059669;color:#065F46}
+.agency-health-opt.selected-amarillo{background:#FFFBEB;border-color:#D97706;color:#92400E}
+.agency-health-opt.selected-rojo{background:#FEF2F2;border-color:#DC2626;color:#991B1B}
+.agency-health-opt.selected-gris{background:var(--sidebar);border-color:var(--border2);color:var(--muted)}
+.agency-modal-footer{display:flex;gap:8px;margin-top:20px}
+.agency-modal-cancel{flex:1;padding:10px;border:1.5px solid var(--border);border-radius:var(--r);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s}
+.agency-modal-cancel:hover{background:var(--sidebar)}
+.agency-modal-save{flex:2;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s}
+.agency-modal-save:hover{background:var(--blue-h)}
+.agency-modal-save:disabled{opacity:.5;cursor:not-allowed}
+
+/* Contexto activo de cliente en chat */
+.agency-ctx-bar{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--blue-lt);border-bottom:1px solid var(--blue-md);font-size:12px;color:var(--blue);flex-shrink:0}
+.agency-ctx-name{font-weight:600;flex:1}
+.agency-ctx-exit{background:none;border:none;cursor:pointer;color:var(--blue);font-size:11px;font-family:var(--font);padding:2px 6px;border-radius:4px;transition:all .15s}
+.agency-ctx-exit:hover{background:var(--blue-md)}
+
+@media(max-width:768px){
+  .agency-wrap{padding:20px 16px}
+  .agency-stats{grid-template-columns:repeat(3,1fr);gap:6px}
+  .agency-grid{grid-template-columns:1fr}
+}
+/* ── FIN PANEL AGENCIA ─────────────────────────────────────────────────────── */
 </style>
 </head>
 <body>
@@ -810,8 +890,21 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div id="sb-recents-list" class="sb-recents-list"></div>
     </div>
 
-    <!-- BOTÓN CONFIGURACIÓN -->
+    <!-- BOTÓN AGENCIA + CONFIGURACIÓN (parte inferior del sidebar) -->
     <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--border);margin-left:-10px;margin-right:-10px;padding-left:10px;padding-right:10px;margin-bottom:0">
+
+      <!-- Panel de clientes (solo plan agency/admin) -->
+      <div id="sb-agency-btn" style="display:none;margin-bottom:6px">
+        <div onclick="showView('agency')" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;transition:all .15s;border:1.5px solid var(--blue-md);background:var(--blue-lt)" onmouseover="this.style.background='#E0E4FC'" onmouseout="this.style.background='var(--blue-lt)'">
+          <div style="width:22px;height:22px;border-radius:6px;background:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3.87-3.87"/></svg>
+          </div>
+          <span style="flex:1;font-weight:600;color:var(--blue);font-size:12px">panel de clientes</span>
+          <span id="sb-agency-count" style="font-size:10px;font-weight:700;background:var(--blue);color:#fff;padding:1px 6px;border-radius:8px;flex-shrink:0">0</span>
+        </div>
+      </div>
+
+      <!-- Configuración -->
       <div onclick="openSettings()" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent" onmouseover="this.style.background='var(--sidebar2)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--muted)'">
         <div style="width:22px;height:22px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -903,6 +996,91 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENCY VIEW -->
+  <div class="view" id="view-agency">
+    <div class="agency-wrap">
+      <!-- Topbar -->
+      <div class="agency-topbar">
+        <div>
+          <div class="agency-title">Panel de clientes</div>
+          <div class="agency-subtitle" id="agency-subtitle">Gestiona y accede a cada cuenta desde aquí</div>
+        </div>
+        <button class="agency-add-btn" id="agency-add-btn" onclick="agencyOpenModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          agregar cliente
+        </button>
+      </div>
+
+      <!-- Barra de uso de cupos -->
+      <div class="agency-limit-bar" id="agency-limit-bar">
+        <span id="agency-limit-text" style="flex-shrink:0">0 / 10 clientes</span>
+        <div class="agency-limit-track">
+          <div class="agency-limit-fill" id="agency-limit-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="agency-stats">
+        <div class="agency-stat">
+          <div class="agency-stat-val" id="ag-stat-total">0</div>
+          <div class="agency-stat-lbl">clientes activos</div>
+        </div>
+        <div class="agency-stat">
+          <div class="agency-stat-val" style="color:var(--success)" id="ag-stat-verde">0</div>
+          <div class="agency-stat-lbl">en buen estado</div>
+        </div>
+        <div class="agency-stat">
+          <div class="agency-stat-val" style="color:var(--warning)" id="ag-stat-alerta">0</div>
+          <div class="agency-stat-lbl">requieren atención</div>
+        </div>
+      </div>
+
+      <!-- Grid de clientes -->
+      <div class="agency-grid" id="agency-grid">
+        <div class="agency-empty" id="agency-empty">
+          <div class="agency-empty-icon">🏢</div>
+          <div class="agency-empty-title">Sin clientes aún</div>
+          <div class="agency-empty-desc">Agrega tu primer cliente para comenzar a gestionar sus cuentas de marketing con IA.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NUEVO / EDITAR CLIENTE -->
+  <div class="agency-modal-overlay" id="agency-modal" style="display:none" onclick="if(event.target===this)agencyCloseModal()">
+    <div class="agency-modal">
+      <div class="agency-modal-title" id="agency-modal-title">Agregar cliente</div>
+      <div class="agency-modal-sub">La información se usa para que el agente tenga contexto de cada cuenta</div>
+
+      <div class="agency-field">
+        <label>nombre del cliente *</label>
+        <input type="text" id="ag-f-name" placeholder="ej. Restaurante El Mesón" maxlength="80">
+      </div>
+      <div class="agency-field">
+        <label>negocio / industria</label>
+        <input type="text" id="ag-f-business" placeholder="ej. Restaurante en Bogotá, 3 sedes" maxlength="120">
+      </div>
+      <div class="agency-field">
+        <label>notas internas</label>
+        <textarea id="ag-f-notes" rows="2" placeholder="Presupuesto mensual, objetivos, canales activos..." maxlength="400"></textarea>
+      </div>
+      <div class="agency-field">
+        <label>estado de salud</label>
+        <div class="agency-health-picker">
+          <div class="agency-health-opt" data-val="verde" onclick="agencySelectHealth('verde')">🟢 Bien</div>
+          <div class="agency-health-opt" data-val="amarillo" onclick="agencySelectHealth('amarillo')">🟡 Atención</div>
+          <div class="agency-health-opt" data-val="rojo" onclick="agencySelectHealth('rojo')">🔴 Urgente</div>
+          <div class="agency-health-opt selected-gris" data-val="gris" onclick="agencySelectHealth('gris')">⬜ Sin definir</div>
+        </div>
+      </div>
+
+      <div class="agency-modal-footer">
+        <button class="agency-modal-cancel" onclick="agencyCloseModal()">cancelar</button>
+        <button class="agency-modal-save" id="agency-modal-save" onclick="agencySaveClient()">guardar cliente</button>
       </div>
     </div>
   </div>
