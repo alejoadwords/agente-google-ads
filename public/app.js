@@ -6547,14 +6547,31 @@ function showDesignQuestionnaire() {
           '</div>' +
           '<div id="design-step-3" class="design-step" style="display:none">' +
             '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">3. ¿Cuál es tu oferta específica para este anuncio?</div>' +
-            '<input type="text" id="dq-offer" placeholder="Ej: Consulta gratis, 20% OFF primera sesión, $150.000" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
+            '<input type="text" id="dq-offer" placeholder="Ej: 20% de descuento en velas aromáticas, Consulta gratis, $150.000" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
             '<button onclick="nextDesignStep(3)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
           '</div>' +
           '<div id="design-step-4" class="design-step" style="display:none">' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">4. ¿Qué prefieres mostrar en las imágenes?</div>' +
-            '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-              '<button onclick="selectFocus(this,\'resultado\')" class="focus-opt" style="flex:1;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🌟 Resultado<br><span style="font-size:10px;color:#666">Cliente feliz después</span></button>' +
-              '<button onclick="selectFocus(this,\'proceso\')" class="focus-opt" style="flex:1;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🔧 Proceso<br><span style="font-size:10px;color:#666">Servicio siendo realizado</span></button>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">4. Foto de tu producto <span style="font-weight:400;font-size:11px;color:var(--muted)">(opcional pero recomendado)</span></div>' +
+            '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Si sube una foto, el fondo del anuncio será tu producto real — mucho más efectivo que fondos genéricos.</div>' +
+            '<div id="dq-product-preview" style="display:none;margin-bottom:10px">' +
+              '<div style="position:relative;display:inline-block">' +
+                '<img id="dq-product-img-preview" style="height:80px;border-radius:8px;border:1px solid var(--border);object-fit:cover" />' +
+                '<button onclick="dqRemoveProductImg()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#EF4444;color:white;border:none;font-size:10px;cursor:pointer;font-weight:700">x</button>' +
+              '</div>' +
+            '</div>' +
+            '<input type="file" id="dq-product-file" accept="image/*" style="display:none" onchange="dqHandleProductImg(this)">' +
+            '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+              '<button onclick="document.getElementById(\'dq-product-file\').click()" style="flex:1;padding:10px;border:1.5px dashed var(--blue-md);border-radius:8px;font-size:12px;font-weight:600;color:var(--blue);background:var(--blue-lt);cursor:pointer">📷 Subir foto del producto</button>' +
+              '<button onclick="nextDesignStep(4)" style="padding:10px 14px;background:var(--muted);color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer">Omitir →</button>' +
+            '</div>' +
+            '<button id="dq-step4-next" onclick="nextDesignStep(4)" style="display:none;width:100%;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente → con mi foto</button>' +
+          '</div>' +
+          '<div id="design-step-5" class="design-step" style="display:none">' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">5. ¿Qué quieres transmitir en los anuncios?</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+              '<button onclick="selectFocus(this,\'producto\')" class="focus-opt" style="flex:1;min-width:100px;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🕯 Producto<br><span style="font-size:10px;color:#666">El producto en primer plano</span></button>' +
+              '<button onclick="selectFocus(this,\'resultado\')" class="focus-opt" style="flex:1;min-width:100px;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">✨ Resultado<br><span style="font-size:10px;color:#666">Cliente feliz usando el producto</span></button>' +
+              '<button onclick="selectFocus(this,\'lifestyle\')" class="focus-opt" style="flex:1;min-width:100px;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🏡 Lifestyle<br><span style="font-size:10px;color:#666">Ambiente y sensación de marca</span></button>' +
             '</div>' +
             '<button onclick="generateWithDesignData()" id="final-generate-btn" style="width:100%;padding:12px;background:#10B981;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer" disabled>🎨 Generar 5 anuncios profesionales</button>' +
           '</div>'
@@ -6581,7 +6598,43 @@ function nextDesignStep(step) {
     if (!data.offer) return;
     document.getElementById('design-step-3').style.display = 'none';
     document.getElementById('design-step-4').style.display = 'block';
+  } else if (step === 4) {
+    // Foto del producto (opcional) — se guardó en designQData.productImageBase64
+    document.getElementById('design-step-4').style.display = 'none';
+    document.getElementById('design-step-5').style.display = 'block';
   }
+}
+
+function dqHandleProductImg(input) {
+  var file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('La imagen debe ser menor a 5MB.'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    designQData.productImageBase64 = e.target.result.split(',')[1];
+    designQData.productImageMediaType = file.type || 'image/jpeg';
+    // Mostrar preview
+    var preview = document.getElementById('dq-product-preview');
+    var previewImg = document.getElementById('dq-product-img-preview');
+    if (preview && previewImg) {
+      previewImg.src = e.target.result;
+      preview.style.display = 'block';
+    }
+    // Mostrar botón "Siguiente con mi foto"
+    var nextBtn = document.getElementById('dq-step4-next');
+    if (nextBtn) nextBtn.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function dqRemoveProductImg() {
+  designQData.productImageBase64 = null;
+  designQData.productImageMediaType = null;
+  var preview = document.getElementById('dq-product-preview');
+  var nextBtn = document.getElementById('dq-step4-next');
+  if (preview) preview.style.display = 'none';
+  if (nextBtn) nextBtn.style.display = 'none';
 }
 
 function selectColor(btn, color) {
@@ -6633,56 +6686,151 @@ async function generateWithDesignData() {
   if (!data.brand || !data.offer || !data.focus) return;
 
   var brand   = data.brand;
-  var colors  = data.colors || 'azul y blanco';
+  var colors  = data.colors || 'dorado y blanco';
   var offer   = data.offer;
-  var focus   = data.focus === 'resultado'
-    ? 'persona sonriente y satisfecha mostrando el resultado del servicio, expresion genuina de felicidad y confianza'
-    : 'profesional realizando el servicio con precision, ambiente moderno y limpio';
-  var colorsDesc = colors + ' con acentos blancos y tipografia bold moderna';
+  var focus   = data.focus;
+  var hasProductImg = !!(data.productImageBase64);
 
-  var concepts = [
-    {
-      label: 'Transformacion dramatica',
-      prompt: 'Anuncio profesional Meta Ads estilo agencia premium para "' + brand + '", ' + focus + ', fondo degradado ' + colors + ' elegante y sofisticado, logo "' + brand + '" prominente esquina superior derecha en blanco, texto principal "' + offer + '" en tipografia bold moderna sans-serif grande centrada, subtitulo elegante, boton CTA "Conoce mas" en blanco con esquinas redondeadas en la parte inferior, composicion vertical 4:5, iluminacion cinematografica, calidad publicitaria profesional nivel Mailchimp o Glossier, diseno limpio con espacio negativo, elementos graficos sutiles'
-    },
-    {
-      label: 'Antes y despues',
-      prompt: 'Anuncio Meta Ads split-screen premium para "' + brand + '", lado izquierdo oscuro con problema, lado derecho brillante con solucion usando ' + focus + ', paleta ' + colorsDesc + ', logo "' + brand + '" integrado en banner inferior, oferta "' + offer + '" destacada en overlay semitransparente, tipografia elegante, flechas direccionales sutiles entre los dos lados, composicion vertical optimizada movil, calidad ads premium nivel agencia'
-    },
-    {
-      label: 'Testimonio visual',
-      prompt: 'Anuncio estilo testimonio premium para "' + brand + '", ' + focus + ', fondo solido ' + colors + ' suave y claro, marco de cita o comillas grandes en esquina superior, texto de oferta "' + offer + '" en tipografia bold grande, logo "' + brand + '" esquina inferior derecha pequeno y elegante, estrellas de calificacion doradas visibles, diseno minimalista premium formato vertical 4:5, calidad publicitaria nivel agencia'
-    },
-    {
-      label: 'Oferta urgente',
-      prompt: 'Anuncio de oferta urgente premium Meta Ads para "' + brand + '", ' + focus + ' en segundo plano con overlay de color, badge prominente con "' + offer + '" en tipografia extra-bold color contrastante, banner inferior con logo "' + brand + '" y CTA "Reserva ahora", paleta ' + colorsDesc + ', gradiente dinamico, composicion vertical 4:5, estetica publicitaria moderna nivel agencia premium'
-    },
-    {
-      label: 'Lifestyle premium',
-      prompt: 'Anuncio lifestyle aspiracional premium para "' + brand + '", ' + focus + ' en entorno aspiracional moderno y elegante, paleta ' + colorsDesc + ', composicion fotografica de revista, logo "' + brand + '" integrado sutilmente en la parte superior, tagline corto con la oferta "' + offer + '" en tipografia bold, CTA button redondeado en esquina inferior, formato vertical 4:5, calidad Glossier o Allbirds ads, luz natural suave'
+  // ── Contexto del brief del cliente (si existe) ──────────────────────────────
+  var industria    = mem.industria    || mem.descripcion || '';
+  var producto     = mem.descripcion  || industria;
+  var tono         = mem.tono         || 'profesional';
+  var diferenciador= mem.diferenciador|| '';
+  var audiencia    = mem.audiencia    || 'adultos en Latinoamérica';
+
+  // ── Describir el tipo de fondo según industria y focus ─────────────────────
+  // Si el usuario subió foto del producto, se usará como fondo via API (imagen de referencia)
+  // Si no, generamos el prompt más específico posible basado en el brief
+
+  function buildBgPrompt(concept) {
+    var base = '';
+    if (hasProductImg) {
+      // Con foto del producto: el prompt describe el producto en el fondo
+      base = 'close-up product photography of the item shown in the reference image, ';
+    } else if (industria.toLowerCase().includes('vela') || producto.toLowerCase().includes('vela') || producto.toLowerCase().includes('aromat')) {
+      // Detectar industria de velas
+      var vela_scenes = [
+        'elegant scented candles in golden holders, soft warm candlelight, dark moody background, luxury spa atmosphere',
+        'collection of premium aromatic candles on marble surface, eucalyptus leaves decoration, warm golden light',
+        'lit candles in cozy home setting, bokeh warm light, hygge atmosphere, soft blanket and cup in background',
+        'aromatic candles with dried flowers and botanicals, artisan handmade aesthetic, wooden surface, natural light',
+        'luxury candle jar with wax texture close-up, smoke wisps, dark elegant background, premium product photography'
+      ];
+      base = vela_scenes[concept % vela_scenes.length] + ', ';
+    } else if (industria.toLowerCase().includes('inmob') || industria.toLowerCase().includes('construcción')) {
+      var inmob_scenes = ['modern luxury apartment interior, large windows city view', 'elegant house facade at golden hour', 'premium residential building exterior, green landscaping'];
+      base = inmob_scenes[concept % inmob_scenes.length] + ', ';
+    } else if (industria.toLowerCase().includes('salud') || industria.toLowerCase().includes('clínica') || industria.toLowerCase().includes('médic')) {
+      var salud_scenes = ['clean modern medical clinic interior', 'professional healthcare setting, natural light', 'wellness center with plants and natural materials'];
+      base = salud_scenes[concept % salud_scenes.length] + ', ';
+    } else if (industria.toLowerCase().includes('restaurante') || industria.toLowerCase().includes('gastronomía') || industria.toLowerCase().includes('food')) {
+      var food_scenes = ['gourmet dish beautifully plated on dark slate', 'restaurant interior warm ambient light', 'fresh ingredients flat lay on wooden surface'];
+      base = food_scenes[concept % food_scenes.length] + ', ';
+    } else if (focus === 'resultado') {
+      base = 'happy satisfied latin client, warm genuine smile, professional environment, ';
+    } else if (focus === 'lifestyle') {
+      base = 'aspirational latin lifestyle, modern elegant home, warm natural light, ';
+    } else {
+      base = 'professional clean product photography, neutral elegant background, soft studio light, ';
     }
+
+    // Añadir paleta de colores al fondo
+    var paletteMap = {
+      'dorado y blanco': 'warm gold and cream tones, elegant warm palette',
+      'azul y blanco': 'blue and white sophisticated palette, cool tones',
+      'verde y beige': 'natural green and beige earthy palette',
+      'rosa y blanco': 'soft rose and white feminine palette',
+    };
+    var palette = paletteMap[colors.toLowerCase()] || colors + ' color palette';
+    return base + palette + '. Professional Meta Ads background, Latin American market. NO TEXT, NO WORDS, NO LETTERS anywhere in the image — clean visual only. Ultra-realistic photography quality.';
+  }
+
+  // ── 5 conceptos de diseño diferenciados ─────────────────────────────────────
+  var concepts = [
+    { label: 'Producto hero', bgPrompt: buildBgPrompt(0) },
+    { label: 'Ambiente lifestyle', bgPrompt: buildBgPrompt(1) },
+    { label: 'Detalle close-up', bgPrompt: buildBgPrompt(2) },
+    { label: 'Composición editorial', bgPrompt: buildBgPrompt(3) },
+    { label: 'Minimalista premium', bgPrompt: buildBgPrompt(4) },
   ];
 
-  addAgent('generando **' + concepts.length + ' creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*');
+  // ── Design object para Canvas (texto compuesto sobre la imagen) ──────────────
+  var colorMap = {
+    'dorado y blanco':   { overlay: '#3D2B00', headline: '#FFD700', body: '#FFF8DC', logo: '#FFD700' },
+    'azul y blanco':     { overlay: '#0A1628', headline: '#FFFFFF', body: '#E8F0FE', logo: '#FFFFFF' },
+    'verde y beige':     { overlay: '#1A2E1A', headline: '#FFFFFF', body: '#F0F4EE', logo: '#FFFFFF' },
+    'rosa y blanco':     { overlay: '#3D1A2B', headline: '#FFE4F0', body: '#FFFFFF', logo: '#FFB3D1' },
+  };
+  var cm = colorMap[colors.toLowerCase()] || { overlay: '#000000', headline: '#FFFFFF', body: '#FFFFFF', logo: '#FFFFFF' };
+
+  var designTemplate = {
+    headline:          offer,
+    headline_size_pct: 0.068,
+    headline_color:    cm.headline,
+    headline_weight:   'bold',
+    body_items:        diferenciador ? [diferenciador.split('.')[0]] : [],
+    body_color:        cm.body,
+    body_size_pct:     0.032,
+    bullet_style:      'none',
+    logo:              brand,
+    logo_color:        cm.logo,
+    logo_size_pct:     0.038,
+    logo_position:     'top-left',
+    overlay_color:     cm.overlay,
+    overlay_opacity:   0.62,
+    text_zone:         'left',
+    text_zone_width_pct: 0.58,
+  };
+
+  addAgent('generando **' + concepts.length + ' creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*' + (hasProductImg ? ' · foto del producto incluida ✓' : ''));
   hist.push({role:'assistant', content: 'Generando 5 creativos profesionales para ' + brand});
 
   generatedAdImages = [];
+  adImgGridEl = null;
   loading = true;
   document.getElementById('sbtn').disabled = true;
 
   for (var i = 0; i < concepts.length; i++) {
     var c = concepts[i];
-    var imgCmd = {
-      prompt: c.prompt + '. IMPORTANTE: todos los textos visibles en la imagen deben estar en espanol. Diseno nivel agencia premium.',
-      format: 'vertical',
-      variations: 1,
-      hasText: true,
-      _index: i + 1,
-      _total: concepts.length,
-      _social: false
-    };
-    await generateAdImages(imgCmd);
-    incrementImageUsage();
+
+    var thinkId = addThinking();
+    (function(tid, idx, total) {
+      setTimeout(function() {
+        var el = document.getElementById(tid);
+        if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativo ' + idx + ' de ' + total + '...'; }
+      }, 100);
+    })(thinkId, i + 1, concepts.length);
+
+    try {
+      var headers = { 'Content-Type': 'application/json' };
+      if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+      var body = { prompt: c.bgPrompt, format: 'vertical', variations: 1, hasText: false };
+
+      // Si hay foto del producto, enviarla como imagen de referencia
+      if (hasProductImg) {
+        body.referenceImage = { base64: data.productImageBase64, mediaType: data.productImageMediaType || 'image/jpeg' };
+      }
+
+      var res = await fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify(body) });
+      var result = await res.json();
+      rmThinking(thinkId);
+
+      if (result.error) {
+        addAgent('No pude generar el creativo ' + (i + 1) + ': ' + result.error);
+        continue;
+      }
+
+      if (result.images && result.images.length > 0) {
+        // ── Componer texto sobre la imagen con Canvas ─────────────────────────
+        await composeWithDesignTemplate(result.images[0], i + 1, concepts.length, 'vertical', designTemplate);
+        incrementImageUsage();
+      }
+    } catch (err) {
+      rmThinking(thinkId);
+      addAgent('Error generando creativo ' + (i + 1) + ': ' + err.message);
+    }
+
     if (userPlan !== 'pro' && !isAdminUser()) break;
   }
 
@@ -6690,6 +6838,7 @@ async function generateWithDesignData() {
   document.getElementById('sbtn').disabled = false;
   designQData = {};
 }
+
 
 // =============================================
 // META ADS — Conexión OAuth + Selector de cuentas
