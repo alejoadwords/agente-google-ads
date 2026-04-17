@@ -6691,144 +6691,194 @@ async function generateWithDesignData() {
   var focus   = data.focus;
   var hasProductImg = !!(data.productImageBase64);
 
-  // ── Contexto del brief del cliente (si existe) ──────────────────────────────
+  // ── Contexto del brief del cliente ────────────────────────────────────────
   var industria    = mem.industria    || mem.descripcion || '';
-  var producto     = mem.descripcion  || industria;
-  var tono         = mem.tono         || 'profesional';
   var diferenciador= mem.diferenciador|| '';
-  var audiencia    = mem.audiencia    || 'adultos en Latinoamérica';
+  var tono         = mem.tono         || 'profesional';
 
-  // ── Describir el tipo de fondo según industria y focus ─────────────────────
-  // Si el usuario subió foto del producto, se usará como fondo via API (imagen de referencia)
-  // Si no, generamos el prompt más específico posible basado en el brief
+  // ── Mapear colores → paleta Canvas ────────────────────────────────────────
+  var colorMap = {
+    'dorado y blanco':   { overlay: '#2D1A00', headline: '#FFD700', body: '#FFF8DC', logo: '#FFD700', hex: '#C9942A, #FFFFFF' },
+    'azul y blanco':     { overlay: '#0A1628', headline: '#FFFFFF', body: '#E8F0FE', logo: '#FFFFFF', hex: '#1E2BCC, #FFFFFF' },
+    'verde y beige':     { overlay: '#1A2E1A', headline: '#FFFFFF', body: '#F0F4EE', logo: '#FFFFFF', hex: '#2D6A4F, #F1E8D8' },
+    'rosa y blanco':     { overlay: '#3D1A2B', headline: '#FFE4F0', body: '#FFFFFF', logo: '#FFE4F0', hex: '#C9184A, #FFE4F0' },
+    'negro y dorado':    { overlay: '#0A0A0A', headline: '#FFD700', body: '#F5F5F0', logo: '#FFD700', hex: '#1A1A1A, #C9942A' },
+    'blanco y café':     { overlay: '#2C1A0A', headline: '#FFFFFF', body: '#F5ECD7', logo: '#FFFFFF', hex: '#6B3A2A, #F5ECD7' },
+  };
+  var colKey = colors.toLowerCase();
+  var cm = colorMap[colKey] || { overlay: '#1A0A00', headline: '#FFD700', body: '#FFFFFF', logo: '#FFD700', hex: colors };
 
-  function buildBgPrompt(concept) {
-    var base = '';
-    if (hasProductImg) {
-      // Con foto del producto: el prompt describe el producto en el fondo
-      base = 'close-up product photography of the item shown in the reference image, ';
-    } else if (industria.toLowerCase().includes('vela') || producto.toLowerCase().includes('vela') || producto.toLowerCase().includes('aromat')) {
-      // Detectar industria de velas
-      var vela_scenes = [
-        'elegant scented candles in golden holders, soft warm candlelight, dark moody background, luxury spa atmosphere',
-        'collection of premium aromatic candles on marble surface, eucalyptus leaves decoration, warm golden light',
-        'lit candles in cozy home setting, bokeh warm light, hygge atmosphere, soft blanket and cup in background',
-        'aromatic candles with dried flowers and botanicals, artisan handmade aesthetic, wooden surface, natural light',
-        'luxury candle jar with wax texture close-up, smoke wisps, dark elegant background, premium product photography'
-      ];
-      base = vela_scenes[concept % vela_scenes.length] + ', ';
-    } else if (industria.toLowerCase().includes('inmob') || industria.toLowerCase().includes('construcción')) {
-      var inmob_scenes = ['modern luxury apartment interior, large windows city view', 'elegant house facade at golden hour', 'premium residential building exterior, green landscaping'];
-      base = inmob_scenes[concept % inmob_scenes.length] + ', ';
-    } else if (industria.toLowerCase().includes('salud') || industria.toLowerCase().includes('clínica') || industria.toLowerCase().includes('médic')) {
-      var salud_scenes = ['clean modern medical clinic interior', 'professional healthcare setting, natural light', 'wellness center with plants and natural materials'];
-      base = salud_scenes[concept % salud_scenes.length] + ', ';
-    } else if (industria.toLowerCase().includes('restaurante') || industria.toLowerCase().includes('gastronomía') || industria.toLowerCase().includes('food')) {
-      var food_scenes = ['gourmet dish beautifully plated on dark slate', 'restaurant interior warm ambient light', 'fresh ingredients flat lay on wooden surface'];
-      base = food_scenes[concept % food_scenes.length] + ', ';
-    } else if (focus === 'resultado') {
-      base = 'happy satisfied latin client, warm genuine smile, professional environment, ';
-    } else if (focus === 'lifestyle') {
-      base = 'aspirational latin lifestyle, modern elegant home, warm natural light, ';
-    } else {
-      base = 'professional clean product photography, neutral elegant background, soft studio light, ';
-    }
+  // ── Construir design object rico usando Claude (igual que flujo de variaciones) ──
+  var designPromptCtx = 'Brand: "' + brand + '". Offer/Headline: "' + offer + '". Colors: ' + colors + '. Industry: ' + (industria || 'e-commerce') + '. Tone: ' + tono + '. Focus: ' + focus + (diferenciador ? '. Differentiator: ' + diferenciador : '') + '.';
 
-    // Añadir paleta de colores al fondo
-    var paletteMap = {
-      'dorado y blanco': 'warm gold and cream tones, elegant warm palette',
-      'azul y blanco': 'blue and white sophisticated palette, cool tones',
-      'verde y beige': 'natural green and beige earthy palette',
-      'rosa y blanco': 'soft rose and white feminine palette',
-    };
-    var palette = paletteMap[colors.toLowerCase()] || colors + ' color palette';
-    return base + palette + '. Professional Meta Ads background, Latin American market. NO TEXT, NO WORDS, NO LETTERS anywhere in the image — clean visual only. Ultra-realistic photography quality.';
+  var design = null;
+  var thinkId0 = addThinking();
+  setTimeout(function() {
+    var el = document.getElementById(thinkId0);
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>diseñando composición tipográfica...'; }
+  }, 100);
+
+  try {
+    var designText = await fetchChatFull({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      system: 'You are an expert Meta Ads designer. Return ONLY valid JSON, no markdown, no backticks.',
+      messages: [{ role: 'user', content: 'Design a premium Meta Ads composition for this campaign: ' + designPromptCtx + '\n\nReturn ONLY JSON: {"text_zone":"left","text_zone_width_pct":0.55,"overlay_color":"' + cm.overlay + '","overlay_opacity":0.65,"headline":"' + offer + '","headline_size_pct":0.072,"headline_color":"' + cm.headline + '","headline_weight":"bold","body_items":["subtitle or value prop in spanish, max 5 words"],"body_size_pct":0.032,"body_color":"' + cm.body + '","bullet_style":"none","logo":"' + brand + '","logo_position":"top-left","logo_size_pct":0.038,"logo_color":"' + cm.logo + '"}' }]
+    });
+    var clean = designText.replace(/```json|```/g, '').trim();
+    var bi = clean.indexOf('{'); if (bi >= 0) clean = clean.slice(bi);
+    design = JSON.parse(clean);
+  } catch(e) {
+    console.warn('[Acuarius] design JSON fallback:', e.message);
   }
 
-  // ── 5 conceptos de diseño diferenciados ─────────────────────────────────────
-  var concepts = [
-    { label: 'Producto hero', bgPrompt: buildBgPrompt(0) },
-    { label: 'Ambiente lifestyle', bgPrompt: buildBgPrompt(1) },
-    { label: 'Detalle close-up', bgPrompt: buildBgPrompt(2) },
-    { label: 'Composición editorial', bgPrompt: buildBgPrompt(3) },
-    { label: 'Minimalista premium', bgPrompt: buildBgPrompt(4) },
-  ];
+  rmThinking(thinkId0);
 
-  // ── Design object para Canvas (texto compuesto sobre la imagen) ──────────────
-  var colorMap = {
-    'dorado y blanco':   { overlay: '#3D2B00', headline: '#FFD700', body: '#FFF8DC', logo: '#FFD700' },
-    'azul y blanco':     { overlay: '#0A1628', headline: '#FFFFFF', body: '#E8F0FE', logo: '#FFFFFF' },
-    'verde y beige':     { overlay: '#1A2E1A', headline: '#FFFFFF', body: '#F0F4EE', logo: '#FFFFFF' },
-    'rosa y blanco':     { overlay: '#3D1A2B', headline: '#FFE4F0', body: '#FFFFFF', logo: '#FFB3D1' },
-  };
-  var cm = colorMap[colors.toLowerCase()] || { overlay: '#000000', headline: '#FFFFFF', body: '#FFFFFF', logo: '#FFFFFF' };
+  // Fallback design si Claude falla
+  if (!design) {
+    design = {
+      text_zone: 'left', text_zone_width_pct: 0.55,
+      overlay_color: cm.overlay, overlay_opacity: 0.65,
+      headline: offer, headline_size_pct: 0.072, headline_color: cm.headline, headline_weight: 'bold',
+      body_items: diferenciador ? [diferenciador.split('.')[0].slice(0,40)] : [],
+      body_size_pct: 0.032, body_color: cm.body, bullet_style: 'none',
+      logo: brand, logo_position: 'top-left', logo_size_pct: 0.038, logo_color: cm.logo,
+    };
+  }
 
-  var designTemplate = {
-    headline:          offer,
-    headline_size_pct: 0.068,
-    headline_color:    cm.headline,
-    headline_weight:   'bold',
-    body_items:        diferenciador ? [diferenciador.split('.')[0]] : [],
-    body_color:        cm.body,
-    body_size_pct:     0.032,
-    bullet_style:      'none',
-    logo:              brand,
-    logo_color:        cm.logo,
-    logo_size_pct:     0.038,
-    logo_position:     'top-left',
-    overlay_color:     cm.overlay,
-    overlay_opacity:   0.62,
-    text_zone:         'left',
-    text_zone_width_pct: 0.58,
-  };
+  // ── Prompts de fondo diferenciados (sin texto, solo visual) ───────────────
+  function buildBgPrompt(idx) {
+    // Si hay foto del producto, NO necesitamos prompt de fondo — se usará directamente
+    if (hasProductImg) return null;
 
-  addAgent('generando **' + concepts.length + ' creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*' + (hasProductImg ? ' · foto del producto incluida ✓' : ''));
-  hist.push({role:'assistant', content: 'Generando 5 creativos profesionales para ' + brand});
+    var paletteHint = 'Color palette: ' + cm.hex + '. ';
+    var noText = 'Absolutely NO text, NO letters, NO numbers, NO words anywhere. Clean visual only. ';
+    var quality = 'Ultra-realistic professional product photography, editorial quality, shot for luxury magazine. ';
+
+    // Detectar tipo de producto/industria del brief
+    var isCandle = (industria + ' ' + offer + ' ' + brand).toLowerCase().match(/vela|candle|aromat|fragran|wax/);
+    var isFood = (industria).toLowerCase().match(/restaurante|food|gastronom|cafe|bebida/);
+    var isSalud = (industria).toLowerCase().match(/salud|clinic|medic|bienestar|estetic/);
+    var isInmob = (industria).toLowerCase().match(/inmob|construc|aparta|casa|finca|viviend/);
+    var isFashion = (industria).toLowerCase().match(/moda|ropa|fashion|calzado|accesorio/);
+
+    var scenes = [];
+    if (isCandle) {
+      scenes = [
+        'luxury scented candle with golden label on marble surface, soft warm candlelight glow, eucalyptus and dried flowers decoration, dark moody elegant background, macro photography',
+        'collection of premium aromatic candles in glass vessels, warm amber light bokeh, dark velvet background, luxury spa atmosphere, professional studio lighting',
+        'single lit candle close-up with smoke wisps rising, soft golden hour light, bokeh background, hygge cozy atmosphere, dark warm tones',
+        'aromatherapy candles with crystals and botanicals on wooden tray, flat lay editorial style, warm natural morning light, cream and gold tones',
+        'elegant candle in bronze holder on bathroom marble ledge, mirror reflection, luxury self-care setting, warm ambient glow',
+      ];
+    } else if (isFood) {
+      scenes = [
+        'gourmet dish beautifully plated on dark slate, professional food photography, warm restaurant ambient light',
+        'fresh premium ingredients flat lay, rustic wooden surface, natural morning light, editorial style',
+        'elegant restaurant interior, warm candlelight, bokeh background, luxury dining atmosphere',
+        'coffee or beverage close-up, steam rising, dark moody background, professional product photography',
+        'chef preparing dish, action food photography, commercial kitchen, warm dramatic lighting',
+      ];
+    } else if (isSalud) {
+      scenes = [
+        'clean modern medical spa interior, natural plant light, minimalist aesthetic, soft warm tones',
+        'wellness products on marble surface, eucalyptus, white towels, premium spa setting',
+        'professional skincare products on clean surface, soft studio light, luxury packaging',
+        'serene wellness center corridor, natural light, plant greenery, modern minimalist',
+        'medical professional hands in care gesture, clean white background, trust and expertise aesthetic',
+      ];
+    } else if (isInmob) {
+      scenes = [
+        'luxury apartment interior, floor-to-ceiling windows, city skyline view, golden hour light',
+        'modern residential facade at dusk, warm interior lights glowing, landscaping',
+        'premium living room interior design, marble floors, designer furniture, natural light',
+        'aerial view luxury residential complex, pool and greenery, golden sunset',
+        'kitchen modern luxury interior, marble countertops, professional staging',
+      ];
+    } else if (isFashion) {
+      scenes = [
+        'premium fashion product on clean white surface, soft studio lighting, minimalist editorial',
+        'lifestyle fashion flat lay, styled accessories, marble background, luxury aesthetic',
+        'fashion editorial outdoor urban setting, natural light, modern architecture backdrop',
+        'close-up texture product photography, premium material detail, luxury feel',
+        'fashion lifestyle aspirational scene, warm natural light, modern elegant setting',
+      ];
+    } else {
+      // Genérico premium
+      scenes = [
+        'premium product on elegant dark surface, dramatic side lighting, luxury aesthetic, bokeh background',
+        'clean minimalist product photography, white marble surface, soft natural window light',
+        'lifestyle scene with product, warm ambient lighting, modern elegant interior',
+        'editorial product photography, abstract gradient background, ' + colors + ' tones',
+        'aspirational lifestyle scene, warm golden light, modern professional setting',
+      ];
+    }
+
+    var scene = scenes[idx % scenes.length];
+    return scene + '. ' + paletteHint + noText + quality;
+  }
+
+  var conceptNames = ['Hero', 'Ambiente', 'Close-up', 'Editorial', 'Lifestyle'];
+
+  addAgent('generando **5 creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*' + (hasProductImg ? ' · usando tu foto del producto ✓' : ''));
+  hist.push({role:'assistant', content: 'Generando creativos para ' + brand});
 
   generatedAdImages = [];
   adImgGridEl = null;
   loading = true;
   document.getElementById('sbtn').disabled = true;
 
-  for (var i = 0; i < concepts.length; i++) {
-    var c = concepts[i];
-
+  for (var i = 0; i < 5; i++) {
     var thinkId = addThinking();
-    (function(tid, idx, total) {
+    (function(tid, idx) {
       setTimeout(function() {
         var el = document.getElementById(tid);
-        if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativo ' + idx + ' de ' + total + '...'; }
+        if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativo ' + (idx+1) + ' de 5...'; }
       }, 100);
-    })(thinkId, i + 1, concepts.length);
+    })(thinkId, i);
 
     try {
-      var headers = { 'Content-Type': 'application/json' };
-      if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+      var bgImage = null;
 
-      var body = { prompt: c.bgPrompt, format: 'vertical', variations: 1, hasText: false };
-
-      // Si hay foto del producto, enviarla como imagen de referencia
       if (hasProductImg) {
-        body.referenceImage = { base64: data.productImageBase64, mediaType: data.productImageMediaType || 'image/jpeg' };
+        // ── Usar foto del producto directamente como fondo ─────────────────
+        // La foto del usuario ES el fondo — Canvas la escala y le pone el overlay + texto
+        bgImage = { base64: data.productImageBase64, mediaType: data.productImageMediaType || 'image/jpeg' };
+        rmThinking(thinkId);
+      } else {
+        // ── Generar fondo atmosférico con la API ───────────────────────────
+        var bgPrompt = buildBgPrompt(i);
+        var headers = { 'Content-Type': 'application/json' };
+        if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+        var res = await fetch('/api/generate-image', {
+          method: 'POST', headers: headers,
+          body: JSON.stringify({ prompt: bgPrompt, format: 'vertical', variations: 1, hasText: false })
+        });
+        var result = await res.json();
+        rmThinking(thinkId);
+        if (result.error || !result.images || !result.images.length) {
+          addAgent('No pude generar el creativo ' + (i+1) + '. Intenta de nuevo.');
+          continue;
+        }
+        bgImage = result.images[0];
       }
 
-      var res = await fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify(body) });
-      var result = await res.json();
-      rmThinking(thinkId);
-
-      if (result.error) {
-        addAgent('No pude generar el creativo ' + (i + 1) + ': ' + result.error);
-        continue;
+      // ── Componer texto sobre el fondo con Canvas (sistema premium) ────────
+      // Variar ligeramente el design entre creativos para no ser idénticos
+      var variantDesign = Object.assign({}, design);
+      // Alternar zona de texto entre variaciones
+      if (i === 1 || i === 3) {
+        variantDesign.text_zone = (design.text_zone === 'left') ? 'right' : 'left';
       }
+      // Variar opacidad del overlay ligeramente
+      variantDesign.overlay_opacity = Math.min(0.82, (design.overlay_opacity || 0.65) + (i % 3) * 0.03);
 
-      if (result.images && result.images.length > 0) {
-        // ── Componer texto sobre la imagen con Canvas ─────────────────────────
-        await composeWithDesignTemplate(result.images[0], i + 1, concepts.length, 'vertical', designTemplate);
-        incrementImageUsage();
-      }
+      await composeWithDesignTemplate(bgImage, i + 1, 5, 'vertical', variantDesign);
+      incrementImageUsage();
+
     } catch (err) {
       rmThinking(thinkId);
-      addAgent('Error generando creativo ' + (i + 1) + ': ' + err.message);
+      addAgent('Error generando creativo ' + (i+1) + ': ' + err.message);
     }
 
     if (userPlan !== 'pro' && !isAdminUser()) break;
