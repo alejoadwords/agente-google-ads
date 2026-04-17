@@ -6359,116 +6359,278 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext('2d');
 
+    // ── Layouts predefinidos por variante ────────────────────────────────────
+    // Cada variante tiene un layout distinto para verse diferente
+    var layouts = [
+      // V1: Overlay izquierdo amplio — clásico agencia
+      { zone:'left',   zonePct:0.58, overlayType:'gradient', textY:0.10, logoPos:'top-left',   ctaPos:'bottom', titleSize:0.078 },
+      // V2: Overlay derecho — diferenciador visual
+      { zone:'right',  zonePct:0.55, overlayType:'gradient', textY:0.12, logoPos:'top-right',  ctaPos:'bottom', titleSize:0.072 },
+      // V3: Full overlay oscuro + imagen centrada — estilo editorial
+      { zone:'center', zonePct:1.0,  overlayType:'full',     textY:0.55, logoPos:'top-center', ctaPos:'bottom', titleSize:0.082 },
+      // V4: Bottom third — producto protagonista arriba
+      { zone:'bottom', zonePct:1.0,  overlayType:'bottom',   textY:0.68, logoPos:'top-left',   ctaPos:'inline', titleSize:0.074 },
+      // V5: Top third — texto arriba, producto abajo
+      { zone:'top',    zonePct:1.0,  overlayType:'top',      textY:0.06, logoPos:'bottom-right',ctaPos:'inline', titleSize:0.076 },
+    ];
+    var lyt = layouts[(index - 1) % layouts.length];
+
+    // ── Colores del design ───────────────────────────────────────────────────
+    var overlayColor   = design.overlay_color   || '#1A0A00';
+    var headlineColor  = design.headline_color  || '#FFD700';
+    var bodyColor      = design.body_color      || '#FFFFFF';
+    var logoColor      = design.logo_color      || '#FFD700';
+    var r = parseInt(overlayColor.slice(1,3)||'00',16);
+    var g = parseInt(overlayColor.slice(3,5)||'00',16);
+    var b = parseInt(overlayColor.slice(5,7)||'00',16);
+    var overlayOp      = design.overlay_opacity || 0.68;
+
+    // ── Helper: rounded rect ─────────────────────────────────────────────────
+    function roundRect(x, y, w, h, rad) {
+      ctx.beginPath();
+      ctx.moveTo(x + rad, y);
+      ctx.lineTo(x + w - rad, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+      ctx.lineTo(x + w, y + h - rad);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+      ctx.lineTo(x + rad, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - rad);
+      ctx.lineTo(x, y + rad);
+      ctx.quadraticCurveTo(x, y, x + rad, y);
+      ctx.closePath();
+    }
+
+    // ── Helper: word wrap centrado o izquierdo ───────────────────────────────
+    function drawWrappedAdv(text, fontSize, color, weight, yPos, xPos, maxWidth, align, letterSpacing) {
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 8; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
+      ctx.fillStyle = color;
+      ctx.textAlign = align || 'left';
+
+      var words = text.split(' ');
+      var lines = [];
+      var cur = '';
+      words.forEach(function(w) {
+        var test = cur ? cur + ' ' + w : w;
+        // Approximate letter spacing impact
+        var testW = ctx.measureText(test).width + (letterSpacing || 0) * test.length;
+        if (testW > maxWidth && cur) { lines.push(cur); cur = w; }
+        else cur = test;
+      });
+      if (cur) lines.push(cur);
+
+      lines.forEach(function(line) {
+        if (letterSpacing) {
+          // Manual letter spacing
+          var chars = line.split('');
+          var totalW = ctx.measureText(line).width + letterSpacing * chars.length;
+          var startX = align === 'center' ? xPos - totalW/2 : xPos;
+          ctx.textAlign = 'left';
+          chars.forEach(function(ch) {
+            ctx.fillText(ch, startX, yPos);
+            startX += ctx.measureText(ch).width + letterSpacing;
+          });
+          ctx.textAlign = align || 'left';
+        } else {
+          ctx.fillText(line, xPos, yPos);
+        }
+        yPos += Math.round(fontSize * 1.22);
+      });
+      ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+      ctx.textAlign = 'left';
+      return yPos;
+    }
+
     var img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
       try {
-        // 1. Imagen base
-        ctx.drawImage(img, 0, 0, W, H);
+        // ── 1. Imagen base (object-cover: escalar y centrar) ─────────────────
+        var iW = img.naturalWidth || img.width;
+        var iH = img.naturalHeight || img.height;
+        var scale = Math.max(W / iW, H / iH);
+        var dW = iW * scale, dH = iH * scale;
+        var dX = (W - dW) / 2, dY = (H - dH) / 2;
+        ctx.drawImage(img, dX, dY, dW, dH);
 
-        var zone = design.text_zone || 'left';
-        var zonePct = Math.min(Math.max(design.text_zone_width_pct || 0.55, 0.3), 0.75);
-        var zoneW = Math.round(W * zonePct);
-        var zoneX = (zone === 'right') ? (W - zoneW) : 0;
+        var margin = Math.round(W * 0.052);
 
-        // 2. Overlay semitransparente en zona de texto
-        var overlayColor = design.overlay_color || '#000000';
-        var overlayOpacity = Math.min(Math.max(design.overlay_opacity || 0.6, 0.35), 0.82);
-        var r = parseInt(overlayColor.slice(1,3)||'00',16);
-        var g = parseInt(overlayColor.slice(3,5)||'00',16);
-        var b = parseInt(overlayColor.slice(5,7)||'00',16);
+        // ── 2. Overlay según layout ──────────────────────────────────────────
+        if (lyt.overlayType === 'gradient') {
+          var isLeft = lyt.zone === 'left';
+          var zW = Math.round(W * lyt.zonePct);
+          var zX = isLeft ? 0 : W - zW;
+          var grad = ctx.createLinearGradient(
+            isLeft ? 0 : zX + zW, 0,
+            isLeft ? zX + zW : zX, 0
+          );
+          grad.addColorStop(0,    'rgba('+r+','+g+','+b+','+(overlayOp)+')');
+          grad.addColorStop(0.7,  'rgba('+r+','+g+','+b+','+(overlayOp*0.9)+')');
+          grad.addColorStop(1,    'rgba('+r+','+g+','+b+',0)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(isLeft ? 0 : zX, 0, zW + Math.round(W*0.07), H);
 
-        // Gradiente para overlay más natural
-        var grad = ctx.createLinearGradient(
-          zone === 'right' ? zoneX + zoneW : zoneX, 0,
-          zone === 'right' ? zoneX : zoneX + zoneW, 0
-        );
-        grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + overlayOpacity + ')');
-        grad.addColorStop(0.75, 'rgba(' + r + ',' + g + ',' + b + ',' + (overlayOpacity * 0.85) + ')');
-        grad.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(zoneX, 0, zoneW + Math.round(W * 0.08), H);
+        } else if (lyt.overlayType === 'full') {
+          // Full overlay más claro para dejar ver el producto
+          var gFull = ctx.createRadialGradient(W/2, H/2, H*0.1, W/2, H/2, H*0.7);
+          gFull.addColorStop(0, 'rgba('+r+','+g+','+b+',0.35)');
+          gFull.addColorStop(1, 'rgba('+r+','+g+','+b+',0.80)');
+          ctx.fillStyle = gFull;
+          ctx.fillRect(0, 0, W, H);
 
-        var margin = Math.round(W * 0.055);
-        var textX = (zone === 'right') ? zoneX + margin : margin;
-        var maxW = zoneW - margin * 2;
-        var y = Math.round(H * 0.10);
+        } else if (lyt.overlayType === 'bottom') {
+          // Gradiente de abajo hacia arriba — producto protagonista
+          var gBot = ctx.createLinearGradient(0, H*0.45, 0, H);
+          gBot.addColorStop(0, 'rgba('+r+','+g+','+b+',0)');
+          gBot.addColorStop(0.35, 'rgba('+r+','+g+','+b+',0.72)');
+          gBot.addColorStop(1,  'rgba('+r+','+g+','+b+',0.92)');
+          ctx.fillStyle = gBot;
+          ctx.fillRect(0, 0, W, H);
 
-        // Helper: word wrap
-        function drawWrapped(text, fontSize, color, weight, yPos) {
-          ctx.font = (weight || 'bold') + ' ' + fontSize + 'px Arial, sans-serif';
-          ctx.fillStyle = color || '#ffffff';
-          ctx.shadowColor = 'rgba(0,0,0,0.75)';
-          ctx.shadowBlur = 6; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
-          var lines = text.split('\n');
-          lines.forEach(function(line) {
-            var words = line.split(' '), cur = '';
-            words.forEach(function(word) {
-              var test = cur ? cur + ' ' + word : word;
-              if (ctx.measureText(test).width > maxW && cur) {
-                ctx.fillText(cur, textX, yPos);
-                yPos += Math.round(fontSize * 1.25);
-                cur = word;
-              } else cur = test;
-            });
-            if (cur) { ctx.fillText(cur, textX, yPos); yPos += Math.round(fontSize * 1.25); }
-          });
-          return yPos;
+        } else if (lyt.overlayType === 'top') {
+          // Gradiente de arriba hacia abajo
+          var gTop = ctx.createLinearGradient(0, 0, 0, H*0.55);
+          gTop.addColorStop(0,   'rgba('+r+','+g+','+b+',0.88)');
+          gTop.addColorStop(0.6, 'rgba('+r+','+g+','+b+',0.60)');
+          gTop.addColorStop(1,   'rgba('+r+','+g+','+b+',0)');
+          ctx.fillStyle = gTop;
+          ctx.fillRect(0, 0, W, H);
         }
 
-        // 3. HEADLINE
-        if (design.headline) {
-          var hlSize = Math.round(W * Math.min(Math.max(design.headline_size_pct || 0.07, 0.045), 0.10));
-          y = drawWrapped(design.headline, hlSize, design.headline_color || '#ffffff', design.headline_weight || 'bold', y);
-          y += Math.round(hlSize * 0.5);
+        // ── 3. Calcular zona de texto ────────────────────────────────────────
+        var textX, textMaxW, textAlign;
+        if (lyt.zone === 'left') {
+          textX = margin; textMaxW = Math.round(W * lyt.zonePct) - margin * 2; textAlign = 'left';
+        } else if (lyt.zone === 'right') {
+          var zWr = Math.round(W * lyt.zonePct);
+          textX = W - zWr + margin; textMaxW = zWr - margin * 2; textAlign = 'left';
+        } else {
+          textX = W / 2; textMaxW = W - margin * 4; textAlign = 'center';
         }
 
-        // 4. BODY ITEMS
-        if (design.body_items && design.body_items.length) {
-          var bSize = Math.round(W * Math.min(Math.max(design.body_size_pct || 0.035, 0.025), 0.055));
-          ctx.font = '600 ' + bSize + 'px Arial, sans-serif';
-          ctx.fillStyle = design.body_color || '#ffffff';
-          ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
+        var y = Math.round(H * lyt.textY);
+        var titleFontSize = Math.round(W * lyt.titleSize);
 
-          var bullet = design.bullet_style === 'dash' ? '— ' : design.bullet_style === 'number' ? '' : '• ';
-          design.body_items.forEach(function(item, idx) {
-            var prefix = design.bullet_style === 'number' ? (idx + 1) + '. ' : bullet;
-            // Word wrap para items
-            var fullItem = prefix + item;
-            var words = fullItem.split(' '), cur = '';
-            words.forEach(function(word) {
-              var test = cur ? cur + ' ' + word : word;
-              if (ctx.measureText(test).width > maxW && cur) {
-                ctx.fillText(cur, textX, y);
-                y += Math.round(bSize * 1.4);
-                cur = '  ' + word; // indent continuación
-              } else cur = test;
-            });
-            if (cur) { ctx.fillText(cur, textX, y); y += Math.round(bSize * 1.6); }
-          });
-        }
-
-        // 5. LOGO
+        // ── 4. LOGO (pill con fondo semitransparente) ────────────────────────
         if (design.logo) {
-          var lSize = Math.round(W * Math.min(Math.max(design.logo_size_pct || 0.04, 0.028), 0.06));
-          var logoPos = design.logo_position || 'bottom-left';
-          var logoX = logoPos.includes('right') ? (W - margin - ctx.measureText(design.logo).width) : margin;
-          var logoY = logoPos.includes('top') ? Math.round(H * 0.08) : H - Math.round(H * 0.055);
-          ctx.font = 'bold ' + lSize + 'px Arial, sans-serif';
-          ctx.fillStyle = design.logo_color || '#ffffff';
-          ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
-          ctx.fillText(design.logo, logoX, logoY);
+          var lSize = Math.round(W * 0.034);
+          ctx.font = '700 ' + lSize + 'px Arial, sans-serif';
+          ctx.shadowBlur = 0;
+          var logoText = design.logo.toUpperCase();
+          var logoW = ctx.measureText(logoText).width;
+          var padX = Math.round(lSize * 0.6), padY = Math.round(lSize * 0.4);
+          var pillW = logoW + padX * 2, pillH = lSize + padY * 2;
+
+          var lpX, lpY;
+          if (lyt.logoPos === 'top-left')    { lpX = margin; lpY = Math.round(H * 0.05); }
+          else if (lyt.logoPos === 'top-right')  { lpX = W - margin - pillW; lpY = Math.round(H * 0.05); }
+          else if (lyt.logoPos === 'top-center') { lpX = (W - pillW)/2; lpY = Math.round(H * 0.05); }
+          else if (lyt.logoPos.includes('bottom')){ lpX = lyt.logoPos.includes('right') ? W - margin - pillW : margin; lpY = H - Math.round(H * 0.08); }
+          else { lpX = margin; lpY = Math.round(H * 0.05); }
+
+          // Pill background
+          ctx.fillStyle = 'rgba('+r+','+g+','+b+',0.55)';
+          roundRect(lpX, lpY - pillH + padY, pillW, pillH, pillH/2);
+          ctx.fill();
+
+          // Logo text
+          ctx.fillStyle = logoColor;
+          ctx.textAlign = 'left';
+          ctx.fillText(logoText, lpX + padX, lpY + padY * 0.4);
+          ctx.textAlign = 'left';
         }
 
-        var b64 = canvas.toDataURL('image/jpeg', 0.93).split(',')[1];
-        renderAdImage({ base64: b64, mediaType: 'image/jpeg' }, index, total, format, 'variación', false);
+        // ── 5. Línea decorativa (acento de color) ────────────────────────────
+        if (lyt.zone !== 'center') {
+          var lineY = y - Math.round(titleFontSize * 0.8);
+          var lineLen = Math.round(textMaxW * 0.28);
+          ctx.fillStyle = headlineColor;
+          ctx.fillRect(textX, lineY, lineLen, Math.round(W * 0.007));
+          y = lineY + Math.round(titleFontSize * 0.9);
+        }
+
+        // ── 6. HEADLINE con tipografía variable por variante ─────────────────
+        // Estilos tipográficos distintos: V1 extra-bold, V2 normal+spacing, V3 italic, V4 condensed, V5 light+bold
+        var hlStyles = [
+          { weight:'900', letterSpacing: 0,    italic: false },  // V1: Black
+          { weight:'700', letterSpacing: 2,    italic: false },  // V2: Bold + spaced
+          { weight:'700', letterSpacing: 0,    italic: true  },  // V3: Bold italic
+          { weight:'800', letterSpacing:-1,    italic: false },  // V4: ExtraBold condensed
+          { weight:'600', letterSpacing: 1,    italic: false },  // V5: SemiBold
+        ];
+        var hlStyle = hlStyles[(index-1) % hlStyles.length];
+        var italic = hlStyle.italic ? 'italic ' : '';
+        ctx.font = italic + hlStyle.weight + ' ' + titleFontSize + 'px Arial, sans-serif';
+        ctx.fillStyle = headlineColor;
+        if (design.headline) {
+          y = drawWrappedAdv(design.headline, titleFontSize, headlineColor,
+              hlStyle.weight, y, textX, textMaxW, textAlign, hlStyle.letterSpacing);
+          y += Math.round(titleFontSize * 0.3);
+        }
+
+        // ── 7. Separador sutil ───────────────────────────────────────────────
+        var sepAlpha = 0.45;
+        ctx.fillStyle = 'rgba(255,255,255,' + sepAlpha + ')';
+        if (textAlign === 'center') {
+          ctx.fillRect(textX - 60, y, 120, 2);
+        } else {
+          ctx.fillRect(textX, y, Math.round(textMaxW * 0.4), 2);
+        }
+        y += Math.round(titleFontSize * 0.55);
+
+        // ── 8. BODY ITEMS ────────────────────────────────────────────────────
+        if (design.body_items && design.body_items.length) {
+          var bSize = Math.round(titleFontSize * 0.44);
+          ctx.font = '400 ' + bSize + 'px Arial, sans-serif';
+          design.body_items.slice(0,3).forEach(function(item) {
+            var line = (design.bullet_style === 'none' ? '' : '• ') + item;
+            y = drawWrappedAdv(line, bSize, bodyColor, '400', y, textX, textMaxW, textAlign, 0);
+            y += Math.round(bSize * 0.2);
+          });
+          y += Math.round(bSize * 0.5);
+        }
+
+        // ── 9. CTA (botón pill) ──────────────────────────────────────────────
+        var ctaText = 'Ver oferta →';
+        var ctaSize = Math.round(W * 0.032);
+        ctx.font = '700 ' + ctaSize + 'px Arial, sans-serif';
+        var ctaW = ctx.measureText(ctaText).width + ctaSize * 2.2;
+        var ctaH = ctaSize * 2.1;
+        var ctaX, ctaY;
+
+        if (lyt.ctaPos === 'inline') {
+          ctaX = textAlign === 'center' ? (W - ctaW)/2 : textX;
+          ctaY = y + Math.round(ctaSize * 0.2);
+        } else {
+          // bottom fijo
+          ctaX = textAlign === 'center' ? (W - ctaW)/2 : textX;
+          ctaY = H - Math.round(H * 0.10);
+        }
+
+        // Fondo del botón
+        ctx.fillStyle = headlineColor;
+        ctx.shadowBlur = 12; ctx.shadowColor = 'rgba(0,0,0,0.4)';
+        roundRect(ctaX, ctaY, ctaW, ctaH, ctaH/2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Texto del botón
+        ctx.fillStyle = overlayColor;
+        ctx.font = '700 ' + ctaSize + 'px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(ctaText, ctaX + ctaW/2, ctaY + ctaH*0.67);
+        ctx.textAlign = 'left';
+
+        // ── 10. Render final ─────────────────────────────────────────────────
+        var b64 = canvas.toDataURL('image/jpeg', 0.94).split(',')[1];
+        renderAdImage({ base64: b64, mediaType: 'image/jpeg' }, index, total, format, 'diseño', false);
       } catch(err) {
         console.error('[Acuarius] Canvas error:', err);
-        renderAdImage(imgData, index, total, format, 'variación', false);
+        renderAdImage(imgData, index, total, format, 'diseño', false);
       }
       resolve();
     };
-    img.onerror = function() { renderAdImage(imgData, index, total, format, 'variación', false); resolve(); };
+    img.onerror = function() { renderAdImage(imgData, index, total, format, 'diseño', false); resolve(); };
     img.src = 'data:' + imgData.mediaType + ';base64,' + imgData.base64;
   });
 }
