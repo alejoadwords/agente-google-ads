@@ -7169,90 +7169,39 @@ async function dqGenerateSelectedConcepts() {
   var selected = (designQData.concepts || []).filter(c => dqSelectedConcepts.has(c.id));
   if (!selected.length) return;
 
-  // Ocultar tarjetas de concepto
   var conceptMsg = document.getElementById('concept-cards-msg');
   if (conceptMsg) conceptMsg.style.display = 'none';
 
-  var brand      = designQData.brand   || 'marca';
-  var offer      = designQData.offer   || '';
-  var format     = designQData.format  || 'vertical';
+  var brand         = designQData.brand   || 'marca';
+  var offer         = designQData.offer   || '';
+  var format        = designQData.format  || 'vertical';
   var hasProductImg = !!(designQData.productImageBase64);
+  var colorDesc     = designQData.colors  || '';
 
-  var colorDesc  = designQData.colors || '';
-  var tono       = designQData.tono   || 'profesional';
-
-  // ── Paleta de colores inteligente ────────────────────────────────────────
-  // Intenta parsear hex directamente, luego detecta por keywords, luego fallback neutro
-  function buildColorPalette(colorStr) {
+  // ── Extraer colores en hex para pasarlos al servidor ─────────────────────
+  function extractBrandColors(colorStr) {
     if (!colorStr) return null;
-    var s = colorStr.toLowerCase().trim();
-
-    // 1. Buscar hex directamente en el string (ej: "#C9942A" o "crema #F5E6C8")
     var hexMatches = colorStr.match(/#([0-9A-Fa-f]{6})/g);
     if (hexMatches && hexMatches.length >= 1) {
-      var primary = hexMatches[0];
-      var secondary = hexMatches[1] || '#FFFFFF';
-      // Determinar si el color primario es oscuro (para overlay) o claro (para headline)
-      var rp = parseInt(primary.slice(1,3), 16);
-      var gp = parseInt(primary.slice(3,5), 16);
-      var bp = parseInt(primary.slice(5,7), 16);
-      var lum = (0.299*rp + 0.587*gp + 0.114*bp) / 255;
-      var overlayHex = lum > 0.5
-        ? darken(primary, 0.5)   // color claro → oscurecer para overlay
-        : primary;               // color oscuro → usar directo
-      var hlHex = lum > 0.5 ? secondary : secondary;
-      return { overlay: overlayHex, headline: secondary, body: '#FFFFFF', logo: secondary, hex: primary + ', ' + secondary };
+      return { primary: hexMatches[0], secondary: hexMatches[1] || '#FFFFFF', overlay: null };
     }
-
-    // 2. Detección por keywords
-    var kw = {
-      // Tonos cálidos
-      dorado:  { overlay:'#2D1A00', headline:'#FFD700', body:'#FFF8DC', logo:'#FFD700' },
-      oro:     { overlay:'#2D1A00', headline:'#FFD700', body:'#FFF8DC', logo:'#FFD700' },
-      golden:  { overlay:'#2D1A00', headline:'#FFD700', body:'#FFF8DC', logo:'#FFD700' },
-      crema:   { overlay:'#3D2B1A', headline:'#F5E6C8', body:'#FFFFFF', logo:'#F5E6C8' },
-      beige:   { overlay:'#2C1A0A', headline:'#F0DDB8', body:'#FFFFFF', logo:'#F0DDB8' },
-      café:    { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
-      cafe:    { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
-      marrón:  { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
-      marron:  { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
-      terracota:{ overlay:'#3D1500', headline:'#FFFFFF', body:'#FFE8D6', logo:'#FFFFFF' },
-      // Fríos
-      azul:    { overlay:'#0A1628', headline:'#FFFFFF', body:'#E8F0FE', logo:'#FFFFFF' },
-      navy:    { overlay:'#080E1F', headline:'#FFFFFF', body:'#D0E0FF', logo:'#FFFFFF' },
-      celeste: { overlay:'#0A1E2C', headline:'#FFFFFF', body:'#E0F2FF', logo:'#FFFFFF' },
-      // Neutros
-      negro:   { overlay:'#080808', headline:'#FFFFFF', body:'#E0E0E0', logo:'#FFFFFF' },
-      black:   { overlay:'#080808', headline:'#FFFFFF', body:'#E0E0E0', logo:'#FFFFFF' },
-      blanco:  { overlay:'#1A1A2E', headline:'#FFFFFF', body:'#F0F0F0', logo:'#FFFFFF' },
-      gris:    { overlay:'#1A1A1A', headline:'#FFFFFF', body:'#E8E8E8', logo:'#FFFFFF' },
-      // Vivos
-      rojo:    { overlay:'#2D0000', headline:'#FFFFFF', body:'#FFE0E0', logo:'#FFFFFF' },
-      verde:   { overlay:'#0A2010', headline:'#FFFFFF', body:'#E0F4E8', logo:'#FFFFFF' },
-      rosa:    { overlay:'#3D1A2B', headline:'#FFE4F0', body:'#FFFFFF', logo:'#FFE4F0' },
-      lila:    { overlay:'#2A1040', headline:'#F0E0FF', body:'#FFFFFF', logo:'#F0E0FF' },
-      morado:  { overlay:'#2A0A40', headline:'#F0D0FF', body:'#FFFFFF', logo:'#F0D0FF' },
-      violeta: { overlay:'#2A0A40', headline:'#F0D0FF', body:'#FFFFFF', logo:'#F0D0FF' },
-      naranja: { overlay:'#3D1500', headline:'#FFE0C0', body:'#FFFFFF', logo:'#FFE0C0' },
-      amarillo:{ overlay:'#2D2000', headline:'#FFE800', body:'#FFFFFF', logo:'#FFE800' },
+    // Mapeo de keywords a hex aproximados para pasarle a Ideogram color_palette
+    var kwHex = {
+      dorado:'#C9942A', oro:'#C9942A', golden:'#C9942A', crema:'#F5E6C8', beige:'#F0DDB8',
+      café:'#6B3A2A', cafe:'#6B3A2A', marrón:'#6B3A2A', marron:'#6B3A2A', terracota:'#C1440E',
+      azul:'#1E2BCC', navy:'#0D1B4B', celeste:'#2196F3', negro:'#111111', black:'#111111',
+      blanco:'#FFFFFF', gris:'#666666', rojo:'#CC0000', verde:'#2D6A4F', rosa:'#C9184A',
+      lila:'#7B2FBE', morado:'#5B21B6', violeta:'#5B21B6', naranja:'#E85D04', amarillo:'#F5E800',
     };
-    for (var word in kw) {
-      if (s.includes(word)) {
-        var base = kw[word];
-        return { overlay: base.overlay, headline: base.headline, body: base.body, logo: base.logo, hex: colorStr };
-      }
+    var s = colorStr.toLowerCase();
+    var primary = null, secondary = '#FFFFFF';
+    for (var kw in kwHex) {
+      if (s.includes(kw)) { if (!primary) primary = kwHex[kw]; else { secondary = kwHex[kw]; break; } }
     }
-    return null;
+    return primary ? { primary, secondary, overlay: null } : null;
   }
 
-  function darken(hex, factor) {
-    var r2 = Math.round(parseInt(hex.slice(1,3),16) * (1-factor));
-    var g2 = Math.round(parseInt(hex.slice(3,5),16) * (1-factor));
-    var b2 = Math.round(parseInt(hex.slice(5,7),16) * (1-factor));
-    return '#' + [r2,g2,b2].map(v => v.toString(16).padStart(2,'0')).join('');
-  }
-
-  var cm = buildColorPalette(colorDesc) || { overlay: '#1A1218', headline: '#FFFFFF', body: '#F0F0F0', logo: '#FFFFFF', hex: '#333, #FFF' };
+  var brandColors = extractBrandColors(colorDesc);
 
   addAgent('generando **' + selected.length + ' creativo' + (selected.length > 1 ? 's' : '') + '** para **' + brand + '**...\n\ncampaña: *' + offer + '*');
   hist.push({ role: 'assistant', content: 'Generando creativos para ' + brand });
@@ -7267,65 +7216,55 @@ async function dqGenerateSelectedConcepts() {
   for (var i = 0; i < selected.length; i++) {
     var concept = selected[i];
     var thinkId = addThinking();
-    (function(tid, idx, c) {
+    (function(tid, c) {
       setTimeout(function() {
         var el = document.getElementById(tid);
         if (el) { var t = el.querySelector('.thinking-bbl'); if (t) t.innerHTML = '<div class="spinner"></div>generando "' + c.nombre + '"...'; }
       }, 100);
-    })(thinkId, i, concept);
+    })(thinkId, concept);
 
     try {
-      var bgImage = null;
+      var headers = { 'Content-Type': 'application/json' };
+      if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
 
-      if (hasProductImg) {
-        bgImage = { base64: designQData.productImageBase64, mediaType: designQData.productImageMediaType || 'image/jpeg' };
-        rmThinking(thinkId);
-      } else {
-        // Usar el prompt específico de cada concepto que Claude generó
-        var bgPrompt = concept.ideogram_prompt;
-        if (colorDesc) bgPrompt += ' Color palette: ' + cm.hex + '.';
-
-        var headers = { 'Content-Type': 'application/json' };
-        if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-        var res = await fetch('/api/generate-image', {
-          method: 'POST', headers: headers,
-          body: JSON.stringify({ prompt: bgPrompt, format: format, variations: 1, hasText: false })
-        });
-        var result = await res.json();
-        rmThinking(thinkId);
-        if (result.error || !result.images || !result.images.length) {
-          addAgent('No pude generar el creativo "' + concept.nombre + '". Continuando...');
-          continue;
-        }
-        bgImage = result.images[0];
-      }
-
-      // Construir design object desde el concepto de Claude
-      var design = {
-        text_zone:           'left',
-        text_zone_width_pct: 0.55,
-        overlay_color:       cm.overlay,
-        overlay_opacity:     0.62 + (i % 3) * 0.04,
-        headline:            concept.headline,
-        headline_size_pct:   0.068,
-        headline_color:      cm.headline,
-        headline_weight:     'bold',
-        body_items:          [concept.subheadline, concept.cta],
-        body_size_pct:       0.030,
-        body_color:          cm.body,
-        bullet_style:        'none',
-        logo:                brand,
-        logo_position:       i % 2 === 0 ? 'top-left' : 'top-right',
-        logo_size_pct:       0.036,
-        logo_color:          cm.logo,
-        cta_text:            concept.cta,
-        cta_color:           cm.headline,
+      // ── Construir adCopy desde el concepto de Claude ──────────────────────
+      var adCopy = {
+        brand:       brand,
+        headline:    concept.headline,
+        subheadline: concept.subheadline,
+        cta:         concept.cta,
       };
 
-      // Alternar zona de texto para variedad
-      if (i === 1 || i === 3) design.text_zone = 'right';
+      // ── Llamada al servidor en modo DESIGN ────────────────────────────────
+      // Ideogram V3 style:DESIGN genera el anuncio completo con texto integrado
+      var body = {
+        prompt:      concept.ideogram_prompt,
+        format:      format,
+        variations:  1,
+        designMode:  true,          // ← activa el nuevo modo DESIGN en el servidor
+        adCopy:      adCopy,
+        brandColors: brandColors,
+      };
 
-      await composeWithDesignTemplate(bgImage, concept.id, total, format, design);
+      // Si hay foto del producto, pasarla para replace-background
+      if (hasProductImg) {
+        body.productImageBase64 = 'data:' + (designQData.productImageMediaType || 'image/jpeg') + ';base64,' + designQData.productImageBase64;
+      }
+
+      var res = await fetch('/api/generate-image', {
+        method: 'POST', headers: headers,
+        body: JSON.stringify(body)
+      });
+      var result = await res.json();
+      rmThinking(thinkId);
+
+      if (result.error || !result.images || !result.images.length) {
+        addAgent('No pude generar el creativo "' + concept.nombre + '". ' + (result.error || 'Intenta de nuevo.'));
+        continue;
+      }
+
+      var img = result.images[0];
+      renderAdImage(img, i + 1, total, format, concept.nombre, false);
       incrementImageUsage();
 
     } catch(err) {
