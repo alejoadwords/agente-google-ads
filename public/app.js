@@ -1684,17 +1684,58 @@ async function agencyOpenClient(id) {
   const c = agencyClients.find(x => x.id === id);
   if (!c) return;
 
-  // IMPORTANTE: setear el clientId ANTES de llamar openAgent
-  // para que getProfileKey y dbLoadProfile usen la clave del cliente
+  // Setear el clientId activo
   agencyActiveClientId = id;
 
-  // openAgent usa dbLoadProfile que ahora está scopeado por clientId:
-  // - Si el cliente tiene perfil guardado → saluda con "hola de nuevo"
-  // - Si no tiene perfil → lanza el onboarding del agente para este cliente
-  await openAgent(currentAgentCtx || 'google-ads');
-
-  // Mostrar barra de contexto encima del chat (después de que openAgent renderizó)
+  // Ir a la pantalla de inicio con saludo personalizado del cliente
+  showView('home');
   agencyShowContextBar(c);
+  renderClientHomeGreeting(c);
+}
+
+function renderClientHomeGreeting(client) {
+  // Personalizar el saludo con el nombre del cliente
+  const greeting = document.getElementById('home-greeting');
+  if (greeting) {
+    const h = new Date().getHours();
+    const t = h < 12 ? 'buenos días' : h < 18 ? 'buenas tardes' : 'buenas noches';
+    greeting.textContent = `${t} — trabajando con ${client.name} 👋`;
+  }
+
+  // Reemplazar el hero del consultor con una bienvenida contextual del cliente
+  const heroEl = document.getElementById('home-consultor-hero');
+  if (!heroEl) return;
+
+  const industria   = client.industria   || client.business || '';
+  const descripcion = client.descripcion || '';
+  const tono        = client.tono        || '';
+  const canales     = client.canales     || '';
+  const ciudad      = client.ciudad      ? ` · ${client.ciudad}` : '';
+  const logoChar    = (client.name || 'C')[0].toUpperCase();
+
+  // Construir contexto del cliente para mostrar en la bienvenida
+  const contextLines = [
+    industria ? `<span style="background:rgba(124,58,237,.12);color:#6D28D9;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${industria}</span>` : '',
+    canales   ? `<span style="font-size:11px;color:#7C3AED;opacity:.8">Canales: ${canales}</span>` : '',
+  ].filter(Boolean).join('  ');
+
+  heroEl.innerHTML = `
+    <div style="width:48px;height:48px;border-radius:14px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;font-size:20px;font-weight:700;color:#fff">
+      ${client.logo ? `<img src="${client.logo}" style="width:100%;height:100%;object-fit:cover;border-radius:14px"/>` : logoChar}
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:15px;font-weight:700;color:#4C1D95;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${client.name}
+        <span style="font-size:10px;font-weight:600;background:#7C3AED;color:#fff;padding:2px 8px;border-radius:20px;letter-spacing:.3px">CLIENTE ACTIVO</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">${contextLines}</div>
+      ${descripcion ? `<div style="font-size:11.5px;color:#6D28D9;opacity:.85;line-height:1.4;margin-top:2px">${descripcion.slice(0, 120)}${descripcion.length > 120 ? '...' : ''}</div>` : ''}
+    </div>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.7"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+  `;
+
+  // Mantener el onclick para que al hacer clic en el hero vaya al consultor con el cliente
+  heroEl.onclick = () => openAgent('consultor');
 }
 
 function agencyShowContextBar(client) {
