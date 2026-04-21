@@ -6381,8 +6381,26 @@ function buildAxisPrompts(axis, design, count) {
   return { label: label, list: list };
 }
 
+// Fuentes cargadas una sola vez
+var _acuariusFontsLoaded = false;
+async function loadCanvasFonts() {
+  if (_acuariusFontsLoaded) return;
+  try {
+    var fonts = [
+      new FontFace('Montserrat', 'url(https://fonts.gstatic.com/s/montserrat/v26/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aXo.woff2)', { weight: '900' }),
+      new FontFace('Montserrat', 'url(https://fonts.gstatic.com/s/montserrat/v26/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w5aXo.woff2)', { weight: '700' }),
+      new FontFace('Montserrat', 'url(https://fonts.gstatic.com/s/montserrat/v26/JTUSjIg1_i6t8kCHKm459WlhyyTh89Y.woff2)',                  { weight: '400' }),
+      new FontFace('Playfair Display', 'url(https://fonts.gstatic.com/s/playfairdisplay/v37/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtM.woff2)', { weight: '700', style: 'italic' }),
+      new FontFace('Playfair Display', 'url(https://fonts.gstatic.com/s/playfairdisplay/v37/nuFiD-vYSZviVYUb_rj3ij__anPXBYf9lW4e5j5hNKc.woff2)', { weight: '700' }),
+    ];
+    await Promise.all(fonts.map(f => f.load().then(lf => { document.fonts.add(lf); return lf; }).catch(() => null)));
+    _acuariusFontsLoaded = true;
+  } catch(e) { _acuariusFontsLoaded = true; }
+}
+
 // Canvas reconstruye el diseño tipográfico original sobre la nueva imagen base
 async function composeWithDesignTemplate(imgData, index, total, format, design) {
+  await loadCanvasFonts();
   return new Promise(function(resolve) {
     var canvas = document.createElement('canvas');
     var W = 1080, H = format === 'vertical' ? 1350 : 1080;
@@ -6544,7 +6562,7 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
         // ── 4. LOGO (pill con fondo semitransparente) ────────────────────────
         if (design.logo) {
           var lSize = Math.round(W * 0.034);
-          ctx.font = '700 ' + lSize + 'px Arial, sans-serif';
+          ctx.font = '700 ' + lSize + 'px "Montserrat", Arial, sans-serif';
           ctx.shadowBlur = 0;
           var logoText = design.logo.toUpperCase();
           var logoW = ctx.measureText(logoText).width;
@@ -6571,26 +6589,30 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
         }
 
         // ── 5. Línea decorativa (acento de color) ────────────────────────────
-        if (lyt.zone !== 'center') {
-          var lineY = y - Math.round(titleFontSize * 0.8);
+        // Solo dibujar si el logo NO está en la misma zona que el texto
+        var logoZone = lyt.logoPos.includes('top') ? 'top' : 'bottom';
+        var textZone = (lyt.textY < 0.35) ? 'top' : 'bottom';
+        var drawAccent = (logoZone !== textZone) || lyt.zone === 'center';
+        if (drawAccent && lyt.zone !== 'center') {
+          // Línea siempre debajo del margen del logo, antes del headline
+          var lineY2 = y;
           var lineLen = Math.round(textMaxW * 0.28);
           ctx.fillStyle = headlineColor;
-          ctx.fillRect(textX, lineY, lineLen, Math.round(W * 0.007));
-          y = lineY + Math.round(titleFontSize * 0.9);
+          ctx.fillRect(textX, lineY2, lineLen, Math.round(W * 0.007));
+          y = lineY2 + Math.round(titleFontSize * 0.7);
         }
 
         // ── 6. HEADLINE con tipografía variable por variante ─────────────────
-        // Estilos tipográficos distintos: V1 extra-bold, V2 normal+spacing, V3 italic, V4 condensed, V5 light+bold
         var hlStyles = [
-          { weight:'900', letterSpacing: 0,    italic: false },  // V1: Black
-          { weight:'700', letterSpacing: 2,    italic: false },  // V2: Bold + spaced
-          { weight:'700', letterSpacing: 0,    italic: true  },  // V3: Bold italic
-          { weight:'800', letterSpacing:-1,    italic: false },  // V4: ExtraBold condensed
-          { weight:'600', letterSpacing: 1,    italic: false },  // V5: SemiBold
+          { font:'Montserrat',       weight:'900', letterSpacing: 0,  italic: false },  // V1: Black sans
+          { font:'Playfair Display', weight:'700', letterSpacing: 0,  italic: true  },  // V2: Serif italic elegante
+          { font:'Montserrat',       weight:'700', letterSpacing: 2,  italic: false },  // V3: Bold spaced
+          { font:'Playfair Display', weight:'700', letterSpacing: 0,  italic: false },  // V4: Serif bold
+          { font:'Montserrat',       weight:'900', letterSpacing:-1,  italic: false },  // V5: Black condensed
         ];
         var hlStyle = hlStyles[(index-1) % hlStyles.length];
         var italic = hlStyle.italic ? 'italic ' : '';
-        ctx.font = italic + hlStyle.weight + ' ' + titleFontSize + 'px Arial, sans-serif';
+        ctx.font = italic + hlStyle.weight + ' ' + titleFontSize + 'px "' + hlStyle.font + '", Arial, sans-serif';
         ctx.fillStyle = headlineColor;
         if (design.headline) {
           y = drawWrappedAdv(design.headline, titleFontSize, headlineColor,
@@ -6611,7 +6633,7 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
         // ── 8. BODY ITEMS ────────────────────────────────────────────────────
         if (design.body_items && design.body_items.length) {
           var bSize = Math.round(titleFontSize * 0.44);
-          ctx.font = '400 ' + bSize + 'px Arial, sans-serif';
+          ctx.font = '400 ' + bSize + 'px "Montserrat", Arial, sans-serif';
           design.body_items.slice(0,3).forEach(function(item) {
             var line = (design.bullet_style === 'none' ? '' : '• ') + item;
             y = drawWrappedAdv(line, bSize, bodyColor, '400', y, textX, textMaxW, textAlign, 0);
@@ -6623,7 +6645,7 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
         // ── 9. CTA (botón pill) ──────────────────────────────────────────────
         var ctaText = 'Ver oferta →';
         var ctaSize = Math.round(W * 0.032);
-        ctx.font = '700 ' + ctaSize + 'px Arial, sans-serif';
+        ctx.font = '700 ' + ctaSize + 'px "Montserrat", Arial, sans-serif';
         var ctaW = ctx.measureText(ctaText).width + ctaSize * 2.2;
         var ctaH = ctaSize * 2.1;
         var ctaX, ctaY;
@@ -6646,7 +6668,7 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
 
         // Texto del botón
         ctx.fillStyle = overlayColor;
-        ctx.font = '700 ' + ctaSize + 'px Arial, sans-serif';
+        ctx.font = '700 ' + ctaSize + 'px "Montserrat", Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(ctaText, ctaX + ctaW/2, ctaY + ctaH*0.67);
         ctx.textAlign = 'left';
@@ -7159,17 +7181,78 @@ async function dqGenerateSelectedConcepts() {
   var colorDesc  = designQData.colors || '';
   var tono       = designQData.tono   || 'profesional';
 
-  // Mapeo de colores a paleta Canvas
-  var colorMap = {
-    'dorado y blanco':   { overlay: '#2D1A00', headline: '#FFD700', body: '#FFF8DC', logo: '#FFD700', hex: '#C9942A, #FFFFFF' },
-    'azul y blanco':     { overlay: '#0A1628', headline: '#FFFFFF', body: '#E8F0FE', logo: '#FFFFFF', hex: '#1E2BCC, #FFFFFF' },
-    'verde y beige':     { overlay: '#1A2E1A', headline: '#FFFFFF', body: '#F0F4EE', logo: '#FFFFFF', hex: '#2D6A4F, #F1E8D8' },
-    'rosa y blanco':     { overlay: '#3D1A2B', headline: '#FFE4F0', body: '#FFFFFF', logo: '#FFE4F0', hex: '#C9184A, #FFE4F0' },
-    'negro y dorado':    { overlay: '#0A0A0A', headline: '#FFD700', body: '#F5F5F0', logo: '#FFD700', hex: '#1A1A1A, #C9942A' },
-    'blanco y café':     { overlay: '#2C1A0A', headline: '#FFFFFF', body: '#F5ECD7', logo: '#FFFFFF', hex: '#6B3A2A, #F5ECD7' },
-  };
-  var colKey = colorDesc.toLowerCase();
-  var cm = colorMap[colKey] || { overlay: '#1A0A00', headline: '#FFD700', body: '#FFFFFF', logo: '#FFD700', hex: colorDesc || '#333, #FFF' };
+  // ── Paleta de colores inteligente ────────────────────────────────────────
+  // Intenta parsear hex directamente, luego detecta por keywords, luego fallback neutro
+  function buildColorPalette(colorStr) {
+    if (!colorStr) return null;
+    var s = colorStr.toLowerCase().trim();
+
+    // 1. Buscar hex directamente en el string (ej: "#C9942A" o "crema #F5E6C8")
+    var hexMatches = colorStr.match(/#([0-9A-Fa-f]{6})/g);
+    if (hexMatches && hexMatches.length >= 1) {
+      var primary = hexMatches[0];
+      var secondary = hexMatches[1] || '#FFFFFF';
+      // Determinar si el color primario es oscuro (para overlay) o claro (para headline)
+      var rp = parseInt(primary.slice(1,3), 16);
+      var gp = parseInt(primary.slice(3,5), 16);
+      var bp = parseInt(primary.slice(5,7), 16);
+      var lum = (0.299*rp + 0.587*gp + 0.114*bp) / 255;
+      var overlayHex = lum > 0.5
+        ? darken(primary, 0.5)   // color claro → oscurecer para overlay
+        : primary;               // color oscuro → usar directo
+      var hlHex = lum > 0.5 ? secondary : secondary;
+      return { overlay: overlayHex, headline: secondary, body: '#FFFFFF', logo: secondary, hex: primary + ', ' + secondary };
+    }
+
+    // 2. Detección por keywords
+    var kw = {
+      // Tonos cálidos
+      dorado:  { overlay:'#2D1A00', headline:'#FFD700', body:'#FFF8DC', logo:'#FFD700' },
+      oro:     { overlay:'#2D1A00', headline:'#FFD700', body:'#FFF8DC', logo:'#FFD700' },
+      golden:  { overlay:'#2D1A00', headline:'#FFD700', body:'#FFF8DC', logo:'#FFD700' },
+      crema:   { overlay:'#3D2B1A', headline:'#F5E6C8', body:'#FFFFFF', logo:'#F5E6C8' },
+      beige:   { overlay:'#2C1A0A', headline:'#F0DDB8', body:'#FFFFFF', logo:'#F0DDB8' },
+      café:    { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
+      cafe:    { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
+      marrón:  { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
+      marron:  { overlay:'#2C1A0A', headline:'#FFFFFF', body:'#F5ECD7', logo:'#FFFFFF' },
+      terracota:{ overlay:'#3D1500', headline:'#FFFFFF', body:'#FFE8D6', logo:'#FFFFFF' },
+      // Fríos
+      azul:    { overlay:'#0A1628', headline:'#FFFFFF', body:'#E8F0FE', logo:'#FFFFFF' },
+      navy:    { overlay:'#080E1F', headline:'#FFFFFF', body:'#D0E0FF', logo:'#FFFFFF' },
+      celeste: { overlay:'#0A1E2C', headline:'#FFFFFF', body:'#E0F2FF', logo:'#FFFFFF' },
+      // Neutros
+      negro:   { overlay:'#080808', headline:'#FFFFFF', body:'#E0E0E0', logo:'#FFFFFF' },
+      black:   { overlay:'#080808', headline:'#FFFFFF', body:'#E0E0E0', logo:'#FFFFFF' },
+      blanco:  { overlay:'#1A1A2E', headline:'#FFFFFF', body:'#F0F0F0', logo:'#FFFFFF' },
+      gris:    { overlay:'#1A1A1A', headline:'#FFFFFF', body:'#E8E8E8', logo:'#FFFFFF' },
+      // Vivos
+      rojo:    { overlay:'#2D0000', headline:'#FFFFFF', body:'#FFE0E0', logo:'#FFFFFF' },
+      verde:   { overlay:'#0A2010', headline:'#FFFFFF', body:'#E0F4E8', logo:'#FFFFFF' },
+      rosa:    { overlay:'#3D1A2B', headline:'#FFE4F0', body:'#FFFFFF', logo:'#FFE4F0' },
+      lila:    { overlay:'#2A1040', headline:'#F0E0FF', body:'#FFFFFF', logo:'#F0E0FF' },
+      morado:  { overlay:'#2A0A40', headline:'#F0D0FF', body:'#FFFFFF', logo:'#F0D0FF' },
+      violeta: { overlay:'#2A0A40', headline:'#F0D0FF', body:'#FFFFFF', logo:'#F0D0FF' },
+      naranja: { overlay:'#3D1500', headline:'#FFE0C0', body:'#FFFFFF', logo:'#FFE0C0' },
+      amarillo:{ overlay:'#2D2000', headline:'#FFE800', body:'#FFFFFF', logo:'#FFE800' },
+    };
+    for (var word in kw) {
+      if (s.includes(word)) {
+        var base = kw[word];
+        return { overlay: base.overlay, headline: base.headline, body: base.body, logo: base.logo, hex: colorStr };
+      }
+    }
+    return null;
+  }
+
+  function darken(hex, factor) {
+    var r2 = Math.round(parseInt(hex.slice(1,3),16) * (1-factor));
+    var g2 = Math.round(parseInt(hex.slice(3,5),16) * (1-factor));
+    var b2 = Math.round(parseInt(hex.slice(5,7),16) * (1-factor));
+    return '#' + [r2,g2,b2].map(v => v.toString(16).padStart(2,'0')).join('');
+  }
+
+  var cm = buildColorPalette(colorDesc) || { overlay: '#1A1218', headline: '#FFFFFF', body: '#F0F0F0', logo: '#FFFFFF', hex: '#333, #FFF' };
 
   addAgent('generando **' + selected.length + ' creativo' + (selected.length > 1 ? 's' : '') + '** para **' + brand + '**...\n\ncampaña: *' + offer + '*');
   hist.push({ role: 'assistant', content: 'Generando creativos para ' + brand });
