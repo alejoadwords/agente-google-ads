@@ -6666,164 +6666,149 @@ async function composeWithDesignTemplate(imgData, index, total, format, design) 
 // Sistema de cuestionario de diseño
 var designQData = {};
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MÓDULO DE CREACIÓN DE IMÁGENES — Director Creativo IA
+// Flujo: Brief (2 preguntas) → Claude genera 5 conceptos → usuario aprueba → Ideogram
+// ─────────────────────────────────────────────────────────────────────────────
+
 function showDesignQuestionnaire() {
   loadImageUsage();
-  
-  // Si no puede generar imágenes, mostrar límite alcanzado
-  if (!canGenerateImage()) {
-    showImageLimitReached();
-    return;
-  }
+  if (!canGenerateImage()) { showImageLimitReached(); return; }
 
-  // ── Pre-cargar datos del cliente activo si existe ──────────────────────────
+  // Pre-cargar datos del cliente activo si existe
   var activeClient = null;
   if (agencyActiveClientId) {
     activeClient = agencyClients.find(c => c.id === agencyActiveClientId) || null;
   }
   if (activeClient) {
-    // Pre-rellenar designQData con los datos del brief
-    designQData.brand  = activeClient.name || '';
-    designQData.colors = activeClient.colores || '';
-    designQData.estiloVisual = activeClient.estiloVisual || '';
-    designQData.productos = activeClient.productos || '';
-    designQData.industria = activeClient.industria || activeClient.descripcion || '';
-    designQData.audiencia = activeClient.audiencia || '';
-    designQData.diferenciador = activeClient.diferenciador || '';
-    designQData.tono = activeClient.tono || '';
-    designQData.propuesta = activeClient.propuesta || '';
-    designQData.fromBrief = true;
+    designQData.brand        = activeClient.name        || '';
+    designQData.colors       = activeClient.colores     || '';
+    designQData.estiloVisual = activeClient.estiloVisual|| '';
+    designQData.productos    = activeClient.productos   || '';
+    designQData.industria    = activeClient.industria   || activeClient.descripcion || '';
+    designQData.audiencia    = activeClient.audiencia   || '';
+    designQData.diferenciador= activeClient.diferenciador || '';
+    designQData.tono         = activeClient.tono        || '';
+    designQData.propuesta    = activeClient.propuesta   || '';
+    designQData.fromBrief    = true;
   } else {
     designQData = {};
   }
 
-  const isAdmin = isAdminUser();
-  const remaining = (userPlan === 'pro' || isAdmin) ? '∞' : (imageUsage.limit - imageUsage.generated);
+  const isAdmin   = isAdminUser();
   const isLimited = userPlan !== 'pro' && !isAdmin;
-  
+  const remaining = isLimited ? (imageUsage.limit - imageUsage.generated) : '∞';
+
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.52 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+
   var el = document.createElement('div');
   el.className = 'msg';
+  el.id = 'design-questionnaire-msg';
 
-  // ── Encabezado según si viene de brief o no ────────────────────────────────
-  var briefBadge = '';
-  var briefHint  = '';
-  if (activeClient && !isLimited) {
-    briefBadge = '<div style="display:inline-flex;align-items:center;gap:5px;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:#059669;margin-bottom:10px">' +
-      '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#10B981"/></svg>' +
-      'Cliente: ' + activeClient.name + '</div>';
-    briefHint = '<div style="font-size:11px;color:#059669;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;padding:8px 10px;margin-bottom:14px">✓ Nombre, colores e industria cargados desde el brief. Solo necesito los datos de esta campaña.</div>';
-  }
-
-  el.innerHTML = 
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.52 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
-    '</div>' +
-    '<div style="max-width:450px">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-        (isLimited ? 
+  if (isLimited) {
+    el.innerHTML =
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
+      '<div style="max-width:420px">' +
+        '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
             '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔒 Diseño básico</h4>' +
             '<div style="background:#FEE2E2;color:#DC2626;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">Restantes: ' + remaining + '</div>' +
           '</div>' +
-          '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Plan gratuito - diseño básico sin cuestionario personalizado</div>'
-        :
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-            '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🎨 Diseño profesional' + (isAdmin ? ' (Admin)' : ' Pro') + '</h4>' +
-            (isAdmin ? '<div style="background:#10B981;color:white;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">ADMIN</div>' : '') +
+          '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:14px">' +
+            '<div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:4px">⚠️ Modo básico activo</div>' +
+            '<div style="font-size:11px;color:#92400E">Se generará 1 imagen con diseño estándar. Para diseño profesional con director creativo IA, actualiza a Pro.</div>' +
           '</div>' +
-          briefBadge +
-          (activeClient ? '' : '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Cuestionario completo para diseño de nivel agencia</div>')
-        ) +
-        briefHint +
-        '<div id="design-step-1" class="design-step"' + (activeClient && !isLimited ? ' style="display:none"' : '') + '>' +
-          (isLimited ?
-            '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:12px">' +
-              '<div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:4px">⚠️ Modo básico activo</div>' +
-              '<div style="font-size:11px;color:#92400E">Se generará 1 imagen con diseño estándar. Para diseño profesional con logo y layout personalizado, actualiza a Pro.</div>' +
-            '</div>' +
-            '<button onclick="generateBasicImage()" style="width:100%;padding:12px;background:#F59E0B;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Generar imagen básica</button>' +
-            '<div style="text-align:center;margin-top:12px">' +
-              '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="padding:6px 12px;background:none;color:var(--blue);border:1px solid var(--blue);border-radius:6px;font-size:11px;cursor:pointer">🚀 Actualizar a Pro para diseño profesional</button>' +
-            '</div>'
-          :
-            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es el nombre de tu negocio/marca?</div>' +
-            '<input type="text" id="dq-brand" placeholder="Ej: Clínica Sorelle, Estética Miranda" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font)">' +
-            '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>'
-          ) +
+          '<button onclick="generateBasicImage()" style="width:100%;padding:12px;background:#F59E0B;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Generar imagen básica</button>' +
+          '<div style="text-align:center;margin-top:10px">' +
+            '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="padding:6px 12px;background:none;color:var(--blue);border:1px solid var(--blue);border-radius:6px;font-size:11px;cursor:pointer;font-family:var(--font)">🚀 Actualizar a Pro</button>' +
+          '</div>' +
         '</div>' +
-        (isLimited ? '' :
-          '<div id="design-step-2" class="design-step" style="display:' + (activeClient ? 'none' : 'none') + '">' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">2. ¿Qué colores representa tu marca?</div>' +
-            '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
-              '<button onclick="selectColor(this,\'azul y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">azul y blanco</button>' +
-              '<button onclick="selectColor(this,\'dorado y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">dorado y blanco</button>' +
-              '<button onclick="selectColor(this,\'verde y beige\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">verde y beige</button>' +
-              '<button onclick="selectColor(this,\'rosa y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">rosa y blanco</button>' +
+      '</div>';
+    document.getElementById('chat-area').appendChild(el);
+    scrollB();
+    return;
+  }
+
+  // ── Modo Pro/Admin: brief simplificado ──────────────────────────────────────
+  var briefBadge = activeClient
+    ? '<div style="display:inline-flex;align-items:center;gap:5px;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:#059669;margin-bottom:10px">' +
+      '<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#10B981"/></svg>' +
+      'Cliente: ' + activeClient.name + '</div><br>'
+    : '';
+
+  var step1Html = activeClient
+    ? '' // Si hay cliente, saltamos el paso de nombre — ya está en designQData.brand
+    : '<div id="dq-step-brand" class="dq-step">' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">¿Cuál es el nombre de tu marca?</div>' +
+        '<input type="text" id="dq-brand" placeholder="Ej: Iluminata, Clínica Sorelle" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font);box-sizing:border-box">' +
+        '<button onclick="dqStepBrandNext()" style="margin-top:10px;padding:8px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Siguiente →</button>' +
+      '</div>';
+
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
+    '<div style="max-width:460px">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+          '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🎬 Director Creativo IA' + (isAdmin ? ' <span style=\'font-size:10px;background:#10B981;color:white;padding:2px 7px;border-radius:10px\'>ADMIN</span>' : '') + '</h4>' +
+        '</div>' +
+        briefBadge +
+
+        // Paso: oferta/campaña
+        '<div id="dq-step-offer" class="dq-step"' + (activeClient ? '' : ' style="display:none"') + '>' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">¿Qué quieres promocionar?</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Sé específico: oferta, producto, ocasión, descuento, lanzamiento...</div>' +
+          '<textarea id="dq-offer" rows="2" placeholder="Ej: 20% de descuento en velas aromáticas este fin de semana · Lanzamiento set regalo navideño · Envío gratis en pedidos +$50" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.4"></textarea>' +
+
+          '<div style="margin-top:12px">' +
+            '<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Formato</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+              '<button onclick="dqSelectFormat(this,\'vertical\')" class="dq-fmt-btn" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text)">Feed vertical<br><span style="font-size:10px;font-weight:400;color:var(--muted)">1080×1350</span></button>' +
+              '<button onclick="dqSelectFormat(this,\'square\')" class="dq-fmt-btn" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text)">Cuadrado<br><span style="font-size:10px;font-weight:400;color:var(--muted)">1080×1080</span></button>' +
+              '<button onclick="dqSelectFormat(this,\'story\')" class="dq-fmt-btn" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text)">Stories<br><span style="font-size:10px;font-weight:400;color:var(--muted)">1080×1920</span></button>' +
             '</div>' +
-            '<input type="text" id="dq-colors" placeholder="O escribe otros colores..." style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
-            '<button onclick="nextDesignStep(2)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
           '</div>' +
-          // ── Paso de oferta: visible inmediatamente si viene de brief ──────────
-          '<div id="design-step-3" class="design-step" style="display:' + (activeClient ? 'block' : 'none') + '">' +
-            (activeClient ? '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">¿Cuál es la oferta o mensaje de este anuncio?</div>' +
-              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sé específico: promoción, descuento, lanzamiento, fecha límite...</div>' :
-              '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">3. ¿Cuál es tu oferta específica para este anuncio?</div>'
-            ) +
-            '<input type="text" id="dq-offer" placeholder="Ej: 20% de descuento en velas aromáticas, Consulta gratis, Envío gratis este fin de semana" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
-            '<button onclick="nextDesignStep(3)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
-          '</div>' +
-          '<div id="design-step-4" class="design-step" style="display:none">' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">4. Foto de tu producto <span style="font-weight:400;font-size:11px;color:var(--muted)">(opcional pero recomendado)</span></div>' +
-            '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Si sube una foto, el fondo del anuncio será tu producto real — mucho más efectivo que fondos genéricos.</div>' +
-            '<div id="dq-product-preview" style="display:none;margin-bottom:10px">' +
+
+          '<div style="margin-top:14px">' +
+            '<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Foto de producto <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional — mejora mucho el resultado)</span></div>' +
+            '<div id="dq-product-preview" style="display:none;margin-bottom:8px">' +
               '<div style="position:relative;display:inline-block">' +
-                '<img id="dq-product-img-preview" style="height:80px;border-radius:8px;border:1px solid var(--border);object-fit:cover" />' +
-                '<button onclick="dqRemoveProductImg()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#EF4444;color:white;border:none;font-size:10px;cursor:pointer;font-weight:700">x</button>' +
+                '<img id="dq-product-img-preview" style="height:70px;border-radius:8px;border:1px solid var(--border);object-fit:cover"/>' +
+                '<button onclick="dqRemoveProductImg()" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:white;border:none;font-size:10px;cursor:pointer;font-weight:700;line-height:1">×</button>' +
               '</div>' +
             '</div>' +
             '<input type="file" id="dq-product-file" accept="image/*" style="display:none" onchange="dqHandleProductImg(this)">' +
-            '<div style="display:flex;gap:8px;margin-bottom:10px">' +
-              '<button onclick="document.getElementById(\'dq-product-file\').click()" style="flex:1;padding:10px;border:1.5px dashed var(--blue-md);border-radius:8px;font-size:12px;font-weight:600;color:var(--blue);background:var(--blue-lt);cursor:pointer">📷 Subir foto del producto</button>' +
-              '<button onclick="nextDesignStep(4)" style="padding:10px 14px;background:var(--muted);color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer">Omitir →</button>' +
-            '</div>' +
-            '<button id="dq-step4-next" onclick="nextDesignStep(4)" style="display:none;width:100%;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente → con mi foto</button>' +
+            '<button onclick="document.getElementById(\'dq-product-file\').click()" style="padding:8px 14px;border:1.5px dashed var(--blue-md);border-radius:8px;font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)">📷 Subir foto del producto</button>' +
           '</div>' +
-          '<div id="design-step-5" class="design-step" style="display:none">' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">5. ¿Qué quieres transmitir en los anuncios?</div>' +
-            '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
-              '<button onclick="selectFocus(this,\'producto\')" class="focus-opt" style="flex:1;min-width:100px;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🕯 Producto<br><span style="font-size:10px;color:#666">El producto en primer plano</span></button>' +
-              '<button onclick="selectFocus(this,\'resultado\')" class="focus-opt" style="flex:1;min-width:100px;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">✨ Resultado<br><span style="font-size:10px;color:#666">Cliente feliz usando el producto</span></button>' +
-              '<button onclick="selectFocus(this,\'lifestyle\')" class="focus-opt" style="flex:1;min-width:100px;padding:12px;border:1px solid #E0E0E0;border-radius:8px;font-size:12px;background:white;cursor:pointer;text-align:center">🏡 Lifestyle<br><span style="font-size:10px;color:#666">Ambiente y sensación de marca</span></button>' +
-            '</div>' +
-            '<button onclick="generateWithDesignData()" id="final-generate-btn" style="width:100%;padding:12px;background:#10B981;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer" disabled>🎨 Generar 5 anuncios profesionales</button>' +
-          '</div>'
-        ) +
+
+          '<button onclick="dqLaunchCreativeConcepts()" id="dq-generate-concepts-btn" style="margin-top:16px;width:100%;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Crear 5 conceptos creativos</button>' +
+        '</div>' +
+
+        step1Html +
       '</div>' +
     '</div>';
+
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 }
 
-function nextDesignStep(step) {
-  var data = designQData;
-  if (step === 1) {
-    data.brand = document.getElementById('dq-brand').value.trim();
-    if (!data.brand) return;
-    document.getElementById('design-step-1').style.display = 'none';
-    document.getElementById('design-step-2').style.display = 'block';
-  } else if (step === 2) {
-    data.colors = document.getElementById('dq-colors').value.trim() || data.colors || 'azul y blanco';
-    document.getElementById('design-step-2').style.display = 'none';
-    document.getElementById('design-step-3').style.display = 'block';
-  } else if (step === 3) {
-    data.offer = document.getElementById('dq-offer').value.trim();
-    if (!data.offer) return;
-    document.getElementById('design-step-3').style.display = 'none';
-    document.getElementById('design-step-4').style.display = 'block';
-  } else if (step === 4) {
-    // Foto del producto (opcional) — se guardó en designQData.productImageBase64
-    document.getElementById('design-step-4').style.display = 'none';
-    document.getElementById('design-step-5').style.display = 'block';
-  }
+function dqStepBrandNext() {
+  var brand = (document.getElementById('dq-brand') || {}).value;
+  if (!brand || !brand.trim()) return;
+  designQData.brand = brand.trim();
+  document.getElementById('dq-step-brand').style.display = 'none';
+  document.getElementById('dq-step-offer').style.display = 'block';
+}
+
+function dqSelectFormat(btn, fmt) {
+  designQData.format = fmt;
+  document.querySelectorAll('.dq-fmt-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)';
+    b.style.background  = 'white';
+    b.style.color       = 'var(--text)';
+  });
+  btn.style.borderColor = 'var(--blue)';
+  btn.style.background  = 'var(--blue-lt)';
+  btn.style.color       = 'var(--blue)';
 }
 
 function dqHandleProductImg(input) {
@@ -6832,96 +6817,222 @@ function dqHandleProductImg(input) {
   if (file.size > 5 * 1024 * 1024) { alert('La imagen debe ser menor a 5MB.'); return; }
   var reader = new FileReader();
   reader.onload = function(e) {
-    designQData.productImageBase64 = e.target.result.split(',')[1];
-    designQData.productImageMediaType = file.type || 'image/jpeg';
-    // Mostrar preview
-    var preview = document.getElementById('dq-product-preview');
+    designQData.productImageBase64     = e.target.result.split(',')[1];
+    designQData.productImageMediaType  = file.type || 'image/jpeg';
+    var preview    = document.getElementById('dq-product-preview');
     var previewImg = document.getElementById('dq-product-img-preview');
-    if (preview && previewImg) {
-      previewImg.src = e.target.result;
-      preview.style.display = 'block';
-    }
-    // Mostrar botón "Siguiente con mi foto"
-    var nextBtn = document.getElementById('dq-step4-next');
-    if (nextBtn) nextBtn.style.display = 'block';
+    if (preview && previewImg) { previewImg.src = e.target.result; preview.style.display = 'block'; }
   };
   reader.readAsDataURL(file);
   input.value = '';
 }
 
 function dqRemoveProductImg() {
-  designQData.productImageBase64 = null;
+  designQData.productImageBase64    = null;
   designQData.productImageMediaType = null;
   var preview = document.getElementById('dq-product-preview');
-  var nextBtn = document.getElementById('dq-step4-next');
   if (preview) preview.style.display = 'none';
-  if (nextBtn) nextBtn.style.display = 'none';
 }
 
-function selectColor(btn, color) {
-  designQData.colors = color;
-  document.querySelectorAll('.color-opt').forEach(b => b.style.background = 'white');
-  btn.style.background = '#E0E7FF';
-  document.getElementById('dq-colors').value = color;
+// ─────────────────────────────────────────────────────────────────────────────
+// ETAPA 2: Claude actúa como Director Creativo — genera 5 conceptos
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function dqLaunchCreativeConcepts() {
+  var offer = (document.getElementById('dq-offer') || {}).value;
+  if (!offer || !offer.trim()) {
+    document.getElementById('dq-offer').style.borderColor = '#EF4444';
+    return;
+  }
+  designQData.offer  = offer.trim();
+  designQData.format = designQData.format || 'vertical';
+
+  // Deshabilitar botón
+  var btn = document.getElementById('dq-generate-concepts-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analizando brief...'; }
+
+  // Ocultar el cuestionario
+  var qMsg = document.getElementById('design-questionnaire-msg');
+  if (qMsg) qMsg.style.display = 'none';
+
+  // Mostrar thinking
+  var thinkId = addThinking();
+  setTimeout(function() {
+    var el = document.getElementById(thinkId);
+    if (el) { var t = el.querySelector('.thinking-bbl'); if (t) t.innerHTML = '<div class="spinner"></div>desarrollando conceptos creativos...'; }
+  }, 100);
+
+  // Construir brief completo para Claude
+  var brief = [
+    'MARCA: ' + (designQData.brand || 'Sin nombre'),
+    designQData.industria    ? 'INDUSTRIA: '      + designQData.industria    : '',
+    designQData.productos    ? 'PRODUCTOS ESTRELLA: ' + designQData.productos : '',
+    designQData.audiencia    ? 'AUDIENCIA: '      + designQData.audiencia    : '',
+    designQData.tono         ? 'TONO DE MARCA: '  + designQData.tono         : '',
+    designQData.estiloVisual ? 'ESTILO VISUAL: '  + designQData.estiloVisual : '',
+    designQData.colors       ? 'COLORES: '        + designQData.colors       : '',
+    designQData.diferenciador? 'DIFERENCIADOR: '  + designQData.diferenciador: '',
+    designQData.propuesta    ? 'PROPUESTA DE VALOR: ' + designQData.propuesta : '',
+    'CAMPAÑA: ' + designQData.offer,
+    'FORMATO: ' + designQData.format,
+    designQData.productImageBase64 ? 'FOTO DE PRODUCTO: el usuario subió una foto del producto — usarla como fondo en todos los conceptos.' : '',
+  ].filter(Boolean).join('\n');
+
+  var systemPrompt = 'Eres el director creativo de una agencia de publicidad de primer nivel especializada en Meta Ads para marcas latinoamericanas. Tu trabajo es generar conceptos creativos visuales que conecten emocionalmente con la audiencia y conviertan. NUNCA generes conceptos genéricos o de stock. Cada concepto debe tener una identidad visual clara y diferente a los demás. Responde SOLO con JSON válido, sin markdown, sin texto adicional.';
+
+  var userPrompt = 'Crea 5 conceptos creativos diferenciados para este brief:\n\n' + brief + '\n\nPara cada concepto genera un JSON con esta estructura exacta:\n{\n  "concepts": [\n    {\n      "id": 1,\n      "nombre": "Nombre evocador del concepto en 3-4 palabras",\n      "concepto": "1 frase que describe la idea creativa central",\n      "escena": "Descripción visual detallada: qué se ve, dónde, cómo está iluminado, texturas, props",\n      "angulo": "Tipo de toma fotográfica: macro, plano general, cenital, primer plano, etc.",\n      "atmosfera": "3 palabras que definen el mood: ej. íntimo, cálido, aspiracional",\n      "headline": "Titular del anuncio en español, máximo 6 palabras, impactante",\n      "subheadline": "Frase de apoyo en español, máximo 8 palabras, refuerza el beneficio",\n      "cta": "Call to action en español, máximo 4 palabras",\n      "ideogram_prompt": "Prompt en inglés para Ideogram, 60-80 palabras, muy específico: describe la escena exacta, iluminación, estilo fotográfico, paleta de colores, ángulo, mood. SIN texto ni letras en la imagen. Termina siempre con: no text, no letters, no words, photorealistic, ultra detailed"\n    }\n  ]\n}';
+
+  var concepts = null;
+  try {
+    var raw = await fetchChatFull({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2500,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    });
+    var clean = raw.replace(/```json|```/g, '').trim();
+    var bi = clean.indexOf('{');
+    if (bi >= 0) clean = clean.slice(bi);
+    concepts = JSON.parse(clean);
+  } catch(e) {
+    console.warn('[Acuarius] concepts parse error:', e.message);
+  }
+
+  rmThinking(thinkId);
+
+  if (!concepts || !concepts.concepts || !concepts.concepts.length) {
+    addAgent('No pude generar los conceptos creativos. Por favor intenta de nuevo.');
+    return;
+  }
+
+  showConceptCards(concepts.concepts);
 }
 
-function selectFocus(btn, focus) {
-  designQData.focus = focus;
-  document.querySelectorAll('.focus-opt').forEach(b => b.style.background = 'white');
-  btn.style.background = '#E0E7FF';
-  document.getElementById('final-generate-btn').disabled = false;
-  document.getElementById('final-generate-btn').style.background = '#10B981';
+// ─────────────────────────────────────────────────────────────────────────────
+// ETAPA 3: Mostrar tarjetas de concepto para que el usuario apruebe
+// ─────────────────────────────────────────────────────────────────────────────
+
+function showConceptCards(concepts) {
+  // Guardar conceptos en designQData para usarlos al generar
+  designQData.concepts = concepts;
+
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.52 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'concept-cards-msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+
+  var cardsHtml = concepts.map(function(c, i) {
+    return '<div class="concept-card" id="concept-card-' + c.id + '" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--bg);transition:all .15s;cursor:pointer;margin-bottom:8px" onclick="dqToggleConcept(' + c.id + ')">' +
+      '<div style="display:flex;align-items:flex-start;gap:10px">' +
+        '<div style="width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all .15s" id="concept-check-' + c.id + '"></div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+            '<span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-lt);padding:2px 7px;border-radius:10px">V' + c.id + '</span>' +
+            '<span style="font-size:13px;font-weight:700;color:var(--text)">' + c.nombre + '</span>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-style:italic">' + c.concepto + '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">' +
+            '<div style="background:var(--sidebar);border-radius:7px;padding:7px 9px">' +
+              '<div style="font-size:9px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Escena</div>' +
+              '<div style="font-size:11px;color:var(--text);line-height:1.4">' + c.escena + '</div>' +
+            '</div>' +
+            '<div style="background:var(--sidebar);border-radius:7px;padding:7px 9px">' +
+              '<div style="font-size:9px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Atmósfera</div>' +
+              '<div style="font-size:11px;color:var(--text);line-height:1.4">' + c.atmosfera + ' · ' + c.angulo + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:7px;padding:7px 9px">' +
+            '<div style="font-size:9px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Copy del anuncio</div>' +
+            '<div style="font-size:12px;font-weight:700;color:var(--text)">' + c.headline + '</div>' +
+            '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + c.subheadline + '</div>' +
+            '<div style="margin-top:5px;display:inline-block;background:var(--blue);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700">' + c.cta + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">5 conceptos creativos listos</div>' +
+        '<div style="font-size:11px;color:var(--muted)">Selecciona los que quieres generar como imagen</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="padding-left:42px;width:100%;max-width:560px">' +
+      cardsHtml +
+      '<div style="display:flex;gap:8px;margin-top:4px">' +
+        '<button onclick="dqSelectAllConcepts()" style="flex:1;padding:9px;background:var(--sidebar);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Seleccionar todos</button>' +
+        '<button onclick="dqGenerateSelectedConcepts()" id="dq-gen-selected-btn" style="flex:2;padding:9px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)" disabled>🎨 Generar seleccionados</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
 }
 
-function generateBasicImage() {
-  // Obtener datos básicos del perfil del usuario
-  const negocio = mem.negocio || 'tu negocio';
-  const industria = mem.industria || 'servicios';
-  const objetivo = mem.objetivo || 'generar leads';
-  
-  // Generar prompt específico que fuerza la generación inmediata
-  const prompt = `[GENERAR_IMAGEN: {"prompt": "Anuncio profesional para ${negocio} en ${industria}, persona feliz usando el servicio, colores corporativos azul y blanco, diseño limpio y profesional, texto: '${negocio}' y 'Conoce más'", "format": "vertical", "variations": 1, "hasText": true}]`;
-  
-  // Enviar directamente el comando de generación (no como mensaje de usuario)
-  hist.push({role:'assistant', content: 'Generando imagen básica para tu negocio...'});
-  
-  // Procesar directamente el comando
-  const imgMatch = prompt.match(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/);
-  if(imgMatch){
-    try{
-      const imgCmd = JSON.parse(imgMatch[1]);
-      imgCmd.variations = 1;
-      imgCmd.hasText = true;
-      imgCmd._index = 1;
-      imgCmd._total = 1;
-      generateAdImages(imgCmd);
-      incrementImageUsage();
-    }catch(e){
-      addAgent('Error generando imagen básica');
-    }
+var dqSelectedConcepts = new Set();
+
+function dqToggleConcept(id) {
+  var card  = document.getElementById('concept-card-' + id);
+  var check = document.getElementById('concept-check-' + id);
+  if (dqSelectedConcepts.has(id)) {
+    dqSelectedConcepts.delete(id);
+    card.style.borderColor  = 'var(--border)';
+    card.style.background   = 'var(--bg)';
+    check.style.background  = 'transparent';
+    check.style.borderColor = 'var(--border)';
+    check.innerHTML = '';
+  } else {
+    dqSelectedConcepts.add(id);
+    card.style.borderColor  = 'var(--blue)';
+    card.style.background   = 'var(--blue-lt)';
+    check.style.background  = 'var(--blue)';
+    check.style.borderColor = 'var(--blue)';
+    check.innerHTML = '<svg width="10" height="10" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+  var genBtn = document.getElementById('dq-gen-selected-btn');
+  if (genBtn) {
+    genBtn.disabled = dqSelectedConcepts.size === 0;
+    genBtn.textContent = dqSelectedConcepts.size > 0
+      ? '🎨 Generar ' + dqSelectedConcepts.size + ' creativo' + (dqSelectedConcepts.size > 1 ? 's' : '')
+      : '🎨 Generar seleccionados';
   }
 }
 
-async function generateWithDesignData() {
-  var data = designQData;
-  if (!data.brand || !data.offer || !data.focus) return;
+function dqSelectAllConcepts() {
+  if (!designQData.concepts) return;
+  designQData.concepts.forEach(function(c) {
+    if (!dqSelectedConcepts.has(c.id)) dqToggleConcept(c.id);
+  });
+}
 
-  var brand   = data.brand;
-  var colors  = data.colors || 'dorado y blanco';
-  var offer   = data.offer;
-  var focus   = data.focus;
-  var hasProductImg = !!(data.productImageBase64);
+// ─────────────────────────────────────────────────────────────────────────────
+// ETAPA 4: Generar imágenes con los conceptos aprobados
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Contexto del brief del cliente ────────────────────────────────────────
-  var industria    = data.industria    || mem.industria    || mem.descripcion || '';
-  var diferenciador= data.diferenciador|| mem.diferenciador|| '';
-  var tono         = data.tono         || mem.tono         || 'profesional';
-  var audiencia    = data.audiencia    || mem.audiencia    || '';
-  var productos    = data.productos    || '';
-  var estiloVisual = data.estiloVisual || '';
-  var propuesta    = data.propuesta    || '';
+async function dqGenerateSelectedConcepts() {
+  if (dqSelectedConcepts.size === 0) return;
 
-  // ── Mapear colores → paleta Canvas ────────────────────────────────────────
+  var selected = (designQData.concepts || []).filter(c => dqSelectedConcepts.has(c.id));
+  if (!selected.length) return;
+
+  // Ocultar tarjetas de concepto
+  var conceptMsg = document.getElementById('concept-cards-msg');
+  if (conceptMsg) conceptMsg.style.display = 'none';
+
+  var brand      = designQData.brand   || 'marca';
+  var offer      = designQData.offer   || '';
+  var format     = designQData.format  || 'vertical';
+  var hasProductImg = !!(designQData.productImageBase64);
+
+  var colorDesc  = designQData.colors || '';
+  var tono       = designQData.tono   || 'profesional';
+
+  // Mapeo de colores a paleta Canvas
   var colorMap = {
     'dorado y blanco':   { overlay: '#2D1A00', headline: '#FFD700', body: '#FFF8DC', logo: '#FFD700', hex: '#C9942A, #FFFFFF' },
     'azul y blanco':     { overlay: '#0A1628', headline: '#FFFFFF', body: '#E8F0FE', logo: '#FFFFFF', hex: '#1E2BCC, #FFFFFF' },
@@ -6930,217 +7041,116 @@ async function generateWithDesignData() {
     'negro y dorado':    { overlay: '#0A0A0A', headline: '#FFD700', body: '#F5F5F0', logo: '#FFD700', hex: '#1A1A1A, #C9942A' },
     'blanco y café':     { overlay: '#2C1A0A', headline: '#FFFFFF', body: '#F5ECD7', logo: '#FFFFFF', hex: '#6B3A2A, #F5ECD7' },
   };
-  var colKey = colors.toLowerCase();
-  var cm = colorMap[colKey] || { overlay: '#1A0A00', headline: '#FFD700', body: '#FFFFFF', logo: '#FFD700', hex: colors };
+  var colKey = colorDesc.toLowerCase();
+  var cm = colorMap[colKey] || { overlay: '#1A0A00', headline: '#FFD700', body: '#FFFFFF', logo: '#FFD700', hex: colorDesc || '#333, #FFF' };
 
-  // ── Construir design object rico usando Claude (igual que flujo de variaciones) ──
-  var designPromptCtx = 'Brand: "' + brand + '". Offer/Headline: "' + offer + '". Colors: ' + colors + '. Industry: ' + (industria || 'e-commerce') + '. Tone: ' + tono + '. Focus: ' + focus +
-    (diferenciador ? '. Differentiator: ' + diferenciador : '') +
-    (audiencia ? '. Target audience: ' + audiencia : '') +
-    (productos ? '. Key products: ' + productos : '') +
-    (estiloVisual ? '. Visual style: ' + estiloVisual : '') +
-    (propuesta ? '. Value proposition: ' + propuesta : '') + '.';
-
-  var design = null;
-  var thinkId0 = addThinking();
-  setTimeout(function() {
-    var el = document.getElementById(thinkId0);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>diseñando composición tipográfica...'; }
-  }, 100);
-
-  try {
-    var designText = await fetchChatFull({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      system: 'You are an expert Meta Ads designer. Return ONLY valid JSON, no markdown, no backticks.',
-      messages: [{ role: 'user', content: 'Design a premium Meta Ads composition for this campaign: ' + designPromptCtx + '\n\nIMPORTANT rules:\n- headline must be the offer/hook in Spanish, punchy and direct, max 6 words\n- body_items must include: [1] a supporting benefit or urgency line (max 6 words in Spanish), [2] a clear CTA in Spanish like "Compra ahora", "Pide el tuyo", "Aprovecha hoy", "Descúbrelo" — choose the most fitting CTA for the brand tone and industry\n- If the brand has products like candles/wellness/beauty, use evocative sensory language\n- logo field must be the brand name exactly as provided\n\nReturn ONLY JSON: {"text_zone":"left","text_zone_width_pct":0.55,"overlay_color":"' + cm.overlay + '","overlay_opacity":0.65,"headline":"' + offer + '","headline_size_pct":0.072,"headline_color":"' + cm.headline + '","headline_weight":"bold","body_items":["supporting benefit in spanish max 6 words","CTA verb phrase in spanish max 4 words"],"body_size_pct":0.032,"body_color":"' + cm.body + '","bullet_style":"none","logo":"' + brand + '","logo_position":"top-left","logo_size_pct":0.038,"logo_color":"' + cm.logo + '"}' }]
-    });
-    var clean = designText.replace(/```json|```/g, '').trim();
-    var bi = clean.indexOf('{'); if (bi >= 0) clean = clean.slice(bi);
-    design = JSON.parse(clean);
-  } catch(e) {
-    console.warn('[Acuarius] design JSON fallback:', e.message);
-  }
-
-  rmThinking(thinkId0);
-
-  // Fallback design si Claude falla
-  if (!design) {
-    var ctaDefault = tono.includes('urgente') ? 'Aprovecha hoy' : tono.includes('aspiracional') ? 'Descúbrelo' : 'Pide el tuyo';
-    design = {
-      text_zone: 'left', text_zone_width_pct: 0.55,
-      overlay_color: cm.overlay, overlay_opacity: 0.65,
-      headline: offer, headline_size_pct: 0.072, headline_color: cm.headline, headline_weight: 'bold',
-      body_items: diferenciador
-        ? [diferenciador.split('.')[0].slice(0, 40), ctaDefault]
-        : [propuesta ? propuesta.slice(0, 40) : 'Calidad garantizada', ctaDefault],
-      body_size_pct: 0.032, body_color: cm.body, bullet_style: 'none',
-      logo: brand, logo_position: 'top-left', logo_size_pct: 0.038, logo_color: cm.logo,
-    };
-  }
-
-  // ── Prompts de fondo diferenciados (sin texto, solo visual) ───────────────
-  function buildBgPrompt(idx) {
-    // Si hay foto del producto, NO necesitamos prompt de fondo — se usará directamente
-    if (hasProductImg) return null;
-
-    var paletteHint = 'Color palette: ' + cm.hex + '. ';
-    var noText = 'Absolutely NO text, NO letters, NO numbers, NO words anywhere. Clean visual only. ';
-    var quality = 'Ultra-realistic professional product photography, editorial quality, shot for luxury magazine. ';
-
-    // ── Estilo visual del brief ───────────────────────────────────────────────
-    var styleHint = '';
-    if (estiloVisual) {
-      var styleMap = {
-        'Minimalista / limpio': 'minimalist clean aesthetic, simple background, lots of negative space. ',
-        'Elegante / premium':   'luxurious elegant premium aesthetic, dark moody tones, sophisticated styling. ',
-        'Vibrante / colorido':  'vibrant colorful energetic aesthetic, bold palette, dynamic composition. ',
-        'Corporativo / formal': 'corporate professional aesthetic, clean structured composition. ',
-        'Natural / orgánico':   'organic natural aesthetic, earthy tones, botanical elements, warm light. ',
-        'Juvenil / moderno':    'modern youthful aesthetic, bold contemporary styling, fresh colors. ',
-      };
-      styleHint = styleMap[estiloVisual] || '';
-    }
-
-    // ── Detectar tipo de producto/industria del brief ─────────────────────────
-    var searchText = (industria + ' ' + offer + ' ' + brand + ' ' + productos).toLowerCase();
-    var isCandle = searchText.match(/vela|candle|aromat|fragran|wax/);
-    var isFood = searchText.match(/restaurante|food|gastronom|cafe|bebida/);
-    var isSalud = searchText.match(/salud|clinic|medic|bienestar|estetic/);
-    var isInmob = searchText.match(/inmob|construc|aparta|casa|finca|viviend/);
-    var isFashion = searchText.match(/moda|ropa|fashion|calzado|accesorio/);
-
-    var scenes = [];
-    if (isCandle) {
-      scenes = [
-        'luxury scented candle with golden label on marble surface, soft warm candlelight glow, eucalyptus and dried flowers decoration, dark moody elegant background, macro photography',
-        'collection of premium aromatic candles in glass vessels, warm amber light bokeh, dark velvet background, luxury spa atmosphere, professional studio lighting',
-        'single lit candle close-up with smoke wisps rising, soft golden hour light, bokeh background, hygge cozy atmosphere, dark warm tones',
-        'aromatherapy candles with crystals and botanicals on wooden tray, flat lay editorial style, warm natural morning light, cream and gold tones',
-        'elegant candle in bronze holder on bathroom marble ledge, mirror reflection, luxury self-care setting, warm ambient glow',
-      ];
-    } else if (isFood) {
-      scenes = [
-        'gourmet dish beautifully plated on dark slate, professional food photography, warm restaurant ambient light',
-        'fresh premium ingredients flat lay, rustic wooden surface, natural morning light, editorial style',
-        'elegant restaurant interior, warm candlelight, bokeh background, luxury dining atmosphere',
-        'coffee or beverage close-up, steam rising, dark moody background, professional product photography',
-        'chef preparing dish, action food photography, commercial kitchen, warm dramatic lighting',
-      ];
-    } else if (isSalud) {
-      scenes = [
-        'clean modern medical spa interior, natural plant light, minimalist aesthetic, soft warm tones',
-        'wellness products on marble surface, eucalyptus, white towels, premium spa setting',
-        'professional skincare products on clean surface, soft studio light, luxury packaging',
-        'serene wellness center corridor, natural light, plant greenery, modern minimalist',
-        'medical professional hands in care gesture, clean white background, trust and expertise aesthetic',
-      ];
-    } else if (isInmob) {
-      scenes = [
-        'luxury apartment interior, floor-to-ceiling windows, city skyline view, golden hour light',
-        'modern residential facade at dusk, warm interior lights glowing, landscaping',
-        'premium living room interior design, marble floors, designer furniture, natural light',
-        'aerial view luxury residential complex, pool and greenery, golden sunset',
-        'kitchen modern luxury interior, marble countertops, professional staging',
-      ];
-    } else if (isFashion) {
-      scenes = [
-        'premium fashion product on clean white surface, soft studio lighting, minimalist editorial',
-        'lifestyle fashion flat lay, styled accessories, marble background, luxury aesthetic',
-        'fashion editorial outdoor urban setting, natural light, modern architecture backdrop',
-        'close-up texture product photography, premium material detail, luxury feel',
-        'fashion lifestyle aspirational scene, warm natural light, modern elegant setting',
-      ];
-    } else {
-      // Genérico premium
-      scenes = [
-        'premium product on elegant dark surface, dramatic side lighting, luxury aesthetic, bokeh background',
-        'clean minimalist product photography, white marble surface, soft natural window light',
-        'lifestyle scene with product, warm ambient lighting, modern elegant interior',
-        'editorial product photography, abstract gradient background, ' + colors + ' tones',
-        'aspirational lifestyle scene, warm golden light, modern professional setting',
-      ];
-    }
-
-    var scene = scenes[idx % scenes.length];
-    return scene + '. ' + styleHint + paletteHint + noText + quality;
-  }
-
-  var conceptNames = ['Hero', 'Ambiente', 'Close-up', 'Editorial', 'Lifestyle'];
-
-  var briefSummary = '';
-  if (industria) briefSummary += ' · industria: *' + industria.split('/')[0].trim() + '*';
-  if (audiencia) briefSummary += ' · audiencia: *' + audiencia.slice(0, 40) + (audiencia.length > 40 ? '...' : '') + '*';
-  if (estiloVisual) briefSummary += ' · estilo: *' + estiloVisual + '*';
-
-  addAgent('generando **5 creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*' + briefSummary + (hasProductImg ? ' · usando tu foto del producto ✓' : ''));
-  hist.push({role:'assistant', content: 'Generando creativos para ' + brand});
+  addAgent('generando **' + selected.length + ' creativo' + (selected.length > 1 ? 's' : '') + '** para **' + brand + '**...\n\ncampaña: *' + offer + '*');
+  hist.push({ role: 'assistant', content: 'Generando creativos para ' + brand });
 
   generatedAdImages = [];
   adImgGridEl = null;
   loading = true;
   document.getElementById('sbtn').disabled = true;
 
-  for (var i = 0; i < 5; i++) {
+  var total = selected.length;
+
+  for (var i = 0; i < selected.length; i++) {
+    var concept = selected[i];
     var thinkId = addThinking();
-    (function(tid, idx) {
+    (function(tid, idx, c) {
       setTimeout(function() {
         var el = document.getElementById(tid);
-        if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativo ' + (idx+1) + ' de 5...'; }
+        if (el) { var t = el.querySelector('.thinking-bbl'); if (t) t.innerHTML = '<div class="spinner"></div>generando "' + c.nombre + '"...'; }
       }, 100);
-    })(thinkId, i);
+    })(thinkId, i, concept);
 
     try {
       var bgImage = null;
 
       if (hasProductImg) {
-        // ── Usar foto del producto directamente como fondo ─────────────────
-        // La foto del usuario ES el fondo — Canvas la escala y le pone el overlay + texto
-        bgImage = { base64: data.productImageBase64, mediaType: data.productImageMediaType || 'image/jpeg' };
+        bgImage = { base64: designQData.productImageBase64, mediaType: designQData.productImageMediaType || 'image/jpeg' };
         rmThinking(thinkId);
       } else {
-        // ── Generar fondo atmosférico con la API ───────────────────────────
-        var bgPrompt = buildBgPrompt(i);
+        // Usar el prompt específico de cada concepto que Claude generó
+        var bgPrompt = concept.ideogram_prompt;
+        if (colorDesc) bgPrompt += ' Color palette: ' + cm.hex + '.';
+
         var headers = { 'Content-Type': 'application/json' };
         if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
         var res = await fetch('/api/generate-image', {
           method: 'POST', headers: headers,
-          body: JSON.stringify({ prompt: bgPrompt, format: 'vertical', variations: 1, hasText: false })
+          body: JSON.stringify({ prompt: bgPrompt, format: format, variations: 1, hasText: false })
         });
         var result = await res.json();
         rmThinking(thinkId);
         if (result.error || !result.images || !result.images.length) {
-          addAgent('No pude generar el creativo ' + (i+1) + '. Intenta de nuevo.');
+          addAgent('No pude generar el creativo "' + concept.nombre + '". Continuando...');
           continue;
         }
         bgImage = result.images[0];
       }
 
-      // ── Componer texto sobre el fondo con Canvas (sistema premium) ────────
-      // Variar ligeramente el design entre creativos para no ser idénticos
-      var variantDesign = Object.assign({}, design);
-      // Alternar zona de texto entre variaciones
-      if (i === 1 || i === 3) {
-        variantDesign.text_zone = (design.text_zone === 'left') ? 'right' : 'left';
-      }
-      // Variar opacidad del overlay ligeramente
-      variantDesign.overlay_opacity = Math.min(0.82, (design.overlay_opacity || 0.65) + (i % 3) * 0.03);
+      // Construir design object desde el concepto de Claude
+      var design = {
+        text_zone:           'left',
+        text_zone_width_pct: 0.55,
+        overlay_color:       cm.overlay,
+        overlay_opacity:     0.62 + (i % 3) * 0.04,
+        headline:            concept.headline,
+        headline_size_pct:   0.068,
+        headline_color:      cm.headline,
+        headline_weight:     'bold',
+        body_items:          [concept.subheadline, concept.cta],
+        body_size_pct:       0.030,
+        body_color:          cm.body,
+        bullet_style:        'none',
+        logo:                brand,
+        logo_position:       i % 2 === 0 ? 'top-left' : 'top-right',
+        logo_size_pct:       0.036,
+        logo_color:          cm.logo,
+        cta_text:            concept.cta,
+        cta_color:           cm.headline,
+      };
 
-      await composeWithDesignTemplate(bgImage, i + 1, 5, 'vertical', variantDesign);
+      // Alternar zona de texto para variedad
+      if (i === 1 || i === 3) design.text_zone = 'right';
+
+      await composeWithDesignTemplate(bgImage, i + 1, total, format, design);
       incrementImageUsage();
 
-    } catch (err) {
+    } catch(err) {
       rmThinking(thinkId);
-      addAgent('Error generando creativo ' + (i+1) + ': ' + err.message);
+      addAgent('Error generando "' + concept.nombre + '": ' + err.message);
     }
-
-    if (userPlan !== 'pro' && !isAdminUser()) break;
   }
 
   loading = false;
   document.getElementById('sbtn').disabled = false;
+  dqSelectedConcepts = new Set();
   designQData = {};
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Imagen básica para plan free
+// ─────────────────────────────────────────────────────────────────────────────
+
+function generateBasicImage() {
+  const negocio  = mem.negocio   || 'tu negocio';
+  const industria= mem.industria || 'servicios';
+  hist.push({ role: 'assistant', content: 'Generando imagen básica...' });
+  const imgMatch = ('[GENERAR_IMAGEN: {"prompt": "Professional advertisement for ' + negocio + ' in ' + industria + ', happy person using the service, corporate colors blue and white, clean professional design, no text, no letters", "format": "vertical", "variations": 1, "hasText": false}]').match(/\[GENERAR_IMAGEN:\s*(\{[\s\S]+?\})\]/);
+  if (imgMatch) {
+    try {
+      const imgCmd = JSON.parse(imgMatch[1]);
+      imgCmd._index = 1; imgCmd._total = 1;
+      generateAdImages(imgCmd);
+      incrementImageUsage();
+    } catch(e) { addAgent('Error generando imagen básica'); }
+  }
+}
+
+
+
 
 
 // =============================================
