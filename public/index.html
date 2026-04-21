@@ -1483,7 +1483,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <!-- PASO 6: Marca y tono -->
         <div class="agency-step-panel" id="step-panel-5">
           <div class="agency-step-title">Identidad de marca y tono</div>
-          <div class="agency-step-desc">Define la voz que deben usar los agentes en copys, anuncios y contenidos.</div>
+          <div class="agency-step-desc">Define la voz y línea gráfica — los agentes la usarán para generar copys, anuncios e imágenes.</div>
           <div class="agency-field">
             <label>Tono de comunicación</label>
             <div class="agency-chips">
@@ -1494,6 +1494,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
               <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Técnico / experto</div>
               <div class="agency-chip" data-g="tono" onclick="agencyToggleChipSingle(this)">Divertido / creativo</div>
             </div>
+          </div>
+          <div class="agency-field">
+            <label>Estilo visual de la marca</label>
+            <div class="agency-chips">
+              <div class="agency-chip" data-g="estilo-visual" onclick="agencyToggleChipSingle(this)">Minimalista / limpio</div>
+              <div class="agency-chip" data-g="estilo-visual" onclick="agencyToggleChipSingle(this)">Elegante / premium</div>
+              <div class="agency-chip" data-g="estilo-visual" onclick="agencyToggleChipSingle(this)">Vibrante / colorido</div>
+              <div class="agency-chip" data-g="estilo-visual" onclick="agencyToggleChipSingle(this)">Corporativo / formal</div>
+              <div class="agency-chip" data-g="estilo-visual" onclick="agencyToggleChipSingle(this)">Natural / orgánico</div>
+              <div class="agency-chip" data-g="estilo-visual" onclick="agencyToggleChipSingle(this)">Juvenil / moderno</div>
+            </div>
+          </div>
+          <div class="agency-field">
+            <label>Colores principales de la marca <span style="font-weight:400;text-transform:none;letter-spacing:0">(hex o descripción)</span></label>
+            <input type="text" id="ag-f-colores" placeholder="ej. azul marino #1A2B6D, dorado #C9A84C, blanco · o: negro, rojo y plata" maxlength="200">
+          </div>
+          <div class="agency-field">
+            <label>Productos o servicios estrella <span style="font-weight:400;text-transform:none;letter-spacing:0">(los más fotografiados/anunciados)</span></label>
+            <input type="text" id="ag-f-productos" placeholder="ej. velas aromáticas de cera de soja, sets de regalo, difusores · o: plan mensual de mantenimiento" maxlength="250">
           </div>
           <div class="agency-field">
             <label>Propuesta de valor única (en 1 frase)</label>

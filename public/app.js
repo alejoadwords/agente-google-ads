@@ -1340,7 +1340,8 @@ function agencyOpenModal(editId = null) {
     'ag-f-audiencia','ag-f-edad','ag-f-genero','ag-f-problema','ag-f-diferenciador',
     'ag-f-presupuesto','ag-f-pixel','ag-f-funciono','ag-f-nofunciono',
     'ag-f-kpi','ag-f-meta-costo','ag-f-crm','ag-f-resultados',
-    'ag-f-propuesta','ag-f-keywords-marca','ag-f-evitar','ag-f-notas'];
+    'ag-f-propuesta','ag-f-keywords-marca','ag-f-evitar','ag-f-notas',
+    'ag-f-colores','ag-f-productos'];
   fieldIds.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
   // Reset chips
@@ -1391,6 +1392,10 @@ function briefFillForm(c) {
   set('ag-f-keywords-marca', c.keywordsMarca);
   set('ag-f-evitar', c.evitar);
   set('ag-f-notas', c.notes);
+  set('ag-f-colores', c.colores);
+  set('ag-f-productos', c.productos);
+  // Chip estilo visual
+  if (c.estiloVisual) document.querySelectorAll('[data-g="estilo-visual"]').forEach(ch => { if (ch.textContent.trim() === c.estiloVisual) ch.classList.add('sel'); });
   // Chips
   if (c.canales) c.canales.split(', ').forEach(v => {
     document.querySelectorAll('[data-g="canales"]').forEach(ch => { if (ch.textContent.trim() === v) ch.classList.add('sel'); });
@@ -1590,6 +1595,9 @@ function briefReadForm() {
     crm:              val('ag-f-crm'),
     resultados:       val('ag-f-resultados'),
     tono:             chips('tono'),
+    estiloVisual:     chips('estilo-visual'),
+    colores:          val('ag-f-colores'),
+    productos:        val('ag-f-productos'),
     propuesta:        val('ag-f-propuesta'),
     keywordsMarca:    val('ag-f-keywords-marca'),
     evitar:           val('ag-f-evitar'),
@@ -6647,12 +6655,44 @@ function showDesignQuestionnaire() {
     return;
   }
 
+  // ── Pre-cargar datos del cliente activo si existe ──────────────────────────
+  var activeClient = null;
+  if (agencyActiveClientId) {
+    activeClient = agencyClients.find(c => c.id === agencyActiveClientId) || null;
+  }
+  if (activeClient) {
+    // Pre-rellenar designQData con los datos del brief
+    designQData.brand  = activeClient.name || '';
+    designQData.colors = activeClient.colores || '';
+    designQData.estiloVisual = activeClient.estiloVisual || '';
+    designQData.productos = activeClient.productos || '';
+    designQData.industria = activeClient.industria || activeClient.descripcion || '';
+    designQData.audiencia = activeClient.audiencia || '';
+    designQData.diferenciador = activeClient.diferenciador || '';
+    designQData.tono = activeClient.tono || '';
+    designQData.propuesta = activeClient.propuesta || '';
+    designQData.fromBrief = true;
+  } else {
+    designQData = {};
+  }
+
   const isAdmin = isAdminUser();
   const remaining = (userPlan === 'pro' || isAdmin) ? '∞' : (imageUsage.limit - imageUsage.generated);
   const isLimited = userPlan !== 'pro' && !isAdmin;
   
   var el = document.createElement('div');
   el.className = 'msg';
+
+  // ── Encabezado según si viene de brief o no ────────────────────────────────
+  var briefBadge = '';
+  var briefHint  = '';
+  if (activeClient && !isLimited) {
+    briefBadge = '<div style="display:inline-flex;align-items:center;gap:5px;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:#059669;margin-bottom:10px">' +
+      '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#10B981"/></svg>' +
+      'Cliente: ' + activeClient.name + '</div>';
+    briefHint = '<div style="font-size:11px;color:#059669;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;padding:8px 10px;margin-bottom:14px">✓ Nombre, colores e industria cargados desde el brief. Solo necesito los datos de esta campaña.</div>';
+  }
+
   el.innerHTML = 
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' +
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.52 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>' +
@@ -6666,13 +6706,15 @@ function showDesignQuestionnaire() {
           '</div>' +
           '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Plan gratuito - diseño básico sin cuestionario personalizado</div>'
         :
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
             '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🎨 Diseño profesional' + (isAdmin ? ' (Admin)' : ' Pro') + '</h4>' +
             (isAdmin ? '<div style="background:#10B981;color:white;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">ADMIN</div>' : '') +
           '</div>' +
-          '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Cuestionario completo para diseño de nivel agencia</div>'
+          briefBadge +
+          (activeClient ? '' : '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Cuestionario completo para diseño de nivel agencia</div>')
         ) +
-        '<div id="design-step-1" class="design-step">' +
+        briefHint +
+        '<div id="design-step-1" class="design-step"' + (activeClient && !isLimited ? ' style="display:none"' : '') + '>' +
           (isLimited ?
             '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:12px">' +
               '<div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:4px">⚠️ Modo básico activo</div>' +
@@ -6696,7 +6738,7 @@ function showDesignQuestionnaire() {
           ) +
         '</div>' +
         (isLimited ? '' :
-          '<div id="design-step-2" class="design-step" style="display:none">' +
+          '<div id="design-step-2" class="design-step" style="display:' + (activeClient ? 'none' : 'none') + '">' +
             '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">2. ¿Qué colores representa tu marca?</div>' +
             '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
               '<button onclick="selectColor(this,\'azul y blanco\')" class="color-opt" style="padding:6px 12px;border:1px solid #E0E0E0;border-radius:20px;font-size:11px;background:white;cursor:pointer">azul y blanco</button>' +
@@ -6707,9 +6749,13 @@ function showDesignQuestionnaire() {
             '<input type="text" id="dq-colors" placeholder="O escribe otros colores..." style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
             '<button onclick="nextDesignStep(2)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
           '</div>' +
-          '<div id="design-step-3" class="design-step" style="display:none">' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">3. ¿Cuál es tu oferta específica para este anuncio?</div>' +
-            '<input type="text" id="dq-offer" placeholder="Ej: 20% de descuento en velas aromáticas, Consulta gratis, $150.000" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
+          // ── Paso de oferta: visible inmediatamente si viene de brief ──────────
+          '<div id="design-step-3" class="design-step" style="display:' + (activeClient ? 'block' : 'none') + '">' +
+            (activeClient ? '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">¿Cuál es la oferta o mensaje de este anuncio?</div>' +
+              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sé específico: promoción, descuento, lanzamiento, fecha límite...</div>' :
+              '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">3. ¿Cuál es tu oferta específica para este anuncio?</div>'
+            ) +
+            '<input type="text" id="dq-offer" placeholder="Ej: 20% de descuento en velas aromáticas, Consulta gratis, Envío gratis este fin de semana" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px">' +
             '<button onclick="nextDesignStep(3)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
           '</div>' +
           '<div id="design-step-4" class="design-step" style="display:none">' +
@@ -6854,9 +6900,13 @@ async function generateWithDesignData() {
   var hasProductImg = !!(data.productImageBase64);
 
   // ── Contexto del brief del cliente ────────────────────────────────────────
-  var industria    = mem.industria    || mem.descripcion || '';
-  var diferenciador= mem.diferenciador|| '';
-  var tono         = mem.tono         || 'profesional';
+  var industria    = data.industria    || mem.industria    || mem.descripcion || '';
+  var diferenciador= data.diferenciador|| mem.diferenciador|| '';
+  var tono         = data.tono         || mem.tono         || 'profesional';
+  var audiencia    = data.audiencia    || mem.audiencia    || '';
+  var productos    = data.productos    || '';
+  var estiloVisual = data.estiloVisual || '';
+  var propuesta    = data.propuesta    || '';
 
   // ── Mapear colores → paleta Canvas ────────────────────────────────────────
   var colorMap = {
@@ -6871,7 +6921,12 @@ async function generateWithDesignData() {
   var cm = colorMap[colKey] || { overlay: '#1A0A00', headline: '#FFD700', body: '#FFFFFF', logo: '#FFD700', hex: colors };
 
   // ── Construir design object rico usando Claude (igual que flujo de variaciones) ──
-  var designPromptCtx = 'Brand: "' + brand + '". Offer/Headline: "' + offer + '". Colors: ' + colors + '. Industry: ' + (industria || 'e-commerce') + '. Tone: ' + tono + '. Focus: ' + focus + (diferenciador ? '. Differentiator: ' + diferenciador : '') + '.';
+  var designPromptCtx = 'Brand: "' + brand + '". Offer/Headline: "' + offer + '". Colors: ' + colors + '. Industry: ' + (industria || 'e-commerce') + '. Tone: ' + tono + '. Focus: ' + focus +
+    (diferenciador ? '. Differentiator: ' + diferenciador : '') +
+    (audiencia ? '. Target audience: ' + audiencia : '') +
+    (productos ? '. Key products: ' + productos : '') +
+    (estiloVisual ? '. Visual style: ' + estiloVisual : '') +
+    (propuesta ? '. Value proposition: ' + propuesta : '') + '.';
 
   var design = null;
   var thinkId0 = addThinking();
@@ -6885,7 +6940,7 @@ async function generateWithDesignData() {
       model: 'claude-sonnet-4-6',
       max_tokens: 800,
       system: 'You are an expert Meta Ads designer. Return ONLY valid JSON, no markdown, no backticks.',
-      messages: [{ role: 'user', content: 'Design a premium Meta Ads composition for this campaign: ' + designPromptCtx + '\n\nReturn ONLY JSON: {"text_zone":"left","text_zone_width_pct":0.55,"overlay_color":"' + cm.overlay + '","overlay_opacity":0.65,"headline":"' + offer + '","headline_size_pct":0.072,"headline_color":"' + cm.headline + '","headline_weight":"bold","body_items":["subtitle or value prop in spanish, max 5 words"],"body_size_pct":0.032,"body_color":"' + cm.body + '","bullet_style":"none","logo":"' + brand + '","logo_position":"top-left","logo_size_pct":0.038,"logo_color":"' + cm.logo + '"}' }]
+      messages: [{ role: 'user', content: 'Design a premium Meta Ads composition for this campaign: ' + designPromptCtx + '\n\nIMPORTANT rules:\n- headline must be the offer/hook in Spanish, punchy and direct, max 6 words\n- body_items must include: [1] a supporting benefit or urgency line (max 6 words in Spanish), [2] a clear CTA in Spanish like "Compra ahora", "Pide el tuyo", "Aprovecha hoy", "Descúbrelo" — choose the most fitting CTA for the brand tone and industry\n- If the brand has products like candles/wellness/beauty, use evocative sensory language\n- logo field must be the brand name exactly as provided\n\nReturn ONLY JSON: {"text_zone":"left","text_zone_width_pct":0.55,"overlay_color":"' + cm.overlay + '","overlay_opacity":0.65,"headline":"' + offer + '","headline_size_pct":0.072,"headline_color":"' + cm.headline + '","headline_weight":"bold","body_items":["supporting benefit in spanish max 6 words","CTA verb phrase in spanish max 4 words"],"body_size_pct":0.032,"body_color":"' + cm.body + '","bullet_style":"none","logo":"' + brand + '","logo_position":"top-left","logo_size_pct":0.038,"logo_color":"' + cm.logo + '"}' }]
     });
     var clean = designText.replace(/```json|```/g, '').trim();
     var bi = clean.indexOf('{'); if (bi >= 0) clean = clean.slice(bi);
@@ -6898,11 +6953,14 @@ async function generateWithDesignData() {
 
   // Fallback design si Claude falla
   if (!design) {
+    var ctaDefault = tono.includes('urgente') ? 'Aprovecha hoy' : tono.includes('aspiracional') ? 'Descúbrelo' : 'Pide el tuyo';
     design = {
       text_zone: 'left', text_zone_width_pct: 0.55,
       overlay_color: cm.overlay, overlay_opacity: 0.65,
       headline: offer, headline_size_pct: 0.072, headline_color: cm.headline, headline_weight: 'bold',
-      body_items: diferenciador ? [diferenciador.split('.')[0].slice(0,40)] : [],
+      body_items: diferenciador
+        ? [diferenciador.split('.')[0].slice(0, 40), ctaDefault]
+        : [propuesta ? propuesta.slice(0, 40) : 'Calidad garantizada', ctaDefault],
       body_size_pct: 0.032, body_color: cm.body, bullet_style: 'none',
       logo: brand, logo_position: 'top-left', logo_size_pct: 0.038, logo_color: cm.logo,
     };
@@ -6917,12 +6975,27 @@ async function generateWithDesignData() {
     var noText = 'Absolutely NO text, NO letters, NO numbers, NO words anywhere. Clean visual only. ';
     var quality = 'Ultra-realistic professional product photography, editorial quality, shot for luxury magazine. ';
 
-    // Detectar tipo de producto/industria del brief
-    var isCandle = (industria + ' ' + offer + ' ' + brand).toLowerCase().match(/vela|candle|aromat|fragran|wax/);
-    var isFood = (industria).toLowerCase().match(/restaurante|food|gastronom|cafe|bebida/);
-    var isSalud = (industria).toLowerCase().match(/salud|clinic|medic|bienestar|estetic/);
-    var isInmob = (industria).toLowerCase().match(/inmob|construc|aparta|casa|finca|viviend/);
-    var isFashion = (industria).toLowerCase().match(/moda|ropa|fashion|calzado|accesorio/);
+    // ── Estilo visual del brief ───────────────────────────────────────────────
+    var styleHint = '';
+    if (estiloVisual) {
+      var styleMap = {
+        'Minimalista / limpio': 'minimalist clean aesthetic, simple background, lots of negative space. ',
+        'Elegante / premium':   'luxurious elegant premium aesthetic, dark moody tones, sophisticated styling. ',
+        'Vibrante / colorido':  'vibrant colorful energetic aesthetic, bold palette, dynamic composition. ',
+        'Corporativo / formal': 'corporate professional aesthetic, clean structured composition. ',
+        'Natural / orgánico':   'organic natural aesthetic, earthy tones, botanical elements, warm light. ',
+        'Juvenil / moderno':    'modern youthful aesthetic, bold contemporary styling, fresh colors. ',
+      };
+      styleHint = styleMap[estiloVisual] || '';
+    }
+
+    // ── Detectar tipo de producto/industria del brief ─────────────────────────
+    var searchText = (industria + ' ' + offer + ' ' + brand + ' ' + productos).toLowerCase();
+    var isCandle = searchText.match(/vela|candle|aromat|fragran|wax/);
+    var isFood = searchText.match(/restaurante|food|gastronom|cafe|bebida/);
+    var isSalud = searchText.match(/salud|clinic|medic|bienestar|estetic/);
+    var isInmob = searchText.match(/inmob|construc|aparta|casa|finca|viviend/);
+    var isFashion = searchText.match(/moda|ropa|fashion|calzado|accesorio/);
 
     var scenes = [];
     if (isCandle) {
@@ -6977,12 +7050,17 @@ async function generateWithDesignData() {
     }
 
     var scene = scenes[idx % scenes.length];
-    return scene + '. ' + paletteHint + noText + quality;
+    return scene + '. ' + styleHint + paletteHint + noText + quality;
   }
 
   var conceptNames = ['Hero', 'Ambiente', 'Close-up', 'Editorial', 'Lifestyle'];
 
-  addAgent('generando **5 creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*' + (hasProductImg ? ' · usando tu foto del producto ✓' : ''));
+  var briefSummary = '';
+  if (industria) briefSummary += ' · industria: *' + industria.split('/')[0].trim() + '*';
+  if (audiencia) briefSummary += ' · audiencia: *' + audiencia.slice(0, 40) + (audiencia.length > 40 ? '...' : '') + '*';
+  if (estiloVisual) briefSummary += ' · estilo: *' + estiloVisual + '*';
+
+  addAgent('generando **5 creativos profesionales** para **' + brand + '**...\n\noferta: *' + offer + '* · paleta: *' + colors + '*' + briefSummary + (hasProductImg ? ' · usando tu foto del producto ✓' : ''));
   hist.push({role:'assistant', content: 'Generando creativos para ' + brand});
 
   generatedAdImages = [];
