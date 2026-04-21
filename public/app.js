@@ -1402,6 +1402,7 @@ function briefFillForm(c) {
   });
   if (c.objetivo) document.querySelectorAll('[data-g="objetivo"]').forEach(ch => { if (ch.textContent.trim() === c.objetivo) ch.classList.add('sel'); });
   if (c.tono) document.querySelectorAll('[data-g="tono"]').forEach(ch => { if (ch.textContent.trim() === c.tono) ch.classList.add('sel'); });
+  if (c.tipoOferta) document.querySelectorAll('[data-g="tipo-oferta"]').forEach(ch => { if (ch.textContent.trim().includes(c.tipoOferta.replace(/^[^\s]+\s/,'').split('/')[0].trim())) ch.classList.add('sel'); });
   // Chips multiselección edad
   if (c.edad) c.edad.split(', ').forEach(v => {
     document.querySelectorAll('[data-g="edad"]').forEach(ch => { if (ch.textContent.trim() === v) ch.classList.add('sel'); });
@@ -1595,6 +1596,7 @@ function briefReadForm() {
     crm:              val('ag-f-crm'),
     resultados:       val('ag-f-resultados'),
     tono:             chips('tono'),
+    tipoOferta:       chips('tipo-oferta'),
     estiloVisual:     chips('estilo-visual'),
     colores:          val('ag-f-colores'),
     productos:        val('ag-f-productos'),
@@ -6690,6 +6692,8 @@ function showDesignQuestionnaire() {
     designQData.diferenciador= activeClient.diferenciador || '';
     designQData.tono         = activeClient.tono        || '';
     designQData.propuesta    = activeClient.propuesta   || '';
+    designQData.tipoOferta   = activeClient.tipoOferta  || '';
+    designQData.descripcion  = activeClient.descripcion || '';
     designQData.fromBrief    = true;
   } else {
     designQData = {};
@@ -6769,15 +6773,36 @@ function showDesignQuestionnaire() {
           '</div>' +
 
           '<div style="margin-top:14px">' +
-            '<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Foto de producto <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional — mejora mucho el resultado)</span></div>' +
-            '<div id="dq-product-preview" style="display:none;margin-bottom:8px">' +
-              '<div style="position:relative;display:inline-block">' +
-                '<img id="dq-product-img-preview" style="height:70px;border-radius:8px;border:1px solid var(--border);object-fit:cover"/>' +
-                '<button onclick="dqRemoveProductImg()" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:white;border:none;font-size:10px;cursor:pointer;font-weight:700;line-height:1">×</button>' +
+            // ── Tipo de negocio — ramifica la sección visual ──────────────────
+            '<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">¿Qué tipo de negocio es?</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+              '<button onclick="dqSelectTipoNegocio(this,\'producto\')" class="dq-tipo-btn" id="dq-tipo-producto" style="flex:1;padding:10px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text);text-align:center">🛍️ Producto<br><span style="font-size:10px;font-weight:400;color:var(--muted)">tiene objeto físico</span></button>' +
+              '<button onclick="dqSelectTipoNegocio(this,\'servicio\')" class="dq-tipo-btn" id="dq-tipo-servicio" style="flex:1;padding:10px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text);text-align:center">🛠️ Servicio<br><span style="font-size:10px;font-weight:400;color:var(--muted)">vende experiencia o trabajo</span></button>' +
+            '</div>' +
+
+            // ── Sección producto: subir foto ──────────────────────────────────
+            '<div id="dq-seccion-producto" style="display:none">' +
+              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sube la foto de tu producto — el resultado será mucho más fiel a tu marca.</div>' +
+              '<div id="dq-product-preview" style="display:none;margin-bottom:8px">' +
+                '<div style="position:relative;display:inline-block">' +
+                  '<img id="dq-product-img-preview" style="height:70px;border-radius:8px;border:1px solid var(--border);object-fit:cover"/>' +
+                  '<button onclick="dqRemoveProductImg()" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:white;border:none;font-size:10px;cursor:pointer;font-weight:700;line-height:1">×</button>' +
+                '</div>' +
+              '</div>' +
+              '<input type="file" id="dq-product-file" accept="image/*" style="display:none" onchange="dqHandleProductImg(this)">' +
+              '<button onclick="document.getElementById(\'dq-product-file\').click()" style="padding:8px 14px;border:1.5px dashed var(--blue-md);border-radius:8px;font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)">📷 Subir foto del producto</button>' +
+              '<div style="margin-top:8px;font-size:10px;color:var(--muted2)">Sin foto: la IA generará escenas del producto. Con foto: usará tu imagen real.</div>' +
+            '</div>' +
+
+            // ── Sección servicio: elegir enfoque visual ───────────────────────
+            '<div id="dq-seccion-servicio" style="display:none">' +
+              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Para servicios el visual se construye desde una situación. ¿Qué quieres transmitir?</div>' +
+              '<div style="display:flex;flex-direction:column;gap:6px">' +
+                '<button onclick="dqSelectEnfoqueServicio(this,\'resultado\')" class="dq-enfoque-btn" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text);text-align:left">✨ Resultado / transformación<br><span style="font-size:10px;font-weight:400;color:var(--muted)">Cliente antes vs. después — el cambio que genera el servicio</span></button>' +
+                '<button onclick="dqSelectEnfoqueServicio(this,\'contexto\')" class="dq-enfoque-btn" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text);text-align:left">🏢 Contexto / ambiente<br><span style="font-size:10px;font-weight:400;color:var(--muted)">El lugar y momento donde ocurre el servicio</span></button>' +
+                '<button onclick="dqSelectEnfoqueServicio(this,\'confianza\')" class="dq-enfoque-btn" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;background:white;cursor:pointer;font-family:var(--font);color:var(--text);text-align:left">🏆 Confianza / credencial<br><span style="font-size:10px;font-weight:400;color:var(--muted)">Profesionalismo, expertise, prueba social</span></button>' +
               '</div>' +
             '</div>' +
-            '<input type="file" id="dq-product-file" accept="image/*" style="display:none" onchange="dqHandleProductImg(this)">' +
-            '<button onclick="document.getElementById(\'dq-product-file\').click()" style="padding:8px 14px;border:1.5px dashed var(--blue-md);border-radius:8px;font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)">📷 Subir foto del producto</button>' +
           '</div>' +
 
           '<button onclick="dqLaunchCreativeConcepts()" id="dq-generate-concepts-btn" style="margin-top:16px;width:100%;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Crear 5 conceptos creativos</button>' +
@@ -6789,6 +6814,17 @@ function showDesignQuestionnaire() {
 
   document.getElementById('chat-area').appendChild(el);
   scrollB();
+
+  // ── Auto-seleccionar tipo de negocio si viene del brief ──────────────────
+  if (activeClient && designQData.tipoOferta) {
+    var tipoOferta = designQData.tipoOferta.toLowerCase();
+    var tipoAuto = tipoOferta.includes('producto') || tipoOferta.includes('e-commerce') || tipoOferta.includes('food') || tipoOferta.includes('restaurante')
+      ? 'producto' : 'servicio';
+    setTimeout(function() {
+      var btn = document.getElementById('dq-tipo-' + tipoAuto);
+      if (btn) dqSelectTipoNegocio(btn, tipoAuto);
+    }, 50);
+  }
 }
 
 function dqStepBrandNext() {
@@ -6802,6 +6838,37 @@ function dqStepBrandNext() {
 function dqSelectFormat(btn, fmt) {
   designQData.format = fmt;
   document.querySelectorAll('.dq-fmt-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)';
+    b.style.background  = 'white';
+    b.style.color       = 'var(--text)';
+  });
+  btn.style.borderColor = 'var(--blue)';
+  btn.style.background  = 'var(--blue-lt)';
+  btn.style.color       = 'var(--blue)';
+}
+
+function dqSelectTipoNegocio(btn, tipo) {
+  designQData.tipoNegocio = tipo;
+  document.querySelectorAll('.dq-tipo-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)';
+    b.style.background  = 'white';
+    b.style.color       = 'var(--text)';
+  });
+  btn.style.borderColor = 'var(--blue)';
+  btn.style.background  = 'var(--blue-lt)';
+  btn.style.color       = 'var(--blue)';
+  // Mostrar la sección correspondiente
+  var secProd = document.getElementById('dq-seccion-producto');
+  var secServ = document.getElementById('dq-seccion-servicio');
+  if (secProd) secProd.style.display = tipo === 'producto' ? 'block' : 'none';
+  if (secServ) secServ.style.display = tipo === 'servicio' ? 'block' : 'none';
+  // Limpiar enfoque de servicio si cambia a producto
+  if (tipo === 'producto') designQData.enfoqueServicio = null;
+}
+
+function dqSelectEnfoqueServicio(btn, enfoque) {
+  designQData.enfoqueServicio = enfoque;
+  document.querySelectorAll('.dq-enfoque-btn').forEach(b => {
     b.style.borderColor = 'var(--border)';
     b.style.background  = 'white';
     b.style.color       = 'var(--text)';
@@ -6838,6 +6905,51 @@ function dqRemoveProductImg() {
 // ETAPA 2: Claude actúa como Director Creativo — genera 5 conceptos
 // ─────────────────────────────────────────────────────────────────────────────
 
+function buildEjemplosProducto(contexto) {
+  return 'CADA concepto DEBE tener setting, ángulo, luz y sujeto completamente diferente.\n\nEjemplos de variedad esperada (adapta al producto real):\n- Concepto 1: macro extremo del producto con detalle de textura, fondo negro, foco de luz puntual\n- Concepto 2: flat lay cenital: producto rodeado de props relacionados sobre superficie de mármol, luz solar lateral\n- Concepto 3: manos sosteniendo el producto frente a ventana, contraluz suave\n- Concepto 4: producto en uso en su ambiente natural, persona de espaldas, luz de tarde cálida\n- Concepto 5: producto solo sobre superficie elegante, luz de estudio lateral, fondo neutro';
+}
+
+function buildEjemplosServicio(industria, enfoque) {
+  var ind = (industria || '').toLowerCase();
+
+  // Ejemplos específicos por industria y enfoque
+  var eMap = {
+    'consultoria': {
+      resultado: 'Ej: empresario latinoamericano mirando dashboard con métricas creciendo en laptop · mujer celebrando con equipo en sala · persona caminando segura hacia cámara en traje formal · hombre en reunión con clientes satisfechos · manos apuntando a gráfica de crecimiento en whiteboard',
+      contexto:  'Ej: sala de juntas moderna con luz de ventana · oficina con vista a ciudad · videoconferencia en pantalla grande · coworking moderno con personas trabajando · escritorio organizado con café y laptop',
+      confianza: 'Ej: mano firme haciendo handshake de negocios · certificados enmarcados en pared de oficina profesional · equipo diverso en reunión · persona hablando en conferencia con audiencia · laptop con resultados de cliente exitoso'
+    },
+    'lavadoras': {
+      resultado: 'Ej: ropa blanca perfectamente doblada vs. ropa sucia antes · técnico con herramientas sonriendo junto a lavadora reparada · familia celebrando lavadora funcionando · manos mostrando ropa limpia y sin manchas · lavadora brillante en cocina ordenada',
+      contexto:  'Ej: técnico uniformado abriendo lavadora en hogar de familia · manos expertas ajustando componente interno · herramientas organizadas sobre piso de cocina · técnico revisando lavadora con linterna · furgoneta de servicio técnico frente a casa',
+      confianza: 'Ej: técnico con uniforme y logo mostrando herramienta a cámara · certificado de garantía en mano · reseñas 5 estrellas en pantalla de celular · técnico uniformado con postura profesional · antes/después de lavadora oxidada vs. reparada'
+    },
+    'inglés': {
+      resultado: 'Ej: persona latinoamericana en videollamada de trabajo en inglés, sonriendo confiada · estudiante recibiendo certificado · persona hablando con extranjero en aeropuerto · CV con idiomas destacados · persona presentando en inglés ante grupo internacional',
+      contexto:  'Ej: estudiante con audífonos aprendiendo en laptop, ventana con luz natural · clase virtual en pantalla · persona practicando frente a espejo · app de idiomas en celular en el metro · cuaderno con notas en inglés y café',
+      confianza: 'Ej: certificado de nivel B2/C1 sostenido con manos orgullosas · pantalla con calificación perfecta · antes: persona bloqueada / después: persona segura hablando · testimonio en pantalla de celular · mapa mental de vocabulario aprendido'
+    }
+  };
+
+  // Encontrar la industria más cercana
+  var ejemplos = null;
+  if (ind.includes('consul') || ind.includes('marketing') || ind.includes('agencia')) ejemplos = eMap['consultoria'];
+  else if (ind.includes('lavad') || ind.includes('técnic') || ind.includes('repair') || ind.includes('electrod')) ejemplos = eMap['lavadoras'];
+  else if (ind.includes('inglés') || ind.includes('ingles') || ind.includes('idioma') || ind.includes('curso') || ind.includes('educ')) ejemplos = eMap['inglés'];
+
+  if (ejemplos && ejemplos[enfoque]) {
+    return 'CADA concepto DEBE mostrar una SITUACIÓN HUMANA diferente — no imágenes abstractas ni corporativas genéricas.\n\nEjemplos para este tipo de servicio con enfoque "' + enfoque + '":\n' + ejemplos[enfoque] + '\n\nVARÍA radicalmente: setting (interior/exterior/urbano/hogar), ángulo (frontal/lateral/contrapicado/cenital), luz (natural/artificial/cálida/fría), y la emoción del sujeto.';
+  }
+
+  // Fallback genérico para servicios
+  var focusMap = {
+    resultado: 'CADA concepto muestra el CAMBIO que genera el servicio: persona antes (frustrada, bloqueada, con problema) vs. persona después (segura, exitosa, satisfecha). Usa situaciones cotidianas reconocibles para latinoamericanos.',
+    contexto:  'CADA concepto muestra el AMBIENTE donde ocurre el servicio: el lugar real, los props del oficio, la interacción entre proveedor y cliente. Que se vea auténtico y profesional al mismo tiempo.',
+    confianza: 'CADA concepto transmite CREDIBILIDAD: expertise visible, resultados tangibles, prueba social. Usa elementos que generen confianza inmediata: uniformes, certificados, resultados en pantalla, gestos de profesionalismo.'
+  };
+  return 'CADA concepto DEBE mostrar una SITUACIÓN HUMANA diferente — personas latinoamericanas reales en momentos concretos.\n\nEnfoque elegido: ' + (focusMap[enfoque] || focusMap.resultado) + '\n\nVARÍA radicalmente: setting, ángulo, luz, emoción del sujeto y composición.';
+}
+
 async function dqLaunchCreativeConcepts() {
   var offer = (document.getElementById('dq-offer') || {}).value;
   if (!offer || !offer.trim()) {
@@ -6863,10 +6975,19 @@ async function dqLaunchCreativeConcepts() {
   }, 100);
 
   // Construir brief completo para Claude
+  var tipoNegocio = designQData.tipoNegocio || (designQData.tipoOferta
+    ? (designQData.tipoOferta.toLowerCase().includes('producto') ? 'producto' : 'servicio')
+    : 'producto');
+  var esServicio = tipoNegocio === 'servicio';
+  var enfoqueServicio = designQData.enfoqueServicio || 'resultado';
+
   var brief = [
     'MARCA: ' + (designQData.brand || 'Sin nombre'),
+    'TIPO DE NEGOCIO: ' + (esServicio ? 'SERVICIO (no tiene producto físico)' : 'PRODUCTO FÍSICO'),
     designQData.industria    ? 'INDUSTRIA: '      + designQData.industria    : '',
-    designQData.productos    ? 'PRODUCTOS ESTRELLA: ' + designQData.productos : '',
+    designQData.descripcion  ? 'DESCRIPCIÓN: '    + designQData.descripcion  : '',
+    !esServicio && designQData.productos ? 'PRODUCTOS ESTRELLA: ' + designQData.productos : '',
+    esServicio ? 'ENFOQUE VISUAL ELEGIDO: ' + enfoqueServicio : '',
     designQData.audiencia    ? 'AUDIENCIA: '      + designQData.audiencia    : '',
     designQData.tono         ? 'TONO DE MARCA: '  + designQData.tono         : '',
     designQData.estiloVisual ? 'ESTILO VISUAL: '  + designQData.estiloVisual : '',
@@ -6875,12 +6996,18 @@ async function dqLaunchCreativeConcepts() {
     designQData.propuesta    ? 'PROPUESTA DE VALOR: ' + designQData.propuesta : '',
     'CAMPAÑA: ' + designQData.offer,
     'FORMATO: ' + designQData.format,
-    designQData.productImageBase64 ? 'FOTO DE PRODUCTO: el usuario subió una foto del producto — usarla como fondo en todos los conceptos.' : '',
+    (!esServicio && designQData.productImageBase64) ? 'FOTO DE PRODUCTO: el usuario subió una foto del producto — úsala como fondo en todos los conceptos.' : '',
   ].filter(Boolean).join('\n');
 
-  var systemPrompt = 'Eres el director creativo de una agencia de publicidad de primer nivel especializada en Meta Ads para marcas latinoamericanas. Tu trabajo es generar conceptos creativos visuales que conecten emocionalmente con la audiencia y conviertan. REGLAS CRÍTICAS: (1) NUNCA repitas el mismo setting o escena entre conceptos — cada uno debe ocurrir en un lugar y momento completamente diferente. (2) Varía radicalmente el ángulo de cámara entre conceptos: macro extremo, cenital, frontal, 45 grados, primer plano de manos, etc. (3) Varía el sujeto principal: a veces el producto solo, a veces manos sosteniendo el producto, a veces el ambiente sin el producto visible, a veces una persona usándolo. (4) Varía la hora del día y fuente de luz: luz de día natural, noche con vela, amanecer, luz de ventana, oscuridad con foco. (5) El ideogram_prompt debe ser tan específico y diferente que sea imposible confundir dos conceptos entre sí. Responde SOLO con JSON válido, sin markdown, sin texto adicional.';
+  // ── System prompt diferenciado ────────────────────────────────────────────
+  var systemPrompt = esServicio
+    ? 'Eres el director creativo de una agencia de publicidad especializada en Meta Ads para servicios en Latinoamérica. CONTEXTO CRÍTICO: Este cliente vende un SERVICIO, no un producto físico. NO puedes poner el "producto" en la imagen porque no existe un objeto que mostrar. El visual SIEMPRE debe construirse desde una SITUACIÓN HUMANA concreta: personas reales en momentos específicos, ambientes que evocan el antes/después, o contextos que transmiten credibilidad profesional. REGLAS: (1) Cada concepto ocurre en un setting físico y momento completamente diferente. (2) Usa personas latinoamericanas reales en situaciones cotidianas reconocibles. (3) Muestra el CAMBIO emocional o el contexto del servicio — nunca imágenes abstractas o corporativas genéricas. (4) Varía radicalmente el ángulo, luz y composición entre conceptos. (5) El ideogram_prompt debe crear una escena tan específica y humana que cualquiera pueda sentirse identificado. Responde SOLO con JSON válido, sin markdown.'
+    : 'Eres el director creativo de una agencia de publicidad de primer nivel especializada en Meta Ads para marcas latinoamericanas. REGLAS CRÍTICAS: (1) NUNCA repitas el mismo setting o escena entre conceptos. (2) Varía radicalmente el ángulo de cámara: macro extremo, cenital, frontal, 45 grados, primer plano de manos. (3) Varía el sujeto: solo el producto, manos sosteniéndolo, ambiente sin producto visible, persona usándolo. (4) Varía la fuente de luz: luz solar, vela encendida, ventana difusa, luz artificial, penumbra. (5) El ideogram_prompt debe ser imposible de confundir con otro concepto. Responde SOLO con JSON válido, sin markdown.';
 
-  var userPrompt = 'Crea 5 conceptos creativos RADICALMENTE DIFERENTES entre sí para este brief:\n\n' + brief + '\n\nCADA concepto DEBE tener:\n- Un setting físico completamente distinto a los otros 4 (ej: baño con vapor, mesa de noche oscura, jardín al amanecer, cocina moderna, exterior nocturno urbano)\n- Un ángulo de cámara diferente (ej: macro extremo, cenital flat-lay, frontal neutro, 45° lateral, primer plano de manos)\n- Una fuente de luz diferente (ej: vela encendida, luz solar directa, ventana difusa, luz artificial cálida, penumbra con reflejo)\n- Un sujeto principal diferente (ej: solo el producto, manos sosteniendo el producto, ambiente evocador sin producto visible, persona usándolo de espaldas)\n\nEl ideogram_prompt de cada concepto debe ser tan específico y diferente que sea imposible confundir dos imágenes entre sí.\n\nEjemplo de variedad esperada:\n- Concepto 1: macro extremo de la etiqueta de la vela con llama desenfocada en fondo negro\n- Concepto 2: flat lay cenital: vela rodeada de pétalos de rosa y musgo sobre mármol blanco, luz solar lateral\n- Concepto 3: manos femeninas sosteniendo la vela encendida frente a ventana con lluvia, contraluz\n- Concepto 4: vela sobre borde de bañera con burbujas y flores secas, vapor visible, luz cálida\n- Concepto 5: vela apagada en mesa de café con libro abierto y taza humeante, luz de tarde dorada\n\nDevuelve SOLO este JSON:\n{\n  "concepts": [\n    {\n      "id": 1,\n      "nombre": "Nombre evocador del concepto en 3-4 palabras",\n      "concepto": "1 frase que describe la idea creativa central",\n      "escena": "Descripción visual detallada: qué se ve, dónde, cómo está iluminado, texturas, props específicos",\n      "angulo": "Tipo de toma fotográfica exacto: ej. macro f/1.8, cenital 90°, primer plano manos, etc.",\n      "atmosfera": "3 palabras que definen el mood",\n      "headline": "Titular del anuncio en español, máximo 6 palabras, impactante y emocional",\n      "subheadline": "Frase de apoyo en español, máximo 8 palabras, refuerza el beneficio concreto",\n      "cta": "Call to action en español, máximo 4 palabras",\n      "ideogram_prompt": "Prompt en inglés para Ideogram, 70-90 palabras. OBLIGATORIO: especifica el setting exacto, el ángulo de cámara exacto, la fuente de luz exacta, el sujeto principal, los props específicos, el mood, el estilo fotográfico y la paleta de color. Termina con: no text, no letters, no words, photorealistic, ultra detailed, professional commercial photography"\n    }\n  ]\n}';
+  // ── User prompt diferenciado ─────────────────────────────────────────────
+  var ejemplosConceptos = esServicio ? buildEjemplosServicio(designQData.industria || '', enfoqueServicio) : buildEjemplosProducto(designQData.productos || designQData.industria || '');
+
+  var userPrompt = 'Crea 5 conceptos creativos RADICALMENTE DIFERENTES entre sí para este brief:\n\n' + brief + '\n\n' + ejemplosConceptos + '\n\nDevuelve SOLO este JSON:\n{\n  "concepts": [\n    {\n      "id": 1,\n      "nombre": "Nombre evocador del concepto en 3-4 palabras",\n      "concepto": "1 frase que describe la idea creativa central",\n      "escena": "Descripción visual detallada: qué se ve, dónde, cómo está iluminado, quién aparece, qué está pasando",\n      "angulo": "Tipo de toma fotográfica exacto",\n      "atmosfera": "3 palabras que definen el mood",\n      "headline": "Titular en español, máximo 6 palabras, impactante y emocional",\n      "subheadline": "Frase de apoyo en español, máximo 8 palabras, beneficio concreto",\n      "cta": "Call to action en español, máximo 4 palabras",\n      "ideogram_prompt": "Prompt en inglés para Ideogram, 70-90 palabras. OBLIGATORIO: setting exacto, ángulo de cámara, fuente de luz, sujeto principal, props específicos, mood, estilo fotográfico, paleta de color. Termina con: no text, no letters, no words, photorealistic, ultra detailed, professional commercial photography"\n    }\n  ]\n}';
 
   var concepts = null;
   try {

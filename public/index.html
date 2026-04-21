@@ -1268,6 +1268,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <div class="agency-step-title">Información del negocio</div>
           <div class="agency-step-desc">Contexto del negocio que los agentes usarán en cada análisis y recomendación.</div>
           <div class="agency-field">
+            <label>¿Qué ofrece el negocio?</label>
+            <div class="agency-chips" style="margin-top:6px">
+              <div class="agency-chip" data-g="tipo-oferta" onclick="agencyToggleChipSingle(this)">🛍️ Producto físico</div>
+              <div class="agency-chip" data-g="tipo-oferta" onclick="agencyToggleChipSingle(this)">🛠️ Servicio / consultoría</div>
+              <div class="agency-chip" data-g="tipo-oferta" onclick="agencyToggleChipSingle(this)">📚 Curso / formación</div>
+              <div class="agency-chip" data-g="tipo-oferta" onclick="agencyToggleChipSingle(this)">💻 Software / SaaS</div>
+              <div class="agency-chip" data-g="tipo-oferta" onclick="agencyToggleChipSingle(this)">🏠 Inmobiliaria</div>
+              <div class="agency-chip" data-g="tipo-oferta" onclick="agencyToggleChipSingle(this)">🍽️ Restaurante / Food</div>
+            </div>
+          </div>
+          <div class="agency-field">
             <label>¿Qué hace el negocio? (descripción clara)</label>
             <textarea id="ag-f-descripcion" rows="2" placeholder="ej. Inmobiliaria especializada en proyectos de vivienda nueva en Bogotá norte. 8 años en el mercado, 3 proyectos activos." maxlength="300"></textarea>
           </div>
