@@ -91,6 +91,7 @@ export default async function handler(req, res) {
 
         const body = {
           prompt:          designPrompt,
+          negative_prompt: 'navigation bar, website menu, top menu bar, footer bar, sidebar, price tags, QR code, social media icons, URL, hashtags, watermark, lorem ipsum, placeholder text, gibberish text, unreadable text, blurry text, multiple products, duplicate products',
           image_size:      spec.imgSize,
           style:           'DESIGN',       // ← clave: modo diseño gráfico/publicidad
           rendering_speed: 'QUALITY',
@@ -115,25 +116,27 @@ export default async function handler(req, res) {
           } catch(e) { /* ignorar si falla parseo de color */ }
         }
 
-        // Si hay foto del producto, usar Remix sobre ella en lugar de text-to-image
+        // Si hay foto del producto, usar Remix con strength bajo para preservar el producto real
+        // strength: 0.35 = Ideogram mantiene ~65% del producto original y añade el diseño/composición
         if (productImageBase64) {
-          // Usar replace-background de Ideogram para mantener el producto real
-          const replaceRes = await fetch('https://fal.run/fal-ai/ideogram/v3/replace-background', {
+          const remixRes = await fetch('https://fal.run/fal-ai/ideogram/v3/remix', {
             method:  'POST',
             headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              image_url:       productImageBase64,  // base64 data URI
+              image_url:       productImageBase64,
               prompt:          designPrompt,
+              negative_prompt: 'navigation bar, website menu, top menu bar, footer bar, sidebar, price tags, QR code, social media icons, URL, hashtags, watermark, duplicate products, multiple candles, extra products',
+              strength:        0.55,
               image_size:      spec.imgSize,
               style:           'DESIGN',
               rendering_speed: 'QUALITY',
               expand_prompt:   false,
             }),
           });
-          const replaceData = await replaceRes.json();
-          if (!replaceRes.ok) {
-            // Fallback a text-to-image si replace-background falla
-            console.warn('replace-background failed, falling back to text-to-image:', replaceData);
+          const remixData = await remixRes.json();
+          if (!remixRes.ok) {
+            // Fallback a text-to-image si remix falla
+            console.warn('remix failed, falling back to text-to-image:', remixData);
             const fallbackRes = await fetch('https://fal.run/fal-ai/ideogram/v3', {
               method: 'POST', headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(body),
@@ -142,7 +145,7 @@ export default async function handler(req, res) {
             if (!fallbackRes.ok) throw new Error(fallbackData.detail?.[0]?.msg || fallbackData.error || 'Error en Ideogram DESIGN');
             imageUrl = fallbackData.images?.[0]?.url;
           } else {
-            imageUrl = replaceData.images?.[0]?.url;
+            imageUrl = remixData.images?.[0]?.url;
           }
         } else {
           const ideogramRes = await fetch('https://fal.run/fal-ai/ideogram/v3', {
@@ -219,46 +222,48 @@ export default async function handler(req, res) {
 // Ideogram V3 con style:DESIGN puede renderizar texto como elemento visual integrado
 function buildDesignPrompt(userPrompt, format, adCopy, brandColors, variantIndex) {
   const formatGuide = {
-    square:   'Square 1:1 social media ad, balanced split composition',
-    vertical: 'Vertical 4:5 Instagram feed ad, mobile-optimized layout',
-    story:    'Vertical 9:16 Instagram Stories ad, full-screen immersive',
-    carousel: 'Square 1:1 carousel card, clean centered composition',
-  }[format] || 'Square social media advertisement';
+    square:   'Square 1:1 social media static image ad',
+    vertical: 'Vertical 4:5 Instagram feed static image ad',
+    story:    'Vertical 9:16 Instagram Stories static image ad',
+    carousel: 'Square 1:1 carousel static image ad',
+  }[format] || 'Square social media static image ad';
 
-  // Variaciones de layout para diversidad visual entre conceptos
+  // Layouts limpios — sin mencionar UI elements que confunden a Ideogram
   const layouts = [
-    'Text block on left third, product/image on right two thirds. Dark gradient overlay on text side.',
-    'Large bold headline centered top half, product centered bottom half on dark background.',
-    'Full bleed background image, text in bottom third with semi-transparent dark band.',
-    'Product top center, text block below on solid brand color background.',
-    'Split design: solid color left panel with text, product image right panel.',
+    'Left half: dark gradient panel with all text. Right half: product/scene photography.',
+    'Bold large headline centered upper area. Supporting text and CTA button lower area. Full background scene.',
+    'Full bleed lifestyle photography background. Dark semi-transparent band bottom 35% with text.',
+    'Solid dark brand-color left panel with text. Product photography right panel, slightly overlapping.',
+    'Full bleed background. Text block upper left with brand name, headline, subtext, CTA pill button.',
   ];
   const layout = layouts[variantIndex % layouts.length];
 
-  // Construir el bloque de texto si hay adCopy
-  let textBlock = '';
+  // Texto exacto — muy explícito para que Ideogram lo respete sin añadir elementos extra
+  let textInstructions = '';
   if (adCopy) {
-    const brand      = adCopy.brand      ? `Brand name: "${adCopy.brand}" as logo text top left` : '';
-    const headline   = adCopy.headline   ? `Main headline: "${adCopy.headline}" — large bold impactful typography` : '';
-    const sub        = adCopy.subheadline? `Subheadline: "${adCopy.subheadline}" — smaller supporting text` : '';
-    const cta        = adCopy.cta        ? `CTA button with text: "${adCopy.cta}" — high contrast pill button` : '';
-    textBlock = [brand, headline, sub, cta].filter(Boolean).join('. ');
+    const parts = [];
+    if (adCopy.brand)       parts.push(`Small brand name "${adCopy.brand}" top left`);
+    if (adCopy.headline)    parts.push(`Large bold headline "${adCopy.headline}"`);
+    if (adCopy.subheadline) parts.push(`Smaller supporting text "${adCopy.subheadline}"`);
+    if (adCopy.cta)         parts.push(`Rounded pill CTA button labeled "${adCopy.cta}"`);
+    textInstructions = 'Text elements (include ONLY these, no other text): ' + parts.join('. ') + '.';
   }
 
-  // Colores
   const colorGuide = brandColors?.primary
-    ? `Primary color: ${brandColors.primary}. Secondary: ${brandColors.secondary || '#FFFFFF'}.`
-    : 'Rich contrasting brand colors for high visibility.';
+    ? `Brand colors: ${brandColors.primary} primary, ${brandColors.secondary || '#FFFFFF'} secondary.`
+    : 'Premium dark tones with high contrast white text.';
 
-  return `Professional advertising creative for Meta Ads, Latin American market. ${formatGuide}. Layout: ${layout}
+  const negativeHint = 'Do not include navigation bars, website menus, footers, price tags, QR codes, social media icons, URLs, hashtags, or any decorative text not specified above.';
 
-${userPrompt}
+  return `${formatGuide}. Layout: ${layout}
 
-${textBlock ? 'Typography requirements: ' + textBlock + '.' : ''}
+Visual concept: ${userPrompt}
 
-Design style: Premium agency-quality ad creative. ${colorGuide} High contrast text always fully legible. Bold modern typography. Strong visual hierarchy. All text in Spanish. Clean professional finish. No watermarks.
+${textInstructions}
 
-Quality: Commercial advertising photography + graphic design hybrid. Ready to publish on Meta Ads. Conversion-optimized layout.`;
+${colorGuide} Typography: modern sans-serif bold, high contrast, 100% legible. All text in Spanish only.
+
+Style: Premium lifestyle brand advertisement. Clean professional composition. Strong visual hierarchy. ${negativeHint}`;
 }
 
 function buildIdeogramPrompt(userPrompt, format) {
