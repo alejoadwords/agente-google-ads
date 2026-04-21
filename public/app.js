@@ -3219,20 +3219,13 @@ function showMetaImageSubCards(parentCard) {
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
       '<div style="font-size:13px;font-weight:600;color:var(--text)">🖼️ Crear anuncios de imagen</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
+    '<div style="display:grid;grid-template-columns:1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
-      // Opción 1: Crear desde cero
+      // Única opción: Crear desde cero
       '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:22px;margin-bottom:8px">✨</div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear desde cero</div>' +
-        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos profesionales a partir de tu marca y oferta</div>' +
-      '</div>' +
-
-      // Opción 2: Variaciones de anuncio existente
-      '<div onclick="dismissMetaCards(this);showVariationUploader()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:22px;margin-bottom:8px">🔄</div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Variaciones de mi anuncio</div>' +
-        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">Sube un anuncio existente y genera variaciones de fondo, estilo y composición</div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear anuncio profesional</div>' +
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos con tu marca, oferta y línea gráfica — listos para publicar en Meta</div>' +
       '</div>' +
 
     '</div>' +
@@ -5793,6 +5786,30 @@ async function generateAdImages(cmd) {
 var generatedAdImages = [];
 var adImgGridEl = null; // Contenedor grid compartido para todas las imágenes del batch
 
+function openAdLightbox(base64, mediaType, label) {
+  // Remover lightbox anterior si existe
+  var existing = document.getElementById('ad-lightbox');
+  if (existing) existing.remove();
+
+  var lb = document.createElement('div');
+  lb.id = 'ad-lightbox';
+  lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  lb.onclick = function(e) { if (e.target === lb) lb.remove(); };
+
+  lb.innerHTML =
+    '<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;max-height:100%">' +
+      '<button onclick="this.closest(\'#ad-lightbox\').remove()" style="position:absolute;top:-12px;right:-12px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:white;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1">✕</button>' +
+      '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);letter-spacing:.5px;text-transform:uppercase">' + (label || '') + '</div>' +
+      '<img src="data:' + mediaType + ';base64,' + base64 + '" style="max-height:85vh;max-width:90vw;border-radius:12px;object-fit:contain;box-shadow:0 24px 80px rgba(0,0,0,.6)">' +
+      '<button onclick="downloadAdImage(\'' + base64 + '\',\'' + mediaType + '\',\'anuncio.png\')" style="padding:10px 24px;background:white;color:#1a1a1a;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:6px">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+        'Descargar imagen' +
+      '</button>' +
+    '</div>';
+
+  document.body.appendChild(lb);
+}
+
 function renderAdImage(img, index, total, format, prompt, isSocial) {
   generatedAdImages.push({ base64: img.base64, mediaType: img.mediaType, index: index, format: format });
 
@@ -5843,8 +5860,11 @@ function renderAdImage(img, index, total, format, prompt, isSocial) {
 
   card.innerHTML =
     '<div style="font-size:10px;color:var(--muted);margin-bottom:5px;font-weight:600;text-align:center">V' + index + '</div>' +
-    '<div style="border-radius:10px;overflow:hidden;border:1px solid var(--border);aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:var(--sidebar)">' +
+    '<div onclick="openAdLightbox(\'' + img.base64 + '\',\'' + img.mediaType + '\',\'V' + index + ' · ' + fmtLabel + '\')" style="border-radius:10px;overflow:hidden;border:1px solid var(--border);aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:var(--sidebar);cursor:zoom-in;position:relative" title="Clic para ver en grande">' +
       '<img src="data:' + img.mediaType + ';base64,' + img.base64 + '" style="width:100%;height:100%;object-fit:cover;display:block"/>' +
+      '<div style="position:absolute;inset:0;background:rgba(0,0,0,0);transition:background .15s;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background=\'rgba(0,0,0,.25)\'" onmouseout="this.style.background=\'rgba(0,0,0,0)\'">' +
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" style="opacity:0;transition:opacity .15s" class="lb-zoom-icon"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>' +
+      '</div>' +
     '</div>' +
     '<div style="display:flex;gap:5px;margin-top:7px">' + btnHtml + '</div>';
   grid.appendChild(card);
@@ -6727,14 +6747,7 @@ function showDesignQuestionnaire() {
           :
             '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es el nombre de tu negocio/marca?</div>' +
             '<input type="text" id="dq-brand" placeholder="Ej: Clínica Sorelle, Estética Miranda" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font)">' +
-            '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>' +
-            '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
-              '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500">¿Ya tienes un anuncio creado?</div>' +
-              '<button onclick="showVariationUploader()" style="width:100%;padding:10px;background:white;color:var(--blue);border:1.5px solid var(--blue);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px">' +
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
-                'Generar variaciones de mi anuncio existente' +
-              '</button>' +
-            '</div>'
+            '<button onclick="nextDesignStep(1)" style="margin-top:12px;padding:8px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Siguiente →</button>'
           ) +
         '</div>' +
         (isLimited ? '' :
