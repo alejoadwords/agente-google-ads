@@ -26,9 +26,9 @@ export default async function handler(req) {
   let body;
   try {
     body = await req.json();
-  } catch {
+  } catch (parseErr) {
     return new Response(
-      JSON.stringify({ error: 'Body inválido.' }),
+      JSON.stringify({ error: `Body inválido: ${parseErr?.message || 'JSON parse error'}` }),
       { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
     );
   }
@@ -42,6 +42,13 @@ export default async function handler(req) {
     );
   }
 
+  // Sanitizar el system prompt: truncar si es demasiado largo
+  // El Edge Runtime de Vercel tiene límite de ~4MB para el body total
+  const MAX_SYSTEM_CHARS = 24000; // ~6000 tokens — suficiente para todos los prompts
+  const sanitizedSystem = typeof system === 'string'
+    ? system.slice(0, MAX_SYSTEM_CHARS)
+    : '';
+
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -51,18 +58,19 @@ export default async function handler(req) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 4000,
         stream: true,
-        system: system || '',
+        system: sanitizedSystem,
         messages,
       }),
     });
 
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();
+      console.error('Anthropic API error:', claudeRes.status, errText.slice(0, 500));
       return new Response(
-        JSON.stringify({ error: `Anthropic error ${claudeRes.status}: ${errText}` }),
+        JSON.stringify({ error: `Anthropic error ${claudeRes.status}: ${errText.slice(0, 200)}` }),
         { status: claudeRes.status, headers: { ...CORS, 'Content-Type': 'application/json' } }
       );
     }
