@@ -607,7 +607,7 @@ Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas
 – Ejemplos: [SUGERENCIAS: Ver keywords recomendadas | Estimar presupuesto | Analizar competencia]`;
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
-const MAX_HIST_MESSAGES = 12; // máximo de mensajes enviados a Claude (6 turnos)
+const MAX_HIST_MESSAGES = 8; // máximo de mensajes enviados a Claude (4 turnos)
 let pendingImg=null; // {base64, mediaType, name}
 let clerkInstance=null,sessionToken=null,userPlan='free';
 let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
@@ -4715,12 +4715,20 @@ if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken
 const histTruncated = hist.length > MAX_HIST_MESSAGES
   ? hist.slice(hist.length - MAX_HIST_MESSAGES)
   : hist;
-// Sanitizar el system prompt: eliminar caracteres de control que rompen JSON
-const sysSanitized = (sys || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
-const payload={messages:histTruncated,system:sysSanitized,userPlan};
+// Sanitizar el system prompt: eliminar caracteres de control que rompen JSON y truncar
+const MAX_SYS = 18000;
+const sysSanitized = (sys || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').slice(0, MAX_SYS);
+// Sanitizar historial: truncar mensajes muy largos individualmente
+const histSanitized = histTruncated.map(m => {
+  if (typeof m.content === 'string' && m.content.length > 4000) {
+    return { ...m, content: m.content.slice(0, 4000) };
+  }
+  return m;
+});
+const payload={messages:histSanitized,system:sysSanitized,userPlan};
 let payloadStr;
 try { payloadStr = JSON.stringify(payload); } catch(jsonErr) { addAgent('Error preparando la solicitud. Intenta de nuevo.'); loading=false; document.getElementById('sbtn').disabled=false; return; }
-const r=await fetch('/api/chat',{method:'POST',headers,body:payloadStr});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}const errMsg=errData.error||'error al procesar la respuesta';addAgent(errMsg.includes('Anthropic')?'Error conectando con el servidor de IA. Intenta de nuevo en un momento.':'error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
+const r=await fetch('/api/chat',{method:'POST',headers,body:payloadStr});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}const errMsg=errData.error||'error desconocido';addAgent('⚠️ Error del servidor: ' + errMsg);loading=false;document.getElementById('sbtn').disabled=false;return;}
 // Leer stream SSE
 let replyFinal='';
 let streamBubble=null;
