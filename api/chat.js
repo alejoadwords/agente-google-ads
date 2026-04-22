@@ -24,11 +24,29 @@ export default async function handler(req) {
   }
 
   let body;
+  let rawBody = '';
   try {
-    body = await req.json();
+    rawBody = await req.text();
+  } catch (readErr) {
+    return new Response(
+      JSON.stringify({ error: `Error leyendo body: ${readErr?.message}` }),
+      { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Límite explícito: 3MB (Edge Runtime de Vercel puede rechazar cuerpos muy grandes)
+  if (rawBody.length > 3 * 1024 * 1024) {
+    return new Response(
+      JSON.stringify({ error: `Payload demasiado grande: ${rawBody.length} bytes. Máximo 3MB.` }),
+      { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  try {
+    body = JSON.parse(rawBody);
   } catch (parseErr) {
     return new Response(
-      JSON.stringify({ error: `Body inválido: ${parseErr?.message || 'JSON parse error'}` }),
+      JSON.stringify({ error: `JSON inválido en posición ${parseErr?.message}: primeros 200 chars: ${rawBody.slice(0, 200)}` }),
       { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
     );
   }
@@ -42,9 +60,8 @@ export default async function handler(req) {
     );
   }
 
-  // Sanitizar el system prompt: truncar si es demasiado largo
-  // El Edge Runtime de Vercel tiene límite de ~4MB para el body total
-  const MAX_SYSTEM_CHARS = 24000; // ~6000 tokens — suficiente para todos los prompts
+  // Truncar system prompt si es muy largo (seguridad adicional)
+  const MAX_SYSTEM_CHARS = 20000;
   const sanitizedSystem = typeof system === 'string'
     ? system.slice(0, MAX_SYSTEM_CHARS)
     : '';
