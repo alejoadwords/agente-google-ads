@@ -75,7 +75,7 @@ export default async function handler(req) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 4000,
         stream: true,
         system: sanitizedSystem,
@@ -86,8 +86,11 @@ export default async function handler(req) {
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();
       console.error('Anthropic API error:', claudeRes.status, errText.slice(0, 500));
+      // Parsear el error de Anthropic para dar mensaje útil
+      let errDetail = errText.slice(0, 300);
+      try { errDetail = JSON.parse(errText)?.error?.message || errDetail; } catch {}
       return new Response(
-        JSON.stringify({ error: `Anthropic error ${claudeRes.status}: ${errText.slice(0, 200)}` }),
+        JSON.stringify({ error: `Anthropic ${claudeRes.status}: ${errDetail}` }),
         { status: claudeRes.status, headers: { ...CORS, 'Content-Type': 'application/json' } }
       );
     }
