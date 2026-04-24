@@ -409,6 +409,7 @@ Formato:
 – Usa **negrita** para cifras importantes, nombres de configuraciones y conceptos clave
 – Usa tablas markdown para keywords y RSA (obligatorio — es más útil que listas de texto)
 – Usa ### para secciones en respuestas largas
+– En listas de bullets, NO dejes líneas en blanco entre cada item — escribe los bullets consecutivos sin saltos de línea entre ellos
 – Sé conciso pero completo. Prefiere acción sobre teoría.
 
 Tono:
@@ -1127,6 +1128,7 @@ REGLAS DE RESPUESTA
 – Usa **negrita** para términos clave y cifras importantes
 – Usa – para listas dentro de secciones
 – Usa ### para secciones en respuestas largas
+– En listas de bullets, NO dejes líneas en blanco entre cada item — escribe los bullets consecutivos sin saltos de línea entre ellos
 – Sé conciso pero completo. Prefiere respuestas accionables sobre teóricas
 
 **Tono:**
@@ -4949,6 +4951,7 @@ REGLAS DE RESPUESTA
 – Usa **negrita** para términos clave y cifras importantes
 – Usa – para listas dentro de secciones
 – Usa ### para secciones en respuestas largas
+– En listas de bullets, NO dejes líneas en blanco entre cada item — escribe los bullets consecutivos sin saltos de línea entre ellos
 – Sé conciso pero completo. Prefiere respuestas accionables sobre teóricas
 
 **Tono:**
@@ -6765,24 +6768,23 @@ function fmt(t){
   s = s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
   s = s.replace(/`(.*?)`/g,'<code style="background:var(--sidebar);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>');
 
-  // 5. Lists: – and - bullets, and numbered lists
-  // First collapse multiple blank lines between bullets to avoid double spacing
-  s = s.replace(/((?:^[–\-•]\s.+$)\n)\n+((?:[–\-•]\s))/gm, '$1$2');
-  s = s.replace(/^– (.+)$/gm,'<li style="margin:2px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^- (.+)$/gm,'<li style="margin:2px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^• (.+)$/gm,'<li style="margin:2px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:2px 0;line-height:1.5">$2</li>');
-  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:4px 0;padding-left:16px">$1</ul>');
+  // 5. Lists: collapse blank lines between bullets first, then render
+  // Remove blank lines between consecutive bullet lines (–, -, •)
+  s = s.replace(/^([ \t]*[–\-•].+)(\n)\n+([ \t]*[–\-•])/gm, '$1$2$3');
+  s = s.replace(/^– (.+)$/gm,'<li style="margin:1px 0;line-height:1.55">$1</li>');
+  s = s.replace(/^- (.+)$/gm,'<li style="margin:1px 0;line-height:1.55">$1</li>');
+  s = s.replace(/^• (.+)$/gm,'<li style="margin:1px 0;line-height:1.55">$1</li>');
+  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:1px 0;line-height:1.55">$2</li>');
+  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:3px 0 6px;padding-left:15px">$1</ul>');
 
   // 6. Horizontal rule
   s = s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">');
 
-  // 7. Paragraphs and line breaks
-  // Collapse 3+ newlines to double, then process
+  // 7. Paragraphs and line breaks — collapse excess blank lines first
   s = s.replace(/\n{3,}/g,'\n\n');
-  s = s.replace(/\n\n/g,'</p><p style="margin-top:6px">');
-  s = s.replace(/\n/g,'<br style="line-height:1.8">');
-  s = '<p style="margin:0;line-height:1.6">' + s + '</p>';
+  s = s.replace(/\n\n/g,'</p><p style="margin-top:5px">');
+  s = s.replace(/\n/g,'<br>');
+  s = '<p style="margin:0;line-height:1.55">' + s + '</p>';
 
   return s;
 }
