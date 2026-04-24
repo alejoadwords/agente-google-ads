@@ -6768,14 +6768,22 @@ function fmt(t){
   s = s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
   s = s.replace(/`(.*?)`/g,'<code style="background:var(--sidebar);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>');
 
-  // 5. Lists: collapse blank lines between bullets first, then render
-  // Remove blank lines between consecutive bullet lines (–, -, •)
-  s = s.replace(/^([ \t]*[–\-•].+)(\n)\n+([ \t]*[–\-•])/gm, '$1$2$3');
-  s = s.replace(/^– (.+)$/gm,'<li style="margin:1px 0;line-height:1.55">$1</li>');
-  s = s.replace(/^- (.+)$/gm,'<li style="margin:1px 0;line-height:1.55">$1</li>');
-  s = s.replace(/^• (.+)$/gm,'<li style="margin:1px 0;line-height:1.55">$1</li>');
-  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:1px 0;line-height:1.55">$2</li>');
-  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:3px 0 6px;padding-left:15px">$1</ul>');
+  // 5. Lists — collapse ALL blank lines between bullet lines aggressively
+  // Keep collapsing until no more double-newlines exist between bullet chars
+  let prev = '';
+  while (prev !== s) {
+    prev = s;
+    s = s.replace(/(<br>|^|\n)([ \t]*[–\-•].+?)(<br>|\n)\n+([ \t]*[–\-•])/gm, '$1$2$3$4');
+  }
+  // Also collapse \n\n between bullets in raw text before <br> conversion
+  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
+  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
+
+  s = s.replace(/^– (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
+  s = s.replace(/^- (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
+  s = s.replace(/^• (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
+  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:1px 0;line-height:1.5">$2</li>');
+  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:3px 0 5px;padding-left:15px">$1</ul>');
 
   // 6. Horizontal rule
   s = s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">');
