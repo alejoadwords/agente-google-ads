@@ -6718,7 +6718,58 @@ function addThinking(){const id='th'+Date.now();const el=document.createElement(
 function rmThinking(id){document.getElementById(id)?.remove()}
 function appendRaw(html){const a=document.getElementById('chat-area');const d=document.createElement('div');d.innerHTML=html;a.appendChild(d.firstElementChild)}
 function scrollB(){const a=document.getElementById('chat-area');setTimeout(()=>{a.scrollTop=a.scrollHeight},50)}
-function fmt(t){return esc(t).replace(/### (.*?)(\n|$)/g,'<h4>$1</h4>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/`(.*?)`/g,'<code>$1</code>').replace(/^– (.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>').replace(/\n\n/g,'</p><p style="margin-top:7px">').replace(/\n/g,'<br>').replace(/^/,'<p>').replace(/$/,'</p>')}
+function fmt(t){
+  // 1. Escape HTML first
+  let s = esc(t);
+
+  // 2. Render markdown tables BEFORE other replacements
+  // Match table blocks: header row | separator row | data rows
+  s = s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g, function(tableBlock) {
+    const lines = tableBlock.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return tableBlock;
+    // Check if second line is a separator (----)
+    if (!/^\|[\s\-:|]+\|/.test(lines[1])) return tableBlock;
+    const headerCells = lines[0].split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
+    const dataRows = lines.slice(2);
+    let html = '<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr>' + headerCells.map(c =>
+      `<th style="background:var(--sidebar);border:1px solid var(--border);padding:7px 10px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${c}</th>`
+    ).join('') + '</tr></thead>';
+    html += '<tbody>';
+    dataRows.forEach(function(row, ri) {
+      const cells = row.split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
+      html += `<tr style="background:${ri%2===0?'var(--bg)':'var(--sidebar)'}">` +
+        cells.map(c => `<td style="border:1px solid var(--border);padding:6px 10px;color:var(--text)">${c}</td>`).join('') +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  });
+
+  // 3. Headers
+  s = s.replace(/### (.*?)(\n|$)/g,'<h4 style="margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--text)">$1</h4>');
+  s = s.replace(/## (.*?)(\n|$)/g,'<h3 style="margin:16px 0 8px;font-size:14px;font-weight:700;color:var(--text)">$1</h3>');
+
+  // 4. Bold and inline code
+  s = s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/`(.*?)`/g,'<code style="background:var(--sidebar);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>');
+
+  // 5. Lists: – and - bullets, and numbered lists
+  s = s.replace(/^– (.+)$/gm,'<li>$1</li>');
+  s = s.replace(/^- (.+)$/gm,'<li>$1</li>');
+  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal">$2</li>');
+  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:6px 0;padding-left:18px">$1</ul>');
+
+  // 6. Horizontal rule
+  s = s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">');
+
+  // 7. Paragraphs and line breaks
+  s = s.replace(/\n\n/g,'</p><p style="margin-top:8px">');
+  s = s.replace(/\n/g,'<br>');
+  s = '<p>' + s + '</p>';
+
+  return s;
+}
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}}
 function autoR(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
