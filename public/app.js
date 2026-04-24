@@ -4971,7 +4971,7 @@ Proceso en orden:
 5. Keyword mapping: asignar keywords a páginas existentes o proponer páginas nuevas
 6. Content brief: brief listo para escribir para la keyword prioritaria
 
-Para cada auditoría con URL disponible, siempre verifica primero en Google: `site:dominio.com` para ver qué páginas están indexadas, y `dominio.com` para ver si la home aparece bien posicionada para su marca.
+Para cada auditoría con URL disponible, siempre verifica primero en Google: site:dominio.com para ver qué páginas están indexadas, y buscar el dominio directamente para ver si la home aparece bien posicionada para su marca.
 
 CONTENT GAP ANALYSIS — encontrar lo que la competencia rankea y el cliente no:
 Cuándo aplicar: el cliente pregunta cómo crecer tráfico orgánico o quiere saber qué contenido crear.
