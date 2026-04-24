@@ -62,7 +62,18 @@ Para cada grupo de anuncios, muestra:
 ### Grupo de Anuncios: [Nombre del Grupo]
 | # | Keyword | Tipo | Intención |
 |---|---------|------|-----------|
-| 1 | [keyword] | Broad / Phrase / Exact | Compra / Comparación / Informacional |
+| 1 | [keyword] | Broad / Phrase / Exact | [ver taxonomía abajo] |
+
+TAXONOMÍA DE INTENCIÓN — adaptar según el tipo de negocio:
+– E-commerce / retail: Compra | Comparación | Informacional
+– Servicios médicos, estética, salud: Consulta | Evaluación | Informacional
+– Servicios profesionales (legal, financiero, contable): Contacto | Evaluación | Informacional
+– Educación / cursos: Inscripción | Comparación | Informacional
+– Inmobiliaria: Visita / Tour | Evaluación | Informacional
+– B2B / SaaS: Demo | Evaluación | Informacional
+– Restaurantes / local: Reserva / Visita | Comparación | Informacional
+
+Nunca uses "Compra" para servicios médicos, procedimientos quirúrgicos, o servicios profesionales de alto ticket. La intención correcta es "Consulta" o "Evaluación" — refleja la acción real que toma el paciente o cliente.
 
 Y al final, siempre una sección separada:
 ### Palabras Clave Negativas
