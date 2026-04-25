@@ -233,6 +233,35 @@ async function handleCreateTestUser(req, res) {
   });
 }
 
+// ── RESET TEST USER PASSWORD ─────────────────────────────
+async function handleResetTestPassword(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  const { id, password } = req.body;
+  if (!id || !password) return res.status(400).json({ error: 'id y password requeridos' });
+  if (password.length < 8) return res.status(400).json({ error: 'Mínimo 8 caracteres' });
+
+  const r = await fetch(`https://api.clerk.com/v1/users/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${CLERK_SECRET}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      password,
+      skip_password_checks: true,
+    }),
+  });
+
+  const data = await r.json();
+  if (!r.ok) {
+    const detail = data.errors?.[0]?.message || JSON.stringify(data);
+    return res.status(400).json({ error: 'Error Clerk: ' + detail });
+  }
+
+  return res.json({ success: true, id });
+}
+
 // ── DELETE TEST USER ─────────────────────────────────────
 async function handleDeleteTestUser(req, res) {
   if (req.method !== 'DELETE') return res.status(405).json({ error: 'DELETE only' });
@@ -320,7 +349,8 @@ export default async function handler(req, res) {
     if (action === 'metrics')          return await handleMetrics(req, res);
     if (action === 'users')            return await handleUsers(req, res);
     if (action === 'create-test-user') return await handleCreateTestUser(req, res);
-    if (action === 'delete-test-user') return await handleDeleteTestUser(req, res);
+    if (action === 'delete-test-user')   return await handleDeleteTestUser(req, res);
+    if (action === 'reset-test-password') return await handleResetTestPassword(req, res);
     if (action === 'sync')             return await handleSync(req, res);
     return res.status(400).json({ error: 'action requerido: metrics | users | create-test-user | sync' });
   } catch (err) {
