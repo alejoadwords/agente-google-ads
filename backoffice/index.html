@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acuarius Admin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 75 75'><rect width='75' height='75' fill='%231E2BCC' rx='8'/><path fill='%23fff' d='M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z'/><path fill='%23fff' d='M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z'/><circle fill='%23fff' cx='60.13' cy='10.7' r='5.3'/></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0A0A0F;--surface:#111118;--surface2:#1A1A24;--surface3:#22222F;
+  --border:#2A2A3A;--border2:#333345;
+  --blue:#1E2BCC;--blue-lt:#2D3DE0;--blue-dim:rgba(30,43,204,.15);
+  --text:#F0F0F8;--muted:#8888A8;--muted2:#55556A;
+  --green:#10B981;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+  --r:8px;--rlg:12px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+/* ── LOGIN ── */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;flex-direction:column;gap:24px}
+#login-screen.hidden{display:none}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rlg);padding:40px 48px;width:360px;text-align:center}
+.login-logo{width:48px;height:48px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.login-title{font-size:20px;font-weight:600;margin-bottom:6px}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px}
+.login-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;font-size:14px;color:var(--text);font-family:var(--mono);outline:none;transition:border .2s;margin-bottom:12px}
+.login-input:focus{border-color:var(--blue-lt)}
+.login-btn{width:100%;padding:11px;background:var(--blue);color:white;border:none;border-radius:var(--r);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .2s}
+.login-btn:hover{background:var(--blue-lt)}
+.login-error{font-size:12px;color:var(--red);margin-top:8px;display:none}
+
+/* ── LAYOUT ── */
+#app{display:flex;height:100vh;overflow:hidden}
+#app.hidden{display:none}
+
+/* ── SIDEBAR ── */
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0}
+.sidebar-header{padding:20px 16px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sidebar-logo{width:30px;height:30px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sidebar-title{font-size:14px;font-weight:700;color:var(--text)}
+.sidebar-subtitle{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.sidebar-nav{padding:12px 8px;flex:1;overflow-y:auto}
+.nav-section{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);padding:8px 8px 4px;margin-top:8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r);font-size:13px;color:var(--muted);cursor:pointer;transition:all .15s;margin-bottom:1px;user-select:none}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--blue-dim);color:var(--blue-lt);font-weight:500}
+.nav-item svg{flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.sidebar-footer{padding:12px 8px;border-top:1px solid var(--border)}
+.sync-btn{width:100%;display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .2s}
+.sync-btn:hover{border-color:var(--blue);color:var(--blue-lt)}
+
+/* ── MAIN ── */
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.topbar{padding:16px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface)}
+.page-title{font-size:16px;font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.badge-live{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green);font-weight:500}
+.badge-live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse-g 2s ease-in-out infinite}
+@keyframes pulse-g{0%,100%{opacity:1}50%{opacity:.3}}
+.content{padding:24px 28px;flex:1}
+
+/* ── VIEWS ── */
+.view{display:none}
+.view.active{display:block}
+
+/* ── METRICS GRID ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rlg);padding:20px;position:relative;overflow:hidden;transition:border-color .2s}
+.metric-card:hover{border-color:var(--border2)}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.metric-card.blue::before{background:var(--blue-lt)}
+.metric-card.green::before{background:var(--green)}
+.metric-card.amber::before{background:var(--amber)}
+.metric-card.purple::before{background:var(--purple)}
+.metric-label{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px}
+.metric-value{font-size:32px;font-weight:700;line-height:1;font-family:var(--mono);margin-bottom:6px}
+.metric-sub{font-size:11px;color:var(--muted)}
+.metric-sub span{color:var(--green)}
+
+/* ── GRID 2 COL ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600;color:var(--text)}
+.card-body{padding:16px 20px}
+
+/* ── PLAN DISTRIBUTION ── */
+.plan-bars{display:flex;flex-direction:column;gap:12px;padding:16px 20px}
+.plan-bar-item{display:flex;align-items:center;gap:12px}
+.plan-bar-label{font-size:12px;color:var(--muted);width:80px;flex-shrink:0}
+.plan-bar-track{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.plan-bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.plan-bar-count{font-size:12px;font-family:var(--mono);color:var(--text);width:32px;text-align:right}
+
+/* ── TABLA ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;cursor:pointer}
+tbody tr:hover{background:var(--surface2)}
+tbody tr:last-child{border-bottom:none}
+td{padding:12px 16px;font-size:13px;color:var(--text)}
+td.mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-free{background:rgba(136,136,168,.15);color:var(--muted)}
+.badge-individual{background:rgba(30,43,204,.2);color:#818CF8}
+.badge-agency{background:rgba(139,92,246,.2);color:var(--purple)}
+.badge-active{background:rgba(16,185,129,.15);color:var(--green)}
+.badge-suspended{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-trial{background:rgba(245,158,11,.15);color:var(--amber)}
+
+/* ── FILTROS ── */
+.filters{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.filter-select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:7px 12px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;cursor:pointer;transition:border .2s}
+.filter-select:focus{border-color:var(--blue)}
+.search-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:7px 12px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;flex:1;min-width:180px;max-width:280px;transition:border .2s}
+.search-input:focus{border-color:var(--blue)}
+.search-input::placeholder{color:var(--muted2)}
+
+/* ── PAGINATION ── */
+.pagination{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--border);justify-content:space-between}
+.pagination-info{font-size:12px;color:var(--muted)}
+.pagination-btns{display:flex;gap:6px}
+.page-btn{padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .2s}
+.page-btn:hover:not(:disabled){border-color:var(--blue);color:var(--blue-lt)}
+.page-btn:disabled{opacity:.4;cursor:not-allowed}
+.page-btn.active{background:var(--blue);color:white;border-color:var(--blue)}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rlg);width:560px;max-height:80vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+.modal-title{font-size:15px;font-weight:600}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px;border-radius:4px;transition:color .2s}
+.modal-close:hover{color:var(--text)}
+.modal-body{padding:24px}
+.field-group{margin-bottom:18px}
+.field-label{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.field-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border .2s}
+.field-input:focus{border-color:var(--blue)}
+.field-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;cursor:pointer;transition:border .2s;appearance:none}
+.field-select:focus{border-color:var(--blue)}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.btn{padding:9px 20px;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);border:none;transition:all .2s}
+.btn-primary{background:var(--blue);color:white}
+.btn-primary:hover{background:var(--blue-lt)}
+.btn-ghost{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.btn-danger:hover{background:rgba(239,68,68,.25)}
+
+/* ── USER DETAIL ── */
+.user-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.info-item{background:var(--surface2);border-radius:var(--r);padding:12px}
+.info-item-label{font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:600}
+.info-item-value{font-size:13px;color:var(--text);font-weight:500}
+.log-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.log-item:last-child{border-bottom:none}
+.log-dot{width:6px;height:6px;border-radius:50%;background:var(--blue-lt);flex-shrink:0;margin-top:5px}
+.log-action{font-size:12px;font-weight:500;color:var(--text)}
+.log-time{font-size:11px;color:var(--muted2);font-family:var(--mono)}
+
+/* ── LOADING ── */
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue-lt);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-row td{text-align:center;padding:40px;color:var(--muted)}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:toastIn .3s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.toast-item.success{border-color:rgba(16,185,129,.4)}
+.toast-item.error{border-color:rgba(239,68,68,.4)}
+
+/* ── BILLING TABLE ── */
+.billing-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.billing-row:last-child{border-bottom:none}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state-icon{font-size:40px;margin-bottom:12px;opacity:.4}
+.empty-state-text{font-size:14px}
+/* ── TEST USERS ── */
+.test-user-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px}
+.form-note{font-size:11px;color:var(--muted2);margin-top:4px}
+.create-user-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--rlg);padding:24px;margin-bottom:20px}
+.create-user-title{font-size:14px;font-weight:600;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.divider{border:none;border-top:1px solid var(--border);margin:20px 0}
+.test-user-id{font-family:var(--mono);font-size:10px;color:var(--muted2);background:var(--surface2);padding:2px 6px;border-radius:4px;margin-left:6px}
+
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  html,body{overflow:auto}
+  #app{flex-direction:column;height:auto;min-height:100vh;overflow:auto}
+  .sidebar{width:100%;height:auto;flex-direction:column;border-right:none;border-bottom:1px solid var(--border)}
+  .sidebar-nav{display:flex;flex-wrap:wrap;padding:8px;gap:4px;overflow-y:visible}
+  .nav-section{display:none}
+  .nav-item{padding:7px 10px;font-size:12px;flex-shrink:0}
+  .sidebar-footer{padding:8px;border-top:1px solid var(--border)}
+  .sync-btn{width:auto;padding:7px 12px;font-size:11px}
+  .main{overflow-y:visible;height:auto}
+  .topbar{padding:12px 16px}
+  .content{padding:16px}
+  .metrics-grid{grid-template-columns:1fr 1fr!important;gap:12px}
+  .grid-2,.grid-3{grid-template-columns:1fr!important}
+  .form-grid,.form-grid-3{grid-template-columns:1fr!important}
+  .user-info-grid{grid-template-columns:1fr!important}
+  .modal{width:calc(100vw - 32px)!important;max-height:90vh}
+  table{font-size:12px}
+  td,th{padding:8px 10px!important}
+  .filters{gap:8px}
+  .search-input{min-width:0;flex:1}
+  .create-user-form{padding:16px}
+  .metric-value{font-size:24px}
+}
+@media (max-width: 480px) {
+  .metrics-grid{grid-template-columns:1fr!important}
+  .nav-item span,.nav-item{font-size:11px}
+  .topbar{padding:10px 12px}
+  .page-title{font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="26" height="26" viewBox="0 0 75 75" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/>
+        <path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/>
+        <circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/>
+      </svg>
+    </div>
+    <div class="login-title">Acuarius Admin</div>
+    <div class="login-sub">Acceso restringido — solo administradores</div>
+    <input type="password" class="login-input" id="secret-input" placeholder="Clave de acceso" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Entrar</button>
+    <div class="login-error" id="login-error">Clave incorrecta</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header" onclick="showView('dashboard')" style="cursor:pointer" title="Ir al Dashboard">
+      <div class="sidebar-logo">
+        <svg width="18" height="18" viewBox="0 0 75 75"><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>
+      </div>
+      <div>
+        <div class="sidebar-title">Acuarius</div>
+        <div class="sidebar-subtitle">Admin Panel</div>
+      </div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-item active" onclick="showView('dashboard')" data-view="dashboard">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-section">Gestión</div>
+      <div class="nav-item" onclick="showView('users')" data-view="users">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Usuarios
+      </div>
+      <div class="nav-item" onclick="showView('plans')" data-view="plans">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Planes & Licencias
+      </div>
+      <div class="nav-item" onclick="showView('billing')" data-view="billing">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Facturación
+      </div>
+      <div class="nav-section">Herramientas</div>
+      <div class="nav-item" onclick="showView('test-users')" data-view="test-users">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v4M10 13h4"/></svg>
+        Usuarios de prueba
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="sync-btn" onclick="syncUsers()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Sincronizar Clerk
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="page-title" id="page-title">Dashboard</div>
+      <div class="topbar-right">
+        <div class="badge-live"><div class="badge-live-dot"></div>En vivo</div>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="view active" id="view-dashboard">
+        <div class="metrics-grid" id="metrics-grid">
+          <div class="metric-card blue"><div class="metric-label">Usuarios totales</div><div class="metric-value" id="m-total">—</div><div class="metric-sub"><span id="m-new7">—</span> nuevos esta semana</div></div>
+          <div class="metric-card green"><div class="metric-label">MRR</div><div class="metric-value" id="m-mrr">—</div><div class="metric-sub">Ingresos recurrentes mensuales</div></div>
+          <div class="metric-card amber"><div class="metric-label">Trials activos</div><div class="metric-value" id="m-trials">—</div><div class="metric-sub"><span id="m-expiring" style="color:var(--amber)">—</span> expiran en 3 días</div></div>
+          <div class="metric-card purple"><div class="metric-label">Mensajes (7d)</div><div class="metric-value" id="m-msgs">—</div><div class="metric-sub"><span id="m-imgs">—</span> imágenes generadas</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Distribución de planes</div></div>
+            <div class="plan-bars" id="plan-bars">
+              <div style="color:var(--muted);font-size:13px">Cargando...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Resumen de ingresos</div></div>
+            <div class="card-body" id="revenue-summary">
+              <div style="color:var(--muted);font-size:13px">Cargando...</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Usuarios recientes</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Usuario</th><th>Plan</th><th>Estado</th><th>Registro</th></tr></thead>
+              <tbody id="recent-users-table"><tr class="loading-row"><td colspan="4">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- USUARIOS -->
+      <div class="view" id="view-users">
+        <div class="filters">
+          <input type="text" class="search-input" id="user-search" placeholder="Buscar por email o nombre..." oninput="debounceSearch()">
+          <select class="filter-select" id="filter-plan" onchange="loadUsers()">
+            <option value="all">Todos los planes</option>
+            <option value="free">Free</option>
+            <option value="individual">Individual</option>
+            <option value="agency">Agencia</option>
+          </select>
+          <select class="filter-select" id="filter-status" onchange="loadUsers()">
+            <option value="all">Todos los estados</option>
+            <option value="active">Activos</option>
+            <option value="suspended">Suspendidos</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Usuario</th><th>Plan</th><th>Estado</th><th>Cuentas</th><th>Mensajes</th><th>Registro</th><th></th></tr></thead>
+              <tbody id="users-table"><tr class="loading-row"><td colspan="7">Cargando usuarios...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="pagination-info">—</div>
+            <div class="pagination-btns" id="pagination-btns"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLANES -->
+      <div class="view" id="view-plans">
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header"><div class="card-title" style="color:var(--muted)">Free Trial</div></div>
+            <div class="card-body">
+              <div style="font-size:28px;font-weight:700;font-family:var(--mono);margin-bottom:4px" id="p-free">—</div>
+              <div style="font-size:12px;color:var(--muted)">usuarios activos</div>
+              <div style="margin-top:12px;font-size:12px;color:var(--muted)">7 días · 1 cuenta · mensajes ilimitados</div>
+            </div>
+          </div>
+          <div class="card" style="border-color:rgba(30,43,204,.4)">
+            <div class="card-header"><div class="card-title" style="color:#818CF8">Individual</div></div>
+            <div class="card-body">
+              <div style="font-size:28px;font-weight:700;font-family:var(--mono);margin-bottom:4px;color:#818CF8" id="p-individual">—</div>
+              <div style="font-size:12px;color:var(--muted)">usuarios activos</div>
+              <div style="margin-top:12px;font-size:12px;color:var(--muted)">$19 USD/mes · 1 cuenta conectada</div>
+            </div>
+          </div>
+          <div class="card" style="border-color:rgba(139,92,246,.4)">
+            <div class="card-header"><div class="card-title" style="color:var(--purple)">Agencia</div></div>
+            <div class="card-body">
+              <div style="font-size:28px;font-weight:700;font-family:var(--mono);margin-bottom:4px;color:var(--purple)" id="p-agency">—</div>
+              <div style="font-size:12px;color:var(--muted)">usuarios activos</div>
+              <div style="margin-top:12px;font-size:12px;color:var(--muted)">$19 + $8/cuenta adicional</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Usuarios en trial — expiran pronto</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Usuario</th><th>Trial expira</th><th>Días restantes</th><th>Acciones</th></tr></thead>
+              <tbody id="trials-table"><tr class="loading-row"><td colspan="4">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- FACTURACIÓN -->
+      <div class="view" id="view-billing">
+        <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric-card green"><div class="metric-label">MRR actual</div><div class="metric-value" id="b-mrr">—</div><div class="metric-sub">Ingresos recurrentes</div></div>
+          <div class="metric-card blue"><div class="metric-label">Este mes</div><div class="metric-value" id="b-month">—</div><div class="metric-sub">Ingresos del período</div></div>
+          <div class="metric-card amber"><div class="metric-label">Total histórico</div><div class="metric-value" id="b-total">—</div><div class="metric-sub">Desde el inicio</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Registro de pagos</div>
+            <button class="btn btn-primary" onclick="openAddBilling()" style="font-size:12px;padding:6px 14px">+ Agregar pago</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Usuario</th><th>Plan</th><th>Monto</th><th>Período</th><th>Estado</th></tr></thead>
+              <tbody id="billing-table"><tr class="loading-row"><td colspan="5">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- TEST USERS -->
+      <div class="view" id="view-test-users">
+        <div class="create-user-form">
+          <div class="create-user-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v4M10 13h4"/></svg>
+            Crear usuario de prueba
+            <span class="test-user-badge">⚗ Solo para testing</span>
+          </div>
+
+          <div class="form-grid">
+            <div>
+              <div class="field-label">Email *</div>
+              <input type="email" class="field-input" id="tu-email" placeholder="test@ejemplo.com">
+            </div>
+            <div>
+              <div class="field-label">Nombre</div>
+              <input type="text" class="field-input" id="tu-name" placeholder="Nombre de prueba">
+            </div>
+          </div>
+
+          <div class="form-grid" style="margin-bottom:20px">
+            <div>
+              <div class="field-label">Contraseña *</div>
+              <input type="text" class="field-input" id="tu-password" placeholder="Mín. 8 caracteres" autocomplete="off">
+              <div class="form-note">Esta contraseña se usará para ingresar a app.acuarius.app</div>
+            </div>
+            <div style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:22px">
+              <button onclick="generatePassword()" style="background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r);padding:9px 14px;font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .2s;text-align:left" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">
+                ⚡ Generar contraseña segura
+              </button>
+            </div>
+          </div>
+
+          <div class="form-grid-3">
+            <div>
+              <div class="field-label">Plan / Licencia</div>
+              <select class="field-select" id="tu-plan">
+                <option value="free">Free (Trial)</option>
+                <option value="individual">Individual ($19)</option>
+                <option value="agency">Agencia ($49)</option>
+                <option value="admin">Admin</option>
+              </select>
+              <div class="form-note">Define qué agentes y features ve el usuario</div>
+            </div>
+            <div>
+              <div class="field-label">Estado inicial</div>
+              <select class="field-select" id="tu-status">
+                <option value="active">Activo</option>
+                <option value="suspended">Suspendido</option>
+              </select>
+            </div>
+            <div>
+              <div class="field-label">Días de trial</div>
+              <input type="number" class="field-input" id="tu-trial" value="30" min="1" max="365">
+              <div class="form-note">Desde hoy. Solo aplica si plan = Free</div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div>
+              <div class="field-label">Límite de mensajes</div>
+              <input type="number" class="field-input" id="tu-msg-limit" value="99999">
+              <div class="form-note">99999 = ilimitado</div>
+            </div>
+            <div>
+              <div class="field-label">Límite de cuentas conectadas</div>
+              <input type="number" class="field-input" id="tu-acc-limit" value="3">
+            </div>
+          </div>
+
+          <div style="margin-bottom:20px">
+            <div class="field-label">Notas internas</div>
+            <input type="text" class="field-input" id="tu-notes" placeholder="Ej: prueba de agente Meta Ads para cliente X">
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-primary" onclick="createTestUser()" id="btn-create-test">
+              <span id="btn-create-test-label">Crear usuario de prueba</span>
+            </button>
+            <span style="font-size:12px;color:var(--muted)">Se creará en Clerk + Supabase con <code style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px">is_test_user: true</code></span>
+          </div>
+
+          <div id="tu-result" style="display:none;margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px">
+            <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">✓ Usuario creado exitosamente</div>
+            <div id="tu-result-body" style="font-size:12px;font-family:var(--mono);color:var(--muted);line-height:1.7"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Usuarios de prueba existentes</div>
+            <button class="btn btn-ghost" onclick="loadTestUsers()" style="font-size:12px;padding:6px 14px">↻ Actualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Usuario</th><th>Plan</th><th>Estado</th><th>Trial expira</th><th>Notas</th><th></th></tr></thead>
+              <tbody id="test-users-table"><tr class="loading-row"><td colspan="6">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RESET PASSWORD -->
+<div class="modal-overlay hidden" id="reset-pw-modal">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <div class="modal-title">🔑 Cambiar contraseña</div>
+      <button class="modal-close" onclick="closeModal('reset-pw-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px" id="reset-pw-email"></div>
+      <div class="field-group">
+        <div class="field-label">Nueva contraseña</div>
+        <input type="text" class="field-input" id="reset-pw-input" placeholder="Mín. 8 caracteres" autocomplete="off">
+      </div>
+      <button onclick="generateResetPassword()" style="background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r);padding:8px 14px;font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--font);margin-top:4px">
+        ⚡ Generar contraseña segura
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('reset-pw-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveResetPassword()">Guardar contraseña</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO -->
+<div class="modal-overlay hidden" id="user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-user-name">Usuario</div>
+      <button class="modal-close" onclick="closeModal('user-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="user-info-grid" id="modal-user-info"></div>
+      <div style="margin-bottom:16px">
+        <div class="field-label">Plan</div>
+        <select class="field-select" id="edit-plan">
+          <option value="free">Free</option>
+          <option value="individual">Individual</option>
+          <option value="agency">Agencia</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px">
+        <div class="field-label">Estado</div>
+        <select class="field-select" id="edit-status">
+          <option value="active">Activo</option>
+          <option value="suspended">Suspendido</option>
+          <option value="cancelled">Cancelado</option>
+        </select>
+      </div>
+      <div class="grid-2" style="gap:12px;margin-bottom:16px">
+        <div>
+          <div class="field-label">Límite de mensajes</div>
+          <input type="number" class="field-input" id="edit-msg-limit" placeholder="99999">
+        </div>
+        <div>
+          <div class="field-label">Límite de cuentas</div>
+          <input type="number" class="field-input" id="edit-acc-limit" placeholder="1">
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div class="field-label">Notas</div>
+        <input type="text" class="field-input" id="edit-notes" placeholder="Notas internas...">
+      </div>
+      <div class="field-label" style="margin-bottom:8px">Últimos logs</div>
+      <div id="modal-logs" style="max-height:200px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btn-suspend" onclick="toggleSuspend()">Suspender</button>
+      <button class="btn btn-ghost" onclick="closeModal('user-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'https://app.acuarius.app/api';
+let adminSecret = '';
+let currentUserId = '';
+let currentPage = 1;
+let searchTimer;
+
+// ── LOGIN ──
+function doLogin() {
+  const val = document.getElementById('secret-input').value;
+  if (!val) return;
+  adminSecret = val;
+  // Verificar con una llamada real
+  fetch(API + '/admin?action=metrics', { headers: { 'x-admin-secret': adminSecret } })
+    .then(r => {
+      if (r.ok) {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        loadDashboard();
+      } else {
+        document.getElementById('login-error').style.display = 'block';
+        adminSecret = '';
+      }
+    })
+    .catch(() => {
+      // En desarrollo, permitir acceso con clave hardcodeada para pruebas
+      document.getElementById('login-error').style.display = 'block';
+    });
+}
+
+// ── NAV ──
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelector('[data-view="' + name + '"]').classList.add('active');
+  const titles = { dashboard: 'Dashboard', users: 'Usuarios', plans: 'Planes & Licencias', billing: 'Facturación', 'test-users': 'Usuarios de prueba' };
+  document.getElementById('page-title').textContent = titles[name] || name;
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'users') loadUsers();
+  if (name === 'plans') loadPlans();
+  if (name === 'billing') loadBilling();
+  if (name === 'test-users') loadTestUsers();
+}
+
+// ── API CALLS ──
+async function apiGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const r = await fetch(API + path + sep + '_=' + Date.now(), {
+    headers: {
+      'x-admin-secret': adminSecret,
+      'Cache-Control': 'no-cache, no-store',
+      'Pragma': 'no-cache'
+    }
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function apiPut(path, body) {
+  const r = await fetch(API + path, {
+    method: 'PUT',
+    headers: { 'x-admin-secret': adminSecret, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  try {
+    const data = await apiGet('/admin?action=metrics');
+    const { overview, revenue, activity } = data;
+
+    document.getElementById('m-total').textContent = overview.totalUsers;
+    document.getElementById('m-new7').textContent = '+' + overview.newLast7;
+    document.getElementById('m-mrr').textContent = '$' + revenue.mrr;
+    document.getElementById('m-trials').textContent = overview.trialUsers;
+    document.getElementById('m-expiring').textContent = overview.trialsExpiringSoon;
+    document.getElementById('m-msgs').textContent = activity.messagesLast7.toLocaleString();
+    document.getElementById('m-imgs').textContent = activity.imagesLast7;
+
+    // Plan distribution
+    const total = overview.totalUsers || 1;
+    document.getElementById('plan-bars').innerHTML = `
+      <div class="plan-bar-item">
+        <div class="plan-bar-label">Free</div>
+        <div class="plan-bar-track"><div class="plan-bar-fill" style="width:${(overview.trialUsers/total*100).toFixed(1)}%;background:var(--muted2)"></div></div>
+        <div class="plan-bar-count">${overview.trialUsers}</div>
+      </div>
+      <div class="plan-bar-item">
+        <div class="plan-bar-label">Individual</div>
+        <div class="plan-bar-track"><div class="plan-bar-fill" style="width:${(overview.individualUsers/total*100).toFixed(1)}%;background:#818CF8"></div></div>
+        <div class="plan-bar-count">${overview.individualUsers}</div>
+      </div>
+      <div class="plan-bar-item">
+        <div class="plan-bar-label">Agencia</div>
+        <div class="plan-bar-track"><div class="plan-bar-fill" style="width:${(overview.agencyUsers/total*100).toFixed(1)}%;background:var(--purple)"></div></div>
+        <div class="plan-bar-count">${overview.agencyUsers}</div>
+      </div>
+    `;
+
+    document.getElementById('revenue-summary').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--muted)">MRR</span>
+          <span style="font-family:var(--mono);font-weight:600;color:var(--green)">$${revenue.mrr} USD</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--muted)">Este mes</span>
+          <span style="font-family:var(--mono);font-weight:600">$${revenue.revenueThisMonth} USD</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Total histórico</span>
+          <span style="font-family:var(--mono);font-weight:600">$${revenue.totalRevenue} USD</span>
+        </div>
+      </div>
+    `;
+
+    // Usuarios recientes
+    const recent = await apiGet('/admin?action=users&page=1');
+    const tbody = document.getElementById('recent-users-table');
+    tbody.innerHTML = recent.users.slice(0, 8).map(u => `
+      <tr onclick="openUser('${u.id}')">
+        <td><div style="font-weight:500">${u.name || '—'}</div><div style="font-size:11px;color:var(--muted)">${u.email}</div></td>
+        <td><span class="badge badge-${u.plan}">${u.plan}</span></td>
+        <td><span class="badge badge-${u.status}">${u.status}</span></td>
+        <td class="mono">${formatDate(u.created_at)}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">Sin usuarios</td></tr>';
+
+  } catch (err) {
+    console.error(err);
+    toast('Error cargando métricas', 'error');
+  }
+}
+
+// ── USUARIOS ──
+async function loadUsers() {
+  const plan = document.getElementById('filter-plan').value;
+  const status = document.getElementById('filter-status').value;
+  const search = document.getElementById('user-search').value;
+  const tbody = document.getElementById('users-table');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="7">Cargando...</td></tr>';
+
+  try {
+    let url = `/admin?action=users&page=${currentPage}&plan=${plan}&status=${status}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const data = await apiGet(url);
+
+    if (!data.users.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">No se encontraron usuarios</td></tr>';
+    } else {
+      tbody.innerHTML = data.users.map(u => `
+        <tr onclick="openUser('${u.id}')">
+          <td><div style="font-weight:500">${u.name || '—'}</div><div style="font-size:11px;color:var(--muted)">${u.email}</div></td>
+          <td><span class="badge badge-${u.plan}">${u.plan}</span></td>
+          <td><span class="badge badge-${u.status}">${u.status}</span></td>
+          <td class="mono">${u.connected_accounts || 0} / ${u.accounts_limit || 1}</td>
+          <td class="mono">${(u.messages_used || 0).toLocaleString()}</td>
+          <td class="mono">${formatDate(u.created_at)}</td>
+          <td><button onclick="event.stopPropagation();openUser('${u.id}')" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">Editar</button></td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('pagination-info').textContent = `${data.total} usuarios · Página ${data.page} de ${data.pages}`;
+    renderPagination(data.page, data.pages);
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red);padding:40px">Error cargando usuarios</td></tr>';
+  }
+}
+
+function renderPagination(page, pages) {
+  const wrap = document.getElementById('pagination-btns');
+  let html = `<button class="page-btn" onclick="changePage(${page-1})" ${page<=1?'disabled':''}>←</button>`;
+  for (let i = Math.max(1,page-2); i <= Math.min(pages,page+2); i++) {
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="changePage(${i})">${i}</button>`;
+  }
+  html += `<button class="page-btn" onclick="changePage(${page+1})" ${page>=pages?'disabled':''}>→</button>`;
+  wrap.innerHTML = html;
+}
+
+function changePage(p) { currentPage = p; loadUsers(); }
+function debounceSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(() => { currentPage=1; loadUsers(); }, 400); }
+
+// ── ABRIR USUARIO ──
+async function openUser(id) {
+  currentUserId = id;
+  try {
+    const data = await apiGet('/admin?action=users&id=' + id);
+    const u = data.user;
+    const c = data.clerk;
+    if (!u && !c) { toast('Usuario no encontrado', 'error'); return; }
+
+    const name = u?.name || (c?.first_name + ' ' + c?.last_name).trim() || 'Usuario';
+    document.getElementById('modal-user-name').textContent = name;
+
+    document.getElementById('modal-user-info').innerHTML = `
+      <div class="info-item"><div class="info-item-label">Email</div><div class="info-item-value">${u?.email || c?.email_addresses?.[0]?.email_address || '—'}</div></div>
+      <div class="info-item"><div class="info-item-label">Plan actual</div><div class="info-item-value">${u?.plan || 'free'}</div></div>
+      <div class="info-item"><div class="info-item-label">Mensajes usados</div><div class="info-item-value" style="font-family:var(--mono)">${(u?.messages_used || 0).toLocaleString()}</div></div>
+      <div class="info-item"><div class="info-item-label">Cuentas conectadas</div><div class="info-item-value" style="font-family:var(--mono)">${u?.connected_accounts || 0}</div></div>
+      <div class="info-item"><div class="info-item-label">Trial expira</div><div class="info-item-value">${u?.trial_ends_at ? formatDate(u.trial_ends_at) : '—'}</div></div>
+      <div class="info-item"><div class="info-item-label">Registro</div><div class="info-item-value">${u?.created_at ? formatDate(u.created_at) : '—'}</div></div>
+    `;
+
+    document.getElementById('edit-plan').value = u?.plan || 'free';
+    document.getElementById('edit-status').value = u?.status || 'active';
+    document.getElementById('edit-msg-limit').value = u?.messages_limit || 99999;
+    document.getElementById('edit-acc-limit').value = u?.accounts_limit || 1;
+
+    const btnSuspend = document.getElementById('btn-suspend');
+    btnSuspend.textContent = u?.status === 'suspended' ? 'Reactivar' : 'Suspender';
+    btnSuspend.className = u?.status === 'suspended' ? 'btn btn-primary' : 'btn btn-danger';
+
+    // Logs
+    const logsEl = document.getElementById('modal-logs');
+    if (data.logs?.length) {
+      logsEl.innerHTML = data.logs.map(l => `
+        <div class="log-item">
+          <div class="log-dot"></div>
+          <div style="flex:1">
+            <div class="log-action">${formatAction(l.action)}</div>
+            <div class="log-time">${formatDateTime(l.created_at)}</div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      logsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Sin actividad registrada</div>';
+    }
+
+    document.getElementById('user-modal').classList.remove('hidden');
+  } catch (err) {
+    toast('Error cargando usuario: ' + err.message, 'error');
+  }
+}
+
+async function saveUser() {
+  try {
+    await apiPut('/admin?action=users', {
+      id: currentUserId,
+      plan: document.getElementById('edit-plan').value,
+      status: document.getElementById('edit-status').value,
+      messages_limit: parseInt(document.getElementById('edit-msg-limit').value),
+      accounts_limit: parseInt(document.getElementById('edit-acc-limit').value),
+      notes: document.getElementById('edit-notes').value,
+    });
+    toast('Usuario actualizado ✓', 'success');
+    closeModal('user-modal');
+    loadUsers();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+async function toggleSuspend() {
+  const current = document.getElementById('edit-status').value;
+  document.getElementById('edit-status').value = current === 'suspended' ? 'active' : 'suspended';
+  await saveUser();
+}
+
+// ── PLANES ──
+async function loadPlans() {
+  try {
+    const data = await apiGet('/admin?action=metrics');
+    document.getElementById('p-free').textContent = data.overview.trialUsers;
+    document.getElementById('p-individual').textContent = data.overview.individualUsers;
+    document.getElementById('p-agency').textContent = data.overview.agencyUsers;
+
+    // Trials expirando
+    const users = await apiGet('/admin?action=users&plan=free&status=active');
+    const now = new Date();
+    const expiring = users.users.filter(u => u.trial_ends_at && new Date(u.trial_ends_at) > now);
+    expiring.sort((a,b) => new Date(a.trial_ends_at) - new Date(b.trial_ends_at));
+
+    const tbody = document.getElementById('trials-table');
+    if (!expiring.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">No hay trials próximos a expirar</td></tr>';
+    } else {
+      tbody.innerHTML = expiring.slice(0, 20).map(u => {
+        const daysLeft = Math.ceil((new Date(u.trial_ends_at) - now) / (1000*60*60*24));
+        const color = daysLeft <= 1 ? 'var(--red)' : daysLeft <= 3 ? 'var(--amber)' : 'var(--green)';
+        return `<tr onclick="openUser('${u.id}')">
+          <td><div style="font-weight:500">${u.name || '—'}</div><div style="font-size:11px;color:var(--muted)">${u.email}</div></td>
+          <td class="mono">${formatDate(u.trial_ends_at)}</td>
+          <td><span style="color:${color};font-family:var(--mono);font-weight:600">${daysLeft}d</span></td>
+          <td><button onclick="event.stopPropagation();extendTrial('${u.id}')" style="background:var(--blue-dim);border:1px solid var(--blue);color:#818CF8;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">Extender 7d</button></td>
+        </tr>`;
+      }).join('');
+    }
+  } catch (err) {
+    toast('Error cargando planes', 'error');
+  }
+}
+
+async function extendTrial(id) {
+  // TODO: implementar extensión de trial
+  toast('Próximamente: extensión de trial', 'success');
+}
+
+// ── FACTURACIÓN ──
+async function loadBilling() {
+  try {
+    const data = await apiGet('/admin?action=metrics');
+    document.getElementById('b-mrr').textContent = '$' + data.revenue.mrr;
+    document.getElementById('b-month').textContent = '$' + data.revenue.revenueThisMonth;
+    document.getElementById('b-total').textContent = '$' + data.revenue.totalRevenue;
+
+    // TODO: cargar registros de billing de Supabase
+    document.getElementById('billing-table').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:40px">Sin registros de facturación aún.<br><small>Usa "+ Agregar pago" para registrar pagos manuales.</small></td></tr>';
+  } catch (err) {
+    toast('Error cargando facturación', 'error');
+  }
+}
+
+function openAddBilling() {
+  toast('Próximamente: registro de pagos', 'success');
+}
+
+// ── TEST USERS ──
+function generatePassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+  let pwd = '';
+  for (let i = 0; i < 12; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+  document.getElementById('tu-password').value = pwd;
+}
+
+async function createTestUser() {
+  const email = document.getElementById('tu-email').value.trim();
+  if (!email) { toast('El email es requerido', 'error'); return; }
+
+  const btn = document.getElementById('btn-create-test');
+  const label = document.getElementById('btn-create-test-label');
+  btn.disabled = true;
+  label.textContent = 'Creando...';
+
+  const resultEl = document.getElementById('tu-result');
+  resultEl.style.display = 'none';
+
+  try {
+    const r = await fetch(API + '/admin?action=create-test-user', {
+      method: 'POST',
+      headers: { 'x-admin-secret': adminSecret, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        name: document.getElementById('tu-name').value.trim() || 'Usuario de prueba',
+        password: document.getElementById('tu-password').value,
+        plan: document.getElementById('tu-plan').value,
+        status: document.getElementById('tu-status').value,
+        trial_days: document.getElementById('tu-trial').value,
+        messages_limit: document.getElementById('tu-msg-limit').value,
+        accounts_limit: document.getElementById('tu-acc-limit').value,
+        notes: document.getElementById('tu-notes').value.trim(),
+      })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.error || 'Error al crear usuario');
+
+    const u = data.user;
+    const pwd = document.getElementById('tu-password').value;
+    document.getElementById('tu-result-body').innerHTML =
+      '🌐 URL: https://app.acuarius.app<br>' +
+      '📧 Email: ' + u.email + '<br>' +
+      '🔑 Contraseña: ' + pwd + '<br>' +
+      '─────────────────────────────<br>' +
+      'Clerk ID: ' + (u.id || data.id) + '<br>' +
+      'Plan: ' + u.plan + ' · Estado: ' + u.status + '<br>' +
+      'Trial expira: ' + formatDate(u.trial_ends_at);
+    resultEl.style.display = 'block';
+
+    toast('Usuario de prueba creado ✓', 'success');
+    loadTestUsers();
+
+    // Limpiar formulario
+    document.getElementById('tu-email').value = '';
+    document.getElementById('tu-name').value = '';
+    document.getElementById('tu-password').value = '';
+    document.getElementById('tu-notes').value = '';
+    document.getElementById('tu-plan').value = 'free';
+    document.getElementById('tu-trial').value = '30';
+    document.getElementById('tu-msg-limit').value = '99999';
+    document.getElementById('tu-acc-limit').value = '3';
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    label.textContent = 'Crear usuario de prueba';
+  }
+}
+
+async function loadTestUsers() {
+  const tbody = document.getElementById('test-users-table');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Cargando...</td></tr>';
+  try {
+    // Traemos todos los usuarios y filtramos los test_ en frontend
+    const data = await apiGet('/admin?action=users&page=1');
+    // Pedimos más páginas si hay muchas
+    let all = data.users || [];
+    if (data.pages > 1) {
+      for (let p = 2; p <= Math.min(data.pages, 10); p++) {
+        const page = await apiGet('/admin?action=users&page=' + p);
+        all = all.concat(page.users || []);
+      }
+    }
+    const testUsers = all.filter(u => u.id && u.id.startsWith('test_'));
+    if (!testUsers.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">No hay usuarios de prueba creados aún</td></tr>';
+      return;
+    }
+    tbody.innerHTML = testUsers.map(u => {
+      const now = new Date();
+      const trialOk = u.trial_ends_at && new Date(u.trial_ends_at) > now;
+      const daysLeft = u.trial_ends_at ? Math.ceil((new Date(u.trial_ends_at) - now) / (1000*60*60*24)) : 0;
+      return '<tr onclick="openUser(\'' + u.id + '\')">' +
+        '<td><div style="font-weight:500">' + (u.name || '—') + '</div><div style="font-size:11px;color:var(--muted)">' + u.email + '</div><span class="test-user-badge" style="margin-top:3px;display:inline-flex">test_</span></td>' +
+        '<td><span class="badge badge-' + u.plan + '">' + u.plan + '</span></td>' +
+        '<td><span class="badge badge-' + u.status + '">' + u.status + '</span></td>' +
+        '<td class="mono" style="color:' + (trialOk ? 'var(--amber)' : 'var(--red)') + '">' + (u.trial_ends_at ? formatDate(u.trial_ends_at) + (trialOk ? ' (' + daysLeft + 'd)' : ' — expirado') : '—') + '</td>' +
+        '<td style="font-size:11px;color:var(--muted);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</td>' +
+        '<td style="display:flex;gap:6px;align-items:center"><button onclick="event.stopPropagation();openResetPassword(\'' + u.id + '\',\'' + u.email + '\')" style="background:var(--blue-dim);border:1px solid var(--blue);color:#818CF8;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">🔑 Clave</button><button onclick="event.stopPropagation();deleteTestUser(\'' + u.id + '\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">Eliminar</button></td>' +
+        '</tr>';
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:30px">Error cargando usuarios de prueba</td></tr>';
+  }
+}
+
+async function deleteTestUser(id) {
+  if (!confirm('¿Eliminar este usuario de prueba? Esta acción no se puede deshacer.')) return;
+  try {
+    const r = await fetch(API + '/admin?action=delete-test-user', {
+      method: 'DELETE',
+      headers: { 'x-admin-secret': adminSecret, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.error || 'Error');
+    toast('Usuario eliminado ✓', 'success');
+    loadTestUsers();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── RESET PASSWORD ──
+let resetPwUserId = '';
+
+function openResetPassword(id, email) {
+  resetPwUserId = id;
+  document.getElementById('reset-pw-email').textContent = 'Usuario: ' + email;
+  document.getElementById('reset-pw-input').value = '';
+  document.getElementById('reset-pw-modal').classList.remove('hidden');
+}
+
+function generateResetPassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+  let pwd = '';
+  for (let i = 0; i < 12; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+  document.getElementById('reset-pw-input').value = pwd;
+}
+
+async function saveResetPassword() {
+  const password = document.getElementById('reset-pw-input').value.trim();
+  if (!password || password.length < 8) { toast('Mínimo 8 caracteres', 'error'); return; }
+
+  try {
+    const r = await fetch(API + '/admin?action=reset-test-password', {
+      method: 'POST',
+      headers: { 'x-admin-secret': adminSecret, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: resetPwUserId, password })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.error || 'Error');
+    toast('Contraseña actualizada ✓ — ' + password, 'success');
+    closeModal('reset-pw-modal');
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── SYNC ──
+async function syncUsers() {
+  toast('Sincronizando con Clerk...', 'success');
+  try {
+    const r = await fetch(API + '/admin?action=sync&_=' + Date.now(), {
+      method: 'POST',
+      headers: {
+        'x-admin-secret': adminSecret,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    const data = await r.json();
+    console.log('Sync response:', data);
+    if (data.error) {
+      toast('Error Clerk: ' + data.error, 'error');
+      return;
+    }
+    const count = data.synced ?? data.total ?? 0;
+    toast('Sincronizados ' + count + ' usuarios ✓', 'success');
+    setTimeout(() => { loadUsers(); loadDashboard(); }, 500);
+  } catch (err) {
+    toast('Error en sincronización: ' + err.message, 'error');
+  }
+}
+
+// ── UTILS ──
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' }); }
+function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('es-CO', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }); }
+function formatAction(a) {
+  const map = { message_sent:'Mensaje enviado', account_connected:'Cuenta conectada', plan_changed:'Plan cambiado', login:'Inicio de sesión', image_generated:'Imagen generada', admin_update:'Actualización admin' };
+  return map[a] || a;
+}
+
+function toast(msg, type = 'success') {
+  const wrap = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast-item ' + type;
+  el.innerHTML = `<span>${type === 'success' ? '✓' : '✗'}</span>${msg}`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Cerrar modal con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
+  if (e.key === 'Enter' && !document.getElementById('login-screen').classList.contains('hidden')) doLogin();
+});
+</script>
+</body>
+</html>
