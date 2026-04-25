@@ -164,17 +164,44 @@ async function handleUsers(req, res) {
 async function handleCreateTestUser(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { email, name, plan, status, trial_days, messages_limit, accounts_limit, notes } = req.body;
+  const { email, name, password, plan, status, trial_days, messages_limit, accounts_limit, notes } = req.body;
   if (!email) return res.status(400).json({ error: 'email requerido' });
+  if (!password || password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
 
-  // Generar un ID de prueba con prefijo test_ para distinguirlos fácilmente
-  const testId = 'test_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  // 1. Crear usuario en Clerk con email + contraseña
+  const firstName = name ? name.split(' ')[0] : 'Test';
+  const lastName  = name ? name.split(' ').slice(1).join(' ') : 'User';
 
+  const clerkRes = await fetch('https://api.clerk.com/v1/users', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${CLERK_SECRET}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email_address: [email],
+      password,
+      first_name: firstName,
+      last_name: lastName,
+      public_metadata: { plan: plan || 'free', status: status || 'active', is_test_user: true },
+      skip_password_checks: true,
+    }),
+  });
+
+  const clerkData = await clerkRes.json();
+  if (!clerkRes.ok) {
+    const detail = clerkData.errors?.[0]?.message || JSON.stringify(clerkData);
+    return res.status(400).json({ error: 'Error al crear en Clerk: ' + detail });
+  }
+
+  const clerkId = clerkData.id; // ID real de Clerk, ej: user_2abc...
+
+  // 2. Insertar en Supabase con el ID real de Clerk
   const trialEndsAt = new Date();
   trialEndsAt.setDate(trialEndsAt.getDate() + (parseInt(trial_days) || 7));
 
   const userData = {
-    id: testId,
+    id: clerkId,
     email,
     name: name || 'Usuario de prueba',
     plan: plan || 'free',
@@ -188,17 +215,22 @@ async function handleCreateTestUser(req, res) {
     updated_at: new Date().toISOString(),
   };
 
-  // Insertar en Supabase
   const result = await supabaseReq('/users', 'POST', userData);
 
-  // Log de la creación
+  // 3. Log
   await supabaseReq('/activity_logs', 'POST', {
-    user_id: testId,
+    user_id: clerkId,
     action: 'admin_create_test',
     details: { notes: notes || 'Usuario de prueba creado desde admin', plan, created_by: 'admin' },
   });
 
-  return res.json({ success: true, user: result?.[0] || userData, id: testId });
+  return res.json({
+    success: true,
+    user: result?.[0] || userData,
+    id: clerkId,
+    clerk_id: clerkId,
+    login_url: 'https://app.acuarius.app',
+  });
 }
 
 // ── DELETE TEST USER ─────────────────────────────────────
@@ -207,12 +239,22 @@ async function handleDeleteTestUser(req, res) {
 
   const { id } = req.body;
   if (!id) return res.status(400).json({ error: 'id requerido' });
-  if (!id.startsWith('test_')) return res.status(400).json({ error: 'Solo se pueden eliminar usuarios con prefijo test_' });
 
-  // Eliminar logs primero (FK constraint)
+  // Verificar que sea un usuario de prueba (metadata Clerk)
+  const clerkUser = await clerkGetUser(id);
+  if (!clerkUser?.public_metadata?.is_test_user) {
+    return res.status(400).json({ error: 'Solo se pueden eliminar usuarios marcados como test (is_test_user: true)' });
+  }
+
+  // 1. Eliminar logs (FK constraint)
   await supabaseReq(`/activity_logs?user_id=eq.${id}`, 'DELETE');
-  // Eliminar usuario
+  // 2. Eliminar de Supabase
   await supabaseReq(`/users?id=eq.${id}`, 'DELETE');
+  // 3. Eliminar de Clerk
+  await fetch(`https://api.clerk.com/v1/users/${id}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${CLERK_SECRET}` },
+  });
 
   return res.json({ success: true, id });
 }
