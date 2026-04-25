@@ -2,7 +2,7 @@
 // Recibe datos del reporte para registro. El PDF se genera en el cliente con jsPDF.
 // Este endpoint guarda el reporte en activity_logs para analytics.
 
-export const config = { runtime: 'nodejs18.x' };
+export const config = { runtime: 'nodejs' };
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
