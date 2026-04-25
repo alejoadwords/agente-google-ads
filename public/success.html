@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>¡Pago exitoso! - Acuarius</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #F8FAFC;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 48px 40px;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .icon { font-size: 64px; margin-bottom: 24px; }
+    h1 { font-size: 26px; font-weight: 700; color: #111; margin-bottom: 12px; }
+    p { font-size: 15px; color: #666; line-height: 1.6; margin-bottom: 8px; }
+    .plan-badge {
+      display: inline-block;
+      background: #EEF2FF;
+      color: #4F46E5;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin: 16px 0 24px;
+    }
+    .btn {
+      display: inline-block;
+      background: #2563EB;
+      color: white;
+      padding: 14px 32px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      margin-top: 8px;
+    }
+    .note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🎉</div>
+    <h1>¡Tu plan está activo!</h1>
+    <p>Gracias por unirte a Acuarius. Tu acceso ha sido activado automáticamente.</p>
+    <div class="plan-badge" id="plan-badge">Plan Individual</div>
+    <p>Ya puedes usar todos los agentes de marketing con inteligencia artificial.</p>
+    <a href="https://app.acuarius.app" class="btn">Ir al app →</a>
+    <p class="note">Si tienes algún problema, escríbenos a alejandro@acuarius.app</p>
+  </div>
+
+  <script>
+    // Mostrar plan según parámetro URL (Hotmart puede enviar params)
+    const params = new URLSearchParams(window.location.search);
+    const plan = params.get('plan');
+    if (plan === 'agencia') {
+      document.getElementById('plan-badge').textContent = 'Plan Agencia';
+    }
+  </script>
+</body>
+</html>
