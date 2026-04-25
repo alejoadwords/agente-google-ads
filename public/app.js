@@ -2260,29 +2260,9 @@ function launchOnboarding(agentKey) {
       return;
     }
   }
-  // Sin cliente de agencia — flujo normal
+  // Sin cliente de agencia — flujo normal: siempre lanzar cuestionario para usuarios sin perfil
   mem = {}; hist = []; onDone = false; obStep = 0;
   document.getElementById('mem-card').style.display = 'none';
-  if (agentKey === 'meta-ads') {
-    onDone = true;
-    addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
-    setTimeout(showMetaActionCards, 400);
-    setTimeout(function(){ loadRecentConversations(); }, 700);
-    return;
-  }
-  if (agentKey === 'google-ads') {
-    onDone = true;
-    addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
-    setTimeout(showGoogleAdsActionCards, 400);
-    setTimeout(function(){ loadRecentConversations(); }, 700);
-    return;
-  }
-  if (agentKey === 'tiktok-ads') {
-    onDone = true;
-    addAgent(`hola, soy tu **agente de TikTok Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas en TikTok que generen resultados reales en la plataforma de mayor crecimiento en LatAm. ¿qué quieres hacer hoy?`);
-    setTimeout(showTikTokActionCards, 400);
-    return;
-  }
   const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
   addAgent(guide);
   setTimeout(() => renderOb(), 600);
@@ -6611,6 +6591,13 @@ async function finishObWithAccountSave() {
   resumen += '\ntodo guardado.';
 
   addAgent(resumen);
+
+  // Mostrar cards de acción según el agente
+  if (currentAgentCtx === 'google-ads')  { setTimeout(showGoogleAdsActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'meta-ads')    { setTimeout(showMetaActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'tiktok-ads') { setTimeout(showTikTokActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'seo')         { setTimeout(showSeoActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'social')      { setTimeout(showSocialActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
 
   // Para el consultor: generar Plan de 30 días automáticamente, luego mostrar cards
   if (currentAgentCtx === 'consultor') {
