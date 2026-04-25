@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 async function getUserId(req) {
   const auth = req.headers.get('authorization') || '';
