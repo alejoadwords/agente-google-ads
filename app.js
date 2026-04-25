@@ -1,10 +1,3 @@
-import { SYSTEM } from './prompts/google-ads.js';
-import { SYSTEM_META } from './prompts/meta-ads.js';
-import { SYSTEM_SEO } from './prompts/seo.js';
-import { SYSTEM_TIKTOK } from './prompts/tiktok-ads.js';
-import { SYSTEM_SOCIAL } from './prompts/social.js';
-import { SYSTEM_CONSULTOR } from './prompts/consultor.js';
-
 
 let mem={},hist=[],onDone=false,obStep=0,loading=false,clientStage='sin definir';
 const MAX_HIST_MESSAGES = 8; // máximo de mensajes enviados a Claude (4 turnos)
