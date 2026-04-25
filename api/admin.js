@@ -160,6 +160,63 @@ async function handleUsers(req, res) {
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
+// ── CREATE TEST USER ──────────────────────────────────────
+async function handleCreateTestUser(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  const { email, name, plan, status, trial_days, messages_limit, accounts_limit, notes } = req.body;
+  if (!email) return res.status(400).json({ error: 'email requerido' });
+
+  // Generar un ID de prueba con prefijo test_ para distinguirlos fácilmente
+  const testId = 'test_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+  const trialEndsAt = new Date();
+  trialEndsAt.setDate(trialEndsAt.getDate() + (parseInt(trial_days) || 7));
+
+  const userData = {
+    id: testId,
+    email,
+    name: name || 'Usuario de prueba',
+    plan: plan || 'free',
+    status: status || 'active',
+    trial_ends_at: trialEndsAt.toISOString(),
+    messages_limit: parseInt(messages_limit) || 99999,
+    accounts_limit: parseInt(accounts_limit) || 1,
+    messages_used: 0,
+    connected_accounts: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Insertar en Supabase
+  const result = await supabaseReq('/users', 'POST', userData);
+
+  // Log de la creación
+  await supabaseReq('/activity_logs', 'POST', {
+    user_id: testId,
+    action: 'admin_create_test',
+    details: { notes: notes || 'Usuario de prueba creado desde admin', plan, created_by: 'admin' },
+  });
+
+  return res.json({ success: true, user: result?.[0] || userData, id: testId });
+}
+
+// ── DELETE TEST USER ─────────────────────────────────────
+async function handleDeleteTestUser(req, res) {
+  if (req.method !== 'DELETE') return res.status(405).json({ error: 'DELETE only' });
+
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'id requerido' });
+  if (!id.startsWith('test_')) return res.status(400).json({ error: 'Solo se pueden eliminar usuarios con prefijo test_' });
+
+  // Eliminar logs primero (FK constraint)
+  await supabaseReq(`/activity_logs?user_id=eq.${id}`, 'DELETE');
+  // Eliminar usuario
+  await supabaseReq(`/users?id=eq.${id}`, 'DELETE');
+
+  return res.json({ success: true, id });
+}
+
 // ── SYNC ──────────────────────────────────────────────────
 async function handleSync(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -218,10 +275,12 @@ export default async function handler(req, res) {
   const action = req.query.action;
 
   try {
-    if (action === 'metrics') return await handleMetrics(req, res);
-    if (action === 'users')   return await handleUsers(req, res);
-    if (action === 'sync')    return await handleSync(req, res);
-    return res.status(400).json({ error: 'action requerido: metrics | users | sync' });
+    if (action === 'metrics')          return await handleMetrics(req, res);
+    if (action === 'users')            return await handleUsers(req, res);
+    if (action === 'create-test-user') return await handleCreateTestUser(req, res);
+    if (action === 'delete-test-user') return await handleDeleteTestUser(req, res);
+    if (action === 'sync')             return await handleSync(req, res);
+    return res.status(400).json({ error: 'action requerido: metrics | users | create-test-user | sync' });
   } catch (err) {
     console.error('Admin error:', err);
     return res.status(500).json({ error: err.message });
