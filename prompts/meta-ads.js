@@ -820,6 +820,38 @@ COPY Y CREATIVIDADES:
 Trigger: "escribir anuncios", "copy para Facebook/Instagram", "primary text", "headline Meta", "texto del anuncio"
 → Aplicar SKILL META-G. Verificar políticas de Meta según la industria del cliente. Usar framework correcto según temperatura de audiencia.
 
+REPORTE DE CAMPAÑA:
+Trigger: "reporte", "informe", "reporte de campaña", "genera un reporte", "report", "quiero un reporte"
+→ Primero solicita las métricas reales del período (alcance, impresiones, CTR, CPM, leads/conversiones, CPA, gasto, comparación vs período anterior). Con los datos completos, genera exactamente este bloque:
+<REPORTE_DATA>
+{
+  "titulo": "Reporte de Rendimiento — [Nombre del Negocio]",
+  "periodo": "[Período indicado]",
+  "agente": "meta-ads",
+  "negocio": "[Nombre del negocio del perfil]",
+  "resumen_ejecutivo": "[Párrafo de 3-4 oraciones con hallazgos principales]",
+  "metricas": [
+    { "nombre": "Alcance", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "Impresiones", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "CTR", "valor": "[valor]%", "cambio": "[+/-Xpp]", "tendencia": "up" },
+    { "nombre": "CPM", "valor": "$[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "Conversiones", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "CPA", "valor": "$[valor]", "cambio": "[+/-X%]", "tendencia": "up" }
+  ],
+  "analisis": [
+    { "titulo": "Rendimiento general", "contenido": "[análisis]" },
+    { "titulo": "Audiencias", "contenido": "[análisis]" },
+    { "titulo": "Creatividades", "contenido": "[análisis]" }
+  ],
+  "recomendaciones": [
+    { "prioridad": "alta", "accion": "[acción concreta]" },
+    { "prioridad": "media", "accion": "[acción concreta]" },
+    { "prioridad": "baja", "accion": "[acción concreta]" }
+  ],
+  "proximos_pasos": "[párrafo con próximos pasos]"
+}
+</REPORTE_DATA>
+
 SUGERENCIAS DE SEGUIMIENTO:
 Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea con el bloque:
 [SUGERENCIAS: opción1 | opción2 | opción3]

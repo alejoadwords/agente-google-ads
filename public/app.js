@@ -2130,12 +2130,13 @@ async function openAgent(agentKey) {
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
       const negocioShort = mem.negocio ? mem.negocio.split('·')[0].trim() : '—';
       addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
-      if (agentKey === 'meta-ads')    { setTimeout(showMetaActionCards, 400); }
-      if (agentKey === 'google-ads')  { setTimeout(showGoogleAdsActionCards, 400); }
-      if (agentKey === 'consultor')   { setTimeout(showConsultorActionCards, 400); }
-      if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
-      if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
+      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); }
+      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
+      if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
+      if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
+      if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
+      if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
       return;
     } catch(e) {
@@ -2248,12 +2249,13 @@ function launchOnboarding(agentKey) {
       document.getElementById('m-stage').textContent = clientStage;
       const summary = briefSummaryForAgent(client, agentKey);
       addAgent(summary);
-      if (agentKey === 'meta-ads')   { setTimeout(showMetaActionCards, 400); }
-      if (agentKey === 'google-ads') { setTimeout(showGoogleAdsActionCards, 400); }
-      if (agentKey === 'consultor')  { setTimeout(showConsultorActionCards, 400); }
-      if (agentKey === 'seo')        { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'social')     { setTimeout(showSocialActionCards, 400); }
-      if (agentKey === 'tiktok-ads') { setTimeout(showTikTokActionCards, 400); }
+      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); }
+      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
+      if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
+      if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
+      if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
+      if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
       // Guardar el perfil del brief como perfil del agente para este cliente
       setTimeout(function(){ dbSaveProfile(agentKey, mem); }, 800);
@@ -3216,6 +3218,8 @@ window.onload = async () => {
   setTimeout(function(){ loadRecentConversations(); }, 1000);
   // Mostrar tour si es la primera vez
   setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
+  // Actualizar badge de historial
+  setTimeout(function(){ updateHistorialBadge(); }, 2000);
 };
 
 // ONBOARDING
@@ -3446,6 +3450,8 @@ if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_SOCIAL.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='tiktok-ads'){
   sys=SYSTEM_TIKTOK.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+}else if(currentAgentCtx==='linkedin-ads'){
+  sys=(typeof SYSTEM_LINKEDIN!=='undefined'?SYSTEM_LINKEDIN:SYSTEM).replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
 }
@@ -3620,9 +3626,35 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     else {
-      hist.push({role:'assistant',content:replyFinalProcessed});
-      addAgent(replyFinalProcessed);
+      // Detectar bloque REPORTE_DATA
+      const reportData = detectReportData(replyFinalProcessed);
+      if (reportData) {
+        const cleanReply = replyFinalProcessed.replace(/<REPORTE_DATA>[\s\S]*?<\/REPORTE_DATA>/,'').trim();
+        if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
+        else { hist.push({role:'assistant',content:'Reporte generado.'}); }
+        setTimeout(() => renderReportCard(reportData), 200);
+      } else {
+        hist.push({role:'assistant',content:replyFinalProcessed});
+        addAgent(replyFinalProcessed);
+      }
       if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
+      // Guardar recomendación silenciosamente si aplica
+      const recAgents = ['google-ads','meta-ads','tiktok-ads','linkedin-ads','seo','consultor'];
+      if (recAgents.includes(currentAgentCtx) && replyFinalProcessed.length > 200) {
+        setTimeout(() => saveRecommendation(currentAgentCtx, replyFinalProcessed), 1000);
+      }
+      // Actualizar snapshot con análisis si corresponde
+      if (_snapshotPendingId && _snapshotAgent === currentAgentCtx) {
+        const snapId = _snapshotPendingId;
+        _snapshotPendingId = null; _snapshotAgent = null;
+        setTimeout(() => {
+          fetch('/api/admin?action=save-snapshot', {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({id: snapId, analysis: replyFinalProcessed})
+          }).catch(()=>{});
+        }, 500);
+      }
     }
     setTimeout(function(){ saveCurrentConversation(); agencyOnMessageReceived(); }, 500);
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
@@ -3638,6 +3670,511 @@ function renderSugerencias(opciones) {
   ).join('');
   area.appendChild(wrap);
   scrollB();
+}
+
+// ── FEATURE 1: RECOMMENDATIONS ───────────────────────────────
+async function saveRecommendation(agent, content) {
+  const user = window.Clerk?.user || clerkInstance?.user;
+  if (!user) return;
+  try {
+    await fetch('/api/admin?action=save-recommendation', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({userId: user.id, agent, content})
+    });
+    updateHistorialBadge();
+  } catch(e) { /* silencioso */ }
+}
+
+async function loadRecommendations(agentFilter) {
+  const user = window.Clerk?.user || clerkInstance?.user;
+  if (!user) return [];
+  try {
+    let url = `/api/admin?action=get-recommendations&userId=${encodeURIComponent(user.id)}`;
+    if (agentFilter && agentFilter !== 'all') url += `&agent=${encodeURIComponent(agentFilter)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch(e) { return []; }
+}
+
+async function updateRecommendation(id, status) {
+  try {
+    await fetch('/api/admin?action=update-recommendation', {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({id, status})
+    });
+  } catch(e) { /* silencioso */ }
+}
+
+async function updateHistorialBadge() {
+  const user = window.Clerk?.user || clerkInstance?.user;
+  if (!user) return;
+  try {
+    const res = await fetch(`/api/admin?action=get-recommendations&userId=${encodeURIComponent(user.id)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const pending = (data || []).filter(r => r.status === 'pending').length;
+    const badge = document.getElementById('historial-badge');
+    if (badge) { badge.textContent = pending; badge.style.display = pending > 0 ? 'inline-flex' : 'none'; }
+  } catch(e) {}
+}
+
+function openHistorialPanel() {
+  let panel = document.getElementById('historial-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'historial-panel';
+    panel.style.cssText = 'position:fixed;top:0;right:0;width:380px;max-width:100vw;height:100vh;background:var(--bg);border-left:1px solid var(--border);z-index:800;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.08);transition:transform .25s';
+    panel.innerHTML = `
+      <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <div style="font-size:15px;font-weight:700;letter-spacing:-.2px">Historial</div>
+        <button onclick="closeHistorialPanel()" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);font-size:18px;line-height:1">×</button>
+      </div>
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border2);display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <div id="htab-rec" class="htab active" onclick="switchHistorialTab('rec')">Recomendaciones</div>
+        <div id="htab-ana" class="htab" onclick="switchHistorialTab('ana')">Análisis</div>
+        <select id="historial-agent-filter" onchange="reloadHistorialContent()" style="margin-left:auto;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--bg);color:var(--text)">
+          <option value="all">Todos</option>
+          <option value="google-ads">Google Ads</option>
+          <option value="meta-ads">Meta Ads</option>
+          <option value="tiktok-ads">TikTok Ads</option>
+          <option value="linkedin-ads">LinkedIn Ads</option>
+          <option value="seo">SEO</option>
+          <option value="consultor">Consultor</option>
+        </select>
+      </div>
+      <div id="historial-body" style="flex:1;overflow-y:auto;padding:16px 20px"></div>`;
+    document.body.appendChild(panel);
+  }
+  panel.style.display = 'flex';
+  panel.style.transform = 'translateX(0)';
+  reloadHistorialContent();
+  updateHistorialBadge();
+}
+
+function closeHistorialPanel() {
+  const panel = document.getElementById('historial-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+function switchHistorialTab(tab) {
+  document.getElementById('htab-rec')?.classList.toggle('active', tab === 'rec');
+  document.getElementById('htab-ana')?.classList.toggle('active', tab === 'ana');
+  reloadHistorialContent();
+}
+
+async function reloadHistorialContent() {
+  const body = document.getElementById('historial-body');
+  if (!body) return;
+  const tabRec = document.getElementById('htab-rec')?.classList.contains('active');
+  const agent = document.getElementById('historial-agent-filter')?.value || 'all';
+  body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">Cargando...</div>';
+  if (tabRec) {
+    const data = await loadRecommendations(agent);
+    if (!data.length) { body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">No hay recomendaciones todavía.</div>'; return; }
+    const agentColors = {'google-ads':'#4285F4','meta-ads':'#1877F2','tiktok-ads':'#010101','linkedin-ads':'#0A66C2','seo':'#059669','consultor':'#1E2BCC','social':'#D97706'};
+    const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','consultor':'Consultor','social':'Social'};
+    body.innerHTML = data.map(r => {
+      const ago = timeAgo(r.created_at);
+      const color = agentColors[r.agent] || '#6B7280';
+      const name = agentNames[r.agent] || r.agent;
+      const preview = r.content.length > 120 ? r.content.slice(0,120)+'...' : r.content;
+      const statusIcon = r.status === 'applied' ? '<span style="color:#16a34a;font-weight:600">✓ Aplicada</span>' : r.status === 'dismissed' ? '<span style="color:#9CA3AF;text-decoration:line-through">Descartada</span>' : `<button onclick="applyRec('${r.id}',this)" style="padding:3px 10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:6px;font-size:11px;color:var(--blue);cursor:pointer;font-weight:600" onmouseover="this.style.background='#dde0fc'" onmouseout="this.style.background='var(--blue-lt)'">Aplicar</button> <button onclick="dismissRec('${r.id}',this)" style="padding:3px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='var(--bg)'">Descartar</button>`;
+      return `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:10px;${r.status==='dismissed'?'opacity:.5':''}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:10px;font-weight:700;background:${color}20;color:${color};padding:2px 8px;border-radius:10px">${name}</span>
+          <span style="font-size:11px;color:var(--muted)">${ago}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:10px">${preview}</div>
+        <div style="display:flex;gap:7px;align-items:center">${statusIcon}</div>
+      </div>`;
+    }).join('');
+  } else {
+    // Tab Análisis
+    const snapshots = await loadSnapshots(agent);
+    if (!snapshots.length) { body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">No hay análisis guardados todavía.</div>'; return; }
+    const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','consultor':'Consultor','social':'Social'};
+    body.innerHTML = snapshots.map(s => {
+      const ago = timeAgo(s.created_at);
+      const name = agentNames[s.agent] || s.agent;
+      const preview = s.analysis ? (s.analysis.length > 120 ? s.analysis.slice(0,120)+'...' : s.analysis) : 'Sin análisis generado.';
+      return `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:700;color:var(--text)">${s.period_label}</span>
+          <span style="font-size:11px;color:var(--muted)">· ${name} · ${ago}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:8px">${preview}</div>
+        ${s.analysis ? `<button onclick="this.closest('div[style]').querySelector('.snap-full').style.display=this.closest('div[style]').querySelector('.snap-full').style.display==='none'?'block':'none'" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0">Ver análisis completo ▾</button><div class='snap-full' style='display:none;margin-top:8px;font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap'>${s.analysis}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+}
+
+function applyRec(id, btn) {
+  updateRecommendation(id, 'applied');
+  const card = btn.closest('div[style]');
+  const actionsDiv = btn.parentElement;
+  actionsDiv.innerHTML = '<span style="color:#16a34a;font-weight:600">✓ Aplicada</span>';
+  updateHistorialBadge();
+}
+
+function dismissRec(id, btn) {
+  updateRecommendation(id, 'dismissed');
+  const card = btn.closest('div[style]');
+  card.style.opacity = '.5';
+  const actionsDiv = btn.parentElement;
+  actionsDiv.innerHTML = '<span style="color:#9CA3AF;text-decoration:line-through">Descartada</span>';
+  updateHistorialBadge();
+}
+
+function timeAgo(ts) {
+  const d = new Date(ts), now = new Date();
+  const diff = Math.floor((now - d) / 1000);
+  if (diff < 60) return 'hace un momento';
+  if (diff < 3600) return `hace ${Math.floor(diff/60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff/3600)} h`;
+  if (diff < 604800) return `hace ${Math.floor(diff/86400)} días`;
+  return d.toLocaleDateString('es');
+}
+
+// ── FEATURE 2: REPORTE PDF ─────────────────────────────────
+function detectReportData(text) {
+  const match = text.match(/<REPORTE_DATA>([\s\S]*?)<\/REPORTE_DATA>/);
+  if (!match) return null;
+  try { return JSON.parse(match[1].trim()); } catch(e) { return null; }
+}
+
+var _reportCache = {};
+
+function renderReportCard(data) {
+  const reportId = 'report_' + Date.now();
+  _reportCache[reportId] = data;
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = `
+    <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div>
+    <div style="border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--bg);max-width:380px;display:flex;align-items:center;gap:12px">
+      <div style="font-size:28px;flex-shrink:0">📄</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${data.titulo||'Reporte'}</div>
+        <div style="font-size:11px;color:var(--muted)">${data.periodo||''} · ${data.negocio||''}</div>
+      </div>
+      <button id="${reportId}-btn" onclick="downloadReport('${reportId}')" style="padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">Descargar PDF</button>
+    </div>`;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+  // Auto-generar
+  setTimeout(() => downloadReport(reportId), 300);
+}
+
+function downloadReport(reportId) {
+  const data = _reportCache[reportId];
+  if (!data) return;
+  const btn = document.getElementById(reportId + '-btn');
+  if (btn) { btn.textContent = 'Generando...'; btn.disabled = true; }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const W = 210, margin = 18, cW = W - margin*2;
+    const blue = [37,99,235], gray = [55,65,81], lightGray = [243,244,246];
+    const green = [22,163,74], red = [220,38,38];
+    let y = margin;
+
+    // Header
+    doc.setFillColor(...blue);
+    doc.rect(0,0,W,20,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text('Acuarius', margin, 13);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text(data.negocio||'', W-margin, 13, {align:'right'});
+    y = 30;
+
+    // Título
+    doc.setTextColor(...gray); doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text(data.titulo||'Reporte', margin, y); y += 7;
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(107,114,128);
+    doc.text(data.periodo||'', margin, y); y += 8;
+    doc.setDrawColor(...blue); doc.setLineWidth(.5);
+    doc.line(margin, y, W-margin, y); y += 8;
+
+    // Resumen ejecutivo
+    doc.setFillColor(...lightGray);
+    doc.roundedRect(margin, y, cW, 2,'r','F');
+    doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(...gray);
+    doc.text('Resumen Ejecutivo', margin, y+6); y += 10;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
+    const resumLines = doc.splitTextToSize(data.resumen_ejecutivo||'', cW);
+    doc.setFillColor(...lightGray);
+    doc.roundedRect(margin, y-2, cW, resumLines.length*5+8, 2,'F');
+    doc.text(resumLines, margin+4, y+4); y += resumLines.length*5+14;
+
+    // Métricas
+    doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(...gray);
+    doc.text('Métricas Principales', margin, y); y += 7;
+    const metrics = data.metricas || [];
+    const cols = 3, cellW = cW/cols, cellH = 18;
+    metrics.slice(0,6).forEach((m, i) => {
+      const col = i % cols, row = Math.floor(i/cols);
+      const x = margin + col*cellW, cy = y + row*cellH;
+      doc.setFillColor(...lightGray); doc.roundedRect(x+1, cy, cellW-2, cellH-2, 2, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(107,114,128);
+      doc.text(m.nombre||'', x+3, cy+5);
+      doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(...gray);
+      doc.text(String(m.valor||''), x+3, cy+12);
+      if (m.cambio) {
+        const isUp = m.tendencia === 'up';
+        doc.setFontSize(8); doc.setFont('helvetica','normal');
+        doc.setTextColor(...(isUp ? green : red));
+        doc.text(m.cambio, x+cellW-3, cy+12, {align:'right'});
+      }
+    });
+    y += Math.ceil(metrics.length/cols)*cellH + 10;
+
+    // Análisis — check if new page needed
+    if (y > 220) { doc.addPage(); y = margin; }
+    doc.setDrawColor(...blue); doc.line(margin, y, W-margin, y); y += 6;
+    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
+    doc.text('Análisis Detallado', margin, y); y += 8;
+    (data.analisis||[]).forEach(a => {
+      if (y > 255) { doc.addPage(); y = margin; }
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
+      doc.text(a.titulo||'', margin, y); y += 5;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
+      const lines = doc.splitTextToSize(a.contenido||'', cW);
+      doc.text(lines, margin, y); y += lines.length*5+6;
+    });
+
+    // Recomendaciones
+    if (y > 220) { doc.addPage(); y = margin; }
+    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
+    doc.text('Recomendaciones', margin, y); y += 8;
+    const priorColors = {alta:[220,38,38], media:[217,119,6], baja:[107,114,128]};
+    (data.recomendaciones||[]).forEach(r => {
+      if (y > 260) { doc.addPage(); y = margin; }
+      const pc = priorColors[r.prioridad]||[107,114,128];
+      doc.setFillColor(...pc); doc.circle(margin+2, y-1, 2,'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
+      const lines = doc.splitTextToSize(r.accion||'', cW-8);
+      doc.text(lines, margin+7, y); y += lines.length*5+5;
+    });
+
+    // Próximos pasos
+    if (y > 220) { doc.addPage(); y = margin; }
+    if (data.proximos_pasos) {
+      doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
+      doc.text('Próximos Pasos', margin, y); y += 7;
+      doc.setFillColor(...lightGray); doc.setDrawColor(...blue); doc.setLineWidth(.5);
+      const psLines = doc.splitTextToSize(data.proximos_pasos, cW-6);
+      doc.rect(margin, y-2, cW, psLines.length*5+8,'F');
+      doc.line(margin, y-2, margin, y-2+psLines.length*5+8);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
+      doc.text(psLines, margin+4, y+4); y += psLines.length*5+14;
+    }
+
+    // Footer en cada página
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFontSize(8); doc.setTextColor(156,163,175);
+      doc.text(`Generado por Acuarius · acuarius.app · ${new Date().toLocaleDateString('es')}`, W/2, 292, {align:'center'});
+    }
+
+    const filename = `reporte-${(data.negocio||'acuarius').replace(/\s+/g,'-')}-${(data.periodo||'').replace(/\s+/g,'-')}.pdf`;
+    doc.save(filename);
+    if (btn) { btn.textContent = '✓ Descargado'; btn.style.background = '#16a34a'; btn.disabled = false; }
+    // Log en servidor (silencioso)
+    const userId = (window.Clerk?.user || clerkInstance?.user)?.id;
+    if (userId) fetch('/api/generate-report', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,userId})}).catch(()=>{});
+  } catch(err) {
+    console.error('PDF error:', err);
+    if (btn) { btn.textContent = 'Error — reintentar'; btn.disabled = false; }
+  }
+}
+
+// ── FEATURE 3: LINKEDIN ADS ACTION CARDS ──────────────────
+function showLinkedInActionCards() {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  var html = '';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">';
+  html += '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">';
+
+  var cards = [
+    {icon:'🏢',title:'Planear campaña B2B',desc:'Estructura completa para tomadores de decisión',prompt:'Ayúdame a planear una campaña de LinkedIn Ads B2B desde cero'},
+    {icon:'🎯',title:'Definir segmentación',desc:'Cargo, industria y empresa para LatAm',prompt:'Ayúdame a definir la segmentación profesional para mi campaña de LinkedIn'},
+    {icon:'✍️',title:'Crear anuncios',desc:'Copys y creatividades para audiencias ejecutivas',prompt:'Necesito crear anuncios profesionales para LinkedIn Ads'},
+    {icon:'📊',title:'Analizar campañas',desc:'Métricas del Campaign Manager con benchmarks B2B',prompt:'Analiza el rendimiento de mis campañas de LinkedIn Ads'}
+  ];
+  cards.forEach(function(c) {
+    html += '<div onclick="dismissLinkedInCards(this);qSend(\'' + c.prompt.replace(/'/g,"\\'") + '\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
+    html += '<div style="font-size:18px;margin-bottom:6px">' + c.icon + '</div>';
+    html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">' + c.title + '</div>';
+    html += '<div style="font-size:11px;color:var(--muted2)">' + c.desc + '</div>';
+    html += '</div>';
+  });
+
+  // Card 5 full-width
+  html += '<div onclick="dismissLinkedInCards(this);qSend(\'Diagnostica por qué mis campañas de LinkedIn no están generando los resultados esperados\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">';
+  html += '<div style="display:flex;align-items:center;gap:10px">';
+  html += '<div style="font-size:22px">🔍</div><div>';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar resultados</div>';
+  html += '<div style="font-size:11px;color:var(--blue);opacity:.75">Encuentra por qué tu campaña no está convirtiendo</div>';
+  html += '</div></div></div>';
+  html += '</div>';
+  el.innerHTML = html;
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+function dismissLinkedInCards(el) { var msg = el.closest('.msg'); if (msg) msg.style.display = 'none'; }
+
+// ── FEATURE 4: ANÁLISIS PERIÓDICO ─────────────────────────
+var _snapshotPendingId = null;
+var _snapshotAgent = null;
+
+const PERIODIC_METRICS = {
+  'google-ads':   ['Impresiones','Clicks','CTR (%)','CPC ($)','Conversiones','CPA ($)','Gasto total ($)'],
+  'meta-ads':     ['Impresiones','Alcance','CTR (%)','CPM ($)','Conversiones','CPA ($)','Gasto total ($)'],
+  'tiktok-ads':   ['Impresiones','Alcance','VVR (%)','CTR (%)','Conversiones','CPA ($)','Gasto total ($)'],
+  'linkedin-ads': ['Impresiones','Clicks','CTR (%)','CPC ($)','Leads','CPL ($)','Gasto total ($)'],
+  'seo':          ['Sesiones orgánicas','Posición promedio','Clicks Search Console','Impresiones SC','Páginas/sesión','Tasa de rebote (%)'],
+  'consultor':    ['Presupuesto total ($)','Canales activos','Leads generados','Costo por lead ($)','ROAS general']
+};
+
+const PREV_METRICS = {
+  'google-ads': ['Impresiones','Clicks','CPA ($)'],
+  'meta-ads':   ['Impresiones','Conversiones','CPA ($)'],
+  'tiktok-ads': ['Impresiones','Conversiones','CPA ($)'],
+  'linkedin-ads':['Impresiones','Leads','CPL ($)'],
+  'seo':        ['Sesiones orgánicas','Posición promedio','Clicks SC'],
+  'consultor':  ['Leads generados','Costo por lead ($)','ROAS general']
+};
+
+function openAnalisisModal() {
+  const agent = currentAgentCtx;
+  const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Social','consultor':'Consultor'};
+  const metrics = PERIODIC_METRICS[agent] || PERIODIC_METRICS['google-ads'];
+  const prevMetrics = PREV_METRICS[agent] || PREV_METRICS['google-ads'];
+  const now = new Date();
+  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const defaultPeriod = months[now.getMonth()] + ' ' + now.getFullYear();
+
+  let existing = document.getElementById('analisis-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'analisis-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--bg);border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <div style="font-size:15px;font-weight:700;letter-spacing:-.2px">📊 Análisis periódico · ${agentNames[agent]||agent}</div>
+        <button onclick="document.getElementById('analisis-modal').remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted)">×</button>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="radio" name="period-type" value="weekly" id="pt-weekly"> Semanal
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="radio" name="period-type" value="monthly" id="pt-monthly" checked> Mensual
+        </label>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted2);display:block;margin-bottom:5px">PERÍODO</label>
+        <input id="am-period" type="text" value="${defaultPeriod}" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;background:var(--bg);color:var(--text)">
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:var(--muted2);margin-bottom:10px">MÉTRICAS DEL PERÍODO</div>
+        ${metrics.map(m => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><label style="font-size:12px;color:var(--text);width:160px;flex-shrink:0">${m}</label><input data-metric="${m}" type="text" placeholder="0" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:13px;background:var(--bg);color:var(--text)"></div>`).join('')}
+      </div>
+      <details style="margin-bottom:14px">
+        <summary style="font-size:12px;font-weight:600;color:var(--muted2);cursor:pointer;margin-bottom:8px">PERÍODO ANTERIOR (opcional)</summary>
+        <div style="margin-top:8px">
+          ${prevMetrics.map(m => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><label style="font-size:12px;color:var(--text);width:160px;flex-shrink:0">${m}</label><input data-prev-metric="${m}" type="text" placeholder="0" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:13px;background:var(--bg);color:var(--text)"></div>`).join('')}
+        </div>
+      </details>
+      <div style="margin-bottom:18px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted2);display:block;margin-bottom:5px">NOTAS ADICIONALES</label>
+        <textarea id="am-notes" rows="2" placeholder="Contexto extra, anomalías, eventos del período..." style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;background:var(--bg);color:var(--text);resize:vertical;font-family:var(--font)"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="document.getElementById('analisis-modal').remove()" style="padding:9px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;color:var(--muted)">Cancelar</button>
+        <button onclick="submitAnalisis()" style="padding:9px 18px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Analizar con IA →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function submitAnalisis() {
+  const modal = document.getElementById('analisis-modal');
+  if (!modal) return;
+  const agent = currentAgentCtx;
+  const periodLabel = document.getElementById('am-period')?.value?.trim() || 'Período actual';
+  const periodType = document.querySelector('input[name="period-type"]:checked')?.value || 'monthly';
+  const notes = document.getElementById('am-notes')?.value?.trim() || '';
+
+  const metrics = {};
+  modal.querySelectorAll('[data-metric]').forEach(inp => {
+    if (inp.value.trim()) metrics[inp.dataset.metric] = inp.value.trim();
+  });
+  const prevMetrics = {};
+  modal.querySelectorAll('[data-prev-metric]').forEach(inp => {
+    if (inp.value.trim()) prevMetrics[inp.dataset.prevMetric] = inp.value.trim();
+  });
+
+  modal.remove();
+
+  // Save snapshot
+  const user = window.Clerk?.user || clerkInstance?.user;
+  if (user) {
+    try {
+      const res = await fetch('/api/admin?action=save-snapshot', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({userId: user.id, agent, period_label: periodLabel, period_type: periodType, metrics})
+      });
+      const json = await res.json();
+      _snapshotPendingId = json.id;
+      _snapshotAgent = agent;
+    } catch(e) {}
+  }
+
+  // Build prompt and inject into chat
+  showView('chat');
+  const metricsText = buildMetricsPrompt({period_label: periodLabel, metrics, prev_metrics: prevMetrics, notes}, agent);
+  const cin = document.getElementById('cin');
+  if (cin) { cin.value = metricsText; sendMsg(); }
+}
+
+function buildMetricsPrompt(data, agent) {
+  let txt = 'Aquí están mis métricas de ' + (data.period_label || 'este período') + ':\n\n';
+  Object.entries(data.metrics || {}).forEach(([k,v]) => { if (v) txt += k + ': ' + v + '\n'; });
+  if (data.prev_metrics && Object.values(data.prev_metrics).some(v => v)) {
+    txt += '\nPeríodo anterior:\n';
+    Object.entries(data.prev_metrics).forEach(([k,v]) => { if (v) txt += k + ': ' + v + '\n'; });
+  }
+  if (data.notes) txt += '\nNotas: ' + data.notes;
+  txt += '\n\nPor favor analiza el rendimiento, identifica tendencias, y dame recomendaciones priorizadas para el siguiente período.';
+  return txt;
+}
+
+async function loadSnapshots(agentFilter) {
+  const user = window.Clerk?.user || clerkInstance?.user;
+  if (!user) return [];
+  try {
+    let url = `/api/admin?action=get-snapshots&userId=${encodeURIComponent(user.id)}&limit=10`;
+    if (agentFilter && agentFilter !== 'all') url += `&agent=${encodeURIComponent(agentFilter)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch(e) { return []; }
 }
 
 function renderSocialOptions() {
@@ -4061,6 +4598,7 @@ function setAgentContext(ctx, showGuide=false){
   const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};
   const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;
   const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;
+  const toolbarLabel=document.getElementById('chat-agent-label');if(toolbarLabel)toolbarLabel.textContent=labels[ctx]||ctx;
   // Mostrar/ocultar panel de acciones social vs píldoras QA
   const socialBar=document.getElementById('social-action-bar');
   const qaBar=document.getElementById('qa');
@@ -6593,11 +7131,12 @@ async function finishObWithAccountSave() {
   addAgent(resumen);
 
   // Mostrar cards de acción según el agente
-  if (currentAgentCtx === 'google-ads')  { setTimeout(showGoogleAdsActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'meta-ads')    { setTimeout(showMetaActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'tiktok-ads') { setTimeout(showTikTokActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'seo')         { setTimeout(showSeoActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'social')      { setTimeout(showSocialActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'seo')          { setTimeout(showSeoActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'social')       { setTimeout(showSocialActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
 
   // Para el consultor: generar Plan de 30 días automáticamente, luego mostrar cards
   if (currentAgentCtx === 'consultor') {

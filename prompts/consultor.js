@@ -115,6 +115,38 @@ Estructura del plan:
 
 Para LatAm: siempre considera WhatsApp como canal de cierre (no de adquisición). La mayoría de los leads en LatAm cierran por WhatsApp, no por formulario ni llamada.
 
+REPORTE DE MARKETING:
+Trigger: "reporte", "informe", "reporte de marketing", "genera un reporte", "report", "resumen de resultados"
+→ Solicita las métricas del período (presupuesto total, canales activos, leads generados, costo por lead, ROAS general, comparación vs período anterior). Con los datos, genera:
+<REPORTE_DATA>
+{
+  "titulo": "Reporte de Marketing Digital — [Nombre del Negocio]",
+  "periodo": "[Período indicado]",
+  "agente": "consultor",
+  "negocio": "[Nombre del negocio del perfil]",
+  "resumen_ejecutivo": "[Párrafo de 3-4 oraciones con hallazgos principales]",
+  "metricas": [
+    { "nombre": "Presupuesto total", "valor": "$[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "Leads generados", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "Costo por lead", "valor": "$[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "ROAS general", "valor": "[valor]x", "cambio": "[+/-X]", "tendencia": "up" },
+    { "nombre": "Canales activos", "valor": "[valor]", "cambio": "[+/-X]", "tendencia": "up" },
+    { "nombre": "Tasa de conversión", "valor": "[valor]%", "cambio": "[+/-Xpp]", "tendencia": "up" }
+  ],
+  "analisis": [
+    { "titulo": "Rendimiento por canal", "contenido": "[análisis]" },
+    { "titulo": "ROI y eficiencia", "contenido": "[análisis]" },
+    { "titulo": "Audiencias y conversiones", "contenido": "[análisis]" }
+  ],
+  "recomendaciones": [
+    { "prioridad": "alta", "accion": "[acción concreta]" },
+    { "prioridad": "media", "accion": "[acción concreta]" },
+    { "prioridad": "baja", "accion": "[acción concreta]" }
+  ],
+  "proximos_pasos": "[párrafo con próximos pasos]"
+}
+</REPORTE_DATA>
+
 SUGERENCIAS DE SEGUIMIENTO:
 Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea con el bloque:
 [SUGERENCIAS: opción1 | opción2 | opción3]

@@ -365,13 +365,107 @@ async function handleSync(req, res) {
   return res.json({ success: true, synced, total: allClerkUsers.length, clerkDebug });
 }
 
+// ── RECOMMENDATIONS ───────────────────────────────────────
+/*
+SQL para Supabase (ejecutar una vez):
+CREATE TABLE recommendations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  content TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'dismissed')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_recommendations_user_id ON recommendations(user_id);
+CREATE INDEX idx_recommendations_agent ON recommendations(agent);
+*/
+async function handleSaveRecommendation(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId, agent, content } = req.body || {};
+  if (!userId || !agent || !content) return res.status(400).json({ error: 'userId, agent, content requeridos' });
+  const result = await supabaseReq('/recommendations', 'POST', { user_id: userId, agent, content });
+  return res.json({ id: result?.[0]?.id, created_at: result?.[0]?.created_at });
+}
+
+async function handleGetRecommendations(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
+  const { userId, agent } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+  let query = `/recommendations?user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=50&select=id,agent,content,status,created_at`;
+  if (agent) query += `&agent=eq.${encodeURIComponent(agent)}`;
+  const result = await supabaseReq(query);
+  return res.json(result || []);
+}
+
+async function handleUpdateRecommendation(req, res) {
+  if (req.method !== 'PATCH') return res.status(405).json({ error: 'PATCH only' });
+  const { id, status } = req.body || {};
+  if (!id || !status) return res.status(400).json({ error: 'id y status requeridos' });
+  await supabaseReq(`/recommendations?id=eq.${id}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+  return res.json({ ok: true });
+}
+
+// ── PERFORMANCE SNAPSHOTS ────────────────────────────────
+/*
+SQL para Supabase (ejecutar una vez):
+CREATE TABLE performance_snapshots (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  period_label TEXT NOT NULL,
+  period_type TEXT NOT NULL,
+  metrics JSONB NOT NULL,
+  analysis TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_snapshots_user_agent ON performance_snapshots(user_id, agent);
+*/
+async function handleSaveSnapshot(req, res) {
+  if (req.method !== 'POST' && req.method !== 'PATCH') return res.status(405).json({ error: 'POST/PATCH only' });
+  if (req.method === 'PATCH') {
+    const { id, analysis } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'id requerido' });
+    await supabaseReq(`/performance_snapshots?id=eq.${id}`, 'PATCH', { analysis });
+    return res.json({ ok: true });
+  }
+  const { userId, agent, period_label, period_type, metrics, analysis } = req.body || {};
+  if (!userId || !agent || !period_label || !period_type || !metrics) return res.status(400).json({ error: 'Campos requeridos faltantes' });
+  const result = await supabaseReq('/performance_snapshots', 'POST', { user_id: userId, agent, period_label, period_type, metrics, analysis: analysis || null });
+  return res.json({ id: result?.[0]?.id });
+}
+
+async function handleGetSnapshots(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
+  const { userId, agent, limit = 10 } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+  let query = `/performance_snapshots?user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=${limit}`;
+  if (agent) query += `&agent=eq.${encodeURIComponent(agent)}`;
+  const result = await supabaseReq(query);
+  return res.json(result || []);
+}
+
 // ── ROUTER PRINCIPAL ──────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (!authCheck(req)) return res.status(401).json({ error: 'Unauthorized' });
 
   const action = req.query.action;
+
+  // Rutas públicas de usuario (sin admin secret)
+  try {
+    if (action === 'save-recommendation')   return await handleSaveRecommendation(req, res);
+    if (action === 'get-recommendations')   return await handleGetRecommendations(req, res);
+    if (action === 'update-recommendation') return await handleUpdateRecommendation(req, res);
+    if (action === 'save-snapshot')         return await handleSaveSnapshot(req, res);
+    if (action === 'get-snapshots')         return await handleGetSnapshots(req, res);
+  } catch (err) {
+    console.error('Admin user-action error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+
+  // Rutas de administrador
+  if (!authCheck(req)) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     if (action === 'metrics')          return await handleMetrics(req, res);
@@ -380,7 +474,7 @@ export default async function handler(req, res) {
     if (action === 'delete-test-user')   return await handleDeleteTestUser(req, res);
     if (action === 'reset-test-password') return await handleResetTestPassword(req, res);
     if (action === 'sync')             return await handleSync(req, res);
-    return res.status(400).json({ error: 'action requerido: metrics | users | create-test-user | sync' });
+    return res.status(400).json({ error: 'action requerido' });
   } catch (err) {
     console.error('Admin error:', err);
     return res.status(500).json({ error: err.message });

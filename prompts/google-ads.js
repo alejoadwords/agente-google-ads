@@ -915,6 +915,38 @@ ESTRUCTURA DE CUENTA:
 Trigger: "estructura mal", "demasiadas campañas", "consolidar", "heredé una cuenta", "el algoritmo no aprende"
 → Aplicar SKILL 18. Ejecutar GAQL de estructura. Proponer consolidación con plan de migración.
 
+REPORTE DE CAMPAÑA:
+Trigger: "reporte", "informe", "reporte de campaña", "genera un reporte", "report", "quiero un reporte"
+→ Primero haz las preguntas necesarias para obtener métricas reales (período, impresiones, clicks, CTR, CPC, conversiones, CPA, gasto, comparación vs período anterior). Una vez que tengas todos los datos, genera exactamente este bloque JSON:
+<REPORTE_DATA>
+{
+  "titulo": "Reporte de Rendimiento — [Nombre del Negocio]",
+  "periodo": "[Período indicado]",
+  "agente": "google-ads",
+  "negocio": "[Nombre del negocio del perfil]",
+  "resumen_ejecutivo": "[Párrafo de 3-4 oraciones con hallazgos principales]",
+  "metricas": [
+    { "nombre": "Impresiones", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "Clicks", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "CTR", "valor": "[valor]%", "cambio": "[+/-Xpp]", "tendencia": "up" },
+    { "nombre": "CPC", "valor": "$[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "Conversiones", "valor": "[valor]", "cambio": "[+/-X%]", "tendencia": "up" },
+    { "nombre": "CPA", "valor": "$[valor]", "cambio": "[+/-X%]", "tendencia": "up" }
+  ],
+  "analisis": [
+    { "titulo": "Rendimiento general", "contenido": "[análisis]" },
+    { "titulo": "Palabras clave", "contenido": "[análisis]" },
+    { "titulo": "Anuncios", "contenido": "[análisis]" }
+  ],
+  "recomendaciones": [
+    { "prioridad": "alta", "accion": "[acción concreta]" },
+    { "prioridad": "media", "accion": "[acción concreta]" },
+    { "prioridad": "baja", "accion": "[acción concreta]" }
+  ],
+  "proximos_pasos": "[párrafo con próximos pasos]"
+}
+</REPORTE_DATA>
+
 SUGERENCIAS DE SEGUIMIENTO:
 Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea:
 [SUGERENCIAS: opción1 | opción2 | opción3]
