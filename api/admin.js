@@ -196,7 +196,20 @@ async function handleCreateTestUser(req, res) {
 
   const clerkId = clerkData.id; // ID real de Clerk, ej: user_2abc...
 
-  // 2. Insertar en Supabase con el ID real de Clerk
+  // 2. Verificar el email automáticamente (sin esto Clerk bloquea el login)
+  const emailId = clerkData.email_addresses?.[0]?.id;
+  if (emailId) {
+    await fetch(`https://api.clerk.com/v1/email_addresses/${emailId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${CLERK_SECRET}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ verified: true }),
+    });
+  }
+
+  // 3. Insertar en Supabase con el ID real de Clerk
   const trialEndsAt = new Date();
   trialEndsAt.setDate(trialEndsAt.getDate() + (parseInt(trial_days) || 7));
 
@@ -217,7 +230,7 @@ async function handleCreateTestUser(req, res) {
 
   const result = await supabaseReq('/users', 'POST', userData);
 
-  // 3. Log
+  // 4. Log
   await supabaseReq('/activity_logs', 'POST', {
     user_id: clerkId,
     action: 'admin_create_test',
