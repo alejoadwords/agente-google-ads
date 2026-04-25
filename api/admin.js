@@ -241,6 +241,10 @@ async function handleResetTestPassword(req, res) {
   if (!id || !password) return res.status(400).json({ error: 'id y password requeridos' });
   if (password.length < 8) return res.status(400).json({ error: 'Mínimo 8 caracteres' });
 
+  if (id.startsWith('test_')) {
+    return res.status(400).json({ error: 'Este usuario fue creado con el sistema anterior (sin Clerk). Elimínalo y crea uno nuevo con el formulario actual.' });
+  }
+
   const r = await fetch(`https://api.clerk.com/v1/users/${id}`, {
     method: 'PATCH',
     headers: {
@@ -269,21 +273,32 @@ async function handleDeleteTestUser(req, res) {
   const { id } = req.body;
   if (!id) return res.status(400).json({ error: 'id requerido' });
 
-  // Verificar que sea un usuario de prueba (metadata Clerk)
-  const clerkUser = await clerkGetUser(id);
-  if (!clerkUser?.public_metadata?.is_test_user) {
-    return res.status(400).json({ error: 'Solo se pueden eliminar usuarios marcados como test (is_test_user: true)' });
+  // IDs con prefijo test_ son usuarios legacy sin Clerk — solo borrar de Supabase
+  if (id.startsWith('test_')) {
+    await supabaseReq(`/activity_logs?user_id=eq.${id}`, 'DELETE');
+    await supabaseReq(`/users?id=eq.${id}`, 'DELETE');
+    return res.json({ success: true, id, note: 'legacy test user removed from Supabase only' });
+  }
+
+  // Usuarios reales: verificar que sea test en Clerk antes de borrar
+  let clerkUser;
+  try { clerkUser = await clerkGetUser(id); } catch(e) { clerkUser = null; }
+
+  if (clerkUser && !clerkUser?.public_metadata?.is_test_user) {
+    return res.status(400).json({ error: 'Solo se pueden eliminar usuarios marcados como is_test_user' });
   }
 
   // 1. Eliminar logs (FK constraint)
   await supabaseReq(`/activity_logs?user_id=eq.${id}`, 'DELETE');
   // 2. Eliminar de Supabase
   await supabaseReq(`/users?id=eq.${id}`, 'DELETE');
-  // 3. Eliminar de Clerk
-  await fetch(`https://api.clerk.com/v1/users/${id}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${CLERK_SECRET}` },
-  });
+  // 3. Eliminar de Clerk (si existe)
+  if (clerkUser?.id) {
+    await fetch(`https://api.clerk.com/v1/users/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${CLERK_SECRET}` },
+    });
+  }
 
   return res.json({ success: true, id });
 }
