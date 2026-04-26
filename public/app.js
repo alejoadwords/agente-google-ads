@@ -6,6 +6,8 @@ let clerkInstance=null,sessionToken=null,userPlan='free';
 let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
 // Declaración temprana para evitar ReferenceError en getProfileKey
 let adsActiveAccount = null;
+// Contexto de cliente activo para usuarios Plan Agencia
+let activeClientContext = null; // { clientId, clientName, clientIndustry, monthlyBudget, notes }
 
 // Sistema de límites de imágenes
 let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
@@ -679,7 +681,14 @@ function agencyRender() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
             reporte
           </button>
-          <button class="agency-open-btn" onclick="agencyOpenClient('${client.id}')">abrir →</button>
+          <button class="agency-open-btn" onclick="agencyOpenAgentDropdown(event,'ag-dd-${client.id}')">Ver agente ▾</button>
+          <div class="agency-card-dropdown" id="ag-dd-${client.id}" style="right:0;left:auto">
+            <div class="agency-card-dd-item" onclick="agencyCloseAllDropdowns();openAgentForClient('google-ads',agencyClients.find(x=>x.id==='${client.id}'))">Google Ads</div>
+            <div class="agency-card-dd-item" onclick="agencyCloseAllDropdowns();openAgentForClient('meta-ads',agencyClients.find(x=>x.id==='${client.id}'))">Meta Ads</div>
+            <div class="agency-card-dd-item" onclick="agencyCloseAllDropdowns();openAgentForClient('seo',agencyClients.find(x=>x.id==='${client.id}'))">SEO</div>
+            <div class="agency-card-dd-item" onclick="agencyCloseAllDropdowns();openAgentForClient('consultor',agencyClients.find(x=>x.id==='${client.id}'))">Consultor</div>
+            <div class="agency-card-dd-item" onclick="agencyCloseAllDropdowns();agencyOpenClient('${client.id}')">Vista general</div>
+          </div>
         </div>
       </div>
     `;
@@ -1080,6 +1089,15 @@ async function agencyOpenClient(id) {
   // Setear el clientId activo
   agencyActiveClientId = id;
 
+  // Setear activeClientContext para inyeccion en system prompt
+  activeClientContext = {
+    clientId:       c.id,
+    clientName:     c.client_name || c.name || '',
+    clientIndustry: c.client_industry || c.industria || c.business || '',
+    monthlyBudget:  c.monthly_budget || c.presupuesto || '',
+    notes:          c.notes || c.descripcion || '',
+  };
+
   // Ir a la pantalla de inicio con saludo personalizado del cliente
   showView('home');
   agencyShowContextBar(c);
@@ -1206,6 +1224,13 @@ function agencyToggleDropdown(event, ddId) {
 
 function agencyCloseAllDropdowns() {
   document.querySelectorAll('.agency-card-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+function agencyOpenAgentDropdown(event, ddId) {
+  event.stopPropagation();
+  agencyCloseAllDropdowns();
+  const dd = document.getElementById(ddId);
+  if (dd) dd.classList.toggle('open');
 }
 
 // Cerrar dropdowns al hacer click fuera
@@ -2100,6 +2125,7 @@ async function dbLoadProfile(agentKey) {
 async function openAgent(agentKey) {
   setAgentContext(agentKey);
   showView('chat');
+  updateActiveClientBar();
   // Esperar a que Clerk esté listo Y tenga usuario antes de cargar perfil
   if (!clerkInstance?.user?.id) {
     await new Promise(res => {
@@ -2575,6 +2601,7 @@ function showSeoActionCards() {
     { icon: '🏥', titulo: 'Auditoría SEO rápida', desc: 'Los problemas técnicos que más están afectando tu posicionamiento.', prompt: 'Ayúdame a identificar los principales problemas SEO de mi sitio web y cómo corregirlos' },
     { icon: '✍️', titulo: 'Estrategia de contenido', desc: 'Qué artículos crear para atraer tráfico orgánico calificado.', prompt: 'Crea una estrategia de contenido SEO para los próximos 3 meses para mi negocio' },
     { icon: '🤖', titulo: 'Optimización para IAs (AEO)', desc: 'Cómo aparecer cuando alguien le pregunta a ChatGPT o Gemini sobre tu industria.', prompt: 'Explícame cómo optimizar mi sitio para que aparezca en las respuestas de IAs como ChatGPT, Claude y Gemini' },
+    { icon: '🔎', titulo: 'Analizar competencia', desc: 'Quién aparece antes que tú y qué mensajes están usando.', prompt: 'Haz un análisis de competencia para mi negocio en los resultados de búsqueda' },
   ];
   var cards = pasos.map(function(p) {
     return '<div class="next-step-card" onclick="this.closest(\'.msg\').style.display=\'none\';qSend(\'' + p.prompt.replace(/'/g,"\\'") + '\')">' +
@@ -3319,8 +3346,10 @@ async function sendMsg(){
     addUser(txt||'[Imagen adjunta]', pendingImg);
     clearImg();
   } else {
-    msgContent=txt;
-    addUser(txt);
+    // Enriquecer con datos competitivos si aplica
+    const enriched = await enrichWithCompetitiveData(txt, currentAgentCtx).catch(() => txt);
+    msgContent = enriched;
+    addUser(txt); // mostrar el mensaje original sin el contexto extra
   }
   hist.push({role:'user',content:msgContent});
   // Ocultar tarjetas de acción rápida del agente social al primer envío
@@ -3463,6 +3492,15 @@ if(currentAgentCtx==='meta-ads'){
   // Inyectar contexto de Google Ads si hay cuenta conectada
   const gCtx = await getGoogleAdsContext().catch(()=>'');
   if(gCtx) sys = gCtx + '\n\n' + sys;
+}
+// Inyectar contexto de cliente activo (Plan Agencia)
+if(activeClientContext){
+  const clientCtx = 'CLIENTE ACTIVO: ' + activeClientContext.clientName +
+    (activeClientContext.clientIndustry ? ' (' + activeClientContext.clientIndustry + ')' : '') +
+    (activeClientContext.monthlyBudget ? '\nPresupuesto mensual: $' + activeClientContext.monthlyBudget : '') +
+    (activeClientContext.notes ? '\nNotas: ' + activeClientContext.notes : '') +
+    '\nEstas ayudando a gestionar las campanas de este cliente especifico.';
+  sys = clientCtx + '\n\n' + sys;
 }
 if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{// Truncar historial: mantener los últimos MAX_HIST_MESSAGES mensajes
 const histTruncated = hist.length > MAX_HIST_MESSAGES
@@ -3635,6 +3673,19 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     else {
+      // Detectar bloque ACTION_CONFIRM
+      const actionConfirmMatch = replyFinalProcessed.match(/<ACTION_CONFIRM>([\s\S]*?)<\/ACTION_CONFIRM>/);
+      if (actionConfirmMatch) {
+        const cleanReply = replyFinalProcessed.replace(/<ACTION_CONFIRM>[\s\S]*?<\/ACTION_CONFIRM>/,'').trim();
+        if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
+        else { hist.push({role:'assistant',content:'Accion propuesta — confirma para ejecutar.'}); }
+        try {
+          const actionData = JSON.parse(actionConfirmMatch[1].trim());
+          setTimeout(() => renderActionConfirmCard(actionData), 200);
+        } catch(e) { console.warn('ACTION_CONFIRM parse error:', e); }
+        if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
+        loading=false; document.getElementById('sbtn').disabled=false; return;
+      }
       // Detectar bloque REPORTE_DATA
       const reportData = detectReportData(replyFinalProcessed);
       if (reportData) {
@@ -4172,6 +4223,171 @@ function buildMetricsPrompt(data, agent) {
   if (data.notes) txt += '\nNotas: ' + data.notes;
   txt += '\n\nPor favor analiza el rendimiento, identifica tendencias, y dame recomendaciones priorizadas para el siguiente período.';
   return txt;
+}
+
+// ── SPRINT 3: ACTIVE CLIENT CONTEXT ──────────────────────
+function openAgentForClient(agentKey, client) {
+  activeClientContext = {
+    clientId:      client.id,
+    clientName:    client.client_name || client.name || '',
+    clientIndustry: client.client_industry || '',
+    monthlyBudget: client.monthly_budget || '',
+    notes:         client.notes || '',
+  };
+  updateActiveClientBar();
+  openAgent(agentKey);
+}
+
+function clearActiveClientContext() {
+  activeClientContext = null;
+  updateActiveClientBar();
+}
+
+function updateActiveClientBar() {
+  const bar  = document.getElementById('agency-ctx-bar');
+  const name = document.getElementById('agency-ctx-name');
+  if (!bar) return;
+  if (activeClientContext) {
+    if (name) name.textContent = activeClientContext.clientName;
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// ── SPRINT 3: COMPETITIVE SEARCH ─────────────────────────
+async function enrichWithCompetitiveData(userMessage, agentKey) {
+  if (!['consultor', 'seo'].includes(agentKey)) return userMessage;
+  const competitiveKeywords = ['competencia', 'competidores', 'competidor', 'quien aparece',
+    'quién aparece', 'que estan haciendo', 'qué están haciendo', 'analisis de mercado',
+    'análisis de mercado', 'benchmark'];
+  const isCompetitiveQuery = competitiveKeywords.some(k => userMessage.toLowerCase().includes(k));
+  if (!isCompetitiveQuery) return userMessage;
+
+  const profile = mem;
+  if (!profile?.negocio || !profile?.industria) return userMessage;
+
+  try {
+    const query = profile.negocio + ' ' + profile.industria + ' ' + (profile.pais || 'Colombia');
+    const res = await fetch('/api/admin?action=competitive-search', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ query, type: 'serp' })
+    });
+    if (!res.ok) return userMessage;
+    const data = await res.json();
+    if (!data.results?.length) return userMessage;
+    const context = data.results.slice(0, 8).map((r, i) =>
+      (i + 1) + '. ' + r.title + '\n   URL: ' + r.url + '\n   ' + (r.description || '')
+    ).join('\n\n');
+    return userMessage + '\n\n[DATOS DE BUSQUEDA REAL — usar para el analisis]\n' + context;
+  } catch(e) { return userMessage; }
+}
+
+// ── SPRINT 3: ACTION CONFIRM CARD ────────────────────────
+function renderActionConfirmCard(actionData) {
+  const area = document.getElementById('chat-area');
+  if (!area || !actionData) return;
+  const params = actionData.params || {};
+  const isReversible = actionData.reversible !== false;
+  const danger = actionData.dangerLevel || 'medium';
+
+  let detailsHtml = '';
+  const friendlyLabels = {
+    campaignName: 'Campaña',
+    status: 'Estado nuevo',
+    currentBudget: 'Presupuesto actual',
+    newBudget: 'Presupuesto nuevo',
+    keywordText: 'Keyword',
+    currentBid: 'Puja actual',
+    newBid: 'Puja nueva',
+    adGroupName: 'Grupo de anuncios',
+  };
+  Object.entries(friendlyLabels).forEach(([k, label]) => {
+    if (params[k] !== undefined) {
+      let valHtml = String(params[k]);
+      if (k === 'status') {
+        valHtml = params[k] === 'PAUSED'
+          ? '<span class="status-paused">○ Pausada</span>'
+          : '<span class="status-active">● Activa</span>';
+      }
+      detailsHtml += '<div class="action-confirm-detail"><span class="label">' + label + ':</span><span class="value">' + valHtml + '</span></div>';
+    }
+  });
+
+  const safeData = JSON.stringify(actionData).replace(/'/g, "\\'");
+  const btnClass = danger === 'high' ? 'btn-execute danger' : 'btn-execute';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg';
+  wrap.innerHTML = '<div class="action-confirm-card">' +
+    '<div class="action-confirm-header">' +
+      '<span class="action-confirm-icon">⚡</span>' +
+      '<span class="action-confirm-title">' + (actionData.label || 'Accion propuesta') + '</span>' +
+      '<span class="action-confirm-badge ' + (isReversible ? 'reversible' : 'irreversible') + '">' + (isReversible ? 'Reversible' : 'Irreversible') + '</span>' +
+    '</div>' +
+    '<div class="action-confirm-body">' + detailsHtml + '</div>' +
+    '<div class="action-confirm-footer">' +
+      '<button class="btn-cancel" onclick="this.closest(\'.msg\').remove()">Cancelar</button>' +
+      '<button class="' + btnClass + '" onclick="executeAction(\'' + safeData.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', this)">' + (actionData.confirmText || 'Confirmar') + '</button>' +
+    '</div>' +
+  '</div>';
+  area.appendChild(wrap);
+  scrollB();
+}
+
+async function executeAction(actionDataStr, btn) {
+  let actionData;
+  try { actionData = JSON.parse(actionDataStr); } catch(e) { return; }
+
+  const userId = clerkInstance?.user?.id;
+  if (!userId) { addAgent('Error: no hay sesion activa.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Ejecutando...';
+
+  const params = actionData.params || {};
+  const endpoint = '/api/google-ads?action=' + actionData.action + '&userId=' + encodeURIComponent(userId) + '&customerId=' + (params.customerId || '');
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ...params, userId, confirm: true }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      btn.disabled = false;
+      btn.textContent = actionData.confirmText || 'Confirmar';
+      addAgent('Error al ejecutar: ' + (data.error || 'Error desconocido') + '. Puedes hacerlo manualmente en Google Ads.');
+      return;
+    }
+
+    // Success
+    btn.closest('.msg').remove();
+    addAgent('Hecho. ' + (data.campaignName || data.adGroupName || data.keywordText || '') +
+      (data.newStatus ? ' — estado: ' + data.newStatus : '') +
+      (data.newBudget ? ' — nuevo presupuesto: $' + data.newBudget + '/dia' : '') +
+      (data.newBid ? ' — nueva puja: $' + data.newBid : ''));
+
+    // Audit log
+    fetch('/api/admin?action=log-api-action', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        userId, platform: 'google_ads', actionType: actionData.action,
+        entityId: params.campaignId || params.adGroupId || params.criterionId,
+        entityName: params.campaignName || params.adGroupName || params.keywordText,
+        newValue: params, confirmed: true,
+      }),
+    }).catch(()=>{});
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = actionData.confirmText || 'Confirmar';
+    addAgent('Error de conexion al ejecutar la accion. Intenta de nuevo.');
+  }
 }
 
 async function loadSnapshots(agentFilter) {

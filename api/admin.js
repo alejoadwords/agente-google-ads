@@ -752,6 +752,105 @@ async function handleArchiveClient(req, res) {
   return res.json({ ok: true });
 }
 
+// ── API ACTION LOGS ───────────────────────────────────────
+/*
+SQL para Supabase (ejecutar una vez):
+CREATE TABLE api_action_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  entity_id TEXT,
+  entity_name TEXT,
+  old_value JSONB,
+  new_value JSONB,
+  confirmed BOOLEAN NOT NULL,
+  executed_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_action_logs_user ON api_action_logs(user_id, executed_at DESC);
+*/
+
+async function handleLogApiAction(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId, platform, actionType, entityId, entityName, oldValue, newValue, confirmed } = req.body || {};
+  if (!userId || !platform || !actionType || confirmed === undefined) {
+    return res.status(400).json({ error: 'userId, platform, actionType, confirmed requeridos' });
+  }
+  const result = await supabaseReq('/api_action_logs', 'POST', {
+    user_id: userId, platform, action_type: actionType,
+    entity_id: entityId || null, entity_name: entityName || null,
+    old_value: oldValue || null, new_value: newValue || null,
+    confirmed: !!confirmed,
+  });
+  return res.json({ id: result?.[0]?.id, ok: true });
+}
+
+// ── ASSIGN CONNECTION TO CLIENT ───────────────────────────
+
+async function handleAssignConnection(req, res) {
+  if (req.method !== 'PATCH') return res.status(405).json({ error: 'PATCH only' });
+  const { connectionId, clientId, label } = req.body || {};
+  if (!connectionId) return res.status(400).json({ error: 'connectionId requerido' });
+  const updates = {};
+  if (clientId !== undefined) updates.client_id = clientId;
+  if (label    !== undefined) updates.label = label;
+  await supabaseReq(`/platform_connections?id=eq.${encodeURIComponent(connectionId)}`, 'PATCH', updates);
+  return res.json({ ok: true });
+}
+
+// ── COMPETITIVE SEARCH ────────────────────────────────────
+
+const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
+
+async function braveSearch(query, count = 10) {
+  if (!BRAVE_API_KEY) throw new Error('BRAVE_SEARCH_API_KEY no configurada');
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}&country=co&search_lang=es`;
+  const res = await fetch(url, {
+    headers: { 'X-Subscription-Token': BRAVE_API_KEY, 'Accept': 'application/json' }
+  });
+  if (!res.ok) throw new Error(`Brave API error: ${res.status}`);
+  return res.json();
+}
+
+async function handleCompetitiveSearch(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { query, type = 'serp' } = req.body || {};
+  if (!query) return res.status(400).json({ error: 'query requerido' });
+
+  try {
+    let searchQuery = query;
+    if (type === 'ads') searchQuery = `${query} precio comprar`;
+    if (type === 'keywords') searchQuery = `${query} Colombia precio comprar vs`;
+
+    const data = await braveSearch(searchQuery);
+    const webResults = data.web?.results || [];
+
+    const results = webResults.map(r => ({
+      title:       r.title,
+      url:         r.url,
+      description: r.description,
+      isAd:        r.url?.includes('gad_source') || r.url?.includes('gclid') || false,
+    }));
+
+    return res.json({ results, query: searchQuery, type, total: results.length });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ── UPDATE USER PREFERENCES ───────────────────────────────
+
+async function handleUpdatePreferences(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId, email_reports } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+  await supabaseReq(`/users?id=eq.${encodeURIComponent(userId)}`, 'PATCH', {
+    email_reports: !!email_reports,
+    updated_at: new Date().toISOString(),
+  });
+  return res.json({ ok: true });
+}
+
 // ── ROUTER PRINCIPAL ──────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
@@ -781,6 +880,11 @@ export default async function handler(req, res) {
     if (action === 'get-clients')           return await handleGetClients(req, res);
     if (action === 'update-client')         return await handleUpdateClient(req, res);
     if (action === 'archive-client')        return await handleArchiveClient(req, res);
+    // Sprint 3
+    if (action === 'log-api-action')        return await handleLogApiAction(req, res);
+    if (action === 'assign-connection')     return await handleAssignConnection(req, res);
+    if (action === 'competitive-search')    return await handleCompetitiveSearch(req, res);
+    if (action === 'update-preferences')    return await handleUpdatePreferences(req, res);
   } catch (err) {
     console.error('Admin user-action error:', err);
     return res.status(500).json({ error: err.message });

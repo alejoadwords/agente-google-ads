@@ -719,6 +719,29 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 /* ── FIN REPORTE WHATSAPP ──────────────────────────────────────────────────── */
 
 /* ── FIN PANEL AGENCIA ─────────────────────────────────────────────────────── */
+
+/* ── ACTION CONFIRM CARD ──────────────────────────────────────────────────── */
+.action-confirm-card{background:var(--bg);border:2px solid var(--warning);border-radius:var(--rlg);padding:16px;margin:8px 0;max-width:500px}
+.action-confirm-header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.action-confirm-icon{font-size:16px}
+.action-confirm-title{font-size:13px;font-weight:700;color:var(--text);flex:1}
+.action-confirm-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px}
+.action-confirm-badge.reversible{background:#ECFDF5;color:#065F46}
+.action-confirm-badge.irreversible{background:#FEF2F2;color:#991B1B}
+.action-confirm-body{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.action-confirm-detail{display:flex;align-items:center;gap:8px;font-size:12px}
+.action-confirm-detail .label{color:var(--muted);min-width:90px;flex-shrink:0}
+.action-confirm-detail .value{color:var(--text);font-weight:500}
+.action-confirm-detail .status-active{color:var(--success)}
+.action-confirm-detail .status-paused{color:var(--muted)}
+.action-confirm-footer{display:flex;gap:8px}
+.action-confirm-footer .btn-cancel{padding:8px 14px;border:1.5px solid var(--border);border-radius:var(--r);background:none;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s}
+.action-confirm-footer .btn-cancel:hover{background:var(--sidebar)}
+.action-confirm-footer .btn-execute{padding:8px 14px;background:var(--warning);color:#fff;border:none;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s}
+.action-confirm-footer .btn-execute:hover{opacity:.85}
+.action-confirm-footer .btn-execute.danger{background:var(--danger)}
+.action-confirm-footer .btn-execute:disabled{opacity:.5;cursor:not-allowed}
+/* ── FIN ACTION CONFIRM ────────────────────────────────────────────────────── */
 </style>
 </head>
 <body>
@@ -1807,6 +1830,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <!-- Dashboard de plataforma conectada (Google Ads / Meta Ads) -->
       <div id="ads-dashboard" style="display:none;flex-shrink:0;border-bottom:1px solid var(--border2);background:var(--sidebar2)">
         <div id="ads-dashboard-inner"></div>
+      </div>
+      <!-- Chip de cliente activo (Plan Agencia) -->
+      <div class="agency-ctx-bar" id="agency-ctx-bar" style="display:none">
+        <span style="font-size:11px">📌 Cliente:</span>
+        <span class="agency-ctx-name" id="agency-ctx-name">—</span>
+        <button class="agency-ctx-exit" onclick="clearActiveClientContext()">× salir</button>
       </div>
       <div class="chat-area" id="chat-area"></div>
 

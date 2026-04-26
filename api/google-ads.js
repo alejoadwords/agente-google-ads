@@ -276,6 +276,185 @@ export default async function handler(req, res) {
       return res.json({ ads });
     }
 
+    // ── update-campaign-status ─────────────────────────────
+    if (action === 'update-campaign-status') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+      const { campaignId, status, confirm } = req.body || {};
+      if (!confirm) return res.status(400).json({ error: 'confirm: true requerido' });
+      if (!campaignId || !status) return res.status(400).json({ error: 'campaignId y status requeridos' });
+      if (!['ENABLED', 'PAUSED'].includes(status)) return res.status(400).json({ error: 'status debe ser ENABLED o PAUSED' });
+
+      // Verify customerId belongs to this user
+      const conn = await getStoredToken(userId);
+      if (!conn || (conn.account_id && conn.account_id.replace(/-/g, '') !== customerId)) {
+        return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
+      }
+
+      const mutateRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${customerId}/campaigns:mutate`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'developer-token': DEV_TOKEN,
+            'Content-Type': 'application/json',
+            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
+          },
+          body: JSON.stringify({
+            operations: [{
+              updateMask: 'status',
+              update: { resourceName: `customers/${customerId}/campaigns/${campaignId}`, status },
+            }],
+          }),
+        }
+      );
+      const mutateData = await mutateRes.json();
+      if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
+
+      // Get campaign name for audit log
+      const nameQuery = `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`;
+      const nameData = await gaqlRequest(customerId, nameQuery, token, userId).catch(() => ({}));
+      const campaignName = nameData.results?.[0]?.campaign?.name || campaignId;
+
+      return res.json({ ok: true, campaignName, newStatus: status });
+    }
+
+    // ── update-campaign-budget ─────────────────────────────
+    if (action === 'update-campaign-budget') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+      const { campaignBudgetId, newDailyBudgetMicros, confirm } = req.body || {};
+      if (!confirm) return res.status(400).json({ error: 'confirm: true requerido' });
+      if (!campaignBudgetId || !newDailyBudgetMicros) return res.status(400).json({ error: 'campaignBudgetId y newDailyBudgetMicros requeridos' });
+
+      const conn = await getStoredToken(userId);
+      if (!conn || (conn.account_id && conn.account_id.replace(/-/g, '') !== customerId)) {
+        return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
+      }
+
+      // Get old budget first
+      const budgetQuery = `SELECT campaign_budget.amount_micros FROM campaign_budget WHERE campaign_budget.id = ${campaignBudgetId}`;
+      const budgetData = await gaqlRequest(customerId, budgetQuery, token, userId).catch(() => ({}));
+      const oldBudget = formatCost(budgetData.results?.[0]?.campaignBudget?.amountMicros || 0);
+
+      const mutateRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${customerId}/campaignBudgets:mutate`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'developer-token': DEV_TOKEN,
+            'Content-Type': 'application/json',
+            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
+          },
+          body: JSON.stringify({
+            operations: [{
+              updateMask: 'amount_micros',
+              update: {
+                resourceName: `customers/${customerId}/campaignBudgets/${campaignBudgetId}`,
+                amountMicros: String(newDailyBudgetMicros),
+              },
+            }],
+          }),
+        }
+      );
+      const mutateData = await mutateRes.json();
+      if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
+
+      return res.json({ ok: true, oldBudget, newBudget: formatCost(newDailyBudgetMicros) });
+    }
+
+    // ── update-keyword-bid ─────────────────────────────────
+    if (action === 'update-keyword-bid') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+      const { adGroupId, criterionId, newCpcBidMicros, confirm } = req.body || {};
+      if (!confirm) return res.status(400).json({ error: 'confirm: true requerido' });
+      if (!adGroupId || !criterionId || !newCpcBidMicros) return res.status(400).json({ error: 'adGroupId, criterionId y newCpcBidMicros requeridos' });
+
+      const conn = await getStoredToken(userId);
+      if (!conn || (conn.account_id && conn.account_id.replace(/-/g, '') !== customerId)) {
+        return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
+      }
+
+      // Get old bid and keyword text
+      const kwQuery = `
+        SELECT ad_group_criterion.keyword.text, ad_group_criterion.cpc_bid_micros
+        FROM ad_group_criterion
+        WHERE ad_group_criterion.ad_group = 'customers/${customerId}/adGroups/${adGroupId}'
+        AND ad_group_criterion.criterion_id = ${criterionId}
+      `;
+      const kwData = await gaqlRequest(customerId, kwQuery, token, userId).catch(() => ({}));
+      const kwRow = kwData.results?.[0]?.adGroupCriterion || {};
+      const keywordText = kwRow.keyword?.text || criterionId;
+      const oldBid = formatCost(kwRow.cpcBidMicros || 0);
+
+      const mutateRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${customerId}/adGroupCriteria:mutate`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'developer-token': DEV_TOKEN,
+            'Content-Type': 'application/json',
+            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
+          },
+          body: JSON.stringify({
+            operations: [{
+              updateMask: 'cpc_bid_micros',
+              update: {
+                resourceName: `customers/${customerId}/adGroupCriteria/${adGroupId}~${criterionId}`,
+                cpcBidMicros: String(newCpcBidMicros),
+              },
+            }],
+          }),
+        }
+      );
+      const mutateData = await mutateRes.json();
+      if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
+
+      return res.json({ ok: true, keywordText, oldBid, newBid: formatCost(newCpcBidMicros) });
+    }
+
+    // ── update-adgroup-status ──────────────────────────────
+    if (action === 'update-adgroup-status') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+      const { adGroupId, status, confirm } = req.body || {};
+      if (!confirm) return res.status(400).json({ error: 'confirm: true requerido' });
+      if (!adGroupId || !status) return res.status(400).json({ error: 'adGroupId y status requeridos' });
+      if (!['ENABLED', 'PAUSED'].includes(status)) return res.status(400).json({ error: 'status debe ser ENABLED o PAUSED' });
+
+      const conn = await getStoredToken(userId);
+      if (!conn || (conn.account_id && conn.account_id.replace(/-/g, '') !== customerId)) {
+        return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
+      }
+
+      const mutateRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${customerId}/adGroups:mutate`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'developer-token': DEV_TOKEN,
+            'Content-Type': 'application/json',
+            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
+          },
+          body: JSON.stringify({
+            operations: [{
+              updateMask: 'status',
+              update: { resourceName: `customers/${customerId}/adGroups/${adGroupId}`, status },
+            }],
+          }),
+        }
+      );
+      const mutateData = await mutateRes.json();
+      if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
+
+      const nameQuery = `SELECT ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`;
+      const nameData = await gaqlRequest(customerId, nameQuery, token, userId).catch(() => ({}));
+      const adGroupName = nameData.results?.[0]?.adGroup?.name || adGroupId;
+
+      return res.json({ ok: true, adGroupName, newStatus: status });
+    }
+
     return res.status(400).json({ error: 'action no reconocido' });
 
   } catch (err) {
