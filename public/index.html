@@ -2123,7 +2123,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 
       <!-- Desconectado -->
       <div id="adsDisconnected">
-        <button onclick="connectGoogleAds()" style="width:100%;padding:8px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Google</button>
+        <div style="background:var(--sidebar2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar tu cuenta desbloqueas</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard en vivo con tus KPIs reales (impresiones, clicks, CPA, ROAS)</div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente de IA lee tus datos reales y da recomendaciones basadas en tus campañas, no en ejemplos</div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas automáticas cuando una campaña está quemando presupuesto <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Detección de CTR bajo, CPA spike y frecuencia alta en tiempo real <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+          </div>
+        </div>
+        <button onclick="connectGoogleAds()" style="width:100%;padding:8px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Google →</button>
       </div>
 
       <!-- Conectado -->
@@ -2177,7 +2186,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
       <!-- Desconectado -->
       <div id="metaDisconnected">
-        <button onclick="connectMetaAds()" style="width:100%;padding:8px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Meta</button>
+        <div style="background:var(--sidebar2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar tu cuenta desbloqueas</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard en vivo con alcance, CPM, CTR, CPA y gasto por campaña</div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente analiza tus campañas reales y te da recomendaciones basadas en tus números</div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas cuando la frecuencia sube de 3.5 o una campaña no convierte <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Monitoreo automático 3 veces al día, sin que tengas que revisar manualmente <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+          </div>
+        </div>
+        <button onclick="connectMetaAds()" style="width:100%;padding:8px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Meta →</button>
       </div>
       <!-- Conectado -->
       <div id="metaConnected" style="display:none">

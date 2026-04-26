@@ -4273,6 +4273,15 @@ async function showGoogleAdsDashboard() {
   _renderGDashContent(overview, campaigns?.campaigns || []);
 }
 
+function _gDashUpgradeBanner() {
+  if (userPlan === 'pro' || userPlan === 'agency' || isAdminUser()) return '';
+  return `<div style="margin:0 16px 8px;padding:8px 12px;background:#fefce8;border:1px solid #fef08a;border-radius:7px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:14px">★</span>
+    <span style="font-size:11px;color:#713f12;flex:1">Estás viendo tus datos reales. Con <strong>Pro</strong> recibes alertas automáticas cuando una campaña falla.</span>
+    <button onclick="showUpgradeHint()" style="font-size:11px;font-weight:600;color:#92400e;background:#fef9c3;border:1px solid #fde68a;border-radius:5px;padding:3px 8px;cursor:pointer;white-space:nowrap">Ver planes</button>
+  </div>`;
+}
+
 function _renderGDashSkeleton() {
   document.getElementById('ads-dashboard-inner').innerHTML = `
     <div style="padding:10px 16px">
@@ -4314,6 +4323,7 @@ function _renderGDashContent(ov, campaigns) {
   }).join('');
 
   document.getElementById('ads-dashboard-inner').innerHTML = `
+    ${_gDashCollapsed ? '' : _gDashUpgradeBanner()}
     <div style="padding:8px 16px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:${_gDashCollapsed ? '0' : '10px'}">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="var(--blue)" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/></svg>
@@ -4409,6 +4419,10 @@ async function showMetaAdsDashboard() {
   }).join('');
 
   document.getElementById('ads-dashboard-inner').innerHTML = `
+    ${_mDashCollapsed ? '' : (() => {
+      if (userPlan === 'pro' || userPlan === 'agency' || isAdminUser()) return '';
+      return '<div style="margin:0 16px 8px;padding:8px 12px;background:#fefce8;border:1px solid #fef08a;border-radius:7px;display:flex;align-items:center;gap:8px"><span style="font-size:14px">★</span><span style="font-size:11px;color:#713f12;flex:1">Estás viendo tus datos reales. Con <strong>Pro</strong> recibes alertas automáticas cuando la frecuencia sube o una campaña no convierte.</span><button onclick="showUpgradeHint()" style="font-size:11px;font-weight:600;color:#92400e;background:#fef9c3;border:1px solid #fde68a;border-radius:5px;padding:3px 8px;cursor:pointer;white-space:nowrap">Ver planes</button></div>';
+    })()}
     <div style="padding:8px 16px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:${_mDashCollapsed ? '0' : '10px'}">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" fill="#1877F2"/><path d="M13 21v-8h3l.5-3H13V8.5c0-.83.42-1.5 1.5-1.5H17V4.1a20 20 0 00-2.57-.1C11.92 4 10 5.7 10 8.29V10H7v3h3v8z" fill="#fff"/></svg>

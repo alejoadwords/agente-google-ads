@@ -76,15 +76,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Obtener todos los usuarios con conexiones activas
-    const connections = await supabaseReq(
-      '/platform_connections?select=user_id&order=user_id'
-    );
+    // 1. Obtener usuarios Pro/Agency/Admin con conexiones activas
+    // Free users no reciben alertas automáticas (feature de plan pagado)
+    const [connections, paidUsers] = await Promise.all([
+      supabaseReq('/platform_connections?select=user_id&order=user_id'),
+      supabaseReq('/users?plan=in.(pro,agency,admin)&select=id'),
+    ]);
 
     if (!connections?.length) return res.json({ ok: true, usersChecked: 0, alertsCreated: 0 });
 
-    // Usuarios únicos
-    const uniqueUserIds = [...new Set(connections.map(c => c.user_id))];
+    const paidUserIds = new Set((paidUsers || []).map(u => u.id));
+
+    // Solo usuarios con plan pagado que tengan cuentas conectadas
+    const uniqueUserIds = [...new Set(
+      connections.map(c => c.user_id).filter(id => paidUserIds.has(id))
+    )];
 
     let totalAlerts = 0;
 
