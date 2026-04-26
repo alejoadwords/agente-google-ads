@@ -223,7 +223,7 @@ async function processUser(user) {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from: 'reportes@acuarius.app',
+            from: 'reportes@app.acuarius.app',
             to: userEmail,
             subject: `📊 Reporte semanal ${conn.platform === 'google_ads' ? 'Google Ads' : 'Meta Ads'} — ${getWeekLabel()}`,
             html,
