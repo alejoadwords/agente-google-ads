@@ -2,5 +2,11 @@
   "rewrites": [
     { "source": "/sso-callback", "destination": "/sso-callback.html" },
     { "source": "/sso-callback/(.*)", "destination": "/sso-callback.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron-alerts",
+      "schedule": "0 9,14,18 * * 1-5"
+    }
   ]
 }

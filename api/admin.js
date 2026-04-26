@@ -445,6 +445,313 @@ async function handleGetSnapshots(req, res) {
   return res.json(result || []);
 }
 
+// ── PLATFORM CONNECTIONS ─────────────────────────────────
+/*
+SQL para Supabase (ejecutar una vez):
+CREATE TABLE platform_connections (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  platform TEXT NOT NULL CHECK (platform IN ('google_ads', 'meta_ads', 'tiktok_ads', 'linkedin_ads')),
+  access_token TEXT,
+  refresh_token TEXT,
+  token_expires_at TIMESTAMPTZ,
+  account_id TEXT,
+  account_name TEXT,
+  extra_data JSONB DEFAULT '{}',
+  connected_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, platform)
+);
+CREATE INDEX idx_connections_user ON platform_connections(user_id);
+
+CREATE TABLE campaign_alerts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  campaign_id TEXT,
+  campaign_name TEXT,
+  alert_type TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK (severity IN ('critical', 'warning', 'info')),
+  message TEXT NOT NULL,
+  metric_value NUMERIC,
+  threshold_value NUMERIC,
+  is_read BOOLEAN DEFAULT FALSE,
+  is_dismissed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_alerts_user_unread ON campaign_alerts(user_id, is_read, is_dismissed);
+
+CREATE TABLE agency_clients (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  agency_user_id TEXT NOT NULL,
+  client_name TEXT NOT NULL,
+  client_email TEXT,
+  client_industry TEXT,
+  monthly_budget NUMERIC,
+  notes TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'churned')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_clients_agency ON agency_clients(agency_user_id);
+*/
+
+async function handleGetConnection(req, res) {
+  const { userId, platform } = req.query;
+  if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
+  const rows = await supabaseReq(
+    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${platform}&select=platform,access_token,account_id,account_name,token_expires_at,connected_at,extra_data`
+  );
+  if (!rows?.length) return res.json({ connected: false });
+  const c = rows[0];
+  return res.json({
+    connected:       true,
+    access_token:    c.access_token,
+    account_id:      c.account_id,
+    account_name:    c.account_name,
+    token_expires_at: c.token_expires_at,
+    connected_at:    c.connected_at,
+    extra_data:      c.extra_data || {},
+  });
+}
+
+async function handleDisconnectPlatform(req, res) {
+  if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).json({ error: 'POST/DELETE only' });
+  const { userId, platform } = req.body || {};
+  if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
+  await supabaseReq(`/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${encodeURIComponent(platform)}`, 'DELETE');
+  return res.json({ ok: true });
+}
+
+// ── ALERTAS ───────────────────────────────────────────────
+
+async function handleCheckAlerts(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+
+  const connections = await supabaseReq(
+    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&select=platform,access_token,account_id`
+  ).catch(() => []);
+
+  const newAlerts = [];
+  const today = new Date().toISOString().split('T')[0];
+
+  for (const conn of connections || []) {
+    if (!conn.access_token) continue;
+    try {
+      if (conn.platform === 'google_ads' && conn.account_id) {
+        const gRes = await fetch(
+          `${SUPABASE_URL ? '' : 'https://app.acuarius.app'}/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(userId)}&customerId=${conn.account_id.replace(/-/g, '')}&dateRange=LAST_7_DAYS`,
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+        const gData = await gRes.json().catch(() => ({}));
+        const campaigns = gData.campaigns || [];
+
+        for (const c of campaigns) {
+          if (c.status !== 'ENABLED') continue;
+          // zero_conversions: gasto > $20 y 0 conversiones
+          if (parseFloat(c.cost) > 20 && parseFloat(c.conversions) === 0) {
+            const exists = await supabaseReq(
+              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.zero_conversions&created_at=gte.${today}T00:00:00Z`
+            );
+            if (!exists?.length) {
+              const alert = {
+                user_id: userId, platform: 'google_ads', account_id: conn.account_id,
+                campaign_id: String(c.id), campaign_name: c.name,
+                alert_type: 'zero_conversions', severity: 'warning',
+                message: `Campaña "${c.name}" tiene $${c.cost} gastado en 7 días y 0 conversiones.`,
+                metric_value: 0, threshold_value: 1,
+              };
+              await supabaseReq('/campaign_alerts', 'POST', alert);
+              newAlerts.push(alert);
+            }
+          }
+          // ctr_drop: CTR < 0.5%
+          if (parseFloat(c.ctr) < 0.5 && parseInt(c.impressions) > 1000) {
+            const exists = await supabaseReq(
+              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.ctr_drop&created_at=gte.${today}T00:00:00Z`
+            );
+            if (!exists?.length) {
+              const alert = {
+                user_id: userId, platform: 'google_ads', account_id: conn.account_id,
+                campaign_id: String(c.id), campaign_name: c.name,
+                alert_type: 'ctr_drop', severity: 'warning',
+                message: `CTR bajo en "${c.name}": ${c.ctr}% (benchmark mínimo 0.5%).`,
+                metric_value: parseFloat(c.ctr), threshold_value: 0.5,
+              };
+              await supabaseReq('/campaign_alerts', 'POST', alert);
+              newAlerts.push(alert);
+            }
+          }
+        }
+      }
+
+      if (conn.platform === 'meta_ads' && conn.account_id) {
+        const mRes = await fetch(
+          `${SUPABASE_URL ? '' : 'https://app.acuarius.app'}/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(userId)}&adAccountId=${conn.account_id}&datePreset=last_7d`
+        );
+        const mData = await mRes.json().catch(() => ({}));
+        const campaigns = mData.campaigns || [];
+
+        for (const c of campaigns) {
+          if (c.status !== 'ACTIVE') continue;
+          // high_frequency: frecuencia > 3.5
+          if (parseFloat(c.frequency) > 3.5) {
+            const exists = await supabaseReq(
+              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.high_frequency&created_at=gte.${today}T00:00:00Z`
+            );
+            if (!exists?.length) {
+              const alert = {
+                user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
+                campaign_id: c.id, campaign_name: c.name,
+                alert_type: 'high_frequency', severity: 'warning',
+                message: `Frecuencia alta en "${c.name}": ${c.frequency} (límite recomendado: 3.5). Audiencia posiblemente saturada.`,
+                metric_value: parseFloat(c.frequency), threshold_value: 3.5,
+              };
+              await supabaseReq('/campaign_alerts', 'POST', alert);
+              newAlerts.push(alert);
+            }
+          }
+          // zero_conversions Meta
+          if (parseFloat(c.spend) > 20 && c.conversions === 0) {
+            const exists = await supabaseReq(
+              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.zero_conversions&created_at=gte.${today}T00:00:00Z`
+            );
+            if (!exists?.length) {
+              const alert = {
+                user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
+                campaign_id: c.id, campaign_name: c.name,
+                alert_type: 'zero_conversions', severity: 'warning',
+                message: `"${c.name}" tiene $${c.spend} gastado y 0 conversiones en 7 días.`,
+                metric_value: 0, threshold_value: 1,
+              };
+              await supabaseReq('/campaign_alerts', 'POST', alert);
+              newAlerts.push(alert);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`check-alerts error for ${conn.platform}:`, e.message);
+    }
+  }
+
+  return res.json({ alerts: newAlerts, count: newAlerts.length });
+}
+
+async function handleGetAlerts(req, res) {
+  const { userId, platform, unreadOnly } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+  let query = `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&is_dismissed=eq.false&order=created_at.desc&limit=50`;
+  if (platform && platform !== 'all') query += `&platform=eq.${encodeURIComponent(platform)}`;
+  if (unreadOnly === 'true') query += `&is_read=eq.false`;
+  const alerts = await supabaseReq(query);
+  return res.json(alerts || []);
+}
+
+async function handleMarkAlertsRead(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+  await supabaseReq(`/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&is_read=eq.false`, 'PATCH', { is_read: true });
+  return res.json({ ok: true });
+}
+
+async function handleDismissAlert(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id requerido' });
+  await supabaseReq(`/campaign_alerts?id=eq.${id}`, 'PATCH', { is_dismissed: true });
+  return res.json({ ok: true });
+}
+
+// ── META TOKEN REFRESH ────────────────────────────────────
+
+async function handleRefreshMetaToken(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+
+  const rows = await supabaseReq(
+    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads&select=access_token,token_expires_at`
+  );
+  if (!rows?.length || !rows[0].access_token) return res.status(404).json({ error: 'No hay token de Meta para este usuario' });
+
+  const conn = rows[0];
+  const expiresAt = new Date(conn.token_expires_at);
+  const daysLeft = (expiresAt - Date.now()) / (1000 * 60 * 60 * 24);
+
+  if (daysLeft > 7) return res.json({ ok: true, refreshed: false, daysLeft: Math.round(daysLeft) });
+
+  const refreshRes = await fetch(
+    `https://graph.facebook.com/v19.0/oauth/access_token?` +
+    new URLSearchParams({
+      grant_type:        'fb_exchange_token',
+      client_id:         process.env.META_APP_ID,
+      client_secret:     process.env.META_APP_SECRET,
+      fb_exchange_token: conn.access_token,
+    })
+  );
+  const data = await refreshRes.json();
+  if (data.error || !data.access_token) return res.status(400).json({ error: 'No se pudo renovar el token de Meta' });
+
+  const newExpires = new Date(Date.now() + (data.expires_in || 5184000) * 1000).toISOString();
+  await supabaseReq(
+    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads`,
+    'PATCH',
+    { access_token: data.access_token, token_expires_at: newExpires, updated_at: new Date().toISOString() }
+  );
+
+  return res.json({ ok: true, refreshed: true, daysLeft: Math.round((data.expires_in || 5184000) / 86400) });
+}
+
+// ── AGENCY CLIENTS ────────────────────────────────────────
+
+async function handleCreateClient(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { agencyUserId, clientName, clientEmail, clientIndustry, monthlyBudget, notes } = req.body || {};
+  if (!agencyUserId || !clientName) return res.status(400).json({ error: 'agencyUserId y clientName requeridos' });
+  const result = await supabaseReq('/agency_clients', 'POST', {
+    agency_user_id: agencyUserId, client_name: clientName,
+    client_email: clientEmail || null, client_industry: clientIndustry || null,
+    monthly_budget: monthlyBudget || null, notes: notes || null,
+  });
+  return res.json({ id: result?.[0]?.id, client: result?.[0] });
+}
+
+async function handleGetClients(req, res) {
+  const { agencyUserId } = req.query;
+  if (!agencyUserId) return res.status(400).json({ error: 'agencyUserId requerido' });
+  const clients = await supabaseReq(
+    `/agency_clients?agency_user_id=eq.${encodeURIComponent(agencyUserId)}&status=neq.churned&order=created_at.desc`
+  );
+  return res.json(clients || []);
+}
+
+async function handleUpdateClient(req, res) {
+  if (req.method !== 'PATCH') return res.status(405).json({ error: 'PATCH only' });
+  const { id, clientName, clientEmail, clientIndustry, monthlyBudget, notes, status } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id requerido' });
+  const updates = {};
+  if (clientName     !== undefined) updates.client_name     = clientName;
+  if (clientEmail    !== undefined) updates.client_email    = clientEmail;
+  if (clientIndustry !== undefined) updates.client_industry = clientIndustry;
+  if (monthlyBudget  !== undefined) updates.monthly_budget  = monthlyBudget;
+  if (notes          !== undefined) updates.notes           = notes;
+  if (status         !== undefined) updates.status          = status;
+  await supabaseReq(`/agency_clients?id=eq.${id}`, 'PATCH', updates);
+  return res.json({ ok: true });
+}
+
+async function handleArchiveClient(req, res) {
+  if (req.method !== 'PATCH') return res.status(405).json({ error: 'PATCH only' });
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id requerido' });
+  await supabaseReq(`/agency_clients?id=eq.${id}`, 'PATCH', { status: 'churned' });
+  return res.json({ ok: true });
+}
+
 // ── ROUTER PRINCIPAL ──────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
@@ -459,6 +766,21 @@ export default async function handler(req, res) {
     if (action === 'update-recommendation') return await handleUpdateRecommendation(req, res);
     if (action === 'save-snapshot')         return await handleSaveSnapshot(req, res);
     if (action === 'get-snapshots')         return await handleGetSnapshots(req, res);
+    // Platform connections
+    if (action === 'get-connection')        return await handleGetConnection(req, res);
+    if (action === 'disconnect-platform')   return await handleDisconnectPlatform(req, res);
+    // Alertas
+    if (action === 'check-alerts')          return await handleCheckAlerts(req, res);
+    if (action === 'get-alerts')            return await handleGetAlerts(req, res);
+    if (action === 'mark-alerts-read')      return await handleMarkAlertsRead(req, res);
+    if (action === 'dismiss-alert')         return await handleDismissAlert(req, res);
+    // Meta token refresh
+    if (action === 'refresh-meta-token')    return await handleRefreshMetaToken(req, res);
+    // Agency clients
+    if (action === 'create-client')         return await handleCreateClient(req, res);
+    if (action === 'get-clients')           return await handleGetClients(req, res);
+    if (action === 'update-client')         return await handleUpdateClient(req, res);
+    if (action === 'archive-client')        return await handleArchiveClient(req, res);
   } catch (err) {
     console.error('Admin user-action error:', err);
     return res.status(500).json({ error: err.message });

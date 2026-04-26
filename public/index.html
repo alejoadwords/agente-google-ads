@@ -737,6 +737,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   </button>
   <span class="hdr-badge" id="plan-badge">free · 7 días</span>
   <div class="hdr-right">
+    <button id="alerts-btn" onclick="openAlertsPanel()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Alertas de campañas">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span id="alerts-badge" style="display:none;position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px">0</span>
+    </button>
     <span class="hdr-user" id="hdr-user"></span>
     <div class="hdr-avatar" id="hdr-avatar">AC</div>
     <button class="hdr-signout" onclick="logout()">salir</button>
@@ -1799,6 +1803,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-4"/></svg>
           Análisis
         </button>
+      </div>
+      <!-- Dashboard de plataforma conectada (Google Ads / Meta Ads) -->
+      <div id="ads-dashboard" style="display:none;flex-shrink:0;border-bottom:1px solid var(--border2);background:var(--sidebar2)">
+        <div id="ads-dashboard-inner"></div>
       </div>
       <div class="chat-area" id="chat-area"></div>
 

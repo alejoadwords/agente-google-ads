@@ -2130,8 +2130,8 @@ async function openAgent(agentKey) {
       const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
       const negocioShort = mem.negocio ? mem.negocio.split('·')[0].trim() : '—';
       addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
-      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); }
-      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
+      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
       if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
       if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
@@ -2249,8 +2249,8 @@ function launchOnboarding(agentKey) {
       document.getElementById('m-stage').textContent = clientStage;
       const summary = briefSummaryForAgent(client, agentKey);
       addAgent(summary);
-      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); }
-      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
+      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
       if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
       if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
@@ -3206,7 +3206,7 @@ window.onload = async () => {
   } catch(e) {
     console.warn('initAuth error:', e.message);
   }
-  
+
   // Inicializar límites de imágenes
   loadImageUsage();
 
@@ -3220,6 +3220,10 @@ window.onload = async () => {
   setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
   // Actualizar badge de historial
   setTimeout(function(){ updateHistorialBadge(); }, 2000);
+  // Restaurar conexiones desde Supabase si no hay token en sessionStorage
+  setTimeout(function(){ restoreConnectionsFromSupabase(); }, 2500);
+  // Inicializar alertas
+  setTimeout(function(){ initAlertsBadge(); }, 3000);
 };
 
 // ONBOARDING
@@ -3442,6 +3446,8 @@ async function callClaude(){loading=true;document.getElementById('sbtn').disable
 let sys;
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
+  const metaCtx = await getMetaAdsContext().catch(()=>'');
+  if(metaCtx) sys = metaCtx + '\n\n' + sys;
 }else if(currentAgentCtx==='seo'){
   sys=SYSTEM_SEO.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='consultor'){
@@ -3454,6 +3460,9 @@ if(currentAgentCtx==='meta-ads'){
   sys=(typeof SYSTEM_LINKEDIN!=='undefined'?SYSTEM_LINKEDIN:SYSTEM).replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
+  // Inyectar contexto de Google Ads si hay cuenta conectada
+  const gCtx = await getGoogleAdsContext().catch(()=>'');
+  if(gCtx) sys = gCtx + '\n\n' + sys;
 }
 if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{// Truncar historial: mantener los últimos MAX_HIST_MESSAGES mensajes
 const histTruncated = hist.length > MAX_HIST_MESSAGES
@@ -4176,6 +4185,459 @@ async function loadSnapshots(agentFilter) {
     return await res.json();
   } catch(e) { return []; }
 }
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 2 — Features 5C, 5D, 6B, 6C, 7D, 8C
+// ═══════════════════════════════════════════════════════════
+
+// ── isAgencyPlan (Feature 8C) ─────────────────────────────
+function isAgencyPlan() {
+  return userPlan === 'admin' || userPlan === 'agency' || isAdminUser();
+}
+
+// ── Restore connections from Supabase on load (Feature 5B) ─
+async function restoreConnectionsFromSupabase() {
+  const uid = clerkInstance?.user?.id;
+  if (!uid) return;
+  const hasGoogleToken = !!sessionStorage.getItem('ads_access_token');
+  const hasMetaToken   = !!sessionStorage.getItem('meta_access_token');
+  if (hasGoogleToken && hasMetaToken) return; // ya restaurado desde sessionStorage
+
+  try {
+    const [gConn, mConn] = await Promise.all([
+      fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`).then(r => r.json()).catch(() => ({})),
+    ]);
+
+    if (!hasGoogleToken && gConn.connected && gConn.access_token) {
+      sessionStorage.setItem('ads_access_token', gConn.access_token);
+      sessionStorage.setItem('ads_email', gConn.account_name || '');
+      updateAdsUI(true, gConn.account_name);
+    }
+    if (!hasMetaToken && mConn.connected && mConn.access_token) {
+      sessionStorage.setItem('meta_access_token', mConn.access_token);
+      sessionStorage.setItem('meta_user_name', mConn.account_name || '');
+      if (mConn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', mConn.extra_data.meta_user_id);
+      updateMetaUI(true, mConn.account_name);
+    }
+
+    // Refrescar token de Meta si expira pronto
+    if (mConn.connected) {
+      fetch('/api/admin?action=refresh-meta-token', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: uid })
+      }).catch(() => {});
+    }
+  } catch {}
+}
+
+// ── Google Ads Dashboard (Feature 5C) ────────────────────────
+let _gDashPeriod = 'LAST_30_DAYS';
+let _gDashCollapsed = true;
+
+async function showGoogleAdsDashboard() {
+  const uid        = clerkInstance?.user?.id;
+  const customerId = sessionStorage.getItem('ads_customer_id');
+  const dash       = document.getElementById('ads-dashboard');
+  if (!uid || !customerId || !dash) return;
+
+  dash.style.display = 'block';
+  _renderGDashSkeleton();
+
+  const cacheKey = `gads_dashboard_${customerId}_${_gDashPeriod}_${Math.floor(Date.now() / 900000)}`;
+  let overview, campaigns;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const d = JSON.parse(cached);
+      overview = d.overview; campaigns = d.campaigns;
+    } else {
+      [overview, campaigns] = await Promise.all([
+        fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
+        fetch(`/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
+      ]);
+      localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
+    }
+  } catch { return; }
+
+  if (overview?.testAccess) {
+    document.getElementById('ads-dashboard-inner').innerHTML = `
+      <div style="padding:10px 16px;font-size:12px;color:var(--muted2);display:flex;align-items:center;gap:8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Tu cuenta está en modo de prueba. Las métricas reales estarán disponibles cuando Google apruebe el acceso completo.
+      </div>`;
+    return;
+  }
+  if (overview?.error) { dash.style.display = 'none'; return; }
+
+  _renderGDashContent(overview, campaigns?.campaigns || []);
+}
+
+function _renderGDashSkeleton() {
+  document.getElementById('ads-dashboard-inner').innerHTML = `
+    <div style="padding:10px 16px">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+        <div style="width:120px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
+        <div style="width:80px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
+      </div>
+      <div style="display:flex;gap:16px">
+        ${[1,2,3,4,5].map(() => '<div style="flex:1;height:32px;background:var(--border);border-radius:6px;animation:pulse 1.2s infinite"></div>').join('')}
+      </div>
+    </div>`;
+}
+
+function _renderGDashContent(ov, campaigns) {
+  const periodLabels = { 'LAST_7_DAYS': '7 días', 'LAST_30_DAYS': '30 días', 'LAST_90_DAYS': '90 días', 'THIS_MONTH': 'Este mes', 'LAST_MONTH': 'Mes ant.' };
+  const periods = Object.entries(periodLabels).map(([v,l]) =>
+    `<option value="${v}" ${v === _gDashPeriod ? 'selected' : ''}>${l}</option>`
+  ).join('');
+
+  const kpis = [
+    { label: 'Impresiones', value: (ov.impressions||0).toLocaleString() },
+    { label: 'Clicks',      value: (ov.clicks||0).toLocaleString() },
+    { label: 'CTR',         value: (ov.ctr||'0')+'%' },
+    { label: 'CPC prom.',   value: '$'+(ov.avgCpc||0) },
+    { label: 'Conversiones',value: (ov.conversions||0) },
+    { label: 'CPA',         value: '$'+(ov.cpa||0) },
+    { label: 'Gasto total', value: '$'+(ov.totalCost||0) },
+  ];
+
+  const campRows = campaigns.slice(0, 5).map(c => {
+    const dot = c.status === 'ENABLED' ? '#22c55e' : '#9ca3af';
+    return `<div onclick="injectCampaignAnalysis('google','${c.name.replace(/'/g, '').replace(/"/g, '')}')"
+      style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px"
+      onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'">
+      <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${c.name}</span>
+      <span style="color:var(--muted2);flex-shrink:0">$${c.cpa} CPA · ${(c.clicks||0).toLocaleString()} clicks</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ads-dashboard-inner').innerHTML = `
+    <div style="padding:8px 16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${_gDashCollapsed ? '0' : '10px'}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="var(--blue)" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/></svg>
+        <span style="font-size:11px;font-weight:600;color:var(--text)">Google Ads</span>
+        <select onchange="changeGDashPeriod(this.value)" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:1px 4px;background:var(--bg);color:var(--text)">${periods}</select>
+        <button onclick="showGoogleAdsDashboard()" style="font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">↻</button>
+        <button onclick="toggleGDash()" style="margin-left:auto;font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">${_gDashCollapsed ? '▼ expandir' : '▲ colapsar'}</button>
+      </div>
+      ${_gDashCollapsed ? '' : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:10px">
+          ${kpis.map(k => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px">
+            <div style="font-size:10px;color:var(--muted2);margin-bottom:2px">${k.label}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${k.value}</div>
+          </div>`).join('')}
+        </div>
+        ${campRows ? `<div style="border-top:1px solid var(--border2);padding-top:6px;font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Campañas</div>${campRows}` : ''}
+      `}
+    </div>`;
+}
+
+function toggleGDash() { _gDashCollapsed = !_gDashCollapsed; showGoogleAdsDashboard(); }
+function changeGDashPeriod(v) { _gDashPeriod = v; showGoogleAdsDashboard(); }
+
+// ── Meta Ads Dashboard (Feature 6B) ──────────────────────────
+let _mDashPeriod = 'last_30d';
+let _mDashCollapsed = true;
+
+async function showMetaAdsDashboard() {
+  const uid       = clerkInstance?.user?.id;
+  const accountId = sessionStorage.getItem('meta_ad_account_id');
+  const dash      = document.getElementById('ads-dashboard');
+  if (!uid || !accountId || !dash) return;
+
+  dash.style.display = 'block';
+  document.getElementById('ads-dashboard-inner').innerHTML = `
+    <div style="padding:10px 16px">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+        <div style="width:120px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
+        <div style="width:80px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
+      </div>
+      <div style="display:flex;gap:16px">
+        ${[1,2,3,4,5].map(() => '<div style="flex:1;height:32px;background:var(--border);border-radius:6px;animation:pulse 1.2s infinite"></div>').join('')}
+      </div>
+    </div>`;
+
+  const cacheKey = `meta_dashboard_${accountId}_${_mDashPeriod}_${Math.floor(Date.now() / 900000)}`;
+  let overview, campaigns;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const d = JSON.parse(cached);
+      overview = d.overview; campaigns = d.campaigns;
+    } else {
+      [overview, campaigns] = await Promise.all([
+        fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
+        fetch(`/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
+      ]);
+      localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
+    }
+  } catch { return; }
+
+  if (overview?.error) {
+    if (overview.retryAfter) {
+      document.getElementById('ads-dashboard-inner').innerHTML = `<div style="padding:10px 16px;font-size:12px;color:var(--muted2)">Los datos de Meta se actualizarán en un momento (rate limit).</div>`;
+    } else { dash.style.display = 'none'; }
+    return;
+  }
+
+  const periodLabels = { 'last_7d': '7 días', 'last_30d': '30 días', 'last_90d': '90 días', 'this_month': 'Este mes', 'last_month': 'Mes ant.' };
+  const periods = Object.entries(periodLabels).map(([v,l]) =>
+    `<option value="${v}" ${v === _mDashPeriod ? 'selected' : ''}>${l}</option>`
+  ).join('');
+
+  const kpis = [
+    { label: 'Alcance',      value: (overview.reach||0).toLocaleString() },
+    { label: 'Impresiones',  value: (overview.impressions||0).toLocaleString() },
+    { label: 'CPM',          value: '$'+(overview.cpm||0) },
+    { label: 'CTR',          value: (overview.ctr||'0')+'%' },
+    { label: 'Conversiones', value: overview.conversions||0 },
+    { label: 'CPA',          value: '$'+(overview.cpa||0) },
+    { label: 'Gasto',        value: '$'+(overview.spend||0) },
+  ];
+
+  const campRows = (campaigns?.campaigns||[]).slice(0, 5).map(c => {
+    const dot = c.status === 'ACTIVE' ? '#22c55e' : '#9ca3af';
+    return `<div onclick="injectCampaignAnalysis('meta','${c.name.replace(/'/g, '').replace(/"/g, '')}')"
+      style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px"
+      onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'">
+      <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${c.name}</span>
+      <span style="color:var(--muted2);flex-shrink:0">$${c.cpa} CPA · ${(c.clicks||0).toLocaleString()} clicks</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ads-dashboard-inner').innerHTML = `
+    <div style="padding:8px 16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${_mDashCollapsed ? '0' : '10px'}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" fill="#1877F2"/><path d="M13 21v-8h3l.5-3H13V8.5c0-.83.42-1.5 1.5-1.5H17V4.1a20 20 0 00-2.57-.1C11.92 4 10 5.7 10 8.29V10H7v3h3v8z" fill="#fff"/></svg>
+        <span style="font-size:11px;font-weight:600;color:var(--text)">Meta Ads</span>
+        <select onchange="changeMDashPeriod(this.value)" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:1px 4px;background:var(--bg);color:var(--text)">${periods}</select>
+        <button onclick="showMetaAdsDashboard()" style="font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">↻</button>
+        <button onclick="toggleMDash()" style="margin-left:auto;font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">${_mDashCollapsed ? '▼ expandir' : '▲ colapsar'}</button>
+      </div>
+      ${_mDashCollapsed ? '' : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:10px">
+          ${kpis.map(k => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px">
+            <div style="font-size:10px;color:var(--muted2);margin-bottom:2px">${k.label}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${k.value}</div>
+          </div>`).join('')}
+        </div>
+        ${campRows ? `<div style="border-top:1px solid var(--border2);padding-top:6px;font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Campañas</div>${campRows}` : ''}
+      `}
+    </div>`;
+}
+
+function toggleMDash() { _mDashCollapsed = !_mDashCollapsed; showMetaAdsDashboard(); }
+function changeMDashPeriod(v) { _mDashPeriod = v; showMetaAdsDashboard(); }
+
+function hidePlatformDashboard() {
+  const dash = document.getElementById('ads-dashboard');
+  if (dash) dash.style.display = 'none';
+}
+
+function injectCampaignAnalysis(platform, campaignName) {
+  const label = platform === 'google' ? 'Google Ads' : 'Meta Ads';
+  const msg = `Dame un análisis detallado de la campaña "${campaignName}" en ${label}.`;
+  document.getElementById('inp').value = msg;
+  sendMsg();
+}
+
+// ── Context injection (Features 5D / 6C) ─────────────────────
+async function getGoogleAdsContext() {
+  const uid        = clerkInstance?.user?.id;
+  const customerId = sessionStorage.getItem('ads_customer_id');
+  if (!uid || !customerId) return '';
+  try {
+    const cacheKey = `gads_ctx_${customerId}_${Math.floor(Date.now() / 900000)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return cached;
+    const res  = await fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=LAST_30_DAYS`);
+    const data = await res.json();
+    if (data.testAccess || data.error || !data.impressions) return '';
+    const ctx = `DATOS REALES DE LA CUENTA GOOGLE ADS (últimos 30 días):
+- Gasto total: $${data.totalCost}
+- Impresiones: ${(data.impressions||0).toLocaleString()}
+- Clicks: ${(data.clicks||0).toLocaleString()}
+- CTR: ${data.ctr}%
+- CPC promedio: $${data.avgCpc}
+- Conversiones: ${data.conversions}
+- CPA: $${data.cpa}
+- Campañas activas: ${data.activeCampaigns}
+- Campañas pausadas: ${data.pausedCampaigns}`;
+    localStorage.setItem(cacheKey, ctx);
+    return ctx;
+  } catch { return ''; }
+}
+
+async function getMetaAdsContext() {
+  const uid       = clerkInstance?.user?.id;
+  const accountId = sessionStorage.getItem('meta_ad_account_id');
+  if (!uid || !accountId) return '';
+  try {
+    const cacheKey = `meta_ctx_${accountId}_${Math.floor(Date.now() / 900000)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return cached;
+    const res  = await fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
+    const data = await res.json();
+    if (data.error || !data.impressions) return '';
+    const ctx = `DATOS REALES DEL AD ACCOUNT META ADS (últimos 30 días):
+- Gasto total: $${data.spend}
+- Alcance: ${(data.reach||0).toLocaleString()}
+- Impresiones: ${(data.impressions||0).toLocaleString()}
+- Clicks: ${(data.clicks||0).toLocaleString()}
+- CTR: ${data.ctr}%
+- CPC: $${data.cpc}
+- CPM: $${data.cpm}
+- Frecuencia: ${data.frequency}
+- Conversiones: ${data.conversions}
+- CPA: $${data.cpa}`;
+    localStorage.setItem(cacheKey, ctx);
+    return ctx;
+  } catch { return ''; }
+}
+
+// ── Alerts (Feature 7D) ──────────────────────────────────────
+let _alertsOpen = false;
+
+async function initAlertsBadge() {
+  const uid = clerkInstance?.user?.id;
+  if (!uid) return;
+  try {
+    const r = await fetch(`/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}&unreadOnly=true`);
+    const alerts = await r.json();
+    updateAlertsBadge(Array.isArray(alerts) ? alerts.length : 0);
+    // Check nuevas alertas silencioso
+    fetch('/api/admin?action=check-alerts', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: uid })
+    }).then(r => r.json()).then(d => {
+      if (d.count > 0) updateAlertsBadge(alerts.length + d.count);
+    }).catch(() => {});
+  } catch {}
+}
+
+function updateAlertsBadge(count) {
+  const btn   = document.getElementById('alerts-btn');
+  const badge = document.getElementById('alerts-badge');
+  if (!btn || !badge) return;
+  if (count > 0) {
+    btn.style.display   = 'flex';
+    badge.style.display = 'flex';
+    badge.textContent   = count > 99 ? '99+' : count;
+  } else {
+    btn.style.display   = 'flex';
+    badge.style.display = 'none';
+  }
+}
+
+async function openAlertsPanel() {
+  if (_alertsOpen) { closeAlertsPanel(); return; }
+  _alertsOpen = true;
+  const uid = clerkInstance?.user?.id;
+
+  // Crear panel si no existe
+  let panel = document.getElementById('alerts-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'alerts-panel';
+    panel.style.cssText = 'position:fixed;top:0;right:0;width:360px;height:100vh;background:var(--bg);border-left:1px solid var(--border);z-index:2000;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.08)';
+    document.body.appendChild(panel);
+  }
+
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;padding:16px 18px;border-bottom:1px solid var(--border2);flex-shrink:0">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Alertas de campañas</span>
+      <select id="alerts-filter" onchange="reloadAlerts()" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:2px 6px;background:var(--bg);color:var(--text)">
+        <option value="all">Todas</option>
+        <option value="google_ads">Google Ads</option>
+        <option value="meta_ads">Meta Ads</option>
+      </select>
+      <button onclick="closeAlertsPanel()" style="background:none;border:none;cursor:pointer;color:var(--muted2);font-size:16px;line-height:1;padding:2px">✕</button>
+    </div>
+    <div id="alerts-list" style="flex:1;overflow-y:auto;padding:12px"></div>`;
+
+  panel.style.display = 'flex';
+
+  // Marcar como leídas
+  if (uid) {
+    fetch('/api/admin?action=mark-alerts-read', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: uid })
+    }).then(() => { const b = document.getElementById('alerts-badge'); if (b) b.style.display = 'none'; }).catch(() => {});
+  }
+
+  await reloadAlerts();
+}
+
+async function reloadAlerts() {
+  const uid    = clerkInstance?.user?.id;
+  const filter = document.getElementById('alerts-filter')?.value || 'all';
+  const list   = document.getElementById('alerts-list');
+  if (!uid || !list) return;
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Cargando...</div>';
+  try {
+    let url = `/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}`;
+    if (filter !== 'all') url += `&platform=${filter}`;
+    const r      = await fetch(url);
+    const alerts = await r.json();
+    if (!alerts.length) {
+      list.innerHTML = '<div style="text-align:center;padding:32px 16px;color:var(--muted2)"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-size:13px">No hay alertas activas</div></div>';
+      return;
+    }
+    list.innerHTML = alerts.map(a => {
+      const severityColor = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' }[a.severity] || '#9ca3af';
+      const severityLabel = { critical: 'CRÍTICO', warning: 'AVISO', info: 'INFO' }[a.severity] || a.severity;
+      const platform = a.platform === 'google_ads' ? 'Google Ads' : 'Meta Ads';
+      return `<div style="border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:8px;border-left:3px solid ${severityColor}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:${severityColor};background:${severityColor}18;padding:1px 6px;border-radius:10px">${severityLabel}</span>
+          <span style="font-size:10px;color:var(--muted2)">${platform}</span>
+          <span style="font-size:10px;color:var(--muted2);margin-left:auto">${timeAgo(a.created_at)}</span>
+        </div>
+        ${a.campaign_name ? `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">${a.campaign_name}</div>` : ''}
+        <div style="font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:8px">${a.message}</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="alertGoToAgent('${a.platform}','${a.message.replace(/'/g,'')}')" style="flex:1;font-size:11px;padding:4px 8px;background:var(--blue-lt);color:var(--blue);border:1px solid var(--blue-md);border-radius:6px;cursor:pointer">Ver en agente</button>
+          <button onclick="dismissAlert('${a.id}',this.parentElement.parentElement)" style="font-size:11px;padding:4px 8px;background:var(--bg);color:var(--muted2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Descartar</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Error al cargar alertas.</div>';
+  }
+}
+
+function closeAlertsPanel() {
+  _alertsOpen = false;
+  const panel = document.getElementById('alerts-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+async function dismissAlert(id, el) {
+  el?.remove();
+  fetch('/api/admin?action=dismiss-alert', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id })
+  }).catch(() => {});
+}
+
+function alertGoToAgent(platform, message) {
+  closeAlertsPanel();
+  const agentCtx = platform === 'google_ads' ? 'google-ads' : 'meta-ads';
+  openAgent(agentCtx);
+  setTimeout(() => {
+    const msg = `Tengo una alerta en mis campañas: ${message} ¿Qué me recomiendas hacer?`;
+    document.getElementById('inp').value = msg;
+    sendMsg();
+  }, 600);
+}
+
+// ═══════════════════════════════════════════════════════════
+// FIN SPRINT 2 — Frontend
+// ═══════════════════════════════════════════════════════════
 
 function renderSocialOptions() {
   const area = document.getElementById('chat-area');
@@ -6704,19 +7166,36 @@ let metaActiveAccount = null;
 (function checkMetaCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('meta_connected') === 'true') {
-    const token  = params.get('meta_token');
-    const name   = params.get('meta_name');
-    const email  = params.get('meta_email');
-    const userId = params.get('meta_user_id');
+    const token    = params.get('meta_token');   // solo en fallback sin userId
+    const name     = params.get('meta_name');
+    const email    = params.get('meta_email');
+    const metaUid  = params.get('meta_user_id');
+    const platform = params.get('platform');     // 'meta_ads' cuando se guardó en Supabase
+    window.history.replaceState({}, '', window.location.pathname);
     if (token) {
       sessionStorage.setItem('meta_access_token', token);
       sessionStorage.setItem('meta_user_name',   name   || '');
       sessionStorage.setItem('meta_user_email',  email  || '');
-      sessionStorage.setItem('meta_user_id',     userId || '');
+      sessionStorage.setItem('meta_user_id',     metaUid || '');
       updateMetaUI(true, name);
       setTimeout(() => { openSettings(); loadMetaAccounts(); }, 400);
+    } else if (platform === 'meta_ads') {
+      updateMetaUI(true, name || 'Conectado');
+      setTimeout(async () => {
+        const uid = clerkInstance?.user?.id;
+        if (!uid) return;
+        try {
+          const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
+          const conn = await r.json();
+          if (conn.connected && conn.access_token) {
+            sessionStorage.setItem('meta_access_token', conn.access_token);
+            sessionStorage.setItem('meta_user_name', conn.account_name || name || '');
+            updateMetaUI(true, conn.account_name || name);
+            openSettings(); loadMetaAccounts();
+          }
+        } catch {}
+      }, 600);
     }
-    window.history.replaceState({}, '', window.location.pathname);
   }
   if (params.get('meta_error')) {
     window.history.replaceState({}, '', window.location.pathname);
@@ -6732,13 +7211,19 @@ let metaActiveAccount = null;
   }
 })();
 
-function connectMetaAds() { window.location.href = '/api/meta-auth'; }
+function connectMetaAds() {
+  const uid = clerkInstance?.user?.id || '';
+  window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+}
 
 function disconnectMetaAds() {
   ['meta_access_token','meta_user_name','meta_user_email','meta_user_id','meta_active_account','meta_ad_account_id']
     .forEach(k => sessionStorage.removeItem(k));
   metaAccounts = []; metaActiveAccount = null;
   updateMetaUI(false);
+  hidePlatformDashboard();
+  const uid = clerkInstance?.user?.id;
+  if (uid) fetch('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'meta_ads' }) }).catch(() => {});
 }
 
 async function loadMetaAccounts() {
@@ -6924,22 +7409,41 @@ let adsAccounts = [];       // todas las cuentas accesibles
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('ads_connected') === 'true') {
-    const token   = params.get('ads_token');
+    const token   = params.get('ads_token');   // solo presente en fallback sin userId
     const refresh = params.get('ads_refresh');
     const email   = params.get('ads_email');
+    const platform = params.get('platform');   // 'google_ads' cuando se guardó en Supabase
+    window.history.replaceState({}, '', window.location.pathname);
     if (token) {
+      // Fallback: token llegó por URL (sin userId)
       sessionStorage.setItem('ads_access_token', token);
       sessionStorage.setItem('ads_refresh_token', refresh || '');
       sessionStorage.setItem('ads_email', email || '');
       updateAdsUI(true, email);
       setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
+    } else if (platform === 'google_ads') {
+      // Token guardado en Supabase — restaurar via get-connection
+      updateAdsUI(true, email || 'Conectado');
+      setTimeout(async () => {
+        const uid = clerkInstance?.user?.id;
+        if (!uid) return;
+        try {
+          const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
+          const conn = await r.json();
+          if (conn.connected && conn.access_token) {
+            sessionStorage.setItem('ads_access_token', conn.access_token);
+            sessionStorage.setItem('ads_email', conn.account_name || email || '');
+            updateAdsUI(true, conn.account_name || email);
+            openSettings(); loadAdsAccounts();
+          }
+        } catch {}
+      }, 600);
     }
-    window.history.replaceState({}, '', window.location.pathname);
   }
   if (params.get('ads_error')) {
     window.history.replaceState({}, '', window.location.pathname);
   }
-  // Restaurar sesión guardada
+  // Restaurar sesión guardada en sessionStorage
   const savedToken   = sessionStorage.getItem('ads_access_token');
   const savedEmail   = sessionStorage.getItem('ads_email');
   const savedAccount = sessionStorage.getItem('ads_active_account');
@@ -6955,7 +7459,8 @@ let adsAccounts = [];       // todas las cuentas accesibles
 })();
 
 function connectGoogleAds() {
-  window.location.href = '/api/google-ads-auth';
+  const uid = clerkInstance?.user?.id || '';
+  window.location.href = '/api/google-ads-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
 }
 
 function disconnectGoogleAds() {
@@ -6966,6 +7471,9 @@ function disconnectGoogleAds() {
   adsAccounts = [];
   adsActiveAccount = null;
   updateAdsUI(false);
+  hidePlatformDashboard();
+  const uid = clerkInstance?.user?.id;
+  if (uid) fetch('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'google_ads' }) }).catch(() => {});
 }
 
 // Carga las cuentas desde la API y muestra el selector
