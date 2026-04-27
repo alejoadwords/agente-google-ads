@@ -3690,6 +3690,19 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
         loading=false; document.getElementById('sbtn').disabled=false; return;
       }
+      // Detectar bloque VIDEO_BRIEF
+      const videoBriefMatch = replyFinalProcessed.match(/<VIDEO_BRIEF>([\s\S]*?)<\/VIDEO_BRIEF>/);
+      if (videoBriefMatch) {
+        const cleanReply = replyFinalProcessed.replace(/<VIDEO_BRIEF>[\s\S]*?<\/VIDEO_BRIEF>/,'').trim();
+        if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
+        else { hist.push({role:'assistant',content:'Brief de video generado — listo para producir.'}); }
+        try {
+          const briefData = JSON.parse(videoBriefMatch[1].trim());
+          setTimeout(() => renderVideoBriefCard(briefData), 200);
+        } catch(e) { console.warn('VIDEO_BRIEF parse error:', e); }
+        if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
+        loading=false; document.getElementById('sbtn').disabled=false; return;
+      }
       // Detectar bloque REPORTE_DATA
       const reportData = detectReportData(replyFinalProcessed);
       if (reportData) {
@@ -4391,6 +4404,136 @@ async function executeAction(actionDataStr, btn) {
     btn.disabled = false;
     btn.textContent = actionData.confirmText || 'Confirmar';
     addAgent('Error de conexion al ejecutar la accion. Intenta de nuevo.');
+  }
+}
+
+// ── VIDEO AD GENERATION (Seedance 2.0 / BytePlus) ────────────────────────────
+
+function renderVideoBriefCard(briefData) {
+  const chatBox = document.getElementById('chat-box');
+  if (!chatBox) return;
+
+  const formatLabels = { '9:16':'Vertical 9:16', '1:1':'Cuadrado 1:1', '16:9':'Horizontal 16:9' };
+  const platformIcon = briefData.platform && briefData.platform.toLowerCase().includes('tiktok') ? '🎵' : '📱';
+
+  const safeData = JSON.stringify(briefData).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+  const card = document.createElement('div');
+  card.className = 'msg agent';
+  card.innerHTML =
+    '<div class="video-brief-card">' +
+      '<div class="video-brief-header">' +
+        '<span class="video-brief-icon">' + platformIcon + '</span>' +
+        '<span class="video-brief-title">Brief de video publicitario</span>' +
+        '<span class="video-brief-platform">' + (briefData.platform || 'Video Ad') + '</span>' +
+      '</div>' +
+      '<div class="video-brief-specs">' +
+        '<span class="video-brief-spec">' + (formatLabels[briefData.aspect_ratio] || briefData.aspect_ratio) + '</span>' +
+        '<span class="video-brief-spec">' + (briefData.duration || 10) + ' seg</span>' +
+        '<span class="video-brief-spec">' + (briefData.resolution || '1080p') + '</span>' +
+        (briefData.style ? '<span class="video-brief-spec">' + briefData.style + '</span>' : '') +
+      '</div>' +
+      (briefData.description ? '<div class="video-brief-description">' + briefData.description + '</div>' : '') +
+      '<div class="video-brief-prompt">' + (briefData.prompt || '') + '</div>' +
+      '<div class="video-brief-footer">' +
+        '<button class="btn-generate" onclick="generateVideo(\'' + safeData + '\', this)">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+          'Generar video' +
+        '</button>' +
+        '<span class="video-brief-cost">~$0.30 · ~60 seg</span>' +
+      '</div>' +
+    '</div>';
+
+  chatBox.appendChild(card);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+async function generateVideo(briefDataStr, btn) {
+  let briefData;
+  try { briefData = JSON.parse(briefDataStr); } catch(e) { return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Generando...';
+
+  // Mostrar barra de progreso
+  const card = btn.closest('.video-brief-card');
+  const progress = document.createElement('div');
+  progress.className = 'video-gen-progress';
+  progress.innerHTML = '<div class="video-gen-spinner"></div><span>Enviando a Seedance 2.0… esto tarda ~60 segundos</span>';
+  card.appendChild(progress);
+
+  try {
+    // 1. Submit job
+    const submitRes = await fetch('/api/video-gen', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        action: 'submit',
+        prompt: briefData.prompt,
+        aspect_ratio: briefData.aspect_ratio || '9:16',
+        duration: briefData.duration || 10,
+        resolution: briefData.resolution || '1080p',
+        style: briefData.style || null,
+      })
+    });
+
+    const submitData = await submitRes.json();
+    if (!submitRes.ok || !submitData.job_id) throw new Error(submitData.error || 'Error al iniciar generación');
+
+    const jobId = submitData.job_id;
+    progress.querySelector('span').textContent = 'Video en proceso… (ID: ' + jobId.slice(0,8) + '…)';
+
+    // 2. Poll hasta completado (máx 3 min, cada 5 seg)
+    let videoUrl = null;
+    let attempts = 0;
+    while (attempts < 36) {
+      await new Promise(r => setTimeout(r, 5000));
+      attempts++;
+
+      const statusRes = await fetch('/api/video-gen', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ action: 'status', job_id: jobId })
+      });
+      const statusData = await statusRes.json();
+
+      if (statusData.status === 'completed' && statusData.video_url) {
+        videoUrl = statusData.video_url;
+        break;
+      } else if (statusData.status === 'failed') {
+        throw new Error(statusData.error || 'La generación falló');
+      }
+      const elapsed = attempts * 5;
+      progress.querySelector('span').textContent = 'Generando video… (' + elapsed + ' seg)';
+    }
+
+    if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');
+
+    // 3. Renderizar video
+    card.closest('.msg').remove();
+    const chatBox = document.getElementById('chat-box');
+    const videoMsg = document.createElement('div');
+    videoMsg.className = 'msg agent';
+    videoMsg.innerHTML =
+      '<div class="video-player-wrap">' +
+        '<video controls autoplay muted playsinline style="max-height:480px">' +
+          '<source src="' + videoUrl + '" type="video/mp4">' +
+        '</video>' +
+        '<div class="video-player-actions">' +
+          '<a class="video-download-btn" href="' + videoUrl + '" download="video-ad.mp4" target="_blank">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+            'Descargar video' +
+          '</a>' +
+        '</div>' +
+      '</div>';
+    chatBox.appendChild(videoMsg);
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+  } catch(e) {
+    progress.remove();
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generar video';
+    addAgent('Error generando el video: ' + e.message + '. Verifica que BYTEPLUS_API_KEY esté configurado en Vercel.');
   }
 }
 
