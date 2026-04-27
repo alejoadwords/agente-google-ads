@@ -565,8 +565,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .agency-health.rojo .agency-health-dot{background:#DC2626}
 .agency-health.gris .agency-health-dot{background:var(--muted2)}
 .agency-card-date{font-size:10px;color:var(--muted2)}
-.agency-open-btn{font-size:11px;font-weight:600;color:var(--blue);background:none;border:none;cursor:pointer;font-family:var(--font);padding:0;transition:opacity .15s}
-.agency-open-btn:hover{opacity:.7}
+.agency-card-agents{display:flex;align-items:center;gap:5px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border2)}
+.agency-agents-label{font-size:10px;color:var(--muted2);margin-right:2px;flex-shrink:0;letter-spacing:.3px}
+.agency-agent-chip{width:30px;height:30px;border-radius:8px;border:1.5px solid;cursor:pointer;transition:all .15s;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font);line-height:1}
+.agency-agent-chip:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.13)}
+.agency-agent-chip.google{color:#4285F4;border-color:#d0e4ff;background:#EFF6FF}
+.agency-agent-chip.google:hover{background:#4285F4;color:#fff;border-color:#4285F4}
+.agency-agent-chip.meta{color:#1877F2;border-color:#d0e4ff;background:#EFF6FF}
+.agency-agent-chip.meta:hover{background:#1877F2;color:#fff;border-color:#1877F2}
+.agency-agent-chip.seo{color:#10B981;border-color:#d1fae5;background:#F0FDF4}
+.agency-agent-chip.seo:hover{background:#10B981;color:#fff;border-color:#10B981}
+.agency-agent-chip.consultor{color:#7C3AED;border-color:#ede9fe;background:#F5F3FF}
+.agency-agent-chip.consultor:hover{background:#7C3AED;color:#fff;border-color:#7C3AED}
+.agency-agent-chip.vista{color:var(--muted2);border-color:var(--border);background:var(--sidebar2)}
+.agency-agent-chip.vista:hover{background:var(--sidebar);color:var(--text);border-color:var(--border)}
 .agency-empty{text-align:center;padding:60px 20px;color:var(--muted)}
 .agency-empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
 .agency-empty-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
