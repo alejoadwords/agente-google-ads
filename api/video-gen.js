@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         ratio: aspect_ratio || '9:16',
         resolution: resolution || '1080p',
         duration: duration || 10,
-        generate_audio: true,
+        generate_audio: false,
       };
 
       const submitRes = await fetch(BASE, {
