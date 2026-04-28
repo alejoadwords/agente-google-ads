@@ -23,9 +23,11 @@ export default async function handler(req, res) {
 
       const raw = await statusRes.text();
       let data;
-      try { data = JSON.parse(raw); } catch { return res.status(500).json({ error: 'Respuesta no-JSON de BytePlus status: ' + raw.slice(0, 200) }); }
+      try { data = JSON.parse(raw); } catch {
+        return res.status(500).json({ error: `HTTP ${statusRes.status} — respuesta no-JSON: "${raw.slice(0, 300)}"` });
+      }
 
-      if (!statusRes.ok) return res.status(statusRes.status).json({ error: data.error?.message || raw.slice(0, 200) });
+      if (!statusRes.ok) return res.status(statusRes.status).json({ error: data.error?.message || data.message || JSON.stringify(data).slice(0, 300) });
 
       const vid = data.output?.video_url || (data.videos && data.videos[0]?.url) || null;
       return res.json({ status: data.status || data.task_status || 'running', video_url: vid });
@@ -60,9 +62,11 @@ export default async function handler(req, res) {
 
       const raw = await submitRes.text();
       let data;
-      try { data = JSON.parse(raw); } catch { return res.status(500).json({ error: 'Respuesta no-JSON de BytePlus submit: ' + raw.slice(0, 200) }); }
+      try { data = JSON.parse(raw); } catch {
+        return res.status(500).json({ error: `HTTP ${submitRes.status} — respuesta no-JSON: "${raw.slice(0, 300)}"` });
+      }
 
-      if (!submitRes.ok) return res.status(submitRes.status).json({ error: data.error?.message || raw.slice(0, 200) });
+      if (!submitRes.ok) return res.status(submitRes.status).json({ error: data.error?.message || data.message || JSON.stringify(data).slice(0, 300) });
 
       const jobId = data.id || data.task_id || data.job_id;
       if (!jobId) return res.status(500).json({ error: 'BytePlus no devolvió job_id. Respuesta: ' + JSON.stringify(data).slice(0, 300) });
@@ -73,6 +77,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'action inválida. Usa submit o status' });
 
   } catch (err) {
-    return res.status(500).json({ error: 'Error interno: ' + err.message });
+    return res.status(500).json({ error: 'Error interno (catch): ' + err.message + ' | stack: ' + (err.stack || '').slice(0, 200) });
   }
 }
