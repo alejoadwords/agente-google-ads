@@ -4523,7 +4523,7 @@ function submitVideoAdForm(btn) {
 }
 
 function renderVideoBriefCard(briefData) {
-  const chatBox = document.getElementById('chat-box');
+  const chatBox = document.getElementById('chat-area');
   if (!chatBox) return;
 
   const formatLabels = { '9:16':'Vertical 9:16', '1:1':'Cuadrado 1:1', '16:9':'Horizontal 16:9' };
@@ -4624,7 +4624,7 @@ async function generateVideo(briefDataStr, btn) {
 
     // 3. Renderizar video
     card.closest('.msg').remove();
-    const chatBox = document.getElementById('chat-box');
+    const chatBox = document.getElementById('chat-area');
     const videoMsg = document.createElement('div');
     videoMsg.className = 'msg agent';
     videoMsg.innerHTML =
