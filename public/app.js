@@ -4657,9 +4657,8 @@ async function generateVideo(briefDataStr, btn) {
         throw new Error(statusData.error || 'La generación falló. Debug: ' + (statusData._debug || ''));
       }
       const elapsed = attempts * 5;
-      const rawSt = statusData.raw_status || statusData.status || '?';
-      const debugHint = statusData._debug ? ' | ' + statusData._debug.slice(0, 400) : '';
-      progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's | ' + rawSt + debugHint;
+      if (statusData._debug) console.log('[video-gen debug]', statusData._debug);
+      progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's';
       // Si está completed pero sin URL, es un bug de extracción — mostrar debug
       if (statusData.status === 'completed' && !statusData.video_url) {
         throw new Error('Video completado pero URL no encontrada. Debug: ' + (statusData._debug || ''));
