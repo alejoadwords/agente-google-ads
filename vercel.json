@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/video-gen.js": { "maxDuration": 30 }
+  },
   "rewrites": [
     { "source": "/sso-callback", "destination": "/sso-callback.html" },
     { "source": "/sso-callback/(.*)", "destination": "/sso-callback.html" }

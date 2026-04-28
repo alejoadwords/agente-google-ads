@@ -29,14 +29,17 @@ export default async function handler(req, res) {
       }
       if (!statusRes.ok) return res.status(statusRes.status).json({ error: data.error?.message || data.message || JSON.stringify(data).slice(0, 300) });
 
-      // La respuesta tiene status: "running" | "succeeded" | "failed"
+      const bpStatus = data.status || data.task_status || 'running';
+      const isCompleted = bpStatus === 'succeeded' || bpStatus === 'completed';
+      const isFailed = bpStatus === 'failed' || bpStatus === 'error';
       const videoUrl = data.content?.find(c => c.type === 'video')?.url
                     || data.outputs?.find(o => o.type === 'video')?.url
-                    || null;
+                    || data.video_url || null;
       return res.json({
-        status: data.status === 'succeeded' ? 'completed' : data.status,
+        status: isCompleted ? 'completed' : isFailed ? 'failed' : 'running',
         video_url: videoUrl,
-        error: data.error?.message || null
+        error: isFailed ? (data.error?.message || bpStatus) : null,
+        _debug: JSON.stringify(data).slice(0, 500)
       });
     }
 
