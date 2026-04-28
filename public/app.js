@@ -6,8 +6,9 @@ let clerkInstance=null,sessionToken=null,userPlan='free';
 let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
 // Declaración temprana para evitar ReferenceError en getProfileKey
 let adsActiveAccount = null;
-// Contexto de cliente activo para usuarios Plan Agencia
+// Contexto de cliente activo para usuarios Plan Agencia y Pro
 let activeClientContext = null; // { clientId, clientName, clientIndustry, monthlyBudget, notes }
+let pendingAgentAfterSetup = null; // agentKey a abrir después de que Pro complete su perfil
 
 // Sistema de límites de imágenes
 let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
@@ -540,11 +541,35 @@ let agencyActiveClientId = null; // cliente en contexto de chat actual
 // ── Inicialización ──────────────────────────────────────────────────────────
 async function agencyInit() {
   const isAgency = userPlan === 'agency' || isAdminUser();
-  const btn = document.getElementById('sb-agency-btn');
-  if (btn) btn.style.display = isAgency ? 'block' : 'none';
-  if (!isAgency) return;
+  const isPro    = userPlan === 'individual' || userPlan === 'pro';
+
+  const agencyBtn = document.getElementById('sb-agency-btn');
+  const proBtn    = document.getElementById('sb-pro-btn');
+  if (agencyBtn) agencyBtn.style.display = isAgency ? 'block' : 'none';
+  if (proBtn)    proBtn.style.display    = isPro    ? 'block' : 'none';
+
+  if (!isAgency && !isPro) return;
   await agencyLoadClients();
-  agencyUpdateSidebarCount();
+  if (isAgency) agencyUpdateSidebarCount();
+
+  // Pro: auto-activar perfil de negocio si ya existe
+  if (isPro && agencyClients.length > 0) {
+    const proClient = agencyClients.find(c => c.id === 'pro_main') || agencyClients[0];
+    if (proClient) {
+      agencyActiveClientId = proClient.id;
+      activeClientContext = {
+        clientId:       proClient.id,
+        clientName:     proClient.name || '',
+        clientIndustry: proClient.industria || proClient.business || '',
+        monthlyBudget:  proClient.presupuesto || '',
+        notes:          proClient.descripcion || '',
+      };
+      // Actualizar sidebar con nombre del negocio
+      proUpdateSidebarLabel(proClient);
+      // Personalizar saludo en home
+      if (document.getElementById('home-consultor-hero')) renderClientHomeGreeting(proClient);
+    }
+  }
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -725,20 +750,32 @@ const BRIEF_TOTAL_STEPS = 8;
 let briefLogoDataUrl = null; // base64 del logo del cliente
 
 function agencyOpenModal(editId = null) {
-  const limit = isAdminUser() ? 999 : AGENCY_CLIENT_LIMIT;
-  if (!editId && agencyClients.length >= limit) {
+  const isPro  = userPlan === 'individual' || userPlan === 'pro';
+  const limit  = isAdminUser() ? 999 : isPro ? 1 : AGENCY_CLIENT_LIMIT;
+  // Pro solo puede tener 1 perfil; si ya existe, siempre abrir en edición
+  const resolvedEditId = isPro && !editId && agencyClients.length > 0
+    ? (agencyClients.find(c => c.id === 'pro_main')?.id || agencyClients[0].id)
+    : editId;
+  if (!resolvedEditId && agencyClients.length >= limit && !isPro) {
     alert(`Has alcanzado el límite de ${limit} clientes en tu plan. Contacta a soporte para ampliar tu plan.`);
     return;
   }
-  agencyEditingId = editId;
+  agencyEditingId = resolvedEditId;
   agencySelectedHealth = 'gris';
   briefCurrentStep = 0;
   briefLogoDataUrl = null;
 
-  document.getElementById('agency-modal-title').textContent = editId ? 'Editar brief de cliente' : 'Brief de cliente';
-  document.getElementById('agency-modal-sub').textContent = editId
-    ? 'Actualiza la información del perfil del cliente'
-    : 'Completa el perfil para que todos los agentes tengan contexto desde el inicio';
+  if (isPro) {
+    document.getElementById('agency-modal-title').textContent = resolvedEditId ? 'Editar perfil de mi negocio' : 'Perfil de mi negocio';
+    document.getElementById('agency-modal-sub').textContent = resolvedEditId
+      ? 'Actualiza la información de tu negocio para mantener el contexto actualizado'
+      : 'Esta información personaliza todos los agentes de Acuarius para tu negocio';
+  } else {
+    document.getElementById('agency-modal-title').textContent = resolvedEditId ? 'Editar brief de cliente' : 'Brief de cliente';
+    document.getElementById('agency-modal-sub').textContent = resolvedEditId
+      ? 'Actualiza la información del perfil del cliente'
+      : 'Completa el perfil para que todos los agentes tengan contexto desde el inicio';
+  }
 
   // Reset todos los campos
   const fieldIds = ['ag-f-name','ag-f-pais','ag-f-ciudad','ag-f-web',
@@ -759,8 +796,8 @@ function agencyOpenModal(editId = null) {
   agencyResetLogoPreview();
 
   // Cargar datos si es edición
-  if (editId) {
-    const c = agencyClients.find(x => x.id === editId);
+  if (resolvedEditId) {
+    const c = agencyClients.find(x => x.id === resolvedEditId);
     if (c) briefFillForm(c);
   }
 
@@ -1036,15 +1073,46 @@ async function agencySaveClient() {
     briefGoStep(0);
     return;
   }
+
+  const isPro = userPlan === 'individual' || userPlan === 'pro';
+
   if (agencyEditingId) {
     const idx = agencyClients.findIndex(c => c.id === agencyEditingId);
     if (idx !== -1) agencyClients[idx] = { ...agencyClients[idx], ...data, updatedAt: now };
   } else {
-    agencyClients.push({ id: 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), ...data, createdAt: now, updatedAt: now });
+    // Pro siempre usa id fijo 'pro_main'
+    const newId = isPro ? 'pro_main' : 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+    agencyClients.push({ id: newId, ...data, createdAt: now, updatedAt: now });
   }
+
   await agencyPersist();
   agencyCloseModal();
-  agencyRender();
+
+  if (isPro) {
+    // Auto-activar perfil y personalizar experiencia
+    const proClient = agencyClients.find(c => c.id === 'pro_main') || agencyClients[0];
+    if (proClient) {
+      agencyActiveClientId = proClient.id;
+      activeClientContext = {
+        clientId:       proClient.id,
+        clientName:     proClient.name || '',
+        clientIndustry: proClient.industria || proClient.business || '',
+        monthlyBudget:  proClient.presupuesto || '',
+        notes:          proClient.descripcion || '',
+      };
+      proUpdateSidebarLabel(proClient);
+      renderClientHomeGreeting(proClient);
+    }
+    // Si hay un agente pendiente, abrirlo ahora
+    if (pendingAgentAfterSetup) {
+      const ag = pendingAgentAfterSetup;
+      pendingAgentAfterSetup = null;
+      setTimeout(() => openAgent(ag), 400);
+    }
+  } else {
+    agencyRender();
+  }
+
   if (btn) { btn.disabled = false; btn.textContent = 'guardar cliente'; }
 }
 
@@ -2266,6 +2334,32 @@ function briefSummaryForAgent(client, agentKey) {
 }
 
 function launchOnboarding(agentKey) {
+  const isPro = userPlan === 'individual' || userPlan === 'pro';
+
+  // Pro sin perfil de negocio → mostrar card de configuración
+  if (isPro && agencyClients.length === 0 && !agencyActiveClientId) {
+    pendingAgentAfterSetup = agentKey;
+    renderProSetupCard(agentKey);
+    return;
+  }
+
+  // Pro con perfil → auto-activar y usar como contexto (igual que agencia)
+  if (isPro && agencyClients.length > 0 && !agencyActiveClientId) {
+    const proClient = agencyClients.find(c => c.id === 'pro_main') || agencyClients[0];
+    if (proClient) {
+      agencyActiveClientId = proClient.id;
+      activeClientContext = {
+        clientId:       proClient.id,
+        clientName:     proClient.name || '',
+        clientIndustry: proClient.industria || proClient.business || '',
+        monthlyBudget:  proClient.presupuesto || '',
+        notes:          proClient.descripcion || '',
+      };
+      launchOnboarding(agentKey); // Re-llamar con contexto activo
+      return;
+    }
+  }
+
   // Si hay un cliente de agencia activo con brief completo, no hacer onboarding — usar brief como contexto
   if (agencyActiveClientId) {
     const client = agencyClients.find(c => c.id === agencyActiveClientId);
@@ -2298,6 +2392,62 @@ function launchOnboarding(agentKey) {
   const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
   addAgent(guide);
   setTimeout(() => renderOb(), 600);
+}
+
+// ── Configuración de negocio para usuarios Pro ────────────────────────────────
+function renderProSetupCard(agentKey) {
+  const chatBox = document.getElementById('chat-area');
+  if (!chatBox) return;
+
+  const agentNames = {
+    'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads',
+    'seo': 'SEO', 'social': 'Contenido para Redes', 'consultor': 'Consultor',
+  };
+  const agentName = agentNames[agentKey] || 'este agente';
+
+  const el = document.createElement('div');
+  el.className = 'msg agent';
+  el.innerHTML =
+    '<div style="background:var(--bg);border:2px solid #7C3AED;border-radius:16px;padding:24px;max-width:500px;width:100%">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">' +
+        '<div style="width:44px;height:44px;border-radius:12px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text)">Antes de empezar con ' + agentName + '</div>' +
+          '<div style="font-size:12px;color:var(--muted2);margin-top:2px">Configura el perfil de tu negocio una sola vez</div>' +
+        '</div>' +
+      '</div>' +
+      '<p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0 0 16px">' +
+        'Para que todos los agentes tengan contexto desde el primer mensaje — industria, audiencia, presupuesto, competencia y tono de marca — necesitamos conocer tu negocio.' +
+      '</p>' +
+      '<div style="background:#F5F3FF;border-radius:10px;padding:14px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Nombre e industria</div>' +
+        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Presupuesto y objetivos</div>' +
+        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Audiencia objetivo</div>' +
+        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap=6px"><span>✓</span> Competencia y tono</div>' +
+        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Canales activos</div>' +
+        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Lo que funciona (y lo que no)</div>' +
+      '</div>' +
+      '<button onclick="proOpenSetupModal()" style="width:100%;padding:12px;background:#7C3AED;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s" onmouseover="this.style.opacity=\'.88\'" onmouseout="this.style.opacity=\'1\'">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+        'Configurar mi negocio ahora' +
+      '</button>' +
+      '<div style="text-align:center;margin-top:10px;font-size:11px;color:var(--muted2)">Solo toma ~5 minutos · Se guarda para siempre</div>' +
+    '</div>';
+  chatBox.appendChild(el);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function proOpenSetupModal() {
+  // Abrir el modal de brief en modo "Mi negocio" para usuarios Pro
+  const proClient = agencyClients.find(c => c.id === 'pro_main');
+  agencyOpenModal(proClient ? 'pro_main' : null);
+}
+
+function proUpdateSidebarLabel(client) {
+  const nameEl = document.getElementById('sb-pro-name');
+  if (nameEl && client && client.name) nameEl.textContent = client.name;
 }
 
 // Cards de acción para Meta Ads
