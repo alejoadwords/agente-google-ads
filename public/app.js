@@ -4608,16 +4608,21 @@ async function generateVideo(briefDataStr, btn) {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ action: 'status', job_id: jobId })
       });
-      const statusData = await statusRes.json();
+      let statusData;
+      try { statusData = await statusRes.json(); } catch(je) {
+        const txt = await statusRes.text().catch(()=>'');
+        throw new Error('Status no-JSON HTTP ' + statusRes.status + ': ' + txt.slice(0,200));
+      }
+      if (!statusRes.ok) throw new Error('Status error ' + statusRes.status + ': ' + (statusData.error || statusData._debug || JSON.stringify(statusData).slice(0,200)));
 
       if (statusData.status === 'completed' && statusData.video_url) {
         videoUrl = statusData.video_url;
         break;
       } else if (statusData.status === 'failed') {
-        throw new Error(statusData.error || 'La generación falló');
+        throw new Error(statusData.error || 'La generación falló. Debug: ' + (statusData._debug || ''));
       }
       const elapsed = attempts * 5;
-      progress.querySelector('span').textContent = 'Generando video… (' + elapsed + ' seg)';
+      progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's | estado: ' + (statusData.raw_status || statusData.status || '?');
     }
 
     if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');

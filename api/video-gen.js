@@ -81,7 +81,7 @@ export default async function handler(req, res) {
       const jobId = data.id || data.task_id;
       if (!jobId) return res.status(500).json({ error: 'Sin job_id en respuesta: ' + JSON.stringify(data).slice(0, 300) });
 
-      return res.json({ job_id: jobId });
+      return res.json({ job_id: jobId, _submit_debug: JSON.stringify(data).slice(0, 500) });
     }
 
     return res.status(400).json({ error: 'action inválida. Usa submit o status' });
