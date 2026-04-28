@@ -4445,8 +4445,18 @@ function showVideoAdForm() {
       '</div>' +
 
       '<div style="margin-bottom:12px">' +
+        '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">FOTO DEL PRODUCTO <span style="color:#7C3AED">★ recomendado</span></label>' +
+        '<div id="vaf-img-drop" onclick="document.getElementById(\'vaf-img-input\').click()" style="border:1.5px dashed #7C3AED;border-radius:8px;padding:10px;cursor:pointer;background:#F5F3FF;display:flex;align-items:center;gap:10px;transition:background .15s" onmouseover="this.style.background=\'#EDE9FE\'" onmouseout="this.style.background=\'#F5F3FF\'">' +
+          '<input type="file" id="vaf-img-input" accept="image/*" style="display:none" onchange="vafPreviewImage(this)">' +
+          '<span style="font-size:18px">📷</span>' +
+          '<div id="vaf-img-label" style="font-size:12px;color:#7C3AED;font-weight:500">Subir foto del producto (mejora el resultado y evita filtros de contenido)</div>' +
+        '</div>' +
+        '<div id="vaf-img-preview" style="display:none;margin-top:6px"><img id="vaf-img-thumb" style="max-height:70px;border-radius:6px;border:1.5px solid #7C3AED"></div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:12px">' +
         '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">DESCRIBE TU PRODUCTO O ESCENA</label>' +
-        '<textarea id="vaf-desc" placeholder="Ej: Shampoo orgánico en botella blanca elegante, cabello brillante y natural, ingredientes como aloe vera y coco..." style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;resize:vertical;min-height:72px;background:var(--sidebar2);color:var(--text);box-sizing:border-box;outline:none"></textarea>' +
+        '<textarea id="vaf-desc" placeholder="Ej: Shampoo orgánico en botella blanca elegante, cabello brillante y natural, ingredientes como aloe vera y coco..." style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;resize:vertical;min-height:60px;background:var(--sidebar2);color:var(--text);box-sizing:border-box;outline:none"></textarea>' +
       '</div>' +
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">' +
@@ -4487,7 +4497,18 @@ function showVideoAdForm() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-function submitVideoAdForm(btn) {
+function vafPreviewImage(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('vaf-img-thumb').src = e.target.result;
+    document.getElementById('vaf-img-preview').style.display = 'block';
+    document.getElementById('vaf-img-label').textContent = input.files[0].name;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+async function submitVideoAdForm(btn) {
   const desc = document.getElementById('vaf-desc').value.trim();
   if (!desc) {
     document.getElementById('vaf-desc').style.borderColor = '#EF4444';
@@ -4495,29 +4516,42 @@ function submitVideoAdForm(btn) {
     return;
   }
 
+  btn.disabled = true;
+  btn.textContent = 'Preparando…';
+
   const platformVal = document.getElementById('vaf-platform').value;
   const [aspectRatio, platform] = platformVal.split('|');
   const style = document.getElementById('vaf-style').value;
   const duration = parseInt(document.querySelector('input[name="vaf-dur"]:checked').value);
 
   const styleDir = {
-    cinematic: 'Cinematic shot, premium product photography, warm dramatic lighting, slow dolly camera movement, shallow depth of field, soft bokeh background, professional color grading',
-    realistic: 'Authentic handheld shot, natural daylight, genuine lifestyle moment, lo-fi aesthetic, slight camera movement for authenticity',
-    '3d_render': 'Hero product shot, clean studio environment, dramatic lighting from above, 360 slow rotation, ultra sharp details, luxury feel',
+    cinematic: 'Cinematic product shot, premium advertising, warm dramatic lighting, slow dolly movement, shallow depth of field, professional color grading',
+    realistic: 'Authentic lifestyle shot, natural daylight, genuine moment, lo-fi aesthetic, slight handheld camera movement',
+    '3d_render': 'Hero product shot, clean studio, dramatic top lighting, ultra sharp details, luxury feel',
   };
+  const prompt = (styleDir[style] || styleDir.cinematic) + '. Subject: ' + desc + '. Social media advertising, high quality.';
 
-  const prompt = (styleDir[style] || styleDir.cinematic) + '. Subject: ' + desc + '. Optimized for social media advertising, high quality, engaging visual storytelling.';
+  // Leer y comprimir imagen de referencia si existe
+  let referenceImage = null;
+  const imgInput = document.getElementById('vaf-img-input');
+  if (imgInput && imgInput.files && imgInput.files[0]) {
+    referenceImage = await new Promise(resolve => {
+      const file = imgInput.files[0];
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const max = 1024;
+        let w = img.width, h = img.height;
+        if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
 
-  const briefData = {
-    prompt,
-    aspect_ratio: aspectRatio,
-    duration,
-    resolution: '1080p',
-    style,
-    platform,
-    description: desc
-  };
-
+  const briefData = { prompt, aspect_ratio: aspectRatio, duration, resolution: '1080p', style, platform, description: desc, reference_image: referenceImage };
   btn.closest('.msg').remove();
   renderVideoBriefCard(briefData);
 }

@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const BYTEPLUS_API_KEY = process.env.BYTEPLUS_API_KEY;
   if (!BYTEPLUS_API_KEY) return res.status(500).json({ error: 'BYTEPLUS_API_KEY no configurado en Vercel' });
 
-  const { action, job_id, prompt, aspect_ratio, duration, resolution } = req.body;
+  const { action, job_id, prompt, aspect_ratio, duration, resolution, reference_image } = req.body;
 
   try {
     // ── STATUS ────────────────────────────────────────────────────────────────
@@ -55,9 +55,15 @@ export default async function handler(req, res) {
         '9:16': '1080x1920',
       };
 
+      const content = [];
+      if (reference_image) {
+        content.push({ type: 'image_url', image_url: { url: reference_image } });
+      }
+      content.push({ type: 'text', text: prompt });
+
       const body = {
         model: 'dreamina-seedance-2-0-260128',
-        content: [{ type: 'text', text: prompt }],
+        content,
         ratio: aspect_ratio || '9:16',
         resolution: resolution || '1080p',
         duration: duration || 10,
