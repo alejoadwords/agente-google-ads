@@ -32,8 +32,10 @@ export default async function handler(req, res) {
       const bpStatus = data.status || data.task_status || 'running';
       const isCompleted = bpStatus === 'succeeded' || bpStatus === 'completed';
       const isFailed = bpStatus === 'failed' || bpStatus === 'error';
-      const videoUrl = data.content?.find(c => c.type === 'video')?.url
-                    || data.outputs?.find(o => o.type === 'video')?.url
+      const contentArr = Array.isArray(data.content) ? data.content : [];
+      const outputsArr = Array.isArray(data.outputs) ? data.outputs : [];
+      const videoUrl = contentArr.find(c => c.type === 'video')?.url
+                    || outputsArr.find(o => o.type === 'video')?.url
                     || data.video_url || null;
       return res.json({
         status: isCompleted ? 'completed' : isFailed ? 'failed' : 'running',
