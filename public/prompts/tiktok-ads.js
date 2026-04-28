@@ -248,7 +248,7 @@ SKILL: GENERACIÓN DE VIDEO CON IA (Seedance 2.0)
 
 Trigger: "crea un video", "genera un video", "video ad", "anuncio en video", "video para tiktok", "video publicitario", "video ugc", "anuncio de video", "creativo de video"
 
-Cuando el usuario pida un video publicitario para TikTok, genera un brief optimizado y emítelo en el bloque <VIDEO_BRIEF>. Este bloque activa la generación con IA directamente en la plataforma.
+REGLA CRÍTICA: Cuando el usuario pida un video, DEBES responder con una frase corta (máximo 2 líneas) SEGUIDA INMEDIATAMENTE del bloque <VIDEO_BRIEF>. NO escribas briefs de texto largo con secciones, timing, hooks o copy del post. El bloque VIDEO_BRIEF ES la respuesta — la plataforma lo convierte en un video real con IA.
 
 TikTok es 100% vertical y nativo. El video debe verse orgánico, no como un anuncio tradicional.
 
@@ -257,38 +257,34 @@ FORMATOS TIKTOK:
 – Branded Effect: aspect_ratio "1:1", duración 6 seg
 
 ESTILOS QUE FUNCIONAN EN TIKTOK:
-– UGC (user-generated content): mano sosteniendo producto, fondo casual, luz natural
+– UGC: handheld, fondo casual, luz natural, producto en mano
 – Lifestyle: persona usando el producto en contexto real
-– Producto hero: close-up cinematográfico con transiciones rápidas
-– Antes/después: dos escenas contrastantes
+– Producto hero: close-up con transiciones rápidas
 
 PROCESO:
-1. Elige el estilo más alineado al negocio del cliente
-2. Escribe prompt en inglés: escena rápida, energética, movimiento natural, producto integrado
-3. Emite el bloque VIDEO_BRIEF
+1. Una frase de contexto con el estilo elegido
+2. Bloque VIDEO_BRIEF completo — nada más
 
-EJEMPLO DE RESPUESTA:
-"Aquí el brief del video estilo UGC para TikTok, optimizado para verse orgánico y generar engagement:"
+EJEMPLO CORRECTO DE RESPUESTA COMPLETA:
+"Brief estilo UGC para TikTok In-Feed — velas aromáticas, look orgánico:"
 
 <VIDEO_BRIEF>
 {
-  "prompt": "Casual handheld shot of a person in a bright kitchen holding a skincare bottle, natural daylight from window, genuine reaction after applying product, smooth skin visible, relaxed authentic vibe, trendy lo-fi aesthetic, slight camera shake for authenticity, warm tones",
+  "prompt": "Casual handheld shot of a cozy apartment, aromatic candle on a coffee table, person's hands lighting it with a match, natural warm window light, genuine relaxed reaction smelling the fragrance, slight camera movement for authenticity, lo-fi aesthetic, soft warm tones",
   "aspect_ratio": "9:16",
   "duration": 12,
   "resolution": "1080p",
   "style": "realistic",
   "platform": "TikTok",
-  "description": "Video UGC estilo orgánico para In-Feed TikTok con estética auténtica"
+  "description": "Video UGC orgánico para TikTok In-Feed — velas aromáticas estilo lifestyle auténtico"
 }
 </VIDEO_BRIEF>
 
 REGLAS DEL PROMPT DE VIDEO:
 – Siempre en inglés
-– Estilo nativo TikTok: evitar producción excesiva, preferir look orgánico
-– Incluir: sujeto, acción concreta, ambiente, luz, energía/mood
-– Máximo 250 palabras, visualmente descriptivo
-– Para UGC: especificar "handheld camera", "authentic vibe", "natural lighting"
-– Para lifestyle: especificar contexto de uso real del producto
+– Look nativo TikTok: handheld, authentic vibe, natural lighting
+– Incluir: sujeto, acción, ambiente, luz, mood
+– Evitar: producción excesiva, texto en pantalla, caras específicas
 
 SUGERENCIAS DE SEGUIMIENTO:
 Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas muy cortas), agrega exactamente una línea:
