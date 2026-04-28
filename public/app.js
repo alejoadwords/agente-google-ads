@@ -4445,7 +4445,8 @@ async function showVideoAdForm() {
   if (credits && credits.available <= 0) {
     const el = document.createElement('div');
     el.className = 'msg agent';
-    const hotmartUrl = 'https://pay.hotmart.com/PENDING'; // ← URL real al crear el producto
+    const url5  = 'https://pay.hotmart.com/R105597226A?off=2muq4ex2';
+    const url10 = 'https://pay.hotmart.com/R105597226A?off=mfjz53b5';
     el.innerHTML =
       '<div style="background:var(--bg);border:2px solid #E5E7EB;border-radius:16px;padding:20px;max-width:480px;width:100%">' +
         '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
@@ -4453,25 +4454,36 @@ async function showVideoAdForm() {
           '<div>' +
             '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
             (credits.is_free
-              ? '<div style="font-size:11px;color:#EF4444;font-weight:600">Plan gratuito · 1 video de prueba utilizado</div>'
+              ? '<div style="font-size:11px;color:#EF4444;font-weight:600">Plan gratuito · video de prueba utilizado</div>'
               : '<div style="font-size:11px;color:#EF4444;font-weight:600">Usaste tus ' + credits.monthly_limit + ' videos de este mes</div>') +
           '</div>' +
         '</div>' +
         '<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:14px;margin-bottom:16px">' +
-          '<div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:8px">⚡ Tus créditos de video se agotaron</div>' +
-          '<div style="font-size:12px;color:#78350F;line-height:1.5">' +
+          '<div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:6px">⚡ Sin créditos disponibles</div>' +
+          '<div style="font-size:12px;color:#78350F;line-height:1.6">' +
             (credits.is_free
-              ? 'El plan gratuito incluye 1 video de prueba. Actualiza a Pro para obtener 5 videos/mes.'
-              : 'Tu plan ' + credits.plan + ' incluye ' + credits.monthly_limit + ' videos/mes. Compra créditos extra o espera al próximo ciclo.') +
+              ? 'El plan gratuito incluye 1 video de prueba. Actualiza a Pro para obtener 5 videos/mes incluidos.'
+              : 'Tu plan incluye ' + credits.monthly_limit + ' videos/mes. Compra créditos extra o espera al próximo ciclo.') +
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px">' +
           (credits.is_free
-            ? '<a href="/pricing.html" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#7C3AED;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">🚀 Actualizar a Pro — 5 videos/mes</a>'
+            ? '<a href="/pricing.html" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#7C3AED;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">🚀 Actualizar a Pro — 5 videos/mes incluidos</a>'
             : '') +
-          '<a href="' + hotmartUrl + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:' + (credits.is_free ? '#F3F4F6' : '#7C3AED') + ';color:' + (credits.is_free ? '#374151' : '#fff') + ';border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">' +
-            '🎬 Comprar créditos extra — 5 por $9.90 · 10 por $16.90' +
-          '</a>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<a href="' + url5 + '" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:12px 10px;background:#7C3AED;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;text-align:center;gap:3px">' +
+              '<span style="font-size:18px">🎬</span>' +
+              '<span>5 créditos</span>' +
+              '<span style="font-size:15px;font-weight:800">$9.90</span>' +
+            '</a>' +
+            '<a href="' + url10 + '" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:12px 10px;background:#6D28D9;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;text-align:center;gap:3px;position:relative">' +
+              '<span style="position:absolute;top:-8px;background:#F59E0B;color:#fff;font-size:9px;padding:2px 7px;border-radius:20px;font-weight:700">MEJOR VALOR</span>' +
+              '<span style="font-size:18px">🎬🎬</span>' +
+              '<span>10 créditos</span>' +
+              '<span style="font-size:15px;font-weight:800">$16.90</span>' +
+            '</a>' +
+          '</div>' +
+          '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:2px">Los créditos extra no vencen · Se suman a tu plan actual</div>' +
         '</div>' +
       '</div>';
     chatBox.appendChild(el);
