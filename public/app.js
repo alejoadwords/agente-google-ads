@@ -4529,7 +4529,7 @@ function renderVideoBriefCard(briefData) {
   const formatLabels = { '9:16':'Vertical 9:16', '1:1':'Cuadrado 1:1', '16:9':'Horizontal 16:9' };
   const platformIcon = briefData.platform && briefData.platform.toLowerCase().includes('tiktok') ? '🎵' : '📱';
 
-  const safeData = JSON.stringify(briefData).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const safeData = encodeURIComponent(JSON.stringify(briefData));
 
   const card = document.createElement('div');
   card.className = 'msg agent';
@@ -4563,7 +4563,7 @@ function renderVideoBriefCard(briefData) {
 
 async function generateVideo(briefDataStr, btn) {
   let briefData;
-  try { briefData = JSON.parse(briefDataStr); } catch(e) { return; }
+  try { briefData = JSON.parse(decodeURIComponent(briefDataStr)); } catch(e) { return; }
 
   btn.disabled = true;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Generando...';
