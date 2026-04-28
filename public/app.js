@@ -2314,7 +2314,7 @@ function showMetaActionCards() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
       // Card 0: Crear video ad con IA — full width, destacada
-      '<div onclick="dismissMetaCards(this);qSend(\'genera un video ad de 10 segundos para Reels de mi negocio\')" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);showVideoAdForm()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<div style="font-size:22px">🎬</div>' +
           '<div>' +
@@ -4419,6 +4419,98 @@ async function executeAction(actionDataStr, btn) {
 }
 
 // ── VIDEO AD GENERATION (Seedance 2.0 / BytePlus) ────────────────────────────
+
+function showVideoAdForm() {
+  const chatBox = document.getElementById('chat-box');
+  const el = document.createElement('div');
+  el.className = 'msg agent';
+  el.innerHTML =
+    '<div style="background:var(--bg);border:2px solid #7C3AED;border-radius:16px;padding:20px;max-width:520px;width:100%">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">' +
+        '<span style="font-size:22px">🎬</span>' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
+          '<div style="font-size:11px;color:var(--muted2)">Seedance 2.0 · ~60 seg de generación · ~$0.30 por video</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:12px">' +
+        '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">DESCRIBE TU PRODUCTO O ESCENA</label>' +
+        '<textarea id="vaf-desc" placeholder="Ej: Shampoo orgánico en botella blanca elegante, cabello brillante y natural, ingredientes como aloe vera y coco..." style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;resize:vertical;min-height:72px;background:var(--sidebar2);color:var(--text);box-sizing:border-box;outline:none"></textarea>' +
+      '</div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">' +
+        '<div>' +
+          '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">PLATAFORMA</label>' +
+          '<select id="vaf-platform" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;background:var(--sidebar2);color:var(--text);outline:none">' +
+            '<option value="9:16|Meta Reels">Reels / Stories 9:16</option>' +
+            '<option value="9:16|TikTok">TikTok In-Feed 9:16</option>' +
+            '<option value="1:1|Meta Feed">Feed cuadrado 1:1</option>' +
+            '<option value="16:9|YouTube">YouTube / Horizontal 16:9</option>' +
+          '</select>' +
+        '</div>' +
+        '<div>' +
+          '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">ESTILO VISUAL</label>' +
+          '<select id="vaf-style" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;background:var(--sidebar2);color:var(--text);outline:none">' +
+            '<option value="cinematic">Cinematic (premium)</option>' +
+            '<option value="realistic">UGC / Orgánico</option>' +
+            '<option value="realistic">Lifestyle</option>' +
+            '<option value="3d_render">Producto hero</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:16px">' +
+        '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;letter-spacing:.5px">DURACIÓN</label>' +
+        '<div style="display:flex;gap:12px">' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)"><input type="radio" name="vaf-dur" value="10" checked style="accent-color:#7C3AED"> 10 segundos</label>' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)"><input type="radio" name="vaf-dur" value="15" style="accent-color:#7C3AED"> 15 segundos</label>' +
+        '</div>' +
+      '</div>' +
+
+      '<button onclick="submitVideoAdForm(this)" style="width:100%;padding:11px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+        'Generar video con IA' +
+      '</button>' +
+    '</div>';
+  chatBox.appendChild(el);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function submitVideoAdForm(btn) {
+  const desc = document.getElementById('vaf-desc').value.trim();
+  if (!desc) {
+    document.getElementById('vaf-desc').style.borderColor = '#EF4444';
+    document.getElementById('vaf-desc').focus();
+    return;
+  }
+
+  const platformVal = document.getElementById('vaf-platform').value;
+  const [aspectRatio, platform] = platformVal.split('|');
+  const style = document.getElementById('vaf-style').value;
+  const duration = parseInt(document.querySelector('input[name="vaf-dur"]:checked').value);
+
+  const styleDir = {
+    cinematic: 'Cinematic shot, premium product photography, warm dramatic lighting, slow dolly camera movement, shallow depth of field, soft bokeh background, professional color grading',
+    realistic: 'Authentic handheld shot, natural daylight, genuine lifestyle moment, lo-fi aesthetic, slight camera movement for authenticity',
+    '3d_render': 'Hero product shot, clean studio environment, dramatic lighting from above, 360 slow rotation, ultra sharp details, luxury feel',
+  };
+
+  const prompt = (styleDir[style] || styleDir.cinematic) + '. Subject: ' + desc + '. Optimized for social media advertising, high quality, engaging visual storytelling.';
+
+  const briefData = {
+    prompt,
+    aspect_ratio: aspectRatio,
+    duration,
+    resolution: '1080p',
+    style,
+    platform,
+    description: desc
+  };
+
+  btn.closest('.msg').remove();
+  renderVideoBriefCard(briefData);
+}
 
 function renderVideoBriefCard(briefData) {
   const chatBox = document.getElementById('chat-box');
