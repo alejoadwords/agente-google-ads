@@ -2313,6 +2313,17 @@ function showMetaActionCards() {
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
+      // Card 0: Crear video ad con IA — full width, destacada
+      '<div onclick="dismissMetaCards(this);qSend(\'genera un video ad de 10 segundos para Reels de mi negocio\')" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🎬</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA <span style="font-size:10px;background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
+            '<div style="font-size:11px;color:#6D28D9;opacity:.85">Genera un video publicitario real para Reels o TikTok con Seedance 2.0</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
       // Card 1: Crear anuncios de imagen
       '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
