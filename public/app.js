@@ -4430,17 +4430,72 @@ async function executeAction(actionDataStr, btn) {
 
 // ── VIDEO AD GENERATION (Seedance 2.0 / BytePlus) ────────────────────────────
 
-function showVideoAdForm() {
+async function showVideoAdForm() {
   const chatBox = document.getElementById('chat-area');
+
+  // ── Verificar créditos antes de mostrar el formulario ──────────────────────
+  let credits = null;
+  try {
+    const tok = sessionToken || (clerkInstance?.session ? await clerkInstance.session.getToken().catch(()=>null) : null);
+    const r = await fetch('/api/video-credits', { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
+    if (r.ok) credits = await r.json();
+  } catch(e) { /* fail open: mostrar formulario aunque no se pueda verificar */ }
+
+  // Sin créditos → mostrar paywall
+  if (credits && credits.available <= 0) {
+    const el = document.createElement('div');
+    el.className = 'msg agent';
+    const hotmartUrl = 'https://pay.hotmart.com/PENDING'; // ← URL real al crear el producto
+    el.innerHTML =
+      '<div style="background:var(--bg);border:2px solid #E5E7EB;border-radius:16px;padding:20px;max-width:480px;width:100%">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+          '<span style="font-size:22px">🎬</span>' +
+          '<div>' +
+            '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
+            (credits.is_free
+              ? '<div style="font-size:11px;color:#EF4444;font-weight:600">Plan gratuito · 1 video de prueba utilizado</div>'
+              : '<div style="font-size:11px;color:#EF4444;font-weight:600">Usaste tus ' + credits.monthly_limit + ' videos de este mes</div>') +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:14px;margin-bottom:16px">' +
+          '<div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:8px">⚡ Tus créditos de video se agotaron</div>' +
+          '<div style="font-size:12px;color:#78350F;line-height:1.5">' +
+            (credits.is_free
+              ? 'El plan gratuito incluye 1 video de prueba. Actualiza a Pro para obtener 5 videos/mes.'
+              : 'Tu plan ' + credits.plan + ' incluye ' + credits.monthly_limit + ' videos/mes. Compra créditos extra o espera al próximo ciclo.') +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
+          (credits.is_free
+            ? '<a href="/pricing.html" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#7C3AED;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">🚀 Actualizar a Pro — 5 videos/mes</a>'
+            : '') +
+          '<a href="' + hotmartUrl + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:' + (credits.is_free ? '#F3F4F6' : '#7C3AED') + ';color:' + (credits.is_free ? '#374151' : '#fff') + ';border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">' +
+            '🎬 Comprar créditos extra — 5 por $9.90 · 10 por $16.90' +
+          '</a>' +
+        '</div>' +
+      '</div>';
+    chatBox.appendChild(el);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return;
+  }
+
+  // ── Mostrar formulario con contador de créditos ────────────────────────────
+  const creditsBadge = credits
+    ? '<span style="font-size:11px;background:#EDE9FE;color:#7C3AED;padding:3px 8px;border-radius:20px;font-weight:600">' + credits.available + ' crédito' + (credits.available !== 1 ? 's' : '') + ' disponible' + (credits.available !== 1 ? 's' : '') + '</span>'
+    : '';
+
   const el = document.createElement('div');
   el.className = 'msg agent';
   el.innerHTML =
     '<div style="background:var(--bg);border:2px solid #7C3AED;border-radius:16px;padding:20px;max-width:520px;width:100%">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">' +
         '<span style="font-size:22px">🎬</span>' +
-        '<div>' +
-          '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
-          '<div style="font-size:11px;color:var(--muted2)">Seedance 2.0 · ~60 seg de generación · ~$0.30 por video</div>' +
+        '<div style="flex:1">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
+            creditsBadge +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--muted2)">Seedance 2.0 · ~60 seg · 1 crédito por video</div>' +
         '</div>' +
       '</div>' +
 
@@ -4667,7 +4722,17 @@ async function generateVideo(briefDataStr, btn) {
 
     if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');
 
-    // 3. Renderizar video
+    // 3. Descontar 1 crédito (generación exitosa)
+    try {
+      const tok = sessionToken || (clerkInstance?.session ? await clerkInstance.session.getToken().catch(()=>null) : null);
+      await fetch('/api/video-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}) },
+        body: JSON.stringify({ action: 'deduct' })
+      });
+    } catch(ce) { console.warn('No se pudo descontar crédito:', ce.message); }
+
+    // 4. Renderizar video
     card.closest('.msg').remove();
     const chatBox = document.getElementById('chat-area');
     const videoMsg = document.createElement('div');

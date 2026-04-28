@@ -64,13 +64,40 @@ export default async function handler(req, res) {
 
   if (!email) return res.status(400).json({ error: 'Missing email' });
 
-  let plan = 'individual';
-  if (productName.toLowerCase().includes('agencia')) plan = 'agencia';
-
   const { data: usuario } = await supabase
-    .from('users').select('id').eq('email', email).single();
+    .from('users').select('id, video_credits_extra').eq('email', email).single();
 
   if (!usuario) return res.status(200).json({ received: true, action: 'user_not_found', email });
+
+  // ── Compra de créditos de video ────────────────────────────────────────────
+  if (productName.toLowerCase().includes('video')) {
+    if (eventosCancelacion.includes(eventType)) {
+      // Los créditos ya comprados no se revierten (política de no reembolso digital)
+      return res.status(200).json({ received: true, action: 'video_credits_no_refund' });
+    }
+
+    // Detectar cantidad: primero por nombre de oferta, luego por precio
+    const offerName  = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
+    const price      = data?.purchase?.price?.value || 0;
+    let creditsToAdd = 0;
+
+    if      (offerName.includes('10')) creditsToAdd = 10;
+    else if (offerName.includes('5'))  creditsToAdd = 5;
+    else if (price <= 12)              creditsToAdd = 5;   // $9.90
+    else if (price <= 20)              creditsToAdd = 10;  // $16.90
+    else                               creditsToAdd = 5;   // fallback
+
+    const currentExtra = usuario.video_credits_extra || 0;
+    await supabase.from('users')
+      .update({ video_credits_extra: currentExtra + creditsToAdd })
+      .eq('id', usuario.id);
+
+    return res.status(200).json({ received: true, action: 'video_credits_added', credits: creditsToAdd, email });
+  }
+
+  // ── Suscripción / plan ─────────────────────────────────────────────────────
+  let plan = 'individual';
+  if (productName.toLowerCase().includes('agencia')) plan = 'agencia';
 
   if (eventosCancelacion.includes(eventType)) {
     await supabase.from('billing').update({ status: 'cancelled' }).eq('user_id', usuario.id);
@@ -80,6 +107,12 @@ export default async function handler(req, res) {
   const ahora = new Date();
   const vencimiento = new Date(ahora);
   vencimiento.setMonth(vencimiento.getMonth() + 1);
+
+  // Al activar/renovar plan: resetear créditos mensuales de video
+  await supabase.from('users').update({
+    video_credits_used:     0,
+    video_credits_reset_at: ahora.toISOString(),
+  }).eq('id', usuario.id);
 
   await supabase.from('billing').upsert({
     user_id: usuario.id,
