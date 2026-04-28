@@ -4621,6 +4621,7 @@ async function generateVideo(briefDataStr, btn) {
         duration: briefData.duration || 10,
         resolution: briefData.resolution || '1080p',
         style: briefData.style || null,
+        reference_image: briefData.reference_image || null,
       })
     });
 
@@ -4656,7 +4657,9 @@ async function generateVideo(briefDataStr, btn) {
         throw new Error(statusData.error || 'La generación falló. Debug: ' + (statusData._debug || ''));
       }
       const elapsed = attempts * 5;
-      progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's | estado: ' + (statusData.raw_status || statusData.status || '?');
+      const rawSt = statusData.raw_status || statusData.status || '?';
+      const debugHint = statusData._debug ? ' | ' + statusData._debug.slice(0, 80) : '';
+      progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's | ' + rawSt + debugHint;
     }
 
     if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');
