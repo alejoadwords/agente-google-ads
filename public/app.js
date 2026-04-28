@@ -4658,8 +4658,12 @@ async function generateVideo(briefDataStr, btn) {
       }
       const elapsed = attempts * 5;
       const rawSt = statusData.raw_status || statusData.status || '?';
-      const debugHint = statusData._debug ? ' | ' + statusData._debug.slice(0, 80) : '';
+      const debugHint = statusData._debug ? ' | ' + statusData._debug.slice(0, 400) : '';
       progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's | ' + rawSt + debugHint;
+      // Si está completed pero sin URL, es un bug de extracción — mostrar debug
+      if (statusData.status === 'completed' && !statusData.video_url) {
+        throw new Error('Video completado pero URL no encontrada. Debug: ' + (statusData._debug || ''));
+      }
     }
 
     if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');

@@ -32,16 +32,32 @@ export default async function handler(req, res) {
       const bpStatus = data.status || data.task_status || 'running';
       const isCompleted = bpStatus === 'succeeded' || bpStatus === 'completed';
       const isFailed = bpStatus === 'failed' || bpStatus === 'error';
+
+      // Try every known structure BytePlus may return
       const contentArr = Array.isArray(data.content) ? data.content : [];
       const outputsArr = Array.isArray(data.outputs) ? data.outputs : [];
+      const contentObj = (!Array.isArray(data.content) && data.content && typeof data.content === 'object') ? data.content : null;
+      const resultsArr = Array.isArray(data.results) ? data.results : [];
+
       const videoUrl = contentArr.find(c => c.type === 'video')?.url
+                    || contentArr.find(c => c.video_url)?.video_url
+                    || contentArr[0]?.url
                     || outputsArr.find(o => o.type === 'video')?.url
-                    || data.video_url || null;
+                    || outputsArr[0]?.url
+                    || resultsArr.find(r => r.type === 'video')?.url
+                    || resultsArr[0]?.url
+                    || contentObj?.url
+                    || contentObj?.video_url
+                    || data.video_url
+                    || data.result?.url
+                    || data.result?.video_url
+                    || null;
+
       return res.json({
         status: isCompleted ? 'completed' : isFailed ? 'failed' : 'running',
         video_url: videoUrl,
         error: isFailed ? (data.error?.message || bpStatus) : null,
-        _debug: JSON.stringify(data).slice(0, 500)
+        _debug: JSON.stringify(data).slice(0, 2000)
       });
     }
 
