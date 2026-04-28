@@ -570,6 +570,11 @@ async function agencyInit() {
       if (document.getElementById('home-consultor-hero')) renderClientHomeGreeting(proClient);
     }
   }
+
+  // Pro sin perfil → mostrar banner en home para usuarios existentes
+  if (isPro && agencyClients.length === 0) {
+    if (document.getElementById('home-consultor-hero')) renderProHomeBanner();
+  }
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -2395,6 +2400,37 @@ function launchOnboarding(agentKey) {
 }
 
 // ── Configuración de negocio para usuarios Pro ────────────────────────────────
+
+// Banner en home para usuarios existentes Pro sin perfil de negocio configurado
+function renderProHomeBanner() {
+  const heroEl = document.getElementById('home-consultor-hero');
+  if (!heroEl) return;
+
+  heroEl.innerHTML =
+    '<div style="display:flex;align-items:flex-start;gap:14px;width:100%">' +
+      '<div style="width:42px;height:42px;border-radius:12px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>' +
+      '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:700;color:#4C1D95;margin-bottom:4px;display:flex;align-items:center;gap:8px">' +
+          '✨ Novedad: Perfil de negocio unificado' +
+          '<span style="font-size:10px;background:#7C3AED;color:#fff;padding:2px 7px;border-radius:20px;font-weight:600">NUEVO</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#6D28D9;line-height:1.5;margin-bottom:10px">' +
+          'Configura tu negocio una sola vez y todos los agentes tendrán contexto completo desde el primer mensaje.' +
+        '</div>' +
+        '<button onclick="proOpenSetupModal()" style="padding:8px 16px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:6px" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+          'Configurar mi negocio' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+
+  // Clic en el hero también abre el modal
+  heroEl.style.cursor = 'default';
+  heroEl.onclick = null;
+}
+
 function renderProSetupCard(agentKey) {
   const chatBox = document.getElementById('chat-area');
   if (!chatBox) return;
