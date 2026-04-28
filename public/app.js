@@ -541,7 +541,7 @@ let agencyActiveClientId = null; // cliente en contexto de chat actual
 // ── Inicialización ──────────────────────────────────────────────────────────
 async function agencyInit() {
   const isAgency = userPlan === 'agency' || isAdminUser();
-  const isPro    = (userPlan === 'individual' || userPlan === 'pro') && !isAdminUser() && userPlan !== 'agency';
+  const isPro    = !isAdminUser() && userPlan !== 'agency';
 
   const agencyBtn = document.getElementById('sb-agency-btn');
   const proBtn    = document.getElementById('sb-pro-btn');
@@ -755,7 +755,7 @@ const BRIEF_TOTAL_STEPS = 8;
 let briefLogoDataUrl = null; // base64 del logo del cliente
 
 function agencyOpenModal(editId = null) {
-  const isPro  = (userPlan === 'individual' || userPlan === 'pro') && !isAdminUser() && userPlan !== 'agency';
+  const isPro  = !isAdminUser() && userPlan !== 'agency';
   const limit  = isAdminUser() ? 999 : isPro ? 1 : AGENCY_CLIENT_LIMIT;
   // Pro solo puede tener 1 perfil; si ya existe, siempre abrir en edición
   const resolvedEditId = isPro && !editId && agencyClients.length > 0
@@ -1079,7 +1079,7 @@ async function agencySaveClient() {
     return;
   }
 
-  const isPro = (userPlan === 'individual' || userPlan === 'pro') && !isAdminUser() && userPlan !== 'agency';
+  const isPro = !isAdminUser() && userPlan !== 'agency';
 
   if (agencyEditingId) {
     const idx = agencyClients.findIndex(c => c.id === agencyEditingId);
@@ -2339,7 +2339,7 @@ function briefSummaryForAgent(client, agentKey) {
 }
 
 function launchOnboarding(agentKey) {
-  const isPro = (userPlan === 'individual' || userPlan === 'pro') && !isAdminUser() && userPlan !== 'agency';
+  const isPro = !isAdminUser() && userPlan !== 'agency';
 
   // Pro sin perfil de negocio → mostrar card de configuración
   if (isPro && agencyClients.length === 0 && !agencyActiveClientId) {
