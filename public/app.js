@@ -4725,8 +4725,12 @@ async function generateVideo(briefDataStr, btn) {
       }
       const elapsed = attempts * 5;
       if (statusData._debug) console.log('[video-gen debug]', statusData._debug);
-      progress.querySelector('span').textContent = 'Generando… ' + elapsed + 's';
-      // Si está completed pero sin URL, es un bug de extracción — mostrar debug
+      const progressMsg =
+        elapsed < 20  ? 'Procesando tu brief con IA…' :
+        elapsed < 50  ? 'Generando el video… esto tarda ~60 segundos' :
+        elapsed < 90  ? 'Casi listo, renderizando frames…' :
+                        'Finalizando… un momento más';
+      progress.querySelector('span').textContent = progressMsg;
       if (statusData.status === 'completed' && !statusData.video_url) {
         throw new Error('Video completado pero URL no encontrada. Debug: ' + (statusData._debug || ''));
       }

@@ -57,7 +57,8 @@ export default async function handler(req, res) {
         status: isCompleted ? 'completed' : isFailed ? 'failed' : 'running',
         video_url: videoUrl,
         error: isFailed ? (data.error?.message || bpStatus) : null,
-        _debug: JSON.stringify(data).slice(0, 2000)
+        // _debug solo en fallo para diagnóstico
+        ...(isFailed || (isCompleted && !videoUrl) ? { _debug: JSON.stringify(data).slice(0, 1000) } : {})
       });
     }
 
