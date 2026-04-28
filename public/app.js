@@ -4431,7 +4431,7 @@ async function executeAction(actionDataStr, btn) {
 // ── VIDEO AD GENERATION (Seedance 2.0 / BytePlus) ────────────────────────────
 
 function showVideoAdForm() {
-  const chatBox = document.getElementById('chat-box');
+  const chatBox = document.getElementById('chat-area');
   const el = document.createElement('div');
   el.className = 'msg agent';
   el.innerHTML =
