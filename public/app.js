@@ -2500,12 +2500,12 @@ function showMetaActionCards() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
       // Card 0: Crear video ad con IA — full width, destacada
-      '<div onclick="dismissMetaCards(this);showVideoAdForm()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);qSend(\'crea un video ad para este cliente\')" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<div style="font-size:22px">🎬</div>' +
           '<div>' +
             '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA <span style="font-size:10px;background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
-            '<div style="font-size:11px;color:#6D28D9;opacity:.85">Genera un video publicitario real para Reels o TikTok con Seedance 2.0</div>' +
+            '<div style="font-size:11px;color:#6D28D9;opacity:.85">El agente construye el brief completo según el contexto del cliente</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -2902,12 +2902,12 @@ function showTikTokActionCards() {
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">';
 
   // Card 0: Crear video ad con IA — full width, destacada
-  html += '<div onclick="dismissTikTokCards(this);showVideoAdForm()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">';
+  html += '<div onclick="dismissTikTokCards(this);qSend(\'crea un video ad para este cliente\')" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">';
   html += '<div style="display:flex;align-items:center;gap:10px">';
   html += '<div style="font-size:22px">🎬</div>';
   html += '<div>';
   html += '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA</div>';
-  html += '<div style="font-size:11px;color:#7C3AED;opacity:.75">Genera un video publicitario para TikTok con Seedance 2.0</div>';
+  html += '<div style="font-size:11px;color:#7C3AED;opacity:.75">El agente construye el brief completo según el contexto del cliente</div>';
   html += '</div></div>';
   html += '</div>';
 
@@ -4777,12 +4777,31 @@ async function submitVideoAdForm(btn) {
   const style = document.getElementById('vaf-style').value;
   const duration = parseInt(document.querySelector('input[name="vaf-dur"]:checked').value);
 
-  const styleDir = {
-    cinematic: 'Cinematic product shot, premium advertising, warm dramatic lighting, slow dolly movement, shallow depth of field, professional color grading',
-    realistic: 'Authentic lifestyle shot, natural daylight, genuine moment, lo-fi aesthetic, slight handheld camera movement',
-    '3d_render': 'Hero product shot, clean studio, dramatic top lighting, ultra sharp details, luxury feel',
+  // Construir prompt rico y cinematográfico para Seedance 2.0
+  const cameraMovements = {
+    cinematic: 'slow cinematic dolly-in, shallow depth of field, anamorphic bokeh, rack focus reveal',
+    realistic: 'slight handheld movement, organic camera drift, authentic POV, natural imperfections',
+    '3d_render': 'smooth orbit rotation, dramatic reveal from low angle, 360 product turntable',
   };
-  const prompt = (styleDir[style] || styleDir.cinematic) + '. Subject: ' + desc + '. Social media advertising, high quality.';
+  const lightingStyle = {
+    cinematic: 'warm golden hour lighting, dramatic shadows, premium color grading with teal and orange tones',
+    realistic: 'natural soft daylight, window light diffusion, true-to-life colors, no harsh shadows',
+    '3d_render': 'studio three-point lighting, dramatic top backlight, clean white or dark background, product highlights',
+  };
+  const platformContext = aspectRatio === '9:16'
+    ? 'vertical social media ad, mobile-first composition, subject centered in frame'
+    : aspectRatio === '1:1'
+    ? 'square social media ad, balanced centered composition'
+    : 'horizontal widescreen ad, cinematic letterbox composition';
+  const motionStyle = duration <= 10
+    ? 'tight edit, one hero moment, single product reveal'
+    : 'multi-moment narrative, 2-3 scene cuts, beginning-middle-end structure';
+  const prompt =
+    (lightingStyle[style] || lightingStyle.cinematic) + ', ' +
+    (cameraMovements[style] || cameraMovements.cinematic) + '. ' +
+    'Subject: ' + desc + '. ' +
+    platformContext + '. ' + motionStyle + '. ' +
+    'Professional advertising quality, high production value, no text overlays, photorealistic, 4K detail.';
 
   // Leer y comprimir imagen de referencia si existe
   let referenceImage = null;
@@ -4809,6 +4828,9 @@ async function submitVideoAdForm(btn) {
   renderVideoBriefCard(briefData);
 }
 
+// Map global para brief de video — evita pasar JSON por onclick (rompe con apóstrofes/paréntesis)
+const _videoBriefMap = new Map();
+
 function renderVideoBriefCard(briefData) {
   const chatBox = document.getElementById('chat-area');
   if (!chatBox) return;
@@ -4816,7 +4838,9 @@ function renderVideoBriefCard(briefData) {
   const formatLabels = { '9:16':'Vertical 9:16', '1:1':'Cuadrado 1:1', '16:9':'Horizontal 16:9' };
   const platformIcon = briefData.platform && briefData.platform.toLowerCase().includes('tiktok') ? '🎵' : '📱';
 
-  const safeData = encodeURIComponent(JSON.stringify(briefData));
+  // Guardar en Map para evitar problemas con caracteres especiales en onclick
+  const briefId = 'vbr_' + Date.now();
+  _videoBriefMap.set(briefId, briefData);
 
   const card = document.createElement('div');
   card.className = 'msg agent';
@@ -4836,7 +4860,7 @@ function renderVideoBriefCard(briefData) {
       (briefData.description ? '<div class="video-brief-description">' + briefData.description + '</div>' : '') +
       '<div class="video-brief-prompt">' + (briefData.prompt || '') + '</div>' +
       '<div class="video-brief-footer">' +
-        '<button class="btn-generate" onclick="generateVideo(\'' + safeData + '\', this)">' +
+        '<button class="btn-generate" data-brief-id="' + briefId + '" onclick="generateVideo(this.dataset.briefId, this)">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
           'Generar video' +
         '</button>' +
@@ -4848,9 +4872,9 @@ function renderVideoBriefCard(briefData) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-async function generateVideo(briefDataStr, btn) {
-  let briefData;
-  try { briefData = JSON.parse(decodeURIComponent(briefDataStr)); } catch(e) { return; }
+async function generateVideo(briefId, btn) {
+  const briefData = _videoBriefMap.get(briefId);
+  if (!briefData) { console.error('Brief no encontrado:', briefId); return; }
 
   btn.disabled = true;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Generando...';
