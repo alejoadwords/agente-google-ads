@@ -3904,9 +3904,18 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
         else { hist.push({role:'assistant',content:'Brief de video generado — listo para producir.'}); }
         try {
-          const briefData = JSON.parse(videoBriefMatch[1].trim());
+          const briefRaw = videoBriefMatch[1].trim();
+          const briefData = JSON.parse(briefRaw);
           setTimeout(() => renderVideoBriefCard(briefData), 200);
-        } catch(e) { console.warn('VIDEO_BRIEF parse error:', e); }
+        } catch(e) {
+          console.warn('VIDEO_BRIEF parse error:', e);
+          // El agente puso texto en lugar de JSON — mostrar el contenido como respuesta normal
+          const fallbackText = videoBriefMatch[1].trim();
+          if (fallbackText && !cleanReply) {
+            hist.push({role:'assistant', content: fallbackText});
+            addAgent(fallbackText);
+          }
+        }
         if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
         loading=false; document.getElementById('sbtn').disabled=false; return;
       }
