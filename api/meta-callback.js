@@ -6,26 +6,37 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 async function saveMetaConnection(userId, token, expiresIn, userInfo) {
   if (!userId || !SUPABASE_URL) return;
-  const expiresAt = new Date(Date.now() + (expiresIn || 5184000) * 1000).toISOString(); // default 60 días
-  await fetch(`${SUPABASE_URL}/rest/v1/platform_connections`, {
-    method: 'POST',
-    headers: {
-      'apikey':        SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'resolution=merge-duplicates',
-    },
-    body: JSON.stringify({
-      user_id:          userId,
-      platform:         'meta_ads',
-      access_token:     token,
-      refresh_token:    null,
-      token_expires_at: expiresAt,
-      account_name:     userInfo.name  || userInfo.email || '',
-      extra_data:       { meta_user_id: userInfo.id, meta_email: userInfo.email || '' },
-      updated_at:       new Date().toISOString(),
-    }),
-  });
+  const expiresAt = new Date(Date.now() + (expiresIn || 5184000) * 1000).toISOString();
+  const payload = {
+    user_id:          userId,
+    platform:         'meta_ads',
+    access_token:     token,
+    refresh_token:    null,
+    token_expires_at: expiresAt,
+    account_name:     userInfo.name  || userInfo.email || '',
+    extra_data:       { meta_user_id: userInfo.id, meta_email: userInfo.email || '' },
+    updated_at:       new Date().toISOString(),
+  };
+
+  // Upsert: POST con on_conflict para manejar fila existente
+  const saveRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/platform_connections?on_conflict=user_id,platform`,
+    {
+      method: 'POST',
+      headers: {
+        'apikey':        SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'resolution=merge-duplicates',
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!saveRes.ok) {
+    const errText = await saveRes.text().catch(() => '');
+    console.error('saveMetaConnection error:', saveRes.status, errText.slice(0, 300));
+  }
 }
 
 export default async function handler(req, res) {

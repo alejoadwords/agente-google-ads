@@ -8385,20 +8385,27 @@ let metaActiveAccount = null;
       setTimeout(() => { openSettings(); loadMetaAccounts(); }, 400);
     } else if (platform === 'meta_ads') {
       updateMetaUI(true, name || 'Conectado');
-      setTimeout(async () => {
-        const uid = clerkInstance?.user?.id;
-        if (!uid) return;
-        try {
-          const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
-          const conn = await r.json();
-          if (conn.connected && conn.access_token) {
-            sessionStorage.setItem('meta_access_token', conn.access_token);
-            sessionStorage.setItem('meta_user_name', conn.account_name || name || '');
-            updateMetaUI(true, conn.account_name || name);
-            openSettings(); loadMetaAccounts();
-          }
-        } catch {}
-      }, 600);
+      // Clerk tarda 1-4s en cargar después de un redirect — reintentamos con backoff
+      (async function waitForClerkAndLoad() {
+        const delays = [800, 1500, 2500, 4000];
+        for (const delay of delays) {
+          await new Promise(res => setTimeout(res, delay));
+          const uid = clerkInstance?.user?.id;
+          if (!uid) continue;
+          try {
+            const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
+            const conn = await r.json();
+            if (conn.connected && conn.access_token) {
+              sessionStorage.setItem('meta_access_token', conn.access_token);
+              sessionStorage.setItem('meta_user_name', conn.account_name || name || '');
+              if (conn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', conn.extra_data.meta_user_id);
+              updateMetaUI(true, conn.account_name || name);
+              openSettings(); loadMetaAccounts();
+              return;
+            }
+          } catch {}
+        }
+      })();
     }
   }
   if (params.get('meta_error')) {
