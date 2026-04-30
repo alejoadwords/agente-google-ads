@@ -71,20 +71,20 @@ export default async function handler(req, res) {
     const userRes  = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token=${longData.access_token}`);
     const userInfo = await userRes.json();
 
+    // Intentar guardar en Supabase (no bloquea el redirect si falla)
     if (userId) {
       await saveMetaConnection(userId, longData.access_token, longData.expires_in, userInfo);
-      return res.redirect(
-        `https://app.acuarius.app/?meta_connected=true&platform=meta_ads&meta_name=${encodeURIComponent(userInfo.name || '')}`
-      );
     }
 
-    // Fallback sin userId: enviar token en URL (backward compat)
+    // Siempre redirigir con el token en la URL para que el frontend lo reciba
+    // aunque Supabase falle — el frontend lo guarda en sessionStorage
     const params = new URLSearchParams({
       meta_connected: 'true',
       meta_token:     longData.access_token,
       meta_name:      userInfo.name  || '',
       meta_email:     userInfo.email || '',
       meta_user_id:   userInfo.id    || '',
+      ...(userId ? { platform: 'meta_ads' } : {}),
     });
     return res.redirect(`https://app.acuarius.app/?${params}`);
 

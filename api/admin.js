@@ -499,9 +499,15 @@ CREATE INDEX idx_clients_agency ON agency_clients(agency_user_id);
 async function handleGetConnection(req, res) {
   const { userId, platform } = req.query;
   if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
-  const rows = await supabaseReq(
-    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${platform}&select=platform,access_token,account_id,account_name,token_expires_at,connected_at,extra_data`
-  );
+  let rows;
+  try {
+    rows = await supabaseReq(
+      `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${platform}&select=platform,access_token,account_id,account_name,token_expires_at,connected_at,extra_data`
+    );
+  } catch (err) {
+    console.error('handleGetConnection Supabase error:', err.message);
+    return res.json({ connected: false });
+  }
   if (!rows?.length) return res.json({ connected: false });
   const c = rows[0];
   return res.json({
