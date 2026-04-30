@@ -40,6 +40,46 @@ export default async function handler(req, res) {
   const spec  = formatSpecs[format] || formatSpecs.square;
   const count = Math.min(Math.max(1, variations), 5);
 
+  // ── MODO KONTEXT: Flux Kontext edita la imagen original con instrucción de texto ──
+  // Ideal para variaciones A/B: conserva el producto/sujeto, cambia fondo/escena/estilo
+  if (mode === 'kontext') {
+    if (!referenceImage) return res.status(400).json({ error: 'referenceImage requerido para modo kontext' });
+    if (!prompt) return res.status(400).json({ error: 'prompt (instrucción de edición) requerido' });
+
+    const kontextRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext', {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_url:     referenceImage,
+        prompt:        prompt,
+        aspect_ratio:  spec.fluxRatio,
+        output_format: 'jpeg',
+        safety_tolerance: '2',
+        seed: Math.floor(Math.random() * 999999),
+      }),
+    });
+
+    const kontextData = await kontextRes.json();
+    if (!kontextRes.ok) {
+      return res.status(500).json({ error: kontextData.detail?.[0]?.msg || kontextData.error || JSON.stringify(kontextData).slice(0, 200) });
+    }
+
+    const imageUrl = kontextData.images?.[0]?.url;
+    if (!imageUrl) return res.status(500).json({ error: 'Kontext no devolvió imagen: ' + JSON.stringify(kontextData).slice(0, 200) });
+
+    const imgRes    = await fetch(imageUrl);
+    const imgBuffer = await imgRes.arrayBuffer();
+    return res.status(200).json({
+      images: [{
+        index: 1, format: spec.label, size: `${spec.w}x${spec.h}`,
+        base64: Buffer.from(imgBuffer).toString('base64'),
+        mediaType: imgRes.headers.get('content-type') || 'image/jpeg',
+        model: 'Flux Kontext Pro', url: imageUrl,
+      }],
+      format: spec, mode: 'kontext',
+    });
+  }
+
   // ── MODO REMIX (legacy) ───────────────────────────────────────────────────
   if (mode === 'remix') {
     if (!referenceImage) return res.status(400).json({ error: 'referenceImage requerido para modo remix' });

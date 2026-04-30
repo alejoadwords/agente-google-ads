@@ -6862,14 +6862,12 @@ async function startABVariation() {
     img.src = _abImageData;
   });
 
-  // Ejemplos de estructura de prompts para diferentes tipos de productos
-  var promptGuide = 'ESTRUCTURA DE PROMPT para cada variacion: "[producto como sujeto principal prominente en primer plano], [descripcion del producto: color, material, caracteristicas clave], [tipo de escena distinto a las otras variaciones], [iluminacion], [mood/ambiente], professional advertising product photography, clean composition, hero product shot, no text no letters". IMPORTANTE: El producto SIEMPRE debe ser el elemento visual dominante y estar en primer plano. Las variaciones solo cambian el CONTEXTO/ESCENA alrededor del producto.';
-
-  // Construir instrucción JSON para N variaciones
+  // Construir instrucción JSON para N variaciones — MODO KONTEXT
+  // Kontext edita la imagen original con instrucciones de texto, no genera desde cero
   var varFields = _AB_LABELS.slice(0, count).map(function(lbl) {
-    return '"variation_' + lbl.toLowerCase() + '":{"concept":"nombre corto descriptivo (ej: Lifestyle urbano / Producto solo sobre fondo oscuro / Modelo en exterior)","prompt":"prompt ~80 palabras en ingles siguiendo la estructura indicada"}';
+    return '"variation_' + lbl.toLowerCase() + '":{"concept":"nombre corto descriptivo del cambio (ej: Fondo oscuro dramático / Ambiente exterior soleado)","instruction":"instruccion de edicion en ingles ~40 palabras: empieza con KEEP o PRESERVE para lo que NO debe cambiar, luego CHANGE/REPLACE para lo que si cambia. Solo cambiar 1-2 elementos por variacion."}';
   }).join(',');
-  var jsonInstruction = '{"ad_description":"descripcion breve del anuncio original","campaign_message":"mensaje o promocion central (ej: Black Friday 50% off camisetas premium)","product_description":"descripcion exacta del producto: tipo, color, caracteristicas visuales","format":"square o vertical",' + varFields + '}';
+  var jsonInstruction = '{"ad_description":"descripcion breve del anuncio original en 1 linea","campaign_message":"mensaje o promocion central detectada",' + varFields + '}';
 
   var contextLine = userContext ? '\n\nCONTEXTO ADICIONAL DEL USUARIO: ' + userContext : '';
 
@@ -6879,11 +6877,11 @@ async function startABVariation() {
     var b64 = _abImageData.split(',')[1];
     var fullText = await fetchChatFull({
       model: 'claude-sonnet-4-6',
-      max_tokens: 200 + count * 350,
-      system: 'Eres un director creativo experto en publicidad digital para Meta Ads. Generas prompts de imagen que producen creativos publicitarios donde EL PRODUCTO ES SIEMPRE EL PROTAGONISTA en primer plano. Responde SOLO con JSON valido, sin markdown, sin backticks.',
+      max_tokens: 150 + count * 200,
+      system: 'Eres experto en edicion de imagenes publicitarias con IA. Generas instrucciones de edicion para Flux Kontext, un modelo que EDITA una imagen existente siguiendo instrucciones de texto precisas. Las instrucciones deben decir EXACTAMENTE que conservar y que cambiar. Responde SOLO con JSON valido, sin markdown, sin backticks.',
       messages: [{ role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-        { type: 'text', text: 'Analiza este anuncio de Meta Ads. Identifica el producto exacto, el mensaje de campana y el tono. Genera exactamente ' + count + ' variaciones para A/B testing.' + contextLine + '\n\nREGLAS:\n1. El PRODUCTO debe ser el SUJETO PRINCIPAL en primer plano en TODAS las variaciones (nunca como elemento secundario o de fondo)\n2. Cada variacion cambia el CONTEXTO VISUAL (escena, modelo, ambiente) pero no el producto\n3. Los prompts deben producir imagenes tipo "hero product shot" o "lifestyle con producto prominente"\n4. NO mencionar texto, letras ni numeros en los prompts\n5. Cada variacion debe ser CLARAMENTE distinta visualmente a las demas\n\n' + promptGuide + '\n\nResponde SOLO con este JSON:\n' + jsonInstruction }
+        { type: 'text', text: 'Analiza este anuncio. El modelo de IA recibira ESTA MISMA IMAGEN y aplicara los cambios que le indiques. Genera ' + count + ' instrucciones de edicion distintas para A/B testing.' + contextLine + '\n\nREGLAS PARA LAS INSTRUCCIONES:\n1. Siempre empezar con "Keep [producto/sujeto principal] exactly as is." — NO cambiar el producto\n2. Luego indicar exactamente QUE cambiar: el fondo, la iluminacion, el color dominante, o el ambiente\n3. Cada variacion debe cambiar algo DIFERENTE a las demas\n4. Las instrucciones deben ser concisas y muy especificas — el modelo las aplica literalmente\n5. Ejemplos de buenas instrucciones: "Keep the white t-shirt exactly as is. Replace the background with a dark dramatic studio backdrop with rim lighting." / "Keep the product unchanged. Change the background to a bright outdoor sunny park setting with green bokeh."\n\nResponde SOLO con este JSON:\n' + jsonInstruction }
       ]}]
     });
     var clean = fullText.replace(/```json|```/g, '').trim();
@@ -6902,25 +6900,35 @@ async function startABVariation() {
 
   var fmt = adFormat;
   var variations = _AB_LABELS.slice(0, count).map(function(lbl) {
-    return analysisResult['variation_' + lbl.toLowerCase()] || { concept: 'Variacion ' + lbl, prompt: analysisResult.ad_description || 'professional advertising photography' };
+    var v = analysisResult['variation_' + lbl.toLowerCase()];
+    return v || { concept: 'Variacion ' + lbl, instruction: 'Keep the main subject exactly as is. Change the background lighting and mood.' };
   });
 
   var conceptList = variations.map(function(v, i) { return '**' + _AB_LABELS[i] + '**: ' + v.concept; }).join(' · ');
-  addAgent('Anuncio analizado. Generando ' + count + ' variaciones en paralelo — ' + conceptList + '...');
+  addAgent('Anuncio analizado. Editando imagen con Flux Kontext — ' + conceptList + '...');
 
   var thinkId2 = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId2);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando ' + count + ' variaciones en paralelo...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>aplicando variaciones con Flux Kontext...'; }
   }, 100);
 
   var headers = { 'Content-Type': 'application/json' };
   if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
 
   try {
+    // Usar modo kontext: envía la imagen original + instrucción de edición
+    // Flux Kontext edita la imagen manteniendo lo que se indica y cambiando solo lo especificado
     var fetchPromises = variations.map(function(v) {
-      var p = v.prompt + '. Professional advertising photography. No text overlay, no words, no letters, no numbers visible in the image.';
-      return fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify({ prompt: p, format: fmt, variations: 1, hasText: false }) }).then(function(r){ return r.json(); });
+      return fetch('/api/generate-image', {
+        method: 'POST', headers: headers,
+        body: JSON.stringify({
+          mode: 'kontext',
+          referenceImage: _abImageData,   // imagen original completa en base64
+          prompt: v.instruction,           // instrucción de edición (qué cambiar)
+          format: fmt,
+        })
+      }).then(function(r){ return r.json(); });
     });
     var results = await Promise.all(fetchPromises);
     rmThinking(thinkId2);
