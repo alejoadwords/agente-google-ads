@@ -994,18 +994,72 @@ function agencyResetLogoPreview() {
 
 // ── Conectar plataformas desde el brief ───────────────────────────────────────
 function agencyConnectPlatform(platform) {
-  // Si hay un cliente activo (editando), redirigir a Settings con contexto
-  // Si no, guardar nota y redirigir a Settings general
+  const metaToken = sessionStorage.getItem('meta_access_token');
+  const adsToken  = sessionStorage.getItem('ads_access_token');
+
+  // Si ya está conectado, no cerrar el modal — solo informar y dejar continuar
+  if (platform === 'meta' && metaToken) {
+    alert('✅ Tu cuenta de Meta Ads ya está conectada. Guarda el cliente y luego selecciona la cuenta publicitaria correcta desde la configuración del agente de Meta Ads.');
+    return;
+  }
+  if (platform === 'google' && adsToken) {
+    alert('✅ Tu cuenta de Google Ads ya está conectada. Guarda el cliente para continuar.');
+    return;
+  }
+
+  // No conectado: guardar el formulario en localStorage antes del redirect
+  try {
+    const formSnapshot = briefReadForm();
+    localStorage.setItem('acuarius_pending_brief', JSON.stringify({
+      formData:  formSnapshot,
+      editingId: agencyEditingId || null,
+      health:    agencySelectedHealth || 'gris',
+      platform,
+      ts:        Date.now(),
+    }));
+  } catch(e) {}
+
   agencyCloseModal();
-  openSettings();
-  // Mostrar mensaje orientador
-  setTimeout(function() {
-    const msg = platform === 'google'
-      ? 'Ve a la sección Google Ads en configuración para conectar la cuenta de este cliente.'
-      : 'Ve a la sección Meta Ads en configuración para conectar la cuenta de este cliente.';
-    alert(msg);
-  }, 600);
+
+  if (platform === 'meta') {
+    // Redirigir al OAuth de Meta
+    const uid = clerkInstance?.user?.id || '';
+    window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+  } else {
+    openSettings();
+    setTimeout(function() {
+      alert('Ve a la sección Google Ads en configuración para conectar tu cuenta.');
+    }, 600);
+  }
 }
+
+// Restaurar brief pendiente si el usuario volvió de un OAuth
+(function restorePendingBrief() {
+  const raw = localStorage.getItem('acuarius_pending_brief');
+  if (!raw) return;
+  try {
+    const saved = JSON.parse(raw);
+    // Descartar si tiene más de 30 min (evitar restaurar un formulario viejo)
+    if (Date.now() - saved.ts > 30 * 60 * 1000) { localStorage.removeItem('acuarius_pending_brief'); return; }
+    // Solo restaurar si el OAuth fue exitoso (meta_token en sessionStorage)
+    const metaOK = saved.platform === 'meta' && !!sessionStorage.getItem('meta_access_token');
+    const googleOK = saved.platform === 'google' && !!sessionStorage.getItem('ads_access_token');
+    if (!metaOK && !googleOK) return;
+    localStorage.removeItem('acuarius_pending_brief');
+    // Esperar a que la app esté lista antes de abrir el modal
+    setTimeout(function() {
+      try {
+        agencyOpenAddClient(saved.editingId);
+        setTimeout(function() {
+          if (saved.formData) briefFillForm(saved.formData);
+          if (saved.health) agencySelectHealth(saved.health);
+          // Ir al último paso directamente
+          briefGoStep(BRIEF_TOTAL_STEPS - 1);
+        }, 300);
+      } catch(e) {}
+    }, 2000);
+  } catch(e) { localStorage.removeItem('acuarius_pending_brief'); }
+})();
 
 function agencySelectHealth(val) {
   agencySelectedHealth = val;
