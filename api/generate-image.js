@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
   const formatSpecs = {
     square:   { w: 1080, h: 1080, imgSize: { width: 1080, height: 1080 }, label: 'Feed cuadrado · 1080×1080',   fluxRatio: '1:1',  ideogramRatio: '1:1'  },
-    vertical: { w: 1080, h: 1350, imgSize: { width: 1080, height: 1350 }, label: 'Feed vertical · 1080×1350',   fluxRatio: '4:5',  ideogramRatio: '4:5'  },
+    vertical: { w: 1080, h: 1350, imgSize: { width: 1080, height: 1350 }, label: 'Feed vertical · 1080×1350',   fluxRatio: '3:4',  ideogramRatio: '4:5'  },
     story:    { w: 1080, h: 1920, imgSize: { width: 1080, height: 1920 }, label: 'Stories / Reels · 1080×1920', fluxRatio: '9:16', ideogramRatio: '9:16' },
     carousel: { w: 1080, h: 1080, imgSize: { width: 1080, height: 1080 }, label: 'Carrusel · 1080×1080',        fluxRatio: '1:1',  ideogramRatio: '1:1'  },
   };
@@ -58,32 +58,29 @@ export default async function handler(req, res) {
         const ext         = mimeType.includes('png') ? 'png' : 'jpg';
         const fileName    = `reference_${Date.now()}.${ext}`;
 
-        // Paso 1: obtener token de upload de fal CDN
-        const tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
+        // Paso 1: iniciar upload — obtener URL pre-firmada y file_url final
+        const initiateRes = await fetch('https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3', {
           method: 'POST',
           headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ file_name: fileName, content_type: mimeType }),
         });
-        const tokenData = await tokenRes.json();
-        if (!tokenRes.ok || !tokenData.base_url || !tokenData.token) {
-          return res.status(500).json({ error: 'Error obteniendo token fal storage: ' + JSON.stringify(tokenData).slice(0, 300) });
+        const initiateData = await initiateRes.json();
+        if (!initiateRes.ok || !initiateData.url || !initiateData.file_url) {
+          return res.status(500).json({ error: 'Error iniciando upload fal: ' + JSON.stringify(initiateData).slice(0, 300) });
         }
 
-        // Paso 2: subir el binario al CDN con el token obtenido
-        const uploadRes = await fetch(`${tokenData.base_url}/files/upload`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${tokenData.token}`,
-            'Content-Type': mimeType,
-            'X-Fal-File-Name': fileName,
-          },
+        // Paso 2: subir el binario con PUT a la URL pre-firmada
+        const putRes = await fetch(initiateData.url, {
+          method: 'PUT',
+          headers: { 'Content-Type': mimeType },
           body: imageBuffer,
         });
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok || !uploadData.access_url) {
-          return res.status(500).json({ error: 'Error subiendo imagen a fal storage: ' + JSON.stringify(uploadData).slice(0, 300) });
+        if (!putRes.ok) {
+          const putErr = await putRes.text();
+          return res.status(500).json({ error: 'Error subiendo binario a fal storage: ' + putErr.slice(0, 300) });
         }
-        imageHttpUrl = uploadData.access_url;
+
+        imageHttpUrl = initiateData.file_url;
       }
 
       // Paso 2: llamar a Flux Kontext con la URL de la imagen
