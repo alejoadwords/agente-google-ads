@@ -556,16 +556,17 @@ async function handleCheckAlerts(req, res) {
 
         for (const c of campaigns) {
           if (c.status !== 'ENABLED') continue;
-          // zero_conversions: gasto > $20 y 0 conversiones
+          // zero_conversions: gasto > $20 y 0 conversiones → critical si > $50
           if (parseFloat(c.cost) > 20 && parseFloat(c.conversions) === 0) {
             const exists = await supabaseReq(
               `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.zero_conversions&created_at=gte.${today}T00:00:00Z`
             );
             if (!exists?.length) {
+              const isCritical = parseFloat(c.cost) > 50;
               const alert = {
                 user_id: userId, platform: 'google_ads', account_id: conn.account_id,
                 campaign_id: String(c.id), campaign_name: c.name,
-                alert_type: 'zero_conversions', severity: 'warning',
+                alert_type: 'zero_conversions', severity: isCritical ? 'critical' : 'warning',
                 message: `Campaña "${c.name}" tiene $${c.cost} gastado en 7 días y 0 conversiones.`,
                 metric_value: 0, threshold_value: 1,
               };
@@ -573,16 +574,17 @@ async function handleCheckAlerts(req, res) {
               newAlerts.push(alert);
             }
           }
-          // ctr_drop: CTR < 0.5%
+          // ctr_drop: CTR < 0.5% → critical si < 0.3% con > 5000 impresiones
           if (parseFloat(c.ctr) < 0.5 && parseInt(c.impressions) > 1000) {
             const exists = await supabaseReq(
               `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.ctr_drop&created_at=gte.${today}T00:00:00Z`
             );
             if (!exists?.length) {
+              const isCritical = parseFloat(c.ctr) < 0.3 && parseInt(c.impressions) > 5000;
               const alert = {
                 user_id: userId, platform: 'google_ads', account_id: conn.account_id,
                 campaign_id: String(c.id), campaign_name: c.name,
-                alert_type: 'ctr_drop', severity: 'warning',
+                alert_type: 'ctr_drop', severity: isCritical ? 'critical' : 'warning',
                 message: `CTR bajo en "${c.name}": ${c.ctr}% (benchmark mínimo 0.5%).`,
                 metric_value: parseFloat(c.ctr), threshold_value: 0.5,
               };
@@ -602,16 +604,17 @@ async function handleCheckAlerts(req, res) {
 
         for (const c of campaigns) {
           if (c.status !== 'ACTIVE') continue;
-          // high_frequency: frecuencia > 3.5
+          // high_frequency: > 3.5 → critical si > 5
           if (parseFloat(c.frequency) > 3.5) {
             const exists = await supabaseReq(
               `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.high_frequency&created_at=gte.${today}T00:00:00Z`
             );
             if (!exists?.length) {
+              const isCritical = parseFloat(c.frequency) > 5;
               const alert = {
                 user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
                 campaign_id: c.id, campaign_name: c.name,
-                alert_type: 'high_frequency', severity: 'warning',
+                alert_type: 'high_frequency', severity: isCritical ? 'critical' : 'warning',
                 message: `Frecuencia alta en "${c.name}": ${c.frequency} (límite recomendado: 3.5). Audiencia posiblemente saturada.`,
                 metric_value: parseFloat(c.frequency), threshold_value: 3.5,
               };
@@ -619,18 +622,36 @@ async function handleCheckAlerts(req, res) {
               newAlerts.push(alert);
             }
           }
-          // zero_conversions Meta
+          // zero_conversions Meta → critical si gasto > $50
           if (parseFloat(c.spend) > 20 && c.conversions === 0) {
             const exists = await supabaseReq(
               `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.zero_conversions&created_at=gte.${today}T00:00:00Z`
             );
             if (!exists?.length) {
+              const isCritical = parseFloat(c.spend) > 50;
               const alert = {
                 user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
                 campaign_id: c.id, campaign_name: c.name,
-                alert_type: 'zero_conversions', severity: 'warning',
+                alert_type: 'zero_conversions', severity: isCritical ? 'critical' : 'warning',
                 message: `"${c.name}" tiene $${c.spend} gastado y 0 conversiones en 7 días.`,
                 metric_value: 0, threshold_value: 1,
+              };
+              await supabaseReq('/campaign_alerts', 'POST', alert);
+              newAlerts.push(alert);
+            }
+          }
+          // high_cpa: CPA > 3x el presupuesto diario → critical
+          if (parseFloat(c.cpa) > 0 && c.dailyBudget && parseFloat(c.cpa) > parseFloat(c.dailyBudget) * 3) {
+            const exists = await supabaseReq(
+              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.high_cpa&created_at=gte.${today}T00:00:00Z`
+            );
+            if (!exists?.length) {
+              const alert = {
+                user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
+                campaign_id: c.id, campaign_name: c.name,
+                alert_type: 'high_cpa', severity: 'critical',
+                message: `CPA muy alto en "${c.name}": $${c.cpa} (${Math.round(parseFloat(c.cpa)/parseFloat(c.dailyBudget))}x el presupuesto diario).`,
+                metric_value: parseFloat(c.cpa), threshold_value: parseFloat(c.dailyBudget) * 3,
               };
               await supabaseReq('/campaign_alerts', 'POST', alert);
               newAlerts.push(alert);
@@ -857,6 +878,24 @@ async function handleUpdatePreferences(req, res) {
   return res.json({ ok: true });
 }
 
+// ── SAVE PLATFORM ACCOUNT ID ──────────────────────────────
+// Llamado cuando el usuario selecciona una cuenta publicitaria (ej: Meta ad account)
+// Guarda el account_id en Supabase para que los crons de alertas/reportes lo usen
+
+async function handleSavePlatformAccount(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId, platform, accountId, accountName } = req.body || {};
+  if (!userId || !platform || !accountId) {
+    return res.status(400).json({ error: 'userId, platform, accountId requeridos' });
+  }
+  await supabaseReq(
+    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${encodeURIComponent(platform)}`,
+    'PATCH',
+    { account_id: accountId, account_name: accountName || null, updated_at: new Date().toISOString() }
+  );
+  return res.json({ ok: true });
+}
+
 // ── ROUTER PRINCIPAL ──────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
@@ -891,6 +930,7 @@ export default async function handler(req, res) {
     if (action === 'assign-connection')     return await handleAssignConnection(req, res);
     if (action === 'competitive-search')    return await handleCompetitiveSearch(req, res);
     if (action === 'update-preferences')    return await handleUpdatePreferences(req, res);
+    if (action === 'save-platform-account') return await handleSavePlatformAccount(req, res);
   } catch (err) {
     console.error('Admin user-action error:', err);
     return res.status(500).json({ error: err.message });
