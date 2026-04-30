@@ -18,7 +18,7 @@ async function getStoredToken(userId) {
   return rows?.[0] || null;
 }
 
-// ── Meta API helper ──────────────────────────────────────────
+// ── Meta API helpers ─────────────────────────────────────────
 async function metaGet(endpoint, params, token) {
   const qs = new URLSearchParams({ ...params, access_token: token });
   const res = await fetch(`${META_BASE}/${endpoint}?${qs}`);
@@ -30,6 +30,30 @@ async function metaGet(endpoint, params, token) {
   }
   return data;
 }
+
+async function metaPost(endpoint, params, token) {
+  const body = new URLSearchParams({ ...params, access_token: token });
+  const res = await fetch(`${META_BASE}/${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  const data = await res.json();
+  if (data.error) {
+    if (data.error.code === 190) throw Object.assign(new Error('Token expirado'), { code: 190 });
+    if (data.error.code === 613) throw Object.assign(new Error('Rate limit Meta API'), { code: 613 });
+    throw new Error(data.error.message || JSON.stringify(data.error));
+  }
+  return data;
+}
+
+const OBJECTIVE_TO_GOAL = {
+  OUTCOME_LEADS:       'LEAD_GENERATION',
+  OUTCOME_TRAFFIC:     'LINK_CLICKS',
+  OUTCOME_AWARENESS:   'REACH',
+  OUTCOME_SALES:       'OFFSITE_CONVERSIONS',
+  OUTCOME_ENGAGEMENT:  'POST_ENGAGEMENT',
+};
 
 // Agrega insights a una lista de objetos (campañas, ad sets, ads)
 async function fetchInsights(ids, level, datePreset, token) {
@@ -239,6 +263,73 @@ export default async function handler(req, res) {
           };
         }),
       });
+    }
+
+    // ── create-campaign ──────────────────────────────────────
+    if (action === 'create-campaign') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
+      const {
+        name        = 'Nueva campaña',
+        objective   = 'OUTCOME_LEADS',
+        budgetUSD   = 10,
+        durationDays,          // null / undefined = sin fecha fin
+        country     = 'MX',
+        city,                  // optional string
+        ageMin      = 18,
+        ageMax      = 65,
+        gender,                // 'male' | 'female' | 'all' | undefined
+      } = req.body || {};
+
+      if (!adAccountId) return res.status(400).json({ error: 'adAccountId requerido' });
+
+      // 1. Crear campaña
+      const campaign = await metaPost(`${adAccountId}/campaigns`, {
+        name,
+        objective,
+        status:               'PAUSED',
+        special_ad_categories: '[]',
+      }, token);
+
+      const campaignId = campaign.id;
+      if (!campaignId) throw new Error('Meta no devolvió un campaign id');
+
+      // 2. Construir targeting
+      const geoLocations = { countries: [country] };
+      if (city && city.trim()) {
+        // city puede ser una ciudad (se pasa como key de Meta o simplemente se ignora si no tenemos el key)
+        // Para simplificar usamos custom_locations o simplemente omitimos si no tenemos el key de Meta
+        // Dejamos solo countries por ahora para no fallar; city se puede mejorar después
+      }
+
+      const targeting = {
+        age_min:       parseInt(ageMin) || 18,
+        age_max:       parseInt(ageMax) || 65,
+        geo_locations: geoLocations,
+      };
+      if (gender === 'male')   targeting.genders = [1];
+      if (gender === 'female') targeting.genders = [2];
+
+      // 3. Fechas
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const adsetParams = {
+        name:               `${name} — AdSet`,
+        campaign_id:        campaignId,
+        daily_budget:       String(Math.round(parseFloat(budgetUSD) * 100)), // cents
+        billing_event:      'IMPRESSIONS',
+        optimization_goal:  OBJECTIVE_TO_GOAL[objective] || 'LINK_CLICKS',
+        targeting:          JSON.stringify(targeting),
+        status:             'PAUSED',
+        start_time:         String(nowUnix + 3600), // comienza en 1h
+      };
+      if (durationDays && parseInt(durationDays) > 0) {
+        adsetParams.end_time = String(nowUnix + parseInt(durationDays) * 86400);
+      }
+
+      const adset = await metaPost(`${adAccountId}/adsets`, adsetParams, token);
+      const adsetId = adset.id;
+      if (!adsetId) throw new Error('Meta no devolvió un adset id');
+
+      return res.json({ campaignId, adsetId });
     }
 
     return res.status(400).json({ error: 'action no reconocido' });
