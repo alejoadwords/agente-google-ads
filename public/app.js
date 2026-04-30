@@ -2500,12 +2500,12 @@ function showMetaActionCards() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
       // Card 0: Crear video ad con IA — full width, destacada
-      '<div onclick="dismissMetaCards(this);qSend(\'crea un video ad para este cliente\')" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
+      '<div onclick="dismissMetaCards(this);showVideoAdFormWithContext()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<div style="font-size:22px">🎬</div>' +
           '<div>' +
             '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA <span style="font-size:10px;background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
-            '<div style="font-size:11px;color:#6D28D9;opacity:.85">El agente construye el brief completo según el contexto del cliente</div>' +
+            '<div style="font-size:11px;color:#6D28D9;opacity:.85">Genera un video publicitario real para Reels o TikTok con Seedance 2.0</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -2902,12 +2902,12 @@ function showTikTokActionCards() {
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">';
 
   // Card 0: Crear video ad con IA — full width, destacada
-  html += '<div onclick="dismissTikTokCards(this);qSend(\'crea un video ad para este cliente\')" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">';
+  html += '<div onclick="dismissTikTokCards(this);showVideoAdFormWithContext()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">';
   html += '<div style="display:flex;align-items:center;gap:10px">';
   html += '<div style="font-size:22px">🎬</div>';
   html += '<div>';
   html += '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA</div>';
-  html += '<div style="font-size:11px;color:#7C3AED;opacity:.75">El agente construye el brief completo según el contexto del cliente</div>';
+  html += '<div style="font-size:11px;color:#7C3AED;opacity:.75">Genera un video publicitario para TikTok con Seedance 2.0</div>';
   html += '</div></div>';
   html += '</div>';
 
@@ -4624,6 +4624,35 @@ async function executeAction(actionDataStr, btn) {
 }
 
 // ── VIDEO AD GENERATION (Seedance 2.0 / BytePlus) ────────────────────────────
+
+// Abre el formulario de video pre-llenado con el contexto del cliente activo
+// Usado por los botones de acción de Meta/TikTok — evita pasar por el agente
+function showVideoAdFormWithContext() {
+  showVideoAdForm();
+  // Esperar a que el formulario se renderice (incluye fetch a /api/video-credits)
+  setTimeout(() => {
+    const desc = document.getElementById('vaf-desc');
+    if (!desc || desc.value.trim()) return; // ya tiene contenido o no existe
+
+    // Construir descripción desde el perfil del cliente activo
+    const parts = [];
+    if (mem.negocio)     parts.push(mem.negocio);
+    if (mem.descripcion) parts.push(mem.descripcion);
+    else if (mem.producto) parts.push(mem.producto);
+    if (mem.diferenciador) parts.push(mem.diferenciador);
+    if (mem.audiencia)   parts.push('Audiencia: ' + mem.audiencia);
+    if (mem.industria && !parts.some(p => p.toLowerCase().includes(mem.industria.toLowerCase())))
+      parts.push('Sector: ' + mem.industria);
+
+    if (parts.length) {
+      desc.value = parts.join('. ');
+      // Resize automático del textarea
+      desc.style.height = 'auto';
+      desc.style.height = desc.scrollHeight + 'px';
+      desc.style.borderColor = '#7C3AED'; // highlight para que el usuario vea que está listo
+    }
+  }, 700);
+}
 
 async function showVideoAdForm() {
   const chatBox = document.getElementById('chat-area');
