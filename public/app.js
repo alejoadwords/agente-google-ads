@@ -3839,7 +3839,7 @@ while(!streamDone){
         }
         replyFinal+=evt.delta;
         const bbl=document.getElementById('stream-bubble-text');
-        if(bbl)bbl.innerHTML=fmt(replyFinal);
+        if(bbl)bbl.innerHTML=fmt(replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,''));
         scrollB();
       }
       if(evt.done&&evt.full!==undefined){replyFinal=evt.full;streamDone=true;}
@@ -6779,13 +6779,189 @@ function publishToMeta(imgIndex) {
   if (cin) { cin.value = 'Quiero publicar la variacion ' + img.index + ' en una campana de Meta Ads.'; sendMsg(); }
 }
 
+// ─── WIZARD DE CREACIÓN DE CAMPAÑA EN META ────────────────────────────────────
+var campaignWizardStep = 1;
+var campaignWizardData = {};
+var campaignWizardImages = [];
+
 function launchMetaCampaignFlow() {
-  if (!metaActiveAccount) {
-    addAgent('Para publicar necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuracion > Conexiones > Meta Ads**.');
+  const token   = sessionStorage.getItem('meta_access_token');
+  const acctId  = sessionStorage.getItem('meta_ad_account_id');
+  if (!token) {
+    addAgent('Para crear una campaña necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuración > Conexiones > Meta Ads**.');
     return;
   }
-  hist.push({ role: 'user', content: 'Tengo ' + generatedAdImages.length + ' creativos listos y quiero crear una campana completa en Meta Ads. Guiame paso a paso: objetivo, audiencia, presupuesto y lanzamiento.' });
-  callClaude();
+  if (!acctId) {
+    addAgent('Para crear una campaña necesitas seleccionar una cuenta publicitaria en **Configuración > Conexiones > Meta Ads**.');
+    return;
+  }
+  campaignWizardImages = (generatedAdImages || []).slice();
+  campaignWizardData   = { adAccountId: acctId, token };
+  campaignWizardStep   = 1;
+  renderCampaignWizard();
+}
+
+function renderCampaignWizard() {
+  var existing = document.getElementById('cw-overlay');
+  if (existing) existing.remove();
+
+  var steps = ['Objetivo','Presupuesto','Audiencia','Lanzar'];
+  var pills  = steps.map(function(s,i){
+    var active = (i+1 === campaignWizardStep) ? 'background:#1877F2;color:#fff' : (i+1 < campaignWizardStep ? 'background:#e8f0fe;color:#1877F2' : 'background:#f3f4f6;color:#999');
+    return '<div style="flex:1;text-align:center;padding:6px 4px;border-radius:20px;font-size:11px;font-weight:600;'+active+'">'+(i+1)+'. '+s+'</div>';
+  }).join('');
+
+  var body = '';
+  if (campaignWizardStep === 1) {
+    body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Nombre de la campaña</label>'+
+      '<input id="cw-name" placeholder="Ej: Leads Noviembre 2025" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.name||'')+'"></div>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px">Objetivo de la campaña</label>'+
+      [['OUTCOME_LEADS','🎯 Generación de leads','Formularios nativos de Meta para captar contactos'],
+       ['OUTCOME_TRAFFIC','🌐 Tráfico al sitio web','Lleva personas a tu landing page o sitio web'],
+       ['OUTCOME_AWARENESS','👁 Reconocimiento','Muestra el anuncio al mayor número de personas'],
+       ['OUTCOME_SALES','🛒 Ventas','Optimiza para conversiones en tu sitio o tienda'],
+       ['OUTCOME_ENGAGEMENT','💬 Interacción','Más likes, comentarios y mensajes en tu página']
+      ].map(function(o){
+        var sel = campaignWizardData.objective === o[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
+        return '<div onclick="cwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px">'+
+          '<div style="font-size:20px">'+o[1].split(' ')[0]+'</div>'+
+          '<div><div style="font-weight:600;font-size:13px">'+o[1].split(' ').slice(1).join(' ')+'</div><div style="font-size:11px;color:#666">'+o[2]+'</div></div></div>';
+      }).join('') + '</div>';
+  } else if (campaignWizardStep === 2) {
+    body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario (USD)</label>'+
+      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px;color:#555">$</span>'+
+      '<input id="cw-budget" type="number" min="1" placeholder="5" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700" value="'+(campaignWizardData.budgetUSD||'')+'">'+
+      '<span style="color:#777;font-size:13px">USD/día</span></div>'+
+      '<div style="margin-top:8px;font-size:12px;color:#888">Meta requiere un mínimo de $1 USD/día. Para leads recomendamos $5–20 USD/día.</div></div>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px">Duración</label>'+
+      [['7','7 días'],['14','14 días'],['30','30 días'],['0','Sin fecha de fin']].map(function(d){
+        var sel = String(campaignWizardData.durationDays) === d[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
+        return '<div onclick="cwSelectDuration('+d[0]+')" style="'+sel+';border-radius:8px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:13px;font-weight:500">'+d[1]+'</div>';
+      }).join('') + '</div>';
+  } else if (campaignWizardStep === 3) {
+    body = '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">País</label>'+
+      '<input id="cw-country" placeholder="Colombia" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.country||'Colombia')+'"></div>'+
+      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Ciudad (opcional)</label>'+
+      '<input id="cw-city" placeholder="Bogotá" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.city||'')+'"></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Edad mínima</label>'+
+      '<input id="cw-age-min" type="number" min="18" max="65" value="'+(campaignWizardData.ageMin||18)+'" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box"></div>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Edad máxima</label>'+
+      '<input id="cw-age-max" type="number" min="18" max="65" value="'+(campaignWizardData.ageMax||55)+'" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box"></div></div>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Género</label>'+
+      '<div style="display:flex;gap:8px">'+
+      [['0','Todos'],['2','Mujeres'],['1','Hombres']].map(function(g){
+        var sel = String(campaignWizardData.gender) === g[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#333;border-color:#ddd';
+        return '<button onclick="cwSelectGender('+g[0]+')" style="'+sel+';border:1px solid;border-radius:20px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:500">'+g[1]+'</button>';
+      }).join('')+'</div></div>';
+  } else if (campaignWizardStep === 4) {
+    var objLabels = {OUTCOME_LEADS:'Generación de leads',OUTCOME_TRAFFIC:'Tráfico al sitio web',OUTCOME_AWARENESS:'Reconocimiento',OUTCOME_SALES:'Ventas',OUTCOME_ENGAGEMENT:'Interacción'};
+    var dur = campaignWizardData.durationDays === 0 ? 'Sin fecha de fin' : campaignWizardData.durationDays + ' días';
+    body = '<div style="background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:16px">'+
+      '<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:#1877F2">Resumen de campaña</div>'+
+      [['Nombre',campaignWizardData.name],['Objetivo',objLabels[campaignWizardData.objective]],
+       ['Presupuesto','$'+campaignWizardData.budgetUSD+' USD/día'],['Duración',dur],
+       ['País',campaignWizardData.country+(campaignWizardData.city?' · '+campaignWizardData.city:'')],
+       ['Edad',campaignWizardData.ageMin+' – '+campaignWizardData.ageMax+' años'],
+       ['Género',{0:'Todos',1:'Hombres',2:'Mujeres'}[campaignWizardData.gender]||'Todos'],
+       ['Creativos',campaignWizardImages.length + ' imagen(es)']
+      ].map(function(r){
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px"><span style="color:#666">'+r[0]+'</span><span style="font-weight:600">'+r[1]+'</span></div>';
+      }).join('')+'</div>'+
+      '<div style="background:#fff3cd;border-radius:8px;padding:12px;font-size:12px;color:#856404;margin-bottom:8px">'+
+      '⚠️ La campaña se creará en estado <strong>PAUSADA</strong> para que puedas revisarla antes de activarla en Meta Ads Manager.</div>'+
+      '<div id="cw-launch-msg" style="display:none"></div>';
+  }
+
+  var html = '<div id="cw-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center">'+
+    '<div style="background:#fff;border-radius:16px;padding:28px;width:min(500px,92vw);max-height:90vh;overflow-y:auto;position:relative;z-index:9999">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'+
+    '<h3 style="margin:0;font-size:18px">🚀 Crear campaña en Meta</h3>'+
+    '<button onclick="closeCampaignWizard()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button></div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:20px">'+pills+'</div>'+
+    '<div id="cw-body">'+body+'</div>'+
+    '<div style="display:flex;gap:10px;margin-top:20px">'+
+    (campaignWizardStep > 1 ? '<button onclick="cwPrev()" style="flex:1;padding:12px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px">← Atrás</button>' : '')+
+    (campaignWizardStep < 4
+      ? '<button onclick="cwNext()" style="flex:2;padding:12px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">Continuar →</button>'
+      : '<button id="cw-launch-btn" onclick="cwLaunch()" style="flex:2;padding:12px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🚀 Crear campaña</button>')+
+    '</div></div></div>';
+
+  var el = document.createElement('div');
+  el.innerHTML = html;
+  document.body.appendChild(el.firstElementChild);
+}
+
+function cwSelectObj(obj) { campaignWizardData.objective = obj; renderCampaignWizard(); }
+function cwSelectDuration(d) { campaignWizardData.durationDays = d; renderCampaignWizard(); }
+function cwSelectGender(g) { campaignWizardData.gender = g; renderCampaignWizard(); }
+
+function cwNext() {
+  if (campaignWizardStep === 1) {
+    var name = (document.getElementById('cw-name')||{}).value||'';
+    if (!name.trim()) { alert('Ingresa un nombre para la campaña.'); return; }
+    if (!campaignWizardData.objective) { alert('Selecciona un objetivo.'); return; }
+    campaignWizardData.name = name.trim();
+  } else if (campaignWizardStep === 2) {
+    var budget = parseFloat((document.getElementById('cw-budget')||{}).value||0);
+    if (!budget || budget < 1) { alert('El presupuesto mínimo es $1 USD/día.'); return; }
+    if (campaignWizardData.durationDays === undefined) { alert('Selecciona la duración.'); return; }
+    campaignWizardData.budgetUSD = budget;
+  } else if (campaignWizardStep === 3) {
+    campaignWizardData.country = (document.getElementById('cw-country')||{}).value||'Colombia';
+    campaignWizardData.city    = (document.getElementById('cw-city')||{}).value||'';
+    campaignWizardData.ageMin  = parseInt((document.getElementById('cw-age-min')||{}).value||18);
+    campaignWizardData.ageMax  = parseInt((document.getElementById('cw-age-max')||{}).value||55);
+  }
+  campaignWizardStep++;
+  renderCampaignWizard();
+}
+
+function cwPrev() { campaignWizardStep--; renderCampaignWizard(); }
+
+function closeCampaignWizard() {
+  var el = document.getElementById('cw-overlay');
+  if (el) el.remove();
+}
+
+async function cwLaunch() {
+  var btn = document.getElementById('cw-launch-btn');
+  var msg = document.getElementById('cw-launch-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando campaña...'; }
+
+  try {
+    var r = await fetch('/api/meta-ads?action=create-campaign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken:  campaignWizardData.token,
+        adAccountId:  campaignWizardData.adAccountId,
+        name:         campaignWizardData.name,
+        objective:    campaignWizardData.objective,
+        budgetUSD:    campaignWizardData.budgetUSD,
+        durationDays: campaignWizardData.durationDays,
+        country:      campaignWizardData.country,
+        city:         campaignWizardData.city,
+        ageMin:       campaignWizardData.ageMin,
+        ageMax:       campaignWizardData.ageMax,
+        gender:       campaignWizardData.gender,
+      }),
+    });
+    var data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'Error al crear la campaña');
+
+    closeCampaignWizard();
+    addAgent('✅ **Campaña creada exitosamente en Meta Ads**\n\n' +
+      '**' + campaignWizardData.name + '**\n' +
+      '- Campaign ID: `' + data.campaignId + '`\n' +
+      '- Ad Set ID: `' + data.adsetId + '`\n' +
+      '- Estado: **PAUSADA** (revísala en Meta Ads Manager antes de activar)\n\n' +
+      'Los creativos generados los puedes subir directamente en Meta Ads Manager usando los ID anteriores. ' +
+      '[Ir a Meta Ads Manager →](https://www.facebook.com/adsmanager)');
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Crear campaña'; }
+    if (msg) { msg.style.display='block'; msg.style.cssText='display:block;background:#fee2e2;color:#991b1b;border-radius:8px;padding:12px;font-size:13px;margin-top:8px'; msg.textContent = '❌ ' + err.message; }
+  }
 }
 
 function requestImageVariation(encodedPrompt, format) {
