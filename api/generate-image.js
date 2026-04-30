@@ -48,7 +48,7 @@ export default async function handler(req, res) {
 
     try {
       // Flux Kontext necesita una URL HTTP, no un base64 data URL
-      // Paso 1: subir la imagen a fal.ai storage para obtener una URL pública
+      // Proceso de upload fal.ai: 1) obtener token CDN, 2) subir binario, 3) usar URL pública
       let imageHttpUrl = referenceImage;
 
       if (referenceImage.startsWith('data:')) {
@@ -56,29 +56,34 @@ export default async function handler(req, res) {
         const imageBuffer = Buffer.from(base64Data, 'base64');
         const mimeType    = referenceImage.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
         const ext         = mimeType.includes('png') ? 'png' : 'jpg';
+        const fileName    = `reference_${Date.now()}.${ext}`;
 
-        // Subir como multipart/form-data a fal storage
-        const boundary = '----FalUpload' + Math.random().toString(36).slice(2);
-        const bodyParts = [
-          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="reference.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
-          imageBuffer,
-          `\r\n--${boundary}--\r\n`,
-        ];
-        const bodyBuffer = Buffer.concat(bodyParts.map(p => Buffer.isBuffer(p) ? p : Buffer.from(p)));
+        // Paso 1: obtener token de upload de fal CDN
+        const tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
+          method: 'POST',
+          headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok || !tokenData.base_url || !tokenData.token) {
+          return res.status(500).json({ error: 'Error obteniendo token fal storage: ' + JSON.stringify(tokenData).slice(0, 300) });
+        }
 
-        const uploadRes  = await fetch('https://fal.run/storage/upload', {
+        // Paso 2: subir el binario al CDN con el token obtenido
+        const uploadRes = await fetch(`${tokenData.base_url}/files/upload`, {
           method: 'POST',
           headers: {
-            'Authorization': `Key ${falKey}`,
-            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Authorization': `Bearer ${tokenData.token}`,
+            'Content-Type': mimeType,
+            'X-Fal-File-Name': fileName,
           },
-          body: bodyBuffer,
+          body: imageBuffer,
         });
         const uploadData = await uploadRes.json();
-        if (!uploadRes.ok || !uploadData.url) {
+        if (!uploadRes.ok || !uploadData.access_url) {
           return res.status(500).json({ error: 'Error subiendo imagen a fal storage: ' + JSON.stringify(uploadData).slice(0, 300) });
         }
-        imageHttpUrl = uploadData.url;
+        imageHttpUrl = uploadData.access_url;
       }
 
       // Paso 2: llamar a Flux Kontext con la URL de la imagen
