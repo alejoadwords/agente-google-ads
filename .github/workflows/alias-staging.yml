@@ -1,0 +1,49 @@
+name: Alias staging deployment
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  alias:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel deployment
+        run: sleep 60
+
+      - name: Get latest staging deployment and alias it
+        run: |
+          TEAM_ID="team_AMakmLzuhAWGyZv4OjCTtWJc"
+          PROJECT_ID="prj_jsnlNLBi8HKCxtA56xhyc65SuVIY"
+          TOKEN="${{ secrets.VERCEL_TOKEN }}"
+
+          # Esperar hasta que el deployment de staging esté READY (máx 5 min)
+          for i in $(seq 1 10); do
+            RESP=$(curl -s "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&teamId=$TEAM_ID&limit=5" \
+              -H "Authorization: Bearer $TOKEN")
+            DEPLOY_ID=$(echo "$RESP" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for d in data.get('deployments', []):
+              if d.get('meta', {}).get('githubCommitRef') == 'staging' and d.get('state') == 'READY':
+                  print(d['uid'])
+                  break
+          ")
+            if [ -n "$DEPLOY_ID" ]; then
+              echo "Found READY deployment: $DEPLOY_ID"
+              break
+            fi
+            echo "Waiting for staging deployment to be ready... ($i/10)"
+            sleep 30
+          done
+
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "No READY staging deployment found after waiting. Exiting."
+            exit 1
+          fi
+
+          # Alias the deployment
+          curl -s -X POST "https://api.vercel.com/v2/deployments/$DEPLOY_ID/aliases?teamId=$TEAM_ID" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"alias":"staging.app.acuarius.app"}' | python3 -c "import sys,json; d=json.load(sys.stdin); print('Aliased:', d.get('alias', d))"
