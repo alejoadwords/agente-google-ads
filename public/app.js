@@ -5463,20 +5463,30 @@ async function getMetaAdsContext() {
     const cacheKey = `meta_ctx_${accountId}_${Math.floor(Date.now() / 900000)}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) return cached;
+    // Obtener moneda de la cuenta activa
+    let currency = 'USD';
+    try { const acc = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}'); currency = acc.currency || 'USD'; } catch {}
+    const accountName = (() => { try { return JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').name || ''; } catch { return ''; } })();
     const res  = await fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
     const data = await res.json();
     if (data.error || !data.impressions) return '';
-    const ctx = `DATOS REALES DEL AD ACCOUNT META ADS (últimos 30 días):
-- Gasto total: $${data.spend}
+    // Nota de conversión si no es USD
+    const currencyNote = currency !== 'USD'
+      ? `\n⚠️ MONEDA DE CUENTA: ${currency} — Los valores de gasto, CPC, CPM y CPA están en ${currency}, NO en USD. Ajusta todos los benchmarks y análisis en consecuencia. Los benchmarks de LatAm en USD deben multiplicarse por el tipo de cambio aproximado para comparar correctamente.`
+      : '';
+    const ctx = `CUENTA META ADS ACTIVA: ${accountName} (${accountId})
+MONEDA DE LA CUENTA: ${currency}
+DATOS REALES (últimos 30 días, valores en ${currency}):
+- Gasto total: ${data.spend} ${currency}
 - Alcance: ${(data.reach||0).toLocaleString()}
 - Impresiones: ${(data.impressions||0).toLocaleString()}
 - Clicks: ${(data.clicks||0).toLocaleString()}
 - CTR: ${data.ctr}%
-- CPC: $${data.cpc}
-- CPM: $${data.cpm}
+- CPC: ${data.cpc} ${currency}
+- CPM: ${data.cpm} ${currency}
 - Frecuencia: ${data.frequency}
 - Conversiones: ${data.conversions}
-- CPA: $${data.cpa}`;
+- CPA: ${data.cpa} ${currency}${currencyNote}`;
     localStorage.setItem(cacheKey, ctx);
     return ctx;
   } catch { return ''; }
