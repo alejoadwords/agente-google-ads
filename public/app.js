@@ -2879,11 +2879,22 @@ function showMetaImageSubCards(parentCard) {
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
-      // Única opción: Crear desde cero
+      // Opción 1: Crear desde cero
       '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:22px;margin-bottom:8px">✨</div>' +
         '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear anuncio profesional</div>' +
         '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos con tu marca, oferta y línea gráfica — listos para publicar en Meta</div>' +
+      '</div>' +
+
+      // Opción 2: Variaciones A/B de anuncio existente
+      '<div onclick="dismissMetaCards(this);showAdVariationAB()" style="border:2px solid #059669;border-radius:12px;padding:16px 14px;cursor:pointer;background:#ECFDF5;transition:all .15s" onmouseover="this.style.background=\'#D1FAE5\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#ECFDF5\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🔄</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:#065F46;margin-bottom:2px">Variaciones A/B de anuncio existente <span style="font-size:10px;background:#059669;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
+            '<div style="font-size:11px;color:#047857;opacity:.9;line-height:1.4">Sube tu anuncio actual y la IA crea 2 variaciones optimizadas para test A/B</div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
 
     '</div>' +
@@ -6725,6 +6736,238 @@ function launchMetaCampaignFlow() {
 function requestImageVariation(encodedPrompt, format) {
   var cin = document.getElementById('cin');
   if (cin) { cin.value = 'Genera una variacion diferente, mismo concepto pero composicion distinta. Formato: ' + format + '.'; sendMsg(); }
+}
+
+// =============================================
+// VARIACIONES A/B — Flujo Manus-style
+// Sube anuncio → Claude analiza → genera 2 variaciones distintas en paralelo → display A/B
+// =============================================
+
+var _abImageData = null; // base64 dataURL del anuncio subido
+
+function showAdVariationAB() {
+  _abImageData = null;
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'ab-variation-card';
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
+    '<div style="max-width:480px;width:100%">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+          '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones A/B de tu anuncio</h4>' +
+          '<div style="background:#ECFDF5;color:#059669;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">2 variaciones</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Claude analiza tu anuncio actual y genera <strong>2 variaciones creativas distintas</strong> — diferentes en concepto, no solo en color — listas para test A/B en Meta.</div>' +
+
+        '<div id="ab-upload-zone" style="border:2px dashed var(--border2);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all .15s;background:white" onclick="document.getElementById(\'ab-file-input\').click()" ondragover="event.preventDefault();this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-lt)\'" ondragleave="this.style.borderColor=\'var(--border2)\';this.style.background=\'white\'" ondrop="handleABDrop(event)">' +
+          '<div id="ab-upload-placeholder">' +
+            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px">Sube tu anuncio actual</div>' +
+            '<div style="font-size:11px;color:var(--muted2)">JPG, PNG o WebP · máx 8 MB</div>' +
+          '</div>' +
+          '<img id="ab-preview" style="display:none;max-height:200px;max-width:100%;border-radius:8px;object-fit:contain" src="" alt="preview"/>' +
+          '<input type="file" id="ab-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleABFile(this.files[0])">' +
+        '</div>' +
+
+        '<div id="ab-generate-wrap" style="display:none;margin-top:14px">' +
+          '<button id="ab-generate-btn" onclick="startABVariation()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🔬 Analizar y crear variaciones A/B</button>' +
+        '</div>' +
+
+      '</div>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+}
+
+function handleABDrop(event) {
+  event.preventDefault();
+  var zone = document.getElementById('ab-upload-zone');
+  if (zone) { zone.style.borderColor = 'var(--border2)'; zone.style.background = 'white'; }
+  var file = event.dataTransfer.files[0];
+  if (file) handleABFile(file);
+}
+
+function handleABFile(file) {
+  if (!file || !file.type.startsWith('image/')) { addAgent('Por favor sube una imagen en formato JPG, PNG o WebP.'); return; }
+  if (file.size > 8 * 1024 * 1024) { addAgent('La imagen debe ser menor a 8 MB.'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    _abImageData = e.target.result;
+    var placeholder = document.getElementById('ab-upload-placeholder');
+    var preview = document.getElementById('ab-preview');
+    var zone = document.getElementById('ab-upload-zone');
+    if (placeholder) placeholder.style.display = 'none';
+    if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+    if (zone) { zone.style.borderColor = '#059669'; zone.style.borderStyle = 'solid'; }
+    var wrap = document.getElementById('ab-generate-wrap');
+    if (wrap) wrap.style.display = 'block';
+    scrollB();
+  };
+  reader.readAsDataURL(file);
+}
+
+async function startABVariation() {
+  if (!_abImageData) { addAgent('Primero sube tu anuncio.'); return; }
+  if (!canGenerateImage()) { showImageLimitReached(); return; }
+
+  var btn = document.getElementById('ab-generate-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
+
+  // Ocultar la card de upload
+  var card = document.getElementById('ab-variation-card');
+  if (card) card.style.display = 'none';
+
+  var thinkId = addThinking();
+  setTimeout(function() {
+    var el = document.getElementById(thinkId);
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con Claude Vision...'; }
+  }, 100);
+
+  // Detectar formato por dimensiones
+  var adFormat = 'square';
+  await new Promise(function(resolve) {
+    var img = new Image();
+    img.onload = function() { adFormat = (img.width / img.height < 0.85) ? 'vertical' : 'square'; resolve(); };
+    img.onerror = resolve;
+    img.src = _abImageData;
+  });
+
+  // Claude analiza el anuncio y genera 2 variaciones con conceptos distintos
+  var analysisResult = null;
+  try {
+    var mediaType = _abImageData.split(';')[0].split(':')[1];
+    var b64 = _abImageData.split(',')[1];
+    var fullText = await fetchChatFull({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1200,
+      system: 'Eres experto en publicidad digital para Meta Ads. Analizas anuncios y generas variaciones creativas para A/B testing. Siempre responde SOLO con JSON válido, sin markdown, sin backticks.',
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+        { type: 'text', text: 'Analiza este anuncio de Meta Ads y genera exactamente 2 variaciones creativas para A/B testing. Las variaciones deben ser DISTINTAS en concepto visual — no solo cambiar un color.\n\nResponde SOLO con este JSON (sin texto extra, sin backticks):\n{"ad_description":"breve descripcion del anuncio original","format":"square o vertical","variation_a":{"concept":"nombre corto del concepto (ej: Ambiente exterior - dia soleado)","prompt":"prompt en ingles detallado para generar la imagen, ~80 palabras, professional advertising photography, incluir descripcion del sujeto, escenario, iluminacion, mood, sin texto en la imagen"},"variation_b":{"concept":"nombre corto del concepto diferente","prompt":"prompt en ingles detallado para generar la imagen, ~80 palabras, professional advertising photography, distinto escenario/sujeto que variacion_a, sin texto en la imagen"}}' }
+      ]}]
+    });
+    var clean = fullText.replace(/```json|```/g, '').trim();
+    var bi = clean.indexOf('{'); if (bi > 0) clean = clean.slice(bi);
+    analysisResult = JSON.parse(clean);
+  } catch(e) {
+    console.error('[AB] Error analizando anuncio:', e.message);
+  }
+
+  rmThinking(thinkId);
+
+  if (!analysisResult) {
+    addAgent('No pude analizar el anuncio. Por favor intenta con otra imagen.');
+    return;
+  }
+
+  // Usar formato detectado por dimensiones (más confiable que el JSON)
+  var fmt = adFormat;
+  var varA = analysisResult.variation_a;
+  var varB = analysisResult.variation_b;
+
+  addAgent('Anuncio analizado. Generando **Variación A** (' + varA.concept + ') y **Variación B** (' + varB.concept + ') en paralelo...');
+
+  var thinkId2 = addThinking();
+  setTimeout(function() {
+    var el = document.getElementById(thinkId2);
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando variaciones A y B en paralelo...'; }
+  }, 100);
+
+  // Generar ambas imágenes en paralelo
+  var headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+  var promptA = varA.prompt + '. Professional advertising photography. No text, no words, no letters in the image.';
+  var promptB = varB.prompt + '. Professional advertising photography. No text, no words, no letters in the image.';
+
+  try {
+    var [resA, resB] = await Promise.all([
+      fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify({ prompt: promptA, format: fmt, variations: 1, hasText: false }) }).then(function(r){ return r.json(); }),
+      fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify({ prompt: promptB, format: fmt, variations: 1, hasText: false }) }).then(function(r){ return r.json(); })
+    ]);
+
+    rmThinking(thinkId2);
+
+    if ((!resA.images || !resA.images.length) && (!resB.images || !resB.images.length)) {
+      addAgent('No se pudieron generar las variaciones. Por favor intenta de nuevo.');
+      return;
+    }
+
+    var imgA = resA.images && resA.images.length ? resA.images[0] : null;
+    var imgB = resB.images && resB.images.length ? resB.images[0] : null;
+
+    incrementImageUsage();
+    if (imgA && imgB) incrementImageUsage();
+
+    renderABComparison(imgA, imgB, varA.concept, varB.concept, fmt, analysisResult.ad_description || '');
+
+  } catch(err) {
+    rmThinking(thinkId2);
+    addAgent('Error generando variaciones: ' + err.message);
+  }
+}
+
+function renderABComparison(imgA, imgB, conceptA, conceptB, format, adDesc) {
+  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+
+  var ratio = format === 'vertical' ? '4/5' : '1/1';
+  var maxH = format === 'vertical' ? '260px' : '220px';
+
+  function imgBlock(img, label, concept, idx) {
+    var labelColor = label === 'A' ? '#2563EB' : '#7C3AED';
+    var labelBg = label === 'A' ? '#EFF6FF' : '#F5F3FF';
+    var b64 = img ? img.base64 : null;
+    var mt = img ? img.mediaType : 'image/jpeg';
+    var dlOnClick = b64 ? 'downloadAdImage(\'' + b64 + '\',\'' + mt + '\',\'variacion_' + label.toLowerCase() + '_' + format + '.png\')' : '';
+    var lbOnClick = b64 ? 'openAdLightbox(\'' + b64 + '\',\'' + mt + '\',\'Variaci\\u00f3n ' + label + ' — ' + concept.replace(/'/g, '') + '\')' : '';
+
+    return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">' +
+      // Label badge
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<div style="background:' + labelBg + ';color:' + labelColor + ';font-size:12px;font-weight:800;padding:3px 10px;border-radius:100px;letter-spacing:.5px">Variación ' + label + '</div>' +
+      '</div>' +
+      // Concept name
+      '<div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3">' + concept.replace(/</g,'&lt;') + '</div>' +
+      // Image
+      (b64
+        ? '<div style="cursor:zoom-in;border-radius:10px;overflow:hidden;aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:#F3F4F6" onclick="' + lbOnClick + '">' +
+            '<img src="data:' + mt + ';base64,' + b64 + '" style="width:100%;height:100%;object-fit:cover" alt="Variacion ' + label + '">' +
+          '</div>'
+        : '<div style="border-radius:10px;background:#FEF2F2;border:1px solid #FCA5A5;aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center;font-size:11px;color:#EF4444;text-align:center;padding:12px">Error generando variación ' + label + '</div>'
+      ) +
+      // Buttons
+      '<div style="display:flex;gap:6px">' +
+        (b64
+          ? '<button onclick="' + dlOnClick + '" style="flex:1;padding:7px 0;background:white;border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text);font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Descargar</button>'
+          : '') +
+        '<button onclick="qSend(\'Quiero publicar la Variacion ' + label + ' en Meta Ads. Ayudame a crear la campana.\')" style="flex:1;padding:7px 0;background:' + labelColor + ';color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Lanzar esta →</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var el = document.createElement('div');
+  el.className = 'msg';
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">Test A/B listo para Meta</div>' +
+        (adDesc ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + adDesc.replace(/</g,'&lt;').slice(0,120) + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:14px;width:100%;max-width:580px;padding-left:40px">' +
+      imgBlock(imgA, 'A', conceptA, 0) +
+      imgBlock(imgB, 'B', conceptB, 1) +
+    '</div>' +
+    '<div style="padding-left:40px;margin-top:12px">' +
+      '<button onclick="qSend(\'Tengo 2 variaciones A/B listas. Variacion A: ' + conceptA.replace(/'/g,'') + '. Variacion B: ' + conceptB.replace(/'/g,'') + '. Recomiendame como estructuro el test A/B en Meta Ads: presupuesto, duracion, metrica de exito y como interpretar los resultados.\')" style="background:none;border:1.5px solid #059669;color:#059669;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📊 Cómo estructurar el test A/B en Meta</button>' +
+    '</div>';
+
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
 }
 
 // =============================================
