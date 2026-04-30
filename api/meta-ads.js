@@ -32,7 +32,6 @@ async function metaGet(endpoint, params, token) {
 }
 
 async function metaPost(endpoint, params, token) {
-  // Usar JSON body — los arrays y objetos anidados se serializan correctamente
   const res = await fetch(`${META_BASE}/${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -42,7 +41,15 @@ async function metaPost(endpoint, params, token) {
   if (data.error) {
     if (data.error.code === 190) throw Object.assign(new Error('Token expirado'), { code: 190 });
     if (data.error.code === 613) throw Object.assign(new Error('Rate limit Meta API'), { code: 613 });
-    throw new Error(data.error.message || JSON.stringify(data.error));
+    // Incluir subcode y error_data para debugging
+    const detail = [
+      data.error.message,
+      data.error.error_subcode ? `subcode:${data.error.error_subcode}` : '',
+      data.error.error_user_msg || '',
+      data.error.error_data ? JSON.stringify(data.error.error_data).slice(0, 200) : '',
+    ].filter(Boolean).join(' | ');
+    console.error(`metaPost error [${endpoint}]:`, JSON.stringify(data.error));
+    throw new Error(detail);
   }
   return data;
 }
@@ -52,16 +59,16 @@ const OBJECTIVE_TO_GOAL = {
   OUTCOME_TRAFFIC:     'LINK_CLICKS',
   OUTCOME_AWARENESS:   'REACH',
   OUTCOME_SALES:       'OFFSITE_CONVERSIONS',
-  OUTCOME_ENGAGEMENT:  'POST_ENGAGEMENT',
+  OUTCOME_ENGAGEMENT:  'REACH',       // POST_ENGAGEMENT requiere promoted_object; REACH es universal
 };
 
-// billing_event debe coincidir con el optimization_goal
+// IMPRESSIONS es el billing_event más seguro para todos los objetivos outcome-based
 const OBJECTIVE_TO_BILLING = {
   OUTCOME_LEADS:       'IMPRESSIONS',
-  OUTCOME_TRAFFIC:     'LINK_CLICKS',
+  OUTCOME_TRAFFIC:     'IMPRESSIONS',
   OUTCOME_AWARENESS:   'IMPRESSIONS',
   OUTCOME_SALES:       'IMPRESSIONS',
-  OUTCOME_ENGAGEMENT:  'POST_ENGAGEMENT',
+  OUTCOME_ENGAGEMENT:  'IMPRESSIONS',
 };
 
 // Mapeo nombre de país → código ISO para LatAm + ES/US
@@ -341,21 +348,22 @@ export default async function handler(req, res) {
 
       // 3. Ad Set
       const nowUnix    = Math.floor(Date.now() / 1000);
-      const optGoal    = OBJECTIVE_TO_GOAL[objective]   || 'LINK_CLICKS';
+      const optGoal    = OBJECTIVE_TO_GOAL[objective]   || 'REACH';
       const billEvent  = OBJECTIVE_TO_BILLING[objective] || 'IMPRESSIONS';
 
+      // Meta Marketing API requiere targeting como JSON string incluso en body JSON
       const adsetBody = {
         name:              `${name} — AdSet`,
         campaign_id:       campaignId,
-        daily_budget:      dailyBudgetCents,   // integer, en unidades mínimas
+        daily_budget:      String(dailyBudgetCents),  // string requerido
         billing_event:     billEvent,
         optimization_goal: optGoal,
-        targeting,                             // objeto anidado — no JSON string
+        targeting:         JSON.stringify(targeting), // JSON string, no objeto anidado
         status:            'PAUSED',
-        start_time:        nowUnix + 3600,     // número Unix, no string
+        start_time:        String(nowUnix + 3600),    // Unix timestamp como string
       };
       if (durationDays && parseInt(durationDays) > 0) {
-        adsetBody.end_time = nowUnix + parseInt(durationDays) * 86400;
+        adsetBody.end_time = String(nowUnix + parseInt(durationDays) * 86400);
       }
 
       const adset = await metaPost(`${adAccountId}/adsets`, adsetBody, token);
