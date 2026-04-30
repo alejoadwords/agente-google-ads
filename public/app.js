@@ -6740,13 +6740,18 @@ function requestImageVariation(encodedPrompt, format) {
 
 // =============================================
 // VARIACIONES A/B — Flujo Manus-style
-// Sube anuncio → Claude analiza → genera 2 variaciones distintas en paralelo → display A/B
+// Sube anuncio → Claude analiza → genera N variaciones en paralelo → grid display
 // =============================================
 
-var _abImageData = null; // base64 dataURL del anuncio subido
+var _abImageData = null;
+var _abVarCount = 2;
+var _AB_LABELS = ['A','B','C','D'];
+var _AB_COLORS = ['#2563EB','#7C3AED','#059669','#D97706'];
+var _AB_BG = ['#EFF6FF','#F5F3FF','#ECFDF5','#FFFBEB'];
 
 function showAdVariationAB() {
   _abImageData = null;
+  _abVarCount = 2;
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
   var el = document.createElement('div');
   el.className = 'msg';
@@ -6755,11 +6760,8 @@ function showAdVariationAB() {
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
     '<div style="max-width:480px;width:100%">' +
       '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-          '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones A/B de tu anuncio</h4>' +
-          '<div style="background:#ECFDF5;color:#059669;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">2 variaciones</div>' +
-        '</div>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Claude analiza tu anuncio actual y genera <strong>2 variaciones creativas distintas</strong> — diferentes en concepto, no solo en color — listas para test A/B en Meta.</div>' +
+        '<h4 style="margin:0 0 4px;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Claude analiza tu anuncio, extrae el concepto de campaña y genera <strong>variaciones con escenarios visuales distintos</strong> — manteniendo el mismo mensaje publicitario.</div>' +
 
         '<div id="ab-upload-zone" style="border:2px dashed var(--border2);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all .15s;background:white" onclick="document.getElementById(\'ab-file-input\').click()" ondragover="event.preventDefault();this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-lt)\'" ondragleave="this.style.borderColor=\'var(--border2)\';this.style.background=\'white\'" ondrop="handleABDrop(event)">' +
           '<div id="ab-upload-placeholder">' +
@@ -6767,18 +6769,36 @@ function showAdVariationAB() {
             '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px">Sube tu anuncio actual</div>' +
             '<div style="font-size:11px;color:var(--muted2)">JPG, PNG o WebP · máx 8 MB</div>' +
           '</div>' +
-          '<img id="ab-preview" style="display:none;max-height:200px;max-width:100%;border-radius:8px;object-fit:contain" src="" alt="preview"/>' +
+          '<img id="ab-preview" style="display:none;max-height:180px;max-width:100%;border-radius:8px;object-fit:contain" src="" alt="preview"/>' +
           '<input type="file" id="ab-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleABFile(this.files[0])">' +
         '</div>' +
 
         '<div id="ab-generate-wrap" style="display:none;margin-top:14px">' +
-          '<button id="ab-generate-btn" onclick="startABVariation()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🔬 Analizar y crear variaciones A/B</button>' +
+          '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas variaciones?</div>' +
+          '<div style="display:flex;gap:6px;margin-bottom:12px">' +
+            [2,3,4].map(function(n){
+              return '<div id="ab-chip-' + n + '" onclick="selectABCount(' + n + ')" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ' + (n===2?'#059669':'var(--border)') + ';background:' + (n===2?'#ECFDF5':'white') + ';color:' + (n===2?'#065F46':'var(--muted)') + ';transition:all .15s">' + n + '</div>';
+            }).join('') +
+          '</div>' +
+          '<button id="ab-generate-btn" onclick="startABVariation()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🔬 Analizar y generar variaciones</button>' +
         '</div>' +
 
       '</div>' +
     '</div>';
   document.getElementById('chat-area').appendChild(el);
   scrollB();
+}
+
+function selectABCount(n) {
+  _abVarCount = n;
+  [2,3,4].forEach(function(i) {
+    var chip = document.getElementById('ab-chip-' + i);
+    if (!chip) return;
+    var sel = (i === n);
+    chip.style.borderColor = sel ? '#059669' : 'var(--border)';
+    chip.style.background = sel ? '#ECFDF5' : 'white';
+    chip.style.color = sel ? '#065F46' : 'var(--muted)';
+  });
 }
 
 function handleABDrop(event) {
@@ -6812,10 +6832,9 @@ async function startABVariation() {
   if (!_abImageData) { addAgent('Primero sube tu anuncio.'); return; }
   if (!canGenerateImage()) { showImageLimitReached(); return; }
 
+  var count = _abVarCount || 2;
   var btn = document.getElementById('ab-generate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
-
-  // Ocultar la card de upload
   var card = document.getElementById('ab-variation-card');
   if (card) card.style.display = 'none';
 
@@ -6834,18 +6853,23 @@ async function startABVariation() {
     img.src = _abImageData;
   });
 
-  // Claude analiza el anuncio y genera 2 variaciones con conceptos distintos
+  // Construir instrucción JSON para N variaciones
+  var varFields = _AB_LABELS.slice(0, count).map(function(lbl) {
+    return '"variation_' + lbl.toLowerCase() + '":{"concept":"nombre corto descriptivo del escenario visual","prompt":"prompt en ingles ~70 palabras que incluya: el MISMO producto/servicio del anuncio original, el MISMO mensaje de campana (oferta/promocion/beneficio identificado), pero en un ESCENARIO VISUAL completamente distinto a las otras variaciones. Incluir: tipo de escena, iluminacion, mood, composicion. NO incluir texto, letras, numeros en la imagen."}';
+  }).join(',');
+  var jsonInstruction = '{"ad_description":"descripcion breve del anuncio","campaign_message":"mensaje o promocion central identificada (ej: Black Friday 50% off camisetas)","format":"square o vertical",' + varFields + '}';
+
   var analysisResult = null;
   try {
     var mediaType = _abImageData.split(';')[0].split(':')[1];
     var b64 = _abImageData.split(',')[1];
     var fullText = await fetchChatFull({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
-      system: 'Eres experto en publicidad digital para Meta Ads. Analizas anuncios y generas variaciones creativas para A/B testing. Siempre responde SOLO con JSON válido, sin markdown, sin backticks.',
+      max_tokens: 200 + count * 300,
+      system: 'Eres experto en publicidad digital para Meta Ads. Tu trabajo es analizar anuncios y generar variaciones visuales para A/B testing que CONSERVEN el mensaje de campana del anuncio original pero lo presenten en escenarios visuales distintos. Responde SOLO con JSON valido, sin markdown, sin backticks.',
       messages: [{ role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-        { type: 'text', text: 'Analiza este anuncio de Meta Ads y genera exactamente 2 variaciones creativas para A/B testing. Las variaciones deben ser DISTINTAS en concepto visual — no solo cambiar un color.\n\nResponde SOLO con este JSON (sin texto extra, sin backticks):\n{"ad_description":"breve descripcion del anuncio original","format":"square o vertical","variation_a":{"concept":"nombre corto del concepto (ej: Ambiente exterior - dia soleado)","prompt":"prompt en ingles detallado para generar la imagen, ~80 palabras, professional advertising photography, incluir descripcion del sujeto, escenario, iluminacion, mood, sin texto en la imagen"},"variation_b":{"concept":"nombre corto del concepto diferente","prompt":"prompt en ingles detallado para generar la imagen, ~80 palabras, professional advertising photography, distinto escenario/sujeto que variacion_a, sin texto en la imagen"}}' }
+        { type: 'text', text: 'Analiza este anuncio de Meta Ads. Identifica el producto, el mensaje de campana (oferta, promocion, beneficio) y el tono visual. Luego genera exactamente ' + count + ' variaciones para A/B testing.\n\nREGLA CRITICA: Cada variacion debe mostrar el MISMO producto con el MISMO mensaje de campana (si es una oferta de Black Friday, todas las variaciones deben evocar Black Friday y la oferta), pero en ESCENARIOS VISUALES diferentes (lifestyle vs producto solo vs grupo de personas vs ambiente festivo, etc.).\n\nResponde SOLO con este JSON:\n' + jsonInstruction }
       ]}]
     });
     var clean = fullText.replace(/```json|```/g, '').trim();
@@ -6862,46 +6886,38 @@ async function startABVariation() {
     return;
   }
 
-  // Usar formato detectado por dimensiones (más confiable que el JSON)
   var fmt = adFormat;
-  var varA = analysisResult.variation_a;
-  var varB = analysisResult.variation_b;
+  var variations = _AB_LABELS.slice(0, count).map(function(lbl) {
+    return analysisResult['variation_' + lbl.toLowerCase()] || { concept: 'Variacion ' + lbl, prompt: analysisResult.ad_description || 'professional advertising photography' };
+  });
 
-  addAgent('Anuncio analizado. Generando **Variación A** (' + varA.concept + ') y **Variación B** (' + varB.concept + ') en paralelo...');
+  var conceptList = variations.map(function(v, i) { return '**' + _AB_LABELS[i] + '**: ' + v.concept; }).join(' · ');
+  addAgent('Anuncio analizado. Generando ' + count + ' variaciones en paralelo — ' + conceptList + '...');
 
   var thinkId2 = addThinking();
   setTimeout(function() {
     var el = document.getElementById(thinkId2);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando variaciones A y B en paralelo...'; }
+    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando ' + count + ' variaciones en paralelo...'; }
   }, 100);
 
-  // Generar ambas imágenes en paralelo
   var headers = { 'Content-Type': 'application/json' };
   if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
 
-  var promptA = varA.prompt + '. Professional advertising photography. No text, no words, no letters in the image.';
-  var promptB = varB.prompt + '. Professional advertising photography. No text, no words, no letters in the image.';
-
   try {
-    var [resA, resB] = await Promise.all([
-      fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify({ prompt: promptA, format: fmt, variations: 1, hasText: false }) }).then(function(r){ return r.json(); }),
-      fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify({ prompt: promptB, format: fmt, variations: 1, hasText: false }) }).then(function(r){ return r.json(); })
-    ]);
-
+    var fetchPromises = variations.map(function(v) {
+      var p = v.prompt + '. Professional advertising photography. No text overlay, no words, no letters, no numbers visible in the image.';
+      return fetch('/api/generate-image', { method: 'POST', headers: headers, body: JSON.stringify({ prompt: p, format: fmt, variations: 1, hasText: false }) }).then(function(r){ return r.json(); });
+    });
+    var results = await Promise.all(fetchPromises);
     rmThinking(thinkId2);
 
-    if ((!resA.images || !resA.images.length) && (!resB.images || !resB.images.length)) {
-      addAgent('No se pudieron generar las variaciones. Por favor intenta de nuevo.');
-      return;
-    }
+    var images = results.map(function(r) { return (r.images && r.images.length) ? r.images[0] : null; });
+    var anyOk = images.some(function(img) { return img !== null; });
+    if (!anyOk) { addAgent('No se pudieron generar las variaciones. Por favor intenta de nuevo.'); return; }
 
-    var imgA = resA.images && resA.images.length ? resA.images[0] : null;
-    var imgB = resB.images && resB.images.length ? resB.images[0] : null;
+    images.forEach(function(img) { if (img) incrementImageUsage(); });
 
-    incrementImageUsage();
-    if (imgA && imgB) incrementImageUsage();
-
-    renderABComparison(imgA, imgB, varA.concept, varB.concept, fmt, analysisResult.ad_description || '');
+    renderVariationsGrid(images, variations.map(function(v){ return v.concept; }), fmt, analysisResult.ad_description || '', analysisResult.campaign_message || '');
 
   } catch(err) {
     rmThinking(thinkId2);
@@ -6909,43 +6925,46 @@ async function startABVariation() {
   }
 }
 
-function renderABComparison(imgA, imgB, conceptA, conceptB, format, adDesc) {
+function renderVariationsGrid(images, concepts, format, adDesc, campaignMsg) {
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-
+  var count = images.length;
   var ratio = format === 'vertical' ? '4/5' : '1/1';
-  var maxH = format === 'vertical' ? '260px' : '220px';
+  var maxH = format === 'vertical' ? '240px' : '200px';
+  // 2 imágenes: side by side; 3-4: grid 2 columnas
+  var gridCols = count === 2 ? '1fr 1fr' : '1fr 1fr';
 
-  function imgBlock(img, label, concept, idx) {
-    var labelColor = label === 'A' ? '#2563EB' : '#7C3AED';
-    var labelBg = label === 'A' ? '#EFF6FF' : '#F5F3FF';
+  function imgBlock(img, idx) {
+    var label = _AB_LABELS[idx];
+    var labelColor = _AB_COLORS[idx] || '#2563EB';
+    var labelBg = _AB_BG[idx] || '#EFF6FF';
+    var concept = (concepts[idx] || 'Variación ' + label).replace(/</g,'&lt;');
     var b64 = img ? img.base64 : null;
     var mt = img ? img.mediaType : 'image/jpeg';
     var dlOnClick = b64 ? 'downloadAdImage(\'' + b64 + '\',\'' + mt + '\',\'variacion_' + label.toLowerCase() + '_' + format + '.png\')' : '';
-    var lbOnClick = b64 ? 'openAdLightbox(\'' + b64 + '\',\'' + mt + '\',\'Variaci\\u00f3n ' + label + ' — ' + concept.replace(/'/g, '') + '\')' : '';
+    var lbOnClick = b64 ? 'openAdLightbox(\'' + b64 + '\',\'' + mt + '\',\'Variaci\\u00f3n ' + label + '\')' : '';
 
-    return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">' +
-      // Label badge
+    return '<div style="display:flex;flex-direction:column;gap:7px;min-width:0">' +
       '<div style="display:flex;align-items:center;gap:6px">' +
-        '<div style="background:' + labelBg + ';color:' + labelColor + ';font-size:12px;font-weight:800;padding:3px 10px;border-radius:100px;letter-spacing:.5px">Variación ' + label + '</div>' +
+        '<div style="background:' + labelBg + ';color:' + labelColor + ';font-size:11px;font-weight:800;padding:2px 9px;border-radius:100px">Var. ' + label + '</div>' +
       '</div>' +
-      // Concept name
-      '<div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3">' + concept.replace(/</g,'&lt;') + '</div>' +
-      // Image
+      '<div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3">' + concept + '</div>' +
       (b64
-        ? '<div style="cursor:zoom-in;border-radius:10px;overflow:hidden;aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:#F3F4F6" onclick="' + lbOnClick + '">' +
+        ? '<div style="cursor:zoom-in;border-radius:9px;overflow:hidden;aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:#F3F4F6" onclick="' + lbOnClick + '">' +
             '<img src="data:' + mt + ';base64,' + b64 + '" style="width:100%;height:100%;object-fit:cover" alt="Variacion ' + label + '">' +
           '</div>'
-        : '<div style="border-radius:10px;background:#FEF2F2;border:1px solid #FCA5A5;aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center;font-size:11px;color:#EF4444;text-align:center;padding:12px">Error generando variación ' + label + '</div>'
+        : '<div style="border-radius:9px;background:#FEF2F2;border:1px solid #FCA5A5;aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center;font-size:11px;color:#EF4444;text-align:center;padding:12px">Error al generar</div>'
       ) +
-      // Buttons
-      '<div style="display:flex;gap:6px">' +
+      '<div style="display:flex;gap:5px">' +
         (b64
-          ? '<button onclick="' + dlOnClick + '" style="flex:1;padding:7px 0;background:white;border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text);font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Descargar</button>'
-          : '') +
-        '<button onclick="qSend(\'Quiero publicar la Variacion ' + label + ' en Meta Ads. Ayudame a crear la campana.\')" style="flex:1;padding:7px 0;background:' + labelColor + ';color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Lanzar esta →</button>' +
+          ? '<button onclick="' + dlOnClick + '" style="flex:1;padding:6px 0;background:white;border:1px solid var(--border);border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;color:var(--text);font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Descargar</button>'
+          : ''
+        ) +
+        '<button onclick="qSend(\'Quiero publicar la Variacion ' + label + ' en Meta Ads. Ayudame a crear la campana.\')" style="flex:1;padding:6px 0;background:' + labelColor + ';color:white;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font)">Lanzar →</button>' +
       '</div>' +
     '</div>';
   }
+
+  var concatConcepts = concepts.map(function(c,i){ return _AB_LABELS[i] + ': ' + c.replace(/'/g,''); }).join('. ');
 
   var el = document.createElement('div');
   el.className = 'msg';
@@ -6954,16 +6973,18 @@ function renderABComparison(imgA, imgB, conceptA, conceptB, format, adDesc) {
     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
       '<div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text)">Test A/B listo para Meta</div>' +
-        (adDesc ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + adDesc.replace(/</g,'&lt;').slice(0,120) + '</div>' : '') +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">' + count + ' variaciones listas para test en Meta</div>' +
+        (campaignMsg
+          ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">Campaña: ' + campaignMsg.replace(/</g,'&lt;').slice(0,100) + '</div>'
+          : (adDesc ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + adDesc.replace(/</g,'&lt;').slice(0,100) + '</div>' : '')
+        ) +
       '</div>' +
     '</div>' +
-    '<div style="display:flex;gap:14px;width:100%;max-width:580px;padding-left:40px">' +
-      imgBlock(imgA, 'A', conceptA, 0) +
-      imgBlock(imgB, 'B', conceptB, 1) +
+    '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:12px;width:100%;max-width:600px;padding-left:40px">' +
+      images.map(function(img, i){ return imgBlock(img, i); }).join('') +
     '</div>' +
     '<div style="padding-left:40px;margin-top:12px">' +
-      '<button onclick="qSend(\'Tengo 2 variaciones A/B listas. Variacion A: ' + conceptA.replace(/'/g,'') + '. Variacion B: ' + conceptB.replace(/'/g,'') + '. Recomiendame como estructuro el test A/B en Meta Ads: presupuesto, duracion, metrica de exito y como interpretar los resultados.\')" style="background:none;border:1.5px solid #059669;color:#059669;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📊 Cómo estructurar el test A/B en Meta</button>' +
+      '<button onclick="qSend(\'Tengo ' + count + ' variaciones listas para test A/B. ' + concatConcepts + '. Como estructuro el test A/B en Meta Ads: presupuesto, duracion, metrica de exito y como interpretar los resultados?\')" style="background:none;border:1.5px solid #059669;color:#059669;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📊 Cómo estructurar el test en Meta</button>' +
     '</div>';
 
   document.getElementById('chat-area').appendChild(el);
