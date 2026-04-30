@@ -5336,13 +5336,20 @@ async function showMetaAdsDashboard() {
   ];
 
   const campRows = (campaigns?.campaigns||[]).slice(0, 5).map(c => {
-    const dot = c.status === 'ACTIVE' ? '#22c55e' : '#9ca3af';
-    return `<div onclick="injectCampaignAnalysis('meta','${c.name.replace(/'/g, '').replace(/"/g, '')}')"
-      style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px"
-      onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'">
+    const isActive = c.status === 'ACTIVE';
+    const dot = isActive ? '#22c55e' : '#9ca3af';
+    const safeName = (c.name||'').replace(/'/g, '').replace(/"/g, '');
+    const toggleLabel = isActive ? '⏸' : '▶';
+    const toggleTitle = isActive ? 'Pausar campaña' : 'Activar campaña';
+    const toggleAction = isActive ? 'PAUSED' : 'ACTIVE';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:5px;font-size:11px">
       <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${c.name}</span>
-      <span style="color:var(--muted2);flex-shrink:0">$${c.cpa} CPA · ${(c.clicks||0).toLocaleString()} clicks</span>
+      <span onclick="injectCampaignAnalysis('meta','${safeName}')" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);cursor:pointer" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${c.name}</span>
+      <span style="color:var(--muted2);flex-shrink:0;font-size:10px">$${c.spend}</span>
+      <button onclick="manageCampaignStatus('${c.id}','${safeName}','${toggleAction}')" title="${toggleTitle}"
+        style="flex-shrink:0;background:${isActive ? '#fef3c7' : '#dcfce7'};border:1px solid ${isActive ? '#fde68a' : '#bbf7d0'};border-radius:4px;cursor:pointer;padding:2px 6px;font-size:10px;color:${isActive ? '#92400e' : '#15803d'};font-weight:600">
+        ${toggleLabel}
+      </button>
     </div>`;
   }).join('');
 
@@ -5384,6 +5391,41 @@ function injectCampaignAnalysis(platform, campaignName) {
   const msg = `Dame un análisis detallado de la campaña "${campaignName}" en ${label}.`;
   document.getElementById('inp').value = msg;
   sendMsg();
+}
+
+async function manageCampaignStatus(campaignId, campaignName, newStatus) {
+  const label  = newStatus === 'ACTIVE' ? 'activar' : 'pausar';
+  const emoji  = newStatus === 'ACTIVE' ? '▶' : '⏸';
+  const spend  = newStatus === 'ACTIVE' ? '\n\n⚠️ La campaña comenzará a gastar presupuesto inmediatamente.' : '';
+  if (!confirm(`¿Quieres ${label} la campaña "${campaignName}"?${spend}`)) return;
+
+  const token     = sessionStorage.getItem('meta_access_token');
+  const accountId = sessionStorage.getItem('meta_ad_account_id');
+  const uid       = clerkInstance?.user?.id;
+  if (!token) { alert('No hay sesión de Meta Ads. Reconecta tu cuenta.'); return; }
+
+  try {
+    const r = await fetch('/api/meta-ads?action=update-campaign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken: token, adAccountId: accountId, campaignId, status: newStatus }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'Error');
+
+    // Limpiar caché del dashboard para forzar recarga
+    Object.keys(localStorage).filter(k => k.startsWith('meta_dashboard_')).forEach(k => localStorage.removeItem(k));
+    // Registrar acción en logs
+    if (uid) fetch('/api/admin?action=log-api-action', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: uid, platform: 'meta_ads', actionType: 'campaign_status_change', entityId: campaignId, entityName: campaignName, newValue: { status: newStatus }, confirmed: true })
+    }).catch(() => {});
+
+    addAgent(`${emoji} **Campaña ${newStatus === 'ACTIVE' ? 'activada' : 'pausada'}**: "${campaignName}"\n\n` +
+      (newStatus === 'ACTIVE' ? 'La campaña está activa y comenzará a entregar anuncios.' : 'La campaña está pausada. No se gastará presupuesto hasta que la actives nuevamente.'));
+    showMetaAdsDashboard();
+  } catch(err) {
+    alert('Error: ' + err.message);
+  }
 }
 
 // ── Context injection (Features 5D / 6C) ─────────────────────
@@ -6950,17 +6992,56 @@ async function cwLaunch() {
     var data = await r.json();
     if (!r.ok || data.error) throw new Error(data.error || 'Error al crear la campaña');
 
-    closeCampaignWizard();
-    addAgent('✅ **Campaña creada exitosamente en Meta Ads**\n\n' +
-      '**' + campaignWizardData.name + '**\n' +
-      '- Campaign ID: `' + data.campaignId + '`\n' +
-      '- Ad Set ID: `' + data.adsetId + '`\n' +
-      '- Estado: **PAUSADA** (revísala en Meta Ads Manager antes de activar)\n\n' +
-      'Los creativos generados los puedes subir directamente en Meta Ads Manager usando los ID anteriores. ' +
-      '[Ir a Meta Ads Manager →](https://www.facebook.com/adsmanager)');
+    // Guardar IDs para el botón de activar
+    campaignWizardData.createdCampaignId = data.campaignId;
+    campaignWizardData.createdAdsetId    = data.adsetId;
+    // Mostrar pantalla de éxito dentro del wizard
+    var overlay = document.getElementById('cw-overlay');
+    if (overlay) {
+      overlay.querySelector('div').innerHTML =
+        '<div style="text-align:center;padding:32px 24px">' +
+        '<div style="font-size:48px;margin-bottom:12px">✅</div>' +
+        '<h3 style="margin:0 0 8px;font-size:18px;color:#111">Campaña creada</h3>' +
+        '<p style="color:#555;font-size:14px;margin:0 0 4px"><strong>' + campaignWizardData.name + '</strong></p>' +
+        '<p style="color:#888;font-size:12px;margin:0 0 24px">Estado actual: <strong style="color:#f59e0b">PAUSADA</strong> — no está gastando presupuesto</p>' +
+        '<div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left;font-size:12px;color:#666">' +
+        '<div style="margin-bottom:4px">Campaign ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.campaignId + '</code></div>' +
+        '<div>Ad Set ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adsetId + '</code></div>' +
+        '</div>' +
+        '<p style="font-size:12px;color:#888;margin-bottom:20px">¿Quieres activarla ahora? Confirma que los creativos y el targeting están listos antes de gastar presupuesto.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
+        '<button id="cw-activate-btn" onclick="activateCreatedCampaign()" style="width:100%;padding:13px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">▶ Activar campaña ahora</button>' +
+        '<button onclick="closeCampaignWizard()" style="width:100%;padding:12px;background:#f3f4f6;color:#333;border:none;border-radius:8px;cursor:pointer;font-size:13px">Dejar pausada · activar luego en Meta Ads Manager</button>' +
+        '</div></div>';
+    }
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = '🚀 Crear campaña'; }
     if (msg) { msg.style.display='block'; msg.style.cssText='display:block;background:#fee2e2;color:#991b1b;border-radius:8px;padding:12px;font-size:13px;margin-top:8px'; msg.textContent = '❌ ' + err.message; }
+  }
+}
+
+async function activateCreatedCampaign() {
+  var campaignId = campaignWizardData.createdCampaignId;
+  var adsetId    = campaignWizardData.createdAdsetId;
+  var token      = campaignWizardData.token;
+  if (!campaignId || !token) return;
+  var btn = document.getElementById('cw-activate-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
+  try {
+    var r = await fetch('/api/meta-ads?action=update-campaign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken: token, adAccountId: campaignWizardData.adAccountId, campaignId, adsetId, status: 'ACTIVE' }),
+    });
+    var data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'Error al activar');
+    closeCampaignWizard();
+    addAgent('▶️ **Campaña activada — está gastando presupuesto**\n\n' +
+      '**' + campaignWizardData.name + '** está ahora activa en Meta Ads.\n\n' +
+      'Monitorearé el rendimiento y te alertaré si detecto anomalías (frecuencia alta, CPA elevado, 0 conversiones). ' +
+      'Puedes pausarla o ajustar el presupuesto directamente desde aquí cuando quieras.');
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '▶ Activar campaña ahora'; }
+    alert('Error al activar: ' + err.message);
   }
 }
 
@@ -8720,6 +8801,14 @@ async function selectMetaAccount(accountId) {
   metaActiveAccount = acc;
   sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
   sessionStorage.setItem('meta_ad_account_id', acc.id);
+  // Guardar account_id en Supabase para que los crons de alertas/reportes lo usen
+  const uid2 = clerkInstance?.user?.id;
+  if (uid2) {
+    fetch('/api/admin?action=save-platform-account', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: uid2, platform: 'meta_ads', accountId: acc.id, accountName: acc.name })
+    }).catch(() => {});
+  }
   renderMetaActiveAccount();
   renderMetaAccountSelector();
   closeSettings();

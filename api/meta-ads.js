@@ -55,6 +55,26 @@ const OBJECTIVE_TO_GOAL = {
   OUTCOME_ENGAGEMENT:  'POST_ENGAGEMENT',
 };
 
+// Mapeo nombre de país → código ISO para LatAm + ES/US
+const COUNTRY_NAME_TO_CODE = {
+  'colombia': 'CO', 'mexico': 'MX', 'méxico': 'MX', 'argentina': 'AR',
+  'chile': 'CL', 'peru': 'PE', 'perú': 'PE', 'ecuador': 'EC',
+  'venezuela': 'VE', 'bolivia': 'BO', 'uruguay': 'UY', 'paraguay': 'PY',
+  'costa rica': 'CR', 'panama': 'PA', 'panamá': 'PA', 'guatemala': 'GT',
+  'honduras': 'HN', 'el salvador': 'SV', 'nicaragua': 'NI',
+  'republica dominicana': 'DO', 'república dominicana': 'DO', 'cuba': 'CU',
+  'puerto rico': 'PR', 'españa': 'ES', 'spain': 'ES',
+  'estados unidos': 'US', 'united states': 'US', 'usa': 'US',
+};
+
+function resolveCountryCode(input) {
+  if (!input) return 'CO';
+  const trimmed = input.trim();
+  // Si ya es código ISO de 2 letras
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed;
+  return COUNTRY_NAME_TO_CODE[trimmed.toLowerCase()] || trimmed.toUpperCase().slice(0, 2);
+}
+
 // Agrega insights a una lista de objetos (campañas, ad sets, ads)
 async function fetchInsights(ids, level, datePreset, token) {
   const insights = {};
@@ -294,20 +314,18 @@ export default async function handler(req, res) {
       if (!campaignId) throw new Error('Meta no devolvió un campaign id');
 
       // 2. Construir targeting
-      const geoLocations = { countries: [country] };
-      if (city && city.trim()) {
-        // city puede ser una ciudad (se pasa como key de Meta o simplemente se ignora si no tenemos el key)
-        // Para simplificar usamos custom_locations o simplemente omitimos si no tenemos el key de Meta
-        // Dejamos solo countries por ahora para no fallar; city se puede mejorar después
-      }
+      const countryCode = resolveCountryCode(country);
+      const geoLocations = { countries: [countryCode] };
 
       const targeting = {
         age_min:       parseInt(ageMin) || 18,
         age_max:       parseInt(ageMax) || 65,
         geo_locations: geoLocations,
       };
-      if (gender === 'male')   targeting.genders = [1];
-      if (gender === 'female') targeting.genders = [2];
+      // gender: 1 = hombres, 2 = mujeres, 0/undefined = todos
+      const genderNum = parseInt(gender);
+      if (genderNum === 1) targeting.genders = [1];
+      if (genderNum === 2) targeting.genders = [2];
 
       // 3. Fechas
       const nowUnix = Math.floor(Date.now() / 1000);
@@ -330,6 +348,37 @@ export default async function handler(req, res) {
       if (!adsetId) throw new Error('Meta no devolvió un adset id');
 
       return res.json({ campaignId, adsetId });
+    }
+
+    // ── update-campaign ──────────────────────────────────────
+    // Cambia el estado (ACTIVE/PAUSED) y/o el presupuesto diario de una campaña
+    if (action === 'update-campaign') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
+      const {
+        campaignId,
+        status,         // 'ACTIVE' | 'PAUSED'
+        budgetUSD,      // nuevo presupuesto diario en USD (opcional)
+        adsetId,        // si se pasa, también actualiza el adset
+      } = req.body || {};
+
+      if (!campaignId) return res.status(400).json({ error: 'campaignId requerido' });
+
+      // Actualizar campaña
+      const campaignParams = {};
+      if (status) campaignParams.status = status;
+
+      if (Object.keys(campaignParams).length) {
+        await metaPost(campaignId, campaignParams, token);
+      }
+
+      // Actualizar presupuesto del adset si se pide
+      if (budgetUSD && adsetId) {
+        await metaPost(adsetId, {
+          daily_budget: String(Math.round(parseFloat(budgetUSD) * 100)),
+        }, token);
+      }
+
+      return res.json({ ok: true, campaignId, status: status || 'unchanged' });
     }
 
     return res.status(400).json({ error: 'action no reconocido' });
