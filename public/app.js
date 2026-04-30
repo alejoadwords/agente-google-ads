@@ -1126,13 +1126,22 @@ function agencyEditClient(id) {
   agencyOpenModal(id);
 }
 
-async function agencyDeleteClient(id) {
+// Eliminar cliente desde la barra de contexto activo (botón en header)
+async function agencyResetClientProfile(id) {
+  const c = agencyClients.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`¿Eliminar el perfil de "${c.name}"?\n\nEsto borrará:\n• El perfil del cliente\n• El entrenamiento de todos los agentes\n• El historial de conversaciones\n• El progreso de la hoja de ruta\n\nPodrás crear un perfil nuevo inmediatamente.`)) return;
+  agencyExitClientContext();
+  await agencyDeleteClient(id, true); // true = skip second confirm
+}
+
+async function agencyDeleteClient(id, skipConfirm = false) {
   agencyCloseAllDropdowns();
   const c = agencyClients.find(x => x.id === id);
   if (!c) return;
-  if (!confirm(`¿Eliminar al cliente "${c.name}"? Se perderá su historial de conversaciones en este dispositivo.`)) return;
+  if (!skipConfirm && !confirm(`¿Eliminar el perfil de "${c.name}"?\n\nEsto borrará el entrenamiento de todos los agentes y el historial de conversaciones de este cliente.`)) return;
   agencyClients = agencyClients.filter(x => x.id !== id);
-  // Limpiar historial local del cliente
+  // Limpiar todo el localStorage relacionado con este cliente
   try {
     const uid = clerkInstance?.user?.id || 'anon';
     for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -1244,6 +1253,9 @@ function agencyShowContextBar(client) {
     <button class="agency-ctx-report" onclick="warOpen(agencyActiveClientId)" title="Generar reporte para WhatsApp">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
       reporte WA
+    </button>
+    <button class="agency-ctx-exit" onclick="agencyResetClientProfile(agencyActiveClientId)" title="Eliminar perfil y reiniciar entrenamiento de agentes" style="background:transparent;border:1px solid rgba(239,68,68,.35);color:#EF4444;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;cursor:pointer;font-family:var(--font);margin-right:2px;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.08)'" onmouseout="this.style.background='transparent'">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:middle;margin-right:3px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>eliminar perfil
     </button>
     <button class="agency-ctx-exit" onclick="agencyExitClientContext()" title="Salir del contexto de este cliente">✕ salir</button>
   `;
@@ -6373,6 +6385,58 @@ const ROADMAP_CONTENT = {
   }
 };
 
+// ── ROADMAP PERSISTENCE ──────────────────────────────────────────────────────
+
+function rmStorageKey() {
+  const uid = clerkInstance?.user?.id || 'anon';
+  const clientId = agencyActiveClientId || 'solo';
+  const agentKey = currentAgentCtx || 'google-ads';
+  return `rm_progress_${uid}_${clientId}_${agentKey}`;
+}
+
+function rmSaveProgress() {
+  const progress = {};
+  document.querySelectorAll('#rm-panel-body .cl-item[data-ridx]').forEach(item => {
+    progress[item.dataset.ridx] = item.classList.contains('done');
+  });
+  try { localStorage.setItem(rmStorageKey(), JSON.stringify(progress)); } catch(e) {}
+}
+
+function rmLoadProgress() {
+  try { return JSON.parse(localStorage.getItem(rmStorageKey()) || '{}'); } catch { return {}; }
+}
+
+function rmToggleTask(el) {
+  el.classList.toggle('done');
+  const done = el.classList.contains('done');
+  const check = el.querySelector('.cl-check');
+  const mark  = el.querySelector('.cl-check-mark');
+  if (done) {
+    check.style.background   = 'var(--success)';
+    check.style.borderColor  = 'var(--success)';
+    mark.style.display       = 'block';
+  } else {
+    check.style.background   = 'var(--bg)';
+    check.style.borderColor  = 'var(--border2)';
+    mark.style.display       = 'none';
+  }
+  rmSaveProgress();
+}
+
+function rmRestoreProgress() {
+  const progress = rmLoadProgress();
+  document.querySelectorAll('#rm-panel-body .cl-item[data-ridx]').forEach(item => {
+    if (progress[item.dataset.ridx]) {
+      item.classList.add('done');
+      const check = item.querySelector('.cl-check');
+      const mark  = item.querySelector('.cl-check-mark');
+      check.style.background  = 'var(--success)';
+      check.style.borderColor = 'var(--success)';
+      mark.style.display      = 'block';
+    }
+  });
+}
+
 function openRoadmap() {
   const agentKey = currentAgentCtx || 'google-ads';
   const data = ROADMAP_CONTENT[agentKey] || ROADMAP_CONTENT['google-ads'];
@@ -6404,10 +6468,11 @@ function openRoadmap() {
     }
     html += `</div>`;
     
-    // Checklist
+    // Checklist — data-ridx = "stageIdx_taskIdx" para persistencia
     html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">`;
-    stage.tasks.forEach(task => {
-      html += `<div class="cl-item" onclick="this.classList.toggle('done')" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer">`;
+    stage.tasks.forEach((task, tidx) => {
+      const ridx = `${idx}_${tidx}`;
+      html += `<div class="cl-item" data-ridx="${ridx}" onclick="rmToggleTask(this)" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer">`;
       html += `<div class="cl-check" style="width:16px;height:16px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;background:var(--bg);transition:all .15s">`;
       html += `<svg class="cl-check-mark" style="display:none;width:8px;height:8px" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`;
       html += `</div>`;
@@ -6416,32 +6481,17 @@ function openRoadmap() {
       html += `</div>`;
     });
     html += `</div>`;
-    
+
     // Botón preguntar al agente
     html += `<button class="ask-agent-btn" onclick="askAgentFromRoadmap('${stage.id}')" style="margin-bottom:16px">▸ preguntar al agente sobre esta etapa</button>`;
     html += `</div>`;
   });
-  
+
   document.getElementById('rm-panel-body').innerHTML = html;
-  
-  // Añadir estilos de done a los checks del panel
-  document.querySelectorAll('#rm-panel-body .cl-item').forEach(item => {
-    const check = item.querySelector('.cl-check');
-    const mark = item.querySelector('.cl-check-mark');
-    item.addEventListener('click', function() {
-      const done = this.classList.contains('done');
-      if(done) {
-        check.style.background = 'var(--success)';
-        check.style.borderColor = 'var(--success)';
-        mark.style.display = 'block';
-      } else {
-        check.style.background = 'var(--bg)';
-        check.style.borderColor = 'var(--border2)';
-        mark.style.display = 'none';
-      }
-    });
-  });
-  
+
+  // Restaurar progreso guardado desde localStorage
+  rmRestoreProgress();
+
   document.getElementById('rm-overlay').classList.add('open');
   document.getElementById('rm-panel').classList.add('open');
 }
