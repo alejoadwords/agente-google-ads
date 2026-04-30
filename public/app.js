@@ -4483,6 +4483,7 @@ function buildMetricsPrompt(data, agent) {
 
 // ── SPRINT 3: ACTIVE CLIENT CONTEXT ──────────────────────
 function openAgentForClient(agentKey, client) {
+  agencyActiveClientId = client.id; // necesario para que getProfileKey use el cliente correcto
   activeClientContext = {
     clientId:      client.id,
     clientName:    client.client_name || client.name || '',
@@ -8586,6 +8587,13 @@ function openSettings() {
     document.getElementById('cfg-email').textContent = email;
     document.getElementById('cfg-plan').textContent = userPlan === 'pro' ? 'Pro' : 'Free';
   }
+  // Sincronizar estado de conexiones desde sessionStorage al abrir el panel
+  const metaToken = sessionStorage.getItem('meta_access_token');
+  const metaName  = sessionStorage.getItem('meta_user_name');
+  updateMetaUI(!!metaToken, metaName || '');
+  const adsToken = sessionStorage.getItem('ads_access_token');
+  const adsEmail = sessionStorage.getItem('ads_email');
+  if (typeof updateAdsUI === 'function') updateAdsUI(!!adsToken, adsEmail || '');
 }
 
 function closeSettings() {
