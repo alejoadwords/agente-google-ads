@@ -65,12 +65,14 @@ export default async function handler(req, res) {
           body: JSON.stringify({ file_name: fileName, content_type: mimeType }),
         });
         const initiateData = await initiateRes.json();
-        if (!initiateRes.ok || !initiateData.url || !initiateData.file_url) {
+        // fal devuelve { upload_url, file_url } (no "url")
+        const uploadUrl = initiateData.upload_url || initiateData.url;
+        if (!initiateRes.ok || !uploadUrl || !initiateData.file_url) {
           return res.status(500).json({ error: 'Error iniciando upload fal: ' + JSON.stringify(initiateData).slice(0, 300) });
         }
 
         // Paso 2: subir el binario con PUT a la URL pre-firmada
-        const putRes = await fetch(initiateData.url, {
+        const putRes = await fetch(uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Type': mimeType },
           body: imageBuffer,
