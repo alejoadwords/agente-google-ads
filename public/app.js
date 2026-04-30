@@ -6761,7 +6761,7 @@ function showAdVariationAB() {
     '<div style="max-width:480px;width:100%">' +
       '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
         '<h4 style="margin:0 0 4px;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Claude analiza tu anuncio, extrae el concepto de campaña y genera <strong>variaciones con escenarios visuales distintos</strong> — manteniendo el mismo mensaje publicitario.</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Sube tu anuncio actual. Claude genera <strong>variaciones donde el producto sigue siendo el protagonista</strong> — mismo mensaje de campaña, diferente tratamiento visual.</div>' +
 
         '<div id="ab-upload-zone" style="border:2px dashed var(--border2);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all .15s;background:white" onclick="document.getElementById(\'ab-file-input\').click()" ondragover="event.preventDefault();this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-lt)\'" ondragleave="this.style.borderColor=\'var(--border2)\';this.style.background=\'white\'" ondrop="handleABDrop(event)">' +
           '<div id="ab-upload-placeholder">' +
@@ -6769,11 +6769,18 @@ function showAdVariationAB() {
             '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px">Sube tu anuncio actual</div>' +
             '<div style="font-size:11px;color:var(--muted2)">JPG, PNG o WebP · máx 8 MB</div>' +
           '</div>' +
-          '<img id="ab-preview" style="display:none;max-height:180px;max-width:100%;border-radius:8px;object-fit:contain" src="" alt="preview"/>' +
+          '<img id="ab-preview" style="display:none;max-height:160px;max-width:100%;border-radius:8px;object-fit:contain" src="" alt="preview"/>' +
           '<input type="file" id="ab-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleABFile(this.files[0])">' +
         '</div>' +
 
         '<div id="ab-generate-wrap" style="display:none;margin-top:14px">' +
+
+          // Campo de contexto adicional
+          '<div style="margin-bottom:12px">' +
+            '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Contexto adicional <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>' +
+            '<textarea id="ab-context-input" placeholder="Ej: Camiseta blanca premium. Quiero que el producto sea el foco principal. La campaña es Black Friday 50% off." style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);font-family:var(--font);resize:none;height:64px;line-height:1.5;background:white" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,100)+\'px\'"></textarea>' +
+          '</div>' +
+
           '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas variaciones?</div>' +
           '<div style="display:flex;gap:6px;margin-bottom:12px">' +
             [2,3,4].map(function(n){
@@ -6833,6 +6840,8 @@ async function startABVariation() {
   if (!canGenerateImage()) { showImageLimitReached(); return; }
 
   var count = _abVarCount || 2;
+  var userContext = (document.getElementById('ab-context-input') || {}).value || '';
+
   var btn = document.getElementById('ab-generate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
   var card = document.getElementById('ab-variation-card');
@@ -6853,11 +6862,16 @@ async function startABVariation() {
     img.src = _abImageData;
   });
 
+  // Ejemplos de estructura de prompts para diferentes tipos de productos
+  var promptGuide = 'ESTRUCTURA DE PROMPT para cada variacion: "[producto como sujeto principal prominente en primer plano], [descripcion del producto: color, material, caracteristicas clave], [tipo de escena distinto a las otras variaciones], [iluminacion], [mood/ambiente], professional advertising product photography, clean composition, hero product shot, no text no letters". IMPORTANTE: El producto SIEMPRE debe ser el elemento visual dominante y estar en primer plano. Las variaciones solo cambian el CONTEXTO/ESCENA alrededor del producto.';
+
   // Construir instrucción JSON para N variaciones
   var varFields = _AB_LABELS.slice(0, count).map(function(lbl) {
-    return '"variation_' + lbl.toLowerCase() + '":{"concept":"nombre corto descriptivo del escenario visual","prompt":"prompt en ingles ~70 palabras que incluya: el MISMO producto/servicio del anuncio original, el MISMO mensaje de campana (oferta/promocion/beneficio identificado), pero en un ESCENARIO VISUAL completamente distinto a las otras variaciones. Incluir: tipo de escena, iluminacion, mood, composicion. NO incluir texto, letras, numeros en la imagen."}';
+    return '"variation_' + lbl.toLowerCase() + '":{"concept":"nombre corto descriptivo (ej: Lifestyle urbano / Producto solo sobre fondo oscuro / Modelo en exterior)","prompt":"prompt ~80 palabras en ingles siguiendo la estructura indicada"}';
   }).join(',');
-  var jsonInstruction = '{"ad_description":"descripcion breve del anuncio","campaign_message":"mensaje o promocion central identificada (ej: Black Friday 50% off camisetas)","format":"square o vertical",' + varFields + '}';
+  var jsonInstruction = '{"ad_description":"descripcion breve del anuncio original","campaign_message":"mensaje o promocion central (ej: Black Friday 50% off camisetas premium)","product_description":"descripcion exacta del producto: tipo, color, caracteristicas visuales","format":"square o vertical",' + varFields + '}';
+
+  var contextLine = userContext ? '\n\nCONTEXTO ADICIONAL DEL USUARIO: ' + userContext : '';
 
   var analysisResult = null;
   try {
@@ -6865,11 +6879,11 @@ async function startABVariation() {
     var b64 = _abImageData.split(',')[1];
     var fullText = await fetchChatFull({
       model: 'claude-sonnet-4-6',
-      max_tokens: 200 + count * 300,
-      system: 'Eres experto en publicidad digital para Meta Ads. Tu trabajo es analizar anuncios y generar variaciones visuales para A/B testing que CONSERVEN el mensaje de campana del anuncio original pero lo presenten en escenarios visuales distintos. Responde SOLO con JSON valido, sin markdown, sin backticks.',
+      max_tokens: 200 + count * 350,
+      system: 'Eres un director creativo experto en publicidad digital para Meta Ads. Generas prompts de imagen que producen creativos publicitarios donde EL PRODUCTO ES SIEMPRE EL PROTAGONISTA en primer plano. Responde SOLO con JSON valido, sin markdown, sin backticks.',
       messages: [{ role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-        { type: 'text', text: 'Analiza este anuncio de Meta Ads. Identifica el producto, el mensaje de campana (oferta, promocion, beneficio) y el tono visual. Luego genera exactamente ' + count + ' variaciones para A/B testing.\n\nREGLA CRITICA: Cada variacion debe mostrar el MISMO producto con el MISMO mensaje de campana (si es una oferta de Black Friday, todas las variaciones deben evocar Black Friday y la oferta), pero en ESCENARIOS VISUALES diferentes (lifestyle vs producto solo vs grupo de personas vs ambiente festivo, etc.).\n\nResponde SOLO con este JSON:\n' + jsonInstruction }
+        { type: 'text', text: 'Analiza este anuncio de Meta Ads. Identifica el producto exacto, el mensaje de campana y el tono. Genera exactamente ' + count + ' variaciones para A/B testing.' + contextLine + '\n\nREGLAS:\n1. El PRODUCTO debe ser el SUJETO PRINCIPAL en primer plano en TODAS las variaciones (nunca como elemento secundario o de fondo)\n2. Cada variacion cambia el CONTEXTO VISUAL (escena, modelo, ambiente) pero no el producto\n3. Los prompts deben producir imagenes tipo "hero product shot" o "lifestyle con producto prominente"\n4. NO mencionar texto, letras ni numeros en los prompts\n5. Cada variacion debe ser CLARAMENTE distinta visualmente a las demas\n\n' + promptGuide + '\n\nResponde SOLO con este JSON:\n' + jsonInstruction }
       ]}]
     });
     var clean = fullText.replace(/```json|```/g, '').trim();
