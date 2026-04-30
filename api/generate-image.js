@@ -46,38 +46,77 @@ export default async function handler(req, res) {
     if (!referenceImage) return res.status(400).json({ error: 'referenceImage requerido para modo kontext' });
     if (!prompt) return res.status(400).json({ error: 'prompt (instrucción de edición) requerido' });
 
-    const kontextRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext', {
-      method: 'POST',
-      headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image_url:     referenceImage,
-        prompt:        prompt,
-        aspect_ratio:  spec.fluxRatio,
-        output_format: 'jpeg',
-        safety_tolerance: '2',
-        seed: Math.floor(Math.random() * 999999),
-      }),
-    });
+    try {
+      // Flux Kontext necesita una URL HTTP, no un base64 data URL
+      // Paso 1: subir la imagen a fal.ai storage para obtener una URL pública
+      let imageHttpUrl = referenceImage;
 
-    const kontextData = await kontextRes.json();
-    if (!kontextRes.ok) {
-      return res.status(500).json({ error: kontextData.detail?.[0]?.msg || kontextData.error || JSON.stringify(kontextData).slice(0, 200) });
+      if (referenceImage.startsWith('data:')) {
+        const base64Data  = referenceImage.replace(/^data:[^;]+;base64,/, '');
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        const mimeType    = referenceImage.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
+        const ext         = mimeType.includes('png') ? 'png' : 'jpg';
+
+        // Subir como multipart/form-data a fal storage
+        const boundary = '----FalUpload' + Math.random().toString(36).slice(2);
+        const bodyParts = [
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="reference.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
+          imageBuffer,
+          `\r\n--${boundary}--\r\n`,
+        ];
+        const bodyBuffer = Buffer.concat(bodyParts.map(p => Buffer.isBuffer(p) ? p : Buffer.from(p)));
+
+        const uploadRes  = await fetch('https://fal.run/storage/upload', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Key ${falKey}`,
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          },
+          body: bodyBuffer,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok || !uploadData.url) {
+          return res.status(500).json({ error: 'Error subiendo imagen a fal storage: ' + JSON.stringify(uploadData).slice(0, 300) });
+        }
+        imageHttpUrl = uploadData.url;
+      }
+
+      // Paso 2: llamar a Flux Kontext con la URL de la imagen
+      const kontextRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_url:        imageHttpUrl,
+          prompt:           prompt,
+          aspect_ratio:     spec.fluxRatio,
+          output_format:    'jpeg',
+          safety_tolerance: '2',
+          seed:             Math.floor(Math.random() * 999999),
+        }),
+      });
+
+      const kontextData = await kontextRes.json();
+      if (!kontextRes.ok) {
+        return res.status(500).json({ error: kontextData.detail?.[0]?.msg || kontextData.error || JSON.stringify(kontextData).slice(0, 300) });
+      }
+
+      const imageUrl = kontextData.images?.[0]?.url;
+      if (!imageUrl) return res.status(500).json({ error: 'Kontext no devolvió imagen: ' + JSON.stringify(kontextData).slice(0, 300) });
+
+      const imgRes    = await fetch(imageUrl);
+      const imgBuffer = await imgRes.arrayBuffer();
+      return res.status(200).json({
+        images: [{
+          index: 1, format: spec.label, size: `${spec.w}x${spec.h}`,
+          base64:    Buffer.from(imgBuffer).toString('base64'),
+          mediaType: imgRes.headers.get('content-type') || 'image/jpeg',
+          model: 'Flux Kontext Pro', url: imageUrl,
+        }],
+        format: spec, mode: 'kontext',
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Error en modo kontext: ' + err.message });
     }
-
-    const imageUrl = kontextData.images?.[0]?.url;
-    if (!imageUrl) return res.status(500).json({ error: 'Kontext no devolvió imagen: ' + JSON.stringify(kontextData).slice(0, 200) });
-
-    const imgRes    = await fetch(imageUrl);
-    const imgBuffer = await imgRes.arrayBuffer();
-    return res.status(200).json({
-      images: [{
-        index: 1, format: spec.label, size: `${spec.w}x${spec.h}`,
-        base64: Buffer.from(imgBuffer).toString('base64'),
-        mediaType: imgRes.headers.get('content-type') || 'image/jpeg',
-        model: 'Flux Kontext Pro', url: imageUrl,
-      }],
-      format: spec, mode: 'kontext',
-    });
   }
 
   // ── MODO REMIX (legacy) ───────────────────────────────────────────────────

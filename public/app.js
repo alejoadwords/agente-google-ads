@@ -6935,7 +6935,11 @@ async function startABVariation() {
 
     var images = results.map(function(r) { return (r.images && r.images.length) ? r.images[0] : null; });
     var anyOk = images.some(function(img) { return img !== null; });
-    if (!anyOk) { addAgent('No se pudieron generar las variaciones. Por favor intenta de nuevo.'); return; }
+    if (!anyOk) {
+      var firstErr = results.map(function(r){ return r.error; }).filter(Boolean)[0] || 'Sin respuesta del servidor';
+      addAgent('Error al generar variaciones: ' + firstErr);
+      return;
+    }
 
     images.forEach(function(img) { if (img) incrementImageUsage(); });
 
