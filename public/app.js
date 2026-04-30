@@ -6880,11 +6880,14 @@ function renderCampaignWizard() {
           '<div><div style="font-weight:600;font-size:13px">'+o[1].split(' ').slice(1).join(' ')+'</div><div style="font-size:11px;color:#666">'+o[2]+'</div></div></div>';
       }).join('') + '</div>';
   } else if (campaignWizardStep === 2) {
-    body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario (USD)</label>'+
+    var cwCurrency = (function(){ try { return JSON.parse(sessionStorage.getItem('meta_active_account')||'{}').currency || 'USD'; } catch(e){ return 'USD'; } })();
+    var cwMinBudget = cwCurrency === 'COP' ? '20.000' : cwCurrency === 'MXN' ? '100' : cwCurrency === 'ARS' ? '1.000' : '5';
+    var cwSugBudget = cwCurrency === 'COP' ? '50.000–200.000' : cwCurrency === 'MXN' ? '200–800' : cwCurrency === 'ARS' ? '5.000–20.000' : '5–20';
+    body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario ('+cwCurrency+')</label>'+
       '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px;color:#555">$</span>'+
-      '<input id="cw-budget" type="number" min="1" placeholder="5" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700" value="'+(campaignWizardData.budgetUSD||'')+'">'+
-      '<span style="color:#777;font-size:13px">USD/día</span></div>'+
-      '<div style="margin-top:8px;font-size:12px;color:#888">Meta requiere un mínimo de $1 USD/día. Para leads recomendamos $5–20 USD/día.</div></div>'+
+      '<input id="cw-budget" type="number" min="1" placeholder="'+cwMinBudget+'" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700" value="'+(campaignWizardData.budget||'')+'">'+
+      '<span style="color:#777;font-size:13px">'+cwCurrency+'/día</span></div>'+
+      '<div style="margin-top:8px;font-size:12px;color:#888">Mínimo $'+cwMinBudget+' '+cwCurrency+'/día. Para leads recomendamos $'+cwSugBudget+' '+cwCurrency+'/día.</div></div>'+
       '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px">Duración</label>'+
       [['7','7 días'],['14','14 días'],['30','30 días'],['0','Sin fecha de fin']].map(function(d){
         var sel = String(campaignWizardData.durationDays) === d[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
@@ -6912,7 +6915,7 @@ function renderCampaignWizard() {
     body = '<div style="background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:16px">'+
       '<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:#1877F2">Resumen de campaña</div>'+
       [['Nombre',campaignWizardData.name],['Objetivo',objLabels[campaignWizardData.objective]],
-       ['Presupuesto','$'+campaignWizardData.budgetUSD+' USD/día'],['Duración',dur],
+       ['Presupuesto','$'+(campaignWizardData.budget||campaignWizardData.budgetUSD)+' '+(campaignWizardData.currency||'USD')+'/día'],['Duración',dur],
        ['País',campaignWizardData.country+(campaignWizardData.city?' · '+campaignWizardData.city:'')],
        ['Edad',campaignWizardData.ageMin+' – '+campaignWizardData.ageMax+' años'],
        ['Género',{0:'Todos',1:'Hombres',2:'Mujeres'}[campaignWizardData.gender]||'Todos'],
@@ -6956,9 +6959,12 @@ function cwNext() {
     campaignWizardData.name = name.trim();
   } else if (campaignWizardStep === 2) {
     var budget = parseFloat((document.getElementById('cw-budget')||{}).value||0);
-    if (!budget || budget < 1) { alert('El presupuesto mínimo es $1 USD/día.'); return; }
+    if (!budget || budget < 1) { alert('Ingresa un presupuesto válido.'); return; }
     if (campaignWizardData.durationDays === undefined) { alert('Selecciona la duración.'); return; }
-    campaignWizardData.budgetUSD = budget;
+    campaignWizardData.budget = budget;
+    campaignWizardData.budgetUSD = budget; // alias legacy
+    // Guardar moneda de la cuenta
+    try { campaignWizardData.currency = JSON.parse(sessionStorage.getItem('meta_active_account')||'{}').currency || 'USD'; } catch(e) { campaignWizardData.currency = 'USD'; }
   } else if (campaignWizardStep === 3) {
     campaignWizardData.country = (document.getElementById('cw-country')||{}).value||'Colombia';
     campaignWizardData.city    = (document.getElementById('cw-city')||{}).value||'';
@@ -6990,7 +6996,7 @@ async function cwLaunch() {
         adAccountId:  campaignWizardData.adAccountId,
         name:         campaignWizardData.name,
         objective:    campaignWizardData.objective,
-        budgetUSD:    campaignWizardData.budgetUSD,
+        budget:       campaignWizardData.budget,
         durationDays: campaignWizardData.durationDays,
         country:      campaignWizardData.country,
         city:         campaignWizardData.city,

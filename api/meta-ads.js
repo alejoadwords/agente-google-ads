@@ -32,11 +32,11 @@ async function metaGet(endpoint, params, token) {
 }
 
 async function metaPost(endpoint, params, token) {
-  const body = new URLSearchParams({ ...params, access_token: token });
+  // Usar JSON body — los arrays y objetos anidados se serializan correctamente
   const res = await fetch(`${META_BASE}/${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...params, access_token: token }),
   });
   const data = await res.json();
   if (data.error) {
@@ -52,6 +52,15 @@ const OBJECTIVE_TO_GOAL = {
   OUTCOME_TRAFFIC:     'LINK_CLICKS',
   OUTCOME_AWARENESS:   'REACH',
   OUTCOME_SALES:       'OFFSITE_CONVERSIONS',
+  OUTCOME_ENGAGEMENT:  'POST_ENGAGEMENT',
+};
+
+// billing_event debe coincidir con el optimization_goal
+const OBJECTIVE_TO_BILLING = {
+  OUTCOME_LEADS:       'IMPRESSIONS',
+  OUTCOME_TRAFFIC:     'LINK_CLICKS',
+  OUTCOME_AWARENESS:   'IMPRESSIONS',
+  OUTCOME_SALES:       'IMPRESSIONS',
   OUTCOME_ENGAGEMENT:  'POST_ENGAGEMENT',
 };
 
@@ -291,59 +300,65 @@ export default async function handler(req, res) {
       const {
         name        = 'Nueva campaña',
         objective   = 'OUTCOME_LEADS',
-        budgetUSD   = 10,
-        durationDays,          // null / undefined = sin fecha fin
-        country     = 'MX',
-        city,                  // optional string
+        budget      = 10,       // en la moneda de la cuenta
+        budgetUSD,              // alias legacy — se ignora si budget está presente
+        durationDays,
+        country     = 'CO',
         ageMin      = 18,
         ageMax      = 65,
-        gender,                // 'male' | 'female' | 'all' | undefined
+        gender,
       } = req.body || {};
+
+      // Presupuesto en unidades mínimas de la moneda de la cuenta
+      // Meta espera el valor en "minor currency units": USD → centavos (*100), COP → ya es entero (*1)
+      // Pasamos el valor tal cual desde el frontend (en la moneda correcta) multiplicado por 100
+      const budgetAmount = parseFloat(budget || budgetUSD || 10);
+      const dailyBudgetCents = Math.round(budgetAmount * 100);
 
       if (!adAccountId) return res.status(400).json({ error: 'adAccountId requerido' });
 
-      // 1. Crear campaña
+      // 1. Crear campaña — special_ad_categories como array real (JSON body)
       const campaign = await metaPost(`${adAccountId}/campaigns`, {
         name,
         objective,
-        status:               'PAUSED',
-        special_ad_categories: '[]',
+        status:                'PAUSED',
+        special_ad_categories: [],   // array vacío — no string
       }, token);
 
       const campaignId = campaign.id;
       if (!campaignId) throw new Error('Meta no devolvió un campaign id');
 
-      // 2. Construir targeting
+      // 2. Construir targeting como objeto (no JSON string — se serializa en el body)
       const countryCode = resolveCountryCode(country);
-      const geoLocations = { countries: [countryCode] };
-
       const targeting = {
         age_min:       parseInt(ageMin) || 18,
         age_max:       parseInt(ageMax) || 65,
-        geo_locations: geoLocations,
+        geo_locations: { countries: [countryCode] },
       };
-      // gender: 1 = hombres, 2 = mujeres, 0/undefined = todos
       const genderNum = parseInt(gender);
       if (genderNum === 1) targeting.genders = [1];
       if (genderNum === 2) targeting.genders = [2];
 
-      // 3. Fechas
-      const nowUnix = Math.floor(Date.now() / 1000);
-      const adsetParams = {
-        name:               `${name} — AdSet`,
-        campaign_id:        campaignId,
-        daily_budget:       String(Math.round(parseFloat(budgetUSD) * 100)), // cents
-        billing_event:      'IMPRESSIONS',
-        optimization_goal:  OBJECTIVE_TO_GOAL[objective] || 'LINK_CLICKS',
-        targeting:          JSON.stringify(targeting),
-        status:             'PAUSED',
-        start_time:         String(nowUnix + 3600), // comienza en 1h
+      // 3. Ad Set
+      const nowUnix    = Math.floor(Date.now() / 1000);
+      const optGoal    = OBJECTIVE_TO_GOAL[objective]   || 'LINK_CLICKS';
+      const billEvent  = OBJECTIVE_TO_BILLING[objective] || 'IMPRESSIONS';
+
+      const adsetBody = {
+        name:              `${name} — AdSet`,
+        campaign_id:       campaignId,
+        daily_budget:      dailyBudgetCents,   // integer, en unidades mínimas
+        billing_event:     billEvent,
+        optimization_goal: optGoal,
+        targeting,                             // objeto anidado — no JSON string
+        status:            'PAUSED',
+        start_time:        nowUnix + 3600,     // número Unix, no string
       };
       if (durationDays && parseInt(durationDays) > 0) {
-        adsetParams.end_time = String(nowUnix + parseInt(durationDays) * 86400);
+        adsetBody.end_time = nowUnix + parseInt(durationDays) * 86400;
       }
 
-      const adset = await metaPost(`${adAccountId}/adsets`, adsetParams, token);
+      const adset = await metaPost(`${adAccountId}/adsets`, adsetBody, token);
       const adsetId = adset.id;
       if (!adsetId) throw new Error('Meta no devolvió un adset id');
 
