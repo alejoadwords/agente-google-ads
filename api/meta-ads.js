@@ -312,6 +312,47 @@ export default async function handler(req, res) {
       return res.json(pages.data || []);
     }
 
+    // ── generate-copy ─────────────────────────────────────────────
+    if (action === 'generate-copy') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
+      const { campaignName, objective, clientProfile } = req.body || {};
+      const objLabels = {
+        OUTCOME_LEADS:'generación de leads (formularios nativos)',
+        OUTCOME_TRAFFIC:'tráfico al sitio web',
+        OUTCOME_AWARENESS:'reconocimiento de marca',
+        OUTCOME_SALES:'ventas y conversiones',
+        OUTCOME_ENGAGEMENT:'interacción (likes, comentarios)',
+        OUTCOME_MESSAGES:'mensajes por WhatsApp',
+      };
+      let profile = '';
+      try { const p=JSON.parse(clientProfile||'{}'); profile=Object.entries(p).filter(([,v])=>v).slice(0,5).map(([k,v])=>k+': '+v).join(', '); } catch(e){}
+      const prompt = `Eres un experto en publicidad digital en LatAm. Genera copy persuasivo para un anuncio de Meta Ads.
+
+Campaña: ${campaignName || 'nueva campaña'}
+Objetivo: ${objLabels[objective] || objective || 'engagement'}
+${profile ? 'Negocio: '+profile : ''}
+
+Responde ÚNICAMENTE con este JSON válido (sin texto extra):
+{"title":"título atractivo (máx 40 caracteres)","body":"texto del anuncio persuasivo con call-to-action (máx 125 caracteres)"}`;
+
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-20250514', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+      });
+      const aiData = await aiRes.json();
+      const text = aiData.content?.[0]?.text || '{}';
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
+        return res.json({ title: parsed.title || '', body: parsed.body || '' });
+      } catch(e) {
+        return res.json({ title: '', body: '' });
+      }
+    }
+
     // ── create-campaign ──────────────────────────────────────
     if (action === 'create-campaign') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
@@ -398,21 +439,55 @@ export default async function handler(req, res) {
     // ── create-ad ─────────────────────────────────────────────────
     if (action === 'create-ad') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
-      const { adAccountId: adAccId, adsetId, pageId, imageBase64, adTitle, adBody, adUrl } = req.body || {};
+      const { adAccountId: adAccId, adsetId, pageId, imageBase64, imagesBase64, videoBase64, adTitle, adBody, adUrl, format } = req.body || {};
 
-      if (!adAccId || !adsetId || !pageId || !imageBase64) {
-        return res.status(400).json({ error: 'adAccountId, adsetId, pageId e imageBase64 son requeridos' });
+      if (!adAccId || !adsetId || !pageId) {
+        return res.status(400).json({ error: 'adAccountId, adsetId y pageId son requeridos' });
       }
 
-      // 1. Upload image to Meta
-      const imgRes = await metaPost(`${adAccId}/adimages`, { bytes: imageBase64 }, token);
-      const imageHash = Object.values(imgRes.images || {})[0]?.hash;
-      if (!imageHash) throw new Error('No se pudo subir la imagen a Meta');
+      let storySpec;
 
-      // 2. Create ad creative
-      const creative = await metaPost(`${adAccId}/adcreatives`, {
-        name: `Acuarius — ${adTitle || 'Ad'}`,
-        object_story_spec: {
+      if (format === 'carousel' && Array.isArray(imagesBase64) && imagesBase64.length > 0) {
+        // ── Carrusel: subir todas las imágenes en paralelo ──────
+        const hashes = await Promise.all(imagesBase64.slice(0, 5).map(async (b64) => {
+          const r = await metaPost(`${adAccId}/adimages`, { bytes: b64 }, token);
+          return Object.values(r.images || {})[0]?.hash;
+        }));
+        const validHashes = hashes.filter(Boolean);
+        if (!validHashes.length) throw new Error('No se pudieron subir las imágenes del carrusel');
+        storySpec = {
+          page_id: pageId,
+          link_data: {
+            link:    adUrl || 'https://www.facebook.com',
+            message: adBody || '',
+            child_attachments: validHashes.map((hash) => ({
+              link:       adUrl || 'https://www.facebook.com',
+              image_hash: hash,
+              name:       adTitle || '',
+            })),
+          },
+        };
+      } else if (format === 'video' && videoBase64) {
+        // ── Video ───────────────────────────────────────────────
+        const vidRes = await metaPost(`${adAccId}/advideos`, { file_url: null, bytes: videoBase64 }, token);
+        const videoId = vidRes.id;
+        if (!videoId) throw new Error('No se pudo subir el video a Meta');
+        storySpec = {
+          page_id: pageId,
+          video_data: {
+            video_id: videoId,
+            message:  adBody || '',
+            title:    adTitle || '',
+            ...(adUrl ? { call_to_action: { type: 'LEARN_MORE', value: { link: adUrl } } } : {}),
+          },
+        };
+      } else {
+        // ── Imagen simple ────────────────────────────────────────
+        if (!imageBase64) return res.status(400).json({ error: 'imageBase64 requerido para formato imagen' });
+        const imgRes = await metaPost(`${adAccId}/adimages`, { bytes: imageBase64 }, token);
+        const imageHash = Object.values(imgRes.images || {})[0]?.hash;
+        if (!imageHash) throw new Error('No se pudo subir la imagen a Meta');
+        storySpec = {
           page_id: pageId,
           link_data: {
             image_hash: imageHash,
@@ -420,11 +495,17 @@ export default async function handler(req, res) {
             message:     adBody  || '',
             name:        adTitle || '',
           },
-        },
+        };
+      }
+
+      // Crear creative
+      const creative = await metaPost(`${adAccId}/adcreatives`, {
+        name: `Acuarius — ${adTitle || 'Ad'}`,
+        object_story_spec: storySpec,
       }, token);
       if (!creative.id) throw new Error('No se pudo crear el creative en Meta');
 
-      // 3. Create ad
+      // Crear ad
       const ad = await metaPost(`${adAccId}/ads`, {
         name:     `Acuarius — ${adTitle || 'Ad'}`,
         adset_id: adsetId,

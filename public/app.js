@@ -6925,39 +6925,108 @@ function renderCampaignWizard() {
         return '<button onclick="cwSelectGender('+g[0]+')" style="'+sel+';border:1px solid;border-radius:20px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:500">'+g[1]+'</button>';
       }).join('')+'</div></div>';
   } else if (campaignWizardStep === 4) {
-    // Step 4: Creativos
+    var fmt = campaignWizardData.adFormat || 'image';
+
+    // ── Selector de formato ────────────────────────────────
+    var fmtSel = '<div style="display:flex;gap:6px;margin-bottom:16px">'+
+      [['image','📷 Imagen'],['carousel','🎠 Carrusel'],['video','🎬 Video']].map(function(f){
+        var a = fmt===f[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#555;border-color:#ddd';
+        return '<button onclick="cwSetFormat(\''+f[0]+'\')" style="'+a+';border:1px solid;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)">'+f[1]+'</button>';
+      }).join('')+'</div>';
+
+    // ── Grid de imágenes generadas ─────────────────────────
     var imgGrid = '';
     if (campaignWizardImages && campaignWizardImages.length) {
-      imgGrid = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Imágenes generadas — selecciona una</label>'+
+      var gridLabel = fmt==='carousel' ? 'Imágenes generadas — selecciona hasta 5' : 'Imágenes generadas — selecciona una';
+      imgGrid = '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">'+gridLabel+'</label>'+
         '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
-        campaignWizardImages.map(function(img, i) {
-          var sel = campaignWizardData.adImageIndex === i ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
-          return '<div class="cw-img-thumb" onclick="cwSelectImage('+i+')" style="'+sel+'border-radius:8px;overflow:hidden;cursor:pointer;width:80px;height:80px;flex-shrink:0">'+
-            '<img src="data:'+img.mediaType+';base64,'+img.base64+'" style="width:100%;height:100%;object-fit:cover"></div>';
-        }).join('')+
-        '</div></div>';
+        campaignWizardImages.map(function(img,i){
+          var sel,badge;
+          if (fmt==='carousel') {
+            var idxs = campaignWizardData.carouselIndexes||[];
+            var pos = idxs.indexOf(i);
+            sel = pos>=0 ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
+            badge = pos>=0 ? '<div style="position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">'+(pos+1)+'</div>' : '';
+          } else {
+            sel = campaignWizardData.adImageIndex===i ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
+            badge = campaignWizardData.adImageIndex===i ? '<div style="position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:10px;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">✓</div>' : '';
+          }
+          return '<div class="cw-img-thumb" data-idx="'+i+'" onclick="cwSelectImage('+i+')" style="'+sel+'border-radius:8px;overflow:hidden;cursor:pointer;width:80px;height:80px;flex-shrink:0;position:relative">'+
+            '<img src="data:'+img.mediaType+';base64,'+img.base64+'" style="width:100%;height:100%;object-fit:cover">'+badge+'</div>';
+        }).join('')+'</div></div>';
     }
-    var hasPreview = campaignWizardData.adImagePreview;
-    body = imgGrid+
-      '<div style="margin-bottom:14px">'+
-        '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">'+(campaignWizardImages&&campaignWizardImages.length?'O sube una imagen nueva':'📎 Imagen del anuncio')+'</label>'+
-        '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;margin-bottom:8px">'+
-          '⬆️ Subir imagen'+
-          '<input type="file" accept="image/jpeg,image/png,image/webp" onchange="cwHandleImageUpload(this)" style="display:none">'+
-        '</label>'+
-        (hasPreview ? '<div><img src="'+hasPreview+'" style="max-height:80px;border-radius:8px;display:block;margin-top:4px;border:2px solid #1877F2"></div>' : '')+
+
+    // ── Sección de copy con botón IA ───────────────────────
+    var copySection =
+      '<div style="margin-bottom:12px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+          '<label style="font-weight:600;font-size:13px">Texto del anuncio <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+          '<button id="cw-gen-btn" onclick="cwGenerateCopy()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1877F2;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
+        '</div>'+
+        '<textarea id="cw-ad-body" rows="3" placeholder="Ej: Descubre nuestros servicios y transforma tu vida hoy..." style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(campaignWizardData.adBody||'')+'</textarea>'+
       '</div>'+
-      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título del anuncio <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
-        '<input id="cw-ad-title" placeholder="Ej: ¡Oferta especial este mes!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.adTitle||'')+'"></div>'+
-      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Texto del anuncio <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
-        '<textarea id="cw-ad-body" rows="3" placeholder="Ej: Descubre nuestros productos..." style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical">'+(campaignWizardData.adBody||'')+'</textarea></div>'+
-      (['OUTCOME_TRAFFIC','OUTCOME_SALES','OUTCOME_MESSAGES'].includes(campaignWizardData.objective)?
-        '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL de destino</label>'+
-          '<input id="cw-ad-url" type="url" placeholder="https://tudominio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.adUrl||'')+'"></div>':'')+
-      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Página de Facebook</label>'+
-        '<div id="cw-pages-container"><div style="color:#888;font-size:13px;padding:10px">⏳ Cargando páginas...</div></div></div>'+
-      '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #eee;font-size:12px;color:#999">'+
-        '💡 Si prefieres agregar los anuncios luego, puedes continuar sin imagen — la campaña quedará pausada en Meta Ads Manager.</div>';
+      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+        '<input id="cw-ad-title" placeholder="Ej: ¡Oferta especial este mes!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adTitle||'')+'"></div>';
+
+    var urlSection = ['OUTCOME_TRAFFIC','OUTCOME_SALES','OUTCOME_MESSAGES'].includes(campaignWizardData.objective) ?
+      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL de destino</label>'+
+        '<input id="cw-ad-url" type="url" placeholder="https://tudominio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adUrl||'')+'"></div>' : '';
+
+    var pageSection = '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Página de Facebook</label>'+
+      '<div id="cw-pages-container"><div style="color:#888;font-size:13px;padding:8px">⏳ Cargando páginas...</div></div></div>';
+
+    var skipNote = '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #eee;font-size:12px;color:#999">'+
+      '💡 Si prefieres agregar los anuncios luego, puedes continuar sin imagen — la campaña quedará pausada en Meta Ads Manager.</div>';
+
+    if (fmt === 'video') {
+      // ── Formato Video ──────────────────────────────────
+      body = fmtSel+
+        '<div style="background:#fff8e6;border:1px solid #ffd970;border-radius:8px;padding:12px;font-size:12px;color:#7a5700;margin-bottom:14px">'+
+          '🎬 <strong>Subir video desde Acuarius</strong> — Selecciona un MP4 o MOV. Los videos se suben directamente a Meta y pueden tardar 1-2 min en procesar antes de publicarse.</div>'+
+        '<div style="margin-bottom:14px">'+
+          '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Archivo de video</label>'+
+          '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">'+
+            '⬆️ Subir video (MP4 / MOV)'+
+            '<input type="file" accept="video/mp4,video/quicktime" onchange="cwHandleVideoUpload(this)" style="display:none">'+
+          '</label>'+
+          (campaignWizardData.adVideoName ? '<div style="margin-top:8px;font-size:12px;color:#1877F2;font-weight:600">✅ '+campaignWizardData.adVideoName+'</div>' : '')+
+        '</div>'+
+        copySection + urlSection + pageSection + skipNote;
+    } else if (fmt === 'carousel') {
+      // ── Formato Carrusel ───────────────────────────────
+      var carouselPreviews = '';
+      if (campaignWizardData.carouselPreviews && campaignWizardData.carouselPreviews.length) {
+        carouselPreviews = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'+
+          campaignWizardData.carouselPreviews.map(function(src){
+            return '<img src="'+src+'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid #1877F2">';
+          }).join('')+'</div>';
+      }
+      body = fmtSel + imgGrid +
+        '<div style="margin-bottom:14px">'+
+          '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">O sube imágenes nuevas (hasta 5)</label>'+
+          '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">'+
+            '⬆️ Subir imágenes'+
+            '<input type="file" accept="image/jpeg,image/png,image/webp" multiple onchange="cwHandleImageUpload(this)" style="display:none">'+
+          '</label>'+
+          carouselPreviews+
+        '</div>'+
+        copySection + urlSection + pageSection + skipNote;
+    } else {
+      // ── Formato Imagen (single) ────────────────────────
+      var singlePreview = campaignWizardData.adImagePreview
+        ? '<img src="'+campaignWizardData.adImagePreview+'" style="max-height:80px;border-radius:8px;display:block;margin-top:8px;border:2px solid #1877F2">'
+        : '';
+      body = fmtSel + imgGrid +
+        '<div style="margin-bottom:14px">'+
+          '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">'+(campaignWizardImages&&campaignWizardImages.length?'O sube una imagen nueva':'📎 Imagen del anuncio')+'</label>'+
+          '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">'+
+            '⬆️ Subir imagen'+
+            '<input type="file" accept="image/jpeg,image/png,image/webp" onchange="cwHandleImageUpload(this)" style="display:none">'+
+          '</label>'+
+          singlePreview+
+        '</div>'+
+        copySection + urlSection + pageSection + skipNote;
+    }
     setTimeout(function(){ cwLoadPages(); }, 50);
 
   } else if (campaignWizardStep === 5) {
@@ -6970,7 +7039,12 @@ function renderCampaignWizard() {
        ['País',campaignWizardData.country+(campaignWizardData.city?' · '+campaignWizardData.city:'')],
        ['Edad',campaignWizardData.ageMin+' – '+campaignWizardData.ageMax+' años'],
        ['Género',{0:'Todos',1:'Hombres',2:'Mujeres'}[campaignWizardData.gender]||'Todos'],
-       ['Creativos', campaignWizardData.adImage ? '✅ Imagen lista' : 'Sin imagen — agregar luego']
+       ['Creativos', (function(){
+         var f=campaignWizardData.adFormat||'image';
+         if(f==='carousel'){var n=(campaignWizardData.carouselImages||[]).length;return n>0?'🎠 '+n+' imágenes (carrusel)':'Sin imágenes — agregar luego';}
+         if(f==='video'){return campaignWizardData.adVideo?'🎬 Video listo':'Sin video — agregar luego';}
+         return campaignWizardData.adImage?'✅ Imagen lista':'Sin imagen — agregar luego';
+       })()]
       ].map(function(r){
         return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px"><span style="color:#666">'+r[0]+'</span><span style="font-weight:600">'+r[1]+'</span></div>';
       }).join('')+'</div>'+
@@ -7002,41 +7076,164 @@ function cwSelectObj(obj) { campaignWizardData.objective = obj; renderCampaignWi
 function cwSelectDuration(d) { campaignWizardData.durationDays = d; renderCampaignWizard(); }
 function cwSelectGender(g) { campaignWizardData.gender = g; renderCampaignWizard(); }
 
-function cwSelectImage(idx) {
-  campaignWizardData.adImageIndex = idx;
-  var img = campaignWizardImages[idx];
-  campaignWizardData.adImage = { base64: img.base64, mediaType: img.mediaType };
-  campaignWizardData.adImagePreview = 'data:' + img.mediaType + ';base64,' + img.base64;
-  // Update border without full re-render
-  document.querySelectorAll('.cw-img-thumb').forEach(function(el, i) {
-    el.style.border = i === idx ? '3px solid #1877F2' : '2px solid #e5e7eb';
-  });
+function cwSetFormat(fmt) {
+  campaignWizardData.adFormat = fmt;
+  renderCampaignWizard();
 }
 
-function cwHandleImageUpload(input) {
+async function cwGenerateCopy() {
+  var btn = document.getElementById('cw-gen-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+  try {
+    var clientProfile = '';
+    try { clientProfile = JSON.stringify(mem || {}); } catch(e) {}
+    var r = await fetch('/api/meta-ads?action=generate-copy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken:   campaignWizardData.token,
+        adAccountId:   campaignWizardData.adAccountId,
+        campaignName:  campaignWizardData.name,
+        objective:     campaignWizardData.objective,
+        clientProfile: clientProfile,
+      }),
+    });
+    var data = await r.json();
+    if (data.title) { var t=document.getElementById('cw-ad-title'); if(t) t.value=data.title; }
+    if (data.body)  { var b=document.getElementById('cw-ad-body');  if(b) b.value=data.body;  }
+    campaignWizardData.adTitle = data.title || '';
+    campaignWizardData.adBody  = data.body  || '';
+  } catch(e) {
+    alert('Error generando copy: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar con IA'; }
+  }
+}
+
+function cwHandleVideoUpload(input) {
   var file = input.files[0];
   if (!file) return;
+  if (file.size > 200 * 1024 * 1024) { alert('El video no puede superar 200 MB.'); return; }
+  campaignWizardData.adVideoName = file.name;
   var reader = new FileReader();
   reader.onload = function(e) {
     var dataUrl = e.target.result;
     var match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) return;
-    campaignWizardData.adImage = { base64: match[2], mediaType: match[1] };
-    campaignWizardData.adImagePreview = dataUrl;
-    campaignWizardData.adImageIndex = undefined;
-    // Show inline preview
-    var label = input.closest('label');
-    if (label) {
-      var existing = label.parentElement.querySelector('img.cw-upload-preview');
-      if (existing) existing.remove();
-      var preview = document.createElement('img');
-      preview.src = dataUrl;
-      preview.className = 'cw-upload-preview';
-      preview.style.cssText = 'max-height:80px;border-radius:8px;display:block;margin-top:8px;border:2px solid #1877F2';
-      label.parentElement.appendChild(preview);
+    if (match) { campaignWizardData.adVideo = { base64: match[2], mediaType: match[1] }; }
+    var nameEl = input.closest('div').querySelector('.cw-video-name');
+    if (!nameEl) {
+      nameEl = document.createElement('div');
+      nameEl.className = 'cw-video-name';
+      nameEl.style.cssText = 'margin-top:8px;font-size:12px;color:#1877F2;font-weight:600';
+      input.closest('label').after(nameEl);
     }
+    nameEl.textContent = '✅ ' + file.name;
   };
   reader.readAsDataURL(file);
+}
+
+function cwSelectImage(idx) {
+  var fmt = campaignWizardData.adFormat || 'image';
+  var img = campaignWizardImages[idx];
+  if (!img) return;
+
+  if (fmt === 'carousel') {
+    // Toggle selection en carrusel — máx 5
+    var idxs = campaignWizardData.carouselIndexes || [];
+    var pos = idxs.indexOf(idx);
+    if (pos >= 0) {
+      idxs.splice(pos, 1);
+    } else {
+      if (idxs.length >= 5) { alert('Máximo 5 imágenes en un carrusel.'); return; }
+      idxs.push(idx);
+    }
+    campaignWizardData.carouselIndexes = idxs;
+    campaignWizardData.carouselImages  = idxs.map(function(i){ return { base64: campaignWizardImages[i].base64, mediaType: campaignWizardImages[i].mediaType }; });
+    // Actualizar visual sin re-render
+    document.querySelectorAll('.cw-img-thumb').forEach(function(el) {
+      var i = parseInt(el.dataset.idx);
+      var p = idxs.indexOf(i);
+      el.style.border = p>=0 ? '3px solid #1877F2' : '2px solid #e5e7eb';
+      var badge = el.querySelector('div');
+      if (p>=0) {
+        if (!badge) { badge=document.createElement('div'); badge.style.cssText='position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center'; el.appendChild(badge); }
+        badge.textContent = p+1;
+      } else { if (badge) badge.remove(); }
+    });
+  } else {
+    // Imagen simple
+    campaignWizardData.adImageIndex   = idx;
+    campaignWizardData.adImage        = { base64: img.base64, mediaType: img.mediaType };
+    campaignWizardData.adImagePreview = 'data:' + img.mediaType + ';base64,' + img.base64;
+    document.querySelectorAll('.cw-img-thumb').forEach(function(el, i) {
+      el.style.border = i === idx ? '3px solid #1877F2' : '2px solid #e5e7eb';
+    });
+  }
+}
+
+function cwHandleImageUpload(input) {
+  var files = Array.from(input.files || []);
+  if (!files.length) return;
+  var fmt = campaignWizardData.adFormat || 'image';
+
+  if (fmt === 'carousel') {
+    // Leer hasta 5 archivos para carrusel
+    var total = Math.min(files.length, 5);
+    var results = [];
+    var previews = [];
+    files.slice(0, total).forEach(function(file, i) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var dataUrl = e.target.result;
+        var match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) { results[i] = { base64: match[2], mediaType: match[1] }; previews[i] = dataUrl; }
+        if (results.filter(Boolean).length === total) {
+          campaignWizardData.carouselImages  = results.filter(Boolean);
+          campaignWizardData.carouselPreviews = previews.filter(Boolean);
+          campaignWizardData.carouselIndexes = [];
+          // Show previews inline
+          var label = input.closest('label');
+          if (label) {
+            var existing = label.parentElement.querySelector('.cw-carousel-previews');
+            if (existing) existing.remove();
+            var div = document.createElement('div');
+            div.className = 'cw-carousel-previews';
+            div.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
+            previews.filter(Boolean).forEach(function(src) {
+              var img = document.createElement('img');
+              img.src = src;
+              img.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid #1877F2';
+              div.appendChild(img);
+            });
+            label.parentElement.appendChild(div);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  } else {
+    // Imagen simple
+    var reader2 = new FileReader();
+    reader2.onload = function(e) {
+      var dataUrl = e.target.result;
+      var match2 = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match2) return;
+      campaignWizardData.adImage        = { base64: match2[2], mediaType: match2[1] };
+      campaignWizardData.adImagePreview = dataUrl;
+      campaignWizardData.adImageIndex   = undefined;
+      var label = input.closest('label');
+      if (label) {
+        var existing = label.parentElement.querySelector('img.cw-upload-preview');
+        if (existing) existing.remove();
+        var preview = document.createElement('img');
+        preview.src = dataUrl;
+        preview.className = 'cw-upload-preview';
+        preview.style.cssText = 'max-height:80px;border-radius:8px;display:block;margin-top:8px;border:2px solid #1877F2';
+        label.parentElement.appendChild(preview);
+      }
+    };
+    reader2.readAsDataURL(files[0]);
+  }
 }
 
 async function cwLoadPages() {
@@ -7092,6 +7289,7 @@ function cwNext() {
     campaignWizardData.adUrl   = (document.getElementById('cw-ad-url')||{}).value||'';
     var pageEl = document.getElementById('cw-page-id');
     if (pageEl) campaignWizardData.pageId = pageEl.value;
+    if (!campaignWizardData.adFormat) campaignWizardData.adFormat = 'image';
   }
   campaignWizardStep++;
   renderCampaignWizard();
@@ -7135,28 +7333,40 @@ async function cwLaunch() {
     campaignWizardData.createdCampaignId = data.campaignId;
     campaignWizardData.createdAdsetId    = data.adsetId;
 
-    // Si hay imagen y página seleccionada, crear el anuncio
-    if (campaignWizardData.adImage && campaignWizardData.pageId) {
+    // Crear anuncio según formato seleccionado
+    var adFmt = campaignWizardData.adFormat || 'image';
+    var hasCreative = (adFmt==='carousel' && (campaignWizardData.carouselImages||[]).length>0) ||
+                      (adFmt==='video'    && campaignWizardData.adVideo) ||
+                      (adFmt==='image'    && campaignWizardData.adImage);
+    if (hasCreative && campaignWizardData.pageId) {
       try {
+        var adPayload = {
+          accessToken: campaignWizardData.token,
+          adAccountId: campaignWizardData.adAccountId,
+          adsetId:     data.adsetId,
+          pageId:      campaignWizardData.pageId,
+          adTitle:     campaignWizardData.adTitle,
+          adBody:      campaignWizardData.adBody,
+          adUrl:       campaignWizardData.adUrl || 'https://www.facebook.com',
+          format:      adFmt,
+        };
+        if (adFmt === 'carousel') {
+          adPayload.imagesBase64 = campaignWizardData.carouselImages.map(function(i){ return i.base64; });
+        } else if (adFmt === 'video') {
+          adPayload.videoBase64 = campaignWizardData.adVideo.base64;
+        } else {
+          adPayload.imageBase64 = campaignWizardData.adImage.base64;
+        }
         var adR = await fetch('/api/meta-ads?action=create-ad', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accessToken: campaignWizardData.token,
-            adAccountId: campaignWizardData.adAccountId,
-            adsetId:     data.adsetId,
-            pageId:      campaignWizardData.pageId,
-            imageBase64: campaignWizardData.adImage.base64,
-            adTitle:     campaignWizardData.adTitle,
-            adBody:      campaignWizardData.adBody,
-            adUrl:       campaignWizardData.adUrl || 'https://www.facebook.com',
-          }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(adPayload),
         });
         var adData = await adR.json();
         if (adData.adId) data.adId = adData.adId;
+        if (adData.error) data.adWarning = adData.error;
       } catch(adErr) {
         console.warn('Ad creation failed (campaign still created):', adErr.message);
-        data.adWarning = 'Campaña y AdSet creados. El anuncio falló: ' + adErr.message;
+        data.adWarning = 'Campaña creada. Error en el anuncio: ' + adErr.message;
       }
     }
 
