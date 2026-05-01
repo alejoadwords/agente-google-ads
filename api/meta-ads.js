@@ -338,11 +338,12 @@ export default async function handler(req, res) {
 
       // 2. Construir targeting como objeto (no JSON string — se serializa en el body)
       const countryCode = resolveCountryCode(country);
+      // Con Advantage Audience activado, Meta no permite age_max < 65 (subcode 1870189)
+      // Solo se envía age_min; Meta expande la audiencia automáticamente
       const targeting = {
-        age_min:               parseInt(ageMin) || 18,
-        age_max:               parseInt(ageMax) || 65,
-        geo_locations:         { countries: [countryCode] },
-        targeting_automation:  { advantage_audience: 1 }, // público Advantage siempre activado
+        age_min:              parseInt(ageMin) || 18,
+        geo_locations:        { countries: [countryCode] },
+        targeting_automation: { advantage_audience: 1 },
       };
       const genderNum = parseInt(gender);
       if (genderNum === 1) targeting.genders = [1];
