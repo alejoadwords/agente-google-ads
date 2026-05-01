@@ -6887,13 +6887,25 @@ function renderCampaignWizard() {
        ['OUTCOME_AWARENESS','👁 Reconocimiento','Muestra el anuncio al mayor número de personas'],
        ['OUTCOME_SALES','🛒 Ventas','Optimiza para conversiones en tu sitio o tienda'],
        ['OUTCOME_ENGAGEMENT','💬 Interacción','Más likes, comentarios y reacciones en tu publicación'],
-       ['OUTCOME_MESSAGES','📱 Mensajes / WhatsApp','Lleva personas a que te escriban directamente por WhatsApp']
+       ['OUTCOME_MESSAGES','📱 Mensajes','Lleva personas a que te escriban por WhatsApp, Messenger o Instagram DM']
       ].map(function(o){
         var sel = campaignWizardData.objective === o[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
         return '<div onclick="cwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px">'+
           '<div style="font-size:20px">'+o[1].split(' ')[0]+'</div>'+
           '<div><div style="font-weight:600;font-size:13px">'+o[1].split(' ').slice(1).join(' ')+'</div><div style="font-size:11px;color:#666">'+o[2]+'</div></div></div>';
-      }).join('') + '</div>';
+      }).join('') +
+      // Selector de app de mensajería — aparece solo cuando el objetivo es OUTCOME_MESSAGES
+      (campaignWizardData.objective === 'OUTCOME_MESSAGES' ?
+        '<div style="margin-top:4px;padding:12px;background:#e8f0fe;border-radius:10px;border:2px solid #1877F2">' +
+        '<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:#1877F2">¿Por qué app recibirás los mensajes?</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
+        [['whatsapp','💬 WhatsApp'],['messenger','📨 Messenger'],['instagram','📸 Instagram DM']].map(function(a){
+          var sel2 = (campaignWizardData.messagingApp||'whatsapp') === a[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#333;border-color:#ddd';
+          return '<button onclick="cwSelectMessagingApp(\''+a[0]+'\')" style="'+sel2+';border:1px solid;border-radius:20px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)">'+a[1]+'</button>';
+        }).join('') +
+        '</div></div>'
+      : '') +
+      '</div>';
   } else if (campaignWizardStep === 2) {
     var cwCurrency = (function(){ try { return JSON.parse(sessionStorage.getItem('meta_active_account')||'{}').currency || 'USD'; } catch(e){ return 'USD'; } })();
     var cwMinBudget = cwCurrency === 'COP' ? '20.000' : cwCurrency === 'MXN' ? '100' : cwCurrency === 'ARS' ? '1.000' : '5';
@@ -7032,9 +7044,11 @@ function renderCampaignWizard() {
   } else if (campaignWizardStep === 5) {
     var objLabels = {OUTCOME_LEADS:'Generación de leads',OUTCOME_TRAFFIC:'Tráfico al sitio web',OUTCOME_AWARENESS:'Reconocimiento',OUTCOME_SALES:'Ventas',OUTCOME_ENGAGEMENT:'Interacción',OUTCOME_MESSAGES:'Mensajes / WhatsApp'};
     var dur = campaignWizardData.durationDays === 0 ? 'Sin fecha de fin' : campaignWizardData.durationDays + ' días';
+    var msgAppLabel = {whatsapp:'💬 WhatsApp',messenger:'📨 Messenger',instagram:'📸 Instagram DM'}[campaignWizardData.messagingApp||'whatsapp'] || 'WhatsApp';
     body = '<div style="background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:16px">'+
       '<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:#1877F2">Resumen de campaña</div>'+
       [['Nombre',campaignWizardData.name],['Objetivo',objLabels[campaignWizardData.objective]],
+       ...(campaignWizardData.objective==='OUTCOME_MESSAGES' ? [['App de mensajería', msgAppLabel]] : []),
        ['Presupuesto','$'+(campaignWizardData.budget||campaignWizardData.budgetUSD)+' '+(campaignWizardData.currency||'USD')+'/día'],['Duración',dur],
        ['País',campaignWizardData.country+(campaignWizardData.city?' · '+campaignWizardData.city:'')],
        ['Edad',campaignWizardData.ageMin+' – '+campaignWizardData.ageMax+' años'],
@@ -7072,7 +7086,13 @@ function renderCampaignWizard() {
   document.body.appendChild(el.firstElementChild);
 }
 
-function cwSelectObj(obj) { campaignWizardData.objective = obj; renderCampaignWizard(); }
+function cwSelectObj(obj) {
+  campaignWizardData.objective = obj;
+  // Inicializar app de mensajería por defecto al seleccionar OUTCOME_MESSAGES
+  if (obj === 'OUTCOME_MESSAGES' && !campaignWizardData.messagingApp) campaignWizardData.messagingApp = 'whatsapp';
+  renderCampaignWizard();
+}
+function cwSelectMessagingApp(app) { campaignWizardData.messagingApp = app; renderCampaignWizard(); }
 function cwSelectDuration(d) { campaignWizardData.durationDays = d; renderCampaignWizard(); }
 function cwSelectGender(g) { campaignWizardData.gender = g; renderCampaignWizard(); }
 
@@ -7351,18 +7371,20 @@ async function cwLaunch() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accessToken:  campaignWizardData.token,
-        adAccountId:  campaignWizardData.adAccountId,
-        name:         campaignWizardData.name,
-        objective:    campaignWizardData.objective,
-        budget:       campaignWizardData.budget,
-        currency:     campaignWizardData.currency || 'USD',
-        durationDays: campaignWizardData.durationDays,
-        country:      campaignWizardData.country,
-        city:         campaignWizardData.city,
-        ageMin:       campaignWizardData.ageMin,
-        ageMax:       campaignWizardData.ageMax,
-        gender:       campaignWizardData.gender,
+        accessToken:   campaignWizardData.token,
+        adAccountId:   campaignWizardData.adAccountId,
+        name:          campaignWizardData.name,
+        objective:     campaignWizardData.objective,
+        budget:        campaignWizardData.budget,
+        currency:      campaignWizardData.currency || 'USD',
+        durationDays:  campaignWizardData.durationDays,
+        country:       campaignWizardData.country,
+        city:          campaignWizardData.city,
+        ageMin:        campaignWizardData.ageMin,
+        ageMax:        campaignWizardData.ageMax,
+        gender:        campaignWizardData.gender,
+        pageId:        campaignWizardData.pageId       || '',
+        messagingApp:  campaignWizardData.messagingApp || 'whatsapp',
       }),
     });
     var data = await r.json();
