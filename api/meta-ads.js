@@ -306,6 +306,12 @@ export default async function handler(req, res) {
       });
     }
 
+    // ── get-pages ─────────────────────────────────────────────────
+    if (action === 'get-pages') {
+      const pages = await metaGet('me/accounts', { fields: 'id,name,category' }, token);
+      return res.json(pages.data || []);
+    }
+
     // ── create-campaign ──────────────────────────────────────
     if (action === 'create-campaign') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
@@ -387,6 +393,46 @@ export default async function handler(req, res) {
       if (!adsetId) throw new Error('Meta no devolvió un adset id');
 
       return res.json({ campaignId, adsetId });
+    }
+
+    // ── create-ad ─────────────────────────────────────────────────
+    if (action === 'create-ad') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
+      const { adAccountId: adAccId, adsetId, pageId, imageBase64, adTitle, adBody, adUrl } = req.body || {};
+
+      if (!adAccId || !adsetId || !pageId || !imageBase64) {
+        return res.status(400).json({ error: 'adAccountId, adsetId, pageId e imageBase64 son requeridos' });
+      }
+
+      // 1. Upload image to Meta
+      const imgRes = await metaPost(`${adAccId}/adimages`, { bytes: imageBase64 }, token);
+      const imageHash = Object.values(imgRes.images || {})[0]?.hash;
+      if (!imageHash) throw new Error('No se pudo subir la imagen a Meta');
+
+      // 2. Create ad creative
+      const creative = await metaPost(`${adAccId}/adcreatives`, {
+        name: `Acuarius — ${adTitle || 'Ad'}`,
+        object_story_spec: {
+          page_id: pageId,
+          link_data: {
+            image_hash: imageHash,
+            link:        adUrl || 'https://www.facebook.com',
+            message:     adBody  || '',
+            name:        adTitle || '',
+          },
+        },
+      }, token);
+      if (!creative.id) throw new Error('No se pudo crear el creative en Meta');
+
+      // 3. Create ad
+      const ad = await metaPost(`${adAccId}/ads`, {
+        name:     `Acuarius — ${adTitle || 'Ad'}`,
+        adset_id: adsetId,
+        creative: { creative_id: creative.id },
+        status:   'PAUSED',
+      }, token);
+
+      return res.json({ adId: ad.id });
     }
 
     // ── update-campaign ──────────────────────────────────────
