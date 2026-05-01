@@ -2557,76 +2557,68 @@ function showMetaActionCards() {
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
   var el = document.createElement('div');
   el.className = 'msg';
-  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  el.style.cssText = 'flex-direction:column;align-items:stretch;max-width:100%;width:100%;padding:0';
+
+  // helper para cards estándar
+  function card(icon, title, desc, onclick) {
+    return '<div onclick="' + onclick + '" style="border:1.5px solid var(--border);border-radius:14px;padding:20px 18px;cursor:pointer;background:var(--bg);transition:all .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px" ' +
+      'onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 16px rgba(30,43,204,.08)\'" ' +
+      'onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+      '<div style="font-size:26px;margin-bottom:10px">' + icon + '</div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">' + title + '</div>' +
+      '<div style="font-size:11px;color:var(--muted2);line-height:1.4">' + desc + '</div>' +
+      '</div>';
+  }
+
   el.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
-      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
+    // Header
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">' +
+      '<div style="width:32px;height:32px;flex-shrink:0;overflow:hidden;border-radius:8px">' + logoSvg + '</div>' +
+      '<div>' +
+        '<div style="font-size:15px;font-weight:700;color:var(--text)">Agente Meta Ads</div>' +
+        '<div style="font-size:12px;color:var(--muted2)">¿en qué trabajamos hoy?</div>' +
+      '</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
-      // Card 0: Crear video ad con IA — full width, destacada
-      '<div onclick="dismissMetaCards(this);showVideoAdFormWithContext()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<div style="font-size:22px">🎬</div>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA <span style="font-size:10px;background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
-            '<div style="font-size:11px;color:#6D28D9;opacity:.85">Genera un video publicitario real para Reels o TikTok con Seedance 2.0</div>' +
-          '</div>' +
+    // Fila 1: 2 cards destacadas (Publicar campaña + Video ad)
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">' +
+
+      // Publicar campaña — azul Meta
+      '<div onclick="dismissMetaCards(this);launchMetaCampaignFlow()" style="border:2px solid #1877F2;border-radius:14px;padding:20px 18px;cursor:pointer;background:linear-gradient(135deg,#e8f0fe 0%,#dbeafe 100%);transition:all .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px" ' +
+        'onmouseover="this.style.background=\'linear-gradient(135deg,#d0e4fd 0%,#bfdbfe 100%)\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 20px rgba(24,119,242,.2)\'" ' +
+        'onmouseout="this.style.background=\'linear-gradient(135deg,#e8f0fe 0%,#dbeafe 100%)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+        '<div style="font-size:26px;margin-bottom:10px">🚀</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#1877F2;margin-bottom:3px">Publicar campaña</div>' +
+        '<div style="font-size:11px;color:#1877F2;opacity:.8;line-height:1.4">Tengo mis creativos listos y quiero publicar en Facebook o Instagram</div>' +
+      '</div>' +
+
+      // Video ad con IA — púrpura
+      '<div onclick="dismissMetaCards(this);showVideoAdFormWithContext()" style="border:2px solid #7C3AED;border-radius:14px;padding:20px 18px;cursor:pointer;background:linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 100%);transition:all .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px" ' +
+        'onmouseover="this.style.background=\'linear-gradient(135deg,#EDE9FE 0%,#DDD6FE 100%)\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 20px rgba(124,58,237,.2)\'" ' +
+        'onmouseout="this.style.background=\'linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 100%)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+        '<div style="font-size:26px;margin-bottom:10px">🎬</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
+          '<div style="font-size:13px;font-weight:700;color:#7C3AED">Crear video ad con IA</div>' +
+          '<span style="font-size:9px;background:#7C3AED;color:#fff;padding:2px 6px;border-radius:8px;font-weight:700">NUEVO</span>' +
         '</div>' +
+        '<div style="font-size:11px;color:#6D28D9;opacity:.85;line-height:1.4">Video real para Reels o TikTok con Seedance 2.0</div>' +
       '</div>' +
 
-      // Card 1: Crear anuncios de imagen
-      '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios de imagen</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Genera creativos profesionales para Facebook e Instagram</div>' +
-      '</div>' +
+    '</div>' +
 
-      // Card 2: Planear campaña
-      '<div onclick="dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">📋</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planear campaña</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Estructura, audiencias, objetivo y presupuesto</div>' +
-      '</div>' +
+    // Fila 2: 3 cards estándar
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">' +
+      card('🖼️', 'Crear anuncios de imagen', 'Creativos profesionales para Facebook e Instagram', 'showMetaImageSubCards(this)') +
+      card('📋', 'Planear campaña', 'Estructura, objetivos, audiencias y presupuesto', 'dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')') +
+      card('📊', 'Analizar campañas', 'Métricas, optimización y recomendaciones de mejora', 'dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')') +
+    '</div>' +
 
-      // Card 3: Analizar campañas
-      '<div onclick="dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">📊</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar campañas</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Métricas, optimización y recomendaciones</div>' +
-      '</div>' +
-
-      // Card 4: Copys para anuncios
-      '<div onclick="dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear copys</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Textos persuasivos para feed, stories y carrusel</div>' +
-      '</div>' +
-
-      // Card 5: Publicar campaña — full width, Meta blue
-      '<div onclick="dismissMetaCards(this);launchMetaCampaignFlow()" style="border:2px solid #1877F2;border-radius:12px;padding:14px 16px;cursor:pointer;background:#e8f0fe;transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'#0d5cbf\';this.style.background=\'#d0e4fd\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'#1877F2\';this.style.background=\'#e8f0fe\';this.style.transform=\'\'">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<div style="font-size:22px">🚀</div>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:#1877F2;margin-bottom:2px">Publicar campaña</div>' +
-            '<div style="font-size:11px;color:#1877F2;opacity:.8">Ya tienes tus creativos y quieres publicar en Facebook o Instagram ahora</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-
-      // Card 6: Diagnosticar campañas — full width, destacada
-      '<div onclick="dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<div style="font-size:22px">🩺</div>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar campañas</div>' +
-            '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-
+    // Fila 3: 2 cards estándar
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+      card('✍️', 'Crear copys', 'Textos persuasivos para feed, stories y carrusel', 'dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')') +
+      card('🩺', 'Diagnosticar campañas', 'Pega tus métricas y te digo dónde estás perdiendo dinero', 'dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')') +
     '</div>';
+
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 }
