@@ -328,8 +328,9 @@ export default async function handler(req, res) {
       const campaign = await metaPost(`${adAccountId}/campaigns`, {
         name,
         objective,
-        status:                'PAUSED',
-        special_ad_categories: [],   // array vacío — no string
+        status:                          'PAUSED',
+        special_ad_categories:           [],     // array vacío — no string
+        is_adset_budget_sharing_enabled: false,  // requerido cuando no se usa CBO
       }, token);
 
       const campaignId = campaign.id;
