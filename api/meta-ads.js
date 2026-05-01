@@ -339,9 +339,10 @@ export default async function handler(req, res) {
       // 2. Construir targeting como objeto (no JSON string — se serializa en el body)
       const countryCode = resolveCountryCode(country);
       const targeting = {
-        age_min:       parseInt(ageMin) || 18,
-        age_max:       parseInt(ageMax) || 65,
-        geo_locations: { countries: [countryCode] },
+        age_min:               parseInt(ageMin) || 18,
+        age_max:               parseInt(ageMax) || 65,
+        geo_locations:         { countries: [countryCode] },
+        targeting_automation:  { advantage_audience: 1 }, // público Advantage siempre activado
       };
       const genderNum = parseInt(gender);
       if (genderNum === 1) targeting.genders = [1];
