@@ -3528,10 +3528,16 @@ window.onload = async () => {
   // Inicializar límites de imágenes
   loadImageUsage();
 
-  // Inicializar panel de agencia si aplica
-  setTimeout(function(){ agencyInit().then(function(){ if(document.getElementById('view-agency').classList.contains('active')) agencyRender(); }); }, 400);
-
-  showView('home');
+  // Vista inicial: panel de clientes para agencia/admin, home para el resto
+  const isAgencyOnLoad = userPlan === 'agency' || isAdminUser();
+  if (isAgencyOnLoad) {
+    // Cargar clientes antes de mostrar el panel para que no aparezca vacío
+    await agencyInit();
+    showView('agency');
+  } else {
+    showView('home');
+    setTimeout(function(){ agencyInit(); }, 400);
+  }
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
   // Mostrar tour si es la primera vez
