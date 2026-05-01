@@ -6860,7 +6860,9 @@ function launchMetaCampaignFlow() {
     return;
   }
   campaignWizardImages = (generatedAdImages || []).slice();
-  campaignWizardData   = { adAccountId: acctId, token };
+  var acctCurrency = 'USD';
+  try { acctCurrency = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').currency || 'USD'; } catch(e) {}
+  campaignWizardData   = { adAccountId: acctId, token, currency: acctCurrency };
   campaignWizardStep   = 1;
   renderCampaignWizard();
 }
@@ -6884,7 +6886,8 @@ function renderCampaignWizard() {
        ['OUTCOME_TRAFFIC','🌐 Tráfico al sitio web','Lleva personas a tu landing page o sitio web'],
        ['OUTCOME_AWARENESS','👁 Reconocimiento','Muestra el anuncio al mayor número de personas'],
        ['OUTCOME_SALES','🛒 Ventas','Optimiza para conversiones en tu sitio o tienda'],
-       ['OUTCOME_ENGAGEMENT','💬 Interacción','Más likes, comentarios y mensajes en tu página']
+       ['OUTCOME_ENGAGEMENT','💬 Interacción','Más likes, comentarios y reacciones en tu publicación'],
+       ['OUTCOME_MESSAGES','📱 Mensajes / WhatsApp','Lleva personas a que te escriban directamente por WhatsApp']
       ].map(function(o){
         var sel = campaignWizardData.objective === o[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
         return '<div onclick="cwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px">'+
@@ -7009,6 +7012,7 @@ async function cwLaunch() {
         name:         campaignWizardData.name,
         objective:    campaignWizardData.objective,
         budget:       campaignWizardData.budget,
+        currency:     campaignWizardData.currency || 'USD',
         durationDays: campaignWizardData.durationDays,
         country:      campaignWizardData.country,
         city:         campaignWizardData.city,
