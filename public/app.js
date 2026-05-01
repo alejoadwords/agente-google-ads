@@ -2604,7 +2604,18 @@ function showMetaActionCards() {
         '<div style="font-size:11px;color:var(--muted2)">Textos persuasivos para feed, stories y carrusel</div>' +
       '</div>' +
 
-      // Card 5: Diagnosticar campañas — full width, destacada
+      // Card 5: Publicar campaña — full width, Meta blue
+      '<div onclick="dismissMetaCards(this);launchMetaCampaignFlow()" style="border:2px solid #1877F2;border-radius:12px;padding:14px 16px;cursor:pointer;background:#e8f0fe;transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'#0d5cbf\';this.style.background=\'#d0e4fd\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'#1877F2\';this.style.background=\'#e8f0fe\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🚀</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:#1877F2;margin-bottom:2px">Publicar campaña</div>' +
+            '<div style="font-size:11px;color:#1877F2;opacity:.8">Ya tienes tus creativos y quieres publicar en Facebook o Instagram ahora</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Card 6: Diagnosticar campañas — full width, destacada
       '<div onclick="dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">' +
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<div style="font-size:22px">🩺</div>' +
@@ -6037,7 +6048,7 @@ let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
     'google-ads':[],
-    'meta-ads':[['crear anuncio','Crear un anuncio de Meta Ads para mi negocio'],['presupuesto','Presupuesto recomendado para Meta Ads'],['audiencias','Cómo definir audiencias en Meta Ads'],['creativos','Dame ideas de creativos para mis anuncios'],['analizar','Analizar rendimiento de mis campañas de Meta']],
+    'meta-ads':[['🚀 crear campaña',null,'launchMetaCampaignFlow'],['crear anuncio','Crear un anuncio de Meta Ads para mi negocio'],['presupuesto','Presupuesto recomendado para Meta Ads'],['audiencias','Cómo definir audiencias en Meta Ads'],['creativos','Dame ideas de creativos para mis anuncios'],['analizar','Analizar rendimiento de mis campañas de Meta']],
     'tiktok-ads':[['crear anuncio','Crear un anuncio para TikTok Ads'],['presupuesto','Presupuesto recomendado para TikTok'],['hooks','Dame ideas de hooks para mis videos'],['tendencias','Qué tendencias de TikTok puedo aprovechar']],
     'linkedin-ads':[['crear anuncio','Crear un anuncio de LinkedIn Ads'],['presupuesto','Presupuesto recomendado para LinkedIn'],['audiencia B2B','Cómo segmentar audiencia B2B en LinkedIn'],['formatos','Qué formatos de anuncio funcionan mejor en LinkedIn']],
     'seo':[['auditoría','Haz una auditoría SEO de mi sitio web'],['keywords','Estudio de palabras clave para mi negocio'],['contenido','Estrategia de contenido SEO para mi sitio'],['competencia','Analizar competencia SEO de mi negocio']],
@@ -6047,7 +6058,10 @@ function updateQaBar(ctx){
   const bar=document.getElementById('qa');
   if(!bar)return;
   const items=QA[ctx]||QA['google-ads'];
-  bar.innerHTML=items.map(([label,prompt])=>`<button class="qb" onclick="qSend('${prompt.replace(/'/g,"\\'")}')"> ${label}</button>`).join('');
+  bar.innerHTML=items.map(([label,prompt,fn])=>{
+    const onclick=fn?`${fn}()`:`qSend('${(prompt||'').replace(/'/g,"\\'")}')`;
+    return `<button class="qb" onclick="${onclick}">${label}</button>`;
+  }).join('');
 }
 function setAgentContext(ctx, showGuide=false){
   currentAgentCtx=ctx;
