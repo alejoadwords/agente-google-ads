@@ -367,6 +367,8 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
         ageMin      = 18,
         ageMax      = 65,
         gender,
+        pageId,                 // ID de página Facebook (requerido para adsets de mensajería)
+        messagingApp = 'whatsapp', // 'whatsapp' | 'messenger' | 'instagram' | 'all'
       } = req.body || {};
 
       // Meta espera daily_budget en "minor currency units"
@@ -378,9 +380,18 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
 
       if (!adAccountId) return res.status(400).json({ error: 'adAccountId requerido' });
 
-      // OUTCOME_MESSAGES es alias interno → Meta usa OUTCOME_ENGAGEMENT con destination_type WHATSAPP
-      const isWhatsApp      = objective === 'OUTCOME_MESSAGES';
-      const metaObjective   = isWhatsApp ? 'OUTCOME_ENGAGEMENT' : objective;
+      // OUTCOME_MESSAGES → Meta usa OUTCOME_ENGAGEMENT con destination_type según app elegida
+      const isMessaging = objective === 'OUTCOME_MESSAGES';
+      const metaObjective = isMessaging ? 'OUTCOME_ENGAGEMENT' : objective;
+
+      // Mapeo de app de mensajería a destination_type de Meta
+      const MESSAGING_DEST = {
+        whatsapp:  'WHATSAPP',
+        messenger: 'MESSENGER',
+        instagram: 'INSTAGRAM_DIRECT',
+        all:       'WHATSAPP',  // Meta no soporta multi-dest en un adset; usamos WhatsApp como principal
+      };
+      const destinationType = isMessaging ? (MESSAGING_DEST[messagingApp] || 'WHATSAPP') : null;
 
       // 1. Crear campaña — special_ad_categories como array real (JSON body)
       const campaign = await metaPost(`${adAccountId}/campaigns`, {
@@ -423,7 +434,9 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
         targeting:         JSON.stringify(targeting),        // JSON string, no objeto anidado
         status:            'PAUSED',
         start_time:        String(nowUnix + 3600),           // Unix timestamp como string
-        ...(isWhatsApp ? { destination_type: 'WHATSAPP' } : {}),
+        ...(destinationType ? { destination_type: destinationType } : {}),
+        // promoted_object con page_id — requerido por Meta para adsets de mensajería (subcode 1815807)
+        ...(isMessaging && pageId ? { promoted_object: JSON.stringify({ page_id: String(pageId) }) } : {}),
       };
       if (durationDays && parseInt(durationDays) > 0) {
         adsetBody.end_time = String(nowUnix + parseInt(durationDays) * 86400);
