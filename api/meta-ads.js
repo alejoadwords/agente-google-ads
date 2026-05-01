@@ -59,7 +59,8 @@ const OBJECTIVE_TO_GOAL = {
   OUTCOME_TRAFFIC:     'LINK_CLICKS',
   OUTCOME_AWARENESS:   'REACH',
   OUTCOME_SALES:       'OFFSITE_CONVERSIONS',
-  OUTCOME_ENGAGEMENT:  'REACH',       // POST_ENGAGEMENT requiere promoted_object; REACH es universal
+  OUTCOME_ENGAGEMENT:  'LINK_CLICKS',    // REACH creaba campaña de alcance; LINK_CLICKS es correcto para engagement
+  OUTCOME_MESSAGES:    'CONVERSATIONS',  // WhatsApp / Messenger
 };
 
 // IMPRESSIONS es el billing_event más seguro para todos los objetivos outcome-based
@@ -69,7 +70,11 @@ const OBJECTIVE_TO_BILLING = {
   OUTCOME_AWARENESS:   'IMPRESSIONS',
   OUTCOME_SALES:       'IMPRESSIONS',
   OUTCOME_ENGAGEMENT:  'IMPRESSIONS',
+  OUTCOME_MESSAGES:    'IMPRESSIONS',
 };
+
+// Monedas que Meta trata como enteros (sin centavos) — NO multiplicar por 100
+const ZERO_DECIMAL_CURRENCIES = new Set(['COP','CLP','ARS','JPY','KRW','IDR','VND','HUF','TWD','RUB']);
 
 // Mapeo nombre de país → código ISO para LatAm + ES/US
 const COUNTRY_NAME_TO_CODE = {
@@ -309,6 +314,7 @@ export default async function handler(req, res) {
         objective   = 'OUTCOME_LEADS',
         budget      = 10,       // en la moneda de la cuenta
         budgetUSD,              // alias legacy — se ignora si budget está presente
+        currency    = 'USD',    // moneda de la cuenta (para calcular minor units)
         durationDays,
         country     = 'CO',
         ageMin      = 18,
@@ -316,18 +322,23 @@ export default async function handler(req, res) {
         gender,
       } = req.body || {};
 
-      // Presupuesto en unidades mínimas de la moneda de la cuenta
-      // Meta espera el valor en "minor currency units": USD → centavos (*100), COP → ya es entero (*1)
-      // Pasamos el valor tal cual desde el frontend (en la moneda correcta) multiplicado por 100
+      // Meta espera daily_budget en "minor currency units"
+      // USD/EUR/MXN → centavos (*100) | COP/ARS/CLP/JPY/etc. → sin centavos (*1)
       const budgetAmount = parseFloat(budget || budgetUSD || 10);
-      const dailyBudgetCents = Math.round(budgetAmount * 100);
+      const dailyBudgetCents = ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase())
+        ? Math.round(budgetAmount)
+        : Math.round(budgetAmount * 100);
 
       if (!adAccountId) return res.status(400).json({ error: 'adAccountId requerido' });
+
+      // OUTCOME_MESSAGES es alias interno → Meta usa OUTCOME_ENGAGEMENT con destination_type WHATSAPP
+      const isWhatsApp      = objective === 'OUTCOME_MESSAGES';
+      const metaObjective   = isWhatsApp ? 'OUTCOME_ENGAGEMENT' : objective;
 
       // 1. Crear campaña — special_ad_categories como array real (JSON body)
       const campaign = await metaPost(`${adAccountId}/campaigns`, {
         name,
-        objective,
+        objective:                       metaObjective,
         status:                          'PAUSED',
         special_ad_categories:           [],     // array vacío — no string
         is_adset_budget_sharing_enabled: false,  // requerido cuando no se usa CBO
@@ -365,6 +376,7 @@ export default async function handler(req, res) {
         targeting:         JSON.stringify(targeting),        // JSON string, no objeto anidado
         status:            'PAUSED',
         start_time:        String(nowUnix + 3600),           // Unix timestamp como string
+        ...(isWhatsApp ? { destination_type: 'WHATSAPP' } : {}),
       };
       if (durationDays && parseInt(durationDays) > 0) {
         adsetBody.end_time = String(nowUnix + parseInt(durationDays) * 86400);
