@@ -356,12 +356,13 @@ export default async function handler(req, res) {
       const adsetBody = {
         name:              `${name} — AdSet`,
         campaign_id:       campaignId,
-        daily_budget:      String(dailyBudgetCents),  // string requerido
+        daily_budget:      String(dailyBudgetCents),         // string requerido
         billing_event:     billEvent,
         optimization_goal: optGoal,
-        targeting:         JSON.stringify(targeting), // JSON string, no objeto anidado
+        bid_strategy:      'LOWEST_COST_WITHOUT_CAP',        // evita subcode 2490487
+        targeting:         JSON.stringify(targeting),        // JSON string, no objeto anidado
         status:            'PAUSED',
-        start_time:        String(nowUnix + 3600),    // Unix timestamp como string
+        start_time:        String(nowUnix + 3600),           // Unix timestamp como string
       };
       if (durationDays && parseInt(durationDays) > 0) {
         adsetBody.end_time = String(nowUnix + parseInt(durationDays) * 86400);
