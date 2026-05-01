@@ -7239,6 +7239,12 @@ function cwHandleImageUpload(input) {
 async function cwLoadPages() {
   var container = document.getElementById('cw-pages-container');
   if (!container) return;
+  // Restaurar pageId guardado en localStorage si aún no está en memoria
+  var lsPageKey = 'meta_saved_page_' + (campaignWizardData.accountId || 'default');
+  if (!campaignWizardData.pageId) {
+    var saved = localStorage.getItem(lsPageKey);
+    if (saved) { try { var sp = JSON.parse(saved); campaignWizardData.pageId = sp.id; campaignWizardData._savedPageName = sp.name; } catch(e){} }
+  }
   if (campaignWizardData._pages) { cwRenderPages(campaignWizardData._pages); return; }
   try {
     var r = await fetch('/api/meta-ads?action=get-pages&accessToken=' + encodeURIComponent(campaignWizardData.token));
@@ -7247,21 +7253,48 @@ async function cwLoadPages() {
     campaignWizardData._pages = pages;
     cwRenderPages(pages);
   } catch(e) {
-    if (container) container.innerHTML = '<input id="cw-page-id" placeholder="ID de tu página de Facebook (ej: 123456789)" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.pageId||'')+'">';
+    // Mostrar input con valor guardado si existe
+    var savedId = campaignWizardData.pageId || '';
+    var savedName = campaignWizardData._savedPageName || '';
+    if (container) {
+      if (savedId) {
+        container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">Usando página guardada' + (savedName ? ' <strong>'+savedName+'</strong>' : '') + '. Cambia el ID si necesitas otra:</div>' +
+          '<input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+savedId+'">';
+      } else {
+        container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">Ingresa el ID de tu página de Facebook (se guardará para próximas campañas):</div>' +
+          '<input id="cw-page-id" placeholder="Ej: 123456789" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="">';
+      }
+    }
   }
 }
 
 function cwRenderPages(pages) {
   var container = document.getElementById('cw-pages-container');
   if (!container) return;
+  var lsPageKey = 'meta_saved_page_' + (campaignWizardData.accountId || 'default');
   if (!pages || !pages.length) {
-    container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">No encontramos páginas asociadas. Ingresa el ID manualmente:</div><input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.pageId||'')+'">';
+    var savedId = campaignWizardData.pageId || '';
+    var savedName = campaignWizardData._savedPageName || '';
+    if (savedId) {
+      container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">Usando página guardada' + (savedName ? ' <strong>'+savedName+'</strong>' : '') + '. Cambia el ID si necesitas otra:</div>' +
+        '<input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+savedId+'">';
+    } else {
+      container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">No encontramos páginas asociadas. Ingresa el ID manualmente:</div>' +
+        '<input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="">';
+    }
     return;
   }
+  // Determinar cuál página seleccionar por defecto
+  var defaultId = campaignWizardData.pageId || pages[0].id;
+  // Asegurarse de que el defaultId esté en la lista; si no, usar el primero
+  if (!pages.find(function(p){ return p.id === defaultId; })) defaultId = pages[0].id;
   container.innerHTML = '<select id="cw-page-id" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box">'+
-    pages.map(function(p){ return '<option value="'+p.id+'"'+(campaignWizardData.pageId===p.id?' selected':'')+'>'+p.name+(p.category?' · '+p.category:'')+'</option>'; }).join('')+
+    pages.map(function(p){ return '<option value="'+p.id+'"'+(p.id === defaultId?' selected':'')+'>'+p.name+(p.category?' · '+p.category:'')+'</option>'; }).join('')+
     '</select>';
-  if (!campaignWizardData.pageId && pages.length) campaignWizardData.pageId = pages[0].id;
+  campaignWizardData.pageId = defaultId;
+  // Guardar en localStorage para futuras campañas
+  var defaultPage = pages.find(function(p){ return p.id === defaultId; }) || pages[0];
+  localStorage.setItem(lsPageKey, JSON.stringify({ id: defaultPage.id, name: defaultPage.name }));
 }
 
 function cwNext() {
@@ -7288,7 +7321,13 @@ function cwNext() {
     campaignWizardData.adBody  = (document.getElementById('cw-ad-body')||{}).value||'';
     campaignWizardData.adUrl   = (document.getElementById('cw-ad-url')||{}).value||'';
     var pageEl = document.getElementById('cw-page-id');
-    if (pageEl) campaignWizardData.pageId = pageEl.value;
+    if (pageEl && pageEl.value) {
+      campaignWizardData.pageId = pageEl.value;
+      // Guardar en localStorage para pre-seleccionar en futuras campañas
+      var lsPageKey = 'meta_saved_page_' + (campaignWizardData.accountId || 'default');
+      var pageName = pageEl.options ? (pageEl.options[pageEl.selectedIndex]||{}).text || '' : '';
+      localStorage.setItem(lsPageKey, JSON.stringify({ id: pageEl.value, name: pageName }));
+    }
     if (!campaignWizardData.adFormat) campaignWizardData.adFormat = 'image';
   }
   campaignWizardStep++;
