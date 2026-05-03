@@ -5157,6 +5157,15 @@ async function restoreConnectionsFromSupabase() {
       if (mConn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', mConn.extra_data.meta_user_id);
       updateMetaUI(true, mConn.account_name);
     }
+    // Restaurar cuenta publicitaria desde localStorage (persiste entre recargas)
+    if (!sessionStorage.getItem('meta_ad_account_id')) {
+      const persistedAccId = localStorage.getItem('meta_ad_account_id_persist');
+      const persistedAcc   = localStorage.getItem('meta_active_account_persist');
+      if (persistedAccId) {
+        sessionStorage.setItem('meta_ad_account_id', persistedAccId);
+        if (persistedAcc) sessionStorage.setItem('meta_active_account', persistedAcc);
+      }
+    }
 
     // Refrescar token de Meta si expira pronto
     if (mConn.connected) {
@@ -6850,7 +6859,17 @@ var campaignWizardImages = [];
 
 function launchMetaCampaignFlow() {
   const token   = sessionStorage.getItem('meta_access_token');
-  const acctId  = sessionStorage.getItem('meta_ad_account_id');
+  // Intentar restaurar account_id desde localStorage si sessionStorage no lo tiene
+  let acctId = sessionStorage.getItem('meta_ad_account_id');
+  if (!acctId) {
+    const persisted = localStorage.getItem('meta_ad_account_id_persist');
+    if (persisted) {
+      acctId = persisted;
+      sessionStorage.setItem('meta_ad_account_id', persisted);
+      const persistedAcc = localStorage.getItem('meta_active_account_persist');
+      if (persistedAcc) sessionStorage.setItem('meta_active_account', persistedAcc);
+    }
+  }
   if (!token) {
     addAgent('Para crear una campaña necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuración > Conexiones > Meta Ads**.');
     return;
@@ -9239,6 +9258,9 @@ async function selectMetaAccount(accountId) {
   metaActiveAccount = acc;
   sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
   sessionStorage.setItem('meta_ad_account_id', acc.id);
+  // Persistir en localStorage para restaurar tras recarga de página
+  localStorage.setItem('meta_active_account_persist', JSON.stringify(acc));
+  localStorage.setItem('meta_ad_account_id_persist', acc.id);
   // Guardar account_id en Supabase para que los crons de alertas/reportes lo usen
   const uid2 = clerkInstance?.user?.id;
   if (uid2) {
