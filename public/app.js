@@ -5153,6 +5153,7 @@ async function restoreConnectionsFromSupabase() {
     }
     if (!hasMetaToken && mConn.connected && mConn.access_token) {
       sessionStorage.setItem('meta_access_token', mConn.access_token);
+      localStorage.setItem('meta_access_token_persist', mConn.access_token);
       sessionStorage.setItem('meta_user_name', mConn.account_name || '');
       if (mConn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', mConn.extra_data.meta_user_id);
       updateMetaUI(true, mConn.account_name);
@@ -6857,10 +6858,18 @@ var campaignWizardStep = 1;
 var campaignWizardData = {};
 var campaignWizardImages = [];
 
-function launchMetaCampaignFlow() {
-  const token   = sessionStorage.getItem('meta_access_token');
-  // Intentar restaurar account_id desde localStorage si sessionStorage no lo tiene
+async function launchMetaCampaignFlow() {
+  // Intentar restaurar desde localStorage si sessionStorage está vacío (tras recarga de página)
+  let token  = sessionStorage.getItem('meta_access_token');
   let acctId = sessionStorage.getItem('meta_ad_account_id');
+
+  if (!token) {
+    const persisted = localStorage.getItem('meta_access_token_persist');
+    if (persisted) {
+      token = persisted;
+      sessionStorage.setItem('meta_access_token', persisted);
+    }
+  }
   if (!acctId) {
     const persisted = localStorage.getItem('meta_ad_account_id_persist');
     if (persisted) {
@@ -6870,14 +6879,40 @@ function launchMetaCampaignFlow() {
       if (persistedAcc) sessionStorage.setItem('meta_active_account', persistedAcc);
     }
   }
+
   if (!token) {
     addAgent('Para crear una campaña necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuración > Conexiones > Meta Ads**.');
     return;
   }
+
+  // Si no hay acctId, intentar obtener la primera cuenta disponible automáticamente
   if (!acctId) {
-    addAgent('Para crear una campaña necesitas seleccionar una cuenta publicitaria en **Configuración > Conexiones > Meta Ads**.');
-    return;
+    try {
+      var tempMsg = addAgent('⏳ Cargando cuenta publicitaria...');
+      var accRes  = await fetch('/api/meta-list-accounts', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ accessToken: token }),
+      });
+      var accData = await accRes.json();
+      if (accData.accounts && accData.accounts.length > 0) {
+        var acc = accData.accounts[0];
+        acctId  = acc.id;
+        sessionStorage.setItem('meta_ad_account_id', acc.id);
+        sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
+        localStorage.setItem('meta_ad_account_id_persist', acc.id);
+        localStorage.setItem('meta_active_account_persist', JSON.stringify(acc));
+        // Limpiar mensaje temporal
+        if (tempMsg && tempMsg.remove) tempMsg.remove();
+      } else {
+        addAgent('No se encontró ninguna cuenta publicitaria. Ve a **Configuración > Conexiones > Meta Ads** para seleccionar una.');
+        return;
+      }
+    } catch(e) {
+      addAgent('Para crear una campaña necesitas seleccionar una cuenta publicitaria en **Configuración > Conexiones > Meta Ads**.');
+      return;
+    }
   }
+
   campaignWizardImages = (generatedAdImages || []).slice();
   var acctCurrency = 'USD';
   try { acctCurrency = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').currency || 'USD'; } catch(e) {}
@@ -9147,6 +9182,7 @@ let metaActiveAccount = null;
     window.history.replaceState({}, '', window.location.pathname);
     if (token) {
       sessionStorage.setItem('meta_access_token', token);
+      localStorage.setItem('meta_access_token_persist', token);
       sessionStorage.setItem('meta_user_name',   name   || '');
       sessionStorage.setItem('meta_user_email',  email  || '');
       sessionStorage.setItem('meta_user_id',     metaUid || '');
@@ -9166,6 +9202,7 @@ let metaActiveAccount = null;
             const conn = await r.json();
             if (conn.connected && conn.access_token) {
               sessionStorage.setItem('meta_access_token', conn.access_token);
+              localStorage.setItem('meta_access_token_persist', conn.access_token);
               sessionStorage.setItem('meta_user_name', conn.account_name || name || '');
               if (conn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', conn.extra_data.meta_user_id);
               updateMetaUI(true, conn.account_name || name);
