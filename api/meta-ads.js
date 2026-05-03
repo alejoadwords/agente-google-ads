@@ -181,7 +181,10 @@ export default async function handler(req, res) {
       return res.json({ accounts });
     }
 
-    if (!adAccountId) return res.status(400).json({ error: 'adAccountId requerido' });
+    // get-pages y generate-copy no requieren adAccountId — los demás sí
+    if (!adAccountId && !['get-pages','generate-copy'].includes(action)) {
+      return res.status(400).json({ error: 'adAccountId requerido' });
+    }
 
     // ── get-account-overview ─────────────────────────────────
     if (action === 'get-account-overview') {
@@ -306,10 +309,21 @@ export default async function handler(req, res) {
       });
     }
 
-    // ── get-pages ─────────────────────────────────────────────────
+    // ── get-pages — usa promote_pages (ads_management, sin pages_show_list) ──────
     if (action === 'get-pages') {
-      const pages = await metaGet('me/accounts', { fields: 'id,name,category' }, token);
-      return res.json(pages.data || []);
+      const accId = adAccountId || (req.query.adAccountId) || '';
+      // 1. promote_pages: páginas que puede usar esta cuenta publicitaria
+      if (accId) {
+        try {
+          const pp = await metaGet(`${accId}/promote_pages`, { fields: 'id,name,category' }, token);
+          if (pp.data && pp.data.length > 0) return res.json(pp.data);
+        } catch(e) { /* fallback */ }
+      }
+      // 2. Fallback: me/accounts (puede requerir pages_show_list)
+      try {
+        const ma = await metaGet('me/accounts', { fields: 'id,name,category' }, token);
+        return res.json(ma.data || []);
+      } catch(e2) { return res.json([]); }
     }
 
     // ── generate-copy ─────────────────────────────────────────────
@@ -342,14 +356,24 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
       });
+      if (!aiRes.ok) {
+        const errTxt = await aiRes.text().catch(() => '');
+        console.error('Anthropic HTTP error:', aiRes.status, errTxt.slice(0, 300));
+        return res.status(500).json({ error: `Error IA (HTTP ${aiRes.status})` });
+      }
       const aiData = await aiRes.json();
-      const text = aiData.content?.[0]?.text || '{}';
+      if (aiData.error) {
+        console.error('Anthropic API error:', JSON.stringify(aiData.error));
+        return res.status(500).json({ error: aiData.error.message || 'Error de la IA' });
+      }
+      const text = aiData.content?.[0]?.text || '';
+      if (!text) return res.status(500).json({ error: 'La IA no generó respuesta' });
       try {
-        const jsonMatch = text.match(/\{[\s\S]*?\}/);
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
         return res.json({ title: parsed.title || '', body: parsed.body || '' });
       } catch(e) {
-        return res.json({ title: '', body: '' });
+        return res.json({ title: '', body: text.slice(0, 125) });
       }
     }
 

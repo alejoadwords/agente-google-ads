@@ -7046,8 +7046,8 @@ function renderCampaignWizard() {
       '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL de destino</label>'+
         '<input id="cw-ad-url" type="url" placeholder="https://tudominio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adUrl||'')+'"></div>' : '';
 
-    var pageSection = '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Página de Facebook</label>'+
-      '<div id="cw-pages-container"><div style="color:#888;font-size:13px;padding:8px">⏳ Cargando páginas...</div></div></div>';
+    // La página de Facebook se carga en background — no se muestra al usuario
+    var pageSection = '<div id="cw-pages-container" style="display:none"></div>';
 
     var skipNote = '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #eee;font-size:12px;color:#999">'+
       '💡 Si prefieres agregar los anuncios luego, puedes continuar sin imagen — la campaña quedará pausada en Meta Ads Manager.</div>';
@@ -7181,12 +7181,23 @@ async function cwGenerateCopy() {
       }),
     });
     var data = await r.json();
+    if (data.error) throw new Error(data.error);
     if (data.title) { var t=document.getElementById('cw-ad-title'); if(t) t.value=data.title; }
     if (data.body)  { var b=document.getElementById('cw-ad-body');  if(b) b.value=data.body;  }
+    if (!data.title && !data.body) throw new Error('La IA no generó texto. Inténtalo de nuevo.');
     campaignWizardData.adTitle = data.title || '';
     campaignWizardData.adBody  = data.body  || '';
   } catch(e) {
-    alert('Error generando copy: ' + e.message);
+    if (btn) btn.innerHTML = '✨ Generar con IA';
+    var errDiv = document.getElementById('cw-gen-error');
+    if (!errDiv) {
+      errDiv = document.createElement('div');
+      errDiv.id = 'cw-gen-error';
+      errDiv.style.cssText = 'color:#dc2626;font-size:12px;margin-top:4px';
+      var genBtn = document.getElementById('cw-gen-btn');
+      if (genBtn && genBtn.parentNode) genBtn.parentNode.parentNode.appendChild(errDiv);
+    }
+    errDiv.textContent = '⚠️ ' + e.message;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar con IA'; }
   }
@@ -7318,65 +7329,27 @@ function cwHandleImageUpload(input) {
   }
 }
 
+// cwLoadPages — carga la página de Facebook en BACKGROUND sin mostrar nada al usuario.
+// Auto-selecciona la primera página encontrada via promote_pages o me/accounts.
 async function cwLoadPages() {
-  var container = document.getElementById('cw-pages-container');
-  if (!container) return;
-  // Restaurar pageId guardado en localStorage si aún no está en memoria
-  var lsPageKey = 'meta_saved_page_' + (campaignWizardData.accountId || 'default');
-  if (!campaignWizardData.pageId) {
-    var saved = localStorage.getItem(lsPageKey);
-    if (saved) { try { var sp = JSON.parse(saved); campaignWizardData.pageId = sp.id; campaignWizardData._savedPageName = sp.name; } catch(e){} }
+  if (campaignWizardData.pageId) return; // ya tenemos página — nada que hacer
+  // Restaurar desde localStorage
+  var lsPageKey = 'meta_saved_page_' + (campaignWizardData.adAccountId || 'default');
+  var saved = localStorage.getItem(lsPageKey);
+  if (saved) {
+    try { var sp = JSON.parse(saved); campaignWizardData.pageId = sp.id; return; } catch(e){}
   }
-  if (campaignWizardData._pages) { cwRenderPages(campaignWizardData._pages); return; }
+  // Llamar al endpoint (usa promote_pages primero, luego me/accounts)
   try {
-    var r = await fetch('/api/meta-ads?action=get-pages&accessToken=' + encodeURIComponent(campaignWizardData.token));
+    var url = '/api/meta-ads?action=get-pages&accessToken=' + encodeURIComponent(campaignWizardData.token) +
+              '&adAccountId=' + encodeURIComponent(campaignWizardData.adAccountId || '');
+    var r = await fetch(url);
     var pages = await r.json();
-    if (!Array.isArray(pages)) throw new Error('no pages');
-    campaignWizardData._pages = pages;
-    cwRenderPages(pages);
-  } catch(e) {
-    // Mostrar input con valor guardado si existe
-    var savedId = campaignWizardData.pageId || '';
-    var savedName = campaignWizardData._savedPageName || '';
-    if (container) {
-      if (savedId) {
-        container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">Usando página guardada' + (savedName ? ' <strong>'+savedName+'</strong>' : '') + '. Cambia el ID si necesitas otra:</div>' +
-          '<input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+savedId+'">';
-      } else {
-        container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">Ingresa el ID de tu página de Facebook (se guardará para próximas campañas):</div>' +
-          '<input id="cw-page-id" placeholder="Ej: 123456789" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="">';
-      }
+    if (Array.isArray(pages) && pages.length > 0) {
+      campaignWizardData.pageId = pages[0].id;
+      localStorage.setItem(lsPageKey, JSON.stringify({ id: pages[0].id, name: pages[0].name }));
     }
-  }
-}
-
-function cwRenderPages(pages) {
-  var container = document.getElementById('cw-pages-container');
-  if (!container) return;
-  var lsPageKey = 'meta_saved_page_' + (campaignWizardData.accountId || 'default');
-  if (!pages || !pages.length) {
-    var savedId = campaignWizardData.pageId || '';
-    var savedName = campaignWizardData._savedPageName || '';
-    if (savedId) {
-      container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">Usando página guardada' + (savedName ? ' <strong>'+savedName+'</strong>' : '') + '. Cambia el ID si necesitas otra:</div>' +
-        '<input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+savedId+'">';
-    } else {
-      container.innerHTML = '<div style="font-size:12px;color:#888;margin-bottom:6px">No encontramos páginas asociadas. Ingresa el ID manualmente:</div>' +
-        '<input id="cw-page-id" placeholder="ID de tu página de Facebook" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="">';
-    }
-    return;
-  }
-  // Determinar cuál página seleccionar por defecto
-  var defaultId = campaignWizardData.pageId || pages[0].id;
-  // Asegurarse de que el defaultId esté en la lista; si no, usar el primero
-  if (!pages.find(function(p){ return p.id === defaultId; })) defaultId = pages[0].id;
-  container.innerHTML = '<select id="cw-page-id" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box">'+
-    pages.map(function(p){ return '<option value="'+p.id+'"'+(p.id === defaultId?' selected':'')+'>'+p.name+(p.category?' · '+p.category:'')+'</option>'; }).join('')+
-    '</select>';
-  campaignWizardData.pageId = defaultId;
-  // Guardar en localStorage para futuras campañas
-  var defaultPage = pages.find(function(p){ return p.id === defaultId; }) || pages[0];
-  localStorage.setItem(lsPageKey, JSON.stringify({ id: defaultPage.id, name: defaultPage.name }));
+  } catch(e) { /* silencioso — la campaña se crea sin ad si no hay página */ }
 }
 
 function cwNext() {
@@ -7402,14 +7375,7 @@ function cwNext() {
     campaignWizardData.adTitle = (document.getElementById('cw-ad-title')||{}).value||'';
     campaignWizardData.adBody  = (document.getElementById('cw-ad-body')||{}).value||'';
     campaignWizardData.adUrl   = (document.getElementById('cw-ad-url')||{}).value||'';
-    var pageEl = document.getElementById('cw-page-id');
-    if (pageEl && pageEl.value) {
-      campaignWizardData.pageId = pageEl.value;
-      // Guardar en localStorage para pre-seleccionar en futuras campañas
-      var lsPageKey = 'meta_saved_page_' + (campaignWizardData.accountId || 'default');
-      var pageName = pageEl.options ? (pageEl.options[pageEl.selectedIndex]||{}).text || '' : '';
-      localStorage.setItem(lsPageKey, JSON.stringify({ id: pageEl.value, name: pageName }));
-    }
+    // pageId se carga en background por cwLoadPages — no hay input visible
     if (!campaignWizardData.adFormat) campaignWizardData.adFormat = 'image';
   }
   campaignWizardStep++;
