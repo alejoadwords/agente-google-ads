@@ -6859,25 +6859,25 @@ var campaignWizardData = {};
 var campaignWizardImages = [];
 
 async function launchMetaCampaignFlow() {
-  // Intentar restaurar desde localStorage si sessionStorage está vacío (tras recarga de página)
-  let token  = sessionStorage.getItem('meta_access_token');
-  let acctId = sessionStorage.getItem('meta_ad_account_id');
+  // 1. Buscar token en sessionStorage → localStorage → Supabase (en ese orden)
+  let token  = sessionStorage.getItem('meta_access_token')
+            || localStorage.getItem('meta_access_token_persist');
 
   if (!token) {
-    const persisted = localStorage.getItem('meta_access_token_persist');
-    if (persisted) {
-      token = persisted;
-      sessionStorage.setItem('meta_access_token', persisted);
-    }
-  }
-  if (!acctId) {
-    const persisted = localStorage.getItem('meta_ad_account_id_persist');
-    if (persisted) {
-      acctId = persisted;
-      sessionStorage.setItem('meta_ad_account_id', persisted);
-      const persistedAcc = localStorage.getItem('meta_active_account_persist');
-      if (persistedAcc) sessionStorage.setItem('meta_active_account', persistedAcc);
-    }
+    // Intentar desde Supabase directamente (Clerk ya cargó cuando el usuario hizo click)
+    try {
+      var uid = clerkInstance?.user?.id;
+      if (uid) {
+        var connRes  = await fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads');
+        var connData = await connRes.json();
+        if (connData.connected && connData.access_token) {
+          token = connData.access_token;
+          sessionStorage.setItem('meta_access_token', token);
+          localStorage.setItem('meta_access_token_persist', token);
+          updateMetaUI(true, connData.account_name || '');
+        }
+      }
+    } catch(e) {}
   }
 
   if (!token) {
@@ -6885,10 +6885,20 @@ async function launchMetaCampaignFlow() {
     return;
   }
 
-  // Si no hay acctId, intentar obtener la primera cuenta disponible automáticamente
-  if (!acctId) {
+  // 2. Buscar account_id en sessionStorage → localStorage → Meta API
+  let acctId = sessionStorage.getItem('meta_ad_account_id')
+             || localStorage.getItem('meta_ad_account_id_persist');
+
+  if (acctId) {
+    // Restaurar en sessionStorage si venía de localStorage
+    sessionStorage.setItem('meta_ad_account_id', acctId);
+    var persistedAcc = localStorage.getItem('meta_active_account_persist');
+    if (persistedAcc && !sessionStorage.getItem('meta_active_account')) {
+      sessionStorage.setItem('meta_active_account', persistedAcc);
+    }
+  } else {
+    // Auto-seleccionar primera cuenta disponible
     try {
-      var tempMsg = addAgent('⏳ Cargando cuenta publicitaria...');
       var accRes  = await fetch('/api/meta-list-accounts', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ accessToken: token }),
@@ -6901,8 +6911,6 @@ async function launchMetaCampaignFlow() {
         sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
         localStorage.setItem('meta_ad_account_id_persist', acc.id);
         localStorage.setItem('meta_active_account_persist', JSON.stringify(acc));
-        // Limpiar mensaje temporal
-        if (tempMsg && tempMsg.remove) tempMsg.remove();
       } else {
         addAgent('No se encontró ninguna cuenta publicitaria. Ve a **Configuración > Conexiones > Meta Ads** para seleccionar una.');
         return;
