@@ -7148,17 +7148,37 @@ function renderCampaignWizard() {
   document.body.appendChild(el.firstElementChild);
 }
 
+// Helpers para guardar campos activos antes de re-renderizar (evita que se borren)
+function cwSaveStep1Fields() {
+  var n = document.getElementById('cw-name'); if (n) campaignWizardData.name = n.value;
+}
+function cwSaveStep2Fields() {
+  var b = document.getElementById('cw-budget'); if (b && b.value) campaignWizardData.budget = parseFloat(b.value) || campaignWizardData.budget;
+}
+function cwSaveStep3Fields() {
+  var co = document.getElementById('cw-country'); if (co) campaignWizardData.country = co.value;
+  var ci = document.getElementById('cw-city');    if (ci) campaignWizardData.city    = ci.value;
+  var am = document.getElementById('cw-age-min'); if (am) campaignWizardData.ageMin  = parseInt(am.value)||18;
+  var ax = document.getElementById('cw-age-max'); if (ax) campaignWizardData.ageMax  = parseInt(ax.value)||55;
+}
+function cwSaveStep4Fields() {
+  var t = document.getElementById('cw-ad-title'); if (t) campaignWizardData.adTitle = t.value;
+  var b = document.getElementById('cw-ad-body');  if (b) campaignWizardData.adBody  = b.value;
+  var u = document.getElementById('cw-ad-url');   if (u) campaignWizardData.adUrl   = u.value;
+}
+
 function cwSelectObj(obj) {
+  cwSaveStep1Fields(); // guardar nombre antes de re-renderizar
   campaignWizardData.objective = obj;
-  // Inicializar app de mensajería por defecto al seleccionar OUTCOME_MESSAGES
   if (obj === 'OUTCOME_MESSAGES' && !campaignWizardData.messagingApp) campaignWizardData.messagingApp = 'whatsapp';
   renderCampaignWizard();
 }
-function cwSelectMessagingApp(app) { campaignWizardData.messagingApp = app; renderCampaignWizard(); }
-function cwSelectDuration(d) { campaignWizardData.durationDays = d; renderCampaignWizard(); }
-function cwSelectGender(g) { campaignWizardData.gender = g; renderCampaignWizard(); }
+function cwSelectMessagingApp(app) { cwSaveStep1Fields(); campaignWizardData.messagingApp = app; renderCampaignWizard(); }
+function cwSelectDuration(d) { cwSaveStep2Fields(); campaignWizardData.durationDays = d; renderCampaignWizard(); }
+function cwSelectGender(g) { cwSaveStep3Fields(); campaignWizardData.gender = g; renderCampaignWizard(); }
 
 function cwSetFormat(fmt) {
+  cwSaveStep4Fields(); // guardar copy antes de re-renderizar
   campaignWizardData.adFormat = fmt;
   renderCampaignWizard();
 }
@@ -7423,11 +7443,14 @@ async function cwLaunch() {
     campaignWizardData.createdAdsetId    = data.adsetId;
 
     // Crear anuncio según formato seleccionado
+    // Para WhatsApp: el creative requiere WhatsApp Business vinculado a la página,
+    // lo que depende de la configuración del cliente en Meta Business → se omite y se guía al usuario.
+    var isMessagingCampaign = campaignWizardData.objective === 'OUTCOME_MESSAGES';
     var adFmt = campaignWizardData.adFormat || 'image';
     var hasCreative = (adFmt==='carousel' && (campaignWizardData.carouselImages||[]).length>0) ||
                       (adFmt==='video'    && campaignWizardData.adVideo) ||
                       (adFmt==='image'    && campaignWizardData.adImage);
-    if (hasCreative && campaignWizardData.pageId) {
+    if (!isMessagingCampaign && hasCreative && campaignWizardData.pageId) {
       try {
         var adPayload = {
           accessToken: campaignWizardData.token,
@@ -7457,6 +7480,9 @@ async function cwLaunch() {
         console.warn('Ad creation failed (campaign still created):', adErr.message);
         data.adWarning = 'Campaña creada. Error en el anuncio: ' + adErr.message;
       }
+    } else if (isMessagingCampaign) {
+      // Para WhatsApp/Messenger/IG DM: el creative necesita configuración específica en Meta
+      data.adWarning = 'whatsapp_manual';
     }
 
     // Mostrar pantalla de éxito dentro del wizard
@@ -7473,7 +7499,12 @@ async function cwLaunch() {
         '<div style="margin-bottom:4px">Ad Set ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adsetId + '</code></div>' +
         (data.adId ? '<div>Ad ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adId + '</code></div>' : '') +
         '</div>' +
-        (data.adWarning ? '<div style="background:#fff3cd;border-radius:8px;padding:10px;font-size:12px;color:#856404;margin-bottom:16px;text-align:left">⚠️ ' + data.adWarning + '</div>' : '') +
+        (data.adWarning === 'whatsapp_manual'
+          ? '<div style="background:#e8f5e9;border-radius:8px;padding:12px;font-size:12px;color:#2e7d32;margin-bottom:16px;text-align:left">'+
+            '💬 <strong>Campaña de WhatsApp creada.</strong> Para agregar el anuncio ve a <strong>Meta Ads Manager → ' + campaignWizardData.name + ' → Agregar anuncio</strong> y selecciona tu número de WhatsApp Business como destino.</div>'
+          : data.adWarning
+            ? '<div style="background:#fff3cd;border-radius:8px;padding:10px;font-size:12px;color:#856404;margin-bottom:16px;text-align:left">⚠️ ' + data.adWarning + '</div>'
+            : '') +
         '<p style="font-size:12px;color:#888;margin-bottom:20px">¿Quieres activarla ahora? Confirma que los creativos y el targeting están listos antes de gastar presupuesto.</p>' +
         '<div style="display:flex;flex-direction:column;gap:10px">' +
         '<button id="cw-activate-btn" onclick="activateCreatedCampaign()" style="width:100%;padding:13px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">▶ Activar campaña ahora</button>' +

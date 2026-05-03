@@ -354,7 +354,7 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
       const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!aiRes.ok) {
         const errTxt = await aiRes.text().catch(() => '');
