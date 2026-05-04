@@ -7037,10 +7037,17 @@ function renderCampaignWizard() {
           '<label style="font-weight:600;font-size:13px">Texto del anuncio <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
           '<button id="cw-gen-btn" onclick="cwGenerateCopy()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1877F2;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
         '</div>'+
-        '<textarea id="cw-ad-body" rows="3" placeholder="Ej: Descubre nuestros servicios y transforma tu vida hoy..." style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(campaignWizardData.adBody||'')+'</textarea>'+
+        '<textarea id="cw-ad-body" rows="3" placeholder="Ej: ¿Buscas crecer tu negocio? 🚀 Llegamos a más clientes para ti. ¡Escríbenos hoy!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(campaignWizardData.adBody||'')+'</textarea>'+
+      '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 125 caracteres</div>'+
       '</div>'+
-      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
-        '<input id="cw-ad-title" placeholder="Ej: ¡Oferta especial este mes!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adTitle||'')+'"></div>';
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+          '<input id="cw-ad-title" placeholder="Ej: ¡Empieza gratis hoy!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adTitle||'')+'">'+
+          '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 40 caracteres</div></div>'+
+        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descripción <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+          '<input id="cw-ad-description" placeholder="Ej: Envío gratis · Sin contrato" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adDescription||'')+'">'+
+          '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 30 caracteres</div></div>'+
+      '</div>';
 
     var urlSection = ['OUTCOME_TRAFFIC','OUTCOME_SALES','OUTCOME_MESSAGES'].includes(campaignWizardData.objective) ?
       '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL de destino</label>'+
@@ -7162,9 +7169,10 @@ function cwSaveStep3Fields() {
   var ax = document.getElementById('cw-age-max'); if (ax) campaignWizardData.ageMax  = parseInt(ax.value)||55;
 }
 function cwSaveStep4Fields() {
-  var t = document.getElementById('cw-ad-title'); if (t) campaignWizardData.adTitle = t.value;
-  var b = document.getElementById('cw-ad-body');  if (b) campaignWizardData.adBody  = b.value;
-  var u = document.getElementById('cw-ad-url');   if (u) campaignWizardData.adUrl   = u.value;
+  var t = document.getElementById('cw-ad-title');       if (t) campaignWizardData.adTitle       = t.value;
+  var b = document.getElementById('cw-ad-body');        if (b) campaignWizardData.adBody        = b.value;
+  var d = document.getElementById('cw-ad-description'); if (d) campaignWizardData.adDescription = d.value;
+  var u = document.getElementById('cw-ad-url');         if (u) campaignWizardData.adUrl         = u.value;
 }
 
 function cwSelectObj(obj) {
@@ -7202,11 +7210,13 @@ async function cwGenerateCopy() {
     });
     var data = await r.json();
     if (data.error) throw new Error(data.error);
-    if (data.title) { var t=document.getElementById('cw-ad-title'); if(t) t.value=data.title; }
-    if (data.body)  { var b=document.getElementById('cw-ad-body');  if(b) b.value=data.body;  }
+    if (data.title)       { var t=document.getElementById('cw-ad-title');       if(t) t.value=data.title;       }
+    if (data.body)        { var b=document.getElementById('cw-ad-body');        if(b) b.value=data.body;        }
+    if (data.description) { var d=document.getElementById('cw-ad-description'); if(d) d.value=data.description; }
     if (!data.title && !data.body) throw new Error('La IA no generó texto. Inténtalo de nuevo.');
-    campaignWizardData.adTitle = data.title || '';
-    campaignWizardData.adBody  = data.body  || '';
+    campaignWizardData.adTitle       = data.title       || '';
+    campaignWizardData.adBody        = data.body        || '';
+    campaignWizardData.adDescription = data.description || '';
   } catch(e) {
     if (btn) btn.innerHTML = '✨ Generar con IA';
     var errDiv = document.getElementById('cw-gen-error');
@@ -7392,9 +7402,10 @@ function cwNext() {
     campaignWizardData.ageMin  = parseInt((document.getElementById('cw-age-min')||{}).value||18);
     campaignWizardData.ageMax  = parseInt((document.getElementById('cw-age-max')||{}).value||55);
   } else if (campaignWizardStep === 4) {
-    campaignWizardData.adTitle = (document.getElementById('cw-ad-title')||{}).value||'';
-    campaignWizardData.adBody  = (document.getElementById('cw-ad-body')||{}).value||'';
-    campaignWizardData.adUrl   = (document.getElementById('cw-ad-url')||{}).value||'';
+    campaignWizardData.adTitle       = (document.getElementById('cw-ad-title')||{}).value||'';
+    campaignWizardData.adBody        = (document.getElementById('cw-ad-body')||{}).value||'';
+    campaignWizardData.adDescription = (document.getElementById('cw-ad-description')||{}).value||'';
+    campaignWizardData.adUrl         = (document.getElementById('cw-ad-url')||{}).value||'';
     // pageId se carga en background por cwLoadPages — no hay input visible
     if (!campaignWizardData.adFormat) campaignWizardData.adFormat = 'image';
   }
@@ -7453,14 +7464,15 @@ async function cwLaunch() {
     if (!isMessagingCampaign && hasCreative && campaignWizardData.pageId) {
       try {
         var adPayload = {
-          accessToken: campaignWizardData.token,
-          adAccountId: campaignWizardData.adAccountId,
-          adsetId:     data.adsetId,
-          pageId:      campaignWizardData.pageId,
-          adTitle:     campaignWizardData.adTitle,
-          adBody:      campaignWizardData.adBody,
-          adUrl:       campaignWizardData.adUrl || 'https://www.facebook.com',
-          format:      adFmt,
+          accessToken:   campaignWizardData.token,
+          adAccountId:   campaignWizardData.adAccountId,
+          adsetId:       data.adsetId,
+          pageId:        campaignWizardData.pageId,
+          adTitle:       campaignWizardData.adTitle,
+          adBody:        campaignWizardData.adBody,
+          adDescription: campaignWizardData.adDescription || '',
+          adUrl:         campaignWizardData.adUrl || 'https://www.facebook.com',
+          format:        adFmt,
         };
         if (adFmt === 'carousel') {
           adPayload.imagesBase64 = campaignWizardData.carouselImages.map(function(i){ return i.base64; });
