@@ -6026,7 +6026,16 @@ function toggleCheck(item){item.classList.toggle('done');updateProgress()}
 function updateProgress(){const all=document.querySelectorAll('.stage-panel.active .cl-item').length;const done=document.querySelectorAll('.stage-panel.active .cl-item.done').length;document.getElementById('pt-count').textContent=`${done} / ${all} tareas`;document.getElementById('pt-fill').style.width=all?`${(done/all)*100}%`:'0%'}
 
 // VIEWS
-function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();if(id==='agency')agencyRender();}
+function showView(id){
+  // Ocultar loader la primera vez que se muestra una vista
+  var loader=document.getElementById('app-loader');
+  if(loader&&!loader.classList.contains('hidden')){loader.classList.add('hidden');setTimeout(function(){loader.style.display='none';},260);}
+  document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+  var el=document.getElementById('view-'+id);
+  if(el)el.classList.add('active');
+  if(id==='roadmap')updateProgress();
+  if(id==='agency')agencyRender();
+}
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
