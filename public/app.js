@@ -2634,7 +2634,18 @@ function showGoogleAdsActionCards() {
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
       '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
+    '<div style="width:100%;max-width:520px;padding-left:40px">' +
+
+      // Card 0: Crear campaña — destacada full-width
+      '<div onclick="dismissGoogleAdsCards(this);launchGoogleCampaignFlow()" style="border:2px solid #1E2BCC;border-radius:14px;padding:18px 20px;cursor:pointer;background:linear-gradient(135deg,#e8eafc 0%,#dbeafe 100%);transition:all .15s;margin-bottom:8px;display:flex;align-items:center;gap:14px" onmouseover="this.style.background=\'#d6d9f7\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'linear-gradient(135deg,#e8eafc 0%,#dbeafe 100%)\';this.style.transform=\'\'">' +
+        '<div style="font-size:28px">🚀</div>' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700;color:#1E2BCC">Crear campaña en Google Ads</div>' +
+          '<div style="font-size:12px;color:#4B5ECC;margin-top:2px">Wizard guiado: keywords, RSA y segmentación en minutos</div>' +
+        '</div>' +
+      '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
 
       // Card 1: Analizar y optimizar campaña
       '<div onclick="dismissGoogleAdsCards(this);qSend(\'ANALIZAR Y OPTIMIZAR mi cuenta de Google Ads - necesito una auditoría profesional completa de mis campañas actuales con análisis de métricas, identificación de problemas y recomendaciones priorizadas de mejora\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
@@ -2675,7 +2686,8 @@ function showGoogleAdsActionCards() {
         '</div>' +
       '</div>' +
 
-    '</div>';
+    '</div>' +   // cierra grid 2-col
+    '</div>';    // cierra contenedor externo
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 }
@@ -5149,7 +5161,21 @@ async function restoreConnectionsFromSupabase() {
     if (!hasGoogleToken && gConn.connected && gConn.access_token) {
       sessionStorage.setItem('ads_access_token', gConn.access_token);
       sessionStorage.setItem('ads_email', gConn.account_name || '');
+      localStorage.setItem('ads_access_token_persist', gConn.access_token);
+      localStorage.setItem('ads_email_persist', gConn.account_name || '');
       updateAdsUI(true, gConn.account_name);
+    }
+    // Restaurar cuenta activa de Google Ads desde localStorage
+    if (!sessionStorage.getItem('ads_customer_id')) {
+      var persistedGId  = localStorage.getItem('ads_customer_id_persist');
+      var persistedGAcc = localStorage.getItem('ads_active_account_persist');
+      if (persistedGId) {
+        sessionStorage.setItem('ads_customer_id', persistedGId);
+        if (persistedGAcc) {
+          sessionStorage.setItem('ads_active_account', persistedGAcc);
+          try { if (typeof adsActiveAccount !== 'undefined') { adsActiveAccount = JSON.parse(persistedGAcc); if (typeof renderActiveAccount === 'function') renderActiveAccount(); } } catch(e){}
+        }
+      }
     }
     if (!hasMetaToken && mConn.connected && mConn.access_token) {
       sessionStorage.setItem('meta_access_token', mConn.access_token);
@@ -7560,6 +7586,377 @@ function requestImageVariation(encodedPrompt, format) {
 }
 
 // =============================================
+// GOOGLE ADS CAMPAIGN WIZARD
+// =============================================
+
+var googleWizardStep = 1;
+var googleWizardData = {};
+
+async function launchGoogleCampaignFlow() {
+  var token      = sessionStorage.getItem('ads_access_token')  || localStorage.getItem('ads_access_token_persist');
+  var customerId = sessionStorage.getItem('ads_customer_id')   || localStorage.getItem('ads_customer_id_persist');
+  var accStr     = sessionStorage.getItem('ads_active_account')|| localStorage.getItem('ads_active_account_persist') || '{}';
+  var acc = {}; try { acc = JSON.parse(accStr); } catch(e){}
+
+  if (!token) {
+    alert('Para crear una campaña necesitas conectar tu cuenta de Google Ads en Configuración.');
+    openSettings(); return;
+  }
+  if (!customerId) {
+    alert('Selecciona una cuenta de Google Ads en Configuración → Conexiones.');
+    openSettings(); return;
+  }
+
+  googleWizardData  = { token: token, customerId: customerId, currency: acc.currency || 'USD', accountName: acc.name || '' };
+  googleWizardStep  = 1;
+  renderGoogleCampaignWizard();
+}
+
+function gcwSelectObj(obj) {
+  gcwSaveStep1Fields();
+  googleWizardData.objective = obj;
+  renderGoogleCampaignWizard();
+}
+function gcwSelectLang(id) {
+  gcwSaveStep2Fields();
+  googleWizardData.languageId = id;
+  renderGoogleCampaignWizard();
+}
+function gcwSaveStep1Fields() {
+  var n = document.getElementById('gcw-name');   if (n) googleWizardData.name   = n.value;
+  var b = document.getElementById('gcw-budget'); if (b) googleWizardData.budget = parseFloat(b.value)||0;
+}
+function gcwSaveStep2Fields() {
+  var c = document.getElementById('gcw-country'); if (c) googleWizardData.countryGeoId = c.value;
+}
+function gcwSaveStep3Fields() {
+  var k = document.getElementById('gcw-keywords');          if (k) googleWizardData.keywordsText          = k.value;
+  var n = document.getElementById('gcw-negative-keywords'); if (n) googleWizardData.negativeKeywordsText  = n.value;
+}
+function gcwSaveStep4Fields() {
+  var u = document.getElementById('gcw-final-url'); if (u) googleWizardData.finalUrl = u.value;
+  var heads = document.querySelectorAll('.gcw-headline');
+  var descs = document.querySelectorAll('.gcw-description');
+  googleWizardData.headlines    = Array.from(heads).map(function(el){ return el.value; });
+  googleWizardData.descriptions = Array.from(descs).map(function(el){ return el.value; });
+}
+function gcwCountChars(input, max) {
+  var len = input.value.length;
+  var counter = input.nextElementSibling;
+  if (counter) {
+    counter.textContent = len + '/' + max;
+    counter.style.color = len > max ? '#dc2626' : (len > max * 0.9 ? '#f59e0b' : '#888');
+  }
+  input.style.borderColor = len > max ? '#dc2626' : '#ddd';
+}
+
+function gcwNext() {
+  if (googleWizardStep === 1) {
+    gcwSaveStep1Fields();
+    if (!googleWizardData.name || !googleWizardData.name.trim()) { alert('Ingresa un nombre para la campaña.'); return; }
+    if (!googleWizardData.objective) { alert('Selecciona un objetivo.'); return; }
+    if (!googleWizardData.budget || googleWizardData.budget <= 0) { alert('Ingresa el presupuesto diario.'); return; }
+  } else if (googleWizardStep === 2) {
+    gcwSaveStep2Fields();
+    if (!googleWizardData.countryGeoId) googleWizardData.countryGeoId = '2170';
+    if (!googleWizardData.languageId)   googleWizardData.languageId   = '1003';
+  } else if (googleWizardStep === 3) {
+    gcwSaveStep3Fields();
+  } else if (googleWizardStep === 4) {
+    gcwSaveStep4Fields();
+  }
+  googleWizardStep++;
+  renderGoogleCampaignWizard();
+}
+function gcwPrev() {
+  if (googleWizardStep === 2) gcwSaveStep2Fields();
+  if (googleWizardStep === 3) gcwSaveStep3Fields();
+  if (googleWizardStep === 4) gcwSaveStep4Fields();
+  googleWizardStep--;
+  renderGoogleCampaignWizard();
+}
+function closeGoogleCampaignWizard() {
+  var el = document.getElementById('gcw-overlay');
+  if (el) el.remove();
+}
+
+async function gcwGenerateContent() {
+  var btn = document.getElementById('gcw-gen-btn') || document.querySelector('[onclick*="gcwGenerateContent"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+  try {
+    var clientProfile = '';
+    try { clientProfile = JSON.stringify(mem || {}); } catch(e){}
+    var r = await fetch('/api/google-ads?action=generate-ad-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        campaignName:  googleWizardData.name,
+        objective:     googleWizardData.objective,
+        clientProfile: clientProfile,
+        userId:        (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '',
+        customerId:    googleWizardData.customerId,
+        accessToken:   googleWizardData.token,
+      }),
+    });
+    var data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    // Guardar todo en wizardData
+    if (data.keywords)         googleWizardData.generatedKeywords    = data.keywords;
+    if (data.negativeKeywords) googleWizardData.generatedNegatives   = data.negativeKeywords;
+    if (data.headlines)        googleWizardData.headlines            = data.headlines;
+    if (data.descriptions)     googleWizardData.descriptions         = data.descriptions;
+
+    // Si estamos en el paso 3, poblar los textareas
+    if (googleWizardStep === 3) {
+      var kwEl = document.getElementById('gcw-keywords');
+      var negEl = document.getElementById('gcw-negative-keywords');
+      if (kwEl && data.keywords) {
+        googleWizardData.keywordsText = data.keywords.map(function(k){
+          if (k.matchType === 'EXACT')   return '[' + k.text + ']';
+          if (k.matchType === 'PHRASE')  return '"' + k.text + '"';
+          return k.text;
+        }).join('\n');
+        kwEl.value = googleWizardData.keywordsText;
+      }
+      if (negEl && data.negativeKeywords) {
+        googleWizardData.negativeKeywordsText = data.negativeKeywords.join('\n');
+        negEl.value = googleWizardData.negativeKeywordsText;
+      }
+    }
+
+    // Si estamos en el paso 4, poblar los inputs RSA
+    if (googleWizardStep === 4) {
+      renderGoogleCampaignWizard(); // re-render con los nuevos headlines/descriptions
+    }
+
+  } catch(e) {
+    var errEl = document.getElementById('gcw-gen-error');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.id = 'gcw-gen-error';
+      errEl.style.cssText = 'color:#dc2626;font-size:12px;margin-top:6px';
+      var genBtn = document.getElementById('gcw-gen-btn');
+      if (genBtn && genBtn.parentNode) genBtn.parentNode.parentNode.appendChild(errEl);
+    }
+    errEl.textContent = '⚠️ ' + e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar con IA'; }
+  }
+}
+
+function renderGoogleCampaignWizard() {
+  var steps = ['Campaña','Segmentación','Keywords','Anuncio RSA'];
+  var stepInd = steps.map(function(s, i) {
+    var done    = i + 1 < googleWizardStep;
+    var current = i + 1 === googleWizardStep;
+    var dotSt   = current ? 'background:#1E2BCC;color:#fff' : (done ? 'background:#e8eafc;color:#1E2BCC' : 'background:#f3f4f6;color:#999');
+    var lblSt   = 'font-size:11px;color:' + (current ? '#1E2BCC' : '#999') + ';font-weight:' + (current ? '600' : '400');
+    return '<div style="display:flex;align-items:center;gap:5px">' +
+      '<div style="width:22px;height:22px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;'+dotSt+'">'+(done?'✓':(i+1))+'</div>'+
+      '<span style="'+lblSt+'">'+s+'</span></div>' +
+      (i < steps.length - 1 ? '<div style="flex:1;height:1px;background:#e5e7eb;margin:0 2px"></div>' : '');
+  }).join('');
+
+  var body = '';
+  var isLastStep = googleWizardStep === 4;
+
+  if (googleWizardStep === 1) {
+    var objectives = [
+      ['LEADS',    '🎯','Generación de leads',  'Formularios y llamadas'],
+      ['SALES',    '🛒','Ventas',               'Conversiones en el sitio web'],
+      ['TRAFFIC',  '🌐','Tráfico',              'Visitas al sitio web'],
+      ['AWARENESS','👁️','Reconocimiento de marca','Impresiones y visibilidad'],
+    ];
+    body =
+      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Nombre de la campaña</label>'+
+        '<input id="gcw-name" placeholder="Ej: Leads - Servicios Contables Nov 2025" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(googleWizardData.name||'')+'"></div>'+
+      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Objetivo de campaña</label>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+          objectives.map(function(o){
+            var sel = googleWizardData.objective === o[0] ? 'border:2px solid #1E2BCC;background:#e8eafc' : 'border:1px solid #e5e7eb;background:#fff';
+            return '<div onclick="gcwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;cursor:pointer;transition:all .1s">'+
+              '<div style="font-size:18px;margin-bottom:4px">'+o[1]+'</div>'+
+              '<div style="font-size:12px;font-weight:600;color:#1E2BCC">'+o[2]+'</div>'+
+              '<div style="font-size:11px;color:#888;margin-top:2px">'+o[3]+'</div></div>';
+          }).join('')+
+        '</div></div>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario ('+googleWizardData.currency+')</label>'+
+        '<input id="gcw-budget" type="number" min="1" placeholder="Ej: 50" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700;box-sizing:border-box" value="'+(googleWizardData.budget||'')+'"></div>';
+
+  } else if (googleWizardStep === 2) {
+    var countries = [
+      ['Colombia','2170'],['México','2484'],['Argentina','2032'],['Chile','2152'],
+      ['Perú','2604'],['Venezuela','2862'],['Ecuador','2218'],['Bolivia','2068'],
+      ['Costa Rica','2188'],['Guatemala','2320'],['El Salvador','2222'],['Honduras','2340'],
+      ['Panamá','2591'],['Rep. Dominicana','2214'],['Uruguay','2858'],['Paraguay','2600'],
+      ['España','2724'],['USA','2840'],
+    ];
+    var selGeoId = googleWizardData.countryGeoId || '2170';
+    body =
+      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">País de segmentación</label>'+
+        '<select id="gcw-country" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff">'+
+          countries.map(function(c){ return '<option value="'+c[1]+'"'+(selGeoId===c[1]?' selected':'')+'>'+c[0]+'</option>'; }).join('')+
+        '</select></div>'+
+      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Idioma del anuncio</label>'+
+        '<div style="display:flex;gap:8px">'+
+          [['1003','Español'],['1000','English'],['1014','Português']].map(function(l){
+            var sel = (googleWizardData.languageId||'1003') === l[0] ? 'background:#1E2BCC;color:#fff;border-color:#1E2BCC' : 'background:#fff;color:#333;border-color:#ddd';
+            return '<button onclick="gcwSelectLang(\''+l[0]+'\')" style="padding:8px 16px;border:1px solid;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font);'+sel+'">'+l[1]+'</button>';
+          }).join('')+
+        '</div></div>'+
+      '<div style="background:#f0f4ff;border:1px solid #c7d7ff;border-radius:8px;padding:12px;font-size:12px;color:#1E2BCC">'+
+        'ℹ️ La campaña se creará en estado <strong>Pausada</strong> para que puedas revisarla antes de activarla en Google Ads.</div>';
+
+  } else if (googleWizardStep === 3) {
+    body =
+      '<div style="margin-bottom:12px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+          '<label style="font-weight:600;font-size:13px">Palabras clave <span style="font-weight:400;color:#888;font-size:12px">(una por línea)</span></label>'+
+          '<button id="gcw-gen-btn" onclick="gcwGenerateContent()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1E2BCC;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
+        '</div>'+
+        '<div style="font-size:11px;color:#888;margin-bottom:6px">Usa [corchetes] para exacta, "comillas" para frase, sin símbolo para amplia.</div>'+
+        '<textarea id="gcw-keywords" rows="6" placeholder="servicios contables bogota\ncontador publico colombia\n[outsourcing contable]" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(googleWizardData.keywordsText||'')+'</textarea>'+
+      '</div>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Keywords negativas <span style="font-weight:400;color:#888;font-size:12px">(opcional, una por línea)</span></label>'+
+        '<textarea id="gcw-negative-keywords" rows="3" placeholder="gratis\ncomo hacer\ncurso" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(googleWizardData.negativeKeywordsText||'')+'</textarea></div>'+
+      '<div id="gcw-gen-error" style="color:#dc2626;font-size:12px;margin-top:6px"></div>';
+
+  } else if (googleWizardStep === 4) {
+    var defaultH = googleWizardData.headlines || ['','','','','','','','','',''];
+    var defaultD = googleWizardData.descriptions || ['','',''];
+    body =
+      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL final del anuncio</label>'+
+        '<input id="gcw-final-url" type="url" placeholder="https://tusitio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(googleWizardData.finalUrl||'')+'"></div>'+
+      '<div style="margin-bottom:12px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+          '<label style="font-weight:600;font-size:13px">Headlines RSA <span style="font-weight:400;color:#888;font-size:12px">(máx 30c c/u — al menos 3)</span></label>'+
+          '<button onclick="gcwGenerateContent()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1E2BCC;border:1px solid #c7d7ff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Regenerar IA</button>'+
+        '</div>'+
+        defaultH.map(function(h, i){
+          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
+            '<span style="font-size:11px;color:#aaa;width:14px;text-align:right">'+(i+1)+'</span>'+
+            '<input class="gcw-headline" maxlength="30" placeholder="Headline '+(i+1)+'" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;box-sizing:border-box" value="'+(h||'')+'" oninput="gcwCountChars(this,30)">'+
+            '<span style="font-size:10px;color:#aaa;min-width:30px;text-align:right">'+(h?Math.min(h.length,30):0)+'/30</span>'+
+          '</div>';
+        }).join('')+
+      '</div>'+
+      '<div>'+
+        '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descriptions RSA <span style="font-weight:400;color:#888;font-size:12px">(máx 90c c/u — al menos 2)</span></label>'+
+        defaultD.map(function(d, i){
+          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
+            '<span style="font-size:11px;color:#aaa;width:14px;text-align:right">'+(i+1)+'</span>'+
+            '<input class="gcw-description" maxlength="90" placeholder="Description '+(i+1)+'" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;box-sizing:border-box" value="'+(d||'')+'" oninput="gcwCountChars(this,90)">'+
+            '<span style="font-size:10px;color:#aaa;min-width:36px;text-align:right">'+(d?Math.min(d.length,90):0)+'/90</span>'+
+          '</div>';
+        }).join('')+
+      '</div>'+
+      '<div id="gcw-launch-msg" style="margin-top:8px;font-size:13px;color:#dc2626"></div>';
+  }
+
+  var overlay = document.getElementById('gcw-overlay');
+  if (!overlay) { overlay = document.createElement('div'); overlay.id = 'gcw-overlay'; document.body.appendChild(overlay); }
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;font-family:var(--font)">'+
+      '<div style="background:#1E2BCC;border-radius:16px 16px 0 0;padding:18px 20px;display:flex;justify-content:space-between;align-items:center">'+
+        '<div>'+
+          (googleWizardData.accountName ? '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:2px">'+googleWizardData.accountName+'</div>' : '')+
+          '<h3 style="margin:0;font-size:17px;color:#fff">🚀 Crear campaña en Google Ads</h3>'+
+        '</div>'+
+        '<button onclick="closeGoogleCampaignWizard()" style="background:none;border:none;font-size:22px;cursor:pointer;color:rgba(255,255,255,.7);line-height:1">×</button>'+
+      '</div>'+
+      '<div style="padding:16px 20px 8px">'+
+        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:18px">'+stepInd+'</div>'+
+        body+
+      '</div>'+
+      '<div style="padding:12px 20px 18px;display:flex;gap:10px;border-top:1px solid #eee">'+
+        (googleWizardStep > 1 ? '<button onclick="gcwPrev()" style="flex:1;padding:12px;background:#f3f4f6;color:#555;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font)">← Atrás</button>' : '')+
+        (isLastStep
+          ? '<button id="gcw-launch-btn" onclick="gcwLaunch()" style="flex:2;padding:12px;background:#1E2BCC;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:var(--font)">🚀 Crear campaña</button>'
+          : '<button onclick="gcwNext()" style="flex:2;padding:12px;background:#1E2BCC;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:var(--font)">Siguiente →</button>')+
+      '</div>'+
+    '</div>';
+}
+
+async function gcwLaunch() {
+  gcwSaveStep4Fields();
+  var btn = document.getElementById('gcw-launch-btn');
+  var msg = document.getElementById('gcw-launch-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando campaña...'; }
+
+  // Parsear keywords del textarea
+  var keywords = [];
+  var negatives = [];
+  try {
+    var lines = (googleWizardData.keywordsText || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+    lines.forEach(function(line) {
+      if (/^\[.+\]$/.test(line))       keywords.push({ text: line.slice(1,-1), matchType: 'EXACT' });
+      else if (/^".+"$/.test(line))    keywords.push({ text: line.slice(1,-1), matchType: 'PHRASE' });
+      else                             keywords.push({ text: line, matchType: 'PHRASE' });
+    });
+    negatives = (googleWizardData.negativeKeywordsText || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+    // Si el usuario usó keywords generadas por IA y no editó, también están en generatedKeywords
+    if (!keywords.length && googleWizardData.generatedKeywords) keywords = googleWizardData.generatedKeywords;
+  } catch(e){}
+
+  try {
+    var uid = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
+    var r = await fetch('/api/google-ads?action=create-campaign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken:      googleWizardData.token,
+        customerId:       googleWizardData.customerId,
+        userId:           uid,
+        name:             googleWizardData.name,
+        objective:        googleWizardData.objective,
+        dailyBudget:      googleWizardData.budget,
+        currency:         googleWizardData.currency,
+        countryGeoId:     googleWizardData.countryGeoId || '2170',
+        languageId:       googleWizardData.languageId   || '1003',
+        keywords:         keywords,
+        negativeKeywords: negatives,
+        headlines:        (googleWizardData.headlines    || []).filter(function(h){ return h && h.trim(); }),
+        descriptions:     (googleWizardData.descriptions || []).filter(function(d){ return d && d.trim(); }),
+        finalUrl:         googleWizardData.finalUrl || '',
+      }),
+    });
+    var data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'Error al crear la campaña');
+
+    // Pantalla de éxito
+    var overlay = document.getElementById('gcw-overlay');
+    if (overlay) {
+      overlay.querySelector('div').innerHTML =
+        '<div style="background:#1E2BCC;border-radius:16px 16px 0 0;padding:18px 20px">'+
+          '<h3 style="margin:0;font-size:17px;color:#fff">✅ ¡Campaña creada!</h3>'+
+        '</div>'+
+        '<div style="padding:24px 20px">'+
+          '<div style="background:#f0f4ff;border-radius:12px;padding:16px;margin-bottom:16px">'+
+            '<div style="font-size:13px;font-weight:700;color:#1E2BCC;margin-bottom:8px">'+googleWizardData.name+'</div>'+
+            '<div style="font-size:12px;color:#555;line-height:1.7">'+
+              '📋 Campaign ID: <strong>'+data.campaignId+'</strong><br>'+
+              '📦 Ad Group ID: <strong>'+data.adGroupId+'</strong>'+
+              (data.adId ? '<br>📢 Ad RSA ID: <strong>'+data.adId+'</strong>' : '')+
+            '</div>'+
+          '</div>'+
+          '<div style="background:#fff8e6;border:1px solid #ffd970;border-radius:8px;padding:12px;font-size:12px;color:#7a5700;margin-bottom:16px">'+
+            '⏸️ La campaña está <strong>Pausada</strong>. Revísala en Google Ads Manager y actívala cuando estés listo.'+
+          '</div>'+
+          '<a href="https://ads.google.com" target="_blank" style="display:block;text-align:center;padding:11px;background:#1E2BCC;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;margin-bottom:8px">Abrir Google Ads →</a>'+
+          '<button onclick="closeGoogleCampaignWizard()" style="width:100%;padding:10px;background:#f3f4f6;color:#555;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--font)">Cerrar</button>'+
+        '</div>';
+    }
+    addAgent('✅ **Campaña creada en Google Ads**\n\n**'+googleWizardData.name+'** está lista (Pausada).\n\n'+(data.adId?'Se creó el anuncio RSA con '+((googleWizardData.headlines||[]).filter(function(h){return h&&h.trim();}).length)+' headlines y '+((googleWizardData.descriptions||[]).filter(function(d){return d&&d.trim();}).length)+' descriptions.\n\n':'')+'Actívala en Google Ads Manager cuando quieras. ¿Necesitas ajustar pujas, agregar más keywords o revisar la estructura antes de activarla?');
+
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Crear campaña'; }
+    if (msg) msg.textContent = '⚠️ ' + err.message;
+  }
+}
+
+// =============================================
 // VARIACIONES A/B — Flujo Manus-style
 // Sube anuncio → Claude analiza → genera N variaciones en paralelo → grid display
 // =============================================
@@ -9471,6 +9868,9 @@ let adsAccounts = [];       // todas las cuentas accesibles
       sessionStorage.setItem('ads_access_token', token);
       sessionStorage.setItem('ads_refresh_token', refresh || '');
       sessionStorage.setItem('ads_email', email || '');
+      localStorage.setItem('ads_access_token_persist', token);
+      localStorage.setItem('ads_refresh_token_persist', refresh || '');
+      localStorage.setItem('ads_email_persist', email || '');
       updateAdsUI(true, email);
       setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
     } else if (platform === 'google_ads') {
@@ -9485,6 +9885,8 @@ let adsAccounts = [];       // todas las cuentas accesibles
           if (conn.connected && conn.access_token) {
             sessionStorage.setItem('ads_access_token', conn.access_token);
             sessionStorage.setItem('ads_email', conn.account_name || email || '');
+            localStorage.setItem('ads_access_token_persist', conn.access_token);
+            localStorage.setItem('ads_email_persist', conn.account_name || email || '');
             updateAdsUI(true, conn.account_name || email);
             openSettings(); loadAdsAccounts();
           }
@@ -9495,15 +9897,20 @@ let adsAccounts = [];       // todas las cuentas accesibles
   if (params.get('ads_error')) {
     window.history.replaceState({}, '', window.location.pathname);
   }
-  // Restaurar sesión guardada en sessionStorage
-  const savedToken   = sessionStorage.getItem('ads_access_token');
-  const savedEmail   = sessionStorage.getItem('ads_email');
-  const savedAccount = sessionStorage.getItem('ads_active_account');
+  // Restaurar sesión — sessionStorage primero, luego localStorage como fallback
+  var savedToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist');
+  var savedEmail   = sessionStorage.getItem('ads_email')          || localStorage.getItem('ads_email_persist');
+  var savedAccount = sessionStorage.getItem('ads_active_account') || localStorage.getItem('ads_active_account_persist');
+  var savedCustId  = sessionStorage.getItem('ads_customer_id')    || localStorage.getItem('ads_customer_id_persist');
   if (savedToken) {
+    if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', savedToken);
+    if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
+    if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
     updateAdsUI(true, savedEmail);
     if (savedAccount) {
       try {
         adsActiveAccount = JSON.parse(savedAccount);
+        if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
         renderActiveAccount();
       } catch {}
     }
@@ -9520,6 +9927,12 @@ function disconnectGoogleAds() {
   sessionStorage.removeItem('ads_refresh_token');
   sessionStorage.removeItem('ads_email');
   sessionStorage.removeItem('ads_active_account');
+  sessionStorage.removeItem('ads_customer_id');
+  localStorage.removeItem('ads_access_token_persist');
+  localStorage.removeItem('ads_refresh_token_persist');
+  localStorage.removeItem('ads_email_persist');
+  localStorage.removeItem('ads_active_account_persist');
+  localStorage.removeItem('ads_customer_id_persist');
   adsAccounts = [];
   adsActiveAccount = null;
   updateAdsUI(false);
@@ -9530,8 +9943,9 @@ function disconnectGoogleAds() {
 
 // Carga las cuentas desde la API y muestra el selector
 async function loadAdsAccounts() {
-  const accessToken = sessionStorage.getItem('ads_access_token');
+  const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   if (!accessToken) return;
+  if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', accessToken);
 
   // Mostrar loading
   document.getElementById('adsAccountsLoading').style.display = 'block';
@@ -9608,9 +10022,11 @@ async function selectAdsAccount(accountId) {
 
   adsActiveAccount = acc;
   sessionStorage.setItem('ads_active_account', JSON.stringify(acc));
+  localStorage.setItem('ads_active_account_persist', JSON.stringify(acc));
 
   // Guardar también el customerId para queryGoogleAds
   sessionStorage.setItem('ads_customer_id', acc.id);
+  localStorage.setItem('ads_customer_id_persist', acc.id);
 
   renderActiveAccount();
   renderAccountSelector(); // re-render para marcar el activo
@@ -9801,8 +10217,8 @@ function updateAdsUI(connected, email) {
 }
 
 async function queryGoogleAds(gaqlQuery) {
-  const accessToken = sessionStorage.getItem('ads_access_token');
-  const customerId  = sessionStorage.getItem('ads_customer_id');
+  const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+  const customerId  = sessionStorage.getItem('ads_customer_id')  || localStorage.getItem('ads_customer_id_persist');
   if (!accessToken) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
   if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {

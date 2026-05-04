@@ -455,6 +455,232 @@ export default async function handler(req, res) {
       return res.json({ ok: true, adGroupName, newStatus: status });
     }
 
+    // ── generate-ad-content ────────────────────────────────────
+    if (action === 'generate-ad-content') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
+      const { objective, clientProfile, campaignName } = req.body || {};
+      const objLabels = {
+        LEADS:     'generación de leads (formularios nativos y llamadas)',
+        SALES:     'ventas y conversiones en el sitio web',
+        TRAFFIC:   'tráfico al sitio web',
+        AWARENESS: 'reconocimiento de marca e impresiones',
+      };
+      let profile = '';
+      try { const p = JSON.parse(clientProfile || '{}'); profile = Object.entries(p).filter(([,v])=>v).slice(0,6).map(([k,v])=>k+': '+v).join(', '); } catch(e){}
+
+      const prompt = `Eres Acuarius, especialista senior en Google Ads Search para mercados de LatAm. Genera keywords y contenido RSA de alta conversión para una campaña de búsqueda.
+
+CONTEXTO DE LA CAMPAÑA:
+- Nombre: ${campaignName || 'nueva campaña'}
+- Objetivo: ${objLabels[objective] || objective || 'generación de leads'}
+${profile ? '- Negocio: '+profile : ''}
+
+GENERA:
+
+1. KEYWORDS (15-20 keywords de búsqueda):
+   - Mix de tipos: "frase" (más relevantes), [exactas] (las más importantes), y sin símbolo para amplia modificada
+   - Incluye variantes con ciudad/país si aplica
+   - Evita términos demasiado genéricos
+
+2. KEYWORDS NEGATIVAS (8-12 términos):
+   - Excluir intención informacional: gratis, cómo, qué es, definición, wikipedia
+   - Excluir competencia no relevante, trabajos/empleo si no aplica
+
+3. HEADLINES RSA (10 headlines):
+   - CRÍTICO: Cada headline debe tener MÁXIMO 30 caracteres incluyendo espacios
+   - Mix: incluir keyword principal, CTA directo, beneficio concreto, urgencia, propuesta de valor
+   - Evita puntuación al final
+
+4. DESCRIPTIONS RSA (3 descriptions):
+   - CRÍTICO: Cada description debe tener MÁXIMO 90 caracteres incluyendo espacios
+   - AIDA: beneficio + diferenciador + CTA específico
+
+Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
+{
+  "keywords": [
+    {"text": "keyword de ejemplo", "matchType": "PHRASE"}
+  ],
+  "negativeKeywords": ["gratis", "como hacer"],
+  "headlines": ["Headline 1 max30c", "Headline 2", "Headline 3", "Headline 4", "Headline 5", "Headline 6", "Headline 7", "Headline 8", "Headline 9", "Headline 10"],
+  "descriptions": ["Description 1 con beneficio y CTA máximo noventa caracteres en total aquí", "Description 2 igual", "Description 3"]
+}`;
+
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!aiRes.ok) {
+        const errTxt = await aiRes.text().catch(() => '');
+        return res.status(500).json({ error: `Error IA (HTTP ${aiRes.status}): ${errTxt.slice(0,200)}` });
+      }
+      const aiData = await aiRes.json();
+      if (aiData.error) return res.status(500).json({ error: aiData.error.message || 'Error de la IA' });
+      const text = aiData.content?.[0]?.text || '';
+      if (!text) return res.status(500).json({ error: 'La IA no generó respuesta' });
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
+        // Truncate silently to enforce limits
+        if (parsed.headlines) parsed.headlines = parsed.headlines.map(h => (h||'').slice(0,30));
+        if (parsed.descriptions) parsed.descriptions = parsed.descriptions.map(d => (d||'').slice(0,90));
+        return res.json(parsed);
+      } catch(e) {
+        return res.status(500).json({ error: 'Error parseando respuesta IA' });
+      }
+    }
+
+    // ── create-campaign ────────────────────────────────────────
+    if (action === 'create-campaign') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
+      const {
+        name            = 'Nueva campaña',
+        objective       = 'LEADS',
+        dailyBudget     = 10,
+        countryGeoId    = '2170',   // Colombia por defecto
+        languageId      = '1003',   // Español
+        keywords        = [],       // [{ text, matchType }]
+        negativeKeywords= [],       // string[]
+        headlines       = [],       // string[] max 30c c/u
+        descriptions    = [],       // string[] max 90c c/u
+        finalUrl        = '',
+      } = req.body || {};
+
+      const cid = customerId.replace(/-/g, '');
+
+      const makeHeaders = (t) => {
+        const h = {
+          'Authorization':   `Bearer ${t}`,
+          'developer-token': DEV_TOKEN,
+          'Content-Type':    'application/json',
+        };
+        if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+        return h;
+      };
+
+      // 1. Crear presupuesto
+      const budgetMicros = String(Math.round(parseFloat(dailyBudget) * 1_000_000));
+      const budgetRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${cid}/campaignBudgets:mutate`,
+        { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
+          operations: [{ create: { name: `Presupuesto — ${name}`, amountMicros: budgetMicros, deliveryMethod: 'STANDARD' } }]
+        })}
+      );
+      const budgetData = await budgetRes.json();
+      if (!budgetRes.ok) throw new Error('Error al crear presupuesto: ' + JSON.stringify(budgetData?.details || budgetData).slice(0,300));
+      const budgetResource = budgetData.results?.[0]?.resourceName;
+      if (!budgetResource) throw new Error('Meta no devolvió el recurso del presupuesto');
+
+      // 2. Crear campaña
+      const campaignRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${cid}/campaigns:mutate`,
+        { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
+          operations: [{ create: {
+            name,
+            status: 'PAUSED',
+            advertisingChannelType: 'SEARCH',
+            campaignBudget: budgetResource,
+            maximizeClicks: {},
+            networkSettings: {
+              targetGoogleSearch: true,
+              targetSearchNetwork: true,
+              targetContentNetwork: false,
+              targetPartnerSearchNetwork: false,
+            },
+          }}]
+        })}
+      );
+      const campaignData = await campaignRes.json();
+      if (!campaignRes.ok) throw new Error('Error al crear campaña: ' + JSON.stringify(campaignData?.details || campaignData).slice(0,300));
+      const campaignResource = campaignData.results?.[0]?.resourceName;
+      if (!campaignResource) throw new Error('Google Ads no devolvió el ID de campaña');
+      const campaignId = campaignResource.split('/').pop();
+
+      // 3. Segmentación geográfica e idioma
+      const criteriaOps = [
+        { create: { campaign: campaignResource, location: { geoTargetConstant: `geoTargetConstants/${countryGeoId}` } } },
+        { create: { campaign: campaignResource, language: { languageConstant: `languageConstants/${languageId}` } } },
+      ];
+      await fetch(`https://googleads.googleapis.com/v18/customers/${cid}/campaignCriteria:mutate`,
+        { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: criteriaOps }) }
+      ).catch(() => {}); // non-fatal
+
+      // 4. Crear grupo de anuncios
+      const agRes = await fetch(
+        `https://googleads.googleapis.com/v18/customers/${cid}/adGroups:mutate`,
+        { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
+          operations: [{ create: {
+            name: `Grupo 1 — ${name}`,
+            campaign: campaignResource,
+            type: 'SEARCH_STANDARD',
+            status: 'ENABLED',
+          }}]
+        })}
+      );
+      const agData = await agRes.json();
+      if (!agRes.ok) throw new Error('Error al crear grupo de anuncios');
+      const agResource = agData.results?.[0]?.resourceName;
+      const adGroupId = agResource?.split('/').pop();
+
+      // 5. Agregar keywords positivas
+      if (keywords.length && agResource) {
+        const kwOps = keywords.slice(0,20).filter(k => k.text).map(k => ({
+          create: {
+            adGroup: agResource,
+            status: 'ENABLED',
+            keyword: { text: k.text, matchType: k.matchType || 'PHRASE' },
+          }
+        }));
+        if (kwOps.length) {
+          await fetch(`https://googleads.googleapis.com/v18/customers/${cid}/adGroupCriteria:mutate`,
+            { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: kwOps }) }
+          ).catch(() => {});
+        }
+      }
+
+      // 6. Agregar keywords negativas a nivel campaña
+      if (negativeKeywords.length && campaignResource) {
+        const negOps = negativeKeywords.slice(0,15).filter(Boolean).map(kw => ({
+          create: {
+            campaign: campaignResource,
+            negative: true,
+            keyword: { text: kw, matchType: 'BROAD' },
+          }
+        }));
+        if (negOps.length) {
+          await fetch(`https://googleads.googleapis.com/v18/customers/${cid}/campaignCriteria:mutate`,
+            { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: negOps }) }
+          ).catch(() => {});
+        }
+      }
+
+      // 7. Crear anuncio RSA
+      let adId = null;
+      const validH = headlines.filter(h => h && h.trim().length >= 1 && h.length <= 30).slice(0,15).map(h => ({ text: h.trim() }));
+      const validD = descriptions.filter(d => d && d.trim().length >= 1 && d.length <= 90).slice(0,4).map(d => ({ text: d.trim() }));
+      if (validH.length >= 3 && validD.length >= 2 && finalUrl && agResource) {
+        const adRes = await fetch(
+          `https://googleads.googleapis.com/v18/customers/${cid}/adGroupAds:mutate`,
+          { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
+            operations: [{ create: {
+              adGroup: agResource,
+              status: 'ENABLED',
+              ad: {
+                responsiveSearchAd: { headlines: validH, descriptions: validD },
+                finalUrls: [finalUrl],
+              },
+            }}]
+          })}
+        );
+        const adData = await adRes.json();
+        if (adData.results?.[0]) adId = adData.results[0].resourceName?.split('~').pop();
+      }
+
+      return res.json({ campaignId, adGroupId, adId, campaignName: name });
+    }
+
     return res.status(400).json({ error: 'action no reconocido' });
 
   } catch (err) {
