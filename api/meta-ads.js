@@ -340,21 +340,38 @@ export default async function handler(req, res) {
       };
       let profile = '';
       try { const p=JSON.parse(clientProfile||'{}'); profile=Object.entries(p).filter(([,v])=>v).slice(0,5).map(([k,v])=>k+': '+v).join(', '); } catch(e){}
-      const prompt = `Eres un experto en publicidad digital en LatAm. Genera copy persuasivo para un anuncio de Meta Ads.
+      const prompt = `Eres Acuarius, especialista senior en Meta Ads para mercados de LatAm. Genera copy publicitario profesional y de alta conversión para un anuncio de Facebook/Instagram.
 
-Campaña: ${campaignName || 'nueva campaña'}
-Objetivo: ${objLabels[objective] || objective || 'engagement'}
-${profile ? 'Negocio: '+profile : ''}
+CONTEXTO DE LA CAMPAÑA:
+- Nombre: ${campaignName || 'nueva campaña'}
+- Objetivo: ${objLabels[objective] || objective || 'engagement'}
+${profile ? '- Negocio: '+profile : ''}
 
-Responde ÚNICAMENTE con este JSON válido (sin texto extra):
-{"title":"título atractivo (máx 40 caracteres)","body":"texto del anuncio persuasivo con call-to-action (máx 125 caracteres)"}`;
+ESTRUCTURA AIDA OBLIGATORIA:
+1. TEXTO PRINCIPAL (body, máx 125 caracteres con espacios):
+   - Atención: Abre con emoji relevante + pregunta o dato que toque un pain point real
+   - Interés: Nombra el beneficio clave en términos concretos
+   - Deseo: Agrega resultado tangible, urgencia o prueba social
+   - Acción: CTA claro y directo (Escríbenos, Regístrate gratis, Ver más, etc.)
+2. TÍTULO (title, máx 40 caracteres): Frase corta que reafirme el beneficio o repita el CTA
+3. DESCRIPCIÓN (description, máx 30 caracteres): Detalle que cierra la venta (precio, oferta, garantía, envío gratis)
+
+REGLAS DE ESTILO LATAM:
+- Usa 1-2 emojis estratégicos (aumentan CTR 20-30% en LatAm)
+- Lenguaje cercano, coloquial y directo (tuteo)
+- Evita clichés: "el mejor", "único", "calidad garantizada"
+- El hook debe generar curiosidad genuina o identificar un problema real
+- No uses asteriscos, hashtags ni mayúsculas sin sentido
+
+Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
+{"body":"texto principal AIDA (máx 125 caracteres)","title":"título directo (máx 40 caracteres)","description":"detalle de cierre (máx 30 caracteres)"}`;
 
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
       const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!aiRes.ok) {
         const errTxt = await aiRes.text().catch(() => '');
@@ -371,9 +388,9 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
       try {
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
-        return res.json({ title: parsed.title || '', body: parsed.body || '' });
+        return res.json({ title: parsed.title || '', body: parsed.body || '', description: parsed.description || '' });
       } catch(e) {
-        return res.json({ title: '', body: text.slice(0, 125) });
+        return res.json({ title: '', body: text.slice(0, 125), description: '' });
       }
     }
 
@@ -476,7 +493,7 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
     // ── create-ad ─────────────────────────────────────────────────
     if (action === 'create-ad') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'POST requerido' });
-      const { adAccountId: adAccId, adsetId, pageId, imageBase64, imagesBase64, videoBase64, adTitle, adBody, adUrl, format } = req.body || {};
+      const { adAccountId: adAccId, adsetId, pageId, imageBase64, imagesBase64, videoBase64, adTitle, adBody, adDescription, adUrl, format } = req.body || {};
 
       if (!adAccId || !adsetId || !pageId) {
         return res.status(400).json({ error: 'adAccountId, adsetId y pageId son requeridos' });
@@ -495,8 +512,9 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
         storySpec = {
           page_id: pageId,
           link_data: {
-            link:    adUrl || 'https://www.facebook.com',
-            message: adBody || '',
+            link:        adUrl || 'https://www.facebook.com',
+            message:     adBody || '',
+            description: adDescription || '',
             child_attachments: validHashes.map((hash) => ({
               link:       adUrl || 'https://www.facebook.com',
               image_hash: hash,
@@ -527,10 +545,11 @@ Responde ÚNICAMENTE con este JSON válido (sin texto extra):
         storySpec = {
           page_id: pageId,
           link_data: {
-            image_hash: imageHash,
+            image_hash:  imageHash,
             link:        adUrl || 'https://www.facebook.com',
             message:     adBody  || '',
             name:        adTitle || '',
+            description: adDescription || '',
           },
         };
       }
