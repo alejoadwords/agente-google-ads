@@ -1730,12 +1730,8 @@ async function warAutoFill(plat) {
 
     if (plat === 'meta') {
       const adAccountId = sessionStorage.getItem('meta_ad_account_id');
-      const token       = sessionStorage.getItem('meta_access_token');
-      if (!adAccountId || !token) throw new Error('Sin cuenta conectada');
-      const r = await fetch('/api/meta-ads', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ accessToken: token, adAccountId, action: 'get-account-overview', datePreset: ranges.meta }),
-      });
+      if (!adAccountId || !uid) throw new Error('Sin cuenta conectada');
+      const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta);
       apiData = await r.json();
     }
 
