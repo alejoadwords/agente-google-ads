@@ -1663,8 +1663,101 @@ function warBuildMetricsForm() {
       const label = labelMap[kid] || kid;
       return '<div class="war-metric-field"><label>' + label + '</label><input type="text" id="war-' + plat + '-' + kid + '" placeholder="ej. 1200"></div>';
     }).join('');
-    return '<div class="war-platform-section"><div class="war-platform-header">' + (platIcons[plat]||'') + '<span class="war-platform-label">' + platInfo.name + '</span></div><div class="war-metrics-grid">' + fields + '</div></div>';
+
+    // Botón auto-fill solo si hay cuenta conectada
+    var hasConn = false;
+    var autoBtn = '';
+    if (plat === 'google' && sessionStorage.getItem('ads_customer_id')) hasConn = true;
+    if (plat === 'meta'   && sessionStorage.getItem('meta_ad_account_id')) hasConn = true;
+    if (hasConn) {
+      autoBtn = '<button id="war-autofill-btn-' + plat + '" onclick="warAutoFill(\'' + plat + '\')" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1E2BCC;background:#EEF0FF;border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 11px;cursor:pointer;font-family:var(--font);transition:all .15s;margin-bottom:10px" onmouseover="this.style.background=\'#dde0ff\'" onmouseout="this.style.background=\'#EEF0FF\'">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+        'Auto-llenar desde cuenta conectada</button>';
+    }
+
+    return '<div class="war-platform-section"><div class="war-platform-header">' + (platIcons[plat]||'') + '<span class="war-platform-label">' + platInfo.name + '</span></div>' + autoBtn + '<div class="war-metrics-grid">' + fields + '</div></div>';
   }).join('');
+}
+
+// Mapeo de IDs de KPIs del WAR → campos de la API
+const WAR_API_MAP = {
+  google: {
+    inversion:    d => d.totalCost       || '',
+    impresiones:  d => d.impressions     || '',
+    clics:        d => d.clicks          || '',
+    ctr:          d => d.ctr             || '',
+    cpc:          d => d.avgCpc          || '',
+    conversiones: d => d.conversions     || '',
+    cpa:          d => d.cpa             || '',
+    roas:         d => d.roas            || '',
+  },
+  meta: {
+    inversion:   d => d.spend       || '',
+    alcance:     d => d.reach       || '',
+    impresiones: d => d.impressions || '',
+    frecuencia:  d => d.frequency   || '',
+    cpm:         d => d.cpm         || '',
+    clics:       d => d.clicks      || '',
+    ctr:         d => d.ctr         || '',
+    leads:       d => d.conversions || '',
+    cpr:         d => d.cpa         || '',
+  },
+};
+
+// Mapeo de período WAR → dateRange de API
+function warPeriodToRange(period) {
+  if (period === 'semana')    return { google: 'LAST_7_DAYS',  meta: 'last_7d' };
+  if (period === 'quincena')  return { google: 'LAST_14_DAYS', meta: 'last_14d' };
+  if (period === 'trimestre') return { google: 'LAST_90_DAYS', meta: 'last_90d' };
+  return { google: 'LAST_30_DAYS', meta: 'last_month' }; // mes (default)
+}
+
+async function warAutoFill(plat) {
+  const btn = document.getElementById('war-autofill-btn-' + plat);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Cargando...'; }
+
+  try {
+    const uid = clerkInstance?.user?.id || '';
+    const ranges = warPeriodToRange(warPeriod);
+    let apiData = null;
+
+    if (plat === 'google') {
+      const customerId = sessionStorage.getItem('ads_customer_id');
+      if (!customerId || !uid) throw new Error('Sin cuenta conectada');
+      const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
+      apiData = await r.json();
+    }
+
+    if (plat === 'meta') {
+      const adAccountId = sessionStorage.getItem('meta_ad_account_id');
+      const token       = sessionStorage.getItem('meta_access_token');
+      if (!adAccountId || !token) throw new Error('Sin cuenta conectada');
+      const r = await fetch('/api/meta-ads', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ accessToken: token, adAccountId, action: 'get-account-overview', datePreset: ranges.meta }),
+      });
+      apiData = await r.json();
+    }
+
+    if (!apiData || apiData.error) throw new Error(apiData?.error || 'Sin datos');
+
+    // Llenar campos con los datos de la API
+    const map = WAR_API_MAP[plat] || {};
+    const kpis = warSelectedKpis[plat] || [];
+    let filled = 0;
+    kpis.forEach(kid => {
+      const val = map[kid] ? String(map[kid](apiData)) : '';
+      if (val && val !== '0' && val !== '0.00') {
+        const el = document.getElementById('war-' + plat + '-' + kid);
+        if (el) { el.value = val; el.style.background = '#F0FDF4'; el.style.borderColor = '#86EFAC'; filled++; }
+      }
+    });
+
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> <span style="color:#16a34a">' + filled + ' métricas cargadas</span>'; }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span style="color:#dc2626">Error: ' + (e.message || 'intenta de nuevo') + '</span>'; }
+    console.error('warAutoFill error:', e);
+  }
 }
 
 function warGetMetricData() {
