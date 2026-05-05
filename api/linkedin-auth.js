@@ -18,9 +18,6 @@ export default function handler(req, res) {
       'openid',
       'profile',
       'email',
-      'r_ads',
-      'r_ads_reporting',
-      'rw_ads',
     ].join(' '),
   });
 
