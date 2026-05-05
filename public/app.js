@@ -9987,6 +9987,10 @@ async function loadLinkedInAccounts() {
     });
     const data = await res.json();
     document.getElementById('linkedinAccountsLoading').style.display = 'none';
+    if (data.error === 'PENDING_APPROVAL') {
+      showLinkedInPending();
+      return;
+    }
     if (data.error || !data.accounts?.length) {
       showLinkedInError(data.error || 'No se encontraron cuentas publicitarias. Verifica que tengas acceso a LinkedIn Campaign Manager.');
       return;
@@ -10077,6 +10081,17 @@ function showLinkedInAccountSelector() {
 function showLinkedInError(msg) {
   const el = document.getElementById('linkedinAccountsError');
   if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function showLinkedInPending() {
+  const el = document.getElementById('linkedinAccountsError');
+  if (el) {
+    el.style.background = '#FFF7ED';
+    el.style.borderColor = '#FED7AA';
+    el.style.color = '#92400E';
+    el.innerHTML = '⏳ <b>Advertising API pendiente de aprobación.</b> Tu cuenta ya está conectada — el agente puede ayudarte con estrategia y análisis. Las métricas en tiempo real se activarán cuando LinkedIn apruebe el acceso.';
+    el.style.display = 'block';
+  }
 }
 
 function updateLinkedInUI(connected, name) {
