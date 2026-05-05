@@ -81,24 +81,18 @@ export default async function handler(req, res) {
     const email = userInfo.email || '';
     const id    = userInfo.sub   || '';
 
-    // 3. Guardar en Supabase si hay userId
+    // 3. Guardar en Supabase (no bloquea el redirect si falla)
     if (userId) {
       await saveLinkedInConnection(userId, accessToken, tokenData.expires_in, { name, email, id });
-      const redirectParams = new URLSearchParams({
-        linkedin_connected: 'true',
-        platform:           'linkedin_ads',
-        linkedin_name:      name,
-        linkedin_email:     email,
-      });
-      return res.redirect(`https://app.acuarius.app/?${redirectParams}`);
     }
 
-    // Fallback sin userId: token en URL
+    // Siempre redirigir con el token en la URL para que el frontend lo guarde en sessionStorage
     const params = new URLSearchParams({
       linkedin_connected: 'true',
       linkedin_token:     accessToken,
       linkedin_name:      name,
       linkedin_email:     email,
+      ...(userId ? { platform: 'linkedin_ads' } : {}),
     });
     return res.redirect(`https://app.acuarius.app/?${params}`);
 
