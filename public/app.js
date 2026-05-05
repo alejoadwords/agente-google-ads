@@ -2619,10 +2619,16 @@ function showMetaActionCards() {
       card('📊', 'Analizar campañas', 'Métricas, optimización y recomendaciones de mejora', 'dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')') +
     '</div>' +
 
-    // Fila 3: 2 cards estándar
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+    // Fila 3: 4 cards estándar
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">' +
       card('✍️', 'Crear copys', 'Textos persuasivos para feed, stories y carrusel', 'dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')') +
       card('🩺', 'Diagnosticar campañas', 'Pega tus métricas y te digo dónde estás perdiendo dinero', 'dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')') +
+    '</div>' +
+
+    // Fila 4: A/B Test + Attribution Model
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+      card('🧪', 'Diseñar prueba A/B', 'Variantes de creative, copy o audiencia listas para testear', 'dismissMetaCards(this);qSend(\'DISEÑAR PRUEBA A/B — Quiero crear un test A/B en Meta Ads. Antes de generar las variantes, dime: ¿qué elemento quieres testear? (creative, copy, audiencia, ubicación, presupuesto) y ¿cuál es la campaña o conjunto de anuncios que tienes actualmente?\')') +
+      card('📐', 'Modelo de atribución', 'Ventana de atribución óptima según tu ciclo de compra', 'dismissMetaCards(this);qSend(\'MODELO DE ATRIBUCIÓN — Ayúdame a elegir la ventana de atribución correcta para mis campañas de Meta Ads. Analiza mi objetivo principal y el ciclo de decisión de compra de mis clientes para recomendarme la configuración más adecuada y los pasos para aplicarla en Meta Business Suite.\')') +
     '</div>';
 
   document.getElementById('chat-area').appendChild(el);
@@ -2681,7 +2687,21 @@ function showGoogleAdsActionCards() {
         '<div style="font-size:11px;color:var(--muted2)">Headlines y descriptions con estructura AIDA</div>' +
       '</div>' +
 
-      // Card 5: Diagnosticar cuenta — full width, destacada
+      // Card 5: A/B Test
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'DISEÑAR PRUEBA A/B — Quiero crear un test A/B en Google Ads. Antes de generar las variantes, necesito saber: ¿qué elemento quieres testear? (headlines, descriptions, landing page, audiencia, estrategia de puja) y ¿qué campaña o grupo de anuncios tienes actualmente?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">🧪</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Diseñar prueba A/B</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Variantes listas para testear headlines, copys o audiencias</div>' +
+      '</div>' +
+
+      // Card 6: Attribution Model
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'MODELO DE ATRIBUCIÓN — Ayúdame a elegir el modelo de atribución correcto para mi cuenta de Google Ads. Analiza mi objetivo de conversión principal y el ciclo de decisión de compra típico en mi industria para recomendarme el modelo más adecuado y los pasos exactos para configurarlo.\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">📐</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Modelo de atribución</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Cuál usar según tu ciclo de venta y cómo configurarlo</div>' +
+      '</div>' +
+
+      // Card 7: Diagnosticar cuenta — full width, destacada
       '<div onclick="dismissGoogleAdsCards(this);showDiagnosticInput(\'google-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'\'>' +
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<div style="font-size:22px">🩺</div>' +
