@@ -22,8 +22,11 @@ export default async function handler(req, res) {
       const r   = await fetch(url, { headers });
       const data = await r.json();
 
-      if (data.status === 401 || data.serviceErrorCode) {
+      if (data.status === 401) {
         return res.status(401).json({ error: 'Token inválido o expirado. Vuelve a conectar tu cuenta de LinkedIn.' });
+      }
+      if (data.status === 403 || data.serviceErrorCode || (data.message && data.message.includes('Not enough permissions'))) {
+        return res.status(403).json({ error: 'PENDING_APPROVAL' });
       }
 
       const elements = data.elements || [];
