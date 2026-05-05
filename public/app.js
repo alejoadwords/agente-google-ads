@@ -5154,14 +5154,16 @@ function isAgencyPlan() {
 async function restoreConnectionsFromSupabase() {
   const uid = clerkInstance?.user?.id;
   if (!uid) return;
-  const hasGoogleToken = !!sessionStorage.getItem('ads_access_token');
-  const hasMetaToken   = !!sessionStorage.getItem('meta_access_token');
-  if (hasGoogleToken && hasMetaToken) return; // ya restaurado desde sessionStorage
+  const hasGoogleToken   = !!sessionStorage.getItem('ads_access_token');
+  const hasMetaToken     = !!sessionStorage.getItem('meta_access_token');
+  const hasLinkedInToken = !!sessionStorage.getItem('linkedin_access_token');
+  if (hasGoogleToken && hasMetaToken && hasLinkedInToken) return; // ya restaurado desde sessionStorage
 
   try {
-    const [gConn, mConn] = await Promise.all([
-      fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`).then(r => r.json()).catch(() => ({})),
-      fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`).then(r => r.json()).catch(() => ({})),
+    const [gConn, mConn, liConn] = await Promise.all([
+      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=google_ads').then(r => r.json()).catch(() => ({})),
+      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads').then(r => r.json()).catch(() => ({})),
+      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads').then(r => r.json()).catch(() => ({})),
     ]);
 
     if (!hasGoogleToken && gConn.connected && gConn.access_token) {
@@ -5206,6 +5208,27 @@ async function restoreConnectionsFromSupabase() {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ userId: uid })
       }).catch(() => {});
+    }
+
+    // Restaurar LinkedIn Ads
+    if (!hasLinkedInToken && liConn.connected && liConn.access_token) {
+      sessionStorage.setItem('linkedin_access_token', liConn.access_token);
+      sessionStorage.setItem('linkedin_user_name', liConn.account_name || '');
+      localStorage.setItem('linkedin_access_token_persist', liConn.access_token);
+      localStorage.setItem('linkedin_user_name_persist', liConn.account_name || '');
+      if (typeof updateLinkedInUI === 'function') updateLinkedInUI(true, liConn.account_name);
+    }
+    // Restaurar cuenta activa de LinkedIn desde localStorage
+    if (!sessionStorage.getItem('linkedin_account_id')) {
+      var persistedLiId  = localStorage.getItem('linkedin_account_id_persist');
+      var persistedLiAcc = localStorage.getItem('linkedin_active_account_persist');
+      if (persistedLiId) {
+        sessionStorage.setItem('linkedin_account_id', persistedLiId);
+        if (persistedLiAcc) {
+          sessionStorage.setItem('linkedin_active_account', persistedLiAcc);
+          try { linkedinActiveAccount = JSON.parse(persistedLiAcc); renderLinkedInActiveAccount(); } catch {}
+        }
+      }
     }
   } catch {}
 }
@@ -9839,6 +9862,9 @@ function openSettings() {
   const adsToken = sessionStorage.getItem('ads_access_token');
   const adsEmail = sessionStorage.getItem('ads_email');
   if (typeof updateAdsUI === 'function') updateAdsUI(!!adsToken, adsEmail || '');
+  const liToken = sessionStorage.getItem('linkedin_access_token');
+  const liName  = sessionStorage.getItem('linkedin_user_name');
+  if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName || '');
 }
 
 function closeSettings() {
@@ -9860,6 +9886,215 @@ function switchSettingsTab(tab) {
       btn.style.fontWeight = '500';
     }
   });
+}
+
+// =============================================
+// =============================================
+// LINKEDIN ADS — Conexión OAuth + Selector de cuentas
+// =============================================
+
+let linkedinAccounts      = [];
+let linkedinActiveAccount = null;
+
+(function checkLinkedInCallback() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('linkedin_connected') === 'true') {
+    const token    = params.get('linkedin_token');
+    const name     = params.get('linkedin_name')  || '';
+    const email    = params.get('linkedin_email') || '';
+    const platform = params.get('platform');
+    window.history.replaceState({}, '', window.location.pathname);
+
+    if (token) {
+      // Fallback: token en URL
+      sessionStorage.setItem('linkedin_access_token', token);
+      sessionStorage.setItem('linkedin_user_name', name || email);
+      localStorage.setItem('linkedin_access_token_persist', token);
+      localStorage.setItem('linkedin_user_name_persist', name || email);
+      updateLinkedInUI(true, name || email);
+      setTimeout(() => { openSettings(); loadLinkedInAccounts(); }, 400);
+    } else if (platform === 'linkedin_ads') {
+      // Token guardado en Supabase
+      updateLinkedInUI(true, name || email || 'Conectado');
+      setTimeout(async () => {
+        const uid = clerkInstance?.user?.id;
+        if (!uid) return;
+        try {
+          const r    = await fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads');
+          const conn = await r.json();
+          if (conn.connected && conn.access_token) {
+            sessionStorage.setItem('linkedin_access_token', conn.access_token);
+            sessionStorage.setItem('linkedin_user_name', conn.account_name || name || email || '');
+            localStorage.setItem('linkedin_access_token_persist', conn.access_token);
+            localStorage.setItem('linkedin_user_name_persist', conn.account_name || name || email || '');
+            updateLinkedInUI(true, conn.account_name || name || email);
+            openSettings(); loadLinkedInAccounts();
+          }
+        } catch {}
+      }, 600);
+    }
+  }
+  if (params.get('linkedin_error')) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  // Restaurar sesión desde sessionStorage / localStorage
+  var savedToken   = sessionStorage.getItem('linkedin_access_token')   || localStorage.getItem('linkedin_access_token_persist');
+  var savedName    = sessionStorage.getItem('linkedin_user_name')       || localStorage.getItem('linkedin_user_name_persist');
+  var savedAccount = sessionStorage.getItem('linkedin_active_account') || localStorage.getItem('linkedin_active_account_persist');
+  if (savedToken) {
+    if (!sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', savedToken);
+    if (savedName && !sessionStorage.getItem('linkedin_user_name'))   sessionStorage.setItem('linkedin_user_name', savedName);
+    updateLinkedInUI(true, savedName);
+    if (savedAccount) {
+      try {
+        linkedinActiveAccount = JSON.parse(savedAccount);
+        if (!sessionStorage.getItem('linkedin_active_account')) sessionStorage.setItem('linkedin_active_account', savedAccount);
+        renderLinkedInActiveAccount();
+      } catch {}
+    }
+  }
+})();
+
+function connectLinkedInAds() {
+  const uid = clerkInstance?.user?.id || '';
+  window.location.href = '/api/linkedin-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+}
+
+function disconnectLinkedInAds() {
+  ['linkedin_access_token','linkedin_user_name','linkedin_active_account','linkedin_account_id']
+    .forEach(k => { sessionStorage.removeItem(k); localStorage.removeItem(k + '_persist'); });
+  localStorage.removeItem('linkedin_user_name_persist');
+  linkedinAccounts = []; linkedinActiveAccount = null;
+  updateLinkedInUI(false);
+  const uid = clerkInstance?.user?.id;
+  if (uid) fetch('/api/admin?action=disconnect-platform', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ userId: uid, platform: 'linkedin_ads' })
+  }).catch(() => {});
+}
+
+async function loadLinkedInAccounts() {
+  const token = sessionStorage.getItem('linkedin_access_token');
+  if (!token) return;
+  document.getElementById('linkedinAccountsLoading').style.display = 'block';
+  document.getElementById('linkedinAccountsList').style.display    = 'none';
+  document.getElementById('linkedinActiveAccount').style.display   = 'none';
+  document.getElementById('linkedinAccountsError').style.display   = 'none';
+  try {
+    const res  = await fetch('/api/linkedin-ads', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ accessToken: token, action: 'list-accounts' }),
+    });
+    const data = await res.json();
+    document.getElementById('linkedinAccountsLoading').style.display = 'none';
+    if (data.error || !data.accounts?.length) {
+      showLinkedInError(data.error || 'No se encontraron cuentas publicitarias. Verifica que tengas acceso a LinkedIn Campaign Manager.');
+      return;
+    }
+    linkedinAccounts = data.accounts;
+    renderLinkedInAccountSelector();
+  } catch(e) {
+    document.getElementById('linkedinAccountsLoading').style.display = 'none';
+    showLinkedInError('Error de conexión al cargar las cuentas.');
+  }
+}
+
+function renderLinkedInAccountSelector() {
+  const container = document.getElementById('linkedinAccountsContainer');
+  container.innerHTML = linkedinAccounts.map(acc => {
+    const isActive = linkedinActiveAccount?.id === acc.id;
+    return '<div onclick="selectLinkedInAccount(\'' + acc.id + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;' +
+      'border:1.5px solid ' + (isActive ? '#0A66C2' : 'var(--border)') + ';' +
+      'background:' + (isActive ? '#EFF6FF' : 'var(--bg)') + ';transition:all .15s"' +
+      ' onmouseover="this.style.borderColor=\'#BFDBFE\'"' +
+      ' onmouseout="this.style.borderColor=\'' + (isActive ? '#0A66C2' : 'var(--border)') + '\'">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + acc.name + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);margin-top:1px">' + acc.id + ' · ' + acc.currency + ' · ' + acc.status + '</div>' +
+      '</div>' +
+      (isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="#0A66C2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '') +
+      '</div>';
+  }).join('');
+  document.getElementById('linkedinAccountsList').style.display = 'block';
+  if (linkedinActiveAccount) renderLinkedInActiveAccount();
+}
+
+async function selectLinkedInAccount(accountId) {
+  const acc = linkedinAccounts.find(a => a.id === accountId);
+  if (!acc) return;
+  linkedinActiveAccount = acc;
+  sessionStorage.setItem('linkedin_active_account', JSON.stringify(acc));
+  sessionStorage.setItem('linkedin_account_id', acc.id);
+  localStorage.setItem('linkedin_active_account_persist', JSON.stringify(acc));
+  localStorage.setItem('linkedin_account_id_persist', acc.id);
+  const uid2 = clerkInstance?.user?.id;
+  if (uid2) {
+    fetch('/api/admin?action=save-platform-account', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: uid2, platform: 'linkedin_ads', accountId: acc.id, accountName: acc.name })
+    }).catch(() => {});
+  }
+  renderLinkedInActiveAccount();
+  renderLinkedInAccountSelector();
+  closeSettings();
+  setTimeout(async () => {
+    const saved = await dbLoadProfile('linkedin-ads');
+    if (saved) {
+      try {
+        Object.assign(mem, saved); updateMem(); onDone = true;
+        clientStage = mapStage(mem.etapa);
+        document.getElementById('mem-card').style.display = 'block';
+        document.getElementById('m-stage').textContent = clientStage;
+        hist = [];
+        addAgent('cuenta LinkedIn cambiada a **' + acc.name + '**.\n\n¿En qué trabajamos hoy?');
+      } catch { startNewLinkedInOnboarding(acc); }
+    } else { startNewLinkedInOnboarding(acc); }
+  }, 300);
+}
+
+function startNewLinkedInOnboarding(acc) {
+  mem = {}; hist = []; onDone = false; obStep = 0;
+  document.getElementById('mem-card').style.display = 'none';
+  document.getElementById('chat-area').innerHTML = '';
+  showView('chat'); setAgentContext('linkedin-ads');
+  addAgent('nueva cuenta LinkedIn: **' + acc.name + '**.\n\nPara darte recomendaciones B2B precisas, necesito conocer este negocio. Son 6 preguntas rápidas.');
+  setTimeout(() => renderOb(), 600);
+}
+
+function renderLinkedInActiveAccount() {
+  if (!linkedinActiveAccount) return;
+  const el = document.getElementById('linkedinActiveAccount');
+  document.getElementById('linkedinActiveName').textContent = linkedinActiveAccount.name;
+  document.getElementById('linkedinActiveId').textContent   = linkedinActiveAccount.id + ' · ' + linkedinActiveAccount.currency;
+  if (el) el.style.display = 'block';
+}
+
+function showLinkedInAccountSelector() {
+  document.getElementById('linkedinActiveAccount').style.display = 'none';
+  linkedinAccounts.length ? renderLinkedInAccountSelector() : loadLinkedInAccounts();
+}
+
+function showLinkedInError(msg) {
+  const el = document.getElementById('linkedinAccountsError');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function updateLinkedInUI(connected, name) {
+  const badge    = document.getElementById('linkedinStatusBadge');
+  const discDiv  = document.getElementById('linkedinDisconnected');
+  const connDiv  = document.getElementById('linkedinConnected');
+  const nameSpan = document.getElementById('linkedinUserName');
+  if (connected) {
+    if (badge)    { badge.textContent = '● conectado'; badge.style.background = 'rgba(10,102,194,.1)'; badge.style.color = '#0A66C2'; }
+    if (discDiv)  discDiv.style.display = 'none';
+    if (connDiv)  connDiv.style.display = 'block';
+    if (name && nameSpan) nameSpan.textContent = name;
+    if (!linkedinAccounts.length && !linkedinActiveAccount) loadLinkedInAccounts();
+  } else {
+    if (badge)   { badge.textContent = 'sin conectar'; badge.style.background = 'var(--sidebar2)'; badge.style.color = 'var(--muted)'; }
+    if (discDiv) discDiv.style.display = 'block';
+    if (connDiv) connDiv.style.display = 'none';
+  }
 }
 
 // =============================================

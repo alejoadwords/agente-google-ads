@@ -2319,6 +2319,56 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
     </div>
 
+    <!-- LinkedIn Ads -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:32px;height:32px;border-radius:8px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">LinkedIn Ads</div>
+          <div style="font-size:11px;color:var(--muted)">Campañas B2B en LinkedIn</div>
+        </div>
+        <span id="linkedinStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
+      </div>
+      <!-- Desconectado -->
+      <div id="linkedinDisconnected">
+        <div style="background:var(--sidebar2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar tu cuenta desbloqueas</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard con impresiones, clicks, CPL y leads generados en tiempo real</div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente analiza tus campañas B2B reales y optimiza segmentación profesional</div>
+            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas cuando el CPL supera el benchmark de tu industria <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+          </div>
+        </div>
+        <button onclick="connectLinkedInAds()" style="width:100%;padding:8px;background:#0A66C2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con LinkedIn →</button>
+      </div>
+      <!-- Conectado -->
+      <div id="linkedinConnected" style="display:none">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--sidebar);border-radius:7px;display:flex;align-items:center;gap:6px">
+          <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#0A66C2"/></svg>
+          <span id="linkedinUserName" style="color:var(--text);font-weight:500"></span>
+        </div>
+        <div id="linkedinAccountsLoading" style="text-align:center;padding:12px 0;display:none">
+          <div style="font-size:12px;color:var(--muted)">Cargando cuentas publicitarias...</div>
+        </div>
+        <div id="linkedinAccountsList" style="display:none;margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cuentas publicitarias</label>
+          </div>
+          <div id="linkedinAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto"></div>
+        </div>
+        <div id="linkedinActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px">
+          <div style="font-size:10px;color:#0A66C2;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
+          <div id="linkedinActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+          <div id="linkedinActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+          <button onclick="showLinkedInAccountSelector()" style="margin-top:8px;font-size:11px;color:#0A66C2;background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+        </div>
+        <div id="linkedinAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
+        <button onclick="disconnectLinkedInAds()" style="width:100%;padding:7px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
+      </div>
+    </div>
+
     <!-- TikTok Ads — próximamente -->
     <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px;opacity:.55">
       <div style="display:flex;align-items:center;gap:10px">
