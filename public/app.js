@@ -10341,6 +10341,72 @@ let adsAccounts = [];       // todas las cuentas accesibles
   }
 })();
 
+// Deep-link desde emails de reporte: ?agent=google_ads&report=weekly|monthly
+(function checkReportDeepLink() {
+  const params  = new URLSearchParams(window.location.search);
+  const agentParam  = params.get('agent');   // 'google_ads' | 'meta_ads'
+  const reportParam = params.get('report');  // 'weekly' | 'monthly'
+  if (!agentParam || !reportParam) return;
+
+  window.history.replaceState({}, '', window.location.pathname);
+
+  // Mapear platform key → agent key (con guiones)
+  const agentKeyMap = {
+    google_ads: 'google-ads',
+    meta_ads:   'meta-ads',
+    tiktok_ads: 'tiktok-ads',
+    linkedin_ads: 'linkedin-ads',
+  };
+  const agentKey = agentKeyMap[agentParam] || 'google-ads';
+
+  const reportLabels = {
+    weekly:  'semanal',
+    monthly: 'mensual',
+  };
+  const platformLabels = {
+    google_ads: 'Google Ads',
+    meta_ads:   'Meta Ads',
+  };
+
+  const reportLabel   = reportLabels[reportParam]   || reportParam;
+  const platformLabel = platformLabels[agentParam]  || agentParam;
+
+  // Esperar a que la app esté lista (Clerk + DOM) y luego abrir el agente
+  async function doOpen() {
+    // Esperar usuario de Clerk
+    if (!clerkInstance?.user?.id) {
+      await new Promise(res => {
+        const iv = setInterval(() => {
+          if (clerkInstance?.user?.id) { clearInterval(iv); res(); }
+        }, 150);
+        setTimeout(() => { clearInterval(iv); res(); }, 8000);
+      });
+    }
+
+    await openAgent(agentKey);
+
+    // Pequeña pausa para asegurar que el área de chat esté lista
+    await new Promise(res => setTimeout(res, 500));
+
+    // Inyectar mensaje de contexto del reporte como si el usuario lo hubiera escrito
+    const contextMsg = `Vengo del reporte ${reportLabel} de ${platformLabel}. Analiza el rendimiento de la semana y dame recomendaciones concretas para mejorar los resultados.`;
+    const inp = document.getElementById('user-input') || document.querySelector('[id$="input"]');
+    if (inp) {
+      inp.value = contextMsg;
+      // Disparar el envío automáticamente
+      const sendBtn = document.getElementById('sbtn') || document.querySelector('[id*="send"]');
+      if (sendBtn && !sendBtn.disabled) sendBtn.click();
+    }
+  }
+
+  // Esperar a que el DOM base esté listo
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(doOpen, 1200));
+  } else {
+    setTimeout(doOpen, 1200);
+  }
+})();
+
 function connectGoogleAds() {
   const uid = clerkInstance?.user?.id || '';
   window.location.href = '/api/google-ads-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
