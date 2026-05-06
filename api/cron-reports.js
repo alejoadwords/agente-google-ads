@@ -187,7 +187,9 @@ function buildWeeklyReportEmail(userEmail, platformKey, metrics, analysis, prevM
                   <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px">${weekLabel}</div>
                 </td>
                 <td align="right">
-                  <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:white;line-height:48px;text-align:center">${cfg.logo}</div>
+                  <div style="background:rgba(255,255,255,.18);border-radius:10px;padding:7px 14px;display:inline-block;line-height:1">
+                    <span style="background:white;color:${color};font-size:13px;font-weight:900;border-radius:5px;padding:3px 6px;margin-right:6px;letter-spacing:-.5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">Ac</span><span style="font-size:15px;font-weight:700;color:white;letter-spacing:-.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">uarius</span>
+                  </div>
                 </td>
               </tr>
             </table>
@@ -229,7 +231,7 @@ function buildWeeklyReportEmail(userEmail, platformKey, metrics, analysis, prevM
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td style="background:#fff;border-radius:12px;padding:20px 24px">
-                  <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px">&#127919; Acciones para esta semana</div>
+                  <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px">&#127919; Acciones recomendadas para esta semana</div>
                   ${analysis.recommendations.map((r, i) => `
                   <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:${i < analysis.recommendations.length - 1 ? '12px' : '0'}">
                     <tr>
@@ -248,7 +250,7 @@ function buildWeeklyReportEmail(userEmail, platformKey, metrics, analysis, prevM
         <!-- ── CTA ────────────────────────────────────── -->
         <tr>
           <td style="background:#f8fafc;padding:4px 16px 24px;text-align:center">
-            <a href="https://app.acuarius.app" style="display:inline-block;background:${color};color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:13px 32px;border-radius:8px;letter-spacing:.2px">Ver análisis completo &rarr;</a>
+            <a href="https://app.acuarius.app/?agent=${platformKey}&report=weekly" style="display:inline-block;background:${color};color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:13px 32px;border-radius:8px;letter-spacing:.2px">Ver análisis completo &rarr;</a>
           </td>
         </tr>
 

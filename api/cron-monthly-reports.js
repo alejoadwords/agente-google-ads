@@ -225,7 +225,7 @@ function buildMonthlyEmail(platform, current, previous, analysis) {
 
     <!-- CTA -->
     <div style="text-align:center;padding:20px 0 8px">
-      <a href="https://app.acuarius.app" style="display:inline-block;background:${colors.accent};color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600">
+      <a href="https://app.acuarius.app/?agent=${platform}&report=monthly" style="display:inline-block;background:${colors.accent};color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600">
         Ver análisis completo en Acuarius →
       </a>
     </div>
