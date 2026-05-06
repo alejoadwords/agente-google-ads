@@ -10385,8 +10385,13 @@ let adsAccounts = [];       // todas las cuentas accesibles
 
     await openAgent(agentKey);
 
-    // Pequeña pausa para asegurar que el área de chat esté lista
-    await new Promise(res => setTimeout(res, 500));
+    // Esperar a que el agente termine el saludo inicial (loading pasa a false)
+    await new Promise(res => setTimeout(res, 800));
+    let waitAttempts = 0;
+    while (typeof loading !== 'undefined' && loading && waitAttempts < 40) {
+      await new Promise(res => setTimeout(res, 250));
+      waitAttempts++;
+    }
 
     // Inyectar mensaje de contexto del reporte y enviarlo automáticamente
     const contextMsg = `Vengo del reporte ${reportLabel} de ${platformLabel}. Analiza el rendimiento de la semana y dame recomendaciones concretas para mejorar los resultados.`;
