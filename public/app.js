@@ -10388,14 +10388,10 @@ let adsAccounts = [];       // todas las cuentas accesibles
     // Pequeña pausa para asegurar que el área de chat esté lista
     await new Promise(res => setTimeout(res, 500));
 
-    // Inyectar mensaje de contexto del reporte como si el usuario lo hubiera escrito
+    // Inyectar mensaje de contexto del reporte y enviarlo automáticamente
     const contextMsg = `Vengo del reporte ${reportLabel} de ${platformLabel}. Analiza el rendimiento de la semana y dame recomendaciones concretas para mejorar los resultados.`;
-    const inp = document.getElementById('user-input') || document.querySelector('[id$="input"]');
-    if (inp) {
-      inp.value = contextMsg;
-      // Disparar el envío automáticamente
-      const sendBtn = document.getElementById('sbtn') || document.querySelector('[id*="send"]');
-      if (sendBtn && !sendBtn.disabled) sendBtn.click();
+    if (typeof qSend === 'function') {
+      qSend(contextMsg);
     }
   }
 
