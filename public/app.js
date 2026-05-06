@@ -1536,7 +1536,7 @@ function warGoStep(step) {
   // Build KPI step when arriving at step 1
   if (step === 1) warBuildKpiStep();
   // Build metrics form when arriving at step 3
-  if (step === 3) warBuildMetricsForm();
+  if (step === 3) { warBuildMetricsForm(); warLoadMetaAccountsForPicker(); }
 
   // Scroll to top
   const body = document.querySelector('.war-body');
@@ -1668,11 +1668,23 @@ function warBuildMetricsForm() {
     var hasConn = false;
     var autoBtn = '';
     if (plat === 'google' && sessionStorage.getItem('ads_customer_id')) hasConn = true;
-    if (plat === 'meta'   && sessionStorage.getItem('meta_ad_account_id')) hasConn = true;
+    if (plat === 'meta'   && (sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist'))) hasConn = true;
     if (hasConn) {
-      autoBtn = '<button id="war-autofill-btn-' + plat + '" onclick="warAutoFill(\'' + plat + '\')" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1E2BCC;background:#EEF0FF;border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 11px;cursor:pointer;font-family:var(--font);transition:all .15s;margin-bottom:10px" onmouseover="this.style.background=\'#dde0ff\'" onmouseout="this.style.background=\'#EEF0FF\'">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
-        'Auto-llenar desde cuenta conectada</button>';
+      if (plat === 'meta') {
+        // Para Meta: selector de cuenta + botón (puede tener múltiples cuentas de clientes)
+        autoBtn = '<div id="war-meta-account-picker" style="margin-bottom:10px">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+          '<select id="war-meta-account-select" style="font-size:11px;font-family:var(--font);border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 8px;background:#EEF0FF;color:#1E2BCC;font-weight:600;cursor:pointer;max-width:240px">' +
+          '<option value="">Cargando cuentas...</option></select>' +
+          '<button id="war-autofill-btn-meta" onclick="warAutoFill(\'meta\')" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1E2BCC;background:#EEF0FF;border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 11px;cursor:pointer;font-family:var(--font);transition:all .15s" onmouseover="this.style.background=\'#dde0ff\'" onmouseout="this.style.background=\'#EEF0FF\'">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+          'Auto-llenar</button>' +
+          '</div></div>';
+      } else {
+        autoBtn = '<button id="war-autofill-btn-' + plat + '" onclick="warAutoFill(\'' + plat + '\')" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1E2BCC;background:#EEF0FF;border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 11px;cursor:pointer;font-family:var(--font);transition:all .15s;margin-bottom:10px" onmouseover="this.style.background=\'#dde0ff\'" onmouseout="this.style.background=\'#EEF0FF\'">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+          'Auto-llenar desde cuenta conectada</button>';
+      }
     }
 
     return '<div class="war-platform-section"><div class="war-platform-header">' + (platIcons[plat]||'') + '<span class="war-platform-label">' + platInfo.name + '</span></div>' + autoBtn + '<div class="war-metrics-grid">' + fields + '</div></div>';
@@ -1712,6 +1724,40 @@ function warPeriodToRange(period) {
   return { google: 'LAST_30_DAYS', meta: 'last_month' }; // mes (default)
 }
 
+// Carga las cuentas de Meta en el selector del WAR paso 4
+async function warLoadMetaAccountsForPicker() {
+  const sel = document.getElementById('war-meta-account-select');
+  if (!sel) return;
+
+  const token = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
+  if (!token) {
+    sel.innerHTML = '<option value="">Sin token Meta — conecta tu cuenta</option>';
+    return;
+  }
+
+  try {
+    const uid = clerkInstance?.user?.id || '';
+    const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
+    const data = await r.json();
+    const accounts = data.accounts || [];
+
+    if (!accounts.length) {
+      sel.innerHTML = '<option value="">Sin cuentas disponibles</option>';
+      return;
+    }
+
+    const stored = sessionStorage.getItem('meta_ad_account_id') || '';
+    sel.innerHTML = accounts.map(a => {
+      const label = (a.name || a.id) + (a.business ? ' · ' + a.business : '') + ' (' + a.currency + ')';
+      const selected = (a.id === stored || 'act_' + a.id === stored || a.id === 'act_' + stored) ? ' selected' : '';
+      return '<option value="' + a.id + '"' + selected + '>' + label + '</option>';
+    }).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error cargando cuentas</option>';
+    console.error('warLoadMetaAccountsForPicker error:', e);
+  }
+}
+
 async function warAutoFill(plat) {
   const btn = document.getElementById('war-autofill-btn-' + plat);
   if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Cargando...'; }
@@ -1729,9 +1775,11 @@ async function warAutoFill(plat) {
     }
 
     if (plat === 'meta') {
-      const adAccountId = sessionStorage.getItem('meta_ad_account_id');
-      const metaToken   = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
-      if (!adAccountId) throw new Error('Sin cuenta conectada');
+      // Usar cuenta seleccionada en el picker (o fallback al sessionStorage)
+      const pickerSel  = document.getElementById('war-meta-account-select');
+      const adAccountId = (pickerSel && pickerSel.value) ? pickerSel.value : sessionStorage.getItem('meta_ad_account_id');
+      const metaToken  = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
+      if (!adAccountId) throw new Error('Selecciona una cuenta publicitaria');
       if (!metaToken)   throw new Error('No hay token. Conecta tu cuenta de Meta Ads.');
       const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
       apiData = await r.json();
