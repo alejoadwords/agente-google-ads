@@ -76,84 +76,195 @@ Responde en español. Sé específico con números. Formato JSON exacto:
   }
 }
 
-function buildMetricCards(metrics) {
-  const cards = [];
-  const entries = [
-    { key: 'clicks',      label: 'Clicks',        prev: 'prevClicks' },
-    { key: 'impressions', label: 'Impresiones',    prev: 'prevImpressions' },
-    { key: 'ctr',         label: 'CTR',            prev: 'prevCtr',   suffix: '%' },
-    { key: 'conversions', label: 'Conversiones',   prev: 'prevConversions' },
-    { key: 'totalCost',   label: 'Gasto total',    prev: 'prevCost',  prefix: '$' },
-    { key: 'cpa',         label: 'CPA',            prev: 'prevCpa',   prefix: '$' },
-  ];
-  for (const e of entries) {
-    if (metrics[e.key] === undefined) continue;
-    const val = metrics[e.key];
-    const prev = metrics[e.prev];
-    let changeHtml = '';
-    if (prev !== undefined && prev > 0) {
-      const pct = (((val - prev) / prev) * 100).toFixed(1);
-      const dir = val >= prev ? 'up' : 'down';
-      changeHtml = `<div class="metric-change ${dir}">${val >= prev ? '▲' : '▼'} ${Math.abs(pct)}%</div>`;
-    }
-    cards.push(`
-      <div class="metric-card">
-        <div class="metric-value">${e.prefix || ''}${val}${e.suffix || ''}</div>
-        <div class="metric-label">${e.label}</div>
-        ${changeHtml}
-      </div>`);
-  }
-  return cards.join('');
+// Configuración de métricas por plataforma
+const PLATFORM_CONFIG = {
+  google_ads: {
+    name:    'Google Ads',
+    color:   '#4285F4',
+    colorDk: '#2563EB',
+    colorBg: '#EFF6FF',
+    logo:    'G',
+    metrics: [
+      { key: 'totalCost',   label: 'Inversión',     prefix: '$', lowerBetter: false },
+      { key: 'clicks',      label: 'Clics',          lowerBetter: false },
+      { key: 'impressions', label: 'Impresiones',    lowerBetter: false },
+      { key: 'ctr',         label: 'CTR',            suffix: '%', lowerBetter: false },
+      { key: 'avgCpc',      label: 'CPC Prom.',      prefix: '$', lowerBetter: true  },
+      { key: 'conversions', label: 'Conversiones',   lowerBetter: false },
+      { key: 'cpa',         label: 'CPA',            prefix: '$', lowerBetter: true  },
+      { key: 'roas',        label: 'ROAS',           suffix: 'x', lowerBetter: false },
+    ],
+  },
+  meta_ads: {
+    name:    'Meta Ads',
+    color:   '#1877F2',
+    colorDk: '#1565C0',
+    colorBg: '#EFF6FF',
+    logo:    'f',
+    metrics: [
+      { key: 'spend',       label: 'Inversión',     prefix: '$', lowerBetter: false },
+      { key: 'reach',       label: 'Alcance',        lowerBetter: false },
+      { key: 'impressions', label: 'Impresiones',    lowerBetter: false },
+      { key: 'clicks',      label: 'Clics',          lowerBetter: false },
+      { key: 'ctr',         label: 'CTR',            suffix: '%', lowerBetter: false },
+      { key: 'cpm',         label: 'CPM',            prefix: '$', lowerBetter: true  },
+      { key: 'conversions', label: 'Conversiones',   lowerBetter: false },
+      { key: 'cpa',         label: 'CPA',            prefix: '$', lowerBetter: true  },
+    ],
+  },
+};
+
+function trendBadge(val, prev, lowerBetter) {
+  if (prev === undefined || prev === null || parseFloat(prev) === 0) return '';
+  const v = parseFloat(val) || 0;
+  const p = parseFloat(prev) || 0;
+  const pct = (((v - p) / p) * 100).toFixed(1);
+  const isGood = lowerBetter ? v <= p : v >= p;
+  const color = isGood ? '#16a34a' : '#dc2626';
+  const bg    = isGood ? '#f0fdf4' : '#fef2f2';
+  const arrow = v >= p ? '&#9650;' : '&#9660;';
+  return `<span style="display:inline-block;font-size:11px;font-weight:700;color:${color};background:${bg};border-radius:20px;padding:2px 7px;margin-top:4px">${arrow} ${Math.abs(pct)}%</span>`;
 }
 
-function buildWeeklyReportEmail(userEmail, platform, metrics, analysis) {
+function buildMetricRows(platform, metrics, prevMetrics) {
+  const cfg = PLATFORM_CONFIG[platform] || PLATFORM_CONFIG.google_ads;
+  return cfg.metrics.map(m => {
+    const val  = metrics[m.key];
+    const prev = prevMetrics?.[m.key];
+    if (val === undefined || val === null) return '';
+    const display = `${m.prefix || ''}${val}${m.suffix || ''}`;
+    const badge = trendBadge(val, prev, m.lowerBetter);
+    return `
+      <td width="25%" style="padding:12px 8px;text-align:center;vertical-align:top">
+        <div style="background:#fff;border-radius:10px;padding:14px 10px;border:1px solid #e5e7eb">
+          <div style="font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px">${display}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:3px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">${m.label}</div>
+          ${badge ? `<div style="margin-top:5px">${badge}</div>` : ''}
+        </div>
+      </td>`;
+  }).filter(Boolean);
+}
+
+function buildMetricTable(platform, metrics, prevMetrics) {
+  const rows = buildMetricRows(platform, metrics, prevMetrics);
+  const chunks = [];
+  for (let i = 0; i < rows.length; i += 4) chunks.push(rows.slice(i, i + 4));
+  return chunks.map(chunk => `
+    <tr>${chunk.join('')}${chunk.length < 4 ? '<td></td>'.repeat(4 - chunk.length) : ''}</tr>
+  `).join('');
+}
+
+function buildWeeklyReportEmail(userEmail, platformKey, metrics, analysis, prevMetrics) {
   const weekLabel = getWeekLabel();
+  const cfg = PLATFORM_CONFIG[platformKey] || PLATFORM_CONFIG.google_ads;
+  const platformName = cfg.name;
+  const color   = cfg.color;
+  const colorDk = cfg.colorDk;
+
+  const recColors = ['#4285F4', '#7C3AED', '#059669'];
+
   return `<!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8">
-  <style>
-    body{font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a}
-    .header{background:#2563eb;color:white;padding:24px;border-radius:8px 8px 0 0}
-    .header h1{margin:0;font-size:20px}
-    .header p{margin:4px 0 0;opacity:.85;font-size:14px}
-    .body{background:#f8fafc;padding:24px}
-    .metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
-    .metric-card{background:white;border-radius:8px;padding:16px;text-align:center}
-    .metric-value{font-size:22px;font-weight:600}
-    .metric-label{font-size:12px;color:#6b7280;margin-top:4px}
-    .metric-change.up{color:#16a34a}
-    .metric-change.down{color:#dc2626}
-    .section{background:white;border-radius:8px;padding:20px;margin:12px 0}
-    .section h3{margin:0 0 12px;font-size:15px;color:#374151}
-    .rec-item{padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
-    .footer{text-align:center;padding:20px;font-size:12px;color:#9ca3af}
-    .cta-btn{display:inline-block;background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:500;margin-top:16px}
-  </style>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reporte Semanal ${platformName}</title>
 </head>
-<body>
-  <div class="header">
-    <h1>Reporte semanal · ${platform}</h1>
-    <p>${weekLabel} · generado por Acuarius</p>
-  </div>
-  <div class="body">
-    <div class="metrics-grid">${buildMetricCards(metrics)}</div>
-    <div class="section">
-      <h3>📊 Resumen de la semana</h3>
-      <p style="font-size:14px;line-height:1.6;color:#374151">${analysis.summary}</p>
-    </div>
-    <div class="section">
-      <h3>🎯 Recomendaciones para esta semana</h3>
-      ${analysis.recommendations.map((r, i) => `<div class="rec-item">${i + 1}. ${r}</div>`).join('')}
-    </div>
-    <div style="text-align:center;padding:20px 0">
-      <a href="https://app.acuarius.app" class="cta-btn">Ver análisis completo →</a>
-    </div>
-  </div>
-  <div class="footer">
-    Acuarius · <a href="https://acuarius.app">acuarius.app</a> ·
-    <a href="https://app.acuarius.app/?action=unsubscribe-reports&userId=unsubscribe">Cancelar suscripción de reportes</a>
-  </div>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td align="center" style="padding:28px 16px">
+
+      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%">
+
+        <!-- ── HEADER ─────────────────────────────────── -->
+        <tr>
+          <td style="background:linear-gradient(135deg,${color} 0%,${colorDk} 100%);border-radius:14px 14px 0 0;padding:28px 32px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">Acuarius · Reporte Semanal</div>
+                  <div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.5px">${platformName}</div>
+                  <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px">${weekLabel}</div>
+                </td>
+                <td align="right">
+                  <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:white;line-height:48px;text-align:center">${cfg.logo}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── MÉTRICAS ────────────────────────────────── -->
+        <tr>
+          <td style="background:#f8fafc;padding:20px 16px 8px">
+            <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin-bottom:4px">Métricas de la semana</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:0 16px 16px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              ${buildMetricTable(platformKey, metrics, prevMetrics)}
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── RESUMEN IA ──────────────────────────────── -->
+        <tr>
+          <td style="background:#f8fafc;padding:0 16px 12px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#fff;border-radius:12px;padding:20px 24px;border-left:4px solid ${color}">
+                  <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">&#128202; Análisis de la semana</div>
+                  <div style="font-size:14px;line-height:1.7;color:#4b5563">${analysis.summary}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── RECOMENDACIONES ────────────────────────── -->
+        ${analysis.recommendations?.length ? `
+        <tr>
+          <td style="background:#f8fafc;padding:0 16px 12px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#fff;border-radius:12px;padding:20px 24px">
+                  <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px">&#127919; Acciones para esta semana</div>
+                  ${analysis.recommendations.map((r, i) => `
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:${i < analysis.recommendations.length - 1 ? '12px' : '0'}">
+                    <tr>
+                      <td width="28" valign="top">
+                        <div style="width:24px;height:24px;background:${recColors[i] || color};border-radius:6px;text-align:center;line-height:24px;font-size:12px;font-weight:800;color:white">${i + 1}</div>
+                      </td>
+                      <td style="padding-left:10px;font-size:14px;line-height:1.6;color:#374151;vertical-align:top">${r}</td>
+                    </tr>
+                  </table>`).join('')}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>` : ''}
+
+        <!-- ── CTA ────────────────────────────────────── -->
+        <tr>
+          <td style="background:#f8fafc;padding:4px 16px 24px;text-align:center">
+            <a href="https://app.acuarius.app" style="display:inline-block;background:${color};color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:13px 32px;border-radius:8px;letter-spacing:.2px">Ver análisis completo &rarr;</a>
+          </td>
+        </tr>
+
+        <!-- ── FOOTER ─────────────────────────────────── -->
+        <tr>
+          <td style="background:#e2e8f0;border-radius:0 0 14px 14px;padding:16px 24px;text-align:center">
+            <div style="font-size:12px;color:#94a3b8">
+              <strong style="color:#64748b">Acuarius</strong> &middot; Reportes automáticos de marketing &middot;
+              <a href="https://app.acuarius.app/?action=unsubscribe-reports" style="color:#94a3b8">Cancelar suscripción</a>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
 }
@@ -218,7 +329,7 @@ async function processUser(user) {
 
       // Send email if user has reports enabled
       if (RESEND_API_KEY && userEmail && emailReports) {
-        const html = buildWeeklyReportEmail(userEmail, conn.platform === 'google_ads' ? 'Google Ads' : 'Meta Ads', currentMetrics, analysis);
+        const html = buildWeeklyReportEmail(userEmail, conn.platform, currentMetrics, analysis, prevMetrics || {});
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
