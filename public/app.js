@@ -876,6 +876,11 @@ function briefFillForm(c) {
     agencyShowLogoPreview(c.logo);
   }
   agencySelectHealth(c.health || 'gris');
+  // Cuentas publicitarias — guardar en dataset para que briefLoadPlatformAccounts las pre-seleccione
+  const gSel = document.getElementById('ag-f-google-account');
+  const mSel = document.getElementById('ag-f-meta-account');
+  if (gSel && c.googleCustomerId) gSel.dataset.stored = c.googleCustomerId;
+  if (mSel && c.metaAdAccountId)  mSel.dataset.stored = c.metaAdAccountId;
 }
 
 function briefGoStep(step) {
@@ -906,6 +911,75 @@ function briefGoStep(step) {
   // Scroll body al top
   const body = document.querySelector('.agency-modal-body');
   if (body) body.scrollTop = 0;
+
+  // Cargar cuentas en paso 7 (Plataformas)
+  if (step === 7) briefLoadPlatformAccounts();
+}
+
+// Carga cuentas de Google y Meta en los selectors del paso 8 del brief
+async function briefLoadPlatformAccounts() {
+  const uid        = clerkInstance?.user?.id || '';
+  const adsToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist')   || '';
+  const metaToken  = sessionStorage.getItem('meta_access_token')  || localStorage.getItem('meta_access_token_persist')  || '';
+
+  // ── Google Ads ────────────────────────────────────────────────
+  const googleRow = document.getElementById('plat-google-account-row');
+  const googleSel = document.getElementById('ag-f-google-account');
+  if (googleRow && googleSel) {
+    if (adsToken) {
+      googleRow.style.display = 'block';
+      googleSel.innerHTML = '<option value="">Cargando...</option>';
+      try {
+        const r = await fetch('/api/google-ads?action=list-accounts&userId=' + encodeURIComponent(uid));
+        const data = await r.json();
+        const accounts = data.accounts || [];
+        if (accounts.length) {
+          const stored = document.getElementById('ag-f-google-account')?.dataset.stored || '';
+          googleSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+            accounts.map(a => {
+              const val = String(a.id || a.customerId || '').replace(/-/g, '');
+              const label = (a.name || a.descriptiveName || a.id) + (val ? ' (' + val + ')' : '');
+              return '<option value="' + val + '"' + (val === stored ? ' selected' : '') + '>' + label + '</option>';
+            }).join('');
+        } else {
+          googleSel.innerHTML = '<option value="">Sin cuentas accesibles</option>';
+        }
+      } catch(e) {
+        googleSel.innerHTML = '<option value="">Error cargando cuentas</option>';
+      }
+    } else {
+      googleRow.style.display = 'none';
+    }
+  }
+
+  // ── Meta Ads ──────────────────────────────────────────────────
+  const metaRow = document.getElementById('plat-meta-account-row');
+  const metaSel = document.getElementById('ag-f-meta-account');
+  if (metaRow && metaSel) {
+    if (metaToken) {
+      metaRow.style.display = 'block';
+      metaSel.innerHTML = '<option value="">Cargando...</option>';
+      try {
+        const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
+        const data = await r.json();
+        const accounts = data.accounts || [];
+        if (accounts.length) {
+          const stored = metaSel.dataset.stored || '';
+          metaSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+            accounts.map(a => {
+              const label = (a.name || a.id) + (a.business ? ' · ' + a.business : '') + ' (' + (a.currency || '') + ')';
+              return '<option value="' + a.id + '"' + (a.id === stored ? ' selected' : '') + '>' + label + '</option>';
+            }).join('');
+        } else {
+          metaSel.innerHTML = '<option value="">Sin cuentas accesibles</option>';
+        }
+      } catch(e) {
+        metaSel.innerHTML = '<option value="">Error cargando cuentas</option>';
+      }
+    } else {
+      metaRow.style.display = 'none';
+    }
+  }
 }
 
 function agencyGoStep(step) {
@@ -1123,6 +1197,9 @@ function briefReadForm() {
     // Logo
     logo:             briefLogoDataUrl || null,
     health:           agencySelectedHealth,
+    // Cuentas publicitarias del cliente
+    googleCustomerId: val('ag-f-google-account') || '',
+    metaAdAccountId:  val('ag-f-meta-account')   || '',
     // Campos legacy para compatibilidad con renderCard
     business:         val('ag-f-industria') || val('ag-f-descripcion').slice(0, 60),
   };
@@ -1746,7 +1823,10 @@ async function warLoadMetaAccountsForPicker() {
       return;
     }
 
-    const stored = sessionStorage.getItem('meta_ad_account_id') || '';
+    // Preferir cuenta del cliente si está guardada, si no usar la activa en sesión
+    const client = agencyClients.find(c => c.id === warClientId);
+    const clientMetaId = client?.metaAdAccountId || '';
+    const stored = clientMetaId || sessionStorage.getItem('meta_ad_account_id') || '';
     sel.innerHTML = accounts.map(a => {
       const label = (a.name || a.id) + (a.business ? ' · ' + a.business : '') + ' (' + a.currency + ')';
       const selected = (a.id === stored || 'act_' + a.id === stored || a.id === 'act_' + stored) ? ' selected' : '';
@@ -1768,7 +1848,8 @@ async function warAutoFill(plat) {
     let apiData = null;
 
     if (plat === 'google') {
-      const customerId = sessionStorage.getItem('ads_customer_id');
+      const warClient  = agencyClients.find(c => c.id === warClientId);
+      const customerId = warClient?.googleCustomerId || sessionStorage.getItem('ads_customer_id');
       if (!customerId || !uid) throw new Error('Sin cuenta conectada');
       const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
       apiData = await r.json();
