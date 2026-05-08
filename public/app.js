@@ -228,6 +228,8 @@ async function initAuth(){
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     updateUserUI(clerkInstance.user);
+    // Registrar referido pendiente si llegó con ?ref=CODE
+    setTimeout(() => { if (typeof registerPendingReferral === 'function') registerPendingReferral(); }, 1500);
     return true;
   } catch(e) {
     console.error('Auth error:', e.message);
@@ -10113,9 +10115,11 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  ['connections','account'].forEach(t => {
-    document.getElementById('stab-content-'+t).style.display = t === tab ? 'block' : 'none';
+  ['connections','account','referral'].forEach(t => {
+    const content = document.getElementById('stab-content-'+t);
+    if (content) content.style.display = t === tab ? 'block' : 'none';
     const btn = document.getElementById('stab-'+t);
+    if (!btn) return;
     if (t === tab) {
       btn.style.color = 'var(--blue)';
       btn.style.borderBottom = '2px solid var(--blue)';
@@ -10126,6 +10130,8 @@ function switchSettingsTab(tab) {
       btn.style.fontWeight = '500';
     }
   });
+  // Cargar datos al abrir tab de referidos
+  if (tab === 'referral') loadReferralData();
 }
 
 // =============================================
@@ -10853,4 +10859,123 @@ function showComingSoon(agentKey) {
 function closeComingSoon() {
   document.getElementById('coming-soon-modal').style.display = 'none';
   document.body.style.overflow = '';
+}
+// =============================================
+// SISTEMA DE REFERIDOS
+// =============================================
+
+let referralCode = null;
+
+// Cargar datos de referidos al abrir el tab
+async function loadReferralData() {
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return;
+
+  // Obtener o crear código
+  try {
+    const r = await fetch('/api/referral?action=my-code&userId=' + encodeURIComponent(userId));
+    const d = await r.json();
+    if (d.code) {
+      referralCode = d.code;
+      const link = 'https://app.acuarius.app/?ref=' + d.code;
+      const box = document.getElementById('ref-link-box');
+      if (box) box.textContent = link;
+    }
+  } catch(e) { console.warn('Referral code error:', e); }
+
+  // Cargar estadísticas
+  try {
+    const r = await fetch('/api/referral?action=stats&userId=' + encodeURIComponent(userId));
+    const d = await r.json();
+
+    const el = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+    el('ref-stat-total',   d.total  || 0);
+    el('ref-stat-active',  d.active || 0);
+    el('ref-stat-earned',  '$' + (parseFloat(d.earned || 0).toFixed(2)));
+    el('ref-stat-pending', '$' + (parseFloat(d.pending || 0).toFixed(2)));
+
+    const tbody = document.getElementById('ref-table-body');
+    if (!tbody) return;
+
+    if (!d.referrals || d.referrals.length === 0) {
+      tbody.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted2);font-size:12px">Aún no tienes referidos. ¡Comparte tu link!</div>';
+      return;
+    }
+
+    const rows = d.referrals.map(ref => {
+      const statusColor = ref.status === 'active' ? '#22c55e' : ref.status === 'registered' ? '#f59e0b' : '#94a3b8';
+      const statusLabel = ref.status === 'active' ? 'Activo' : ref.status === 'registered' ? 'Registrado' : ref.status;
+      const earned = parseFloat(ref.total_earned || 0).toFixed(2);
+      const date = ref.created_at ? new Date(ref.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+      const email = ref.referred_email || '—';
+      const emailMasked = email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.min(b.length, 4)) + c);
+      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px">
+        <div>
+          <div style="font-weight:500;color:var(--text)">${emailMasked}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${date}</div>
+        </div>
+        <div style="text-align:center">
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;background:${statusColor}20;color:${statusColor}">${statusLabel}</span>
+        </div>
+        <div style="text-align:right;font-weight:600;color:var(--text)">$${earned}</div>
+      </div>`;
+    }).join('');
+
+    tbody.innerHTML = rows;
+  } catch(e) { console.warn('Referral stats error:', e); }
+}
+
+// Copiar link al clipboard
+function copyReferralLink() {
+  if (!referralCode) return;
+  const link = 'https://app.acuarius.app/?ref=' + referralCode;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('ref-copy-btn');
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '¡Copiado!';
+      btn.style.background = '#22c55e';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = 'var(--blue)'; }, 2000);
+    }
+  }).catch(() => {
+    // Fallback para iOS
+    const el = document.createElement('textarea');
+    el.value = link;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  });
+}
+
+// Capturar ?ref=CODE al cargar la página y guardarlo en localStorage
+(function captureReferralCode() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref');
+  if (ref && ref.length >= 4) {
+    localStorage.setItem('pending_ref_code', ref.toUpperCase());
+    // Limpiar URL sin recargar
+    const clean = window.location.pathname + (window.location.search.replace(/[?&]ref=[^&]*/g, '').replace(/^&/, '?') || '');
+    window.history.replaceState({}, '', clean);
+  }
+})();
+
+// Registrar referido al iniciar sesión (llamar desde initAuth o tras autenticación)
+async function registerPendingReferral() {
+  const refCode = localStorage.getItem('pending_ref_code');
+  if (!refCode) return;
+
+  const userId = clerkInstance?.user?.id;
+  const email  = clerkInstance?.user?.primaryEmailAddress?.emailAddress;
+  if (!userId || !email) return;
+
+  try {
+    const r = await fetch('/api/referral?action=register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register', refCode, referredEmail: email, referredUserId: userId }),
+    });
+    const d = await r.json();
+    if (d.ok) localStorage.removeItem('pending_ref_code');
+  } catch(e) { console.warn('Register referral error:', e); }
 }

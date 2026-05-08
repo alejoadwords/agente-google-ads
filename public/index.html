@@ -2208,7 +2208,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   <!-- Tabs -->
   <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 20px">
     <button onclick="switchSettingsTab('connections')" id="stab-connections" style="font-size:12px;font-weight:600;padding:10px 0;margin-right:20px;border:none;background:none;cursor:pointer;color:var(--blue);border-bottom:2px solid var(--blue);font-family:var(--font)">Conexiones</button>
-    <button onclick="switchSettingsTab('account')" id="stab-account" style="font-size:12px;font-weight:500;padding:10px 0;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-family:var(--font)">Cuenta</button>
+    <button onclick="switchSettingsTab('account')" id="stab-account" style="font-size:12px;font-weight:500;padding:10px 0;margin-right:20px;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-family:var(--font)">Cuenta</button>
+    <button onclick="switchSettingsTab('referral')" id="stab-referral" style="font-size:12px;font-weight:500;padding:10px 0;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-family:var(--font)">Referidos</button>
   </div>
 
   <!-- Tab: Conexiones -->
@@ -2432,6 +2433,61 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <div style="font-size:11px;color:var(--muted);margin-top:1px">7 días de prueba</div>
         </div>
         <button style="padding:6px 12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Mejorar plan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Referidos -->
+  <div id="stab-content-referral" style="display:none;flex:1;overflow-y:auto;padding:20px">
+
+    <!-- Link de referido -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:8px">Tu link de referido</div>
+      <p style="font-size:11px;color:var(--muted2);margin-bottom:12px;line-height:1.5">Comparte este link. Ganas <strong style="color:var(--text)">$4.75 USD/mes</strong> por cada persona que se suscriba con tu código.</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="ref-link-box" style="flex:1;background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Cargando...</div>
+        <button id="ref-copy-btn" onclick="copyReferralLink()" style="padding:8px 14px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Copiar</button>
+      </div>
+    </div>
+
+    <!-- Stats cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Referidos</div>
+        <div id="ref-stat-total" style="font-size:22px;font-weight:700;color:var(--text)">—</div>
+        <div style="font-size:11px;color:var(--muted)">total registrados</div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Activos</div>
+        <div id="ref-stat-active" style="font-size:22px;font-weight:700;color:#22c55e">—</div>
+        <div style="font-size:11px;color:var(--muted)">suscritos este mes</div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Total ganado</div>
+        <div id="ref-stat-earned" style="font-size:22px;font-weight:700;color:var(--text)">—</div>
+        <div style="font-size:11px;color:var(--muted)">USD acumulado</div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Próxima liquidación</div>
+        <div id="ref-stat-pending" style="font-size:22px;font-weight:700;color:#f59e0b">—</div>
+        <div style="font-size:11px;color:var(--muted)">USD este mes</div>
+      </div>
+    </div>
+
+    <!-- Tabla de referidos -->
+    <div style="border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2)">Historial de referidos</div>
+      </div>
+      <div id="ref-table-body" style="max-height:280px;overflow-y:auto">
+        <div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- Nota de liquidación -->
+    <div style="margin-top:12px;padding:10px 12px;background:var(--sidebar);border-radius:10px;border:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted2);line-height:1.5">
+        💡 <strong style="color:var(--text)">¿Cómo funciona el pago?</strong> Liquidamos comisiones manualmente los primeros 5 días de cada mes por PayPal, transferencia o Nequi. Te contactamos al email de tu cuenta.
       </div>
     </div>
   </div>
