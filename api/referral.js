@@ -8,7 +8,7 @@ export const config = { runtime: 'nodejs' };
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const COMMISSION   = 4.75;
+const COMMISSION   = 5;
 
 // ── Helper REST Supabase ──────────────────────────────────────────────────────
 async function sb(path, method = 'GET', body = null, extra = {}) {

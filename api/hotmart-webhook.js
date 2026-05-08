@@ -145,7 +145,7 @@ export default async function handler(req, res) {
             referred_user_id: usuario.id,
             activated_at:     ahora.toISOString(),
             months_paid:      1,
-            total_earned:     4.75,
+            total_earned:     5,
             updated_at:       ahora.toISOString(),
           })
           .eq('id', refConversion.id);
@@ -155,7 +155,7 @@ export default async function handler(req, res) {
           .from('referral_conversions')
           .update({
             months_paid:  (refConversion.months_paid || 0) + 1,
-            total_earned: parseFloat(refConversion.total_earned || 0) + 4.75,
+            total_earned: parseFloat(refConversion.total_earned || 0) + 5,
             updated_at:   ahora.toISOString(),
           })
           .eq('id', refConversion.id);
