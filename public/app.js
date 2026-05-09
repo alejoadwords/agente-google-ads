@@ -3203,6 +3203,15 @@ function showMetaImageSubCards(parentCard) {
         '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos con tu marca, oferta y línea gráfica — listos para publicar en Meta</div>' +
       '</div>' +
 
+      // Opción 1b: Diseño estructurado (HTML Design System)
+      '<div onclick="dismissMetaCards(this);showHtmlDesignWizard()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<div style="font-size:20px">🎨</div>' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text)">Diseño estructurado <span style="font-size:10px;background:var(--blue);color:#fff;padding:1px 7px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.4;padding-left:28px">Layouts tipo agencia — texto, iconos e imagen perfectamente organizados. 3, 5 o 10 variaciones.</div>' +
+      '</div>' +
+
       // Opción 2: Variaciones A/B de anuncio existente
       '<div onclick="dismissMetaCards(this);showAdVariationAB()" style="border:2px solid #059669;border-radius:12px;padding:16px 14px;cursor:pointer;background:#ECFDF5;transition:all .15s" onmouseover="this.style.background=\'#D1FAE5\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#ECFDF5\';this.style.transform=\'\'">' +
         '<div style="display:flex;align-items:center;gap:10px">' +
@@ -10978,4 +10987,455 @@ async function registerPendingReferral() {
     const d = await r.json();
     if (d.ok) localStorage.removeItem('pending_ref_code');
   } catch(e) { console.warn('Register referral error:', e); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HTML DESIGN SYSTEM — Layouts profesionales para anuncios
+// ══════════════════════════════════════════════════════════════════
+
+let hdwVariations = 3;
+let hdwFormat = 'feed';
+
+function showHtmlDesignWizard() {
+  loadImageUsage();
+  if (!canGenerateImage()) { showImageLimitReached(); return; }
+
+  const isAdmin = isAdminUser();
+  const remaining = (!isAdmin && userPlan !== 'pro') ? Math.max(0, imageUsage.limit - imageUsage.generated) : '∞';
+
+  const logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+
+  // Pre-fill with active client brief if available
+  const client = agencyActiveClientId ? agencyClients.find(c => c.id === agencyActiveClientId) : null;
+  const prePrompt = client
+    ? (client.name || '') + (client.descripcion ? ' — ' + client.descripcion : '') + (client.industria ? '. Industria: ' + client.industria : '')
+    : '';
+
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'html-design-wizard';
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+    '<div style="max-width:480px;width:100%">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:14px;padding:20px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text)">🎨 Diseño estructurado</div>' +
+          (remaining !== '∞' ? '<div style="margin-left:auto;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">' + remaining + ' restantes</div>' : '') +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted2);margin-bottom:14px">Describe tu negocio y campaña — la IA genera el copy, colores y diseño automáticamente.</div>' +
+
+        '<textarea id="hdw-prompt" rows="3" placeholder="Ej: Gimnasio CrossFit en Bogotá, primer mes gratis para nuevos socios, ambiente energético y motivacional&#10;&#10;O: Tienda de ropa femenina, colección primavera con 30% de descuento, estilo moderno y casual" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.45;color:var(--text);background:white">' + prePrompt + '</textarea>' +
+
+        '<div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">' +
+          '<div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Variaciones</div>' +
+            '<div style="display:flex;gap:6px" id="hdw-var-btns">' +
+              '<button onclick="hdwSetVar(this,3)" class="hdw-sel-btn hdw-active" style="padding:6px 14px;border:1.5px solid var(--blue);border-radius:7px;font-size:12px;font-weight:700;background:var(--blue-lt);color:var(--blue);cursor:pointer;font-family:var(--font)">3</button>' +
+              '<button onclick="hdwSetVar(this,5)" class="hdw-sel-btn" style="padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">5</button>' +
+              '<button onclick="hdwSetVar(this,10)" class="hdw-sel-btn" style="padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">10</button>' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Formato</div>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap" id="hdw-fmt-btns">' +
+              '<button onclick="hdwSetFmt(this,\'feed\')" class="hdw-fmt-btn hdw-active" style="padding:6px 12px;border:1.5px solid var(--blue);border-radius:7px;font-size:11px;font-weight:700;background:var(--blue-lt);color:var(--blue);cursor:pointer;font-family:var(--font)">📱 Feed</button>' +
+              '<button onclick="hdwSetFmt(this,\'story\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">📲 Story</button>' +
+              '<button onclick="hdwSetFmt(this,\'square\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">⬛ Square</button>' +
+              '<button onclick="hdwSetFmt(this,\'all\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">🎲 Todos</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<button onclick="runHtmlDesign()" style="width:100%;margin-top:16px;padding:13px;background:var(--blue);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:background .15s" onmouseover="this.style.background=\'var(--blue-h)\'" onmouseout="this.style.background=\'var(--blue)\'">✨ Crear diseños</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+  setTimeout(() => document.getElementById('hdw-prompt')?.focus(), 100);
+}
+
+function hdwSetVar(btn, n) {
+  hdwVariations = n;
+  document.querySelectorAll('.hdw-sel-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+  });
+  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
+}
+
+function hdwSetFmt(btn, fmt) {
+  hdwFormat = fmt;
+  document.querySelectorAll('.hdw-fmt-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+  });
+  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
+}
+
+async function runHtmlDesign() {
+  const prompt = document.getElementById('hdw-prompt')?.value?.trim();
+  if (!prompt) {
+    document.getElementById('hdw-prompt').style.borderColor = '#ef4444';
+    return;
+  }
+
+  const count = hdwVariations;
+  const fmt = hdwFormat;
+
+  document.getElementById('html-design-wizard')?.remove();
+
+  const thinkId = addThinking();
+
+  const updateMsg = (txt) => {
+    const el = document.getElementById(thinkId);
+    if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>' + txt; }
+  };
+
+  try {
+    updateMsg('Analizando tu negocio con IA...');
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+    // Step 1: Get design brief from Claude
+    const briefRes = await fetch('/api/design-brief', {
+      method: 'POST', headers,
+      body: JSON.stringify({ prompt, format: fmt }),
+    });
+    const brief = await briefRes.json();
+    if (brief.error) throw new Error(brief.error);
+
+    // Step 2: Generate background photo with Flux (photo mode, no text)
+    updateMsg('Generando foto de fondo...');
+    const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
+    const bgRes = await fetch('/api/generate-image', {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text, no people, vibrant colors',
+        format: fluxFormat,
+        variations: 1,
+        hasText: false,
+      }),
+    });
+    const bgData = await bgRes.json();
+    const bgBase64 = bgData.images?.[0] ? ('data:' + bgData.images[0].mediaType + ';base64,' + bgData.images[0].base64) : null;
+
+    rmThinking(thinkId);
+
+    // Step 3: Render N HTML template variations
+    await renderHtmlVariations(brief, bgBase64, count, fmt);
+
+  } catch (err) {
+    rmThinking(thinkId);
+    addAgent('Error generando diseños: ' + err.message);
+  }
+}
+
+// ── Template selection logic ───────────────────────────────────────────────
+// Templates by format:
+// story (0): Split left text / right photo
+// story (1): Full photo + dark overlay
+// square (2): Split left text / right photo rounded
+// square (3): Dark photo + white text + icons row
+// feed (4):   Full photo + gradient overlay (4:5)
+
+const HDW_TEMPLATES = [
+  { format:'story',  label:'Story · Split',   id:0 },
+  { format:'story',  label:'Story · Overlay', id:1 },
+  { format:'square', label:'Square · Split',  id:2 },
+  { format:'square', label:'Square · Dark',   id:3 },
+  { format:'feed',   label:'Feed · Overlay',  id:4 },
+];
+
+function hdwGetTemplateList(fmt, count) {
+  let pool = [];
+  if (fmt === 'story')  pool = [0,1,0,1,0,1,0,1,0,1];
+  else if (fmt === 'square') pool = [2,3,2,3,2,3,2,3,2,3];
+  else if (fmt === 'feed')   pool = [4,4,4,4,4,4,4,4,4,4];
+  else pool = [0,2,4,1,3,0,2,4,1,3]; // 'all'
+
+  // alternate color palettes: even index = primary, odd = alt
+  return pool.slice(0, count).map((tplId, i) => ({
+    tplId,
+    palette: i % 2 === 0 ? 'primary' : 'alt',
+    label: HDW_TEMPLATES.find(t => t.id === tplId)?.label || 'Ad',
+    format: ['story','story','square','square','feed'][tplId] || 'feed',
+  }));
+}
+
+async function renderHtmlVariations(brief, bgBase64, count, fmt) {
+  const templates = hdwGetTemplateList(fmt, count);
+  const total = templates.length;
+
+  // Initialize shared grid (first call = index 1)
+  for (let i = 0; i < total; i++) {
+    const tpl = templates[i];
+    const thinkId = addThinking();
+    const el = document.getElementById(thinkId);
+    if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>renderizando diseño ' + (i+1) + ' de ' + total + '...'; }
+
+    try {
+      const imgData = await captureHtmlTemplate(brief, bgBase64, tpl.tplId, tpl.palette);
+      rmThinking(thinkId);
+      renderAdImage({ base64: imgData.base64, mediaType: 'image/png' }, i + 1, total, tpl.format, tpl.label, false);
+      if (i === 0) incrementImageUsage();
+    } catch(err) {
+      rmThinking(thinkId);
+      addAgent('Error en variación ' + (i+1) + ': ' + err.message);
+    }
+  }
+}
+
+// ── HTML capture via html2canvas ──────────────────────────────────────────
+async function captureHtmlTemplate(brief, bgBase64, tplId, palette) {
+  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 4:{w:1080,h:1350} };
+  const d = dims[tplId] || dims[4];
+
+  // Container: off-screen, real size
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + d.w + 'px;height:' + d.h + 'px;overflow:hidden;z-index:-1';
+  container.innerHTML = hdwBuildTemplate(brief, bgBase64, tplId, palette, d.w, d.h);
+  document.body.appendChild(container);
+
+  // Wait for fonts + images
+  await document.fonts.ready;
+  await new Promise(r => setTimeout(r, 300));
+
+  try {
+    const canvas = await html2canvas(container.firstChild, {
+      scale: 1,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: null,
+      logging: false,
+      width: d.w,
+      height: d.h,
+    });
+    const base64 = canvas.toDataURL('image/jpeg', 0.92).replace('data:image/jpeg;base64,', '');
+    return { base64, mediaType: 'image/jpeg' };
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+// ── Color utilities ────────────────────────────────────────────────────────
+function hdwLighten(hex, amount) {
+  const r = parseInt(hex.slice(1,3)||'33',16);
+  const g = parseInt(hex.slice(3,5)||'33',16);
+  const b = parseInt(hex.slice(5,7)||'33',16);
+  return 'rgb('+Math.round(r+(255-r)*amount)+','+Math.round(g+(255-g)*amount)+','+Math.round(b+(255-b)*amount)+')';
+}
+
+function hdwHex2Rgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3)||'0',16);
+  const g = parseInt(hex.slice(3,5)||'0',16);
+  const b = parseInt(hex.slice(5,7)||'0',16);
+  return 'rgba('+r+','+g+','+b+','+alpha+')';
+}
+
+function hdwGetColors(brief, palette) {
+  return palette === 'alt'
+    ? { primary: brief.alt_primary||'#2d1a3d', bg: brief.alt_bg||'#f5f0ff', accent: brief.accent_color||'#a78bfa' }
+    : { primary: brief.primary_color||'#1a3d1a', bg: brief.bg_color||'#f5f0e8', accent: brief.accent_color||'#4ade80' };
+}
+
+// ── Icon SVG by keyword ────────────────────────────────────────────────────
+function hdwIcon(feat, color) {
+  const f = (feat||'').toLowerCase();
+  const s = color||'#333';
+  const base = (path) => '<svg viewBox="0 0 24 24" fill="none" stroke="'+s+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%">'+path+'</svg>';
+  if (f.match(/montaña|volcan|senderismo|trekking|hiking|mount/)) return base('<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>');
+  if (f.match(/playa|beach|mar|ocean|surf/)) return base('<path d="M17 17H7l-5-5s4-3 10-3 10 3 10 3l-5 5z"/><path d="M12 9V4"/><path d="M4.22 10.22 6 12"/><path d="M19.78 10.22 18 12"/>');
+  if (f.match(/cultura|museo|historia|tradicion|heritage/)) return base('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>');
+  if (f.match(/grupo|familia|personas|people|team|comunidad/)) return base('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
+  if (f.match(/natural|naturaleza|salvaje|wild|flora|plant/)) return base('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>');
+  if (f.match(/agua|water|lago|river|nadar|swim|cristal/)) return base('<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>');
+  if (f.match(/gym|fitness|fuerza|muscle|entrena|workout/)) return base('<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>');
+  if (f.match(/comida|food|restaurante|chef|cocina|gourmet/)) return base('<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>');
+  if (f.match(/precio|oferta|descuento|promo|sale|gratis/)) return base('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>');
+  if (f.match(/rapido|rápido|entrega|delivery|ship|envio/)) return base('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><polygon points="9 22 21 22 21 12 13 12 13 18 9 18 9 22"/><path d="M16 12V9a3 3 0 0 0-3-3"/>');
+  // default: star
+  return base('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>');
+}
+
+// ── TEMPLATE BUILDER ──────────────────────────────────────────────────────
+function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
+  const c = hdwGetColors(brief, palette);
+  const iconBg = hdwLighten(c.primary, 0.8);
+  const feats = (brief.features || ['Característica 1','Característica 2','Característica 3','Característica 4']).slice(0,4);
+  const fonts = '@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap");';
+
+  // ── Template 0: Story Split ────────────────────────────────────
+  if (tplId === 0) {
+    const iconSize = 80; const labelSize = 24; const iconPad = 20;
+    const featItems = feats.map(f =>
+      '<div style="display:flex;align-items:center;gap:24px;margin-bottom:18px">' +
+        '<div style="width:'+iconSize+'px;height:'+iconSize+'px;border-radius:50%;background:'+iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:'+iconPad+'px">'+hdwIcon(f,c.primary)+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:'+labelSize+'px;color:'+c.primary+';text-transform:uppercase;letter-spacing:.05em;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo panel right
+      (bgBase64 ? '<div style="position:absolute;right:0;top:0;width:48%;height:100%;background:url(\''+bgBase64+'\') center/cover no-repeat;border-radius:120px 0 0 120px"></div>' : '<div style="position:absolute;right:0;top:0;width:48%;height:100%;background:linear-gradient(135deg,'+c.primary+','+hdwLighten(c.primary,0.3)+');border-radius:120px 0 0 120px"></div>') +
+      // Text area
+      '<div style="position:absolute;left:0;top:0;width:56%;height:100%;padding:80px 60px;display:flex;flex-direction:column;box-sizing:border-box">' +
+        // Category badge
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.primary+';color:#fff;padding:14px 26px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;width:fit-content;margin-bottom:50px;font-family:Montserrat,sans-serif">' +
+          '<svg viewBox="0 0 24 24" style="width:28px;height:28px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+          (brief.category||'CATEGORÍA') +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.9;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:16px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:80px;line-height:1.1;color:'+c.primary+';margin-bottom:32px">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:32px">' +
+          '<div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'NOMBRE')+'</div>' +
+          '<div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div>' +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;line-height:1.5;color:#444;margin-bottom:40px">'+(brief.description||'')+'</div>' +
+        '<div style="flex:1">' + featItems + '</div>' +
+      '</div>' +
+      // CTA bar
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:36px 60px;display:flex;align-items:center;gap:28px">' +
+        '<div style="width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:28px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'RECIBE TU ITINERARIO')+'</div><div style="font-family:Montserrat,sans-serif;font-size:20px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'+ INFORMACIÓN EXCLUSIVA')+'</div></div>' +
+        '<div style="width:76px;height:76px;background:'+c.accent+';border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:38px;height:38px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 1: Story Overlay ──────────────────────────────────
+  if (tplId === 1) {
+    const featItems = feats.map(f =>
+      '<div style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);padding:14px 22px;border-radius:50px;border:1px solid rgba(255,255,255,.2);margin-bottom:12px">' +
+        '<div style="width:32px;height:32px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:24px;color:#fff;letter-spacing:.04em">'+(f)+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Background photo
+      (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c.primary+' 0%,'+hdwLighten(c.primary,0.2)+' 100%)"></div>') +
+      '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.88) 50%, rgba(0,0,0,.15) 100%)"></div>' +
+      // Top badge
+      '<div style="position:absolute;top:70px;left:70px;display:inline-flex;align-items:center;gap:14px;background:'+c.primary+';color:#fff;padding:16px 30px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">' +
+        '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+        (brief.category||'CATEGORÍA') +
+      '</div>' +
+      // Content
+      '<div style="position:absolute;bottom:160px;left:70px;right:70px">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:rgba(255,255,255,.7);letter-spacing:.15em;text-transform:uppercase;margin-bottom:14px">'+(brief.divider||'NOMBRE')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:130px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:82px;color:#fff;opacity:.9;margin-bottom:36px">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:36px">'+(brief.description||'')+'</div>' +
+        featItems +
+      '</div>' +
+      // CTA
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:34px 70px;display:flex;align-items:center;gap:28px">' +
+        '<div style="width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:19px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+        '<div style="width:72px;height:72px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 2: Square Split ───────────────────────────────────
+  if (tplId === 2) {
+    const featGrid = feats.slice(0,4).map(f =>
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:54px;height:54px;border-radius:50%;background:'+iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:14px">'+hdwIcon(f,c.primary)+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:17px;color:'+c.primary+';text-transform:uppercase;letter-spacing:.04em;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo right
+      (bgBase64 ? '<div style="position:absolute;right:0;top:0;width:50%;height:100%;background:url(\''+bgBase64+'\') center/cover no-repeat;border-radius:80px 0 0 80px"></div>' : '<div style="position:absolute;right:0;top:0;width:50%;height:100%;background:'+c.primary+';border-radius:80px 0 0 80px"></div>') +
+      // Text left
+      '<div style="position:absolute;left:0;top:0;width:56%;height:100%;padding:60px 56px 200px;display:flex;flex-direction:column;box-sizing:border-box">' +
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.primary+';color:#fff;padding:12px 22px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;width:fit-content;margin-bottom:36px;font-family:Montserrat,sans-serif">' +
+          '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+          (brief.category||'CATEGORÍA') +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:96px;line-height:.88;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:64px;color:'+c.primary+';margin-bottom:22px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:22px"><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'')+'</div><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div></div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;line-height:1.5;color:#555;margin-bottom:28px">'+(brief.description||'')+'</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:auto">' + featGrid + '</div>' +
+      '</div>' +
+      // CTA
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:30px 56px;display:flex;align-items:center;gap:22px">' +
+        '<div style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:30px;height:30px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+        '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 3: Square Dark ────────────────────────────────────
+  if (tplId === 3) {
+    const iconRow = feats.slice(0,4).map(f =>
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex:1">' +
+        '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;padding:18px">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:15px;color:#fff;text-transform:uppercase;letter-spacing:.04em;text-align:center;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
+      '<div style="position:absolute;inset:0;background:linear-gradient(135deg, '+hdwHex2Rgba(c.primary,.85)+' 0%, rgba(0,0,0,.6) 100%)"></div>' +
+      // Content
+      '<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:80px">' +
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.accent+';color:'+c.primary+';padding:12px 24px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;width:fit-content;margin-bottom:40px;font-family:Montserrat,sans-serif">' +
+          (brief.category||'CATEGORÍA') +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:110px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:72px;color:'+c.accent+';margin-bottom:30px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:50px">'+(brief.description||'')+'</div>' +
+        // Icon row
+        '<div style="display:flex;gap:20px;margin-bottom:50px">' + iconRow + '</div>' +
+        // CTA
+        '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);border-radius:20px;padding:26px 32px">' +
+          '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+          '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 4: Feed Overlay (4:5) ────────────────────────────
+  const featItems4 = feats.slice(0,4).map(f =>
+    '<div style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(6px);padding:12px 20px;border-radius:50px;border:1px solid rgba(255,255,255,.18);margin-bottom:10px">' +
+      '<div style="width:28px;height:28px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
+      '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:#fff;letter-spacing:.03em">'+f+'</div>' +
+    '</div>'
+  ).join('');
+
+  return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+    '<style>'+fonts+'</style>' +
+    (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c.primary+','+hdwLighten(c.primary,0.2)+')"></div>') +
+    '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.85) 55%, rgba(0,0,0,.1) 100%)"></div>' +
+    // Top badge
+    '<div style="position:absolute;top:60px;left:60px;display:inline-flex;align-items:center;gap:12px;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);color:#fff;padding:14px 28px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">' +
+      '<svg viewBox="0 0 24 24" style="width:24px;height:24px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+      (brief.category||'CATEGORÍA') +
+    '</div>' +
+    // Bottom content
+    '<div style="position:absolute;bottom:140px;left:60px;right:60px">' +
+      '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:rgba(255,255,255,.65);letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px">'+(brief.divider||'')+'</div>' +
+      '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
+      '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:76px;color:#fff;opacity:.9;margin-bottom:30px">'+(brief.subheadline||'subtitulo')+'</div>' +
+      '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:28px">'+(brief.description||'')+'</div>' +
+      featItems4 +
+    '</div>' +
+    // CTA bar
+    '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:32px 60px;display:flex;align-items:center;gap:24px">' +
+      '<div style="width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:30px;height:30px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+      '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+      '<div style="width:68px;height:68px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+    '</div>' +
+  '</div>';
 }
