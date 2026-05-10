@@ -11141,24 +11141,29 @@ async function runHtmlDesign() {
 const HDW_TEMPLATES = [
   { format:'story',  label:'Story · Split',   id:0 },
   { format:'story',  label:'Story · Overlay', id:1 },
+  { format:'story',  label:'Story · Half',    id:7 },
   { format:'square', label:'Square · Split',  id:2 },
   { format:'square', label:'Square · Dark',   id:3 },
+  { format:'square', label:'Square · Card',   id:8 },
   { format:'feed',   label:'Feed · Overlay',  id:4 },
+  { format:'feed',   label:'Feed · Impact',   id:5 },
+  { format:'feed',   label:'Feed · Clean',    id:6 },
 ];
 
 function hdwGetTemplateList(fmt, count) {
   let pool = [];
-  if (fmt === 'story')  pool = [0,1,0,1,0,1,0,1,0,1];
-  else if (fmt === 'square') pool = [2,3,2,3,2,3,2,3,2,3];
-  else if (fmt === 'feed')   pool = [4,4,4,4,4,4,4,4,4,4];
-  else pool = [0,2,4,1,3,0,2,4,1,3]; // 'all'
+  if (fmt === 'story')  pool = [0,1,7,0,1,7,0,1,7,0];
+  else if (fmt === 'square') pool = [2,3,8,2,3,8,2,3,8,2];
+  else if (fmt === 'feed')   pool = [4,5,6,4,5,6,4,5,6,4];
+  else pool = [4,0,2,5,1,8,6,3,7,4]; // 'all'
 
+  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square'};
   // alternate color palettes: even index = primary, odd = alt
   return pool.slice(0, count).map((tplId, i) => ({
     tplId,
     palette: i % 2 === 0 ? 'primary' : 'alt',
     label: HDW_TEMPLATES.find(t => t.id === tplId)?.label || 'Ad',
-    format: ['story','story','square','square','feed'][tplId] || 'feed',
+    format: fmtMap[tplId] || 'feed',
   }));
 }
 
@@ -11187,7 +11192,7 @@ async function renderHtmlVariations(brief, bgBase64, count, fmt) {
 
 // ── HTML capture via html2canvas ──────────────────────────────────────────
 async function captureHtmlTemplate(brief, bgBase64, tplId, palette) {
-  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 4:{w:1080,h:1350} };
+  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 7:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 8:{w:1080,h:1080}, 4:{w:1080,h:1350}, 5:{w:1080,h:1350}, 6:{w:1080,h:1350} };
   const d = dims[tplId] || dims[4];
 
   // Container: off-screen, real size
@@ -11401,6 +11406,143 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
         '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);border-radius:20px;padding:26px 32px">' +
           '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
           '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 5: Feed Impact — bold color top + photo bottom ───
+  if (tplId === 5) {
+    const topH = 476; const ctaH = 126; const photoH = H - topH - ctaH;
+    const featRow = feats.slice(0,4).map(f =>
+      '<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(0,0,0,.38);backdrop-filter:blur(8px);padding:11px 20px;border-radius:40px;border:1px solid rgba(255,255,255,.22);margin:0 8px 8px 0">' +
+        '<div style="width:20px;height:20px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:19px;color:#fff;white-space:nowrap;letter-spacing:.02em">'+f+'</div>' +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Top color block
+      '<div style="position:absolute;top:0;left:0;right:0;height:'+topH+'px;background:'+c.primary+';padding:56px 72px;box-sizing:border-box">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:26px">' +
+          '<div style="background:'+c.accent+';color:'+c.primary+';padding:11px 26px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;letter-spacing:.16em;color:rgba(255,255,255,.38);text-transform:uppercase">'+(brief.divider||'')+'</div>' +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:135px;line-height:.83;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:18px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:62px;color:'+c.accent+';line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+      '</div>' +
+      // Photo section
+      '<div style="position:absolute;top:'+topH+'px;left:0;right:0;height:'+photoH+'px;overflow:hidden">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+hdwLighten(c.primary,0.2)+','+hdwLighten(c.primary,0.5)+')"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 65%)"></div>' +
+        '<div style="position:absolute;bottom:26px;left:60px;right:60px;display:flex;flex-wrap:wrap">' + featRow + '</div>' +
+      '</div>' +
+      // CTA bar
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:'+ctaH+'px;background:'+c.primary+';padding:0 64px;display:flex;align-items:center;gap:22px">' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+        '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 6: Feed Clean — editorial light background ────────
+  if (tplId === 6) {
+    const photoH = 640; const pad = 50; const photoW = W - pad * 2;
+    const featChips = feats.slice(0,4).map(f =>
+      '<div style="display:inline-flex;align-items:center;gap:8px;background:'+c.primary+';color:#fff;padding:9px 18px;border-radius:30px;font-size:17px;font-weight:700;font-family:Montserrat,sans-serif;margin:0 8px 8px 0">' +
+        '<div style="width:16px;height:16px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' + f +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Decorative accent bar top-left
+      '<div style="position:absolute;top:0;left:0;width:8px;height:'+photoH+'px;background:'+c.accent+'"></div>' +
+      // Photo card
+      '<div style="position:absolute;top:'+pad+'px;left:'+pad+'px;width:'+photoW+'px;height:'+photoH+'px;border-radius:28px;overflow:hidden">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
+        '<div style="position:absolute;top:28px;left:28px;background:'+c.primary+';color:#fff;padding:10px 22px;border-radius:40px;font-size:17px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
+      '</div>' +
+      // Text area
+      '<div style="position:absolute;top:'+(photoH+pad+28)+'px;left:'+pad+'px;right:'+pad+'px">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:88px;line-height:.87;color:'+c.primary+';letter-spacing:-.02em;text-transform:uppercase;margin-bottom:10px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:54px;color:'+c.primary+';margin-bottom:14px;line-height:1.1;opacity:.75;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">' +
+          '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:15px;color:'+c.primary+';letter-spacing:.14em;text-transform:uppercase;opacity:.5">'+(brief.divider||'')+'</div>' +
+          '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#555;line-height:1.5;margin-bottom:18px">'+(brief.description||'')+'</div>' +
+        '<div style="margin-bottom:22px">' + featChips + '</div>' +
+        '<div style="background:'+c.primary+';color:#fff;padding:24px 40px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:14px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
+          '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 7: Story Half — photo top + color panel bottom ───
+  if (tplId === 7) {
+    const splitY = Math.round(H * 0.48);
+    const iconRow = feats.slice(0,4).map(f =>
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;flex:1">' +
+        '<div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;padding:20px">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:17px;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.03em;text-align:center;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo top half
+      '<div style="position:absolute;top:0;left:0;right:0;height:'+splitY+'px">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+hdwLighten(c.primary,0.3)+','+hdwLighten(c.primary,0.6)+')"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.18) 0%, rgba(0,0,0,.35) 100%)"></div>' +
+        // Category badge on photo
+        '<div style="position:absolute;top:60px;left:60px;background:'+c.accent+';color:'+c.primary+';padding:14px 28px;border-radius:50px;font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
+      '</div>' +
+      // Color bottom half
+      '<div style="position:absolute;top:'+splitY+'px;left:0;right:0;bottom:0;background:'+c.primary+';padding:60px 70px;display:flex;flex-direction:column;box-sizing:border-box">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,.45);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px">'+(brief.divider||'')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.85;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:76px;color:'+c.accent+';margin-bottom:36px;line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:44px">'+(brief.description||'')+'</div>' +
+        '<div style="display:flex;gap:16px;margin-bottom:auto">' + iconRow + '</div>' +
+        // CTA
+        '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.22);border-radius:18px;padding:26px 32px;margin-top:44px">' +
+          '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+          '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 8: Square Card — clean light card with photo center ─
+  if (tplId === 8) {
+    const photoSize = 680; const cardPad = 50; const photoRadius = 24;
+    const chipRow = feats.slice(0,3).map(f =>
+      '<div style="display:inline-flex;align-items:center;gap:8px;background:'+hdwLighten(c.primary,0.88)+';color:'+c.primary+';padding:8px 16px;border-radius:30px;font-size:15px;font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;margin-right:8px">' +
+        '<div style="width:14px;height:14px">'+hdwIcon(f,c.primary)+'</div>' + f +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo centered top area
+      '<div style="position:absolute;top:'+cardPad+'px;left:'+cardPad+'px;width:'+(W-cardPad*2)+'px;height:'+photoSize+'px;border-radius:'+photoRadius+'px;overflow:hidden">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.05) 50%, rgba(0,0,0,.45) 100%)"></div>' +
+        // Accent badge top-right
+        '<div style="position:absolute;top:24px;right:24px;background:'+c.accent+';color:'+c.primary+';padding:10px 20px;border-radius:40px;font-size:16px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'')+'</div>' +
+        // Brand bottom-left
+        '<div style="position:absolute;bottom:22px;left:28px;font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:rgba(255,255,255,.6);letter-spacing:.12em;text-transform:uppercase">'+(brief.divider||'')+'</div>' +
+      '</div>' +
+      // Text below photo
+      '<div style="position:absolute;top:'+(cardPad+photoSize+22)+'px;left:'+cardPad+'px;right:'+cardPad+'px">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:78px;line-height:.87;color:'+c.primary+';letter-spacing:-.02em;text-transform:uppercase;margin-bottom:8px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:46px;color:'+c.primary+';opacity:.7;margin-bottom:16px;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="margin-bottom:18px">' + chipRow + '</div>' +
+        '<div style="background:'+c.primary+';color:#fff;padding:20px 32px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:12px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
+          '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
         '</div>' +
       '</div>' +
     '</div>';
