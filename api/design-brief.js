@@ -44,7 +44,9 @@ Required fields:
   "alt_primary": "#hex",
   "alt_bg": "#hex",
   "photo_query": "english keywords for background photo, 5 words max"
-}`;
+}
+
+IMPORTANT: Output ALL text fields (headline, subheadline, category, divider, description, features[], cta_title, cta_sub) in the SAME LANGUAGE as the business description. If the description is in Spanish, ALL fields must be in Spanish. If in English, respond in English. Never mix languages.`;
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {

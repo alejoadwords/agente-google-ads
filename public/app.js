@@ -11046,6 +11046,19 @@ function showHtmlDesignWizard() {
           '</div>' +
         '</div>' +
 
+        '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Personalizar (opcional)</div>' +
+          '<div style="display:flex;gap:10px;margin-bottom:8px">' +
+            '<label style="flex:1;cursor:pointer">' +
+              '<input type="file" id="hdw-bg-file" accept="image/*" style="display:none" onchange="hdwPreviewFile(this,\'hdw-bg-lbl\')">' +
+              '<div id="hdw-bg-lbl" style="border:1.5px dashed var(--border);border-radius:10px;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\'" onmouseout="this.style.borderColor=\'var(--border)\'">🖼️ Subir fondo / producto</div>' +
+            '</label>' +
+            '<label style="flex:1;cursor:pointer">' +
+              '<input type="file" id="hdw-logo-file" accept="image/*" style="display:none" onchange="hdwPreviewFile(this,\'hdw-logo-lbl\')">' +
+              '<div id="hdw-logo-lbl" style="border:1.5px dashed var(--border);border-radius:10px;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\'" onmouseout="this.style.borderColor=\'var(--border)\'">🏷️ Subir logo</div>' +
+            '</label>' +
+          '</div>' +
+        '</div>' +
         '<button onclick="runHtmlDesign()" style="width:100%;margin-top:16px;padding:13px;background:var(--blue);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:background .15s" onmouseover="this.style.background=\'var(--blue-h)\'" onmouseout="this.style.background=\'var(--blue)\'">✨ Crear diseños</button>' +
       '</div>' +
     '</div>';
@@ -11104,25 +11117,50 @@ async function runHtmlDesign() {
     const brief = await briefRes.json();
     if (brief.error) throw new Error(brief.error);
 
-    // Step 2: Generate background photo with Flux (photo mode, no text)
-    updateMsg('Generando foto de fondo...');
-    const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
-    const bgRes = await fetch('/api/generate-image', {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text, no people, vibrant colors',
-        format: fluxFormat,
-        variations: 1,
-        hasText: false,
-      }),
-    });
-    const bgData = await bgRes.json();
-    const bgBase64 = bgData.images?.[0] ? ('data:' + bgData.images[0].mediaType + ';base64,' + bgData.images[0].base64) : null;
+    // Read uploaded background (overrides AI generation)
+    const bgFileInput = document.getElementById('hdw-bg-file');
+    let customBgBase64 = null;
+    if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
+      customBgBase64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(bgFileInput.files[0]);
+      });
+    }
+
+    // Read uploaded logo
+    const logoFileInput = document.getElementById('hdw-logo-file');
+    let logoBase64 = null;
+    if (logoFileInput && logoFileInput.files && logoFileInput.files[0]) {
+      logoBase64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(logoFileInput.files[0]);
+      });
+    }
+
+    // Step 2: Generate background photo with Flux (photo mode, no text) — skip if user uploaded custom bg
+    let bgBase64 = customBgBase64;
+    if (!customBgBase64) {
+      updateMsg('Generando foto de fondo...');
+      const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
+      const bgRes = await fetch('/api/generate-image', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text, no people, vibrant colors',
+          format: fluxFormat,
+          variations: 1,
+          hasText: false,
+        }),
+      });
+      const bgData = await bgRes.json();
+      bgBase64 = bgData.images?.[0] ? ('data:' + bgData.images[0].mediaType + ';base64,' + bgData.images[0].base64) : null;
+    }
 
     rmThinking(thinkId);
 
     // Step 3: Render N HTML template variations
-    await renderHtmlVariations(brief, bgBase64, count, fmt);
+    await renderHtmlVariations(brief, customBgBase64 || bgBase64, count, fmt, logoBase64);
 
   } catch (err) {
     rmThinking(thinkId);
@@ -11167,7 +11205,7 @@ function hdwGetTemplateList(fmt, count) {
   }));
 }
 
-async function renderHtmlVariations(brief, bgBase64, count, fmt) {
+async function renderHtmlVariations(brief, bgBase64, count, fmt, logoBase64) {
   const templates = hdwGetTemplateList(fmt, count);
   const total = templates.length;
 
@@ -11179,7 +11217,7 @@ async function renderHtmlVariations(brief, bgBase64, count, fmt) {
     if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>renderizando diseño ' + (i+1) + ' de ' + total + '...'; }
 
     try {
-      const imgData = await captureHtmlTemplate(brief, bgBase64, tpl.tplId, tpl.palette);
+      const imgData = await captureHtmlTemplate(brief, bgBase64, tpl.tplId, tpl.palette, logoBase64);
       rmThinking(thinkId);
       renderAdImage({ base64: imgData.base64, mediaType: 'image/png' }, i + 1, total, tpl.format, tpl.label, false);
       if (i === 0) incrementImageUsage();
@@ -11191,14 +11229,14 @@ async function renderHtmlVariations(brief, bgBase64, count, fmt) {
 }
 
 // ── HTML capture via html2canvas ──────────────────────────────────────────
-async function captureHtmlTemplate(brief, bgBase64, tplId, palette) {
+async function captureHtmlTemplate(brief, bgBase64, tplId, palette, logoBase64) {
   const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 7:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 8:{w:1080,h:1080}, 4:{w:1080,h:1350}, 5:{w:1080,h:1350}, 6:{w:1080,h:1350} };
   const d = dims[tplId] || dims[4];
 
   // Container: off-screen, real size
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + d.w + 'px;height:' + d.h + 'px;overflow:hidden;z-index:-1';
-  container.innerHTML = hdwBuildTemplate(brief, bgBase64, tplId, palette, d.w, d.h);
+  container.innerHTML = hdwBuildTemplate(brief, bgBase64, tplId, palette, d.w, d.h, logoBase64);
   document.body.appendChild(container);
 
   // Wait for fonts + images
@@ -11237,6 +11275,20 @@ function hdwHex2Rgba(hex, alpha) {
   return 'rgba('+r+','+g+','+b+','+alpha+')';
 }
 
+function hdwPreviewFile(input, labelId) {
+  const file = input.files[0];
+  if (!file) return;
+  const name = file.name.length > 22 ? file.name.slice(0,20)+'…' : file.name;
+  const el = document.getElementById(labelId);
+  if (el) {
+    const isLogo = labelId.includes('logo');
+    el.innerHTML = (isLogo ? '🏷️ ' : '🖼️ ') + name;
+    el.style.borderColor = 'var(--blue)';
+    el.style.color = 'var(--blue)';
+    el.style.background = 'var(--blue-lt)';
+  }
+}
+
 function hdwGetColors(brief, palette) {
   return palette === 'alt'
     ? { primary: brief.alt_primary||'#2d1a3d', bg: brief.alt_bg||'#f5f0ff', accent: brief.accent_color||'#a78bfa' }
@@ -11263,11 +11315,14 @@ function hdwIcon(feat, color) {
 }
 
 // ── TEMPLATE BUILDER ──────────────────────────────────────────────────────
-function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
+function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
   const c = hdwGetColors(brief, palette);
   const iconBg = hdwLighten(c.primary, 0.8);
   const feats = (brief.features || ['Característica 1','Característica 2','Característica 3','Característica 4']).slice(0,4);
   const fonts = '@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap");';
+  const logoEl = logoBase64
+    ? '<div style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.92);border-radius:12px;padding:8px 14px;display:flex;align-items:center;max-width:140px;max-height:72px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.2)"><img src="'+logoBase64+'" style="max-width:120px;max-height:56px;object-fit:contain"></div>'
+    : '';
 
   // ── Template 0: Story Split ────────────────────────────────────
   if (tplId === 0) {
@@ -11306,6 +11361,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
         '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:28px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'RECIBE TU ITINERARIO')+'</div><div style="font-family:Montserrat,sans-serif;font-size:20px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'+ INFORMACIÓN EXCLUSIVA')+'</div></div>' +
         '<div style="width:76px;height:76px;background:'+c.accent+';border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:38px;height:38px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11342,6 +11398,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
         '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:19px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
         '<div style="width:72px;height:72px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11376,6 +11433,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
         '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
         '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11408,6 +11466,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
           '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
         '</div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11428,8 +11487,8 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
           '<div style="background:'+c.accent+';color:'+c.primary+';padding:11px 26px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
           '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;letter-spacing:.16em;color:rgba(255,255,255,.38);text-transform:uppercase">'+(brief.divider||'')+'</div>' +
         '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:135px;line-height:.83;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:18px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:62px;color:'+c.accent+';line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:110px;line-height:.83;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:18px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:54px;color:'+c.accent+';line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
       '</div>' +
       // Photo section
       '<div style="position:absolute;top:'+topH+'px;left:0;right:0;height:'+photoH+'px;overflow:hidden">' +
@@ -11443,6 +11502,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
         '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
         '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11479,6 +11539,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
           '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
         '</div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11513,6 +11574,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
           '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
         '</div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11545,6 +11607,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
           '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
         '</div>' +
       '</div>' +
+      logoEl +
     '</div>';
   }
 
@@ -11579,5 +11642,6 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H) {
       '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
       '<div style="width:68px;height:68px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
     '</div>' +
+    logoEl +
   '</div>';
 }
