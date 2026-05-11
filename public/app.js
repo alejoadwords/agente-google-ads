@@ -11177,25 +11177,31 @@ async function runHtmlDesign() {
 // feed (4):   Full photo + gradient overlay (4:5)
 
 const HDW_TEMPLATES = [
-  { format:'story',  label:'Story · Split',   id:0 },
-  { format:'story',  label:'Story · Overlay', id:1 },
-  { format:'story',  label:'Story · Half',    id:7 },
-  { format:'square', label:'Square · Split',  id:2 },
-  { format:'square', label:'Square · Dark',   id:3 },
-  { format:'square', label:'Square · Card',   id:8 },
-  { format:'feed',   label:'Feed · Overlay',  id:4 },
-  { format:'feed',   label:'Feed · Impact',   id:5 },
-  { format:'feed',   label:'Feed · Clean',    id:6 },
+  { format:'story',  label:'Story · Split',        id:0 },
+  { format:'story',  label:'Story · Overlay',      id:1 },
+  { format:'story',  label:'Story · Half',         id:7 },
+  { format:'square', label:'Square · Split',       id:2 },
+  { format:'square', label:'Square · Dark',        id:3 },
+  { format:'square', label:'Square · Card',        id:8 },
+  { format:'feed',   label:'Feed · Overlay',       id:4 },
+  { format:'feed',   label:'Feed · Impact',        id:5 },
+  { format:'feed',   label:'Feed · Clean',         id:6 },
+  { format:'feed',   label:'Feed · E-commerce',    id:9 },
+  { format:'square', label:'Square · Profile',     id:10 },
+  { format:'square', label:'Square · Magazine',    id:11 },
+  { format:'square', label:'Square · Dark Event',  id:12 },
+  { format:'square', label:'Square · Lifestyle',   id:13 },
+  { format:'feed',   label:'Feed · Diagonal',      id:14 },
 ];
 
 function hdwGetTemplateList(fmt, count) {
   let pool = [];
   if (fmt === 'story')  pool = [0,1,7,0,1,7,0,1,7,0];
-  else if (fmt === 'square') pool = [2,3,8,2,3,8,2,3,8,2];
-  else if (fmt === 'feed')   pool = [4,5,6,4,5,6,4,5,6,4];
-  else pool = [4,0,2,5,1,8,6,3,7,4]; // 'all'
+  else if (fmt === 'square') pool = [10,11,12,13,9,3,10,12,11,13];
+  else if (fmt === 'feed')   pool = [9,14,10,4,5,6,9,14,4,5];
+  else pool = [9,10,11,12,13,14,0,1,2,3]; // 'all'
 
-  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square'};
+  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed'};
   // alternate color palettes: even index = primary, odd = alt
   return pool.slice(0, count).map((tplId, i) => ({
     tplId,
@@ -11230,7 +11236,7 @@ async function renderHtmlVariations(brief, bgBase64, count, fmt, logoBase64) {
 
 // ── HTML capture via html2canvas ──────────────────────────────────────────
 async function captureHtmlTemplate(brief, bgBase64, tplId, palette, logoBase64) {
-  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 7:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 8:{w:1080,h:1080}, 4:{w:1080,h:1350}, 5:{w:1080,h:1350}, 6:{w:1080,h:1350} };
+  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 7:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 8:{w:1080,h:1080}, 4:{w:1080,h:1350}, 5:{w:1080,h:1350}, 6:{w:1080,h:1350}, 9:{w:1080,h:1350}, 10:{w:1080,h:1080}, 11:{w:1080,h:1080}, 12:{w:1080,h:1080}, 13:{w:1080,h:1080}, 14:{w:1080,h:1350} };
   const d = dims[tplId] || dims[4];
 
   // Container: off-screen, real size
@@ -11606,6 +11612,201 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
           '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
           '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
         '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 9: E-commerce Product (Feed 1080×1350) ──────────
+  if (tplId === 9) {
+    const iconEmojis = ['✈','📦','⭐','🔒'];
+    const discountText = (feats[0] || 'OFERTA').split(' ')[0].toUpperCase();
+    const iconRow = feats.slice(0,4).map((f, i) =>
+      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">' +
+        '<div style="font-size:32px;line-height:1">' + iconEmojis[i] + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:#444;text-align:center;letter-spacing:.02em">' + f + '</div>' +
+      '</div>'
+    ).join('');
+    const topBarH = Math.round(H * 0.07);
+    const photoH  = Math.round(H * 0.52);
+    const contentH = Math.round(H * 0.27);
+    const iconRowH = Math.round(H * 0.09);
+    const btmBarH  = Math.round(H * 0.07);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
+      '<style>' + fonts + '</style>' +
+      // Top bar
+      '<div style="height:' + topBarH + 'px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:' + c.primary + '">' + (brief.category || 'CATEGORÍA') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.08em;color:#888">' + (brief.divider || '') + '</div>' +
+      '</div>' +
+      // Photo area
+      '<div style="height:' + photoH + 'px;position:relative;flex-shrink:0;overflow:hidden">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + c.primary + '"></div>') +
+        '<div style="position:absolute;top:20px;right:20px;width:120px;height:120px;border-radius:50%;background:' + c.primary + ';display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.25)">' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:38px;font-weight:900;color:#fff;line-height:1">' + discountText + '</div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:rgba(255,255,255,.8);letter-spacing:.06em">OFF</div>' +
+        '</div>' +
+      '</div>' +
+      // Content area
+      '<div style="height:' + contentH + 'px;padding:24px 40px 0;flex-shrink:0;overflow:hidden">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:72px;color:' + c.primary + ';line-height:1.05;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:34px;color:' + c.accent + ';margin-top:8px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:12px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.description || '') + '</div>' +
+      '</div>' +
+      // Icon row
+      '<div style="height:' + iconRowH + 'px;display:flex;align-items:center;border-top:1px solid #eee;flex-shrink:0;padding:0 20px">' +
+        iconRow +
+      '</div>' +
+      // Bottom bar
+      '<div style="height:' + btmBarH + 'px;background:' + c.primary + ';display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:#fff;letter-spacing:.04em;text-transform:uppercase">' + (brief.cta_title || 'COMPRAR AHORA') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:600;color:rgba(255,255,255,.75)">' + (brief.cta_sub || '') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 10: Professional Profile Split (Square 1080×1080) ─
+  if (tplId === 10) {
+    const leftW = Math.round(W * 0.48);
+    const rightW = W - leftW;
+    return '<div style="width:' + W + 'px;height:' + H + 'px;display:flex;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Left panel
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;background:' + c.primary + ';padding:50px 40px;display:flex;flex-direction:column;box-sizing:border-box;flex-shrink:0">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + c.accent + '">' + (brief.category || '') + '</div>' +
+        '<div style="width:40px;height:3px;background:' + c.accent + ';margin:20px 0"></div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:68px;color:' + c.accent + ';line-height:1.05;letter-spacing:-.02em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:700;color:#fff;margin-top:16px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:22px;color:rgba(255,255,255,.75);margin-top:16px;line-height:1.5;flex:1;overflow:hidden">' + (brief.description || '') + '</div>' +
+        '<div style="border:2px solid ' + c.accent + ';color:' + c.accent + ';padding:14px 32px;border-radius:6px;font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;letter-spacing:.05em;width:fit-content">' + (brief.cta_title || 'CONTACTAR') + '</div>' +
+        '<div style="margin-top:24px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.7);margin-bottom:6px">&#128222; ' + (feats[0] || '') + '</div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.7)">&#9993; ' + (feats[1] || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      // Right panel
+      '<div style="width:' + rightW + 'px;height:' + H + 'px;position:relative;flex-shrink:0">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.3) + '"></div>') +
+        logoEl +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 11: Magazine Grid (Square 1080×1080) ─────────────
+  if (tplId === 11) {
+    const leftW  = Math.round(W * 0.32);
+    const rightW = W - leftW;
+    const topTileH   = Math.round(H * 0.52);
+    const btmTileH   = H - topTileH - 6;
+    const btmTileW   = Math.round(rightW / 2) - 3;
+    const bgUrl = bgBase64 ? 'url(\'' + bgBase64 + '\') center/cover no-repeat' : c.primary;
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Left strip
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;position:relative;flex-shrink:0;padding:40px 20px 40px 40px;box-sizing:border-box">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:30px;color:' + c.accent + ';position:absolute;top:48px;left:40px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;writing-mode:vertical-rl;transform:rotate(180deg);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:' + c.primary + ';opacity:.7;position:absolute;bottom:120px;left:40px">' + (brief.category || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:' + Math.min(Math.round(W * 0.13), 130) + 'px;color:' + c.primary + ';line-height:.92;position:absolute;bottom:0;left:40px;right:0;word-break:break-word;padding-bottom:20px">' + (brief.headline || 'TIT') + '</div>' +
+        '<div style="position:absolute;bottom:' + Math.round(H * 0.13) + 'px;left:40px">' + logoEl + '</div>' +
+      '</div>' +
+      // Right grid
+      '<div style="width:' + rightW + 'px;height:' + H + 'px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">' +
+        '<div style="height:' + topTileH + 'px;background:' + bgUrl + ';flex-shrink:0"></div>' +
+        '<div style="display:flex;gap:6px;height:' + btmTileH + 'px;flex-shrink:0">' +
+          '<div style="width:' + btmTileW + 'px;background:' + bgUrl + '"></div>' +
+          '<div style="flex:1;background:' + bgUrl + '"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 12: Dark Event / Course (Square 1080×1080) ───────
+  if (tplId === 12) {
+    const darkBg = '#0d1117';
+    const leftW  = Math.round(W * 0.55);
+    const rightW = W - leftW;
+    const priceText = (feats[0] || 'GRATIS');
+    const dateText  = (feats[1] || '');
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + darkBg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Left content
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;padding:60px 40px;box-sizing:border-box;display:flex;flex-direction:column;position:relative;z-index:2;flex-shrink:0">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:' + c.accent + '">' + (brief.category || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:64px;color:#fff;line-height:1.05;margin-top:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;width:100px;height:100px;border:2px solid ' + c.accent + ';border-radius:50%;justify-content:center;margin-top:24px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:32px;font-weight:700;color:#fff;line-height:1">' + priceText + '</div>' +
+        '</div>' +
+        (dateText ? '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#fff;margin-top:8px">' + dateText + '</div>' : '') +
+        '<div style="background:' + c.accent + ';padding:8px 20px;border-radius:4px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;color:#000;margin-top:20px;width:fit-content">' + (brief.divider || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.6);margin-top:8px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="flex:1"></div>' +
+        '<div style="background:' + c.accent + ';color:#000;padding:14px 32px;border-radius:6px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;width:fit-content">' + (brief.cta_title || 'INSCRIBIRSE') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.5);margin-top:8px">' + (brief.cta_sub || '') + '</div>' +
+      '</div>' +
+      // Right photo
+      '<div style="width:' + rightW + 'px;height:' + H + 'px;position:relative;flex-shrink:0">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.1) + '"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to right, ' + darkBg + ' 0%, transparent 40%)"></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 13: Minimal Lifestyle (Square 1080×1080) ─────────
+  if (tplId === 13) {
+    const photoTop  = Math.round(H * 0.04);
+    const photoLeft = Math.round(W * 0.05);
+    const photoW    = W - photoLeft * 2;
+    const photoH    = Math.round(H * 0.72);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Decorative dots
+      '<div style="position:absolute;top:30px;left:30px;display:grid;grid-template-columns:1fr 1fr;gap:8px;z-index:2">' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+      '</div>' +
+      // Main photo
+      '<div style="position:absolute;top:' + photoTop + 'px;left:' + photoLeft + 'px;width:' + photoW + 'px;height:' + photoH + 'px;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15)">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + c.primary + '"></div>') +
+      '</div>' +
+      // Bottom text
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + Math.round(H * 0.26) + 'px;padding:0 50px;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:36px;box-sizing:border-box">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:52px;color:' + c.primary + ';transform:translateY(-20px);line-height:1.1">' + (brief.headline || 'Titular') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:26px;color:' + c.accent + ';opacity:.85">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;letter-spacing:.15em;text-transform:uppercase;color:' + c.primary + ';opacity:.5;margin-top:8px">' + (brief.divider || '') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 14: Diagonal Accent (Feed 1080×1350) ─────────────
+  if (tplId === 14) {
+    const diagW = Math.round(W * 0.7);
+    const diagH = Math.round(H * 0.45);
+    const photoW = Math.round(W * 0.52);
+    const photoH = Math.round(H * 0.82);
+    const btmH   = Math.round(H * 0.12);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:#fff;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Diagonal shape
+      '<div style="position:absolute;bottom:0;left:0;width:' + diagW + 'px;height:' + diagH + 'px;background:' + c.primary + ';clip-path:polygon(0 100%, 100% 100%, 0 0);opacity:.9"></div>' +
+      // Photo area (right, behind bottom bar)
+      '<div style="position:absolute;right:0;top:0;width:' + photoW + 'px;height:' + photoH + 'px">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.2) + '"></div>') +
+      '</div>' +
+      // Content area
+      '<div style="position:absolute;top:' + Math.round(H * 0.08) + 'px;left:60px;width:' + Math.round(W * 0.52) + 'px">' +
+        '<div style="background:' + c.accent + ';color:#fff;padding:6px 18px;border-radius:20px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;display:inline-block">' + (brief.category || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:88px;color:' + c.primary + ';line-height:.95;margin-top:20px;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:20px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.description || '') + '</div>' +
+      '</div>' +
+      // Bottom bar
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + btmH + 'px;background:' + c.primary + ';display:flex;align-items:center;padding:0 60px;justify-content:space-between">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:#fff;letter-spacing:.02em">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
+        '<div style="width:52px;height:52px;border:2.5px solid rgba(255,255,255,.8);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;box-sizing:border-box">&#8594;</div>' +
       '</div>' +
       logoEl +
     '</div>';
