@@ -11628,8 +11628,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
       '</div>'
     ).join('');
     const topBarH = Math.round(H * 0.07);
-    const photoH  = Math.round(H * 0.52);
-    const contentH = Math.round(H * 0.27);
+    const photoH  = Math.round(H * 0.50);
     const iconRowH = Math.round(H * 0.09);
     const btmBarH  = Math.round(H * 0.07);
     return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
@@ -11648,10 +11647,10 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '</div>' +
       '</div>' +
       // Content area
-      '<div style="height:' + contentH + 'px;padding:24px 40px 0;flex-shrink:0;overflow:hidden">' +
+      '<div style="flex:1;padding:24px 40px 0;overflow:hidden">' +
         '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:72px;color:' + c.primary + ';line-height:1.05;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
         '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:34px;color:' + c.accent + ';margin-top:8px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:12px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.description || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:12px;line-height:1.4;overflow:hidden">' + (brief.description || '') + '</div>' +
       '</div>' +
       // Icon row
       '<div style="height:' + iconRowH + 'px;display:flex;align-items:center;border-top:1px solid #eee;flex-shrink:0;padding:0 20px">' +
@@ -11704,10 +11703,10 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
     return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
       '<style>' + fonts + '</style>' +
       // Left strip
-      '<div style="width:' + leftW + 'px;height:' + H + 'px;position:relative;flex-shrink:0;padding:40px 20px 40px 40px;box-sizing:border-box">' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:30px;color:' + c.accent + ';position:absolute;top:48px;left:40px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;writing-mode:vertical-rl;transform:rotate(180deg);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:' + c.primary + ';opacity:.7;position:absolute;bottom:120px;left:40px">' + (brief.category || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:' + Math.min(Math.round(W * 0.13), 130) + 'px;color:' + c.primary + ';line-height:.92;position:absolute;bottom:0;left:40px;right:0;word-break:break-word;padding-bottom:20px">' + (brief.headline || 'TIT') + '</div>' +
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;position:relative;flex-shrink:0;box-sizing:border-box">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:28px;color:' + c.accent + ';position:absolute;top:40px;left:40px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:' + c.primary + ';position:absolute;top:' + (40 + 28 + 10) + 'px;left:40px">' + (brief.category || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:' + Math.min(Math.round(W * 0.11), 115) + 'px;color:' + c.primary + ';line-height:.92;position:absolute;bottom:20px;left:40px;right:10px;word-break:break-word">' + (brief.headline || 'TIT') + '</div>' +
         '<div style="position:absolute;bottom:' + Math.round(H * 0.13) + 'px;left:40px">' + logoEl + '</div>' +
       '</div>' +
       // Right grid
@@ -11782,31 +11781,32 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
     '</div>';
   }
 
-  // ── Template 14: Diagonal Accent (Feed 1080×1350) ─────────────
+  // ── Template 14: Bold Stripe (Feed 1080×1350) ────────────────
   if (tplId === 14) {
-    const diagW = Math.round(W * 0.7);
-    const diagH = Math.round(H * 0.45);
-    const photoW = Math.round(W * 0.52);
-    const photoH = Math.round(H * 0.82);
-    const btmH   = Math.round(H * 0.12);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:#fff;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+    const photoSectionH = Math.round(H * 0.42);
+    const stripH        = Math.round(H * 0.06);
+    const accentIsLight = (c.accent === '#fff' || c.accent === '#ffffff' || c.accent === '#FFF');
+    const accentTextCol = accentIsLight ? '#000' : '#fff';
+    return '<div style="width:' + W + 'px;height:' + H + 'px;overflow:hidden;position:relative;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
       '<style>' + fonts + '</style>' +
-      // Diagonal shape
-      '<div style="position:absolute;bottom:0;left:0;width:' + diagW + 'px;height:' + diagH + 'px;background:' + c.primary + ';clip-path:polygon(0 100%, 100% 100%, 0 0);opacity:.9"></div>' +
-      // Photo area (right, behind bottom bar)
-      '<div style="position:absolute;right:0;top:0;width:' + photoW + 'px;height:' + photoH + 'px">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.2) + '"></div>') +
+      // Photo section
+      '<div style="height:' + photoSectionH + 'px;flex-shrink:0;position:relative;overflow:hidden">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.2) + '"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 50%, rgba(0,0,0,.35) 100%)"></div>' +
+        '<div style="position:absolute;bottom:20px;left:40px;background:' + c.accent + ';color:' + accentTextCol + ';padding:8px 22px;border-radius:30px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">' + (brief.category || '') + '</div>' +
       '</div>' +
-      // Content area
-      '<div style="position:absolute;top:' + Math.round(H * 0.08) + 'px;left:60px;width:' + Math.round(W * 0.52) + 'px">' +
-        '<div style="background:' + c.accent + ';color:#fff;padding:6px 18px;border-radius:20px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;display:inline-block">' + (brief.category || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:88px;color:' + c.primary + ';line-height:.95;margin-top:20px;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:20px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.description || '') + '</div>' +
+      // Accent strip
+      '<div style="height:' + stripH + 'px;flex-shrink:0;background:' + c.accent + ';display:flex;align-items:center;padding:0 40px;justify-content:space-between">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:' + accentTextCol + ';letter-spacing:.04em;text-transform:uppercase">' + (brief.divider || '') + '</div>' +
+        '<div style="color:' + accentTextCol + ';font-size:18px;letter-spacing:8px">&#9679;&#9679;&#9679;&#9679;</div>' +
       '</div>' +
-      // Bottom bar
-      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + btmH + 'px;background:' + c.primary + ';display:flex;align-items:center;padding:0 60px;justify-content:space-between">' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:800;color:#fff;letter-spacing:.02em">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
-        '<div style="width:52px;height:52px;border:2.5px solid rgba(255,255,255,.8);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;box-sizing:border-box">&#8594;</div>' +
+      // Bottom content
+      '<div style="flex:1;background:' + c.primary + ';padding:48px 48px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:82px;color:#fff;line-height:.95;letter-spacing:-.02em;margin-bottom:20px;overflow:hidden">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:rgba(255,255,255,.75);margin-bottom:24px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.65);line-height:1.5;overflow:hidden;max-height:' + Math.round(H * 0.12) + 'px">' + (brief.description || '') + '</div>' +
+        '<div style="flex:1"></div>' +
+        '<div style="background:#fff;color:' + c.primary + ';padding:16px 48px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;letter-spacing:.04em;width:fit-content;margin-top:auto">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
       '</div>' +
       logoEl +
     '</div>';
