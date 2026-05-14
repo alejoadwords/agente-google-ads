@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-PX26PNPJ');</script>
+<!-- End Google Tag Manager -->
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Acuarius — Agentes de IA para Marketing Digital en LatAm</title>
@@ -226,6 +235,21 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
 .footer-platforms img{height:20px;opacity:.4;transition:opacity .2s;filter:invert(1)}
 .footer-platforms img:hover{opacity:.8}
 
+/* ── CREATIVOS CON IA ── */
+.creativos-section{background:var(--bg)}
+.creativos-grid{columns:4;column-gap:14px;margin-top:56px}
+.creative-card{break-inside:avoid;margin-bottom:14px;border-radius:14px;overflow:hidden;position:relative;cursor:default;transition:transform .3s,box-shadow .3s}
+.creative-card:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,.2)}
+.creative-platform-badge{position:absolute;top:12px;left:12px;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);color:rgba(255,255,255,.92);font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:100px;letter-spacing:.04em;text-transform:uppercase}
+.creative-platform-badge.is-video{background:rgba(109,40,217,.82)}
+.creativos-tools{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:48px;flex-wrap:wrap}
+.creativos-tool-pill{display:flex;align-items:center;gap:8px;padding:10px 20px;background:white;border:1.5px solid var(--border);border-radius:100px;font-size:13px;font-weight:600;color:var(--text);transition:all .2s}
+.creativos-tool-pill:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 4px 14px rgba(30,43,204,.12)}
+.creativos-tool-pill svg{flex-shrink:0}
+.creativos-note{text-align:center;font-size:13px;color:var(--muted2);margin-top:20px}
+@media(max-width:900px){.creativos-grid{columns:2}}
+@media(max-width:560px){.creativos-grid{columns:1}}
+
 /* ── MOBILE ── */
 @media(max-width:768px){
   nav{padding:0 20px}
@@ -249,6 +273,11 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
 </head>
 <body>
 
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PX26PNPJ"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
 <!-- NAV -->
 <nav>
   <div class="nav-inner">
@@ -258,6 +287,7 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#agentes">Agentes</a>
+      <a href="#creativos">Creativos IA</a>
       <a href="#planes">Precios</a>
       <a href="#faq">FAQ</a>
     </div>
@@ -337,6 +367,7 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
     <div class="ticker-item"><div class="ticker-dot"></div>Google Ads con IA</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Meta Ads inteligente</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Generación de imágenes para anuncios</div>
+    <div class="ticker-item"><div class="ticker-dot"></div>Videos publicitarios con IA</div>
     <div class="ticker-item"><div class="ticker-dot"></div>SEO automatizado</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Hecho para LatAm</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Desde $19 USD/mes</div>
@@ -344,6 +375,7 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
     <div class="ticker-item"><div class="ticker-dot"></div>Google Ads con IA</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Meta Ads inteligente</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Generación de imágenes para anuncios</div>
+    <div class="ticker-item"><div class="ticker-dot"></div>Videos publicitarios con IA</div>
     <div class="ticker-item"><div class="ticker-dot"></div>SEO automatizado</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Hecho para LatAm</div>
     <div class="ticker-item"><div class="ticker-dot"></div>Desde $19 USD/mes</div>
@@ -532,6 +564,12 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
             <td><span class="cross">✗</span> No incluido</td>
           </tr>
           <tr>
+            <td>Generación de video publicitario con IA</td>
+            <td class="acuarius-col"><span class="check">✓</span> Seedance 2.0</td>
+            <td><span class="cross">✗</span> No incluido</td>
+            <td><span class="cross">✗</span> No incluido</td>
+          </tr>
+          <tr>
             <td>Múltiples plataformas en uno</td>
             <td class="acuarius-col"><span class="check">✓</span> 6 agentes</td>
             <td><span class="partial">◐</span> Solo ads pagados</td>
@@ -561,6 +599,73 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
   </div>
 </section>
 
+<!-- CREATIVOS CON IA -->
+<section class="creativos-section" id="creativos">
+  <div class="section-inner">
+    <div class="fade-up" style="text-align:center;max-width:620px;margin:0 auto">
+      <p class="section-label">Creativos con IA</p>
+      <h2 class="section-title">De la estrategia al anuncio<br>en minutos</h2>
+      <p class="section-sub" style="margin:0 auto">Genera imágenes y videos publicitarios listos para publicar. Dile al agente qué quieres comunicar y él crea las piezas por ti — con el formato, tamaño y CTA incluido.</p>
+    </div>
+
+    <!-- Creative showcase grid (masonry 4 cols) -->
+    <div class="creativos-grid fade-up">
+
+      <div class="creative-card">
+        <img src="/creative-3.png" alt="Anuncio Meta Ads" style="width:100%;display:block">
+        <div class="creative-platform-badge">Meta Ads · Feed 16:9</div>
+      </div>
+
+      <div class="creative-card">
+        <video autoplay muted loop playsinline style="width:100%;display:block;aspect-ratio:9/16">
+          <source src="/creative-video.mp4" type="video/mp4">
+        </video>
+        <div class="creative-platform-badge is-video">🎬 Video IA · TikTok / Reels</div>
+      </div>
+
+      <div class="creative-card">
+        <img src="/creative-4.png" alt="Anuncio Instagram Stories" style="width:100%;display:block">
+        <div class="creative-platform-badge">Instagram Stories · 9:16</div>
+      </div>
+
+      <div class="creative-card">
+        <img src="/creative-1.png" alt="Anuncio Instagram Feed" style="width:100%;display:block">
+        <div class="creative-platform-badge">Instagram Feed · 1:1</div>
+      </div>
+
+      <div class="creative-card">
+        <video autoplay muted loop playsinline style="width:100%;display:block;aspect-ratio:9/16">
+          <source src="/creative-video-2.mp4" type="video/mp4">
+        </video>
+        <div class="creative-platform-badge is-video">🎬 Video IA · TikTok / Reels</div>
+      </div>
+
+      <div class="creative-card">
+        <img src="/creative-2.png" alt="Anuncio vertical" style="width:100%;display:block;aspect-ratio:4/5;object-fit:cover;object-position:top">
+        <div class="creative-platform-badge">Instagram Stories · 9:16</div>
+      </div>
+
+    </div>
+
+    <!-- Tool pills -->
+    <div class="creativos-tools fade-up">
+      <div class="creativos-tool-pill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="#7C3AED" stroke-width="2"/><path d="M8 12l3 3 5-5" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Ideogram V3 — texto legible en imágenes
+      </div>
+      <div class="creativos-tool-pill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#059669" stroke-width="2"/><path d="M8 12l3 3 5-5" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Flux 2 Pro — imágenes fotorrealistas
+      </div>
+      <div class="creativos-tool-pill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" stroke="#1E2BCC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Seedance 2.0 — videos publicitarios IA
+      </div>
+    </div>
+    <p class="creativos-note fade-up">Los creativos se generan directamente en el chat. Sin salir de la plataforma, sin herramientas adicionales.</p>
+  </div>
+</section>
+
 <!-- PLANES -->
 <section class="plans-section" id="planes">
   <div class="section-inner">
@@ -587,6 +692,7 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Mensajes ilimitados durante la prueba</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>1 cuenta publicitaria conectada</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Generación de imágenes con IA</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><strong>1 video publicitario</strong> de prueba</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Análisis en tiempo real</li>
         </ul>
         <a href="https://app.acuarius.app" class="plan-cta plan-cta-outline">Empezar gratis ahora</a>
@@ -609,6 +715,7 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Mensajes ilimitados</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><strong>1 cuenta conectada</strong> por plataforma</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Generación de imágenes con IA</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><strong>5 videos publicitarios</strong> / mes</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Análisis y acciones en tiempo real</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Soporte por email</li>
         </ul>
@@ -629,6 +736,7 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
         <ul class="plan-features">
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Todo lo del plan Individual</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><strong>Hasta 5 cuentas</strong> — Google Ads, Meta, TikTok, LinkedIn</li>
+          <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><strong>15 videos publicitarios</strong> / mes</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Soporte para MCC (cuentas hijo)</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Perfil independiente por cliente</li>
           <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>Onboarding personalizado</li>
@@ -750,6 +858,13 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
       </div>
       <div class="faq-item fade-up">
         <div class="faq-q" onclick="toggleFaq(this)">
+          ¿Cómo funciona la generación de videos publicitarios?
+          <div class="faq-icon"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg></div>
+        </div>
+        <div class="faq-a"><p>El agente de Contenido para Redes puede generar videos publicitarios de hasta 10 segundos usando Seedance 2.0, uno de los modelos de video IA más avanzados del mercado. Le describes el producto o campaña, eliges el formato (vertical para TikTok/Reels, horizontal para YouTube/Display) y el modelo genera el video. Puedes descargar el resultado y publicarlo directamente. El plan Individual incluye 5 videos/mes, Agencia 15/mes, y puedes comprar packs adicionales.</p></div>
+      </div>
+      <div class="faq-item fade-up">
+        <div class="faq-q" onclick="toggleFaq(this)">
           ¿Mis datos de campañas están seguros?
           <div class="faq-icon"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg></div>
         </div>
@@ -808,12 +923,13 @@ footer{background:var(--text);padding:64px 40px 40px;color:rgba(255,255,255,.6)}
         <div class="footer-col-title">Legal</div>
         <div class="footer-links">
           <a href="/privacy.html">Política de privacidad</a>
-          <a href="/cdn-cgi/l/email-protection#1c7f79735c7d7f697d6e75696f327d6c6c">Contacto</a>
+          <a href="/terms.html">Términos de servicio</a>
+          <a href="mailto:alejandro@acuarius.app">Contacto</a>
         </div>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© 2025 Acuarius. Todos los derechos reservados.</span>
+      <span>© 2026 Acuarius. Todos los derechos reservados.</span>
       <span>Hecho con ❤️ para latinoamérica</span>
     </div>
   </div>
@@ -832,4 +948,19 @@ function toggleFaq(el) {
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
 }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.fade-up').forEach(e
+document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+// Nav shrink on scroll
+window.addEventListener('scroll', () => {
+  const nav = document.querySelector('nav');
+  if (window.scrollY > 60) {
+    nav.style.height = '56px';
+    nav.style.boxShadow = '0 2px 20px rgba(0,0,0,.08)';
+  } else {
+    nav.style.height = '68px';
+    nav.style.boxShadow = 'none';
+  }
+});
+</script>
+</body>
+</html>
