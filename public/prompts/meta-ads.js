@@ -678,6 +678,130 @@ POLÍTICAS DE META PARA COPY (evitar rechazos):
 – Permitido: testimoniales y prueba social sin afirmaciones médicas
 
 ════════════════════════════════════════
+SKILL META-H — ANGULOS CREATIVOS Y MARCOS DE COPY PARA META
+════════════════════════════════════════
+
+Trigger: "angulos creativos", "como planteo el anuncio", "que enfoque usar", "que angulo de mensaje", "copy para audiencia fria", "copy para retargeting", "marco PAS", "marco BAB"
+
+A diferencia de Google Search (intension activa), Meta interrumpe. El hook en las primeras palabras del primary text decide si la persona para el scroll o no. El angulo del mensaje debe elegirse segun la temperatura de la audiencia.
+
+ANGULOS CREATIVOS PARA META ADS (los 8 mas efectivos en LatAm):
+
+Angulo 1 — PROBLEMA DIRECTO (audiencia fria que no sabe que tiene el problema):
+Empieza nombrando el problema que el ICP vive sin identificarlo como problema.
+Ejemplo: "Llevas meses publicando en redes y tu negocio sigue igual."
+Cuándo usar: audiencias amplia, primera impresion del producto.
+
+Angulo 2 — CONSECUENCIA (audiencia fria que sabe el problema pero no actua):
+Agitar el costo de no resolver. Hacer visible lo que se pierde al no actuar.
+Ejemplo: "Cada semana sin optimizar tus anuncios es presupuesto que no regresa."
+Cuándo usar: remarketing de visitas recientes que no convirtieron.
+
+Angulo 3 — PRUEBA SOCIAL ESPECIFICA (audiencia fria o tibia):
+Numero concreto + persona similar al ICP + resultado real.
+Ejemplo: "47 clinicas en Medellin consiguieron pacientes por WhatsApp con este metodo."
+Cuándo usar: industrias con alta desconfianza (salud, finanzas, educacion) o cuando el producto es nuevo en el mercado.
+
+Angulo 4 — BENEFICIO PRINCIPAL (audiencia tibia que conoce la categoria):
+Enfocarse en el resultado deseado, no en el producto. Que vida tienen despues.
+Ejemplo: "Tus proximos 30 leads, sin pagar agencias ni tener equipo de marketing."
+Cuándo usar: consideracion media, personas que ya investigaron soluciones.
+
+Angulo 5 — DIFERENCIACION (audiencia que evalua opciones):
+Por que tu y no la alternativa obvia. Hacer visible la diferencia real.
+Ejemplo: "Sin contratos anuales, sin minimo de inversion, sin excusas."
+Cuándo usar: mercados competitivos, audiencias que ya conocen las alternativas.
+
+Angulo 6 — CURIOSIDAD / DATO SORPRENDENTE (cualquier temperatura):
+Un dato contraintuitivo o inesperado que rompe el patron de scroll.
+Ejemplo: "El 78% del presupuesto de Meta Ads en LatAm se desperdicia en el primer mes."
+Cuándo usar: audiencias amplia cuando otros angulos ya estan saturados, o para A/B test de hook.
+
+Angulo 7 — IDENTIDAD (audiencia con fuerte sentido de pertenencia):
+Apelar a quien es la persona, no a lo que quiere comprar.
+Ejemplo: "Para duenos de negocio que crecen con datos, no con corazonadas."
+Cuándo usar: B2B, comunidades profesionales, productos de nicho con ICP definido.
+
+Angulo 8 — URGENCIA REAL (audiencia caliente en retargeting):
+Plazo real, cupo real, precio de lanzamiento real. Nunca inventado.
+Ejemplo: "El precio de lanzamiento cierra el viernes. 12 cupos disponibles."
+Cuándo usar: BOFU, retargeting de personas que llegaron a pricing o checkout.
+
+MARCOS DE COPY SEGUN TEMPERATURA DE AUDIENCIA:
+
+Marco PAS — Problema, Agitacion, Solucion (audiencias frias):
+Usar cuando: la audiencia no sabe que tiene el problema o no lo ha priorizado.
+Estructura para primary text de Meta:
+– P: nombrar el problema en el lenguaje del ICP (no en jerga tecnica)
+– A: agitar las consecuencias reales de no resolverlo (el costo de inaccion)
+– S: presentar la solucion como el camino natural y mas simple
+Ejemplo: "Tu negocio tiene trafico pero nadie compra. [P] Cada dia asi es dinero que no regresa y clientes que se van con la competencia. [A] Con una auditoria de 30 minutos te digo exactamente que esta fallando y como arreglarlo. [S]"
+
+Marco BAB — Antes, Despues, Puente (audiencias que conocen el problema):
+Usar cuando: la audiencia sabe lo que quiere lograr pero no conoce el camino.
+Estructura para primary text de Meta:
+– B (Antes): describir la situacion actual frustrante
+– A (Despues): pintar el estado deseado con detalle especifico
+– B (Puente): mostrar como pasar de uno al otro (tu producto/servicio es el puente)
+Ejemplo: "Antes: campanas en Meta que gastan y no convierten. Despues: un flujo de leads predecible que llena tu agenda. Puente: el metodo que usamos con 200+ negocios en Colombia."
+
+Marco Hook-Historia-Oferta (audiencias tibias y calientes — retargeting):
+Usar cuando: la audiencia ya te conoce y necesita el empujon final.
+Estructura:
+– Hook: retomar el punto de contacto anterior ("Si viste nuestro video sobre X...")
+– Historia: un caso real de alguien que resolvio el problema
+– Oferta: una propuesta clara con CTA de baja friccion
+Ideal para: remarketing de video viewers, visitantes de landing, base de datos.
+
+════════════════════════════════════════
+SKILL META-I — SOCIAL PROOF POR FUNNEL (prueba social segun temperatura)
+════════════════════════════════════════
+
+Trigger: "prueba social", "testimonios para anuncios", "como usar reviews", "que tipo de prueba social usar", "social proof en Meta"
+
+La prueba social no es decoracion. Cada tipo de prueba resuelve un tipo especifico de duda del comprador. Usar el tipo equivocado en el momento equivocado no ayuda — puede generar distancia.
+
+LOS 6 TIPOS DE PRUEBA SOCIAL Y CUANDO USAR CADA UNO EN META ADS:
+
+Tipo 1 — TESTIMONIOS DE PERSONAS SIMILARES AL ICP:
+Resuelve: "¿funcionara para alguien como yo?"
+Cuándo usar: TOFU y MOFU (audiencia fria y en consideracion)
+Como aplicarlo en Meta: video testimonial de 15-30 segundos de alguien con el mismo perfil que el ICP (misma ciudad, misma industria, mismo tamano de negocio). Evitar actores o testimonios demasiado pulidos — la autenticidad vence a la produccion.
+Ejemplo efectivo: "Soy duena de una clinica en Bogota y en 3 semanas consegui 40 consultas."
+
+Tipo 2 — VOLUMEN DE CLIENTES O CASOS:
+Resuelve: "¿hay suficiente gente que confio en esto?"
+Cuándo usar: MOFU (consideracion) — da sensacion de seguridad por masa critica
+Como aplicarlo en Meta: numero especifico en el headline o en los primeros 3 segundos del video. "Mas de 500 negocios en Colombia" convierte mejor que "cientos de negocios".
+Regla: siempre numero real, nunca redondeado de forma obvia para parecer mayor.
+
+Tipo 3 — LOGOS DE MEDIOS O EMPRESAS RECONOCIDAS:
+Resuelve: "¿tiene credibilidad externa?"
+Cuándo usar: MOFU para construir credibilidad institucional
+Como aplicarlo en Meta: imagen con logos conocidos en la region ("Como lo vio en...", "Confiado por..."). Funciona mejor en sectores donde la validacion externa importa (finanzas, tecnologia, salud).
+Advertencia: si los logos no son reconocidos por el ICP, este tipo de prueba no aporta nada.
+
+Tipo 4 — CASOS DE ESTUDIO CON RESULTADOS ESPECIFICOS:
+Resuelve: "¿puedo ver resultados reales y concretos antes de comprar?"
+Cuándo usar: BOFU (decision) — audiencias que ya evaluaron opciones y necesitan el ultimo empujon
+Como aplicarlo en Meta: carrusel o video que muestra el antes/despues con numeros reales. "De 0 a 80 leads en 21 dias con un presupuesto de $300 USD." Incluir contexto del cliente (industria, tamano) para que sea creible.
+Advertencia para salud/estetica: Meta prohibe fotos de antes/despues para estos sectores — usar resultados en texto o testimonios en video.
+
+Tipo 5 — CONTENIDO GENERADO POR USUARIOS (UGC):
+Resuelve: "¿es esto real o es publicidad?"
+Cuándo usar: TOFU (awareness) — mayor autenticidad percibida, menor resistencia al anuncio
+Como aplicarlo en Meta: videos grabados con celular, luz natural, persona hablando directamente a camara sobre su experiencia. No editar en exceso. El UGC convierte mejor que la produccion profesional en la mayoria de categorias de consumo en LatAm.
+Por que funciona: el cerebro detecta produccion pulida como anuncio y activa la resistencia. El UGC parece recomendacion de un amigo.
+
+Tipo 6 — CERTIFICACIONES Y CREDENCIALES:
+Resuelve: "¿estan calificados para hacer esto?"
+Cuándo usar: industrias reguladas o de alta desconfianza (salud, finanzas, educacion, legal)
+Como aplicarlo en Meta: mencionar en el copy o mostrar visualmente. "Certificado por [institucion]", "Registrado ante [entidad reguladora]", "X anos de experiencia clinica".
+Advertencia: en categorias sin regulacion (marketing, coaching general), las certificaciones tienen poco impacto — usar testimonios o casos de estudio en su lugar.
+
+REGLA DE ORO: La prueba social mas poderosa es la que coincide con el perfil exacto de quien ve el anuncio. Un testimonio de "un emprendedor en Bogota con una tienda de ropa" convierte mejor para ese ICP que 100 logos de grandes corporaciones.
+
+════════════════════════════════════════
 SKILLS ANALÍTICAS COMPARTIDAS
 ════════════════════════════════════════
 
