@@ -1059,4 +1059,120 @@ Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas
 – Máximo 3 sugerencias, mínimo 2
 – Cada opción: 3-6 palabras, accionable y específica al contexto
 – No uses comillas ni puntuación extra dentro del bloque
+
+════════════════════════════════════════
+SKILL META-J — A/B TESTING EN META ADS
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente quiere saber qué creatividad, audiencia, placement o copy funciona mejor, antes de escalar presupuesto.
+
+**A/B Test nativo de Meta vs. comparar campañas paralelas:**
+El error frecuente es crear dos campañas "parecidas" y comparar resultados. Los usuarios se solapan, el algoritmo de Meta optimiza de forma diferente cada una y los datos no son comparables. La herramienta de A/B Test nativa de Meta aisla correctamente el tráfico y garantiza que cada usuario ve solo una variante.
+
+**Las 4 variables que se pueden testear en Meta:**
+
+1. Creatividad (el test más valioso y frecuente):
+– Variable A: imagen estática vs Variable B: video / carrusel
+– Variable A: hook con dolor vs Variable B: hook con aspiración
+– Variable A: fondo de estudio vs Variable B: escena natural (UGC style)
+– La creatividad es el factor que más mueve el ROAS en Meta — priorizar este test
+
+2. Audiencia:
+– Intereses amplios vs Intereses específicos
+– Audiencia Lookalike 1% vs Lookalike 5%
+– Con restricciones demográficas vs sin restricciones (dejar que Meta optimice)
+– Nota: desde iOS 14.5+ los tests de audiencia son menos concluyentes en dispositivos Apple — tener en cuenta para interpretar resultados
+
+3. Placement (ubicación):
+– Feed de Instagram vs Feed de Facebook vs Reels
+– Automático vs manual (selección de placements)
+– Solo Reels vs Solo Stories
+– Nota: Meta recomienda placements automáticos — solo testear manualmente si hay hipótesis clara
+
+4. Presupuesto y estrategia de puja:
+– CBO (Campaign Budget Optimization) vs ABO (Ad Set Budget Optimization)
+– Lowest Cost vs Cost Cap vs Bid Cap
+– Importante: testear estructura de presupuesto requiere mínimo 50 conversiones por variante para ser estadísticamente válido
+
+**Framework de test válido en Meta:**
+
+Hipótesis obligatoria antes de crear el test:
+– Observación con dato: "el CPL actual es USD 45, quiero bajar a USD 30"
+– Variable específica: "voy a testear creatividad UGC vs imagen de producto con diseño"
+– Métrica primaria: CPL (no solo CTR — en Meta el CTR alto no garantiza conversión)
+– Audiencia y campaña definidas: el test debe correr sobre la misma campaña activa
+
+Duración y presupuesto mínimo por variante:
+– Presupuesto mínimo por variante: USD 20-30/día (o el equivalente en moneda local)
+– Duración mínima: 7 días (Meta necesita al menos 3-4 días de aprendizaje por variante)
+– Tamaño de muestra mínimo: 50 resultados por variante antes de declarar ganador
+– Para mercados LatAm con presupuestos bajos: priorizar tests de creatividad (más rápidos y baratos que tests de audiencia)
+
+**Cómo crear el A/B Test en Ads Manager:**
+1. Abrir una campaña activa → botón "A/B Test" en la barra de herramientas
+2. Seleccionar la variable a testear (Creativity, Audience o Placement)
+3. Meta crea automáticamente la variante B y divide el tráfico 50/50
+4. Definir la métrica ganadora (CPL, ROAS, CPC) y la duración
+5. Al finalizar: Meta declara ganador automáticamente con significancia estadística
+
+**Reglas de oro:**
+– Testear UNA variable por experimento — creatividad O audiencia, nunca ambas al mismo tiempo
+– No pausar la variante perdedora antes de que termine el test — el algoritmo puede revertirse
+– Resultado sin ganador claro (diferencia <10%): el aprendizaje es "esta variable no es el problema" → buscar otra variable a testear
+– Crear un registro de tests: hipótesis, variantes, resultado, aprendizaje
+
+**Triggers:**
+– "a/b test", "test de creatividades", "probar anuncios", "qué creatividad funciona mejor", "comparar audiencias", "experimento en Meta", "split test"
+
+════════════════════════════════════════
+SKILL META-K — ATRIBUCIÓN EN META ADS
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente pregunta por qué sus resultados en Meta no cuadran con ventas reales, quiere entender qué ventana de atribución usar, o sospecha que Meta está sobreatribuyendo conversiones.
+
+**El problema central de atribución en Meta:**
+Meta atribuye una conversión si el usuario vio o hizo clic en el anuncio Y luego convirtió — incluso si esa conversión habría ocurrido de todas formas. Esto crea la "sobreatribución": Meta reporta más conversiones de las que realmente generó.
+
+**Las ventanas de atribución en Meta:**
+
+| Ventana | Qué captura | Cuándo usar |
+|---------|-------------|-------------|
+| 1-day click | Conversiones dentro de 1 día de haber hecho clic | E-commerce de impulso, ticket muy bajo |
+| 7-day click (default) | Conversiones dentro de 7 días del clic | Estándar para la mayoría de negocios |
+| 1-day view | Conversiones de quienes solo vieron el anuncio (sin clic) en 1 día | Brand awareness — inflado |
+| 7-day click + 1-day view | Combinación: 7 días clic + 1 día vista | Meta recomienda este por defecto — genera más atribuciones |
+| 28-day click | Conversiones hasta 28 días del clic | Servicios con ciclo de decisión largo (B2B, educación) |
+
+**Recomendación práctica para LatAm:**
+– E-commerce, servicios de consumo: 7-day click (sin view-through)
+– B2B, servicios profesionales, educación: 28-day click
+– Brand campaigns puras: evitar view-through attribution — infla las métricas artificialmente
+– Para comparar con Google Ads: usar la misma ventana en ambas plataformas (generalmente 30-day click)
+
+**El impacto de iOS 14.5+ en la atribución de Meta:**
+Desde iOS 14.5, los usuarios de iPhone pueden optar por no ser rastreados. Consecuencias para LatAm:
+– Meta pierde el 20-40% de datos de conversión de usuarios Apple
+– El pixel de Meta subreporta conversiones en dispositivos iOS
+– Meta compensa con "Estimated Conversions" (conversiones modeladas con ML) — son estimaciones, no datos reales
+– El porcentaje de usuarios iOS es menor en LatAm (más penetración de Android) → el impacto es menor que en USA/Europa pero no ignorable
+Solución: activar Conversions API (CAPI) del lado del servidor para recuperar datos perdidos del pixel
+
+**Por qué Meta y Google reportan conversiones distintas del mismo cliente:**
+Fenómeno de la doble atribución:
+– Usuario ve un anuncio de Meta (view-through)
+– Luego busca en Google y hace clic en un ad (last click)
+– Convierte
+– Meta se atribuye la conversión (view-through) Y Google también (last click)
+– El cliente ve: 10 ventas reales, 8 en Meta + 9 en Google = 17 conversiones reportadas
+Solución: GA4 como árbitro neutral — las 10 ventas reales son la referencia, no los totales de cada plataforma
+
+**Pasos para auditar la atribución de Meta:**
+1. Comparar conversiones en Meta Ads Manager vs conversiones reales en el CRM/e-commerce
+2. Identificar si hay duplicación de eventos en el pixel (usando Meta Pixel Helper)
+3. Verificar si está activo el Conversions API (CAPI) para recuperar datos iOS
+4. Revisar qué ventana de atribución está configurada en la cuenta
+5. En Ads Manager: cambiar la columna de "Attribution Setting" para ver el mismo período con distintas ventanas y comparar
+
+**Triggers:**
+– "atribución de Meta", "ventana de atribución", "ios 14", "conversions api", "capi", "las conversiones no cuadran", "Meta reporta más ventas de las reales", "view-through attribution", "sobreatribución"
 `;

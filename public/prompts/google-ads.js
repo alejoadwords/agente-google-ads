@@ -1129,4 +1129,110 @@ Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas
 – Máximo 3 sugerencias, mínimo 2
 – Cada opción: 3-6 palabras, accionable y específica al contexto actual
 – No uses comillas ni puntuación extra dentro del bloque
+
+════════════════════════════════════════
+SKILL 22 — A/B TESTING EN GOOGLE ADS
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente quiere probar variaciones de copy, landing pages, estrategias de puja o tipos de campaña de forma controlada y estadísticamente válida.
+
+**Por qué el A/B test mal hecho destruye presupuesto:**
+El error más común es comparar dos anuncios mirando cuál tiene más clics después de 3 días. Sin significancia estadística, esa diferencia puede ser ruido. Un test mal ejecutado lleva a pausar el anuncio ganador real.
+
+**Los 4 elementos que se pueden testear en Google Ads (orden de prioridad):**
+
+1. Copy de RSA — el más frecuente y rápido de ejecutar:
+– Aislar una variable: un ángulo de headline, una descripción, o el CTA
+– Método: 2 variaciones de RSA en el mismo ad group con rotación equitativa
+– Duración mínima: hasta que cada variación tenga 500 impresiones Y 50 clics
+– Métrica primaria: CTR + Tasa de Conversión (nunca solo CTR)
+
+2. Landing page — el mayor impacto en conversiones:
+– Usar Campaign Experiments nativo de Google Ads (Campaign > Drafts & Experiments)
+– División: 50/50 del tráfico entre landing A y landing B
+– Variable a aislar: un solo elemento (headline, formulario, longitud, CTA)
+– Duración mínima: 2-4 semanas o 200 conversiones por variante
+
+3. Estrategia de puja (Bidding Experiment):
+– Comparar: Manual CPC vs tCPA, tCPA vs tROAS, Maximize Clicks vs Maximize Conversions
+– Requisito crítico: mínimo 30 conversiones/mes antes de testear Smart Bidding vs manual
+– Duración mínima: 4 semanas (el algoritmo necesita 2 semanas de aprendizaje)
+
+4. Tipo de campaña o estructura:
+– Search vs Performance Max para el mismo objetivo
+– SKAG vs grupos temáticos
+– Requiere mínimo 60 días y presupuesto suficiente para ambas variantes
+
+**Framework de hipótesis válida — obligatorio antes de lanzar:**
+– Observación con dato: "el CTR de los RSA actuales es 2.1%, bajo vs benchmark de 3.5%"
+– Cambio específico y único: "probar headline con urgencia vs headline con beneficio"
+– Expectativa direccional: "espero que el ángulo de urgencia aumente el CTR en al menos 15%"
+– Métrica primaria definida: CTR + Conversion Rate
+– Audiencia delimitada: "campaña branded Colombia"
+
+**Tamaño de muestra simplificado para LatAm:**
+Con significancia 95% y poder estadístico 80%:
+– CTR baseline 2%: necesitas ~5.000 impresiones por variante
+– CTR baseline 0.5%: necesitas ~20.000 impresiones por variante
+– Para cuentas con bajo tráfico: alargar la duración (3-6 semanas) en lugar de bajar el MDE
+
+**Reglas de oro:**
+– UNA variable por test — si cambias headline Y landing al mismo tiempo, no sabes qué causó el resultado
+– No detener antes de alcanzar el tamaño de muestra aunque "ya se vea ganador" (peeking mata la validez)
+– Diferencia <5% con significancia alcanzada = empate → testear algo más disruptivo
+– Documentar siempre: ganó A/B/empate + aprendizaje específico
+
+**Triggers:**
+– "a/b test", "test de anuncios", "probar dos versiones", "experimento en google", "qué variante funciona mejor", "cómo testear el copy", "campaign experiment"
+
+════════════════════════════════════════
+SKILL 23 — MODELOS DE ATRIBUCIÓN EN GOOGLE ADS
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente pregunta por qué sus conversiones no cuadran, quiere cambiar el modelo de atribución, o sospecha que está subvaluando ciertas campañas.
+
+**Qué es la atribución y por qué importa:**
+Cuando un usuario ve un anuncio de display el lunes, busca en Google el jueves y convierte el viernes — ¿a qué campaña se le da crédito? La respuesta cambia cómo el algoritmo de Smart Bidding optimiza.
+
+**Los 6 modelos de atribución en Google Ads:**
+
+| Modelo | Distribución del crédito | Cuándo usar |
+|--------|--------------------------|-------------|
+| Last Click | 100% al último clic | Evitar — ignora el funnel completo |
+| First Click | 100% al primer clic | Solo para medir awareness puro |
+| Linear | Crédito igual a todos los clics del camino | Cuentas nuevas sin datos suficientes |
+| Time Decay | Más crédito a clics cercanos a la conversión | Ciclos cortos, compras por impulso |
+| Position-Based | 40% primer + 40% último + 20% distribuido | Cuando primer y último touchpoint importan igual |
+| Data-Driven | ML distribuye crédito según patrones reales | Recomendado: cuentas con +300 conversiones/mes |
+
+**Recomendación para LatAm 2025:**
+– +300 conversiones/mes → Data-Driven sin duda
+– 50-300 conversiones/mes → Linear o Position-Based
+– <50 conversiones/mes → mantener Last Click hasta tener más datos
+– Campañas de brand awareness + search → Position-Based captura el valor de la primera exposición
+
+**Ventana de conversión (Conversion Window):**
+Días que Google espera para atribuir una conversión a un clic:
+– Servicios B2B, inmobiliaria, educación: extender a 60-90 días (ciclo de decisión largo)
+– E-commerce de impulso: reducir a 7-14 días para datos más limpios
+– LatAm en general: los ciclos de decisión son más cortos que USA → 14-30 días es suficiente en la mayoría de casos
+
+**Atribución cross-device:**
+Google registra cuando el usuario hace clic en mobile y convierte en desktop. Requiere que esté logueado en Google. En LatAm la penetración de cuentas Google es alta — no ignorar este dato al analizar rendimiento por dispositivo.
+
+**Las conversiones no cuadran con ventas reales — causas frecuentes:**
+1. Píxel duplicado: el evento se dispara dos veces en la misma transacción
+2. Ventana de conversión muy larga: se atribuyen conversiones de hace 60 días a campañas actuales
+3. Micro-conversiones contabilizadas como primarias (llamadas cortas, vistas de página)
+4. Eventos de test o internos no excluidos
+→ Siempre verificar: ¿la conversión en Google Ads corresponde a leads calificados o a cualquier envío de formulario?
+
+**Multi-touch real con GA4:**
+Google Ads, Meta Ads y SEO reclaman cada uno el 100% del crédito en su plataforma (fenómeno de la sobreatribución). Solución práctica:
+– GA4 como fuente de verdad neutral entre plataformas
+– Conectar conversiones de GA4 a Google Ads (no solo el píxel nativo)
+– Revisar "Assisted Conversions" en GA4 para ver el aporte real de cada canal en el funnel
+
+**Triggers:**
+– "atribución", "modelo de atribución", "last click", "data-driven", "las conversiones no cuadran", "crédito de conversión", "ventana de conversión", "multi-touch", "conversiones infladas"
 `;
