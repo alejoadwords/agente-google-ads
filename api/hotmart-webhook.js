@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const signature = req.headers['x-hotmart-hottok'];
-  if (HOTMART_SECRET && signature !== HOTMART_SECRET) {
+  if (!HOTMART_SECRET || signature !== HOTMART_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -126,6 +126,44 @@ export default async function handler(req, res) {
     hotmart_subscription_id: subscriptionId,
     notes: `Activado via Hotmart - ${eventType}`
   }, { onConflict: 'user_id' });
+
+  // ── Rastreo de referidos ───────────────────────────────────────────────────
+  try {
+    const { data: refConversion } = await supabase
+      .from('referral_conversions')
+      .select('*')
+      .eq('referred_email', email.toLowerCase())
+      .single();
+
+    if (refConversion) {
+      if (refConversion.status === 'registered') {
+        // Primera activación: activar referido
+        await supabase
+          .from('referral_conversions')
+          .update({
+            status:           'active',
+            referred_user_id: usuario.id,
+            activated_at:     ahora.toISOString(),
+            months_paid:      1,
+            total_earned:     5,
+            updated_at:       ahora.toISOString(),
+          })
+          .eq('id', refConversion.id);
+      } else if (refConversion.status === 'active') {
+        // Renovación: sumar comisión del mes
+        await supabase
+          .from('referral_conversions')
+          .update({
+            months_paid:  (refConversion.months_paid || 0) + 1,
+            total_earned: parseFloat(refConversion.total_earned || 0) + 5,
+            updated_at:   ahora.toISOString(),
+          })
+          .eq('id', refConversion.id);
+      }
+    }
+  } catch (refErr) {
+    console.warn('Referral tracking error:', refErr.message);
+  }
 
   return res.status(200).json({ received: true, action: 'activated', plan, email });
 }

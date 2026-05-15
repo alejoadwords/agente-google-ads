@@ -388,4 +388,166 @@ Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas
 – Cada opción: 3-6 palabras, accionable y específica al contexto
 – No uses comillas ni puntuación extra dentro del bloque
 – Ejemplos: [SUGERENCIAS: Auditar sitio web | Investigar keywords | Plan de contenido SEO]
+
+════════════════════════════════════════
+SKILL 8: AI SEO AVANZADO — LAS 3 COLUMNAS DE CITABILIDAD
+════════════════════════════════════════
+
+Complementa SKILL 7 (AEO). Esta skill detalla cómo pasar del concepto a la ejecución para que las IAs citen tu contenido de forma consistente.
+
+**Las 3 Columnas (de la investigación de Princeton GEO 2024):**
+
+**Columna 1 — ESTRUCTURA (que el contenido sea extraíble)**
+Las IAs extraen párrafos, no páginas. Cada afirmación clave debe funcionar como texto independiente.
+– Bloques de definición: "X es..." o "X se refiere a..." para queries de 'qué es'
+– Bloques paso a paso numerados para queries de 'cómo hacer'
+– Tablas comparativas para queries '[X] vs [Y]'
+– Bloques FAQ con preguntas en lenguaje natural
+– Respuesta directa en los primeros 40-60 palabras de cada sección (no enterrar la respuesta)
+– H2/H3 redactados como el usuario formularía la pregunta
+
+**Columna 2 — AUTORIDAD (que el contenido sea citable)**
+Tabla de boosters de citación (Princeton GEO, estudio Perplexity.ai):
+
+| Método | Boost de visibilidad | Cómo aplicar |
+|--------|---------------------|--------------|
+| Citar fuentes | +40% | Referencias con links a estudios/medios reconocidos |
+| Añadir estadísticas | +37% | Números específicos con fuente y fecha |
+| Citas de expertos | +30% | Nombre + cargo + organización |
+| Tono autoritativo | +25% | Demostrar experiencia, no solo opinar |
+| Claridad | +20% | Simplificar conceptos complejos |
+| Términos técnicos | +18% | Vocabulario específico del dominio |
+
+Advertencia: el keyword stuffing REDUCE visibilidad en IAs en -10%. Lo opuesto al SEO tradicional.
+
+**Señales de autoridad para LatAm:**
+– Autores con bio visible, credenciales y cargo
+– Fecha de última actualización prominente (las IAs prefieren contenido reciente)
+– Datos propios o estadísticas originales del mercado latinoamericano
+– Menciones en medios del sector (El Tiempo, Forbes LatAm, G2, Clutch)
+
+**Columna 3 — PRESENCIA (estar donde las IAs buscan)**
+Las IAs citan más fuentes de terceros que dominios propios:
+– Wikipedia (7.8% de todas las citas de ChatGPT) — mantener perfil actualizado
+– Reddit (1.8% de citas) — participar auténticamente en comunidades del nicho
+– YouTube — frecuentemente citado en Google AI Overviews para queries de 'cómo hacer'
+– Directorios de autoridad: Google My Business, Clutch, G2, Capterra
+– Guest posts en medios reconocidos del sector en LatAm
+– Quora en español — responder preguntas de autoridad con profundidad
+
+**Checklist de robots.txt — acceso de bots de IA:**
+Si cualquiera de estos bots está bloqueado, esa plataforma NO puede citarte:
+– GPTBot y ChatGPT-User → OpenAI (ChatGPT)
+– PerplexityBot → Perplexity
+– ClaudeBot y anthropic-ai → Anthropic (Claude)
+– Google-Extended → Gemini y AI Overviews
+– Bingbot → Microsoft Copilot
+
+**Tipos de contenido más citados por IAs:**
+1. Artículos comparativos ([X] vs [Y]) — 33% de las citas
+2. Guías definitivas — 15%
+3. Investigación original con datos propios — 12%
+4. Listas "best of" — 10%
+5. Páginas de producto con detalles específicos — 10%
+6. Guías paso a paso (how-to) — 8%
+
+**Monitoreo DIY mensual (sin herramientas de pago):**
+1. Elegir 20 queries clave del negocio
+2. Buscar cada una en ChatGPT, Perplexity y Google
+3. Registrar: ¿el cliente aparece citado? ¿quién sí aparece? ¿qué página suya?
+4. Log en spreadsheet para comparar mes a mes
+5. Para LatAm: añadir Gemini (muy usado en Android) como cuarta plataforma a monitorear
+
+════════════════════════════════════════
+SKILL 9: KEYWORD RESEARCH POR ETAPA DE COMPRA
+════════════════════════════════════════
+
+Mapea keywords al viaje del comprador. Fundamental para crear contenido que captura demanda en cada fase.
+
+**Las 3 etapas con modificadores de keywords:**
+
+**Etapa 1 — Conciencia (el usuario identifica su problema)**
+Modificadores: "qué es", "cómo hacer", "guía para", "introducción a", "diferencia entre"
+Ejemplos LatAm:
+– "qué es el posicionamiento SEO"
+– "cómo hacer marketing digital sin presupuesto"
+– "diferencia entre SEO y SEM"
+Tipo de contenido: blog educativo, guías, videos explicativos
+Intención: informacional
+
+**Etapa 2 — Consideración (el usuario evalúa opciones)**
+Modificadores: "mejor", "top", "vs", "alternativas", "comparativa", "cuál es mejor"
+Ejemplos LatAm:
+– "mejor agencia SEO en Bogotá"
+– "WordPress vs Shopify para e-commerce"
+– "alternativas a Semrush gratuitas"
+Tipo de contenido: comparativas, reviews, casos de estudio, guías de compra
+Intención: comercial
+
+**Etapa 3 — Decisión (el usuario está listo para comprar/contratar)**
+Modificadores: "precio", "costo", "contratar", "cotización", "demo", "agencia + ciudad"
+Ejemplos LatAm:
+– "contratar agencia SEO Medellín"
+– "precio posicionamiento web Colombia"
+– "cotización marketing digital México"
+Tipo de contenido: páginas de servicio, landing pages, páginas de precios
+Intención: transaccional
+
+**Modelo Hub & Spoke aplicado a LatAm:**
+– Hub (página pilar): tema amplio con autoridad temática — ej: '/marketing-digital'
+– Spokes (artículos cluster): subtemas que enlazan al hub
+  → '/marketing-digital/seo-para-restaurantes'
+  → '/marketing-digital/costo-marketing-digital'
+  → '/marketing-digital/agencia-marketing-bogota'
+– Regla: todos los spokes enlazan al hub → concentra autoridad en la página prioritaria
+– Nota LatAm: los mercados como Colombia, México y Argentina tienen vocabulario distinto para el mismo concepto — crear estrategias de keywords separadas por país cuando el término cambia significativamente (ej: 'celular' vs 'móvil' vs 'teléfono')
+
+**Criterios para elegir buenos pilares temáticos:**
+1. Se alinea con el producto o servicio del cliente
+2. Tiene volumen de búsqueda en el país objetivo
+3. El cliente tiene o puede generar autoridad en ese tema
+4. Es lo suficientemente amplio para generar múltiples artículos cluster
+
+════════════════════════════════════════
+SKILL 10: GOOGLE BUSINESS PROFILE (SEO LOCAL)
+════════════════════════════════════════
+
+Para negocios con presencia física o que atienden zonas geográficas específicas. El GBP (anteriormente Google My Business) es el activo de SEO local con mayor retorno en LatAm.
+
+**Cuándo aplicar:** el cliente tiene negocio físico, atiende una ciudad o zona, o quiere aparecer en búsquedas locales (ej: "dentista cerca", "restaurante en Chapinero").
+
+**Optimización completa del perfil GBP:**
+
+Campos prioritarios:
+– Nombre del negocio: exactamente igual que en el sitio web y todos los directorios (consistencia NAP: Nombre, Dirección, Teléfono)
+– Categoría principal: ser específico ("Clínica dental" no "Servicios de salud")
+– Categorías secundarias: añadir todas las que apliquen
+– Descripción: 750 caracteres, keywords naturales, sin keyword stuffing
+– Horario: actualizado y con horarios especiales en festivos
+– Teléfono: número local, consistente en toda la web
+– URL del sitio web: enlazar a landing page específica del servicio, no solo a la home
+– Atributos: seleccionar todos los relevantes (acepta tarjetas, wifi, estacionamiento, etc.)
+
+**Gestión de reseñas — el factor de ranking local más subestimado:**
+– Responder TODAS las reseñas (positivas y negativas) dentro de 48 horas
+– Respuesta a negativas: nunca defensivo, siempre empático + solución
+– Estrategia de captación ética: enviar link de reseña por WhatsApp tras servicio completado
+– Benchmarks LatAm: >20 reseñas para aparecer en local pack, >4.3 estrellas para competir en tope
+– Velocidad de reseñas importa: 5 reseñas nuevas/mes > 20 reseñas antiguas sin actividad
+
+**Google Posts — señal de perfil activo:**
+– Publicar 2-4 posts/mes en el perfil GBP
+– Tipos: novedades, ofertas, eventos, productos destacados
+– Incluir imagen + CTA + keyword local en el texto
+– Los posts tienen vida útil de 7 días para novedades; ofertas duran mientras se configuren
+
+**Señales de E-E-A-T para negocios locales:**
+– Fotos actualizadas: interior, exterior, equipo de trabajo (mínimo 10 fotos, añadir mensualmente)
+– Q&A: poblar con 5-10 preguntas frecuentes reales del negocio
+– Para servicios profesionales (abogados, médicos, contadores): añadir credenciales y números de registro en la descripción
+
+**Consistencia de citaciones (NAP) en directorios LatAm:**
+– Amarillas.com, PaginasAmarillas.com.co/mx, Yelp, Foursquare
+– Directorios del sector: TripAdvisor (turismo/restaurantes), Doctoralia (salud), Inmuebles24 (inmobiliaria)
+– Cualquier variación en nombre o teléfono entre plataformas perjudica el ranking local
 `;

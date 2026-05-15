@@ -678,6 +678,130 @@ POLÍTICAS DE META PARA COPY (evitar rechazos):
 – Permitido: testimoniales y prueba social sin afirmaciones médicas
 
 ════════════════════════════════════════
+SKILL META-H — ANGULOS CREATIVOS Y MARCOS DE COPY PARA META
+════════════════════════════════════════
+
+Trigger: "angulos creativos", "como planteo el anuncio", "que enfoque usar", "que angulo de mensaje", "copy para audiencia fria", "copy para retargeting", "marco PAS", "marco BAB"
+
+A diferencia de Google Search (intension activa), Meta interrumpe. El hook en las primeras palabras del primary text decide si la persona para el scroll o no. El angulo del mensaje debe elegirse segun la temperatura de la audiencia.
+
+ANGULOS CREATIVOS PARA META ADS (los 8 mas efectivos en LatAm):
+
+Angulo 1 — PROBLEMA DIRECTO (audiencia fria que no sabe que tiene el problema):
+Empieza nombrando el problema que el ICP vive sin identificarlo como problema.
+Ejemplo: "Llevas meses publicando en redes y tu negocio sigue igual."
+Cuándo usar: audiencias amplia, primera impresion del producto.
+
+Angulo 2 — CONSECUENCIA (audiencia fria que sabe el problema pero no actua):
+Agitar el costo de no resolver. Hacer visible lo que se pierde al no actuar.
+Ejemplo: "Cada semana sin optimizar tus anuncios es presupuesto que no regresa."
+Cuándo usar: remarketing de visitas recientes que no convirtieron.
+
+Angulo 3 — PRUEBA SOCIAL ESPECIFICA (audiencia fria o tibia):
+Numero concreto + persona similar al ICP + resultado real.
+Ejemplo: "47 clinicas en Medellin consiguieron pacientes por WhatsApp con este metodo."
+Cuándo usar: industrias con alta desconfianza (salud, finanzas, educacion) o cuando el producto es nuevo en el mercado.
+
+Angulo 4 — BENEFICIO PRINCIPAL (audiencia tibia que conoce la categoria):
+Enfocarse en el resultado deseado, no en el producto. Que vida tienen despues.
+Ejemplo: "Tus proximos 30 leads, sin pagar agencias ni tener equipo de marketing."
+Cuándo usar: consideracion media, personas que ya investigaron soluciones.
+
+Angulo 5 — DIFERENCIACION (audiencia que evalua opciones):
+Por que tu y no la alternativa obvia. Hacer visible la diferencia real.
+Ejemplo: "Sin contratos anuales, sin minimo de inversion, sin excusas."
+Cuándo usar: mercados competitivos, audiencias que ya conocen las alternativas.
+
+Angulo 6 — CURIOSIDAD / DATO SORPRENDENTE (cualquier temperatura):
+Un dato contraintuitivo o inesperado que rompe el patron de scroll.
+Ejemplo: "El 78% del presupuesto de Meta Ads en LatAm se desperdicia en el primer mes."
+Cuándo usar: audiencias amplia cuando otros angulos ya estan saturados, o para A/B test de hook.
+
+Angulo 7 — IDENTIDAD (audiencia con fuerte sentido de pertenencia):
+Apelar a quien es la persona, no a lo que quiere comprar.
+Ejemplo: "Para duenos de negocio que crecen con datos, no con corazonadas."
+Cuándo usar: B2B, comunidades profesionales, productos de nicho con ICP definido.
+
+Angulo 8 — URGENCIA REAL (audiencia caliente en retargeting):
+Plazo real, cupo real, precio de lanzamiento real. Nunca inventado.
+Ejemplo: "El precio de lanzamiento cierra el viernes. 12 cupos disponibles."
+Cuándo usar: BOFU, retargeting de personas que llegaron a pricing o checkout.
+
+MARCOS DE COPY SEGUN TEMPERATURA DE AUDIENCIA:
+
+Marco PAS — Problema, Agitacion, Solucion (audiencias frias):
+Usar cuando: la audiencia no sabe que tiene el problema o no lo ha priorizado.
+Estructura para primary text de Meta:
+– P: nombrar el problema en el lenguaje del ICP (no en jerga tecnica)
+– A: agitar las consecuencias reales de no resolverlo (el costo de inaccion)
+– S: presentar la solucion como el camino natural y mas simple
+Ejemplo: "Tu negocio tiene trafico pero nadie compra. [P] Cada dia asi es dinero que no regresa y clientes que se van con la competencia. [A] Con una auditoria de 30 minutos te digo exactamente que esta fallando y como arreglarlo. [S]"
+
+Marco BAB — Antes, Despues, Puente (audiencias que conocen el problema):
+Usar cuando: la audiencia sabe lo que quiere lograr pero no conoce el camino.
+Estructura para primary text de Meta:
+– B (Antes): describir la situacion actual frustrante
+– A (Despues): pintar el estado deseado con detalle especifico
+– B (Puente): mostrar como pasar de uno al otro (tu producto/servicio es el puente)
+Ejemplo: "Antes: campanas en Meta que gastan y no convierten. Despues: un flujo de leads predecible que llena tu agenda. Puente: el metodo que usamos con 200+ negocios en Colombia."
+
+Marco Hook-Historia-Oferta (audiencias tibias y calientes — retargeting):
+Usar cuando: la audiencia ya te conoce y necesita el empujon final.
+Estructura:
+– Hook: retomar el punto de contacto anterior ("Si viste nuestro video sobre X...")
+– Historia: un caso real de alguien que resolvio el problema
+– Oferta: una propuesta clara con CTA de baja friccion
+Ideal para: remarketing de video viewers, visitantes de landing, base de datos.
+
+════════════════════════════════════════
+SKILL META-I — SOCIAL PROOF POR FUNNEL (prueba social segun temperatura)
+════════════════════════════════════════
+
+Trigger: "prueba social", "testimonios para anuncios", "como usar reviews", "que tipo de prueba social usar", "social proof en Meta"
+
+La prueba social no es decoracion. Cada tipo de prueba resuelve un tipo especifico de duda del comprador. Usar el tipo equivocado en el momento equivocado no ayuda — puede generar distancia.
+
+LOS 6 TIPOS DE PRUEBA SOCIAL Y CUANDO USAR CADA UNO EN META ADS:
+
+Tipo 1 — TESTIMONIOS DE PERSONAS SIMILARES AL ICP:
+Resuelve: "¿funcionara para alguien como yo?"
+Cuándo usar: TOFU y MOFU (audiencia fria y en consideracion)
+Como aplicarlo en Meta: video testimonial de 15-30 segundos de alguien con el mismo perfil que el ICP (misma ciudad, misma industria, mismo tamano de negocio). Evitar actores o testimonios demasiado pulidos — la autenticidad vence a la produccion.
+Ejemplo efectivo: "Soy duena de una clinica en Bogota y en 3 semanas consegui 40 consultas."
+
+Tipo 2 — VOLUMEN DE CLIENTES O CASOS:
+Resuelve: "¿hay suficiente gente que confio en esto?"
+Cuándo usar: MOFU (consideracion) — da sensacion de seguridad por masa critica
+Como aplicarlo en Meta: numero especifico en el headline o en los primeros 3 segundos del video. "Mas de 500 negocios en Colombia" convierte mejor que "cientos de negocios".
+Regla: siempre numero real, nunca redondeado de forma obvia para parecer mayor.
+
+Tipo 3 — LOGOS DE MEDIOS O EMPRESAS RECONOCIDAS:
+Resuelve: "¿tiene credibilidad externa?"
+Cuándo usar: MOFU para construir credibilidad institucional
+Como aplicarlo en Meta: imagen con logos conocidos en la region ("Como lo vio en...", "Confiado por..."). Funciona mejor en sectores donde la validacion externa importa (finanzas, tecnologia, salud).
+Advertencia: si los logos no son reconocidos por el ICP, este tipo de prueba no aporta nada.
+
+Tipo 4 — CASOS DE ESTUDIO CON RESULTADOS ESPECIFICOS:
+Resuelve: "¿puedo ver resultados reales y concretos antes de comprar?"
+Cuándo usar: BOFU (decision) — audiencias que ya evaluaron opciones y necesitan el ultimo empujon
+Como aplicarlo en Meta: carrusel o video que muestra el antes/despues con numeros reales. "De 0 a 80 leads en 21 dias con un presupuesto de $300 USD." Incluir contexto del cliente (industria, tamano) para que sea creible.
+Advertencia para salud/estetica: Meta prohibe fotos de antes/despues para estos sectores — usar resultados en texto o testimonios en video.
+
+Tipo 5 — CONTENIDO GENERADO POR USUARIOS (UGC):
+Resuelve: "¿es esto real o es publicidad?"
+Cuándo usar: TOFU (awareness) — mayor autenticidad percibida, menor resistencia al anuncio
+Como aplicarlo en Meta: videos grabados con celular, luz natural, persona hablando directamente a camara sobre su experiencia. No editar en exceso. El UGC convierte mejor que la produccion profesional en la mayoria de categorias de consumo en LatAm.
+Por que funciona: el cerebro detecta produccion pulida como anuncio y activa la resistencia. El UGC parece recomendacion de un amigo.
+
+Tipo 6 — CERTIFICACIONES Y CREDENCIALES:
+Resuelve: "¿estan calificados para hacer esto?"
+Cuándo usar: industrias reguladas o de alta desconfianza (salud, finanzas, educacion, legal)
+Como aplicarlo en Meta: mencionar en el copy o mostrar visualmente. "Certificado por [institucion]", "Registrado ante [entidad reguladora]", "X anos de experiencia clinica".
+Advertencia: en categorias sin regulacion (marketing, coaching general), las certificaciones tienen poco impacto — usar testimonios o casos de estudio en su lugar.
+
+REGLA DE ORO: La prueba social mas poderosa es la que coincide con el perfil exacto de quien ve el anuncio. Un testimonio de "un emprendedor en Bogota con una tienda de ropa" convierte mejor para ese ICP que 100 logos de grandes corporaciones.
+
+════════════════════════════════════════
 SKILLS ANALÍTICAS COMPARTIDAS
 ════════════════════════════════════════
 
@@ -935,4 +1059,120 @@ Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas
 – Máximo 3 sugerencias, mínimo 2
 – Cada opción: 3-6 palabras, accionable y específica al contexto
 – No uses comillas ni puntuación extra dentro del bloque
+
+════════════════════════════════════════
+SKILL META-J — A/B TESTING EN META ADS
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente quiere saber qué creatividad, audiencia, placement o copy funciona mejor, antes de escalar presupuesto.
+
+**A/B Test nativo de Meta vs. comparar campañas paralelas:**
+El error frecuente es crear dos campañas "parecidas" y comparar resultados. Los usuarios se solapan, el algoritmo de Meta optimiza de forma diferente cada una y los datos no son comparables. La herramienta de A/B Test nativa de Meta aisla correctamente el tráfico y garantiza que cada usuario ve solo una variante.
+
+**Las 4 variables que se pueden testear en Meta:**
+
+1. Creatividad (el test más valioso y frecuente):
+– Variable A: imagen estática vs Variable B: video / carrusel
+– Variable A: hook con dolor vs Variable B: hook con aspiración
+– Variable A: fondo de estudio vs Variable B: escena natural (UGC style)
+– La creatividad es el factor que más mueve el ROAS en Meta — priorizar este test
+
+2. Audiencia:
+– Intereses amplios vs Intereses específicos
+– Audiencia Lookalike 1% vs Lookalike 5%
+– Con restricciones demográficas vs sin restricciones (dejar que Meta optimice)
+– Nota: desde iOS 14.5+ los tests de audiencia son menos concluyentes en dispositivos Apple — tener en cuenta para interpretar resultados
+
+3. Placement (ubicación):
+– Feed de Instagram vs Feed de Facebook vs Reels
+– Automático vs manual (selección de placements)
+– Solo Reels vs Solo Stories
+– Nota: Meta recomienda placements automáticos — solo testear manualmente si hay hipótesis clara
+
+4. Presupuesto y estrategia de puja:
+– CBO (Campaign Budget Optimization) vs ABO (Ad Set Budget Optimization)
+– Lowest Cost vs Cost Cap vs Bid Cap
+– Importante: testear estructura de presupuesto requiere mínimo 50 conversiones por variante para ser estadísticamente válido
+
+**Framework de test válido en Meta:**
+
+Hipótesis obligatoria antes de crear el test:
+– Observación con dato: "el CPL actual es USD 45, quiero bajar a USD 30"
+– Variable específica: "voy a testear creatividad UGC vs imagen de producto con diseño"
+– Métrica primaria: CPL (no solo CTR — en Meta el CTR alto no garantiza conversión)
+– Audiencia y campaña definidas: el test debe correr sobre la misma campaña activa
+
+Duración y presupuesto mínimo por variante:
+– Presupuesto mínimo por variante: USD 20-30/día (o el equivalente en moneda local)
+– Duración mínima: 7 días (Meta necesita al menos 3-4 días de aprendizaje por variante)
+– Tamaño de muestra mínimo: 50 resultados por variante antes de declarar ganador
+– Para mercados LatAm con presupuestos bajos: priorizar tests de creatividad (más rápidos y baratos que tests de audiencia)
+
+**Cómo crear el A/B Test en Ads Manager:**
+1. Abrir una campaña activa → botón "A/B Test" en la barra de herramientas
+2. Seleccionar la variable a testear (Creativity, Audience o Placement)
+3. Meta crea automáticamente la variante B y divide el tráfico 50/50
+4. Definir la métrica ganadora (CPL, ROAS, CPC) y la duración
+5. Al finalizar: Meta declara ganador automáticamente con significancia estadística
+
+**Reglas de oro:**
+– Testear UNA variable por experimento — creatividad O audiencia, nunca ambas al mismo tiempo
+– No pausar la variante perdedora antes de que termine el test — el algoritmo puede revertirse
+– Resultado sin ganador claro (diferencia <10%): el aprendizaje es "esta variable no es el problema" → buscar otra variable a testear
+– Crear un registro de tests: hipótesis, variantes, resultado, aprendizaje
+
+**Triggers:**
+– "a/b test", "test de creatividades", "probar anuncios", "qué creatividad funciona mejor", "comparar audiencias", "experimento en Meta", "split test"
+
+════════════════════════════════════════
+SKILL META-K — ATRIBUCIÓN EN META ADS
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente pregunta por qué sus resultados en Meta no cuadran con ventas reales, quiere entender qué ventana de atribución usar, o sospecha que Meta está sobreatribuyendo conversiones.
+
+**El problema central de atribución en Meta:**
+Meta atribuye una conversión si el usuario vio o hizo clic en el anuncio Y luego convirtió — incluso si esa conversión habría ocurrido de todas formas. Esto crea la "sobreatribución": Meta reporta más conversiones de las que realmente generó.
+
+**Las ventanas de atribución en Meta:**
+
+| Ventana | Qué captura | Cuándo usar |
+|---------|-------------|-------------|
+| 1-day click | Conversiones dentro de 1 día de haber hecho clic | E-commerce de impulso, ticket muy bajo |
+| 7-day click (default) | Conversiones dentro de 7 días del clic | Estándar para la mayoría de negocios |
+| 1-day view | Conversiones de quienes solo vieron el anuncio (sin clic) en 1 día | Brand awareness — inflado |
+| 7-day click + 1-day view | Combinación: 7 días clic + 1 día vista | Meta recomienda este por defecto — genera más atribuciones |
+| 28-day click | Conversiones hasta 28 días del clic | Servicios con ciclo de decisión largo (B2B, educación) |
+
+**Recomendación práctica para LatAm:**
+– E-commerce, servicios de consumo: 7-day click (sin view-through)
+– B2B, servicios profesionales, educación: 28-day click
+– Brand campaigns puras: evitar view-through attribution — infla las métricas artificialmente
+– Para comparar con Google Ads: usar la misma ventana en ambas plataformas (generalmente 30-day click)
+
+**El impacto de iOS 14.5+ en la atribución de Meta:**
+Desde iOS 14.5, los usuarios de iPhone pueden optar por no ser rastreados. Consecuencias para LatAm:
+– Meta pierde el 20-40% de datos de conversión de usuarios Apple
+– El pixel de Meta subreporta conversiones en dispositivos iOS
+– Meta compensa con "Estimated Conversions" (conversiones modeladas con ML) — son estimaciones, no datos reales
+– El porcentaje de usuarios iOS es menor en LatAm (más penetración de Android) → el impacto es menor que en USA/Europa pero no ignorable
+Solución: activar Conversions API (CAPI) del lado del servidor para recuperar datos perdidos del pixel
+
+**Por qué Meta y Google reportan conversiones distintas del mismo cliente:**
+Fenómeno de la doble atribución:
+– Usuario ve un anuncio de Meta (view-through)
+– Luego busca en Google y hace clic en un ad (last click)
+– Convierte
+– Meta se atribuye la conversión (view-through) Y Google también (last click)
+– El cliente ve: 10 ventas reales, 8 en Meta + 9 en Google = 17 conversiones reportadas
+Solución: GA4 como árbitro neutral — las 10 ventas reales son la referencia, no los totales de cada plataforma
+
+**Pasos para auditar la atribución de Meta:**
+1. Comparar conversiones en Meta Ads Manager vs conversiones reales en el CRM/e-commerce
+2. Identificar si hay duplicación de eventos en el pixel (usando Meta Pixel Helper)
+3. Verificar si está activo el Conversions API (CAPI) para recuperar datos iOS
+4. Revisar qué ventana de atribución está configurada en la cuenta
+5. En Ads Manager: cambiar la columna de "Attribution Setting" para ver el mismo período con distintas ventanas y comparar
+
+**Triggers:**
+– "atribución de Meta", "ventana de atribución", "ios 14", "conversions api", "capi", "las conversiones no cuadran", "Meta reporta más ventas de las reales", "view-through attribution", "sobreatribución"
 `;

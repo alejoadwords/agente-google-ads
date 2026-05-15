@@ -228,6 +228,8 @@ async function initAuth(){
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     updateUserUI(clerkInstance.user);
+    // Registrar referido pendiente si llegó con ?ref=CODE
+    setTimeout(() => { if (typeof registerPendingReferral === 'function') registerPendingReferral(); }, 1500);
     return true;
   } catch(e) {
     console.error('Auth error:', e.message);
@@ -543,10 +545,12 @@ async function agencyInit() {
   const isAgency = userPlan === 'agency' || isAdminUser();
   const isPro    = !isAdminUser() && userPlan !== 'agency';
 
-  const agencyBtn = document.getElementById('sb-agency-btn');
-  const proBtn    = document.getElementById('sb-pro-btn');
+  const agencyBtn  = document.getElementById('sb-agency-btn');
+  const proBtn     = document.getElementById('sb-pro-btn');
+  const dashBtn    = document.getElementById('agency-dash-btn');
   if (agencyBtn) agencyBtn.style.display = isAgency ? 'block' : 'none';
   if (proBtn)    proBtn.style.display    = isPro    ? 'block' : 'none';
+  if (dashBtn)   dashBtn.style.display   = isAgency ? 'flex'  : 'none';
 
   if (!isAgency && !isPro) return;
   await agencyLoadClients();
@@ -1535,6 +1539,219 @@ let warSelectedKpis = {}; // { google: ['inversion','clics',...], meta: [...] }
 let warCustomKpis   = {}; // { google: [{id:'custom_0', label:'Mi métrica'}], ... }
 
 let warClientId = null;
+// ── LIVE DASHBOARDS ──────────────────────────────────────────────────────────
+
+let dashManualData = {};
+let dashCurrentTab = 'list';
+
+function dashboardOpen() {
+  document.getElementById('dash-modal').style.display = 'flex';
+  dashManualData = {};
+  document.getElementById('dash-manual-tags').innerHTML = '';
+  document.getElementById('dash-manual-key').value = '';
+  document.getElementById('dash-manual-val').value = '';
+  document.getElementById('dash-success-msg').style.display = 'none';
+  document.getElementById('dash-new-url-wrap').style.display = 'none';
+  dashSwitchTab('list');
+  dashLoadList();
+  dashPopulateClients();
+}
+
+function dashboardClose() {
+  document.getElementById('dash-modal').style.display = 'none';
+}
+
+function dashSwitchTab(tab) {
+  dashCurrentTab = tab;
+  document.getElementById('dash-panel-list').style.display   = tab === 'list'   ? 'block' : 'none';
+  document.getElementById('dash-panel-create').style.display = tab === 'create' ? 'block' : 'none';
+  document.getElementById('dash-footer-list').style.display   = tab === 'list'   ? 'flex'  : 'none';
+  document.getElementById('dash-footer-create').style.display = tab === 'create' ? 'flex'  : 'none';
+  document.getElementById('dash-tab-list').className   = 'dash-tab' + (tab === 'list'   ? ' active' : '');
+  document.getElementById('dash-tab-create').className = 'dash-tab' + (tab === 'create' ? ' active' : '');
+}
+
+function dashPopulateClients() {
+  const sel = document.getElementById('dash-client-select');
+  sel.innerHTML = '<option value="">— Selecciona un cliente —</option>';
+  agencyClients.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name || c.business || 'Sin nombre';
+    sel.appendChild(opt);
+  });
+}
+
+function dashClientSelected() {
+  const clientId = document.getElementById('dash-client-select').value;
+  if (!clientId) return;
+  const client = agencyClients.find(c => c.id === clientId);
+  if (!client) return;
+  // Pre-fill agency name if blank
+  const agNameInput = document.getElementById('dash-agency-name');
+  if (!agNameInput.value) {
+    agNameInput.value = '';
+  }
+}
+
+function dashTogglePlat(el) {
+  el.classList.toggle('selected');
+}
+
+function dashAddManual() {
+  const k = document.getElementById('dash-manual-key').value.trim();
+  const v = document.getElementById('dash-manual-val').value.trim();
+  if (!k || !v) return;
+  dashManualData[k] = v;
+  document.getElementById('dash-manual-key').value = '';
+  document.getElementById('dash-manual-val').value = '';
+  dashRenderManualTags();
+}
+
+function dashRenderManualTags() {
+  const wrap = document.getElementById('dash-manual-tags');
+  wrap.innerHTML = Object.entries(dashManualData).map(([k, v]) => `
+    <div class="dash-manual-tag">
+      <span><strong>${k}:</strong> ${v}</span>
+      <button onclick="dashRemoveManual('${k.replace(/'/g, "\\'")}')">×</button>
+    </div>
+  `).join('');
+}
+
+function dashRemoveManual(key) {
+  delete dashManualData[key];
+  dashRenderManualTags();
+}
+
+function dashCopyUrl(elId) {
+  const url = document.getElementById(elId).textContent.trim();
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target.closest('button');
+    const orig = btn.innerHTML;
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  }).catch(() => {
+    prompt('Copia este enlace:', url);
+  });
+}
+
+function dashOpenUrl(elId) {
+  const url = document.getElementById(elId).textContent.trim();
+  window.open(url, '_blank');
+}
+
+async function dashLoadList() {
+  const loading = document.getElementById('dash-list-loading');
+  const items = document.getElementById('dash-list-items');
+  const empty = document.getElementById('dash-list-empty');
+  loading.style.display = 'block';
+  items.innerHTML = '';
+  empty.style.display = 'none';
+
+  try {
+    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
+    if (!token) { loading.textContent = 'Inicia sesión para ver tus dashboards'; return; }
+
+    const res = await fetch('/api/dashboard?action=list', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await res.json();
+    const dashes = data.dashboards || [];
+
+    loading.style.display = 'none';
+
+    if (dashes.length === 0) {
+      empty.style.display = 'block';
+      return;
+    }
+
+    const platLabels = { google_ads: 'Google Ads', meta_ads: 'Meta Ads' };
+    items.innerHTML = dashes.map(d => {
+      const url = window.location.origin + '/dashboard.html?id=' + d.id;
+      const plats = (d.platforms || []).map(p => platLabels[p] || p).join(', ') || 'Sin plataformas';
+      const updated = d.updated_at ? new Date(d.updated_at).toLocaleDateString('es-CO', { day:'2-digit', month:'short' }) : '';
+      return `
+        <div class="dash-list-item">
+          <div class="dash-list-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E2BCC" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </div>
+          <div class="dash-list-info">
+            <div class="dash-list-name">${esc(d.client_name)}</div>
+            <div class="dash-list-meta">${plats} · ${updated} · ${d.views || 0} vistas</div>
+          </div>
+          <div class="dash-list-actions">
+            <button class="dash-list-btn" onclick="navigator.clipboard.writeText('${url}').then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='Copiar'},1500)})" title="Copiar enlace">Copiar</button>
+            <button class="dash-list-btn primary" onclick="window.open('${url}','_blank')" title="Abrir dashboard">Abrir ↗</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    loading.textContent = 'Error al cargar dashboards';
+  }
+}
+
+async function dashCreate() {
+  const clientId = document.getElementById('dash-client-select').value;
+  if (!clientId) { alert('Selecciona un cliente'); return; }
+  const client = agencyClients.find(c => c.id === clientId);
+
+  const selectedPlats = Array.from(document.querySelectorAll('.dash-plat-check.selected'))
+    .map(el => el.dataset.plat);
+
+  const body = {
+    client_name:   client?.name || client?.business || 'Cliente',
+    agency_name:   document.getElementById('dash-agency-name').value.trim() || null,
+    agency_color:  document.getElementById('dash-agency-color').value,
+    period:        document.getElementById('dash-period').value,
+    platforms:     selectedPlats,
+    manual_data:   dashManualData,
+  };
+
+  const btn = document.getElementById('dash-create-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creando...';
+
+  try {
+    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
+    if (!token) throw new Error('No autenticado');
+
+    const res = await fetch('/api/dashboard', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error');
+
+    const fullUrl = window.location.origin + data.url;
+
+    // Switch to list tab and show success
+    dashSwitchTab('list');
+    document.getElementById('dash-success-msg').style.display = 'block';
+    document.getElementById('dash-new-url-wrap').style.display = 'block';
+    document.getElementById('dash-new-url').textContent = fullUrl;
+
+    // Reset form
+    document.getElementById('dash-client-select').value = '';
+    document.getElementById('dash-agency-name').value = '';
+    document.getElementById('dash-period').value = '30d';
+    document.querySelectorAll('.dash-plat-check.selected').forEach(el => el.classList.remove('selected'));
+    dashManualData = {};
+    dashRenderManualTags();
+
+    // Reload list
+    dashLoadList();
+  } catch (e) {
+    alert('Error al crear dashboard: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear dashboard';
+  }
+}
+
+// ── WAR (WhatsApp report) ─────────────────────────────────────────────────────
+
 let warStep = 0;
 let warPeriod = 'mes';
 let warGeneratedText = null;
@@ -2527,9 +2744,7 @@ async function openAgent(agentKey) {
       addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
       if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
       if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
-      if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
       if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
@@ -2672,9 +2887,7 @@ function launchOnboarding(agentKey) {
       addAgent(summary);
       if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
       if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
-      if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
       if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
@@ -3199,6 +3412,15 @@ function showMetaImageSubCards(parentCard) {
         '<div style="font-size:22px;margin-bottom:8px">✨</div>' +
         '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear anuncio profesional</div>' +
         '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos con tu marca, oferta y línea gráfica — listos para publicar en Meta</div>' +
+      '</div>' +
+
+      // Opción 1b: Diseño estructurado (HTML Design System)
+      '<div onclick="dismissMetaCards(this);showHtmlDesignWizard()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<div style="font-size:20px">🎨</div>' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text)">Diseño estructurado <span style="font-size:10px;background:var(--blue);color:#fff;padding:1px 7px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.4;padding-left:28px">Layouts tipo agencia — texto, iconos e imagen perfectamente organizados. 3, 5 o 10 variaciones.</div>' +
       '</div>' +
 
       // Opción 2: Variaciones A/B de anuncio existente
@@ -6426,67 +6648,83 @@ function rmThinking(id){document.getElementById(id)?.remove()}
 function appendRaw(html){const a=document.getElementById('chat-area');const d=document.createElement('div');d.innerHTML=html;a.appendChild(d.firstElementChild)}
 function scrollB(){const a=document.getElementById('chat-area');setTimeout(()=>{a.scrollTop=a.scrollHeight},50)}
 function fmt(t){
-  // 1. Escape HTML first
-  let s = esc(t);
-
-  // 2. Render markdown tables BEFORE other replacements
-  // Match table blocks: header row | separator row | data rows
-  s = s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g, function(tableBlock) {
-    const lines = tableBlock.trim().split('\n').filter(l => l.trim());
-    if (lines.length < 2) return tableBlock;
-    // Check if second line is a separator (----)
-    if (!/^\|[\s\-:|]+\|/.test(lines[1])) return tableBlock;
-    const headerCells = lines[0].split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
-    const dataRows = lines.slice(2);
-    let html = '<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-    html += '<thead><tr>' + headerCells.map(c =>
-      `<th style="background:var(--sidebar);border:1px solid var(--border);padding:7px 10px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${c}</th>`
-    ).join('') + '</tr></thead>';
-    html += '<tbody>';
-    dataRows.forEach(function(row, ri) {
-      const cells = row.split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
-      html += `<tr style="background:${ri%2===0?'var(--bg)':'var(--sidebar)'}">` +
-        cells.map(c => `<td style="border:1px solid var(--border);padding:6px 10px;color:var(--text)">${c}</td>`).join('') +
-      '</tr>';
-    });
-    html += '</tbody></table></div>';
-    return html;
+  // Step 1: Extract fenced code blocks BEFORE escaping (preserve content verbatim)
+  const cb=[];
+  t=t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g,function(_,lang,code){
+    cb.push({lang:lang.trim(),code:code.replace(/\n+$/,'')});
+    return '\x00CB'+(cb.length-1)+'\x00';
   });
 
-  // 3. Headers
-  s = s.replace(/### (.*?)(\n|$)/g,'<h4 style="margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--text)">$1</h4>');
-  s = s.replace(/## (.*?)(\n|$)/g,'<h3 style="margin:16px 0 8px;font-size:14px;font-weight:700;color:var(--text)">$1</h3>');
+  // Step 2: Escape HTML
+  let s=esc(t);
 
-  // 4. Bold and inline code
-  s = s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-  s = s.replace(/`(.*?)`/g,'<code style="background:var(--sidebar);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>');
+  // Step 3: Restore code blocks as styled <pre> elements
+  s=s.replace(/\x00CB(\d+)\x00/g,function(_,idx){
+    const b=cb[+idx];
+    const code=b.code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const label=b.lang
+      ? '<div style="font-size:10px;font-family:monospace;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em;opacity:.7">'+b.lang.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'
+      : '';
+    return '<pre style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0 8px;font-size:0">'+label
+      +'<code style="font-family:\'SF Mono\',\'Fira Code\',Consolas,monospace;font-size:12.5px;line-height:1.6;color:var(--text);white-space:pre">'+code+'</code></pre>';
+  });
 
-  // 5. Lists — collapse ALL blank lines between bullet lines aggressively
-  // Keep collapsing until no more double-newlines exist between bullet chars
-  let prev = '';
-  while (prev !== s) {
-    prev = s;
-    s = s.replace(/(<br>|^|\n)([ \t]*[–\-•].+?)(<br>|\n)\n+([ \t]*[–\-•])/gm, '$1$2$3$4');
+  // Step 4: Markdown tables
+  s=s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g,function(block){
+    const lines=block.trim().split('\n').filter(l=>l.trim());
+    if(lines.length<2||!/^\|[\s\-:|]+\|/.test(lines[1]))return block;
+    const heads=lines[0].split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
+    let h='<div style="overflow-x:auto;margin:14px 0"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+    h+='<thead><tr>'+heads.map(c=>'<th style="background:var(--sidebar);border:1px solid var(--border);padding:8px 13px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">'+fmtI(c)+'</th>').join('')+'</tr></thead><tbody>';
+    lines.slice(2).forEach(function(row,ri){
+      const cells=row.split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
+      h+='<tr style="background:'+(ri%2===0?'var(--bg)':'var(--sidebar)')+'">'+cells.map(c=>'<td style="border:1px solid var(--border);padding:7px 13px;color:var(--text);line-height:1.45">'+fmtI(c)+'</td>').join('')+'</tr>';
+    });
+    h+='</tbody></table></div>';
+    return h;
+  });
+
+  // Step 5: Headings (h1 → h2 → h3 → h4 with clear visual hierarchy)
+  s=s.replace(/^# (.+)$/gm,'<h2 style="margin:24px 0 10px;font-size:20px;font-weight:700;color:var(--text);line-height:1.3;letter-spacing:-.01em">$1</h2>');
+  s=s.replace(/^## (.+)$/gm,'<h3 style="margin:20px 0 8px;font-size:16px;font-weight:700;color:var(--text);padding-bottom:5px;border-bottom:1.5px solid var(--border)">$1</h3>');
+  s=s.replace(/^### (.+)$/gm,'<h4 style="margin:16px 0 5px;font-size:14px;font-weight:700;color:var(--text)">$1</h4>');
+
+  // Step 6: Blockquotes (&gt; because > was HTML-escaped in step 2)
+  s=s.replace(/^&gt; (.+)$/gm,'<blockquote style="border-left:3px solid var(--blue);margin:12px 0;padding:6px 14px;background:var(--sidebar);border-radius:0 6px 6px 0;color:var(--muted);font-style:italic;line-height:1.55">$1</blockquote>');
+
+  // Step 7: Horizontal rule
+  s=s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">');
+
+  // Step 8: Inline formatting — bold first, then italic (safe after bold is consumed), then inline code
+  s=s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+  s=s.replace(/`([^`\n]+)`/g,'<code style="background:var(--sidebar);padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:monospace;color:var(--text);border:1px solid var(--border)">$1</code>');
+
+  // Step 9: Lists — collapse blank lines between consecutive bullet/numbered lines
+  for(var _i=0;_i<5;_i++){
+    s=s.replace(/^([–\-•] .+)\n\n([–\-•] )/gm,'$1\n$2');
+    s=s.replace(/^(\d+\. .+)\n\n(\d+\. )/gm,'$1\n$2');
   }
-  // Also collapse \n\n between bullets in raw text before <br> conversion
-  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
-  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
+  s=s.replace(/^[–•] (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
+  s=s.replace(/^- (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
+  s=s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:4px 0;line-height:1.55">$2</li>');
+  // Wrap consecutive <li> in <ul> — strip \n inside so step 10 doesn't inject <br> between items
+  s=s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,function(_,g){
+    return '<ul style="margin:6px 0 10px;padding-left:20px">'+g.replace(/\n/g,'')+'</ul>';
+  });
 
-  s = s.replace(/^– (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^- (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^• (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:1px 0;line-height:1.5">$2</li>');
-  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:3px 0 5px;padding-left:15px">$1</ul>');
-
-  // 6. Horizontal rule
-  s = s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">');
-
-  // 7. Paragraphs and line breaks — collapse excess blank lines first
-  s = s.replace(/\n{3,}/g,'\n\n');
-  s = s.replace(/\n\n/g,'</p><p style="margin-top:5px">');
-  s = s.replace(/\n/g,'<br>');
-  s = '<p style="margin:0;line-height:1.55">' + s + '</p>';
-
+  // Step 10: Paragraphs and line breaks
+  s=s.replace(/\n{3,}/g,'\n\n');
+  s=s.replace(/\n\n/g,'</p><p style="margin-top:9px">');
+  s=s.replace(/\n/g,'<br>');
+  s='<p style="margin:0;line-height:1.65;font-size:14px">'+s+'</p>';
+  return s;
+}
+// Inline-only formatting for table cells (no block elements)
+function fmtI(s){
+  s=s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+  s=s.replace(/`([^`\n]+)`/g,'<code style="background:rgba(0,0,0,.07);padding:1px 5px;border-radius:3px;font-size:12px;font-family:monospace">$1</code>');
   return s;
 }
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -10113,9 +10351,11 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  ['connections','account'].forEach(t => {
-    document.getElementById('stab-content-'+t).style.display = t === tab ? 'block' : 'none';
+  ['connections','account','referral'].forEach(t => {
+    const content = document.getElementById('stab-content-'+t);
+    if (content) content.style.display = t === tab ? 'block' : 'none';
     const btn = document.getElementById('stab-'+t);
+    if (!btn) return;
     if (t === tab) {
       btn.style.color = 'var(--blue)';
       btn.style.borderBottom = '2px solid var(--blue)';
@@ -10126,6 +10366,8 @@ function switchSettingsTab(tab) {
       btn.style.fontWeight = '500';
     }
   });
+  // Cargar datos al abrir tab de referidos
+  if (tab === 'referral') loadReferralData();
 }
 
 // =============================================
@@ -10684,7 +10926,7 @@ async function finishObWithAccountSave() {
   if (currentAgentCtx === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
   if (currentAgentCtx === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
   if (currentAgentCtx === 'seo')          { setTimeout(showSeoActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'social')       { setTimeout(showSocialActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'social')       { setTimeout(function(){ loadRecentConversations(); }, 700); return; }
 
   // Para el consultor: generar Plan de 30 días automáticamente, luego mostrar cards
   if (currentAgentCtx === 'consultor') {
@@ -10853,4 +11095,981 @@ function showComingSoon(agentKey) {
 function closeComingSoon() {
   document.getElementById('coming-soon-modal').style.display = 'none';
   document.body.style.overflow = '';
+}
+// =============================================
+// SISTEMA DE REFERIDOS
+// =============================================
+
+let referralCode = null;
+
+// Cargar datos de referidos al abrir el tab
+async function loadReferralData() {
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return;
+
+  // Obtener o crear código
+  try {
+    const r = await fetch('/api/referral?action=my-code&userId=' + encodeURIComponent(userId));
+    const d = await r.json();
+    if (d.code) {
+      referralCode = d.code;
+      const link = 'https://app.acuarius.app/?ref=' + d.code;
+      const box = document.getElementById('ref-link-box');
+      if (box) box.textContent = link;
+    }
+  } catch(e) { console.warn('Referral code error:', e); }
+
+  // Cargar estadísticas
+  try {
+    const r = await fetch('/api/referral?action=stats&userId=' + encodeURIComponent(userId));
+    const d = await r.json();
+
+    const el = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+    el('ref-stat-total',   d.total  || 0);
+    el('ref-stat-active',  d.active || 0);
+    el('ref-stat-earned',  '$' + (parseFloat(d.earned || 0).toFixed(2)));
+    el('ref-stat-pending', '$' + (parseFloat(d.pending || 0).toFixed(2)));
+
+    const tbody = document.getElementById('ref-table-body');
+    if (!tbody) return;
+
+    if (!d.referrals || d.referrals.length === 0) {
+      tbody.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted2);font-size:12px">Aún no tienes referidos. ¡Comparte tu link!</div>';
+      return;
+    }
+
+    const rows = d.referrals.map(ref => {
+      const statusColor = ref.status === 'active' ? '#22c55e' : ref.status === 'registered' ? '#f59e0b' : '#94a3b8';
+      const statusLabel = ref.status === 'active' ? 'Activo' : ref.status === 'registered' ? 'Registrado' : ref.status;
+      const earned = parseFloat(ref.total_earned || 0).toFixed(2);
+      const date = ref.created_at ? new Date(ref.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+      const email = ref.referred_email || '—';
+      const emailMasked = email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.min(b.length, 4)) + c);
+      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px">
+        <div>
+          <div style="font-weight:500;color:var(--text)">${emailMasked}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${date}</div>
+        </div>
+        <div style="text-align:center">
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;background:${statusColor}20;color:${statusColor}">${statusLabel}</span>
+        </div>
+        <div style="text-align:right;font-weight:600;color:var(--text)">$${earned}</div>
+      </div>`;
+    }).join('');
+
+    tbody.innerHTML = rows;
+  } catch(e) { console.warn('Referral stats error:', e); }
+}
+
+// Copiar link al clipboard
+function copyReferralLink() {
+  if (!referralCode) return;
+  const link = 'https://app.acuarius.app/?ref=' + referralCode;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('ref-copy-btn');
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '¡Copiado!';
+      btn.style.background = '#22c55e';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = 'var(--blue)'; }, 2000);
+    }
+  }).catch(() => {
+    // Fallback para iOS
+    const el = document.createElement('textarea');
+    el.value = link;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  });
+}
+
+// Capturar ?ref=CODE al cargar la página y guardarlo en localStorage
+(function captureReferralCode() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref');
+  if (ref && ref.length >= 4) {
+    localStorage.setItem('pending_ref_code', ref.toUpperCase());
+    // Limpiar URL sin recargar
+    const clean = window.location.pathname + (window.location.search.replace(/[?&]ref=[^&]*/g, '').replace(/^&/, '?') || '');
+    window.history.replaceState({}, '', clean);
+  }
+})();
+
+// Registrar referido al iniciar sesión (llamar desde initAuth o tras autenticación)
+async function registerPendingReferral() {
+  const refCode = localStorage.getItem('pending_ref_code');
+  if (!refCode) return;
+
+  const userId = clerkInstance?.user?.id;
+  const email  = clerkInstance?.user?.primaryEmailAddress?.emailAddress;
+  if (!userId || !email) return;
+
+  try {
+    const r = await fetch('/api/referral?action=register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register', refCode, referredEmail: email, referredUserId: userId }),
+    });
+    const d = await r.json();
+    if (d.ok) localStorage.removeItem('pending_ref_code');
+  } catch(e) { console.warn('Register referral error:', e); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HTML DESIGN SYSTEM — Layouts profesionales para anuncios
+// ══════════════════════════════════════════════════════════════════
+
+let hdwVariations = 3;
+let hdwFormat = 'feed';
+
+function showHtmlDesignWizard() {
+  loadImageUsage();
+  if (!canGenerateImage()) { showImageLimitReached(); return; }
+
+  const isAdmin = isAdminUser();
+  const remaining = (!isAdmin && userPlan !== 'pro') ? Math.max(0, imageUsage.limit - imageUsage.generated) : '∞';
+
+  const logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
+
+  // Pre-fill with active client brief if available
+  const client = agencyActiveClientId ? agencyClients.find(c => c.id === agencyActiveClientId) : null;
+  const prePrompt = client
+    ? (client.name || '') + (client.descripcion ? ' — ' + client.descripcion : '') + (client.industria ? '. Industria: ' + client.industria : '')
+    : '';
+
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'html-design-wizard';
+  el.innerHTML =
+    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+    '<div style="max-width:480px;width:100%">' +
+      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:14px;padding:20px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text)">🎨 Diseño estructurado</div>' +
+          (remaining !== '∞' ? '<div style="margin-left:auto;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">' + remaining + ' restantes</div>' : '') +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted2);margin-bottom:14px">Describe tu negocio y campaña — la IA genera el copy, colores y diseño automáticamente.</div>' +
+
+        '<textarea id="hdw-prompt" rows="3" placeholder="Ej: Gimnasio CrossFit en Bogotá, primer mes gratis para nuevos socios, ambiente energético y motivacional&#10;&#10;O: Tienda de ropa femenina, colección primavera con 30% de descuento, estilo moderno y casual" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.45;color:var(--text);background:white">' + prePrompt + '</textarea>' +
+
+        '<div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">' +
+          '<div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Variaciones</div>' +
+            '<div style="display:flex;gap:6px" id="hdw-var-btns">' +
+              '<button onclick="hdwSetVar(this,3)" class="hdw-sel-btn hdw-active" style="padding:6px 14px;border:1.5px solid var(--blue);border-radius:7px;font-size:12px;font-weight:700;background:var(--blue-lt);color:var(--blue);cursor:pointer;font-family:var(--font)">3</button>' +
+              '<button onclick="hdwSetVar(this,5)" class="hdw-sel-btn" style="padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">5</button>' +
+              '<button onclick="hdwSetVar(this,10)" class="hdw-sel-btn" style="padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">10</button>' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Formato</div>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap" id="hdw-fmt-btns">' +
+              '<button onclick="hdwSetFmt(this,\'feed\')" class="hdw-fmt-btn hdw-active" style="padding:6px 12px;border:1.5px solid var(--blue);border-radius:7px;font-size:11px;font-weight:700;background:var(--blue-lt);color:var(--blue);cursor:pointer;font-family:var(--font)">📱 Feed</button>' +
+              '<button onclick="hdwSetFmt(this,\'story\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">📲 Story</button>' +
+              '<button onclick="hdwSetFmt(this,\'square\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">⬛ Square</button>' +
+              '<button onclick="hdwSetFmt(this,\'all\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">🎲 Todos</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Personalizar (opcional)</div>' +
+          '<div style="display:flex;gap:10px;margin-bottom:8px">' +
+            '<label style="flex:1;cursor:pointer">' +
+              '<input type="file" id="hdw-bg-file" accept="image/*" style="display:none" onchange="hdwPreviewFile(this,\'hdw-bg-lbl\')">' +
+              '<div id="hdw-bg-lbl" style="border:1.5px dashed var(--border);border-radius:10px;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\'" onmouseout="this.style.borderColor=\'var(--border)\'">🖼️ Subir fondo / producto</div>' +
+            '</label>' +
+            '<label style="flex:1;cursor:pointer">' +
+              '<input type="file" id="hdw-logo-file" accept="image/*" style="display:none" onchange="hdwPreviewFile(this,\'hdw-logo-lbl\')">' +
+              '<div id="hdw-logo-lbl" style="border:1.5px dashed var(--border);border-radius:10px;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\'" onmouseout="this.style.borderColor=\'var(--border)\'">🏷️ Subir logo</div>' +
+            '</label>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="runHtmlDesign()" style="width:100%;margin-top:16px;padding:13px;background:var(--blue);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:background .15s" onmouseover="this.style.background=\'var(--blue-h)\'" onmouseout="this.style.background=\'var(--blue)\'">✨ Crear diseños</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('chat-area').appendChild(el);
+  scrollB();
+  setTimeout(() => document.getElementById('hdw-prompt')?.focus(), 100);
+}
+
+function hdwSetVar(btn, n) {
+  hdwVariations = n;
+  document.querySelectorAll('.hdw-sel-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+  });
+  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
+}
+
+function hdwSetFmt(btn, fmt) {
+  hdwFormat = fmt;
+  document.querySelectorAll('.hdw-fmt-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+  });
+  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
+}
+
+async function runHtmlDesign() {
+  const prompt = document.getElementById('hdw-prompt')?.value?.trim();
+  if (!prompt) {
+    document.getElementById('hdw-prompt').style.borderColor = '#ef4444';
+    return;
+  }
+
+  const count = hdwVariations;
+  const fmt = hdwFormat;
+
+  document.getElementById('html-design-wizard')?.remove();
+
+  const thinkId = addThinking();
+
+  const updateMsg = (txt) => {
+    const el = document.getElementById(thinkId);
+    if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>' + txt; }
+  };
+
+  try {
+    updateMsg('Analizando tu negocio con IA...');
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+    // Step 1: Get design brief from Claude
+    const briefRes = await fetch('/api/design-brief', {
+      method: 'POST', headers,
+      body: JSON.stringify({ prompt, format: fmt }),
+    });
+    const brief = await briefRes.json();
+    if (brief.error) throw new Error(brief.error);
+
+    // Read uploaded background (overrides AI generation)
+    const bgFileInput = document.getElementById('hdw-bg-file');
+    let customBgBase64 = null;
+    if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
+      customBgBase64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(bgFileInput.files[0]);
+      });
+    }
+
+    // Read uploaded logo
+    const logoFileInput = document.getElementById('hdw-logo-file');
+    let logoBase64 = null;
+    if (logoFileInput && logoFileInput.files && logoFileInput.files[0]) {
+      logoBase64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(logoFileInput.files[0]);
+      });
+    }
+
+    // Step 2: Generate background photo with Flux (photo mode, no text) — skip if user uploaded custom bg
+    let bgBase64 = customBgBase64;
+    if (!customBgBase64) {
+      updateMsg('Generando foto de fondo...');
+      const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
+      const bgRes = await fetch('/api/generate-image', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text, no people, vibrant colors',
+          format: fluxFormat,
+          variations: 1,
+          hasText: false,
+        }),
+      });
+      const bgData = await bgRes.json();
+      bgBase64 = bgData.images?.[0] ? ('data:' + bgData.images[0].mediaType + ';base64,' + bgData.images[0].base64) : null;
+    }
+
+    rmThinking(thinkId);
+
+    // Step 3: Render N HTML template variations
+    await renderHtmlVariations(brief, customBgBase64 || bgBase64, count, fmt, logoBase64);
+
+  } catch (err) {
+    rmThinking(thinkId);
+    addAgent('Error generando diseños: ' + err.message);
+  }
+}
+
+// ── Template selection logic ───────────────────────────────────────────────
+// Templates by format:
+// story (0): Split left text / right photo
+// story (1): Full photo + dark overlay
+// square (2): Split left text / right photo rounded
+// square (3): Dark photo + white text + icons row
+// feed (4):   Full photo + gradient overlay (4:5)
+
+const HDW_TEMPLATES = [
+  { format:'story',  label:'Story · Split',        id:0 },
+  { format:'story',  label:'Story · Overlay',      id:1 },
+  { format:'story',  label:'Story · Half',         id:7 },
+  { format:'square', label:'Square · Split',       id:2 },
+  { format:'square', label:'Square · Dark',        id:3 },
+  { format:'square', label:'Square · Card',        id:8 },
+  { format:'feed',   label:'Feed · Overlay',       id:4 },
+  { format:'feed',   label:'Feed · Impact',        id:5 },
+  { format:'feed',   label:'Feed · Clean',         id:6 },
+  { format:'feed',   label:'Feed · E-commerce',    id:9 },
+  { format:'square', label:'Square · Profile',     id:10 },
+  { format:'square', label:'Square · Magazine',    id:11 },
+  { format:'square', label:'Square · Dark Event',  id:12 },
+  { format:'square', label:'Square · Lifestyle',   id:13 },
+  { format:'feed',   label:'Feed · Diagonal',      id:14 },
+];
+
+function hdwGetTemplateList(fmt, count) {
+  let pool = [];
+  if (fmt === 'story')  pool = [0,1,7,0,1,7,0,1,7,0];
+  else if (fmt === 'square') pool = [10,11,12,13,9,3,10,12,11,13];
+  else if (fmt === 'feed')   pool = [9,14,10,4,5,6,9,14,4,5];
+  else pool = [9,10,11,12,13,14,0,1,2,3]; // 'all'
+
+  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed'};
+  // alternate color palettes: even index = primary, odd = alt
+  return pool.slice(0, count).map((tplId, i) => ({
+    tplId,
+    palette: i % 2 === 0 ? 'primary' : 'alt',
+    label: HDW_TEMPLATES.find(t => t.id === tplId)?.label || 'Ad',
+    format: fmtMap[tplId] || 'feed',
+  }));
+}
+
+async function renderHtmlVariations(brief, bgBase64, count, fmt, logoBase64) {
+  const templates = hdwGetTemplateList(fmt, count);
+  const total = templates.length;
+
+  // Initialize shared grid (first call = index 1)
+  for (let i = 0; i < total; i++) {
+    const tpl = templates[i];
+    const thinkId = addThinking();
+    const el = document.getElementById(thinkId);
+    if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>renderizando diseño ' + (i+1) + ' de ' + total + '...'; }
+
+    try {
+      const imgData = await captureHtmlTemplate(brief, bgBase64, tpl.tplId, tpl.palette, logoBase64);
+      rmThinking(thinkId);
+      renderAdImage({ base64: imgData.base64, mediaType: 'image/png' }, i + 1, total, tpl.format, tpl.label, false);
+      if (i === 0) incrementImageUsage();
+    } catch(err) {
+      rmThinking(thinkId);
+      addAgent('Error en variación ' + (i+1) + ': ' + err.message);
+    }
+  }
+}
+
+// ── HTML capture via html2canvas ──────────────────────────────────────────
+async function captureHtmlTemplate(brief, bgBase64, tplId, palette, logoBase64) {
+  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 7:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 8:{w:1080,h:1080}, 4:{w:1080,h:1350}, 5:{w:1080,h:1350}, 6:{w:1080,h:1350}, 9:{w:1080,h:1350}, 10:{w:1080,h:1080}, 11:{w:1080,h:1080}, 12:{w:1080,h:1080}, 13:{w:1080,h:1080}, 14:{w:1080,h:1350} };
+  const d = dims[tplId] || dims[4];
+
+  // Container: off-screen, real size
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + d.w + 'px;height:' + d.h + 'px;overflow:hidden;z-index:-1';
+  container.innerHTML = hdwBuildTemplate(brief, bgBase64, tplId, palette, d.w, d.h, logoBase64);
+  document.body.appendChild(container);
+
+  // Wait for fonts + images
+  await document.fonts.ready;
+  await new Promise(r => setTimeout(r, 300));
+
+  try {
+    const canvas = await html2canvas(container.firstChild, {
+      scale: 1,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: null,
+      logging: false,
+      width: d.w,
+      height: d.h,
+    });
+    const base64 = canvas.toDataURL('image/jpeg', 0.92).replace('data:image/jpeg;base64,', '');
+    return { base64, mediaType: 'image/jpeg' };
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+// ── Color utilities ────────────────────────────────────────────────────────
+function hdwLighten(hex, amount) {
+  const r = parseInt(hex.slice(1,3)||'33',16);
+  const g = parseInt(hex.slice(3,5)||'33',16);
+  const b = parseInt(hex.slice(5,7)||'33',16);
+  return 'rgb('+Math.round(r+(255-r)*amount)+','+Math.round(g+(255-g)*amount)+','+Math.round(b+(255-b)*amount)+')';
+}
+
+function hdwHex2Rgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3)||'0',16);
+  const g = parseInt(hex.slice(3,5)||'0',16);
+  const b = parseInt(hex.slice(5,7)||'0',16);
+  return 'rgba('+r+','+g+','+b+','+alpha+')';
+}
+
+function hdwPreviewFile(input, labelId) {
+  const file = input.files[0];
+  if (!file) return;
+  const name = file.name.length > 22 ? file.name.slice(0,20)+'…' : file.name;
+  const el = document.getElementById(labelId);
+  if (el) {
+    const isLogo = labelId.includes('logo');
+    el.innerHTML = (isLogo ? '🏷️ ' : '🖼️ ') + name;
+    el.style.borderColor = 'var(--blue)';
+    el.style.color = 'var(--blue)';
+    el.style.background = 'var(--blue-lt)';
+  }
+}
+
+function hdwGetColors(brief, palette) {
+  return palette === 'alt'
+    ? { primary: brief.alt_primary||'#2d1a3d', bg: brief.alt_bg||'#f5f0ff', accent: brief.accent_color||'#a78bfa' }
+    : { primary: brief.primary_color||'#1a3d1a', bg: brief.bg_color||'#f5f0e8', accent: brief.accent_color||'#4ade80' };
+}
+
+// ── Icon SVG by keyword ────────────────────────────────────────────────────
+function hdwIcon(feat, color) {
+  const f = (feat||'').toLowerCase();
+  const s = color||'#333';
+  const base = (path) => '<svg viewBox="0 0 24 24" fill="none" stroke="'+s+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%">'+path+'</svg>';
+  if (f.match(/montaña|volcan|senderismo|trekking|hiking|mount/)) return base('<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>');
+  if (f.match(/playa|beach|mar|ocean|surf/)) return base('<path d="M17 17H7l-5-5s4-3 10-3 10 3 10 3l-5 5z"/><path d="M12 9V4"/><path d="M4.22 10.22 6 12"/><path d="M19.78 10.22 18 12"/>');
+  if (f.match(/cultura|museo|historia|tradicion|heritage/)) return base('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>');
+  if (f.match(/grupo|familia|personas|people|team|comunidad/)) return base('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
+  if (f.match(/natural|naturaleza|salvaje|wild|flora|plant/)) return base('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>');
+  if (f.match(/agua|water|lago|river|nadar|swim|cristal/)) return base('<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>');
+  if (f.match(/gym|fitness|fuerza|muscle|entrena|workout/)) return base('<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>');
+  if (f.match(/comida|food|restaurante|chef|cocina|gourmet/)) return base('<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>');
+  if (f.match(/precio|oferta|descuento|promo|sale|gratis/)) return base('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>');
+  if (f.match(/rapido|rápido|entrega|delivery|ship|envio/)) return base('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><polygon points="9 22 21 22 21 12 13 12 13 18 9 18 9 22"/><path d="M16 12V9a3 3 0 0 0-3-3"/>');
+  // default: star
+  return base('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>');
+}
+
+// ── TEMPLATE BUILDER ──────────────────────────────────────────────────────
+function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
+  const c = hdwGetColors(brief, palette);
+  const iconBg = hdwLighten(c.primary, 0.8);
+  const feats = (brief.features || ['Característica 1','Característica 2','Característica 3','Característica 4']).slice(0,4);
+  const fonts = '@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap");';
+  const logoEl = logoBase64
+    ? '<div style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.92);border-radius:12px;padding:8px 14px;display:flex;align-items:center;max-width:140px;max-height:72px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.2)"><img src="'+logoBase64+'" style="max-width:120px;max-height:56px;object-fit:contain"></div>'
+    : '';
+
+  // ── Template 0: Story Split ────────────────────────────────────
+  if (tplId === 0) {
+    const iconSize = 80; const labelSize = 24; const iconPad = 20;
+    const featItems = feats.map(f =>
+      '<div style="display:flex;align-items:center;gap:24px;margin-bottom:18px">' +
+        '<div style="width:'+iconSize+'px;height:'+iconSize+'px;border-radius:50%;background:'+iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:'+iconPad+'px">'+hdwIcon(f,c.primary)+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:'+labelSize+'px;color:'+c.primary+';text-transform:uppercase;letter-spacing:.05em;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo panel right
+      (bgBase64 ? '<div style="position:absolute;right:0;top:0;width:48%;height:100%;background:url(\''+bgBase64+'\') center/cover no-repeat;border-radius:120px 0 0 120px"></div>' : '<div style="position:absolute;right:0;top:0;width:48%;height:100%;background:linear-gradient(135deg,'+c.primary+','+hdwLighten(c.primary,0.3)+');border-radius:120px 0 0 120px"></div>') +
+      // Text area
+      '<div style="position:absolute;left:0;top:0;width:56%;height:100%;padding:80px 60px;display:flex;flex-direction:column;box-sizing:border-box">' +
+        // Category badge
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.primary+';color:#fff;padding:14px 26px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;width:fit-content;margin-bottom:50px;font-family:Montserrat,sans-serif">' +
+          '<svg viewBox="0 0 24 24" style="width:28px;height:28px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+          (brief.category||'CATEGORÍA') +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.9;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:16px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:80px;line-height:1.1;color:'+c.primary+';margin-bottom:32px">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:32px">' +
+          '<div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'NOMBRE')+'</div>' +
+          '<div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div>' +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;line-height:1.5;color:#444;margin-bottom:40px">'+(brief.description||'')+'</div>' +
+        '<div style="flex:1">' + featItems + '</div>' +
+      '</div>' +
+      // CTA bar
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:36px 60px;display:flex;align-items:center;gap:28px">' +
+        '<div style="width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:28px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'RECIBE TU ITINERARIO')+'</div><div style="font-family:Montserrat,sans-serif;font-size:20px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'+ INFORMACIÓN EXCLUSIVA')+'</div></div>' +
+        '<div style="width:76px;height:76px;background:'+c.accent+';border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:38px;height:38px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 1: Story Overlay ──────────────────────────────────
+  if (tplId === 1) {
+    const featItems = feats.map(f =>
+      '<div style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);padding:14px 22px;border-radius:50px;border:1px solid rgba(255,255,255,.2);margin-bottom:12px">' +
+        '<div style="width:32px;height:32px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:24px;color:#fff;letter-spacing:.04em">'+(f)+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Background photo
+      (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c.primary+' 0%,'+hdwLighten(c.primary,0.2)+' 100%)"></div>') +
+      '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.88) 50%, rgba(0,0,0,.15) 100%)"></div>' +
+      // Top badge
+      '<div style="position:absolute;top:70px;left:70px;display:inline-flex;align-items:center;gap:14px;background:'+c.primary+';color:#fff;padding:16px 30px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">' +
+        '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+        (brief.category||'CATEGORÍA') +
+      '</div>' +
+      // Content
+      '<div style="position:absolute;bottom:160px;left:70px;right:70px">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:rgba(255,255,255,.7);letter-spacing:.15em;text-transform:uppercase;margin-bottom:14px">'+(brief.divider||'NOMBRE')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:130px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:82px;color:#fff;opacity:.9;margin-bottom:36px">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:36px">'+(brief.description||'')+'</div>' +
+        featItems +
+      '</div>' +
+      // CTA
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:34px 70px;display:flex;align-items:center;gap:28px">' +
+        '<div style="width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:19px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+        '<div style="width:72px;height:72px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 2: Square Split ───────────────────────────────────
+  if (tplId === 2) {
+    const featGrid = feats.slice(0,4).map(f =>
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:54px;height:54px;border-radius:50%;background:'+iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:14px">'+hdwIcon(f,c.primary)+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:17px;color:'+c.primary+';text-transform:uppercase;letter-spacing:.04em;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo right
+      (bgBase64 ? '<div style="position:absolute;right:0;top:0;width:50%;height:100%;background:url(\''+bgBase64+'\') center/cover no-repeat;border-radius:80px 0 0 80px"></div>' : '<div style="position:absolute;right:0;top:0;width:50%;height:100%;background:'+c.primary+';border-radius:80px 0 0 80px"></div>') +
+      // Text left
+      '<div style="position:absolute;left:0;top:0;width:56%;height:100%;padding:60px 56px 200px;display:flex;flex-direction:column;box-sizing:border-box">' +
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.primary+';color:#fff;padding:12px 22px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;width:fit-content;margin-bottom:36px;font-family:Montserrat,sans-serif">' +
+          '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+          (brief.category||'CATEGORÍA') +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:96px;line-height:.88;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:64px;color:'+c.primary+';margin-bottom:22px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:22px"><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'')+'</div><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div></div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;line-height:1.5;color:#555;margin-bottom:28px">'+(brief.description||'')+'</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:auto">' + featGrid + '</div>' +
+      '</div>' +
+      // CTA
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:30px 56px;display:flex;align-items:center;gap:22px">' +
+        '<div style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:30px;height:30px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+        '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 3: Square Dark ────────────────────────────────────
+  if (tplId === 3) {
+    const iconRow = feats.slice(0,4).map(f =>
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex:1">' +
+        '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;padding:18px">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:15px;color:#fff;text-transform:uppercase;letter-spacing:.04em;text-align:center;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
+      '<div style="position:absolute;inset:0;background:linear-gradient(135deg, '+hdwHex2Rgba(c.primary,.85)+' 0%, rgba(0,0,0,.6) 100%)"></div>' +
+      // Content
+      '<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:80px">' +
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.accent+';color:'+c.primary+';padding:12px 24px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;width:fit-content;margin-bottom:40px;font-family:Montserrat,sans-serif">' +
+          (brief.category||'CATEGORÍA') +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:110px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:72px;color:'+c.accent+';margin-bottom:30px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:50px">'+(brief.description||'')+'</div>' +
+        // Icon row
+        '<div style="display:flex;gap:20px;margin-bottom:50px">' + iconRow + '</div>' +
+        // CTA
+        '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);border-radius:20px;padding:26px 32px">' +
+          '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+          '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+        '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 5: Feed Impact — bold color top + photo bottom ───
+  if (tplId === 5) {
+    const topH = 476; const ctaH = 126; const photoH = H - topH - ctaH;
+    const featRow = feats.slice(0,4).map(f =>
+      '<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(0,0,0,.38);backdrop-filter:blur(8px);padding:11px 20px;border-radius:40px;border:1px solid rgba(255,255,255,.22);margin:0 8px 8px 0">' +
+        '<div style="width:20px;height:20px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:19px;color:#fff;white-space:nowrap;letter-spacing:.02em">'+f+'</div>' +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Top color block
+      '<div style="position:absolute;top:0;left:0;right:0;height:'+topH+'px;background:'+c.primary+';padding:56px 72px;box-sizing:border-box">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:26px">' +
+          '<div style="background:'+c.accent+';color:'+c.primary+';padding:11px 26px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;letter-spacing:.16em;color:rgba(255,255,255,.38);text-transform:uppercase">'+(brief.divider||'')+'</div>' +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:110px;line-height:.83;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:18px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:54px;color:'+c.accent+';line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+      '</div>' +
+      // Photo section
+      '<div style="position:absolute;top:'+topH+'px;left:0;right:0;height:'+photoH+'px;overflow:hidden">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+hdwLighten(c.primary,0.2)+','+hdwLighten(c.primary,0.5)+')"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 65%)"></div>' +
+        '<div style="position:absolute;bottom:26px;left:60px;right:60px;display:flex;flex-wrap:wrap">' + featRow + '</div>' +
+      '</div>' +
+      // CTA bar
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:'+ctaH+'px;background:'+c.primary+';padding:0 64px;display:flex;align-items:center;gap:22px">' +
+        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+        '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 6: Feed Clean — editorial light background ────────
+  if (tplId === 6) {
+    const photoH = 640; const pad = 50; const photoW = W - pad * 2;
+    const featChips = feats.slice(0,4).map(f =>
+      '<div style="display:inline-flex;align-items:center;gap:8px;background:'+c.primary+';color:#fff;padding:9px 18px;border-radius:30px;font-size:17px;font-weight:700;font-family:Montserrat,sans-serif;margin:0 8px 8px 0">' +
+        '<div style="width:16px;height:16px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' + f +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Decorative accent bar top-left
+      '<div style="position:absolute;top:0;left:0;width:8px;height:'+photoH+'px;background:'+c.accent+'"></div>' +
+      // Photo card
+      '<div style="position:absolute;top:'+pad+'px;left:'+pad+'px;width:'+photoW+'px;height:'+photoH+'px;border-radius:28px;overflow:hidden">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
+        '<div style="position:absolute;top:28px;left:28px;background:'+c.primary+';color:#fff;padding:10px 22px;border-radius:40px;font-size:17px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
+      '</div>' +
+      // Text area
+      '<div style="position:absolute;top:'+(photoH+pad+28)+'px;left:'+pad+'px;right:'+pad+'px">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:88px;line-height:.87;color:'+c.primary+';letter-spacing:-.02em;text-transform:uppercase;margin-bottom:10px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:54px;color:'+c.primary+';margin-bottom:14px;line-height:1.1;opacity:.75;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">' +
+          '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:15px;color:'+c.primary+';letter-spacing:.14em;text-transform:uppercase;opacity:.5">'+(brief.divider||'')+'</div>' +
+          '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
+        '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#555;line-height:1.5;margin-bottom:18px">'+(brief.description||'')+'</div>' +
+        '<div style="margin-bottom:22px">' + featChips + '</div>' +
+        '<div style="background:'+c.primary+';color:#fff;padding:24px 40px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:14px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
+          '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
+        '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 7: Story Half — photo top + color panel bottom ───
+  if (tplId === 7) {
+    const splitY = Math.round(H * 0.48);
+    const iconRow = feats.slice(0,4).map(f =>
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;flex:1">' +
+        '<div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;padding:20px">'+hdwIcon(f,'#fff')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:17px;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.03em;text-align:center;line-height:1.2">'+f.toUpperCase()+'</div>' +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo top half
+      '<div style="position:absolute;top:0;left:0;right:0;height:'+splitY+'px">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+hdwLighten(c.primary,0.3)+','+hdwLighten(c.primary,0.6)+')"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.18) 0%, rgba(0,0,0,.35) 100%)"></div>' +
+        // Category badge on photo
+        '<div style="position:absolute;top:60px;left:60px;background:'+c.accent+';color:'+c.primary+';padding:14px 28px;border-radius:50px;font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
+      '</div>' +
+      // Color bottom half
+      '<div style="position:absolute;top:'+splitY+'px;left:0;right:0;bottom:0;background:'+c.primary+';padding:60px 70px;display:flex;flex-direction:column;box-sizing:border-box">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,.45);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px">'+(brief.divider||'')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.85;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:76px;color:'+c.accent+';margin-bottom:36px;line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:44px">'+(brief.description||'')+'</div>' +
+        '<div style="display:flex;gap:16px;margin-bottom:auto">' + iconRow + '</div>' +
+        // CTA
+        '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.22);border-radius:18px;padding:26px 32px;margin-top:44px">' +
+          '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+          '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+        '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 8: Square Card — clean light card with photo center ─
+  if (tplId === 8) {
+    const photoSize = 680; const cardPad = 50; const photoRadius = 24;
+    const chipRow = feats.slice(0,3).map(f =>
+      '<div style="display:inline-flex;align-items:center;gap:8px;background:'+hdwLighten(c.primary,0.88)+';color:'+c.primary+';padding:8px 16px;border-radius:30px;font-size:15px;font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;margin-right:8px">' +
+        '<div style="width:14px;height:14px">'+hdwIcon(f,c.primary)+'</div>' + f +
+      '</div>'
+    ).join('');
+    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>'+fonts+'</style>' +
+      // Photo centered top area
+      '<div style="position:absolute;top:'+cardPad+'px;left:'+cardPad+'px;width:'+(W-cardPad*2)+'px;height:'+photoSize+'px;border-radius:'+photoRadius+'px;overflow:hidden">' +
+        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.05) 50%, rgba(0,0,0,.45) 100%)"></div>' +
+        // Accent badge top-right
+        '<div style="position:absolute;top:24px;right:24px;background:'+c.accent+';color:'+c.primary+';padding:10px 20px;border-radius:40px;font-size:16px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'')+'</div>' +
+        // Brand bottom-left
+        '<div style="position:absolute;bottom:22px;left:28px;font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:rgba(255,255,255,.6);letter-spacing:.12em;text-transform:uppercase">'+(brief.divider||'')+'</div>' +
+      '</div>' +
+      // Text below photo
+      '<div style="position:absolute;top:'+(cardPad+photoSize+22)+'px;left:'+cardPad+'px;right:'+cardPad+'px">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:78px;line-height:.87;color:'+c.primary+';letter-spacing:-.02em;text-transform:uppercase;margin-bottom:8px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:46px;color:'+c.primary+';opacity:.7;margin-bottom:16px;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
+        '<div style="margin-bottom:18px">' + chipRow + '</div>' +
+        '<div style="background:'+c.primary+';color:#fff;padding:20px 32px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:12px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
+          '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
+        '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 9: E-commerce Product (Feed 1080×1350) ──────────
+  if (tplId === 9) {
+    const iconEmojis = ['✈','📦','⭐','🔒'];
+    const discountText = (feats[0] || 'OFERTA').split(' ')[0].toUpperCase();
+    const iconRow = feats.slice(0,4).map((f, i) =>
+      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">' +
+        '<div style="font-size:32px;line-height:1">' + iconEmojis[i] + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:#444;text-align:center;letter-spacing:.02em">' + f + '</div>' +
+      '</div>'
+    ).join('');
+    const topBarH = Math.round(H * 0.07);
+    const photoH  = Math.round(H * 0.50);
+    const iconRowH = Math.round(H * 0.09);
+    const btmBarH  = Math.round(H * 0.07);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
+      '<style>' + fonts + '</style>' +
+      // Top bar
+      '<div style="height:' + topBarH + 'px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:' + c.primary + '">' + (brief.category || 'CATEGORÍA') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.08em;color:#888">' + (brief.divider || '') + '</div>' +
+      '</div>' +
+      // Photo area
+      '<div style="height:' + photoH + 'px;position:relative;flex-shrink:0;overflow:hidden">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + c.primary + '"></div>') +
+        '<div style="position:absolute;top:20px;right:20px;width:120px;height:120px;border-radius:50%;background:' + c.primary + ';display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.25)">' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:38px;font-weight:900;color:#fff;line-height:1">' + discountText + '</div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:rgba(255,255,255,.8);letter-spacing:.06em">OFF</div>' +
+        '</div>' +
+      '</div>' +
+      // Content area
+      '<div style="flex:1;padding:24px 40px 0;overflow:hidden">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:72px;color:' + c.primary + ';line-height:1.05;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:34px;color:' + c.accent + ';margin-top:8px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:12px;line-height:1.4;overflow:hidden">' + (brief.description || '') + '</div>' +
+      '</div>' +
+      // Icon row
+      '<div style="height:' + iconRowH + 'px;display:flex;align-items:center;border-top:1px solid #eee;flex-shrink:0;padding:0 20px">' +
+        iconRow +
+      '</div>' +
+      // Bottom bar
+      '<div style="height:' + btmBarH + 'px;background:' + c.primary + ';display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:#fff;letter-spacing:.04em;text-transform:uppercase">' + (brief.cta_title || 'COMPRAR AHORA') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:600;color:rgba(255,255,255,.75)">' + (brief.cta_sub || '') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 10: Professional Profile Split (Square 1080×1080) ─
+  if (tplId === 10) {
+    const leftW = Math.round(W * 0.48);
+    const rightW = W - leftW;
+    return '<div style="width:' + W + 'px;height:' + H + 'px;display:flex;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Left panel
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;background:' + c.primary + ';padding:50px 40px;display:flex;flex-direction:column;box-sizing:border-box;flex-shrink:0">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + c.accent + '">' + (brief.category || '') + '</div>' +
+        '<div style="width:40px;height:3px;background:' + c.accent + ';margin:20px 0"></div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:68px;color:' + c.accent + ';line-height:1.05;letter-spacing:-.02em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:700;color:#fff;margin-top:16px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:22px;color:rgba(255,255,255,.75);margin-top:16px;line-height:1.5;flex:1;overflow:hidden">' + (brief.description || '') + '</div>' +
+        '<div style="border:2px solid ' + c.accent + ';color:' + c.accent + ';padding:14px 32px;border-radius:6px;font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;letter-spacing:.05em;width:fit-content">' + (brief.cta_title || 'CONTACTAR') + '</div>' +
+        '<div style="margin-top:24px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.7);margin-bottom:6px">&#128222; ' + (feats[0] || '') + '</div>' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.7)">&#9993; ' + (feats[1] || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      // Right panel
+      '<div style="width:' + rightW + 'px;height:' + H + 'px;position:relative;flex-shrink:0">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.3) + '"></div>') +
+        logoEl +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 11: Magazine Grid (Square 1080×1080) ─────────────
+  if (tplId === 11) {
+    const leftW  = Math.round(W * 0.32);
+    const rightW = W - leftW;
+    const topTileH   = Math.round(H * 0.52);
+    const btmTileH   = H - topTileH - 6;
+    const btmTileW   = Math.round(rightW / 2) - 3;
+    const bgUrl = bgBase64 ? 'url(\'' + bgBase64 + '\') center/cover no-repeat' : c.primary;
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Left strip
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;position:relative;flex-shrink:0;box-sizing:border-box">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:28px;color:' + c.accent + ';position:absolute;top:40px;left:40px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:' + c.primary + ';position:absolute;top:' + (40 + 28 + 10) + 'px;left:40px">' + (brief.category || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:' + Math.min(Math.round(W * 0.11), 115) + 'px;color:' + c.primary + ';line-height:.92;position:absolute;bottom:20px;left:40px;right:10px;word-break:break-word">' + (brief.headline || 'TIT') + '</div>' +
+        '<div style="position:absolute;bottom:' + Math.round(H * 0.13) + 'px;left:40px">' + logoEl + '</div>' +
+      '</div>' +
+      // Right grid
+      '<div style="width:' + rightW + 'px;height:' + H + 'px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">' +
+        '<div style="height:' + topTileH + 'px;background:' + bgUrl + ';flex-shrink:0"></div>' +
+        '<div style="display:flex;gap:6px;height:' + btmTileH + 'px;flex-shrink:0">' +
+          '<div style="width:' + btmTileW + 'px;background:' + bgUrl + '"></div>' +
+          '<div style="flex:1;background:' + bgUrl + '"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Template 12: Dark Event / Course (Square 1080×1080) ───────
+  if (tplId === 12) {
+    const darkBg = '#0d1117';
+    const leftW  = Math.round(W * 0.55);
+    const rightW = W - leftW;
+    const priceText = (feats[0] || 'GRATIS');
+    const dateText  = (feats[1] || '');
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + darkBg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Left content
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;padding:60px 40px;box-sizing:border-box;display:flex;flex-direction:column;position:relative;z-index:2;flex-shrink:0">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:' + c.accent + '">' + (brief.category || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:64px;color:#fff;line-height:1.05;margin-top:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;width:100px;height:100px;border:2px solid ' + c.accent + ';border-radius:50%;justify-content:center;margin-top:24px">' +
+          '<div style="font-family:Montserrat,sans-serif;font-size:32px;font-weight:700;color:#fff;line-height:1">' + priceText + '</div>' +
+        '</div>' +
+        (dateText ? '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#fff;margin-top:8px">' + dateText + '</div>' : '') +
+        '<div style="background:' + c.accent + ';padding:8px 20px;border-radius:4px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;color:#000;margin-top:20px;width:fit-content">' + (brief.divider || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.6);margin-top:8px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="flex:1"></div>' +
+        '<div style="background:' + c.accent + ';color:#000;padding:14px 32px;border-radius:6px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;width:fit-content">' + (brief.cta_title || 'INSCRIBIRSE') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.5);margin-top:8px">' + (brief.cta_sub || '') + '</div>' +
+      '</div>' +
+      // Right photo
+      '<div style="width:' + rightW + 'px;height:' + H + 'px;position:relative;flex-shrink:0">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.1) + '"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to right, ' + darkBg + ' 0%, transparent 40%)"></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 13: Minimal Lifestyle (Square 1080×1080) ─────────
+  if (tplId === 13) {
+    const photoTop  = Math.round(H * 0.04);
+    const photoLeft = Math.round(W * 0.05);
+    const photoW    = W - photoLeft * 2;
+    const photoH    = Math.round(H * 0.72);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Decorative dots
+      '<div style="position:absolute;top:30px;left:30px;display:grid;grid-template-columns:1fr 1fr;gap:8px;z-index:2">' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
+      '</div>' +
+      // Main photo
+      '<div style="position:absolute;top:' + photoTop + 'px;left:' + photoLeft + 'px;width:' + photoW + 'px;height:' + photoH + 'px;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15)">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + c.primary + '"></div>') +
+      '</div>' +
+      // Bottom text
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + Math.round(H * 0.26) + 'px;padding:0 50px;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:36px;box-sizing:border-box">' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:52px;color:' + c.primary + ';transform:translateY(-20px);line-height:1.1">' + (brief.headline || 'Titular') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:26px;color:' + c.accent + ';opacity:.85">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;letter-spacing:.15em;text-transform:uppercase;color:' + c.primary + ';opacity:.5;margin-top:8px">' + (brief.divider || '') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 14: Bold Stripe (Feed 1080×1350) ────────────────
+  if (tplId === 14) {
+    const photoSectionH = Math.round(H * 0.42);
+    const stripH        = Math.round(H * 0.06);
+    const accentIsLight = (c.accent === '#fff' || c.accent === '#ffffff' || c.accent === '#FFF');
+    const accentTextCol = accentIsLight ? '#000' : '#fff';
+    return '<div style="width:' + W + 'px;height:' + H + 'px;overflow:hidden;position:relative;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
+      '<style>' + fonts + '</style>' +
+      // Photo section
+      '<div style="height:' + photoSectionH + 'px;flex-shrink:0;position:relative;overflow:hidden">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.2) + '"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 50%, rgba(0,0,0,.35) 100%)"></div>' +
+        '<div style="position:absolute;bottom:20px;left:40px;background:' + c.accent + ';color:' + accentTextCol + ';padding:8px 22px;border-radius:30px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">' + (brief.category || '') + '</div>' +
+      '</div>' +
+      // Accent strip
+      '<div style="height:' + stripH + 'px;flex-shrink:0;background:' + c.accent + ';display:flex;align-items:center;padding:0 40px;justify-content:space-between">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:' + accentTextCol + ';letter-spacing:.04em;text-transform:uppercase">' + (brief.divider || '') + '</div>' +
+        '<div style="color:' + accentTextCol + ';font-size:18px;letter-spacing:8px">&#9679;&#9679;&#9679;&#9679;</div>' +
+      '</div>' +
+      // Bottom content
+      '<div style="flex:1;background:' + c.primary + ';padding:48px 48px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden">' +
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:82px;color:#fff;line-height:.95;letter-spacing:-.02em;margin-bottom:20px;overflow:hidden">' + (brief.headline || 'TITULAR') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:rgba(255,255,255,.75);margin-bottom:24px">' + (brief.subheadline || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.65);line-height:1.5;overflow:hidden;max-height:' + Math.round(H * 0.12) + 'px">' + (brief.description || '') + '</div>' +
+        '<div style="flex:1"></div>' +
+        '<div style="background:#fff;color:' + c.primary + ';padding:16px 48px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;letter-spacing:.04em;width:fit-content;margin-top:auto">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 4: Feed Overlay (4:5) ────────────────────────────
+  const featItems4 = feats.slice(0,4).map(f =>
+    '<div style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(6px);padding:12px 20px;border-radius:50px;border:1px solid rgba(255,255,255,.18);margin-bottom:10px">' +
+      '<div style="width:28px;height:28px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
+      '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:#fff;letter-spacing:.03em">'+f+'</div>' +
+    '</div>'
+  ).join('');
+
+  return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+    '<style>'+fonts+'</style>' +
+    (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c.primary+','+hdwLighten(c.primary,0.2)+')"></div>') +
+    '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.85) 55%, rgba(0,0,0,.1) 100%)"></div>' +
+    // Top badge
+    '<div style="position:absolute;top:60px;left:60px;display:inline-flex;align-items:center;gap:12px;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);color:#fff;padding:14px 28px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">' +
+      '<svg viewBox="0 0 24 24" style="width:24px;height:24px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
+      (brief.category||'CATEGORÍA') +
+    '</div>' +
+    // Bottom content
+    '<div style="position:absolute;bottom:140px;left:60px;right:60px">' +
+      '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:rgba(255,255,255,.65);letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px">'+(brief.divider||'')+'</div>' +
+      '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
+      '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:76px;color:#fff;opacity:.9;margin-bottom:30px">'+(brief.subheadline||'subtitulo')+'</div>' +
+      '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:28px">'+(brief.description||'')+'</div>' +
+      featItems4 +
+    '</div>' +
+    // CTA bar
+    '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:32px 60px;display:flex;align-items:center;gap:24px">' +
+      '<div style="width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:30px;height:30px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
+      '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
+      '<div style="width:68px;height:68px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
+    '</div>' +
+    logoEl +
+  '</div>';
 }
