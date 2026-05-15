@@ -5587,7 +5587,8 @@ async function generateVideo(briefId, btn) {
     progress.remove();
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generar video';
-    addAgent('Error generando el video: ' + e.message + '. Verifica que BYTEPLUS_API_KEY esté configurado en Vercel.');
+    console.error('[video-gen]', e.message);
+    addAgent('Tuvimos un error inesperado al generar el video. Por favor contacta a soporte si el problema persiste.');
   }
 }
 
@@ -7232,7 +7233,8 @@ async function generateAdImages(cmd) {
     }
   } catch (err) {
     rmThinking(thinkId);
-    addAgent('Error generando creativo ' + batchIndex + ': ' + err.message);
+    console.error('[generate-image]', err.message);
+    addAgent('Tuvimos un error inesperado al generar el creativo. Por favor contacta a soporte si el problema persiste.');
   }
 }
 
@@ -8681,7 +8683,8 @@ async function startABVariation() {
 
   } catch(err) {
     rmThinking(thinkId2);
-    addAgent('Error generando variaciones: ' + err.message);
+    console.error('[generate-image]', err.message);
+    addAgent('Tuvimos un error inesperado al generar las variaciones. Por favor contacta a soporte si el problema persiste.');
   }
 }
 
@@ -9098,7 +9101,8 @@ async function launchAxisVariations(designEncoded, format, count) {
     results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
   } catch(err) {
     rmThinking(thinkId);
-    addAgent('Error generando variaciones: ' + err.message);
+    console.error('[generate-image]', err.message);
+    addAgent('Tuvimos un error inesperado al generar las variaciones. Por favor contacta a soporte si el problema persiste.');
     return;
   }
 
@@ -10062,7 +10066,8 @@ async function dqGenerateSelectedConcepts() {
 
     } catch(err) {
       rmThinking(thinkId);
-      addAgent('Error generando "' + concept.nombre + '": ' + err.message);
+      console.error('[generate-image]', err.message);
+      addAgent('Tuvimos un error inesperado al generar la imagen. Por favor contacta a soporte si el problema persiste.');
     }
   }
 
@@ -10087,7 +10092,7 @@ function generateBasicImage() {
       imgCmd._index = 1; imgCmd._total = 1;
       generateAdImages(imgCmd);
       incrementImageUsage();
-    } catch(e) { addAgent('Error generando imagen básica'); }
+    } catch(e) { console.error('[generate-image]', e.message); addAgent('Tuvimos un error inesperado al generar la imagen. Por favor contacta a soporte si el problema persiste.'); }
   }
 }
 
@@ -11391,7 +11396,8 @@ async function runHtmlDesign() {
 
   } catch (err) {
     rmThinking(thinkId);
-    addAgent('Error generando diseños: ' + err.message);
+    console.error('[generate-image]', err.message);
+    addAgent('Tuvimos un error inesperado al generar los diseños. Por favor contacta a soporte si el problema persiste.');
   }
 }
 
