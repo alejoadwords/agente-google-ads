@@ -11227,6 +11227,34 @@ async function registerPendingReferral() {
 
 let hdwVariations = 3;
 let hdwFormat = 'feed';
+let hdwCategory = 'general';
+
+const HDW_CATEGORIES = [
+  { id:'general',     label:'General',      icon:'✨', desc:'Auto-detecta el estilo' },
+  { id:'yoga',        label:'Yoga / Bienestar', icon:'🧘', desc:'Sereno, natural, mindfulness' },
+  { id:'fitness',     label:'Fitness',      icon:'💪', desc:'Energético, motivacional' },
+  { id:'ecommerce',   label:'E-commerce',   icon:'🛍️', desc:'Producto, tienda online' },
+  { id:'restaurante', label:'Restaurante',  icon:'🍽️', desc:'Gastronomía, cafés, comida' },
+  { id:'belleza',     label:'Belleza / Spa',icon:'💅', desc:'Estética, lujo, cuidado' },
+  { id:'educacion',   label:'Educación',    icon:'📚', desc:'Cursos, academias, tutorías' },
+  { id:'tecnologia',  label:'Tecnología',   icon:'💻', desc:'Apps, SaaS, startups' },
+  { id:'turismo',     label:'Turismo',      icon:'✈️', desc:'Viajes, hoteles, destinos' },
+  { id:'moda',        label:'Moda',         icon:'👗', desc:'Ropa, accesorios, lifestyle' },
+];
+
+// Template pools by category and format
+const HDW_CATEGORY_TEMPLATES = {
+  general:     { feed:[9,14,10,4,5,6],   story:[0,1,7],       square:[10,11,12,13,9,3] },
+  yoga:        { feed:[6,13,4,14,5,9],   story:[7,1,0],       square:[13,11,10,12,3,9] },
+  fitness:     { feed:[5,14,9,4,6,10],   story:[0,1,7],       square:[3,12,10,11,13,9] },
+  ecommerce:   { feed:[9,4,14,5,6,10],   story:[1,0,7],       square:[9,10,11,3,12,13] },
+  restaurante: { feed:[4,6,14,9,5,10],   story:[1,7,0],       square:[11,13,10,12,9,3] },
+  belleza:     { feed:[6,4,9,14,10,5],   story:[7,1,0],       square:[11,10,13,12,3,9] },
+  educacion:   { feed:[10,9,4,14,6,5],   story:[0,7,1],       square:[10,11,3,12,13,9] },
+  tecnologia:  { feed:[14,5,9,4,10,6],   story:[0,1,7],       square:[3,10,12,11,9,13] },
+  turismo:     { feed:[4,14,6,9,5,10],   story:[1,7,0],       square:[11,13,10,9,12,3] },
+  moda:        { feed:[6,14,4,9,10,5],   story:[7,1,0],       square:[11,10,13,9,12,3] },
+};
 
 function showHtmlDesignWizard() {
   loadImageUsage();
@@ -11257,6 +11285,17 @@ function showHtmlDesignWizard() {
         '<div style="font-size:11px;color:var(--muted2);margin-bottom:14px">Describe tu negocio y campaña — la IA genera el copy, colores y diseño automáticamente.</div>' +
 
         '<textarea id="hdw-prompt" rows="3" placeholder="Ej: Gimnasio CrossFit en Bogotá, primer mes gratis para nuevos socios, ambiente energético y motivacional&#10;&#10;O: Tienda de ropa femenina, colección primavera con 30% de descuento, estilo moderno y casual" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.45;color:var(--text);background:white">' + prePrompt + '</textarea>' +
+
+        '<div style="margin-top:14px">' +
+          '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Categoría / Industria</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap" id="hdw-cat-btns">' +
+            HDW_CATEGORIES.map((c,i) =>
+              '<button onclick="hdwSetCat(this,\'' + c.id + '\')" class="hdw-cat-btn" title="' + c.desc + '" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border:1.5px solid ' + (i===0?'var(--blue)':'var(--border)') + ';border-radius:7px;font-size:11px;font-weight:600;background:' + (i===0?'var(--blue-lt)':'white') + ';color:' + (i===0?'var(--blue)':'var(--muted)') + ';cursor:pointer;font-family:var(--font)">' +
+                '<span>' + c.icon + '</span><span>' + c.label + '</span>' +
+              '</button>'
+            ).join('') +
+          '</div>' +
+        '</div>' +
 
         '<div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">' +
           '<div>' +
@@ -11300,6 +11339,14 @@ function showHtmlDesignWizard() {
   setTimeout(() => document.getElementById('hdw-prompt')?.focus(), 100);
 }
 
+function hdwSetCat(btn, cat) {
+  hdwCategory = cat;
+  document.querySelectorAll('.hdw-cat-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+  });
+  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
+}
+
 function hdwSetVar(btn, n) {
   hdwVariations = n;
   document.querySelectorAll('.hdw-sel-btn').forEach(b => {
@@ -11325,6 +11372,7 @@ async function runHtmlDesign() {
 
   const count = hdwVariations;
   const fmt = hdwFormat;
+  const cat = hdwCategory;
 
   document.getElementById('html-design-wizard')?.remove();
 
@@ -11344,7 +11392,7 @@ async function runHtmlDesign() {
     // Step 1: Get design brief from Claude
     const briefRes = await fetch('/api/design-brief', {
       method: 'POST', headers,
-      body: JSON.stringify({ prompt, format: fmt }),
+      body: JSON.stringify({ prompt, format: fmt, category: cat }),
     });
     const brief = await briefRes.json();
     if (brief.error) throw new Error(brief.error);
@@ -11392,7 +11440,7 @@ async function runHtmlDesign() {
     rmThinking(thinkId);
 
     // Step 3: Render N HTML template variations
-    await renderHtmlVariations(brief, customBgBase64 || bgBase64, count, fmt, logoBase64);
+    await renderHtmlVariations(brief, customBgBase64 || bgBase64, count, fmt, logoBase64, cat);
 
   } catch (err) {
     rmThinking(thinkId);
@@ -11427,16 +11475,26 @@ const HDW_TEMPLATES = [
   { format:'feed',   label:'Feed · Diagonal',      id:14 },
 ];
 
-function hdwGetTemplateList(fmt, count) {
-  let pool = [];
-  if (fmt === 'story')  pool = [0,1,7,0,1,7,0,1,7,0];
-  else if (fmt === 'square') pool = [10,11,12,13,9,3,10,12,11,13];
-  else if (fmt === 'feed')   pool = [9,14,10,4,5,6,9,14,4,5];
-  else pool = [9,10,11,12,13,14,0,1,2,3]; // 'all'
-
+function hdwGetTemplateList(fmt, count, category) {
   const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed'};
-  // alternate color palettes: even index = primary, odd = alt
-  return pool.slice(0, count).map((tplId, i) => ({
+
+  let pool = [];
+  const catKey = (category && HDW_CATEGORY_TEMPLATES[category]) ? category : 'general';
+  const catPools = HDW_CATEGORY_TEMPLATES[catKey];
+
+  if (fmt === 'all') {
+    // Mix of all formats from category
+    const p = catPools;
+    pool = [p.feed[0], p.story[0], p.square[0], p.feed[1], p.story[1], p.square[1], p.feed[2], p.story[2], p.square[2], p.feed[3]];
+  } else {
+    pool = catPools[fmt] || catPools['feed'];
+  }
+
+  // Cycle the pool if count > pool length
+  const extended = [];
+  for (let i = 0; i < count; i++) extended.push(pool[i % pool.length]);
+
+  return extended.slice(0, count).map((tplId, i) => ({
     tplId,
     palette: i % 2 === 0 ? 'primary' : 'alt',
     label: HDW_TEMPLATES.find(t => t.id === tplId)?.label || 'Ad',
@@ -11444,8 +11502,8 @@ function hdwGetTemplateList(fmt, count) {
   }));
 }
 
-async function renderHtmlVariations(brief, bgBase64, count, fmt, logoBase64) {
-  const templates = hdwGetTemplateList(fmt, count);
+async function renderHtmlVariations(brief, bgBase64, count, fmt, logoBase64, category) {
+  const templates = hdwGetTemplateList(fmt, count, category);
   const total = templates.length;
 
   // Initialize shared grid (first call = index 1)
