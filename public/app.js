@@ -11245,7 +11245,7 @@ const HDW_CATEGORIES = [
 // Template pools by category and format
 const HDW_CATEGORY_TEMPLATES = {
   general:     { feed:[9,14,10,4,5,6],   story:[0,1,7],       square:[10,11,12,13,9,3] },
-  yoga:        { feed:[6,13,4,14,5,9],   story:[7,1,0],       square:[13,11,10,12,3,9] },
+  yoga:        { feed:[16,6,13,4,14,5],  story:[17,7,1,0],    square:[15,13,11,10,12,3] },
   fitness:     { feed:[5,14,9,4,6,10],   story:[0,1,7],       square:[3,12,10,11,13,9] },
   ecommerce:   { feed:[9,4,14,5,6,10],   story:[1,0,7],       square:[9,10,11,3,12,13] },
   restaurante: { feed:[4,6,14,9,5,10],   story:[1,7,0],       square:[11,13,10,12,9,3] },
@@ -11473,10 +11473,13 @@ const HDW_TEMPLATES = [
   { format:'square', label:'Square · Dark Event',  id:12 },
   { format:'square', label:'Square · Lifestyle',   id:13 },
   { format:'feed',   label:'Feed · Diagonal',      id:14 },
+  { format:'square', label:'Yoga · Serenity',      id:15 },
+  { format:'feed',   label:'Yoga · Zen Split',     id:16 },
+  { format:'story',  label:'Yoga · Story Flow',    id:17 },
 ];
 
 function hdwGetTemplateList(fmt, count, category) {
-  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed'};
+  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed',15:'square',16:'feed',17:'story'};
 
   let pool = [];
   const catKey = (category && HDW_CATEGORY_TEMPLATES[category]) ? category : 'general';
@@ -12098,6 +12101,127 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.65);line-height:1.5;overflow:hidden;max-height:' + Math.round(H * 0.12) + 'px">' + (brief.description || '') + '</div>' +
         '<div style="flex:1"></div>' +
         '<div style="background:#fff;color:' + c.primary + ';padding:16px 48px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;letter-spacing:.04em;width:fit-content;margin-top:auto">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 15: Yoga · Serenity (Square 1080×1080) ──────────
+  if (tplId === 15) {
+    const Y_GOLD   = '#d39c50';
+    const Y_DARK   = '#1c1208';
+    const Y_CREAM  = '#f6f1ed';
+    const Y_TERRA  = '#8a5f49';
+    const photoH   = Math.round(H * 0.62);
+    const feats15  = feats.slice(0, 3);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + Y_CREAM + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Top photo with gold border frame
+      '<div style="position:absolute;top:0;left:0;right:0;height:' + photoH + 'px;overflow:hidden">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:linear-gradient(135deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
+        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,' + Y_CREAM + ' 100%)"></div>' +
+        // Gold top bar
+        '<div style="position:absolute;top:0;left:0;right:0;height:5px;background:' + Y_GOLD + '"></div>' +
+        // Category badge
+        '<div style="position:absolute;top:28px;left:40px;background:rgba(0,0,0,.35);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.25);color:#fff;padding:8px 20px;border-radius:30px;font-size:18px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
+      '</div>' +
+      // Bottom content
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + Math.round(H * 0.42) + 'px;padding:0 48px 36px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end">' +
+        // Gold divider line
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">' +
+          '<div style="flex:1;height:1px;background:' + Y_GOLD + ';opacity:.6"></div>' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
+          '<div style="flex:1;height:1px;background:' + Y_GOLD + ';opacity:.6"></div>' +
+        '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(W * 0.072) + 'px;font-weight:700;color:' + Y_DARK + ';line-height:1.1;margin-bottom:10px">' + (brief.headline || 'Encuentra tu equilibrio') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.038) + 'px;color:' + Y_TERRA + ';margin-bottom:16px">' + (brief.subheadline || '') + '</div>' +
+        // Feature dots
+        '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px">' +
+          feats15.map(f => '<div style="display:flex;align-items:center;gap:7px"><div style="width:7px;height:7px;border-radius:50%;background:' + Y_GOLD + ';flex-shrink:0"></div><div style="font-size:17px;color:' + Y_DARK + ';font-weight:600;opacity:.8">' + f + '</div></div>').join('') +
+        '</div>' +
+        // CTA
+        '<div style="display:inline-flex;align-items:center;gap:12px;background:' + Y_DARK + ';color:#fff;padding:14px 30px;border-radius:6px;font-size:19px;font-weight:700;letter-spacing:.06em;width:fit-content">' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' + (brief.cta_title || 'DESCUBRIR') +
+        '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 16: Yoga · Zen Split (Feed 1080×1350) ────────────
+  if (tplId === 16) {
+    const Y_GOLD  = '#d39c50';
+    const Y_DARK  = '#1c1208';
+    const Y_CREAM = '#ebeae5';
+    const Y_TERRA = '#8a5f49';
+    const leftW   = Math.round(W * 0.5);
+    const feats16 = feats.slice(0, 4);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;display:flex;overflow:hidden;font-family:Montserrat,sans-serif;position:relative">' +
+      '<style>' + fonts + '</style>' +
+      // Left: text panel
+      '<div style="width:' + leftW + 'px;height:' + H + 'px;background:' + Y_CREAM + ';display:flex;flex-direction:column;justify-content:center;padding:60px 44px;box-sizing:border-box;flex-shrink:0">' +
+        // Top accent
+        '<div style="width:40px;height:3px;background:' + Y_GOLD + ';margin-bottom:28px"></div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;color:' + Y_TERRA + ';letter-spacing:.18em;text-transform:uppercase;margin-bottom:16px">' + (brief.category || 'BIENESTAR') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(leftW * 0.115) + 'px;font-weight:700;color:' + Y_DARK + ';line-height:1.05;margin-bottom:14px">' + (brief.headline || 'Calma y concentración') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(leftW * 0.055) + 'px;color:' + Y_TERRA + ';margin-bottom:28px;line-height:1.4">' + (brief.subheadline || '') + '</div>' +
+        // Features list
+        '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:36px">' +
+          feats16.map(f => '<div style="display:flex;align-items:center;gap:12px">' +
+            '<div style="width:22px;height:22px;border-radius:50%;border:2px solid ' + Y_GOLD + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+              '<div style="width:7px;height:7px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
+            '</div>' +
+            '<div style="font-size:19px;color:' + Y_DARK + ';font-weight:600;line-height:1.3">' + f + '</div>' +
+          '</div>').join('') +
+        '</div>' +
+        // CTA
+        '<div style="background:' + Y_TERRA + ';color:#fff;padding:16px 24px;border-radius:4px;font-size:18px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;width:fit-content">' + (brief.cta_title || 'COMENZAR') + '</div>' +
+        '<div style="width:40px;height:3px;background:' + Y_GOLD + ';margin-top:32px"></div>' +
+      '</div>' +
+      // Right: photo
+      '<div style="flex:1;height:' + H + 'px;overflow:hidden;position:relative">' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:linear-gradient(160deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
+        // Subtle left shadow on photo
+        '<div style="position:absolute;inset:0;background:linear-gradient(to right, rgba(0,0,0,.15) 0%, transparent 30%)"></div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 17: Yoga · Story Flow (Story 1080×1920) ──────────
+  if (tplId === 17) {
+    const Y_GOLD  = '#d39c50';
+    const Y_DARK  = '#1c1208';
+    const Y_CREAM = '#f6f1ed';
+    const feats17 = feats.slice(0, 4);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Full photo
+      (bgBase64 ? '<img src="' + bgBase64 + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block">' : '<div style="position:absolute;inset:0;background:linear-gradient(160deg,#2d1f0e,' + Y_DARK + ')"></div>') +
+      // Dark gradient overlay bottom 70%
+      '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(20,12,4,.92) 50%, rgba(0,0,0,.25) 75%, transparent 100%)"></div>' +
+      // Top badge
+      '<div style="position:absolute;top:60px;left:60px;right:60px;display:flex;align-items:center;justify-content:space-between">' +
+        '<div style="border:1px solid rgba(255,255,255,.35);color:#fff;padding:12px 28px;border-radius:30px;font-size:20px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
+        '<div style="width:40px;height:40px;border-radius:50%;border:1px solid ' + Y_GOLD + ';display:flex;align-items:center;justify-content:center">' +
+          '<div style="width:12px;height:12px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
+        '</div>' +
+      '</div>' +
+      // Bottom content
+      '<div style="position:absolute;bottom:0;left:0;right:0;padding:0 72px 80px;box-sizing:border-box">' +
+        // Gold accent line
+        '<div style="width:60px;height:3px;background:' + Y_GOLD + ';margin-bottom:28px"></div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(W * 0.112) + 'px;font-weight:700;color:#fff;line-height:1.0;margin-bottom:16px">' + (brief.headline || 'Transforma tu vida') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.055) + 'px;color:' + Y_GOLD + ';margin-bottom:36px;line-height:1.4">' + (brief.subheadline || '') + '</div>' +
+        // Features
+        '<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:48px">' +
+          feats17.map(f => '<div style="display:flex;align-items:center;gap:16px">' +
+            '<div style="width:28px;height:1px;background:' + Y_GOLD + ';flex-shrink:0"></div>' +
+            '<div style="font-size:22px;color:rgba(255,255,255,.9);font-weight:600">' + f + '</div>' +
+          '</div>').join('') +
+        '</div>' +
+        // CTA button
+        '<div style="background:' + Y_GOLD + ';color:' + Y_DARK + ';padding:22px 48px;border-radius:6px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;display:inline-block">' + (brief.cta_title || 'COMENZAR AHORA') + '</div>' +
       '</div>' +
       logoEl +
     '</div>';
