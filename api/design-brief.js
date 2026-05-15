@@ -19,11 +19,13 @@ Pick brand colors based on the industry type:
 - Fitness/gym: black + red (#111111, #fee2e2, accent: #ef4444, alt_primary: #1a0000, alt_bg: #fff0f0)
 - Fashion/luxury: black + gold (#1a1a1a, #fdf8f0, accent: #d4af37, alt_primary: #2a2000, alt_bg: #fffbf0)
 - Health/wellness: dark blue + cream (#1e3a5f, #f0f9ff, accent: #38bdf8, alt_primary: #0f2040, alt_bg: #e8f4fd)
+- Yoga/mindfulness: sage green + warm white (#2d4a3e, #f7f5f0, accent: #7fb069, alt_primary: #1a2e26, alt_bg: #eef4ea)
 - Food/restaurant: dark brown + orange (#2d1a0e, #fff7ed, accent: #f97316, alt_primary: #1a0d00, alt_bg: #fff3e0)
 - Technology: electric blue + light (#1e2bcc, #f0f4ff, accent: #6366f1, alt_primary: #0d1a99, alt_bg: #e8ecff)
 - Beauty/spa: purple + pink (#4a1a4a, #fdf2f8, accent: #ec4899, alt_primary: #2d0a2d, alt_bg: #fce8f6)
 - Education: navy + yellow (#1a2f5a, #fefce8, accent: #eab308, alt_primary: #0d1a3d, alt_bg: #fef9c3)
-- Retail: emerald + white (#065f46, #f0fdf4, accent: #10b981, alt_primary: #033d2e, alt_bg: #dcfce7)
+- Retail/e-commerce: emerald + white (#065f46, #f0fdf4, accent: #10b981, alt_primary: #033d2e, alt_bg: #dcfce7)
+- Fashion/clothing: warm charcoal + cream (#2c2420, #faf8f5, accent: #c4a882, alt_primary: #1a1410, alt_bg: #f5f2ed)
 - Services: corporate blue + gray (#1e40af, #f8fafc, accent: #3b82f6, alt_primary: #0f2a7a, alt_bg: #eff6ff)
 
 Respond ONLY with a valid JSON object. No markdown, no explanation, just JSON.
@@ -64,17 +66,31 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400, headers: CORS });
   }
 
-  const { prompt, format = 'feed' } = body;
+  const { prompt, format = 'feed', category = 'general' } = body;
   if (!prompt) {
     return new Response(JSON.stringify({ error: 'Missing prompt' }), { status: 400, headers: CORS });
   }
+
+  // Category-specific color overrides injected into the user message
+  const CATEGORY_HINTS = {
+    yoga:        'IMPORTANT: This is yoga/mindfulness/wellness. Use exclusively the Yoga/mindfulness palette: primary_color:#2d4a3e, bg_color:#f7f5f0, accent_color:#7fb069, alt_primary:#1a2e26, alt_bg:#eef4ea. Photo should be serene, natural, calm — yoga poses, nature, soft light.',
+    fitness:     'IMPORTANT: This is fitness/gym. Use the Fitness/gym palette: primary_color:#111111, bg_color:#fee2e2, accent_color:#ef4444. Photo should be energetic, athletic, motivational.',
+    ecommerce:   'IMPORTANT: This is e-commerce/retail. Use the Retail palette: primary_color:#065f46, bg_color:#f0fdf4, accent_color:#10b981. Photo should show the product cleanly.',
+    restaurante: 'IMPORTANT: This is food/restaurant. Use the Food palette: primary_color:#2d1a0e, bg_color:#fff7ed, accent_color:#f97316. Photo should be appetizing food photography.',
+    belleza:     'IMPORTANT: This is beauty/spa. Use the Beauty palette: primary_color:#4a1a4a, bg_color:#fdf2f8, accent_color:#ec4899. Photo should feel luxurious and elegant.',
+    educacion:   'IMPORTANT: This is education. Use the Education palette: primary_color:#1a2f5a, bg_color:#fefce8, accent_color:#eab308. Photo should feel inspiring and professional.',
+    tecnologia:  'IMPORTANT: This is technology/SaaS. Use the Technology palette: primary_color:#1e2bcc, bg_color:#f0f4ff, accent_color:#6366f1. Photo should feel modern and digital.',
+    turismo:     'IMPORTANT: This is travel/tourism. Use the Travel palette: primary_color:#1a3d1a, bg_color:#f5f0e8, accent_color:#4ade80. Photo should be a beautiful destination.',
+    moda:        'IMPORTANT: This is fashion/clothing. Use the Fashion palette: primary_color:#2c2420, bg_color:#faf8f5, accent_color:#c4a882. Photo should be editorial fashion style.',
+  };
+  const categoryHint = CATEGORY_HINTS[category] || '';
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'Missing ANTHROPIC_API_KEY' }), { status: 500, headers: CORS });
   }
 
-  const userMessage = `Business description: ${prompt}\nAd format: ${format}\n\nExtract the design brief as JSON.`;
+  const userMessage = `Business description: ${prompt}\nAd format: ${format}\nCategory: ${category}\n${categoryHint}\n\nExtract the design brief as JSON.`;
 
   let claudeRes;
   try {
