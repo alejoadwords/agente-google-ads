@@ -6437,67 +6437,80 @@ function rmThinking(id){document.getElementById(id)?.remove()}
 function appendRaw(html){const a=document.getElementById('chat-area');const d=document.createElement('div');d.innerHTML=html;a.appendChild(d.firstElementChild)}
 function scrollB(){const a=document.getElementById('chat-area');setTimeout(()=>{a.scrollTop=a.scrollHeight},50)}
 function fmt(t){
-  // 1. Escape HTML first
-  let s = esc(t);
-
-  // 2. Render markdown tables BEFORE other replacements
-  // Match table blocks: header row | separator row | data rows
-  s = s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g, function(tableBlock) {
-    const lines = tableBlock.trim().split('\n').filter(l => l.trim());
-    if (lines.length < 2) return tableBlock;
-    // Check if second line is a separator (----)
-    if (!/^\|[\s\-:|]+\|/.test(lines[1])) return tableBlock;
-    const headerCells = lines[0].split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
-    const dataRows = lines.slice(2);
-    let html = '<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-    html += '<thead><tr>' + headerCells.map(c =>
-      `<th style="background:var(--sidebar);border:1px solid var(--border);padding:7px 10px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${c}</th>`
-    ).join('') + '</tr></thead>';
-    html += '<tbody>';
-    dataRows.forEach(function(row, ri) {
-      const cells = row.split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
-      html += `<tr style="background:${ri%2===0?'var(--bg)':'var(--sidebar)'}">` +
-        cells.map(c => `<td style="border:1px solid var(--border);padding:6px 10px;color:var(--text)">${c}</td>`).join('') +
-      '</tr>';
-    });
-    html += '</tbody></table></div>';
-    return html;
+  // Step 1: Extract fenced code blocks BEFORE escaping (preserve content verbatim)
+  const cb=[];
+  t=t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g,function(_,lang,code){
+    cb.push({lang:lang.trim(),code:code.replace(/\n+$/,'')});
+    return '\x00CB'+(cb.length-1)+'\x00';
   });
 
-  // 3. Headers
-  s = s.replace(/### (.*?)(\n|$)/g,'<h4 style="margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--text)">$1</h4>');
-  s = s.replace(/## (.*?)(\n|$)/g,'<h3 style="margin:16px 0 8px;font-size:14px;font-weight:700;color:var(--text)">$1</h3>');
+  // Step 2: Escape HTML
+  let s=esc(t);
 
-  // 4. Bold and inline code
-  s = s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-  s = s.replace(/`(.*?)`/g,'<code style="background:var(--sidebar);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>');
+  // Step 3: Restore code blocks as styled <pre> elements
+  s=s.replace(/\x00CB(\d+)\x00/g,function(_,idx){
+    const b=cb[+idx];
+    const code=b.code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const label=b.lang
+      ? '<div style="font-size:10px;font-family:monospace;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em;opacity:.7">'+b.lang.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'
+      : '';
+    return '<pre style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0 8px;font-size:0">'+label
+      +'<code style="font-family:\'SF Mono\',\'Fira Code\',Consolas,monospace;font-size:12.5px;line-height:1.6;color:var(--text);white-space:pre">'+code+'</code></pre>';
+  });
 
-  // 5. Lists — collapse ALL blank lines between bullet lines aggressively
-  // Keep collapsing until no more double-newlines exist between bullet chars
-  let prev = '';
-  while (prev !== s) {
-    prev = s;
-    s = s.replace(/(<br>|^|\n)([ \t]*[–\-•].+?)(<br>|\n)\n+([ \t]*[–\-•])/gm, '$1$2$3$4');
-  }
-  // Also collapse \n\n between bullets in raw text before <br> conversion
-  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
-  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
+  // Step 4: Markdown tables
+  s=s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g,function(block){
+    const lines=block.trim().split('\n').filter(l=>l.trim());
+    if(lines.length<2||!/^\|[\s\-:|]+\|/.test(lines[1]))return block;
+    const heads=lines[0].split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
+    let h='<div style="overflow-x:auto;margin:14px 0"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+    h+='<thead><tr>'+heads.map(c=>'<th style="background:var(--sidebar);border:1px solid var(--border);padding:8px 13px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">'+fmtI(c)+'</th>').join('')+'</tr></thead><tbody>';
+    lines.slice(2).forEach(function(row,ri){
+      const cells=row.split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
+      h+='<tr style="background:'+(ri%2===0?'var(--bg)':'var(--sidebar)')+'">'+cells.map(c=>'<td style="border:1px solid var(--border);padding:7px 13px;color:var(--text);line-height:1.45">'+fmtI(c)+'</td>').join('')+'</tr>';
+    });
+    h+='</tbody></table></div>';
+    return h;
+  });
 
-  s = s.replace(/^– (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^- (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^• (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
-  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:1px 0;line-height:1.5">$2</li>');
-  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:3px 0 5px;padding-left:15px">$1</ul>');
+  // Step 5: Headings (h1 → h2 → h3 → h4 with clear visual hierarchy)
+  s=s.replace(/^# (.+)$/gm,'<h2 style="margin:24px 0 10px;font-size:20px;font-weight:700;color:var(--text);line-height:1.3;letter-spacing:-.01em">$1</h2>');
+  s=s.replace(/^## (.+)$/gm,'<h3 style="margin:20px 0 8px;font-size:16px;font-weight:700;color:var(--text);padding-bottom:5px;border-bottom:1.5px solid var(--border)">$1</h3>');
+  s=s.replace(/^### (.+)$/gm,'<h4 style="margin:16px 0 5px;font-size:14px;font-weight:700;color:var(--text)">$1</h4>');
 
-  // 6. Horizontal rule
-  s = s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">');
+  // Step 6: Blockquotes (&gt; because > was HTML-escaped in step 2)
+  s=s.replace(/^&gt; (.+)$/gm,'<blockquote style="border-left:3px solid var(--blue);margin:12px 0;padding:6px 14px;background:var(--sidebar);border-radius:0 6px 6px 0;color:var(--muted);font-style:italic;line-height:1.55">$1</blockquote>');
 
-  // 7. Paragraphs and line breaks — collapse excess blank lines first
-  s = s.replace(/\n{3,}/g,'\n\n');
-  s = s.replace(/\n\n/g,'</p><p style="margin-top:5px">');
-  s = s.replace(/\n/g,'<br>');
-  s = '<p style="margin:0;line-height:1.55">' + s + '</p>';
+  // Step 7: Horizontal rule
+  s=s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">');
 
+  // Step 8: Inline formatting — bold first, then italic (safe after bold is consumed), then inline code
+  s=s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+  s=s.replace(/`([^`\n]+)`/g,'<code style="background:var(--sidebar);padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:monospace;color:var(--text);border:1px solid var(--border)">$1</code>');
+
+  // Step 9: Lists — collapse blank lines between consecutive bullet lines
+  let prev='';
+  while(prev!==s){prev=s;s=s.replace(/(<br>|^|\n)([ \t]*[–\-•].+?)(<br>|\n)\n+([ \t]*[–\-•])/gm,'$1$2$3$4');}
+  s=s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g,'$1\n$2');
+  s=s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g,'$1\n$2');
+  s=s.replace(/^[–•] (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
+  s=s.replace(/^- (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
+  s=s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:4px 0;line-height:1.55">$2</li>');
+  s=s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:6px 0 10px;padding-left:20px">$1</ul>');
+
+  // Step 10: Paragraphs and line breaks
+  s=s.replace(/\n{3,}/g,'\n\n');
+  s=s.replace(/\n\n/g,'</p><p style="margin-top:9px">');
+  s=s.replace(/\n/g,'<br>');
+  s='<p style="margin:0;line-height:1.65;font-size:14px">'+s+'</p>';
+  return s;
+}
+// Inline-only formatting for table cells (no block elements)
+function fmtI(s){
+  s=s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+  s=s.replace(/`([^`\n]+)`/g,'<code style="background:rgba(0,0,0,.07);padding:1px 5px;border-radius:3px;font-size:12px;font-family:monospace">$1</code>');
   return s;
 }
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
