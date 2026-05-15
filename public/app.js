@@ -545,10 +545,12 @@ async function agencyInit() {
   const isAgency = userPlan === 'agency' || isAdminUser();
   const isPro    = !isAdminUser() && userPlan !== 'agency';
 
-  const agencyBtn = document.getElementById('sb-agency-btn');
-  const proBtn    = document.getElementById('sb-pro-btn');
+  const agencyBtn  = document.getElementById('sb-agency-btn');
+  const proBtn     = document.getElementById('sb-pro-btn');
+  const dashBtn    = document.getElementById('agency-dash-btn');
   if (agencyBtn) agencyBtn.style.display = isAgency ? 'block' : 'none';
   if (proBtn)    proBtn.style.display    = isPro    ? 'block' : 'none';
+  if (dashBtn)   dashBtn.style.display   = isAgency ? 'flex'  : 'none';
 
   if (!isAgency && !isPro) return;
   await agencyLoadClients();
@@ -1537,6 +1539,219 @@ let warSelectedKpis = {}; // { google: ['inversion','clics',...], meta: [...] }
 let warCustomKpis   = {}; // { google: [{id:'custom_0', label:'Mi métrica'}], ... }
 
 let warClientId = null;
+// ── LIVE DASHBOARDS ──────────────────────────────────────────────────────────
+
+let dashManualData = {};
+let dashCurrentTab = 'list';
+
+function dashboardOpen() {
+  document.getElementById('dash-modal').style.display = 'flex';
+  dashManualData = {};
+  document.getElementById('dash-manual-tags').innerHTML = '';
+  document.getElementById('dash-manual-key').value = '';
+  document.getElementById('dash-manual-val').value = '';
+  document.getElementById('dash-success-msg').style.display = 'none';
+  document.getElementById('dash-new-url-wrap').style.display = 'none';
+  dashSwitchTab('list');
+  dashLoadList();
+  dashPopulateClients();
+}
+
+function dashboardClose() {
+  document.getElementById('dash-modal').style.display = 'none';
+}
+
+function dashSwitchTab(tab) {
+  dashCurrentTab = tab;
+  document.getElementById('dash-panel-list').style.display   = tab === 'list'   ? 'block' : 'none';
+  document.getElementById('dash-panel-create').style.display = tab === 'create' ? 'block' : 'none';
+  document.getElementById('dash-footer-list').style.display   = tab === 'list'   ? 'flex'  : 'none';
+  document.getElementById('dash-footer-create').style.display = tab === 'create' ? 'flex'  : 'none';
+  document.getElementById('dash-tab-list').className   = 'dash-tab' + (tab === 'list'   ? ' active' : '');
+  document.getElementById('dash-tab-create').className = 'dash-tab' + (tab === 'create' ? ' active' : '');
+}
+
+function dashPopulateClients() {
+  const sel = document.getElementById('dash-client-select');
+  sel.innerHTML = '<option value="">— Selecciona un cliente —</option>';
+  agencyClients.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name || c.business || 'Sin nombre';
+    sel.appendChild(opt);
+  });
+}
+
+function dashClientSelected() {
+  const clientId = document.getElementById('dash-client-select').value;
+  if (!clientId) return;
+  const client = agencyClients.find(c => c.id === clientId);
+  if (!client) return;
+  // Pre-fill agency name if blank
+  const agNameInput = document.getElementById('dash-agency-name');
+  if (!agNameInput.value) {
+    agNameInput.value = '';
+  }
+}
+
+function dashTogglePlat(el) {
+  el.classList.toggle('selected');
+}
+
+function dashAddManual() {
+  const k = document.getElementById('dash-manual-key').value.trim();
+  const v = document.getElementById('dash-manual-val').value.trim();
+  if (!k || !v) return;
+  dashManualData[k] = v;
+  document.getElementById('dash-manual-key').value = '';
+  document.getElementById('dash-manual-val').value = '';
+  dashRenderManualTags();
+}
+
+function dashRenderManualTags() {
+  const wrap = document.getElementById('dash-manual-tags');
+  wrap.innerHTML = Object.entries(dashManualData).map(([k, v]) => `
+    <div class="dash-manual-tag">
+      <span><strong>${k}:</strong> ${v}</span>
+      <button onclick="dashRemoveManual('${k.replace(/'/g, "\\'")}')">×</button>
+    </div>
+  `).join('');
+}
+
+function dashRemoveManual(key) {
+  delete dashManualData[key];
+  dashRenderManualTags();
+}
+
+function dashCopyUrl(elId) {
+  const url = document.getElementById(elId).textContent.trim();
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target.closest('button');
+    const orig = btn.innerHTML;
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  }).catch(() => {
+    prompt('Copia este enlace:', url);
+  });
+}
+
+function dashOpenUrl(elId) {
+  const url = document.getElementById(elId).textContent.trim();
+  window.open(url, '_blank');
+}
+
+async function dashLoadList() {
+  const loading = document.getElementById('dash-list-loading');
+  const items = document.getElementById('dash-list-items');
+  const empty = document.getElementById('dash-list-empty');
+  loading.style.display = 'block';
+  items.innerHTML = '';
+  empty.style.display = 'none';
+
+  try {
+    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
+    if (!token) { loading.textContent = 'Inicia sesión para ver tus dashboards'; return; }
+
+    const res = await fetch('/api/dashboard?action=list', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await res.json();
+    const dashes = data.dashboards || [];
+
+    loading.style.display = 'none';
+
+    if (dashes.length === 0) {
+      empty.style.display = 'block';
+      return;
+    }
+
+    const platLabels = { google_ads: 'Google Ads', meta_ads: 'Meta Ads' };
+    items.innerHTML = dashes.map(d => {
+      const url = window.location.origin + '/dashboard.html?id=' + d.id;
+      const plats = (d.platforms || []).map(p => platLabels[p] || p).join(', ') || 'Sin plataformas';
+      const updated = d.updated_at ? new Date(d.updated_at).toLocaleDateString('es-CO', { day:'2-digit', month:'short' }) : '';
+      return `
+        <div class="dash-list-item">
+          <div class="dash-list-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E2BCC" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </div>
+          <div class="dash-list-info">
+            <div class="dash-list-name">${esc(d.client_name)}</div>
+            <div class="dash-list-meta">${plats} · ${updated} · ${d.views || 0} vistas</div>
+          </div>
+          <div class="dash-list-actions">
+            <button class="dash-list-btn" onclick="navigator.clipboard.writeText('${url}').then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='Copiar'},1500)})" title="Copiar enlace">Copiar</button>
+            <button class="dash-list-btn primary" onclick="window.open('${url}','_blank')" title="Abrir dashboard">Abrir ↗</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    loading.textContent = 'Error al cargar dashboards';
+  }
+}
+
+async function dashCreate() {
+  const clientId = document.getElementById('dash-client-select').value;
+  if (!clientId) { alert('Selecciona un cliente'); return; }
+  const client = agencyClients.find(c => c.id === clientId);
+
+  const selectedPlats = Array.from(document.querySelectorAll('.dash-plat-check.selected'))
+    .map(el => el.dataset.plat);
+
+  const body = {
+    client_name:   client?.name || client?.business || 'Cliente',
+    agency_name:   document.getElementById('dash-agency-name').value.trim() || null,
+    agency_color:  document.getElementById('dash-agency-color').value,
+    period:        document.getElementById('dash-period').value,
+    platforms:     selectedPlats,
+    manual_data:   dashManualData,
+  };
+
+  const btn = document.getElementById('dash-create-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creando...';
+
+  try {
+    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
+    if (!token) throw new Error('No autenticado');
+
+    const res = await fetch('/api/dashboard', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error');
+
+    const fullUrl = window.location.origin + data.url;
+
+    // Switch to list tab and show success
+    dashSwitchTab('list');
+    document.getElementById('dash-success-msg').style.display = 'block';
+    document.getElementById('dash-new-url-wrap').style.display = 'block';
+    document.getElementById('dash-new-url').textContent = fullUrl;
+
+    // Reset form
+    document.getElementById('dash-client-select').value = '';
+    document.getElementById('dash-agency-name').value = '';
+    document.getElementById('dash-period').value = '30d';
+    document.querySelectorAll('.dash-plat-check.selected').forEach(el => el.classList.remove('selected'));
+    dashManualData = {};
+    dashRenderManualTags();
+
+    // Reload list
+    dashLoadList();
+  } catch (e) {
+    alert('Error al crear dashboard: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear dashboard';
+  }
+}
+
+// ── WAR (WhatsApp report) ─────────────────────────────────────────────────────
+
 let warStep = 0;
 let warPeriod = 'mes';
 let warGeneratedText = null;
@@ -2529,9 +2744,7 @@ async function openAgent(agentKey) {
       addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
       if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
       if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
-      if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
       if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
@@ -2674,9 +2887,7 @@ function launchOnboarding(agentKey) {
       addAgent(summary);
       if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
       if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
-      if (agentKey === 'consultor')    { setTimeout(showConsultorActionCards, 400); }
       if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'social')       { setTimeout(showSocialActionCards, 400); }
       if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
       if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
@@ -6489,15 +6700,18 @@ function fmt(t){
   s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
   s=s.replace(/`([^`\n]+)`/g,'<code style="background:var(--sidebar);padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:monospace;color:var(--text);border:1px solid var(--border)">$1</code>');
 
-  // Step 9: Lists — collapse blank lines between consecutive bullet lines
-  let prev='';
-  while(prev!==s){prev=s;s=s.replace(/(<br>|^|\n)([ \t]*[–\-•].+?)(<br>|\n)\n+([ \t]*[–\-•])/gm,'$1$2$3$4');}
-  s=s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g,'$1\n$2');
-  s=s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g,'$1\n$2');
+  // Step 9: Lists — collapse blank lines between consecutive bullet/numbered lines
+  for(var _i=0;_i<5;_i++){
+    s=s.replace(/^([–\-•] .+)\n\n([–\-•] )/gm,'$1\n$2');
+    s=s.replace(/^(\d+\. .+)\n\n(\d+\. )/gm,'$1\n$2');
+  }
   s=s.replace(/^[–•] (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
   s=s.replace(/^- (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
   s=s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:4px 0;line-height:1.55">$2</li>');
-  s=s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:6px 0 10px;padding-left:20px">$1</ul>');
+  // Wrap consecutive <li> in <ul> — strip \n inside so step 10 doesn't inject <br> between items
+  s=s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,function(_,g){
+    return '<ul style="margin:6px 0 10px;padding-left:20px">'+g.replace(/\n/g,'')+'</ul>';
+  });
 
   // Step 10: Paragraphs and line breaks
   s=s.replace(/\n{3,}/g,'\n\n');
@@ -10712,7 +10926,7 @@ async function finishObWithAccountSave() {
   if (currentAgentCtx === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
   if (currentAgentCtx === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
   if (currentAgentCtx === 'seo')          { setTimeout(showSeoActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'social')       { setTimeout(showSocialActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
+  if (currentAgentCtx === 'social')       { setTimeout(function(){ loadRecentConversations(); }, 700); return; }
 
   // Para el consultor: generar Plan de 30 días automáticamente, luego mostrar cards
   if (currentAgentCtx === 'consultor') {

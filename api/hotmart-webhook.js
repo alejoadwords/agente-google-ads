@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const signature = req.headers['x-hotmart-hottok'];
-  if (HOTMART_SECRET && signature !== HOTMART_SECRET) {
+  if (!HOTMART_SECRET || signature !== HOTMART_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>window.__CLERK_PUBLISHABLE_KEY__='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';</script>
-<script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA" crossorigin="anonymous"></script>
+<script async src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5.125.10/dist/clerk.browser.js" data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -520,6 +520,52 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .agency-title{font-size:20px;font-weight:700;letter-spacing:-.4px;color:var(--text)}
 .agency-subtitle{font-size:13px;color:var(--muted);margin-top:2px}
 .agency-add-btn{display:flex;align-items:center;gap:7px;padding:9px 16px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;flex-shrink:0}
+.agency-dash-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;background:none;color:var(--blue);border:1.5px solid var(--blue);border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;flex-shrink:0}
+.agency-dash-btn:hover{background:var(--blue);color:#fff}
+.dash-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:1100;padding:16px}
+.dash-modal{background:#fff;border-radius:14px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.dash-modal-header{padding:22px 24px 0;border-bottom:1px solid var(--border);padding-bottom:16px}
+.dash-modal-title{font-size:17px;font-weight:700;margin-bottom:4px}
+.dash-modal-sub{font-size:13px;color:var(--muted)}
+.dash-modal-body{padding:20px 24px}
+.dash-tabs{display:flex;gap:4px;margin-bottom:20px;background:var(--sidebar);border-radius:8px;padding:4px}
+.dash-tab{flex:1;padding:7px 12px;border:none;background:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);font-family:var(--font);transition:all .15s}
+.dash-tab.active{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.dash-form-row{margin-bottom:14px}
+.dash-form-row label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.dash-form-row input,.dash-form-row select,.dash-form-row textarea{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--font);color:var(--text);background:#fff;transition:border-color .15s}
+.dash-form-row input:focus,.dash-form-row select:focus,.dash-form-row textarea:focus{outline:none;border-color:var(--blue)}
+.dash-form-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dash-platform-checks{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.dash-plat-check{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;user-select:none}
+.dash-plat-check.selected{border-color:var(--blue);background:#EFF6FF;color:var(--blue)}
+.dash-modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dash-btn-cancel{padding:9px 16px;border:1.5px solid var(--border);border-radius:var(--r);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font)}
+.dash-btn-cancel:hover{background:var(--sidebar)}
+.dash-btn-create{padding:9px 20px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)}
+.dash-btn-create:hover{background:var(--blue-h)}
+.dash-btn-create:disabled{opacity:.45;cursor:not-allowed}
+.dash-list-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.dash-list-item:hover{border-color:var(--blue)}
+.dash-list-icon{width:36px;height:36px;border-radius:8px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dash-list-info{flex:1;min-width:0}
+.dash-list-name{font-size:14px;font-weight:600;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-list-meta{font-size:12px;color:var(--muted)}
+.dash-list-actions{display:flex;gap:6px;flex-shrink:0}
+.dash-list-btn{padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;background:none;font-size:12px;cursor:pointer;font-family:var(--font);color:var(--muted)}
+.dash-list-btn:hover{background:var(--sidebar)}
+.dash-list-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.dash-list-btn.primary:hover{opacity:.9}
+.dash-url-box{background:var(--sidebar);border-radius:8px;padding:12px 14px;font-size:13px;font-family:monospace;color:var(--text);word-break:break-all;margin:12px 0}
+.dash-copy-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)}
+.dash-copy-btn:hover{opacity:.9}
+.dash-success{background:#D1FAE5;border:1px solid #86EFAC;border-radius:8px;padding:12px 16px;font-size:13px;color:#065F46;margin-bottom:14px;display:none}
+.dash-manual-add{display:flex;gap:8px;margin-top:8px}
+.dash-manual-add input{flex:1}
+.dash-manual-add button{padding:8px 12px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--font);white-space:nowrap}
+.dash-manual-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.dash-manual-tag{display:flex;align-items:center;gap:4px;background:var(--sidebar);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px}
+.dash-manual-tag button{background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0}
 .agency-add-btn:hover{background:var(--blue-h)}
 .agency-add-btn:disabled{opacity:.5;cursor:not-allowed}
 .agency-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
@@ -1231,10 +1277,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <div class="agency-title">Panel de clientes</div>
           <div class="agency-subtitle" id="agency-subtitle">Gestiona y accede a cada cuenta desde aquí</div>
         </div>
-        <button class="agency-add-btn" id="agency-add-btn" onclick="agencyOpenModal()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          agregar cliente
-        </button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="agency-dash-btn" id="agency-dash-btn" onclick="dashboardOpen()" title="Ver y crear dashboards de clientes">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="11" rx="1"/><rect x="14" y="14" width="7" height="11" rx="1"/></svg>
+            Reportes en Vivo
+          </button>
+          <button class="agency-add-btn" id="agency-add-btn" onclick="agencyOpenModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            agregar cliente
+          </button>
+        </div>
       </div>
 
       <!-- Barra de uso de cupos -->
@@ -1768,6 +1820,114 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <button class="agency-modal-next" id="brief-btn-next" onclick="agencyBriefNext()">continuar →</button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- MODAL DASHBOARDS EN VIVO -->
+  <div class="dash-modal-overlay" id="dash-modal" style="display:none" onclick="if(event.target===this)dashboardClose()">
+    <div class="dash-modal">
+      <div class="dash-modal-header">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div class="dash-modal-title">Reportes en Vivo</div>
+            <div class="dash-modal-sub">Crea dashboards compartibles con tus clientes — actualizan solos cada hora</div>
+          </div>
+          <button onclick="dashboardClose()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:4px">×</button>
+        </div>
+        <div class="dash-tabs" style="margin-top:16px">
+          <button class="dash-tab active" id="dash-tab-list" onclick="dashSwitchTab('list')">Mis dashboards</button>
+          <button class="dash-tab" id="dash-tab-create" onclick="dashSwitchTab('create')">Crear nuevo</button>
+        </div>
+      </div>
+
+      <!-- TAB: LIST -->
+      <div id="dash-panel-list" class="dash-modal-body">
+        <div id="dash-success-msg" class="dash-success">
+          Dashboard creado. Comparte el enlace con tu cliente.
+        </div>
+        <div id="dash-new-url-wrap" style="display:none;margin-bottom:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">Enlace de tu nuevo dashboard:</div>
+          <div class="dash-url-box" id="dash-new-url"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="dash-copy-btn" onclick="dashCopyUrl('dash-new-url')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              Copiar enlace
+            </button>
+            <button class="dash-list-btn" onclick="dashOpenUrl('dash-new-url')" style="display:flex;align-items:center;gap:5px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Abrir
+            </button>
+          </div>
+        </div>
+        <div id="dash-list-empty" style="text-align:center;padding:40px 0;color:var(--muted);font-size:14px;display:none">
+          <div style="font-size:32px;margin-bottom:10px">📊</div>
+          <div style="font-weight:600;margin-bottom:4px">Sin dashboards aún</div>
+          <div>Crea tu primero en la pestaña "Crear nuevo"</div>
+        </div>
+        <div id="dash-list-loading" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Cargando...</div>
+        <div id="dash-list-items"></div>
+      </div>
+
+      <!-- TAB: CREATE -->
+      <div id="dash-panel-create" class="dash-modal-body" style="display:none">
+        <div class="dash-form-row">
+          <label>Cliente</label>
+          <select id="dash-client-select" onchange="dashClientSelected()">
+            <option value="">— Selecciona un cliente —</option>
+          </select>
+        </div>
+        <div class="dash-form-2col">
+          <div class="dash-form-row">
+            <label>Nombre de agencia (opcional)</label>
+            <input type="text" id="dash-agency-name" placeholder="Tu agencia">
+          </div>
+          <div class="dash-form-row">
+            <label>Color de marca</label>
+            <input type="color" id="dash-agency-color" value="#1E2BCC" style="height:41px;padding:4px 6px;cursor:pointer">
+          </div>
+        </div>
+        <div class="dash-form-row">
+          <label>Período</label>
+          <select id="dash-period">
+            <option value="7d">Últimos 7 días</option>
+            <option value="14d">Últimos 14 días</option>
+            <option value="30d" selected>Últimos 30 días</option>
+            <option value="90d">Últimos 90 días</option>
+          </select>
+        </div>
+        <div class="dash-form-row">
+          <label>Plataformas conectadas</label>
+          <div class="dash-platform-checks" id="dash-plat-checks">
+            <div class="dash-plat-check" data-plat="google_ads" onclick="dashTogglePlat(this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              Google Ads
+            </div>
+            <div class="dash-plat-check" data-plat="meta_ads" onclick="dashTogglePlat(this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+              Meta Ads
+            </div>
+          </div>
+        </div>
+        <div class="dash-form-row" id="dash-manual-section">
+          <label>Datos adicionales (opcional)</label>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Agrega métricas de otras plataformas o datos propios para incluir en el dashboard</div>
+          <div class="dash-manual-add">
+            <input type="text" id="dash-manual-key" placeholder="Métrica (ej: Seguidores TikTok)">
+            <input type="text" id="dash-manual-val" placeholder="Valor (ej: 12,500)" style="max-width:140px">
+            <button onclick="dashAddManual()">+ Agregar</button>
+          </div>
+          <div class="dash-manual-tags" id="dash-manual-tags"></div>
+        </div>
+      </div>
+
+      <div class="dash-modal-footer" id="dash-footer-list">
+        <div style="font-size:12px;color:var(--muted)">Los dashboards se actualizan automáticamente cada hora</div>
+        <button class="dash-btn-cancel" onclick="dashboardClose()">Cerrar</button>
+      </div>
+      <div class="dash-modal-footer" id="dash-footer-create" style="display:none">
+        <button class="dash-btn-cancel" onclick="dashSwitchTab('list')">Cancelar</button>
+        <button class="dash-btn-create" id="dash-create-btn" onclick="dashCreate()">Crear dashboard</button>
+      </div>
     </div>
   </div>
 

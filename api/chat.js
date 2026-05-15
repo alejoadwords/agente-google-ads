@@ -6,6 +6,29 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Verify Clerk JWT using JWKS (Edge-compatible, no extra deps)
+async function verifyClerkToken(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const header = JSON.parse(atob(hB64.replace(/-/g,'+').replace(/_/g,'/')));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const key = jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const cryptoKey = await crypto.subtle.importKey(
+      'jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
+    );
+    const sig = Uint8Array.from(atob(sB64.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
+    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
+    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data);
+    if (!valid) return null;
+    const payload = JSON.parse(atob(pB64.replace(/-/g,'+').replace(/_/g,'/')));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub || null;
+  } catch { return null; }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
@@ -13,6 +36,17 @@ export default async function handler(req) {
 
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: CORS });
+  }
+
+  // Verify Clerk session token — block unauthenticated requests
+  const authHeader = req.headers.get('Authorization');
+  const token = authHeader?.replace('Bearer ', '') || '';
+  const userId = token ? await verifyClerkToken(token) : null;
+  if (!userId) {
+    return new Response(
+      JSON.stringify({ error: 'No autorizado.' }),
+      { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Acuarius</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --brand:#1E2BCC;
+      --bg:#F9FAFB;
+      --card:#fff;
+      --border:#E5E7EB;
+      --text:#111827;
+      --muted:#6B7280;
+      --green:#10B981;
+      --yellow:#F59E0B;
+      --red:#EF4444;
+      --google:#4285F4;
+      --meta:#1877F2;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* ── Header ── */
+    .header{background:var(--brand);color:#fff;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .header-left{display:flex;align-items:center;gap:12px}
+    .logo-wrap{width:36px;height:36px;border-radius:8px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .agency-name{font-size:14px;opacity:.8;margin-top:2px}
+    .client-name{font-size:20px;font-weight:700;line-height:1.2}
+    .header-right{text-align:right;font-size:13px;opacity:.75}
+    .period-badge{display:inline-block;background:rgba(255,255,255,.15);border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;margin-top:4px}
+
+    /* ── Container ── */
+    .container{max-width:1200px;margin:0 auto;padding:28px 24px}
+
+    /* ── KPI Cards ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+    .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+    .kpi-label{font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+    .kpi-value{font-size:28px;font-weight:700;line-height:1.1}
+    .kpi-sub{font-size:12px;color:var(--muted);margin-top:4px}
+    .kpi-delta{font-size:12px;margin-top:4px;font-weight:600}
+    .kpi-delta.up{color:var(--green)} .kpi-delta.down{color:var(--red)}
+
+    /* ── Section titles ── */
+    .section-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+    /* ── Charts row ── */
+    .charts-row{display:grid;grid-template-columns:1fr 2fr;gap:16px;margin-bottom:24px}
+    @media(max-width:760px){.charts-row{grid-template-columns:1fr}}
+    .chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+    .chart-title{font-size:14px;font-weight:600;color:var(--muted);margin-bottom:14px}
+    .chart-wrap{position:relative;height:220px}
+    .chart-wrap.tall{height:280px}
+
+    /* ── Platform cards ── */
+    .platforms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:24px}
+    .platform-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .platform-header{padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+    .platform-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .platform-name{font-weight:700;font-size:15px}
+    .platform-spend{margin-left:auto;font-weight:700;font-size:18px}
+    .platform-body{padding:16px 18px}
+    .metric-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+    .metric-row:last-child{border-bottom:none}
+    .metric-label{font-size:13px;color:var(--muted)}
+    .metric-val{font-size:13px;font-weight:600}
+
+    /* ── Campaigns table ── */
+    .campaigns-section{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:24px;overflow:hidden}
+    .campaigns-header{padding:16px 20px;border-bottom:1px solid var(--border)}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{padding:10px 16px;text-align:left;font-weight:600;color:var(--muted);font-size:12px;border-bottom:1px solid var(--border);white-space:nowrap;background:#F9FAFB}
+    td{padding:11px 16px;border-bottom:1px solid var(--border)}
+    tr:last-child td{border-bottom:none}
+    .status-badge{display:inline-block;font-size:11px;font-weight:600;border-radius:4px;padding:2px 7px}
+    .status-badge.enabled{background:#D1FAE5;color:#065F46}
+    .status-badge.paused{background:#FEF3C7;color:#92400E}
+    .plat-tag{font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;margin-right:4px}
+    .plat-tag.google{background:#EBF2FF;color:var(--google)}
+    .plat-tag.meta{background:#EFF6FF;color:var(--meta)}
+
+    /* ── Insights ── */
+    .insights-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px}
+    .insights-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:14px}
+    .insight-block{border-radius:8px;padding:14px 16px}
+    .insight-block.obs{background:#EFF6FF;border:1px solid #BFDBFE}
+    .insight-block.alert{background:#FFF7ED;border:1px solid #FED7AA}
+    .insight-block.rec{background:#F0FDF4;border:1px solid #BBF7D0}
+    .insight-block-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .insight-block.obs .insight-block-title{color:#1D4ED8}
+    .insight-block.alert .insight-block-title{color:#C2410C}
+    .insight-block.rec .insight-block-title{color:#15803D}
+    .insight-item{font-size:13px;color:var(--text);line-height:1.5;padding:4px 0 4px 12px;border-left:2px solid currentColor;margin-bottom:6px}
+    .insight-item:last-child{margin-bottom:0}
+    .insight-block.obs .insight-item{border-color:#93C5FD}
+    .insight-block.alert .insight-item{border-color:#FDBA74}
+    .insight-block.rec .insight-item{border-color:#86EFAC}
+
+    /* ── Manual data ── */
+    .manual-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px}
+    .manual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:14px}
+    .manual-item{border:1px solid var(--border);border-radius:8px;padding:14px}
+    .manual-item-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+    .manual-item-val{font-size:20px;font-weight:700}
+
+    /* ── Footer ── */
+    .footer{border-top:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;background:var(--card);font-size:12px;color:var(--muted)}
+    .footer-logo{display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--muted)}
+    .update-info{display:flex;align-items:center;gap:6px}
+    .update-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+    .refresh-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
+    .refresh-btn:hover{background:var(--bg)}
+
+    /* ── Print ── */
+    .print-btn{position:fixed;bottom:24px;right:24px;background:var(--brand);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(30,43,204,.35);display:flex;align-items:center;gap:6px}
+    .print-btn:hover{opacity:.92}
+    @media print{.print-btn,.refresh-btn{display:none}}
+
+    /* ── Loading / Error ── */
+    .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px}
+    .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .error-wrap{text-align:center;padding:60px 24px}
+    .error-wrap h2{font-size:20px;margin-bottom:8px}
+    .error-wrap p{color:var(--muted);font-size:14px}
+
+    /* ── Bar chart in campaigns ── */
+    .spend-bar-wrap{width:100%;height:6px;background:var(--border);border-radius:3px;margin-top:3px}
+    .spend-bar{height:6px;border-radius:3px;background:var(--brand)}
+
+    /* ── No data ── */
+    .no-data{text-align:center;padding:32px;color:var(--muted);font-size:14px}
+  </style>
+</head>
+<body>
+
+<div id="loading" class="loading-wrap">
+  <div class="spinner"></div>
+  <div style="font-size:14px;color:#6B7280">Cargando datos del dashboard...</div>
+</div>
+
+<div id="error-view" class="error-wrap" style="display:none">
+  <h2>Dashboard no encontrado</h2>
+  <p>El enlace puede haber expirado o el dashboard fue eliminado.</p>
+</div>
+
+<div id="app" style="display:none">
+  <!-- Header -->
+  <div class="header" id="header">
+    <div class="header-left">
+      <div class="logo-wrap">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" width="36" height="36">
+          <rect width="75" height="75" fill="#1E2BCC" rx="8"/>
+          <path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/>
+          <path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/>
+          <circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/>
+        </svg>
+      </div>
+      <div>
+        <div class="agency-name" id="agency-name"></div>
+        <div class="client-name" id="client-name"></div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="period-label"></div>
+      <div class="period-badge" id="period-badge"></div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- KPI Row -->
+    <div class="kpi-grid" id="kpi-grid"></div>
+
+    <!-- Charts Row -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Inversión por plataforma</div>
+        <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Inversión diaria</div>
+        <div class="chart-wrap tall"><canvas id="lineChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Platform Cards -->
+    <div class="section-title"><span class="dot" style="background:var(--brand)"></span>Rendimiento por plataforma</div>
+    <div class="platforms-grid" id="platforms-grid"></div>
+
+    <!-- Campaigns Table -->
+    <div class="campaigns-section" id="campaigns-section" style="display:none">
+      <div class="campaigns-header">
+        <div class="section-title" style="margin-bottom:0"><span class="dot" style="background:#8B5CF6"></span>Top campañas</div>
+      </div>
+      <div class="table-wrap">
+        <table id="campaigns-table">
+          <thead>
+            <tr>
+              <th>Plataforma</th>
+              <th>Campaña</th>
+              <th>Inversión</th>
+              <th>Clics</th>
+              <th>Conv.</th>
+              <th>CTR</th>
+              <th>CPC</th>
+              <th>Inv. %</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="insights-section" id="insights-section" style="display:none">
+      <div class="section-title" style="margin-bottom:0"><span class="dot" style="background:#F59E0B"></span>Análisis IA</div>
+      <div class="insights-grid" id="insights-grid"></div>
+    </div>
+
+    <!-- Manual Data -->
+    <div class="manual-section" id="manual-section" style="display:none">
+      <div class="section-title" style="margin-bottom:0"><span class="dot" style="background:#10B981"></span>Datos adicionales</div>
+      <div class="manual-grid" id="manual-grid"></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <a class="footer-logo" href="https://acuarius.app" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" width="18" height="18" style="border-radius:4px">
+        <rect width="75" height="75" fill="#1E2BCC" rx="8"/>
+        <path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/>
+        <path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/>
+        <circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/>
+      </svg>
+      Generado con Acuarius
+    </a>
+    <div class="update-info">
+      <div class="update-dot" id="status-dot"></div>
+      <span id="update-label">Actualizando...</span>
+      <button class="refresh-btn" onclick="loadData()">↻ Actualizar</button>
+    </div>
+  </div>
+</div>
+
+<button class="print-btn" onclick="window.print()">⬇ Exportar PDF</button>
+
+<script>
+const $ = id => document.getElementById(id);
+let dashData = null;
+let donutChart = null;
+let lineChart = null;
+
+const fmtCurrency = (n, decimals = 0) => {
+  if (n >= 1000) return '$' + (n / 1000).toFixed(1) + 'k';
+  return '$' + (n || 0).toFixed(decimals);
+};
+const fmtNum = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : (n || 0).toLocaleString();
+const fmtPct = n => (n || 0).toFixed(2) + '%';
+
+function getId() {
+  return new URLSearchParams(window.location.search).get('id');
+}
+
+async function loadData() {
+  const id = getId();
+  if (!id) { showError(); return; }
+
+  try {
+    const res = await fetch('/api/dashboard?id=' + id);
+    if (!res.ok) throw new Error('Not found');
+    dashData = await res.json();
+    render(dashData);
+  } catch (e) {
+    showError();
+  }
+}
+
+function showError() {
+  $('loading').style.display = 'none';
+  $('error-view').style.display = 'block';
+}
+
+function timeAgo(ts) {
+  if (!ts) return 'Sin datos en caché';
+  const diff = (Date.now() - new Date(ts).getTime()) / 60000;
+  if (diff < 2) return 'Hace un momento';
+  if (diff < 60) return 'Hace ' + Math.round(diff) + ' min';
+  return 'Hace ' + Math.round(diff / 60) + ' h';
+}
+
+function periodLabel(period, from, to) {
+  const labels = { '7d':'Últimos 7 días', '14d':'Últimos 14 días', '30d':'Últimos 30 días', '90d':'Últimos 90 días' };
+  if (labels[period]) return labels[period];
+  return from + ' → ' + to;
+}
+
+function render(d) {
+  // Apply brand color
+  if (d.agency_color) {
+    document.documentElement.style.setProperty('--brand', d.agency_color);
+  }
+
+  // Header
+  $('client-name').textContent = d.client_name;
+  $('agency-name').textContent = d.agency_name || 'Dashboard de rendimiento';
+  $('period-label').textContent = d.date_from + ' — ' + d.date_to;
+  $('period-badge').textContent = periodLabel(d.period, d.date_from, d.date_to);
+
+  // Footer
+  $('update-label').textContent = timeAgo(d.cached_at);
+
+  // Aggregate totals
+  const platforms = d.platforms || [];
+  const manual = d.manual_data || {};
+
+  let totalSpend = 0, totalClicks = 0, totalImpressions = 0, totalConversions = 0;
+  let totalConvValue = 0;
+
+  for (const p of platforms) {
+    totalSpend += p.spend || 0;
+    totalClicks += p.clicks || 0;
+    totalImpressions += p.impressions || 0;
+    totalConversions += p.conversions || 0;
+    totalConvValue += (p.roas || 0) * (p.spend || 0);
+  }
+
+  const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  const avgCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;
+  const avgCPA = totalConversions > 0 ? totalSpend / totalConversions : 0;
+  const avgROAS = totalSpend > 0 ? totalConvValue / totalSpend : 0;
+
+  // KPIs
+  const kpis = [
+    { label: 'Inversión total', value: fmtCurrency(totalSpend, totalSpend < 1000 ? 2 : 0), sub: 'Total período' },
+    { label: 'Clics', value: fmtNum(totalClicks), sub: 'CTR ' + fmtPct(avgCTR) },
+    { label: 'Impresiones', value: fmtNum(totalImpressions), sub: 'Alcance estimado' },
+    { label: 'Conversiones', value: fmtNum(totalConversions), sub: 'CPA ' + fmtCurrency(avgCPA, 2) },
+    { label: 'CPC promedio', value: fmtCurrency(avgCPC, 2), sub: 'Por clic' },
+    { label: 'ROAS', value: avgROAS > 0 ? avgROAS.toFixed(2) + 'x' : '—', sub: 'Retorno inversión' },
+  ];
+
+  $('kpi-grid').innerHTML = kpis.map(k => `
+    <div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+
+  // Donut chart — spend by platform
+  const platNames = platforms.map(p => p.platform === 'google_ads' ? 'Google Ads' : p.platform === 'meta_ads' ? 'Meta Ads' : p.platform);
+  const platSpends = platforms.map(p => p.spend || 0);
+  const platColors = platforms.map(p => p.platform === 'google_ads' ? '#4285F4' : p.platform === 'meta_ads' ? '#1877F2' : '#8B5CF6');
+
+  if (donutChart) donutChart.destroy();
+  if (platforms.length > 0) {
+    donutChart = new Chart($('donutChart'), {
+      type: 'doughnut',
+      data: {
+        labels: platNames,
+        datasets: [{ data: platSpends, backgroundColor: platColors, borderWidth: 2, borderColor: '#fff' }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 16, font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' ' + ctx.label + ': ' + fmtCurrency(ctx.parsed, 0) + ' (' + ((ctx.parsed / totalSpend) * 100).toFixed(1) + '%)'
+            }
+          }
+        },
+        cutout: '62%',
+      }
+    });
+  } else {
+    $('donutChart').parentElement.innerHTML = '<div class="no-data">Sin datos de plataformas conectadas</div>';
+  }
+
+  // Line chart — daily spend
+  const allDates = new Set();
+  for (const p of platforms) (p.daily || []).forEach(d => allDates.add(d.date));
+  const dates = Array.from(allDates).sort();
+  const lineColors = ['#4285F4', '#1877F2', '#8B5CF6', '#10B981'];
+
+  if (lineChart) lineChart.destroy();
+  if (dates.length > 0) {
+    const datasets = platforms.map((p, i) => {
+      const map = {};
+      (p.daily || []).forEach(r => { map[r.date] = r.spend; });
+      return {
+        label: platNames[i],
+        data: dates.map(d => map[d] || 0),
+        borderColor: lineColors[i] || '#888',
+        backgroundColor: (lineColors[i] || '#888') + '18',
+        tension: 0.3,
+        fill: true,
+        pointRadius: dates.length > 20 ? 0 : 3,
+        borderWidth: 2,
+      };
+    });
+
+    lineChart = new Chart($('lineChart'), {
+      type: 'line',
+      data: { labels: dates.map(d => d.slice(5)), datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { padding: 14, font: { size: 12 } } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: {
+            grid: { color: '#F3F4F6' },
+            ticks: {
+              font: { size: 11 },
+              callback: v => '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v),
+            }
+          }
+        },
+        interaction: { mode: 'index', intersect: false },
+      }
+    });
+  } else {
+    $('lineChart').parentElement.innerHTML = '<div class="no-data">Sin datos diarios disponibles</div>';
+  }
+
+  // Platform breakdown cards
+  const platGrid = $('platforms-grid');
+  if (platforms.length > 0) {
+    platGrid.innerHTML = platforms.map(p => {
+      const icon = p.platform === 'google_ads' ? '🔵' : p.platform === 'meta_ads' ? '🟦' : '📊';
+      const name = p.platform === 'google_ads' ? 'Google Ads' : p.platform === 'meta_ads' ? 'Meta Ads' : p.platform;
+      const color = p.platform === 'google_ads' ? 'var(--google)' : p.platform === 'meta_ads' ? 'var(--meta)' : 'var(--brand)';
+      const cpa = p.conversions > 0 ? p.spend / p.conversions : 0;
+      const roas = p.roas || 0;
+      return `
+        <div class="platform-card">
+          <div class="platform-header">
+            <div class="platform-icon" style="background:${color}18;color:${color}">${icon}</div>
+            <div class="platform-name" style="color:${color}">${name}</div>
+            <div class="platform-spend">${fmtCurrency(p.spend, 0)}</div>
+          </div>
+          <div class="platform-body">
+            <div class="metric-row"><span class="metric-label">Clics</span><span class="metric-val">${fmtNum(p.clicks)}</span></div>
+            <div class="metric-row"><span class="metric-label">Impresiones</span><span class="metric-val">${fmtNum(p.impressions)}</span></div>
+            <div class="metric-row"><span class="metric-label">CTR</span><span class="metric-val">${fmtPct(p.ctr * 100)}</span></div>
+            <div class="metric-row"><span class="metric-label">CPC</span><span class="metric-val">${fmtCurrency(p.cpc, 2)}</span></div>
+            <div class="metric-row"><span class="metric-label">Conversiones</span><span class="metric-val">${fmtNum(p.conversions)}</span></div>
+            <div class="metric-row"><span class="metric-label">CPA</span><span class="metric-val">${cpa > 0 ? fmtCurrency(cpa, 2) : '—'}</span></div>
+            <div class="metric-row"><span class="metric-label">ROAS</span><span class="metric-val">${roas > 0 ? roas.toFixed(2) + 'x' : '—'}</span></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    platGrid.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:20px 0">Sin plataformas conectadas. Los datos aparecerán aquí cuando se configuren las integraciones.</div>';
+  }
+
+  // Campaigns table
+  const allCampaigns = [];
+  for (const p of platforms) {
+    const platTag = p.platform === 'google_ads' ? 'google' : 'meta';
+    (p.campaigns || []).forEach(c => allCampaigns.push({ ...c, platTag }));
+  }
+  allCampaigns.sort((a, b) => (b.spend || 0) - (a.spend || 0));
+
+  if (allCampaigns.length > 0) {
+    $('campaigns-section').style.display = 'block';
+    const maxSpend = allCampaigns[0]?.spend || 1;
+    $('campaigns-tbody').innerHTML = allCampaigns.slice(0, 15).map(c => {
+      const pct = ((c.spend || 0) / totalSpend * 100).toFixed(1);
+      const barPct = ((c.spend || 0) / maxSpend * 100).toFixed(1);
+      return `
+        <tr>
+          <td><span class="plat-tag ${c.platTag}">${c.platTag === 'google' ? 'Google' : 'Meta'}</span></td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name || '—'}</td>
+          <td><strong>${fmtCurrency(c.spend, 0)}</strong></td>
+          <td>${fmtNum(c.clicks)}</td>
+          <td>${fmtNum(c.conversions)}</td>
+          <td>${fmtPct((c.ctr || 0) * 100)}</td>
+          <td>${fmtCurrency(c.cpc, 2)}</td>
+          <td>
+            <div style="font-size:12px;color:var(--muted)">${pct}%</div>
+            <div class="spend-bar-wrap"><div class="spend-bar" style="width:${barPct}%"></div></div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // AI Insights
+  if (d.insights) {
+    $('insights-section').style.display = 'block';
+    const ins = d.insights;
+    const blocks = [
+      { key: 'observaciones', cls: 'obs', icon: '📊', title: 'Observaciones' },
+      { key: 'alertas', cls: 'alert', icon: '⚠️', title: 'Alertas' },
+      { key: 'recomendaciones', cls: 'rec', icon: '💡', title: 'Recomendaciones' },
+    ];
+    $('insights-grid').innerHTML = blocks.filter(b => ins[b.key]?.length).map(b => `
+      <div class="insight-block ${b.cls}">
+        <div class="insight-block-title">${b.icon} ${b.title}</div>
+        ${ins[b.key].map(item => `<div class="insight-item">${item}</div>`).join('')}
+      </div>
+    `).join('');
+  }
+
+  // Manual data
+  if (Object.keys(manual).length > 0) {
+    $('manual-section').style.display = 'block';
+    $('manual-grid').innerHTML = Object.entries(manual).map(([k, v]) => `
+      <div class="manual-item">
+        <div class="manual-item-label">${k}</div>
+        <div class="manual-item-val">${v}</div>
+      </div>
+    `).join('');
+  }
+
+  // Show app, hide loading
+  $('loading').style.display = 'none';
+  $('app').style.display = 'block';
+
+  // Auto-refresh every 10 minutes
+  setTimeout(loadData, 10 * 60 * 1000);
+}
+
+// Init
+loadData();
+</script>
+</body>
+</html>
