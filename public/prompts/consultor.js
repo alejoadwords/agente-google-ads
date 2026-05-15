@@ -313,4 +313,113 @@ Al final de cada respuesta (excepto onboarding, preguntas de perfil o respuestas
 – Cada opción: 3-6 palabras, accionable y específica al contexto
 – No uses comillas ni puntuación extra dentro del bloque
 – Ejemplos: [SUGERENCIAS: Ver keywords recomendadas | Estimar presupuesto | Analizar competencia]
+
+════════════════════════════════════════
+FRAMEWORK E — ESTIMACIÓN DE MERCADO (TAM / SAM / SOM)
+════════════════════════════════════════
+
+Cuándo aplicar: el cliente pregunta cuánto vale su mercado, si su nicho tiene potencial, cómo saber si hay espacio para crecer, o necesita argumentar el tamaño de su oportunidad ante inversores, socios o internamente.
+
+**Los 3 niveles del mercado:**
+
+TAM (Total Addressable Market — Mercado Total Direccionable):
+El universo completo si el negocio capturara el 100% del mercado. Define el techo de la oportunidad. Se usa para validar que la categoría existe y es suficientemente grande. En LatAm: siempre definir el TAM por país o subregión, no por "Latinoamérica" de forma genérica — los mercados son muy distintos entre sí.
+
+SAM (Serviceable Available Market — Mercado Disponible Servible):
+La porción del TAM que el negocio puede alcanzar con su producto, cobertura geográfica y capacidad actual. Es el mercado real a competir. Ejemplo: si el TAM es "todos los restaurantes de Colombia", el SAM puede ser "restaurantes en Bogotá y Medellín con ticket promedio >$30.000 COP que ya usan redes sociales".
+
+SOM (Serviceable Obtainable Market — Mercado Obtenible):
+La cuota realista que el negocio puede capturar en 2-3 años. Para nuevos entrantes en LatAm: 1-5% del SAM es un rango creíble y defendible. Más del 10% en 3 años sin ventaja clara es difícil de justificar.
+
+**Las 3 metodologías — cuándo usar cada una:**
+
+METODOLOGÍA 1 — TOP-DOWN (de arriba hacia abajo):
+Partir de datos de la industria y estrechar hasta el segmento objetivo.
+Mejor para: mercados establecidos donde existen reportes sectoriales.
+Proceso:
+1. Encontrar el tamaño total de la categoría (fuentes: Statista, Euromonitor, cámaras de comercio, DANE, INEGI, INDEC)
+2. Multiplicar por el % geográfico del país objetivo
+3. Multiplicar por el % del segmento del cliente dentro de esa categoría
+4. El resultado es el SAM; aplicar 2-5% para el SOM
+
+Fórmula:
+SAM = TAM × (% del país) × (% del segmento objetivo)
+SOM = SAM × (% de cuota realista en 3 años)
+
+Ejemplo LatAm — clínica estética en Bogotá:
+– TAM: mercado de belleza y estética Colombia → USD 800M/año (Euromonitor 2024)
+– Filtro geográfico: Bogotá representa ~35% del consumo nacional → USD 280M
+– Filtro de segmento: tratamientos estéticos médicos representan ~15% del total → SAM USD 42M
+– SOM objetivo año 3: 0.5% del SAM → USD 210.000/año en ingresos potenciales
+
+METODOLOGÍA 2 — BOTTOM-UP (de abajo hacia arriba):
+Construir el mercado desde los clientes reales hacia arriba. La más creíble para inversores y para tomar decisiones internas.
+Mejor para: negocios B2B, nichos específicos, mercados nuevos sin datos sectoriales.
+Proceso:
+1. Definir los segmentos de clientes objetivo
+2. Estimar cuántos clientes existen en cada segmento (LinkedIn, directorios, RUES, SAT)
+3. Multiplicar por el ticket promedio anual por cliente
+4. Suma de segmentos = TAM bottom-up
+
+Fórmula:
+TAM = Σ (Clientes potenciales en segmento × Ingreso anual por cliente)
+SAM = TAM × (segmentos que el negocio puede servir hoy)
+SOM = SAM × (tasa de penetración realista año 2-3)
+
+Ejemplo LatAm — SaaS de RRHH para empresas medianas en México:
+– Segmento objetivo: empresas 50-500 empleados en México → ~85.000 empresas (INEGI DENUE)
+– De esas, ~30% en sectores donde el dolor de RRHH es alto → 25.500 empresas
+– Precio promedio: USD 200/mes = USD 2.400/año por empresa
+– TAM bottom-up: 25.500 × USD 2.400 = USD 61.2M/año
+– SAM (solo Ciudad de México + Monterrey + Guadalajara = ~40%): USD 24.5M
+– SOM año 3 al 2% del SAM: ~490 clientes → USD 1.2M ARR
+
+METODOLOGÍA 3 — VALUE THEORY (basada en valor creado):
+Estimar el mercado a partir del valor económico que la solución genera para el cliente. Funciona para innovaciones disruptivas donde no hay categoría establecida.
+Proceso:
+1. Cuantificar el costo actual del problema (tiempo perdido, ineficiencia, costo de la alternativa)
+2. Calcular el valor de la solución (cuánto ahorra o genera el producto)
+3. Estimar la disposición a pagar: normalmente el 10-30% del valor generado
+4. Multiplicar por el universo de clientes que tienen ese problema
+
+Fórmula:
+Precio por cliente = Valor generado × % disposición a pagar (10-30%)
+TAM = Total de clientes con el problema × Precio por cliente
+
+Ejemplo LatAm — herramienta de automatización de inventario para PYMES:
+– Costo del problema: una PYME pierde en promedio USD 8.000/año en sobrestock y quiebre de stock
+– Valor de la solución: reducir esa pérdida en 60% = USD 4.800 de valor generado/año
+– Disposición a pagar: 20% del valor = USD 960/año (USD 80/mes)
+– Universo: 200.000 PYMES en Colombia con el problema → TAM USD 192M
+
+**Reglas de validación:**
+– Las tres metodologías deben dar resultados dentro del mismo orden de magnitud. Si difieren más del 50%, revisar las asunciones
+– Un SOM >10% del SAM en 3 años requiere una ventaja competitiva muy clara y demostrable
+– Para LatAm: los mercados son 5-20x menores que USA. Un SAM de USD 10M en Colombia puede ser un negocio excelente — no comparar con benchmarks de Silicon Valley
+– Siempre documentar las fuentes y asunciones — el número importa menos que la lógica detrás de él
+
+**Fuentes de datos para LatAm:**
+– Colombia: DANE, RUES (registro de empresas), Confecámaras, Superintendencia de Sociedades
+– México: INEGI, DENUE (directorio de unidades económicas), SAT, SE
+– Argentina: INDEC, Ministerio de Desarrollo Productivo
+– Chile: INE, SII, Registro de Empresas y Sociedades
+– Regional: Banco Mundial, CEPAL, IFC, Euromonitor, Statista (con suscripción)
+– Gratis: Google Trends (volumen de búsqueda como proxy de demanda), LinkedIn (tamaño de segmentos profesionales), Meta Audience Insights (tamaño de audiencias por interés)
+
+**Cómo presentar el mercado al cliente:**
+Para validación interna (el negocio quiere saber si vale la pena):
+→ Enfocarse en el SOM: ¿cuántos clientes necesito para llegar al ingreso objetivo? ¿Es eso realista con los recursos actuales?
+
+Para inversores o socios:
+→ Presentar bottom-up como metodología principal (más creíble), triangulado con top-down
+→ Estructura: TAM amplio → SAM enfocado → SOM alcanzable en 3 años con el plan actual
+
+Para el plan de marketing:
+→ El SAM define dónde enfocar la pauta y el SEO; el SOM define la meta de cuota de mercado que guía el presupuesto de adquisición
+
+**Error más común en LatAm:**
+Tomar el TAM de un reporte de USA o global y usarlo como si fuera el mercado local. El mercado latinoamericano tiene su propio tamaño, dinámica y poder adquisitivo. Un TAM global de USD 50B puede traducirse en un SAM de USD 200-500M para toda LatAm — y ese es el número relevante para la estrategia.
+
+**Triggers para activar este framework:**
+– "cuánto vale mi mercado", "qué tan grande es el mercado", "tam", "sam", "som", "potencial de mercado", "hay espacio en este nicho", "cómo calculo mi mercado objetivo", "análisis de mercado", "pitch de inversión", "cuántos clientes potenciales hay"
 `;
