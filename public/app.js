@@ -11245,7 +11245,7 @@ const HDW_CATEGORIES = [
 // Template pools by category and format
 const HDW_CATEGORY_TEMPLATES = {
   general:     { feed:[9,14,10,4,5,6],   story:[0,1,7],       square:[10,11,12,13,9,3] },
-  yoga:        { feed:[16,6,13,4,14,5],  story:[17,7,1,0],    square:[15,13,11,10,12,3] },
+  yoga:        { feed:[16,16,14,6,13,4], story:[17,18,17,18,7], square:[15,15,13,11,10,12] },
   fitness:     { feed:[5,14,9,4,6,10],   story:[0,1,7],       square:[3,12,10,11,13,9] },
   ecommerce:   { feed:[9,4,14,5,6,10],   story:[1,0,7],       square:[9,10,11,3,12,13] },
   restaurante: { feed:[4,6,14,9,5,10],   story:[1,7,0],       square:[11,13,10,12,9,3] },
@@ -11476,10 +11476,11 @@ const HDW_TEMPLATES = [
   { format:'square', label:'Yoga · Serenity',      id:15 },
   { format:'feed',   label:'Yoga · Zen Split',     id:16 },
   { format:'story',  label:'Yoga · Story Flow',    id:17 },
+  { format:'story',  label:'Yoga · Minimal Light', id:18 },
 ];
 
 function hdwGetTemplateList(fmt, count, category) {
-  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed',15:'square',16:'feed',17:'story'};
+  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed',15:'square',16:'feed',17:'story',18:'story'};
 
   let pool = [];
   const catKey = (category && HDW_CATEGORY_TEMPLATES[category]) ? category : 'general';
@@ -12222,6 +12223,58 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '</div>' +
         // CTA button
         '<div style="background:' + Y_GOLD + ';color:' + Y_DARK + ';padding:22px 48px;border-radius:6px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;display:inline-block">' + (brief.cta_title || 'COMENZAR AHORA') + '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 18: Yoga · Minimal Light (Story 1080×1920) ──────
+  if (tplId === 18) {
+    const Y_GOLD  = '#d39c50';
+    const Y_DARK  = '#1c1208';
+    const Y_CREAM = '#f6f1ed';
+    const Y_TERRA = '#8a5f49';
+    const photoSize = Math.round(W * 0.72);
+    const feats18 = feats.slice(0, 3);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + Y_CREAM + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column;align-items:center">' +
+      '<style>' + fonts + '</style>' +
+      // Top header
+      '<div style="width:100%;padding:64px 72px 32px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between">' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:' + Y_TERRA + ';letter-spacing:.2em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<div style="width:32px;height:1px;background:' + Y_GOLD + '"></div>' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
+          '<div style="width:16px;height:1px;background:' + Y_GOLD + '"></div>' +
+        '</div>' +
+      '</div>' +
+      // Framed photo
+      '<div style="position:relative;width:' + photoSize + 'px;height:' + photoSize + 'px;flex-shrink:0">' +
+        // Gold outer frame
+        '<div style="position:absolute;inset:-8px;border:2px solid ' + Y_GOLD + ';border-radius:4px;opacity:.7"></div>' +
+        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:2px">' : '<div style="width:100%;height:100%;background:linear-gradient(135deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
+        // Bottom cream fade
+        '<div style="position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,' + Y_CREAM + ',transparent)"></div>' +
+      '</div>' +
+      // Content below photo
+      '<div style="flex:1;width:100%;padding:32px 72px 64px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
+        '<div>' +
+          '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(W * 0.1) + 'px;font-weight:700;color:' + Y_DARK + ';line-height:1.0;margin-bottom:12px">' + (brief.headline || 'Transforma tu bienestar') + '</div>' +
+          '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.048) + 'px;color:' + Y_TERRA + ';margin-bottom:28px;line-height:1.35">' + (brief.subheadline || '') + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:14px">' +
+            feats18.map(f => '<div style="display:flex;align-items:center;gap:14px">' +
+              '<div style="width:24px;height:24px;border-radius:50%;background:' + Y_GOLD + ';opacity:.25;flex-shrink:0"></div>' +
+              '<div style="position:relative"><div style="position:absolute;left:-17px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
+              '<div style="font-size:20px;color:' + Y_DARK + ';font-weight:600">' + f + '</div></div>' +
+            '</div>').join('') +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between">' +
+          '<div style="background:' + Y_DARK + ';color:' + Y_CREAM + ';padding:18px 36px;border-radius:4px;font-size:20px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">' + (brief.cta_title || 'COMENZAR') + '</div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+            '<div style="width:48px;height:2px;background:' + Y_GOLD + '"></div>' +
+            '<div style="width:32px;height:2px;background:' + Y_TERRA + '"></div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
       logoEl +
     '</div>';
