@@ -11244,16 +11244,16 @@ const HDW_CATEGORIES = [
 
 // Template pools by category and format
 const HDW_CATEGORY_TEMPLATES = {
-  general:     { feed:[9,14,10,4,5,6],   story:[0,1,7],       square:[10,11,12,13,9,3] },
-  yoga:        { feed:[16,16,14,6,13,4], story:[17,18,17,18,7], square:[15,15,13,11,10,12] },
-  fitness:     { feed:[5,14,9,4,6,10],   story:[0,1,7],       square:[3,12,10,11,13,9] },
-  ecommerce:   { feed:[9,4,14,5,6,10],   story:[1,0,7],       square:[9,10,11,3,12,13] },
-  restaurante: { feed:[4,6,14,9,5,10],   story:[1,7,0],       square:[11,13,10,12,9,3] },
-  belleza:     { feed:[6,4,9,14,10,5],   story:[7,1,0],       square:[11,10,13,12,3,9] },
-  educacion:   { feed:[10,9,4,14,6,5],   story:[0,7,1],       square:[10,11,3,12,13,9] },
-  tecnologia:  { feed:[14,5,9,4,10,6],   story:[0,1,7],       square:[3,10,12,11,9,13] },
-  turismo:     { feed:[4,14,6,9,5,10],   story:[1,7,0],       square:[11,13,10,9,12,3] },
-  moda:        { feed:[6,14,4,9,10,5],   story:[7,1,0],       square:[11,10,13,9,12,3] },
+  general:     { feed:[9,14,10,4,5,6],   story:[19,1,7,0],    square:[10,11,12,13,9,3] },
+  yoga:        { feed:[16,16,14,6,13,4], story:[17,18,19,17,18], square:[15,15,13,11,10,12] },
+  fitness:     { feed:[5,14,9,4,6,10],   story:[19,1,7,0],    square:[3,12,10,11,13,9] },
+  ecommerce:   { feed:[9,4,14,5,6,10],   story:[19,1,0,7],    square:[9,10,11,3,12,13] },
+  restaurante: { feed:[4,6,14,9,5,10],   story:[19,1,7,0],    square:[11,13,10,12,9,3] },
+  belleza:     { feed:[6,4,9,14,10,5],   story:[19,7,1,0],    square:[11,10,13,12,3,9] },
+  educacion:   { feed:[10,9,4,14,6,5],   story:[19,0,7,1],    square:[10,11,3,12,13,9] },
+  tecnologia:  { feed:[14,5,9,4,10,6],   story:[19,0,1,7],    square:[3,10,12,11,9,13] },
+  turismo:     { feed:[4,14,6,9,5,10],   story:[19,1,7,0],    square:[11,13,10,9,12,3] },
+  moda:        { feed:[6,14,4,9,10,5],   story:[19,7,1,0],    square:[11,10,13,9,12,3] },
 };
 
 function showHtmlDesignWizard() {
@@ -11374,6 +11374,26 @@ async function runHtmlDesign() {
   const fmt = hdwFormat;
   const cat = hdwCategory;
 
+  // Read file inputs BEFORE removing wizard from DOM
+  const bgFileInput = document.getElementById('hdw-bg-file');
+  const logoFileInput = document.getElementById('hdw-logo-file');
+  let customBgBase64 = null;
+  let logoBase64 = null;
+  if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
+    customBgBase64 = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(bgFileInput.files[0]);
+    });
+  }
+  if (logoFileInput && logoFileInput.files && logoFileInput.files[0]) {
+    logoBase64 = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(logoFileInput.files[0]);
+    });
+  }
+
   document.getElementById('html-design-wizard')?.remove();
 
   const thinkId = addThinking();
@@ -11397,37 +11417,16 @@ async function runHtmlDesign() {
     const brief = await briefRes.json();
     if (brief.error) throw new Error(brief.error);
 
-    // Read uploaded background (overrides AI generation)
-    const bgFileInput = document.getElementById('hdw-bg-file');
-    let customBgBase64 = null;
-    if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
-      customBgBase64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsDataURL(bgFileInput.files[0]);
-      });
-    }
-
-    // Read uploaded logo
-    const logoFileInput = document.getElementById('hdw-logo-file');
-    let logoBase64 = null;
-    if (logoFileInput && logoFileInput.files && logoFileInput.files[0]) {
-      logoBase64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsDataURL(logoFileInput.files[0]);
-      });
-    }
-
     // Step 2: Generate background photo with Flux (photo mode, no text) — skip if user uploaded custom bg
     let bgBase64 = customBgBase64;
     if (!customBgBase64) {
       updateMsg('Generando foto de fondo...');
       const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
+      const needsPeople = ['yoga','fitness','belleza','turismo','educacion','moda'].includes(cat);
       const bgRes = await fetch('/api/generate-image', {
         method: 'POST', headers,
         body: JSON.stringify({
-          prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text, no people, vibrant colors',
+          prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text' + (needsPeople ? ', natural lighting, authentic feeling' : ', no people') + ', vibrant colors',
           format: fluxFormat,
           variations: 1,
           hasText: false,
@@ -11477,10 +11476,11 @@ const HDW_TEMPLATES = [
   { format:'feed',   label:'Yoga · Zen Split',     id:16 },
   { format:'story',  label:'Yoga · Story Flow',    id:17 },
   { format:'story',  label:'Yoga · Minimal Light', id:18 },
+  { format:'story',  label:'Story · Hero Panel',   id:19 },
 ];
 
 function hdwGetTemplateList(fmt, count, category) {
-  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed',15:'square',16:'feed',17:'story',18:'story'};
+  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed',15:'square',16:'feed',17:'story',18:'story',19:'story'};
 
   let pool = [];
   const catKey = (category && HDW_CATEGORY_TEMPLATES[category]) ? category : 'general';
@@ -12273,6 +12273,57 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
           '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
             '<div style="width:48px;height:2px;background:' + Y_GOLD + '"></div>' +
             '<div style="width:32px;height:2px;background:' + Y_TERRA + '"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      logoEl +
+    '</div>';
+  }
+
+  // ── Template 19: Story · Hero Panel (Andiamo-style) ──────────
+  if (tplId === 19) {
+    const panelH  = Math.round(H * 0.48);
+    const feats19 = feats.slice(0, 5);
+    return '<div style="width:' + W + 'px;height:' + H + 'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
+      '<style>' + fonts + '</style>' +
+      // Full photo background
+      (bgBase64 ? '<img src="' + bgBase64 + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="position:absolute;inset:0;background:linear-gradient(160deg,' + c.primary + ',' + hdwLighten(c.primary, 0.35) + ')"></div>') +
+      // Top gradient for text readability
+      '<div style="position:absolute;top:0;left:0;right:0;height:' + Math.round(H * 0.65) + 'px;background:linear-gradient(to bottom,rgba(0,0,0,.65) 0%,rgba(0,0,0,.2) 55%,transparent 100%)"></div>' +
+      // Brand name top left
+      '<div style="position:absolute;top:68px;left:72px;right:72px">' +
+        '<div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:.18em;text-transform:uppercase;text-shadow:0 2px 10px rgba(0,0,0,.5);margin-bottom:18px">' + (brief.brand || '') + '</div>' +
+        // Category badge pill
+        '<div style="display:inline-flex;align-items:center;gap:10px;background:' + c.primary + ';color:#fff;padding:11px 24px;border-radius:50px;font-size:19px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 4px 16px rgba(0,0,0,.25);margin-bottom:0">' +
+          '<div style="width:22px;height:22px;flex-shrink:0">' + hdwIcon(brief.category || feats[0] || '', '#fff') + '</div>' +
+          (brief.category || brief.industria || 'DESTACADO') +
+        '</div>' +
+      '</div>' +
+      // Hero headline block (mid-photo)
+      '<div style="position:absolute;top:' + Math.round(H * 0.3) + 'px;left:72px;right:72px">' +
+        '<div style="font-size:' + Math.round(W * 0.14) + 'px;font-weight:900;color:#fff;line-height:.88;text-transform:uppercase;letter-spacing:-.02em;text-shadow:0 4px 20px rgba(0,0,0,.35);margin-bottom:10px">' + (brief.headline || '') + '</div>' +
+        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.072) + 'px;color:' + hdwLighten(c.primary, 0.5) + ';text-shadow:0 2px 10px rgba(0,0,0,.4);line-height:1.2">' + (brief.subheadline || '') + '</div>' +
+      '</div>' +
+      // White panel at bottom
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + panelH + 'px;background:#fff;border-radius:44px 44px 0 0;padding:44px 72px 60px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
+        // Optional description line
+        (brief.description ? '<div style="font-size:20px;color:#666;line-height:1.45;margin-bottom:4px">' + brief.description + '</div>' : '') +
+        // Feature list with icon circles
+        '<div style="display:flex;flex-direction:column;gap:18px">' +
+          feats19.map(f => '<div style="display:flex;align-items:center;gap:18px">' +
+            '<div style="width:48px;height:48px;border-radius:50%;background:' + c.primary + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">' +
+              '<div style="width:24px;height:24px">' + hdwIcon(f, '#fff') + '</div>' +
+            '</div>' +
+            '<div style="font-size:21px;color:#222;font-weight:600;line-height:1.25">' + f + '</div>' +
+          '</div>').join('') +
+        '</div>' +
+        // CTA full width + logo
+        '<div style="display:flex;align-items:center;gap:16px;margin-top:4px">' +
+          '<div style="flex:1;display:flex;align-items:center;justify-content:space-between;background:' + c.primary + ';color:#fff;padding:24px 36px;border-radius:18px;font-size:23px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;cursor:pointer">' +
+            '<span>' + (brief.cta_title || 'DESCUBRE MÁS') + '</span>' +
+            '<div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="width:22px;height:22px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
