@@ -11621,9 +11621,21 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
   const iconBg = hdwLighten(c.primary, 0.8);
   const feats = (brief.features || ['Característica 1','Característica 2','Característica 3','Característica 4']).slice(0,4);
   const fonts = '@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap");';
-  const logoEl = logoBase64
-    ? '<div style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.92);border-radius:12px;padding:8px 14px;display:flex;align-items:center;max-width:140px;max-height:72px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.2)"><img src="'+logoBase64+'" style="max-width:120px;max-height:56px;object-fit:contain"></div>'
+  // Logo variants — use the right one per template background type
+  // logoDark: pill with glass blur, for dark/photo backgrounds
+  const logoDark = logoBase64
+    ? '<div style="position:absolute;top:28px;right:28px;background:rgba(255,255,255,.18);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.35);border-radius:50px;padding:8px 18px;display:flex;align-items:center;max-width:160px;height:54px;z-index:10"><img src="'+logoBase64+'" style="max-width:130px;max-height:40px;object-fit:contain;filter:brightness(0) invert(1)"></div>'
     : '';
+  // logoLight: no container, just drop shadow, for cream/white backgrounds
+  const logoLight = logoBase64
+    ? '<div style="position:absolute;top:28px;right:28px;max-width:120px;max-height:56px;z-index:10;filter:drop-shadow(0 2px 6px rgba(0,0,0,.12))"><img src="'+logoBase64+'" style="max-width:120px;max-height:56px;object-fit:contain"></div>'
+    : '';
+  // logoPanel: bottom-right inside a white panel, original colors
+  const logoPanel = logoBase64
+    ? '<div style="position:absolute;bottom:40px;right:60px;max-width:110px;max-height:52px;z-index:10"><img src="'+logoBase64+'" style="max-width:110px;max-height:52px;object-fit:contain"></div>'
+    : '';
+  // logoEl: default (kept for backward compat with older templates)
+  const logoEl = logoDark;
 
   // ── Template 0: Story Split ────────────────────────────────────
   if (tplId === 0) {
@@ -12145,7 +12157,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
           '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' + (brief.cta_title || 'DESCUBRIR') +
         '</div>' +
       '</div>' +
-      logoEl +
+      logoLight +
     '</div>';
   }
 
@@ -12177,15 +12189,14 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '</div>' +
         // CTA
         '<div style="background:' + Y_TERRA + ';color:#fff;padding:16px 24px;border-radius:4px;font-size:18px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;width:fit-content">' + (brief.cta_title || 'COMENZAR') + '</div>' +
-        '<div style="width:40px;height:3px;background:' + Y_GOLD + ';margin-top:32px"></div>' +
+        // Logo at bottom of cream panel (no white box — bg is already cream)
+        (logoBase64 ? '<div style="margin-top:24px"><img src="' + logoBase64 + '" style="max-width:100px;max-height:44px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.1))"></div>' : '<div style="width:40px;height:3px;background:' + Y_GOLD + ';margin-top:32px"></div>') +
       '</div>' +
       // Right: photo
       '<div style="flex:1;height:' + H + 'px;overflow:hidden;position:relative">' +
         (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:linear-gradient(160deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
-        // Subtle left shadow on photo
         '<div style="position:absolute;inset:0;background:linear-gradient(to right, rgba(0,0,0,.15) 0%, transparent 30%)"></div>' +
       '</div>' +
-      logoEl +
     '</div>';
   }
 
@@ -12221,10 +12232,12 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
             '<div style="font-size:22px;color:rgba(255,255,255,.9);font-weight:600">' + f + '</div>' +
           '</div>').join('') +
         '</div>' +
-        // CTA button
-        '<div style="background:' + Y_GOLD + ';color:' + Y_DARK + ';padding:22px 48px;border-radius:6px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;display:inline-block">' + (brief.cta_title || 'COMENZAR AHORA') + '</div>' +
+        // CTA + logo row
+        '<div style="display:flex;align-items:center;gap:24px">' +
+          '<div style="background:' + Y_GOLD + ';color:' + Y_DARK + ';padding:22px 48px;border-radius:6px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">' + (brief.cta_title || 'COMENZAR AHORA') + '</div>' +
+          (logoBase64 ? '<div style="background:rgba(255,255,255,.12);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:8px 14px;display:flex;align-items:center"><img src="' + logoBase64 + '" style="max-width:90px;max-height:38px;object-fit:contain;filter:brightness(0) invert(1)"></div>' : '') +
+        '</div>' +
       '</div>' +
-      logoEl +
     '</div>';
   }
 
@@ -12238,14 +12251,12 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
     const feats18 = feats.slice(0, 3);
     return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + Y_CREAM + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column;align-items:center">' +
       '<style>' + fonts + '</style>' +
-      // Top header
+      // Top header — logo on right, category on left
       '<div style="width:100%;padding:64px 72px 32px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between">' +
         '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:' + Y_TERRA + ';letter-spacing:.2em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
-        '<div style="display:flex;gap:8px;align-items:center">' +
-          '<div style="width:32px;height:1px;background:' + Y_GOLD + '"></div>' +
-          '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
-          '<div style="width:16px;height:1px;background:' + Y_GOLD + '"></div>' +
-        '</div>' +
+        (logoBase64
+          ? '<img src="' + logoBase64 + '" style="max-width:110px;max-height:48px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.12))">'
+          : '<div style="display:flex;gap:8px;align-items:center"><div style="width:32px;height:1px;background:' + Y_GOLD + '"></div><div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div><div style="width:16px;height:1px;background:' + Y_GOLD + '"></div></div>') +
       '</div>' +
       // Framed photo
       '<div style="position:relative;width:' + photoSize + 'px;height:' + photoSize + 'px;flex-shrink:0">' +
@@ -12276,7 +12287,6 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
           '</div>' +
         '</div>' +
       '</div>' +
-      logoEl +
     '</div>';
   }
 
@@ -12317,17 +12327,18 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
             '<div style="font-size:21px;color:#222;font-weight:600;line-height:1.25">' + f + '</div>' +
           '</div>').join('') +
         '</div>' +
-        // CTA full width + logo
+        // CTA + logo row inside white panel
         '<div style="display:flex;align-items:center;gap:16px;margin-top:4px">' +
-          '<div style="flex:1;display:flex;align-items:center;justify-content:space-between;background:' + c.primary + ';color:#fff;padding:24px 36px;border-radius:18px;font-size:23px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;cursor:pointer">' +
+          '<div style="flex:1;display:flex;align-items:center;justify-content:space-between;background:' + c.primary + ';color:#fff;padding:24px 36px;border-radius:18px;font-size:23px;font-weight:800;text-transform:uppercase;letter-spacing:.04em">' +
             '<span>' + (brief.cta_title || 'DESCUBRE MÁS') + '</span>' +
             '<div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="width:22px;height:22px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
             '</div>' +
           '</div>' +
+          // Logo to the right of CTA, inside the white panel (no white box needed)
+          (logoBase64 ? '<div style="flex-shrink:0;display:flex;align-items:center"><img src="' + logoBase64 + '" style="max-width:88px;max-height:60px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.12))"></div>' : '') +
         '</div>' +
       '</div>' +
-      logoEl +
     '</div>';
   }
 
