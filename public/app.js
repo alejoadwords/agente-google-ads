@@ -10152,10 +10152,13 @@ let metaActiveAccount = null;
   if (params.get('meta_error')) {
     window.history.replaceState({}, '', window.location.pathname);
   }
-  const savedToken   = sessionStorage.getItem('meta_access_token');
-  const savedName    = sessionStorage.getItem('meta_user_name');
+  // Restaurar desde sessionStorage o localStorage (persiste entre sesiones del browser)
+  const savedToken   = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
+  const savedName    = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
   const savedAccount = sessionStorage.getItem('meta_active_account');
   if (savedToken) {
+    if (!sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', savedToken);
+    if (savedName && !sessionStorage.getItem('meta_user_name')) sessionStorage.setItem('meta_user_name', savedName);
     updateMetaUI(true, savedName);
     if (savedAccount) {
       try { metaActiveAccount = JSON.parse(savedAccount); renderMetaActiveAccount(); } catch {}
@@ -10338,16 +10341,19 @@ function openSettings() {
     document.getElementById('cfg-email').textContent = email;
     document.getElementById('cfg-plan').textContent = userPlan === 'pro' ? 'Pro' : 'Free';
   }
-  // Sincronizar estado de conexiones desde sessionStorage al abrir el panel
-  const metaToken = sessionStorage.getItem('meta_access_token');
-  const metaName  = sessionStorage.getItem('meta_user_name');
-  updateMetaUI(!!metaToken, metaName || '');
-  const adsToken = sessionStorage.getItem('ads_access_token');
-  const adsEmail = sessionStorage.getItem('ads_email');
-  if (typeof updateAdsUI === 'function') updateAdsUI(!!adsToken, adsEmail || '');
-  const liToken = sessionStorage.getItem('linkedin_access_token');
-  const liName  = sessionStorage.getItem('linkedin_user_name');
-  if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName || '');
+  // Sincronizar estado de conexiones — sessionStorage primero, localStorage como fallback
+  const metaToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
+  const metaName  = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
+  if (metaToken && !sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', metaToken);
+  updateMetaUI(!!metaToken, metaName);
+  const adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+  const adsEmail = sessionStorage.getItem('ads_email')        || localStorage.getItem('ads_email_persist') || '';
+  if (adsToken && !sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', adsToken);
+  if (typeof updateAdsUI === 'function') updateAdsUI(!!adsToken, adsEmail);
+  const liToken = sessionStorage.getItem('linkedin_access_token') || localStorage.getItem('linkedin_access_token_persist');
+  const liName  = sessionStorage.getItem('linkedin_user_name')    || localStorage.getItem('linkedin_user_name_persist') || '';
+  if (liToken && !sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', liToken);
+  if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName);
 }
 
 function closeSettings() {
