@@ -22,8 +22,10 @@ export default async function handler(req, res) {
       }
     );
 
-    const listData = await listRes.json();
     const statusCode = listRes.status;
+    const rawText = await listRes.text();
+    let listData = {};
+    try { listData = JSON.parse(rawText); } catch { listData = { _raw: rawText.slice(0, 200) }; }
     console.log('listAccessibleCustomers status:', statusCode, JSON.stringify(listData).slice(0, 500));
 
     // Error HTTP de Google
@@ -73,7 +75,9 @@ export default async function handler(req, res) {
             }
           );
 
-          const qData = await queryRes.json();
+          const qRaw = await queryRes.text();
+          let qData = {};
+          try { qData = JSON.parse(qRaw); } catch { return null; }
           if (!queryRes.ok) {
             console.log(`Customer ${id} query error:`, queryRes.status, JSON.stringify(qData).slice(0, 200));
             return null;
