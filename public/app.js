@@ -10900,9 +10900,10 @@ async function loadAdsAccounts() {
     document.getElementById('adsAccountsLoading').style.display = 'none';
 
     if (data.error || !data.accounts?.length) {
-      const msg = data.googleError
-        ? `Google Ads: ${data.googleError}`
-        : 'No se pudieron cargar las cuentas. Puede ser que el token de desarrollador aún esté en modo de prueba.';
+      const detail = data.googleError || data.details || data.error || '';
+      const msg = detail
+        ? `Error Google Ads: ${detail}`
+        : 'No se pudieron cargar las cuentas. Puede ser que el developer token esté en modo prueba.';
       showAdsError(msg);
       return;
     }
