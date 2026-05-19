@@ -6539,6 +6539,71 @@ function showToast(msg, type = 'success') {
   }, 4000);
 }
 
+// CONNECTION SUCCESS MODAL — large centered overlay with blur
+function showConnectionModal(platform, accountName) {
+  const existing = document.getElementById('acuarius-conn-modal');
+  if (existing) existing.remove();
+
+  const icons = {
+    google_ads: '🎯',
+    meta_ads:   '📘',
+    tiktok_ads: '🎵',
+    linkedin:   '💼',
+  };
+  const labels = {
+    google_ads: 'Google Ads',
+    meta_ads:   'Meta Ads',
+    tiktok_ads: 'TikTok Ads',
+    linkedin:   'LinkedIn Ads',
+  };
+  const icon  = icons[platform]  || '✅';
+  const label = labels[platform] || platform;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'acuarius-conn-modal';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease`;
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:48px 44px 40px;max-width:420px;width:90%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.25);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">
+      <div style="font-size:56px;margin-bottom:16px;line-height:1">${icon}</div>
+      <div style="width:56px;height:56px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2 style="font-size:22px;font-weight:700;color:#111;margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
+      <p style="font-size:15px;color:#555;margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
+      <p style="font-size:13px;color:#888;margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
+      <button id="conn-modal-settings-btn" style="width:100%;padding:14px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
+      <button id="conn-modal-close-btn" style="width:100%;padding:12px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);transition:background .2s">Cerrar</button>
+    </div>
+  `;
+
+  // Inject keyframe animations once
+  if (!document.getElementById('conn-modal-styles')) {
+    const style = document.createElement('style');
+    style.id = 'conn-modal-styles';
+    style.textContent = `
+      @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
+      @keyframes scaleInCard { from{opacity:0;transform:scale(.88)} to{opacity:1;transform:scale(1)} }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(overlay);
+
+  const close = () => {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity .25s';
+    setTimeout(() => overlay.remove(), 260);
+  };
+
+  document.getElementById('conn-modal-close-btn').addEventListener('click', close);
+  document.getElementById('conn-modal-settings-btn').addEventListener('click', () => {
+    close();
+    setTimeout(() => openSettings(), 280);
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
+
 // VIEWS
 function showView(id){
   // Ocultar loader la primera vez que se muestra una vista
@@ -10654,15 +10719,14 @@ let adsAccounts = [];       // todas las cuentas accesibles
       updateAdsUI(true, email);
       setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
     } else if (platform === 'google_ads') {
-      // Token guardado en Supabase — mostrar toast de éxito y restaurar con backoff para Clerk
-      showToast('✅ Google Ads conectado correctamente', 'success');
+      // uid viene en la URL — no necesitamos esperar a que Clerk cargue
+      const urlUid = params.get('uid') || '';
+      showConnectionModal('google_ads', email || 'Google Ads');
       updateAdsUI(true, email || 'Conectado');
-      (async function waitForClerkAndRestoreGoogle() {
-        const delays = [600, 1500, 2500, 4000];
-        for (const delay of delays) {
-          await new Promise(res => setTimeout(res, delay));
-          const uid = clerkInstance?.user?.id;
-          if (!uid) continue;
+      (async function restoreGoogleToken() {
+        // Intentar con uid de URL primero (disponible inmediatamente)
+        const tryFetch = async (uid) => {
+          if (!uid) return false;
           try {
             const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
             const conn = await r.json();
@@ -10672,12 +10736,19 @@ let adsAccounts = [];       // todas las cuentas accesibles
               localStorage.setItem('ads_access_token_persist', conn.access_token);
               localStorage.setItem('ads_email_persist', conn.account_name || email || '');
               updateAdsUI(true, conn.account_name || email);
-              openSettings(); loadAdsAccounts();
-              return;
+              return true;
             }
           } catch {}
+          return false;
+        };
+        // Intento inmediato con uid de URL
+        if (await tryFetch(urlUid)) { openSettings(); loadAdsAccounts(); return; }
+        // Fallback: esperar a Clerk con backoff
+        for (const delay of [800, 1800, 3000, 5000]) {
+          await new Promise(res => setTimeout(res, delay));
+          const clerkUid = clerkInstance?.user?.id;
+          if (await tryFetch(clerkUid || urlUid)) { openSettings(); loadAdsAccounts(); return; }
         }
-        // Si llegó hasta acá, el token puede estar guardado igualmente — abrir settings
         openSettings();
       })();
     }

@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       // Guardar en Supabase — el token no viaja por la URL
       await saveGoogleConnection(userId, tokens, userInfo);
       return res.redirect(
-        `https://app.acuarius.app/?ads_connected=true&platform=google_ads&ads_email=${encodeURIComponent(userInfo.email || '')}`
+        `https://app.acuarius.app/?ads_connected=true&platform=google_ads&ads_email=${encodeURIComponent(userInfo.email || '')}&uid=${encodeURIComponent(userId)}`
       );
     }
 
