@@ -9,23 +9,34 @@ export default async function handler(req, res) {
   if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
 
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  const mccId = (process.env.GOOGLE_ADS_MCC_ID || '').replace(/-/g, '');
+
+  const baseHeaders = {
+    'Authorization':   `Bearer ${accessToken}`,
+    'developer-token': developerToken,
+    ...(mccId ? { 'login-customer-id': mccId } : {}),
+  };
 
   try {
     // 1. Obtener todas las cuentas accesibles con el token
     const listRes = await fetch(
       'https://googleads.googleapis.com/v18/customers:listAccessibleCustomers',
-      {
-        headers: {
-          'Authorization':   `Bearer ${accessToken}`,
-          'developer-token': developerToken,
-        },
-      }
+      { headers: baseHeaders }
     );
 
     const listData = await listRes.json();
+    console.log('listAccessibleCustomers status:', listRes.status, JSON.stringify(listData).slice(0, 400));
 
     if (!listRes.ok || !listData.resourceNames) {
-      return res.status(200).json({ accounts: [], isMCC: false });
+      // Extraer el mensaje de error real de Google para poder diagnosticar
+      const googleError = listData?.error?.message
+        || listData?.error?.details?.[0]?.errors?.[0]?.message
+        || JSON.stringify(listData).slice(0, 200);
+      return res.status(200).json({
+        accounts: [],
+        isMCC: false,
+        googleError,
+      });
     }
 
     // 2. Para cada resource name, obtener detalles de la cuenta
@@ -41,9 +52,8 @@ export default async function handler(req, res) {
             {
               method: 'POST',
               headers: {
-                'Authorization':   `Bearer ${accessToken}`,
-                'developer-token': developerToken,
-                'Content-Type':    'application/json',
+                ...baseHeaders,
+                'Content-Type': 'application/json',
               },
               body: JSON.stringify({
                 query: `SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account FROM customer LIMIT 1`
@@ -73,7 +83,6 @@ export default async function handler(req, res) {
     const accounts = accountDetails.filter(Boolean);
 
     // 3. Separar MCCs de cuentas normales
-    // Si hay cuentas manager, las cuentas no-manager son las "hija"
     const hasManager = accounts.some(a => a.isManager);
 
     return res.status(200).json({
