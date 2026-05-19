@@ -10900,7 +10900,10 @@ async function loadAdsAccounts() {
     document.getElementById('adsAccountsLoading').style.display = 'none';
 
     if (data.error || !data.accounts?.length) {
-      showAdsError('No se pudieron cargar las cuentas. Puede ser que la API aún esté en revisión por Google.');
+      const msg = data.googleError
+        ? `Google Ads: ${data.googleError}`
+        : 'No se pudieron cargar las cuentas. Puede ser que el token de desarrollador aún esté en modo de prueba.';
+      showAdsError(msg);
       return;
     }
 
