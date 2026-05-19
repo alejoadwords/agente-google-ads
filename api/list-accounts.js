@@ -1,10 +1,27 @@
 // api/list-accounts.js
 // Lista todas las cuentas de Google Ads accesibles con el token del usuario
 
+const SUPABASE_URL        = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+async function getFreshToken(userId) {
+  if (!userId || !SUPABASE_URL) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_ads&select=access_token,refresh_token`,
+      { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    );
+    const rows = await r.json();
+    return rows?.[0]?.access_token || null;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { accessToken } = req.body;
+  let { accessToken, userId } = req.body || {};
+  // Si no viene token en el body, intentar obtenerlo de Supabase
+  if (!accessToken && userId) accessToken = await getFreshToken(userId);
   if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
 
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
