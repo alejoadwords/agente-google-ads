@@ -130,7 +130,7 @@ async function gaqlFetch(customerId, query, accessToken) {
   };
   if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
   const res = await fetch(
-    `https://googleads.googleapis.com/v19/customers/${customerId}/googleAds:search`,
+    `https://googleads.googleapis.com/v20/customers/${customerId}/googleAds:search`,
     { method: 'POST', headers: h, body: JSON.stringify({ query }) }
   );
   if (!res.ok) throw new Error(`Google Ads ${res.status}`);
