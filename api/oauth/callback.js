@@ -4,27 +4,34 @@
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// Guarda la conexión en Supabase. Retorna true si fue exitoso.
 async function saveGoogleConnection(userId, tokens, userInfo) {
-  if (!userId || !SUPABASE_URL) return;
+  if (!userId || !SUPABASE_URL) return false;
   const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
-  await fetch(`${SUPABASE_URL}/rest/v1/platform_connections`, {
-    method: 'POST',
-    headers: {
-      'apikey':        SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'resolution=merge-duplicates',
-    },
-    body: JSON.stringify({
-      user_id:          userId,
-      platform:         'google_ads',
-      access_token:     tokens.access_token,
-      refresh_token:    tokens.refresh_token || null,
-      token_expires_at: expiresAt,
-      account_name:     userInfo.email || '',
-      updated_at:       new Date().toISOString(),
-    }),
-  });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections`, {
+      method: 'POST',
+      headers: {
+        'apikey':        SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify({
+        user_id:          userId,
+        platform:         'google_ads',
+        access_token:     tokens.access_token,
+        refresh_token:    tokens.refresh_token || null,
+        token_expires_at: expiresAt,
+        account_name:     userInfo.email || '',
+        updated_at:       new Date().toISOString(),
+      }),
+    });
+    return r.ok;
+  } catch (e) {
+    console.error('saveGoogleConnection error:', e.message);
+    return false;
+  }
 }
 
 export default async function handler(req, res) {
@@ -60,14 +67,21 @@ export default async function handler(req, res) {
     const userInfo = await userRes.json();
 
     if (userId) {
-      // Guardar en Supabase — el token no viaja por la URL
+      // Intentar guardar en Supabase
       await saveGoogleConnection(userId, tokens, userInfo);
+      // Pasar el token en la URL también — el frontend lo guarda en sessionStorage
+      // inmediatamente sin depender de la lectura de Supabase.
+      // El token es de corta duración (1h) y la URL se limpia con replaceState.
       return res.redirect(
-        `https://app.acuarius.app/?ads_connected=true&platform=google_ads&ads_email=${encodeURIComponent(userInfo.email || '')}&uid=${encodeURIComponent(userId)}`
+        `https://app.acuarius.app/?ads_connected=true&platform=google_ads` +
+        `&ads_email=${encodeURIComponent(userInfo.email || '')}` +
+        `&ads_token=${encodeURIComponent(tokens.access_token)}` +
+        `&ads_refresh=${encodeURIComponent(tokens.refresh_token || '')}` +
+        `&uid=${encodeURIComponent(userId)}`
       );
     }
 
-    // Fallback sin userId: enviar token en URL (backward compat para usuarios sin Clerk)
+    // Fallback sin userId
     const params = new URLSearchParams({
       ads_connected: 'true',
       ads_email:     userInfo.email || '',

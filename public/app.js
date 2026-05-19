@@ -10703,28 +10703,36 @@ let adsAccounts = [];       // todas las cuentas accesibles
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('ads_connected') === 'true') {
-    const token   = params.get('ads_token');   // solo presente en fallback sin userId
-    const refresh = params.get('ads_refresh');
-    const email   = params.get('ads_email');
-    const platform = params.get('platform');   // 'google_ads' cuando se guardó en Supabase
+    const token    = params.get('ads_token');
+    const refresh  = params.get('ads_refresh');
+    const email    = params.get('ads_email');
+    const platform = params.get('platform');   // 'google_ads' = guardado en Supabase
+    const urlUid   = params.get('uid') || '';
     window.history.replaceState({}, '', window.location.pathname);
+
     if (token) {
-      // Fallback: token llegó por URL (sin userId)
+      // Guardar token en sessionStorage/localStorage inmediatamente
       sessionStorage.setItem('ads_access_token', token);
       sessionStorage.setItem('ads_refresh_token', refresh || '');
       sessionStorage.setItem('ads_email', email || '');
       localStorage.setItem('ads_access_token_persist', token);
       localStorage.setItem('ads_refresh_token_persist', refresh || '');
       localStorage.setItem('ads_email_persist', email || '');
-      updateAdsUI(true, email);
-      setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
+
+      if (platform === 'google_ads') {
+        // Flujo con userId: mostrar modal grande y abrir configuración
+        showConnectionModal('google_ads', email || 'Google Ads');
+        // Abrir settings después de que el DOM esté listo
+        setTimeout(() => { updateAdsUI(true, email); openSettings(); loadAdsAccounts(); }, 500);
+      } else {
+        // Flujo legacy sin userId
+        updateAdsUI(true, email);
+        setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
+      }
     } else if (platform === 'google_ads') {
-      // uid viene en la URL — no necesitamos esperar a que Clerk cargue
-      const urlUid = params.get('uid') || '';
+      // Sin token en URL (backwards compat): intentar recuperar desde Supabase
       showConnectionModal('google_ads', email || 'Google Ads');
-      updateAdsUI(true, email || 'Conectado');
       (async function restoreGoogleToken() {
-        // Intentar con uid de URL primero (disponible inmediatamente)
         const tryFetch = async (uid) => {
           if (!uid) return false;
           try {
@@ -10741,9 +10749,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
           } catch {}
           return false;
         };
-        // Intento inmediato con uid de URL
         if (await tryFetch(urlUid)) { openSettings(); loadAdsAccounts(); return; }
-        // Fallback: esperar a Clerk con backoff
         for (const delay of [800, 1800, 3000, 5000]) {
           await new Promise(res => setTimeout(res, delay));
           const clerkUid = clerkInstance?.user?.id;
