@@ -111,6 +111,10 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('list-accounts error:', err);
-    return res.status(500).json({ error: 'Error consultando cuentas', details: err.message });
+    return res.status(200).json({
+      accounts: [], isMCC: false,
+      googleError: `Error interno: ${err.message}`,
+      details: err.message,
+    });
   }
 }
