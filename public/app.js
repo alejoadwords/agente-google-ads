@@ -927,17 +927,22 @@ async function briefLoadPlatformAccounts() {
   const metaToken  = sessionStorage.getItem('meta_access_token')  || localStorage.getItem('meta_access_token_persist')  || '';
 
   // ── Google Ads ────────────────────────────────────────────────
-  const googleRow = document.getElementById('plat-google-account-row');
-  const googleSel = document.getElementById('ag-f-google-account');
+  const googleRow    = document.getElementById('plat-google-account-row');
+  const googleSel    = document.getElementById('ag-f-google-account');
+  const googleStatus = document.getElementById('plat-google-status');
+  const googleBtn    = document.querySelector('#plat-google .agency-platform-btn');
   if (googleRow && googleSel) {
     if (adsToken) {
+      // Actualizar badge de estado
+      if (googleStatus) { googleStatus.textContent = '● conectado'; googleStatus.style.color = 'var(--success)'; }
+      if (googleBtn)    { googleBtn.textContent = 'Cambiar'; googleBtn.classList.remove('connect'); googleBtn.classList.add('connected'); }
       googleRow.style.display = 'block';
       googleSel.innerHTML = '<option value="">Cargando...</option>';
       try {
         const r = await fetch('/api/list-accounts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken: adsToken }),
+          body: JSON.stringify({ accessToken: adsToken, userId: uid }),
         });
         const data = await r.json();
         const accounts = data.accounts || [];
@@ -950,10 +955,12 @@ async function briefLoadPlatformAccounts() {
               return '<option value="' + val + '"' + (val === stored ? ' selected' : '') + '>' + label + '</option>';
             }).join('');
         } else {
-          googleSel.innerHTML = '<option value="">Sin cuentas accesibles</option>';
+          // Mostrar error real si está disponible
+          const errMsg = data.googleError ? data.googleError.slice(0, 80) : 'Sin cuentas accesibles';
+          googleSel.innerHTML = '<option value="">' + errMsg + '</option>';
         }
       } catch(e) {
-        googleSel.innerHTML = '<option value="">Error cargando cuentas</option>';
+        googleSel.innerHTML = '<option value="">Error: ' + e.message.slice(0, 60) + '</option>';
       }
     } else {
       googleRow.style.display = 'none';
