@@ -10,17 +10,24 @@ export default async function handler(req, res) {
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
   const mccId = (process.env.GOOGLE_ADS_MCC_ID || '').replace(/-/g, '');
 
-  try {
-    // 1. listAccessibleCustomers — NO usar login-customer-id aquí
-    const listRes = await fetch(
-      'https://googleads.googleapis.com/v19/customers:listAccessibleCustomers',
-      {
-        headers: {
-          'Authorization':   `Bearer ${accessToken}`,
-          'developer-token': developerToken,
-        },
-      }
+  // Intentar con versiones en orden descendente hasta encontrar una que responda
+  async function tryListAccessible(version) {
+    return fetch(
+      `https://googleads.googleapis.com/v${version}/customers:listAccessibleCustomers`,
+      { headers: { 'Authorization': `Bearer ${accessToken}`, 'developer-token': developerToken } }
     );
+  }
+
+  try {
+    // 1. listAccessibleCustomers — probar v20, v19, v18 en ese orden
+    let listRes;
+    for (const ver of [20, 19, 18]) {
+      const r = await tryListAccessible(ver);
+      if (r.status !== 404) { listRes = r; break; }
+    }
+    if (!listRes) {
+      return res.status(200).json({ accounts: [], isMCC: false, googleError: 'API de Google Ads no disponible (todas las versiones devuelven 404). Verifica el developer token.' });
+    }
 
     const statusCode = listRes.status;
     const rawText = await listRes.text();
@@ -65,7 +72,7 @@ export default async function handler(req, res) {
           if (mccId && mccId !== id) headers['login-customer-id'] = mccId;
 
           const queryRes = await fetch(
-            `https://googleads.googleapis.com/v19/customers/${id}/googleAds:search`,
+            `https://googleads.googleapis.com/v20/customers/${id}/googleAds:search`,
             {
               method: 'POST',
               headers,
