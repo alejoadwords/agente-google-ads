@@ -934,7 +934,11 @@ async function briefLoadPlatformAccounts() {
       googleRow.style.display = 'block';
       googleSel.innerHTML = '<option value="">Cargando...</option>';
       try {
-        const r = await fetch('/api/google-ads?action=list-accounts&userId=' + encodeURIComponent(uid));
+        const r = await fetch('/api/list-accounts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: adsToken }),
+        });
         const data = await r.json();
         const accounts = data.accounts || [];
         if (accounts.length) {
@@ -5034,6 +5038,14 @@ function openAgentForClient(agentKey, client) {
     monthlyBudget: client.monthly_budget || '',
     notes:         client.notes || '',
   };
+  // Si es Google Ads y el cliente tiene cuenta asignada, activarla
+  if (agentKey === 'google-ads' && client.googleCustomerId) {
+    const custId = String(client.googleCustomerId).replace(/-/g, '');
+    sessionStorage.setItem('ads_customer_id', custId);
+    localStorage.setItem('ads_customer_id_persist', custId);
+    adsActiveAccount = { id: custId, name: client.googleAccountName || client.name || custId };
+    if (typeof renderActiveAccount === 'function') renderActiveAccount();
+  }
   updateActiveClientBar();
   openAgent(agentKey);
 }

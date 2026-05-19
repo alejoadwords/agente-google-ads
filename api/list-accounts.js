@@ -107,7 +107,6 @@ export default async function handler(req, res) {
     );
 
     const accounts = accountDetails.filter(Boolean);
-    const hasManager = accounts.some(a => a.isManager);
 
     // Si no se pudo obtener detalle de ninguna cuenta, explicar
     if (accounts.length === 0) {
@@ -118,7 +117,65 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({ accounts, isMCC: hasManager, total: accounts.length });
+    // Separar MCCs de cuentas normales
+    const mccAccounts = accounts.filter(a => a.isManager);
+    const nonMccAccounts = accounts.filter(a => !a.isManager);
+
+    // Para cada MCC, consultar sus sub-cuentas (level = 1)
+    const subAccountsArrays = await Promise.all(
+      mccAccounts.map(async (mcc) => {
+        try {
+          const queryRes = await fetch(
+            `https://googleads.googleapis.com/v20/customers/${mcc.id}/googleAds:search`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization':    `Bearer ${accessToken}`,
+                'developer-token':  developerToken,
+                'login-customer-id': String(mcc.id),
+                'Content-Type':     'application/json',
+              },
+              body: JSON.stringify({
+                query: 'SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.test_account, customer_client.level FROM customer_client WHERE customer_client.level = 1 ORDER BY customer_client.id',
+              }),
+            }
+          );
+          const qRaw = await queryRes.text();
+          let qData = {};
+          try { qData = JSON.parse(qRaw); } catch { return []; }
+          if (!queryRes.ok) {
+            console.log(`MCC ${mcc.id} customer_client query error:`, queryRes.status, JSON.stringify(qData).slice(0, 200));
+            return [];
+          }
+          return (qData.results || []).map(row => {
+            const cc = row.customerClient;
+            if (!cc) return null;
+            return {
+              id:        cc.id,
+              name:      cc.descriptiveName || `Cuenta ${cc.id}`,
+              currency:  cc.currencyCode || 'USD',
+              timezone:  cc.timeZone || '',
+              isManager: cc.manager || false,
+              isTest:    cc.testAccount || false,
+            };
+          }).filter(Boolean);
+        } catch (e) {
+          console.log(`MCC ${mcc.id} sub-accounts error:`, e.message);
+          return [];
+        }
+      })
+    );
+
+    const subAccounts = subAccountsArrays.flat();
+
+    // Combinar: cuentas no-MCC directas + sub-cuentas de todos los MCCs
+    const combined = [...nonMccAccounts, ...subAccounts];
+
+    // Si hay sub-cuentas, devolverlas; si no, devolver los MCCs como fallback
+    const finalAccounts = combined.length > 0 ? combined : mccAccounts;
+    const hasManager = mccAccounts.length > 0;
+
+    return res.status(200).json({ accounts: finalAccounts, isMCC: hasManager, total: finalAccounts.length });
 
   } catch (err) {
     console.error('list-accounts error:', err);
