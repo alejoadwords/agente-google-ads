@@ -6517,6 +6517,28 @@ function setStage(s,btn){curStage=s;document.querySelectorAll('.stage-btn').forE
 function toggleCheck(item){item.classList.toggle('done');updateProgress()}
 function updateProgress(){const all=document.querySelectorAll('.stage-panel.active .cl-item').length;const done=document.querySelectorAll('.stage-panel.active .cl-item.done').length;document.getElementById('pt-count').textContent=`${done} / ${all} tareas`;document.getElementById('pt-fill').style.width=all?`${(done/all)*100}%`:'0%'}
 
+// ── Toast notification ────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const existing = document.getElementById('acuarius-toast');
+  if (existing) existing.remove();
+  const colors = {
+    success: { bg: '#D1FAE5', border: '#6EE7B7', text: '#065F46' },
+    error:   { bg: '#FEE2E2', border: '#FCA5A5', text: '#991B1B' },
+    info:    { bg: '#EFF6FF', border: '#93C5FD', text: '#1E40AF' },
+  };
+  const c = colors[type] || colors.info;
+  const t = document.createElement('div');
+  t.id = 'acuarius-toast';
+  t.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);z-index:9999;background:${c.bg};border:1.5px solid ${c.border};color:${c.text};padding:13px 24px;border-radius:10px;font-size:14px;font-weight:600;font-family:var(--font);box-shadow:0 8px 30px rgba(0,0,0,.12);transition:transform .35s cubic-bezier(.34,1.56,.64,1);max-width:420px;text-align:center;pointer-events:none`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.transform = 'translateX(-50%) translateY(0)'; });
+  setTimeout(() => {
+    t.style.transform = 'translateX(-50%) translateY(-80px)';
+    setTimeout(() => t.remove(), 400);
+  }, 4000);
+}
+
 // VIEWS
 function showView(id){
   // Ocultar loader la primera vez que se muestra una vista
@@ -10632,28 +10654,41 @@ let adsAccounts = [];       // todas las cuentas accesibles
       updateAdsUI(true, email);
       setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
     } else if (platform === 'google_ads') {
-      // Token guardado en Supabase — restaurar via get-connection
+      // Token guardado en Supabase — mostrar toast de éxito y restaurar con backoff para Clerk
+      showToast('✅ Google Ads conectado correctamente', 'success');
       updateAdsUI(true, email || 'Conectado');
-      setTimeout(async () => {
-        const uid = clerkInstance?.user?.id;
-        if (!uid) return;
-        try {
-          const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
-          const conn = await r.json();
-          if (conn.connected && conn.access_token) {
-            sessionStorage.setItem('ads_access_token', conn.access_token);
-            sessionStorage.setItem('ads_email', conn.account_name || email || '');
-            localStorage.setItem('ads_access_token_persist', conn.access_token);
-            localStorage.setItem('ads_email_persist', conn.account_name || email || '');
-            updateAdsUI(true, conn.account_name || email);
-            openSettings(); loadAdsAccounts();
-          }
-        } catch {}
-      }, 600);
+      (async function waitForClerkAndRestoreGoogle() {
+        const delays = [600, 1500, 2500, 4000];
+        for (const delay of delays) {
+          await new Promise(res => setTimeout(res, delay));
+          const uid = clerkInstance?.user?.id;
+          if (!uid) continue;
+          try {
+            const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
+            const conn = await r.json();
+            if (conn.connected && conn.access_token) {
+              sessionStorage.setItem('ads_access_token', conn.access_token);
+              sessionStorage.setItem('ads_email', conn.account_name || email || '');
+              localStorage.setItem('ads_access_token_persist', conn.access_token);
+              localStorage.setItem('ads_email_persist', conn.account_name || email || '');
+              updateAdsUI(true, conn.account_name || email);
+              openSettings(); loadAdsAccounts();
+              return;
+            }
+          } catch {}
+        }
+        // Si llegó hasta acá, el token puede estar guardado igualmente — abrir settings
+        openSettings();
+      })();
     }
   }
   if (params.get('ads_error')) {
+    const errCode = params.get('ads_error');
     window.history.replaceState({}, '', window.location.pathname);
+    const errMsg = errCode === 'access_denied' ? 'Cancelaste la conexión con Google.'
+      : errCode === 'token_failed' ? 'Error al obtener el token de Google. Intenta de nuevo.'
+      : 'Error al conectar con Google Ads. Intenta de nuevo.';
+    showToast('❌ ' + errMsg, 'error');
   }
   // Restaurar sesión — sessionStorage primero, luego localStorage como fallback
   var savedToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist');
