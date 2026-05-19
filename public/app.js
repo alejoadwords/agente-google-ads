@@ -3560,15 +3560,27 @@ function showDiagnosticInput(agent) {
 
   html += '<div style="padding-left:40px;width:100%;max-width:580px">';
 
-  // Banner cuenta conectada / no conectada (solo Google)
-  if (isGoogle) {
-    if (adsActiveAccount) {
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:10px;margin-bottom:14px">';
-      html += '<div style="font-size:16px">✅</div>';
-      html += '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:#065F46">Cuenta conectada: ' + adsActiveAccount.name + '</div>';
-      html += '<div style="font-size:11px;color:#047857;margin-top:1px">Puedes subir capturas de pantalla de cualquier sección de tu cuenta</div></div>';
-      html += '</div>';
-    } else {
+  // Cuando hay cuenta conectada en Google Ads → flujo directo, sin capturas
+  if (isGoogle && adsActiveAccount) {
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:12px;margin-bottom:16px">';
+    html += '<div style="font-size:20px">✅</div>';
+    html += '<div style="flex:1">';
+    html += '<div style="font-size:13px;font-weight:700;color:#065F46">Cuenta conectada</div>';
+    html += '<div style="font-size:12px;color:#047857;margin-top:2px">' + adsActiveAccount.name + ' · El agente accede a tus datos directamente</div>';
+    html += '</div></div>';
+
+    html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:20px">';
+    html += '<div style="font-size:13px;color:var(--text);margin-bottom:6px;font-weight:600">¿Qué quieres analizar?</div>';
+    html += '<div style="font-size:12px;color:var(--muted2);margin-bottom:18px">El agente consultará tu cuenta en tiempo real: campañas, métricas, keywords, anuncios y más.</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="runDirectDiagnostic(\'' + agent + '\')" style="flex:1;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:-.2px">🔍 Analizar cuenta ahora →</button>';
+    html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:12px 16px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
+    html += '</div></div>';
+
+  } else {
+    // Sin cuenta conectada (o Meta): mostrar formulario completo con capturas + texto
+
+    if (isGoogle) {
       html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:10px;margin-bottom:14px">';
       html += '<div style="font-size:16px">🔗</div>';
       html += '<div style="flex:1">';
@@ -3577,37 +3589,39 @@ function showDiagnosticInput(agent) {
       html += '<button onclick="connectGoogleAds()" style="padding:6px 12px;background:#F97316;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar cuenta de Google Ads →</button>';
       html += '</div></div>';
     }
+
+    html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
+
+    // Sección capturas — multi-imagen
+    html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📷 Capturas de pantalla <span style="font-weight:400;color:var(--muted2)">(hasta 4 — campañas, grupos, anuncios, keywords...)</span></div>';
+    html += '<div id="diag-img-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px"></div>';
+    html += '<label id="diag-add-img-btn" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;transition:background .15s">';
+    html += '<div style="font-size:16px">➕</div>';
+    html += '<div style="font-size:12px;color:var(--muted)">Agregar captura <span style="color:var(--muted2)">(PNG, JPG)</span></div>';
+    html += '<input type="file" id="diag-file-input" accept="image/*" multiple style="display:none" onchange="diagAddImages(this)">';
+    html += '</label>';
+
+    // Separador
+    html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
+    html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+    html += '<div style="font-size:11px;color:var(--muted2)">o también</div>';
+    html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+    html += '</div>';
+
+    // Textarea métricas
+    html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">📋 Pega tus métricas en texto</div>';
+    html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:90px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
+
+    // Botones
+    html += '<div style="display:flex;gap:8px;margin-top:14px">';
+    html += '<button onclick="runDiagnostic(\'' + agent + '\')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
+    html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
+    html += '</div>';
+
+    html += '</div>';
   }
 
-  html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
-
-  // Sección capturas — multi-imagen
-  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📷 Capturas de pantalla <span style="font-weight:400;color:var(--muted2)">(hasta 4 — campañas, grupos, anuncios, keywords...)</span></div>';
-  html += '<div id="diag-img-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px"></div>';
-  html += '<label id="diag-add-img-btn" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;transition:background .15s">';
-  html += '<div style="font-size:16px">➕</div>';
-  html += '<div style="font-size:12px;color:var(--muted)">Agregar captura <span style="color:var(--muted2)">(PNG, JPG)</span></div>';
-  html += '<input type="file" id="diag-file-input" accept="image/*" multiple style="display:none" onchange="diagAddImages(this)">';
-  html += '</label>';
-
-  // Separador
-  html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
-  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
-  html += '<div style="font-size:11px;color:var(--muted2)">o también</div>';
-  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
   html += '</div>';
-
-  // Textarea métricas
-  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">📋 Pega tus métricas en texto</div>';
-  html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:90px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
-
-  // Botones
-  html += '<div style="display:flex;gap:8px;margin-top:14px">';
-  html += '<button onclick="runDiagnostic(\'' + agent + '\')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
-  html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
-  html += '</div>';
-
-  html += '</div></div>';
 
   el.innerHTML = html;
   document.getElementById('chat-area').appendChild(el);
@@ -3725,6 +3739,32 @@ async function runDiagnostic(agent) {
 
   // Push a hist y llamar directamente — sin addUser (el prompt no aparece en el chat)
   hist.push({ role: 'user', content: msgContent });
+  await callClaude();
+}
+async function runDirectDiagnostic(agent) {
+  var panel = document.getElementById('diagnostic-input-panel');
+  if (panel) panel.remove();
+
+  var accountName = adsActiveAccount ? adsActiveAccount.name : 'la cuenta conectada';
+  var diagPrompt = 'DIAGNÓSTICO AUTOMÁTICO DE CUENTA — GOOGLE ADS\n\n';
+  diagPrompt += 'Realiza un diagnóstico completo de ' + accountName + ' usando la API de Google Ads conectada. ';
+  diagPrompt += 'Consulta los datos reales de la cuenta mediante las queries GAQL disponibles y entrega un diagnóstico profesional con exactamente este formato:\n\n';
+  diagPrompt += '## 🩺 Diagnóstico de Google Ads — ' + accountName + '\n\n';
+  diagPrompt += '**Resumen de la cuenta:** [métricas clave del período reciente: inversión, impresiones, clics, CTR, CPC, conversiones, CPA, ROAS]\n\n';
+  diagPrompt += '### 🔴 Problema #1: [nombre concreto]\n';
+  diagPrompt += '**Qué está pasando:** [descripción basada en los datos reales de la cuenta]\n';
+  diagPrompt += '**Impacto estimado:** [cuánto presupuesto se desperdicia o cuánta conversión se pierde, con cifras reales]\n';
+  diagPrompt += '**Acción inmediata:** [qué hacer esta semana, específico y ejecutable]\n\n';
+  diagPrompt += '### 🟡 Problema #2: [nombre concreto]\n';
+  diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
+  diagPrompt += '### 🟢 Oportunidad #1: [nombre concreto]\n';
+  diagPrompt += '**Qué está pasando:** ...\n**Potencial:** ...\n**Acción recomendada:** ...\n\n';
+  diagPrompt += '### ✅ Plan de acción — próximas 2 semanas\n';
+  diagPrompt += 'Las 3 acciones más importantes en orden de impacto, con semana estimada.\n\n';
+  diagPrompt += '---\n';
+  diagPrompt += 'Habla en español LatAm. Usa los números reales de la cuenta. Empieza consultando las campañas activas y sus métricas de los últimos 30 días.';
+
+  hist.push({ role: 'user', content: diagPrompt });
   await callClaude();
 }
 // ── FIN MÓDULO DIAGNÓSTICO ───────────────────────────────────────────────────
