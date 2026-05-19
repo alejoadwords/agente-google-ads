@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   try {
     // 1. listAccessibleCustomers — NO usar login-customer-id aquí
     const listRes = await fetch(
-      'https://googleads.googleapis.com/v18/customers:listAccessibleCustomers',
+      'https://googleads.googleapis.com/v19/customers:listAccessibleCustomers',
       {
         headers: {
           'Authorization':   `Bearer ${accessToken}`,
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
           if (mccId && mccId !== id) headers['login-customer-id'] = mccId;
 
           const queryRes = await fetch(
-            `https://googleads.googleapis.com/v18/customers/${id}/googleAds:search`,
+            `https://googleads.googleapis.com/v19/customers/${id}/googleAds:search`,
             {
               method: 'POST',
               headers,
