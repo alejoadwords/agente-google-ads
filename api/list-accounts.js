@@ -4,7 +4,7 @@
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-async function getFreshToken(userId) {
+async function getStoredConnection(userId) {
   if (!userId || !SUPABASE_URL) return null;
   try {
     const r = await fetch(
@@ -12,16 +12,52 @@ async function getFreshToken(userId) {
       { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
     );
     const rows = await r.json();
-    return rows?.[0]?.access_token || null;
+    return rows?.[0] || null;
   } catch { return null; }
+}
+
+async function refreshGoogleToken(refreshToken) {
+  try {
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type:    'refresh_token',
+      }),
+    });
+    return r.json();
+  } catch { return {}; }
+}
+
+async function updateStoredToken(userId, accessToken) {
+  if (!SUPABASE_URL) return;
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_ads`,
+    {
+      method: 'PATCH',
+      headers: {
+        'apikey':        SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({ access_token: accessToken, updated_at: new Date().toISOString() }),
+    }
+  ).catch(() => {});
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   let { accessToken, userId } = req.body || {};
-  // Si no viene token en el body, intentar obtenerlo de Supabase
-  if (!accessToken && userId) accessToken = await getFreshToken(userId);
+
+  // Si no hay token en el body, obtenerlo de Supabase
+  if (!accessToken && userId) {
+    const conn = await getStoredConnection(userId);
+    accessToken = conn?.access_token || null;
+  }
   if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
 
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
@@ -35,6 +71,18 @@ export default async function handler(req, res) {
     );
   }
 
+  // Auto-refresh si hay 401: obtener refresh_token de Supabase y renovar
+  async function tryRefreshAndRetry() {
+    if (!userId) return false;
+    const conn = await getStoredConnection(userId);
+    if (!conn?.refresh_token) return false;
+    const refreshed = await refreshGoogleToken(conn.refresh_token);
+    if (!refreshed.access_token) return false;
+    accessToken = refreshed.access_token;
+    await updateStoredToken(userId, accessToken);
+    return true;
+  }
+
   try {
     // 1. listAccessibleCustomers — probar v20, v19, v18 en ese orden
     let listRes;
@@ -44,6 +92,21 @@ export default async function handler(req, res) {
     }
     if (!listRes) {
       return res.status(200).json({ accounts: [], isMCC: false, googleError: 'API de Google Ads no disponible (todas las versiones devuelven 404). Verifica el developer token.' });
+    }
+
+    // Si el token expiró (401), intentar refresh y repetir
+    if (listRes.status === 401) {
+      const refreshed = await tryRefreshAndRetry();
+      if (refreshed) {
+        listRes = null;
+        for (const ver of [20, 19, 18]) {
+          const r = await tryListAccessible(ver);
+          if (r.status !== 404) { listRes = r; break; }
+        }
+      }
+      if (!listRes) {
+        return res.status(200).json({ accounts: [], isMCC: false, googleError: 'Token expirado y no se pudo renovar. Reconecta tu cuenta de Google Ads en Configuración.' });
+      }
     }
 
     const statusCode = listRes.status;

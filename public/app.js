@@ -932,17 +932,18 @@ async function briefLoadPlatformAccounts() {
   const googleStatus = document.getElementById('plat-google-status');
   const googleBtn    = document.querySelector('#plat-google .agency-platform-btn');
   if (googleRow && googleSel) {
-    if (adsToken) {
+    const hasGoogleConn = !!(adsToken || uid); // mostrar si hay token local O userId (Supabase como fallback)
+    if (hasGoogleConn) {
       // Actualizar badge de estado
       if (googleStatus) { googleStatus.textContent = '● conectado'; googleStatus.style.color = 'var(--success)'; }
       if (googleBtn)    { googleBtn.textContent = 'Cambiar'; googleBtn.classList.remove('connect'); googleBtn.classList.add('connected'); }
       googleRow.style.display = 'block';
-      googleSel.innerHTML = '<option value="">Cargando...</option>';
+      googleSel.innerHTML = '<option value="">Cargando cuentas...</option>';
       try {
         const r = await fetch('/api/list-accounts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken: adsToken, userId: uid }),
+          body: JSON.stringify({ accessToken: adsToken || '', userId: uid }),
         });
         const data = await r.json();
         const accounts = data.accounts || [];
@@ -954,13 +955,20 @@ async function briefLoadPlatformAccounts() {
               const label = (a.name || a.descriptiveName || a.id) + (val ? ' (' + val + ')' : '');
               return '<option value="' + val + '"' + (val === stored ? ' selected' : '') + '>' + label + '</option>';
             }).join('');
+          if (googleStatus && !adsToken) {
+            googleStatus.textContent = '● conectado';
+            googleStatus.style.color = 'var(--success)';
+          }
         } else {
-          // Mostrar error real si está disponible
-          const errMsg = data.googleError ? data.googleError.slice(0, 80) : 'Sin cuentas accesibles';
+          const errMsg = data.googleError ? data.googleError.slice(0, 100) : 'Sin cuentas accesibles';
           googleSel.innerHTML = '<option value="">' + errMsg + '</option>';
+          if (data.googleError && data.googleError.includes('expirad') && googleStatus) {
+            googleStatus.textContent = '⚠ token expirado';
+            googleStatus.style.color = 'var(--warning, #F59E0B)';
+          }
         }
       } catch(e) {
-        googleSel.innerHTML = '<option value="">Error: ' + e.message.slice(0, 60) + '</option>';
+        googleSel.innerHTML = '<option value="">Error al cargar: ' + e.message.slice(0, 60) + '</option>';
       }
     } else {
       googleRow.style.display = 'none';
