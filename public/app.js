@@ -11225,13 +11225,14 @@ function updateAdsUI(connected, email) {
 async function queryGoogleAds(gaqlQuery) {
   const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   const customerId  = sessionStorage.getItem('ads_customer_id')  || localStorage.getItem('ads_customer_id_persist');
-  if (!accessToken) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
+  const userId      = clerkInstance?.user?.id || '';
+  if (!accessToken && !userId) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
   if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {
     const res = await fetch('/api/google-ads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customerId, query: gaqlQuery, accessToken }),
+      body: JSON.stringify({ customerId, query: gaqlQuery, accessToken: accessToken || '', userId }),
     });
     return await res.json();
   } catch (err) {
