@@ -3812,8 +3812,12 @@ async function runDirectDiagnostic(agent) {
       }).join('\n');
 
   // 4. Construir prompt con datos reales ya formateados — Claude solo analiza, no consulta
-  var diagPrompt = 'DATOS REALES DE LA CUENTA GOOGLE ADS — ' + accountName + ' (últimos 30 días)\n';
-  diagPrompt += 'Moneda: ' + currency + ' (TODOS los valores monetarios están en ' + currency + ', no en USD)\n\n';
+  var clientProfile = memCtx ? memCtx() : '';
+
+  var diagPrompt = '=== PERFIL DEL CLIENTE ===\n';
+  diagPrompt += clientProfile + '\n\n';
+  diagPrompt += '=== DATOS REALES DE LA CUENTA GOOGLE ADS — ' + accountName + ' (últimos 30 días) ===\n';
+  diagPrompt += 'Moneda de la cuenta: ' + currency + ' (TODOS los valores monetarios están en ' + currency + ', NO en USD)\n\n';
   diagPrompt += 'CAMPAÑAS:\n' + dataLines + '\n\n';
   diagPrompt += 'TOTALES:\n';
   diagPrompt += '- Inversión total: ' + currency + ' ' + Math.round(totalCost).toLocaleString('es-CO') + '\n';
@@ -3823,10 +3827,12 @@ async function runDirectDiagnostic(agent) {
   diagPrompt += '- CPC promedio: ' + currency + ' ' + Math.round(avgCpc).toLocaleString('es-CO') + '\n';
   diagPrompt += '- Conversiones: ' + totalConv + '\n';
   diagPrompt += '- CPA: ' + currency + ' ' + Math.round(cpa).toLocaleString('es-CO') + '\n\n';
-  diagPrompt += 'Con estos datos reales entrega el diagnóstico. Usa los números exactos de arriba. Todos los benchmarks y comparaciones deben hacerse en ' + currency + ', no en USD:\n\n';
+  diagPrompt += '=== INSTRUCCIONES PARA EL DIAGNÓSTICO ===\n';
+  diagPrompt += 'CRÍTICO: Evalúa el CPA y todas las métricas en el contexto real del negocio del cliente (ticket, industria, ciclo de venta). NO uses benchmarks genéricos. Un CPA que parece alto puede ser excelente para un producto de ticket alto; un CPA bajo puede ser malo si las conversiones son de baja calidad.\n';
+  diagPrompt += 'Usa los números exactos de arriba. Moneda = ' + currency + '. No inventes datos que no están en este mensaje.\n\n';
   diagPrompt += '## 🩺 Diagnóstico de Google Ads — ' + accountName + '\n\n';
-  diagPrompt += '**Resumen (últimos 30 días):** [reproduce los totales exactos de arriba en ' + currency + ']\n\n';
-  diagPrompt += '### 🔴 Problema principal:\n**Qué está pasando:** ...\n**Impacto (' + currency + '):** ...\n**Acción esta semana:** ...\n\n';
+  diagPrompt += '**Resumen (últimos 30 días):** [reproduce los totales exactos en ' + currency + ']\n\n';
+  diagPrompt += '### 🔴 Problema principal (si existe — si la cuenta está bien, dilo):\n**Qué está pasando:** ...\n**Impacto (' + currency + '):** ...\n**Acción esta semana:** ...\n\n';
   diagPrompt += '### 🟡 Segundo punto de mejora:\n**Qué está pasando:** ...\n**Acción:** ...\n\n';
   diagPrompt += '### 🟢 Lo que está funcionando bien:\n...\n\n';
   diagPrompt += '### ✅ Plan 2 semanas:\n[3 acciones en orden de impacto]\n\n';
