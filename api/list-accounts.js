@@ -98,14 +98,23 @@ export default async function handler(req, res) {
     if (listRes.status === 401) {
       const refreshed = await tryRefreshAndRetry();
       if (refreshed) {
+        // Reintento con token renovado
         listRes = null;
         for (const ver of [20, 19, 18]) {
           const r = await tryListAccessible(ver);
           if (r.status !== 404) { listRes = r; break; }
         }
-      }
-      if (!listRes) {
-        return res.status(200).json({ accounts: [], isMCC: false, googleError: 'Token expirado y no se pudo renovar. Reconecta tu cuenta de Google Ads en Configuración.' });
+        if (!listRes) {
+          return res.status(200).json({ accounts: [], isMCC: false, googleError: 'API no disponible después de renovar el token.' });
+        }
+      } else {
+        // Refresh falló — pedir reconexión
+        console.log('list-accounts: token 401 y refresh fallido, userId:', userId);
+        return res.status(200).json({
+          accounts: [], isMCC: false,
+          googleError: 'Tu sesión de Google Ads expiró. Reconecta tu cuenta en Configuración → Conexiones → Google Ads.',
+          needsReconnect: true,
+        });
       }
     }
 
