@@ -3746,23 +3746,29 @@ async function runDirectDiagnostic(agent) {
   if (panel) panel.remove();
 
   var accountName = adsActiveAccount ? adsActiveAccount.name : 'la cuenta conectada';
-  var diagPrompt = 'DIAGNÓSTICO AUTOMÁTICO DE CUENTA — GOOGLE ADS\n\n';
-  diagPrompt += 'Realiza un diagnóstico completo de ' + accountName + ' usando la API de Google Ads conectada. ';
-  diagPrompt += 'Consulta los datos reales de la cuenta mediante las queries GAQL disponibles y entrega un diagnóstico profesional con exactamente este formato:\n\n';
+  var customerId  = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || (adsActiveAccount && adsActiveAccount.id) || '';
+
+  // Prompt explícito que le indica al agente el customer ID y que debe usar GAQL
+  var diagPrompt = 'DIAGNÓSTICO AUTOMÁTICO — CUENTA GOOGLE ADS CONECTADA\n\n';
+  diagPrompt += 'La cuenta de Google Ads está conectada y lista para consultar via API.\n';
+  if (customerId) diagPrompt += 'Customer ID activo: ' + customerId + '\n';
+  diagPrompt += 'Nombre de cuenta: ' + accountName + '\n\n';
+  diagPrompt += 'INSTRUCCIÓN: Usa el bloque [GAQL_QUERY: ...] para obtener los datos reales. ';
+  diagPrompt += 'Empieza con una query de campañas de los últimos 30 días para ver el estado general:\n\n';
+  diagPrompt += '[GAQL_QUERY: SELECT campaign.name, campaign.status, campaign.advertising_channel_type, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc FROM campaign WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.cost_micros DESC LIMIT 20]\n\n';
+  diagPrompt += 'Con los datos obtenidos, entrega un diagnóstico profesional con este formato:\n\n';
   diagPrompt += '## 🩺 Diagnóstico de Google Ads — ' + accountName + '\n\n';
-  diagPrompt += '**Resumen de la cuenta:** [métricas clave del período reciente: inversión, impresiones, clics, CTR, CPC, conversiones, CPA, ROAS]\n\n';
+  diagPrompt += '**Resumen de la cuenta (últimos 30 días):** [inversión total, impresiones, clics, CTR, CPC, conversiones, CPA]\n\n';
   diagPrompt += '### 🔴 Problema #1: [nombre concreto]\n';
-  diagPrompt += '**Qué está pasando:** [descripción basada en los datos reales de la cuenta]\n';
-  diagPrompt += '**Impacto estimado:** [cuánto presupuesto se desperdicia o cuánta conversión se pierde, con cifras reales]\n';
-  diagPrompt += '**Acción inmediata:** [qué hacer esta semana, específico y ejecutable]\n\n';
+  diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
   diagPrompt += '### 🟡 Problema #2: [nombre concreto]\n';
   diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
-  diagPrompt += '### 🟢 Oportunidad #1: [nombre concreto]\n';
-  diagPrompt += '**Qué está pasando:** ...\n**Potencial:** ...\n**Acción recomendada:** ...\n\n';
+  diagPrompt += '### 🟢 Oportunidad detectada: [nombre concreto]\n';
+  diagPrompt += '**Potencial:** ...\n**Acción recomendada:** ...\n\n';
   diagPrompt += '### ✅ Plan de acción — próximas 2 semanas\n';
-  diagPrompt += 'Las 3 acciones más importantes en orden de impacto, con semana estimada.\n\n';
+  diagPrompt += 'Las 3 acciones más importantes en orden de impacto.\n\n';
   diagPrompt += '---\n';
-  diagPrompt += 'Habla en español LatAm. Usa los números reales de la cuenta. Empieza consultando las campañas activas y sus métricas de los últimos 30 días.';
+  diagPrompt += 'Habla en español LatAm. Usa los números reales que obtengas de la API.';
 
   hist.push({ role: 'user', content: diagPrompt });
   await callClaude();
@@ -11173,7 +11179,7 @@ function renderActiveAccount() {
   const nameEl = document.getElementById('adsActiveName');
   const idEl   = document.getElementById('adsActiveId');
   if (nameEl) nameEl.textContent = adsActiveAccount.name;
-  if (idEl)   idEl.textContent   = `ID: ${adsActiveAccount.id} · ${adsActiveAccount.currency}`;
+  if (idEl)   idEl.textContent   = `ID: ${adsActiveAccount.id}` + (adsActiveAccount.currency ? ` · ${adsActiveAccount.currency}` : '');
   if (el)     el.style.display   = 'block';
 }
 
