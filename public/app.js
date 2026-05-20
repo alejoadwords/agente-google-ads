@@ -3754,29 +3754,83 @@ async function runDirectDiagnostic(agent) {
   if (panel) panel.remove();
 
   var accountName = adsActiveAccount ? adsActiveAccount.name : 'la cuenta conectada';
-  var customerId  = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || (adsActiveAccount && adsActiveAccount.id) || '';
 
-  // Prompt explícito que le indica al agente el customer ID y que debe usar GAQL
-  var diagPrompt = 'DIAGNÓSTICO AUTOMÁTICO — CUENTA GOOGLE ADS CONECTADA\n\n';
-  diagPrompt += 'La cuenta de Google Ads está conectada y lista para consultar via API.\n';
-  if (customerId) diagPrompt += 'Customer ID activo: ' + customerId + '\n';
-  diagPrompt += 'Nombre de cuenta: ' + accountName + '\n\n';
-  diagPrompt += 'INSTRUCCIÓN: Usa el bloque [GAQL_QUERY: ...] para obtener los datos reales. ';
-  diagPrompt += 'Empieza con una query de campañas de los últimos 30 días para ver el estado general:\n\n';
-  diagPrompt += '[GAQL_QUERY: SELECT campaign.name, campaign.status, campaign.advertising_channel_type, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc FROM campaign WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.cost_micros DESC LIMIT 20]\n\n';
-  diagPrompt += 'Con los datos obtenidos, entrega un diagnóstico profesional con este formato:\n\n';
+  // Mostrar estado de carga mientras consultamos la API
+  var loadBubble = document.createElement('div');
+  loadBubble.className = 'msg';
+  loadBubble.id = 'diag-load-bubble';
+  loadBubble.style.cssText = 'flex-direction:column;align-items:flex-start';
+  loadBubble.innerHTML = '<div style="font-size:13px;color:var(--muted)">⏳ Consultando datos reales de <b>' + accountName + '</b>...</div>';
+  document.getElementById('chat-area').appendChild(loadBubble);
+  scrollB();
+
+  // 1. Obtener moneda de la cuenta
+  var currency = (adsActiveAccount && adsActiveAccount.currency) || '';
+  if (!currency) {
+    var curRes = await queryGoogleAds('SELECT customer.currency_code FROM customer LIMIT 1');
+    currency = curRes.results && curRes.results[0] && curRes.results[0].customer && curRes.results[0].customer.currencyCode || 'COP';
+  }
+
+  // 2. Consultar campañas últimos 30 días
+  var gaqlQuery = 'SELECT campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc FROM campaign WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.cost_micros DESC LIMIT 20';
+  var result = await queryGoogleAds(gaqlQuery);
+
+  // Quitar burbuja de carga
+  var lb = document.getElementById('diag-load-bubble');
+  if (lb) lb.remove();
+
+  if (result.error) {
+    addAgent('⚠️ No pude consultar la cuenta: ' + result.error);
+    return;
+  }
+
+  // 3. Formatear datos con la moneda correcta
+  var rows = result.results || [];
+  var fmt2 = function(micros) { return Math.round(Number(micros || 0) / 1000000).toLocaleString('es-CO'); };
+  var fmtPct = function(v) { return (Number(v || 0) * 100).toFixed(2); };
+
+  var totalCostMicros = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.costMicros || 0); }, 0);
+  var totalClics      = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.clicks || 0); }, 0);
+  var totalImp        = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.impressions || 0); }, 0);
+  var totalConv       = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.conversions || 0); }, 0);
+  var totalCost       = totalCostMicros / 1000000;
+  var avgCpc          = totalClics > 0 ? totalCost / totalClics : 0;
+  var avgCtr          = totalImp   > 0 ? (totalClics / totalImp * 100) : 0;
+  var cpa             = totalConv  > 0 ? totalCost / totalConv : 0;
+
+  var dataLines = rows.length === 0
+    ? 'No hay campañas con datos en los últimos 30 días.'
+    : rows.map(function(r) {
+        var c = r.campaign || {};
+        var m = r.metrics  || {};
+        return '- ' + (c.name || 'Sin nombre') + ' [' + (c.status || '') + ']: '
+          + currency + ' ' + fmt2(m.costMicros) + ' | '
+          + Number(m.impressions || 0).toLocaleString('es-CO') + ' imp | '
+          + Number(m.clicks || 0).toLocaleString('es-CO') + ' clics | CTR ' + fmtPct(m.ctr) + '% | '
+          + 'CPC ' + currency + ' ' + fmt2(m.averageCpc) + ' | '
+          + Number(m.conversions || 0) + ' conv';
+      }).join('\n');
+
+  // 4. Construir prompt con datos reales ya formateados — Claude solo analiza, no consulta
+  var diagPrompt = 'DATOS REALES DE LA CUENTA GOOGLE ADS — ' + accountName + ' (últimos 30 días)\n';
+  diagPrompt += 'Moneda: ' + currency + ' (TODOS los valores monetarios están en ' + currency + ', no en USD)\n\n';
+  diagPrompt += 'CAMPAÑAS:\n' + dataLines + '\n\n';
+  diagPrompt += 'TOTALES:\n';
+  diagPrompt += '- Inversión total: ' + currency + ' ' + Math.round(totalCost).toLocaleString('es-CO') + '\n';
+  diagPrompt += '- Impresiones: ' + totalImp.toLocaleString('es-CO') + '\n';
+  diagPrompt += '- Clics: ' + totalClics.toLocaleString('es-CO') + '\n';
+  diagPrompt += '- CTR promedio: ' + avgCtr.toFixed(2) + '%\n';
+  diagPrompt += '- CPC promedio: ' + currency + ' ' + Math.round(avgCpc).toLocaleString('es-CO') + '\n';
+  diagPrompt += '- Conversiones: ' + totalConv + '\n';
+  diagPrompt += '- CPA: ' + currency + ' ' + Math.round(cpa).toLocaleString('es-CO') + '\n\n';
+  diagPrompt += 'Con estos datos reales entrega el diagnóstico. Usa los números exactos de arriba. Todos los benchmarks y comparaciones deben hacerse en ' + currency + ', no en USD:\n\n';
   diagPrompt += '## 🩺 Diagnóstico de Google Ads — ' + accountName + '\n\n';
-  diagPrompt += '**Resumen de la cuenta (últimos 30 días):** [inversión total, impresiones, clics, CTR, CPC, conversiones, CPA]\n\n';
-  diagPrompt += '### 🔴 Problema #1: [nombre concreto]\n';
-  diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
-  diagPrompt += '### 🟡 Problema #2: [nombre concreto]\n';
-  diagPrompt += '**Qué está pasando:** ...\n**Impacto estimado:** ...\n**Acción inmediata:** ...\n\n';
-  diagPrompt += '### 🟢 Oportunidad detectada: [nombre concreto]\n';
-  diagPrompt += '**Potencial:** ...\n**Acción recomendada:** ...\n\n';
-  diagPrompt += '### ✅ Plan de acción — próximas 2 semanas\n';
-  diagPrompt += 'Las 3 acciones más importantes en orden de impacto.\n\n';
-  diagPrompt += '---\n';
-  diagPrompt += 'Habla en español LatAm. Usa los números reales que obtengas de la API.';
+  diagPrompt += '**Resumen (últimos 30 días):** [reproduce los totales exactos de arriba en ' + currency + ']\n\n';
+  diagPrompt += '### 🔴 Problema principal:\n**Qué está pasando:** ...\n**Impacto (' + currency + '):** ...\n**Acción esta semana:** ...\n\n';
+  diagPrompt += '### 🟡 Segundo punto de mejora:\n**Qué está pasando:** ...\n**Acción:** ...\n\n';
+  diagPrompt += '### 🟢 Lo que está funcionando bien:\n...\n\n';
+  diagPrompt += '### ✅ Plan 2 semanas:\n[3 acciones en orden de impacto]\n\n';
+  diagPrompt += '---\nHabla en español LatAm. Moneda = ' + currency + '. Sé directo. No hagas más consultas a la API.';
 
   hist.push({ role: 'user', content: diagPrompt });
   await callClaude();
