@@ -959,13 +959,13 @@ async function briefLoadPlatformAccounts() {
             googleStatus.textContent = '● conectado';
             googleStatus.style.color = 'var(--success)';
           }
+        } else if (data.needsReconnect) {
+          googleSel.innerHTML = '<option value="">Sesión expirada — reconecta tu cuenta</option>';
+          if (googleStatus) { googleStatus.textContent = '⚠ sesión expirada'; googleStatus.style.color = '#F59E0B'; }
+          if (googleBtn)    { googleBtn.textContent = 'Reconectar'; googleBtn.classList.remove('connected'); googleBtn.classList.add('connect'); googleBtn.onclick = connectGoogleAds; }
         } else {
           const errMsg = data.googleError ? data.googleError.slice(0, 100) : 'Sin cuentas accesibles';
           googleSel.innerHTML = '<option value="">' + errMsg + '</option>';
-          if (data.googleError && data.googleError.includes('expirad') && googleStatus) {
-            googleStatus.textContent = '⚠ token expirado';
-            googleStatus.style.color = 'var(--warning, #F59E0B)';
-          }
         }
       } catch(e) {
         googleSel.innerHTML = '<option value="">Error al cargar: ' + e.message.slice(0, 60) + '</option>';
