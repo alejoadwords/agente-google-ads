@@ -109,24 +109,58 @@ export default async function handler(req, res) {
   // ── Legacy GAQL proxy (backward compat) ─────────────────────
   if (!action) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const { customerId, query, accessToken } = req.body;
-    if (!customerId || !query || !accessToken) return res.status(400).json({ error: 'customerId, query y accessToken requeridos' });
+    const { customerId: rawCid, query, accessToken: rawToken, userId: bodyUid } = req.body;
+    if (!rawCid || !query) return res.status(400).json({ error: 'customerId y query requeridos' });
+
+    const cleanCid = rawCid.replace(/-/g, '');
+    const makeH = (tok) => {
+      const h = { 'Authorization': `Bearer ${tok}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
+      if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+      return h;
+    };
+    const doReq = (tok) => fetch(
+      `https://googleads.googleapis.com/v20/customers/${cleanCid}/googleAds:search`,
+      { method: 'POST', headers: makeH(tok), body: JSON.stringify({ query }) }
+    );
+
+    // Obtener token inicial: del body, o de Supabase como fallback
+    let activeToken = rawToken || '';
+    if (!activeToken && bodyUid) {
+      const conn = await getStoredToken(bodyUid);
+      activeToken = conn?.access_token || '';
+    }
+    if (!activeToken) return res.status(200).json({ error: 'No hay token de Google Ads. Conecta tu cuenta en Configuración.' });
+
     try {
-      const headers = {
-        'Authorization':   `Bearer ${accessToken}`,
-        'developer-token': DEV_TOKEN,
-        'Content-Type':    'application/json',
-      };
-      if (MCC_ID) headers['login-customer-id'] = MCC_ID.replace(/-/g, '');
-      const r = await fetch(
-        `https://googleads.googleapis.com/v20/customers/${customerId.replace(/-/g, '')}/googleAds:searchStream`,
-        { method: 'POST', headers, body: JSON.stringify({ query }) }
-      );
-      const data = await r.json();
-      if (!r.ok) return res.status(r.status).json({ error: 'Error en Google Ads API', details: data });
-      return res.status(200).json({ results: data });
+      let r = await doReq(activeToken);
+
+      // Auto-refresh en 401
+      if (r.status === 401 && bodyUid) {
+        const conn = await getStoredToken(bodyUid);
+        if (conn?.refresh_token) {
+          const refreshed = await refreshGoogleToken(conn.refresh_token);
+          if (refreshed.access_token) {
+            await updateStoredToken(bodyUid, refreshed.access_token, refreshed.expires_in);
+            r = await doReq(refreshed.access_token);
+          }
+        }
+      }
+
+      const rawText = await r.text();
+      let data;
+      try { data = JSON.parse(rawText); } catch { data = { _raw: rawText.slice(0, 400) }; }
+
+      if (!r.ok) {
+        const msg = data?.error?.message || data?.error?.status || JSON.stringify(data).slice(0, 300);
+        console.log('GAQL proxy error', r.status, msg);
+        return res.status(200).json({ error: `Google Ads API [${r.status}]: ${msg}` });
+      }
+
+      // /search devuelve { results: [...] } directamente
+      return res.status(200).json({ results: data.results || [] });
     } catch (err) {
-      return res.status(500).json({ error: 'Error interno del servidor' });
+      console.error('GAQL proxy exception:', err.message);
+      return res.status(200).json({ error: `Error interno: ${err.message}` });
     }
   }
 
