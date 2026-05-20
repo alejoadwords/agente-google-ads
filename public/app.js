@@ -3811,6 +3811,40 @@ async function runDirectDiagnostic(agent) {
           + Number(m.conversions || 0) + ' conv';
       }).join('\n');
 
+  // 3b. Ad groups query
+  var adGroupResult = await queryGoogleAds('SELECT campaign.name, ad_group.name, ad_group.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc FROM ad_group WHERE segments.date DURING LAST_30_DAYS AND ad_group.status != \'REMOVED\' ORDER BY metrics.cost_micros DESC LIMIT 30');
+  var adGroupLines = '';
+  if (adGroupResult.results && adGroupResult.results.length > 0) {
+    adGroupLines = adGroupResult.results.map(function(r) {
+      var ag = r.adGroup || {};
+      var c  = r.campaign || {};
+      var m  = r.metrics  || {};
+      var cost = Math.round(Number(m.costMicros || 0) / 1000000).toLocaleString('es-CO');
+      var cpc  = Math.round(Number(m.averageCpc  || 0) / 1000000).toLocaleString('es-CO');
+      var ctr  = (Number(m.ctr || 0) * 100).toFixed(2);
+      return '  - ' + (ag.name || '?') + ' [' + (ag.status || '') + '] (camp: ' + (c.name || '?') + '): '
+        + currency + ' ' + cost + ' | ' + Number(m.clicks || 0).toLocaleString('es-CO') + ' clics | CTR ' + ctr + '% | CPC ' + currency + ' ' + cpc + ' | ' + Number(m.conversions || 0) + ' conv';
+    }).join('\n');
+  }
+
+  // 3c. Keywords query (search campaigns)
+  var kwResult = await queryGoogleAds('SELECT campaign.name, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc, ad_group_criterion.quality_info.quality_score FROM keyword_view WHERE segments.date DURING LAST_30_DAYS AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC LIMIT 50');
+  var kwLines = '';
+  if (kwResult.results && kwResult.results.length > 0) {
+    kwLines = kwResult.results.map(function(r) {
+      var kw = r.adGroupCriterion && r.adGroupCriterion.keyword || {};
+      var qi = r.adGroupCriterion && r.adGroupCriterion.qualityInfo || {};
+      var ag = r.adGroup || {};
+      var m  = r.metrics || {};
+      var cost = Math.round(Number(m.costMicros || 0) / 1000000).toLocaleString('es-CO');
+      var cpc  = Math.round(Number(m.averageCpc  || 0) / 1000000).toLocaleString('es-CO');
+      var ctr  = (Number(m.ctr || 0) * 100).toFixed(2);
+      var qs   = qi.qualityScore ? ' QS:' + qi.qualityScore : '';
+      return '  - [' + (kw.matchType || '?') + '] "' + (kw.text || '?') + '"' + qs + ' (grupo: ' + (ag.name || '?') + '): '
+        + currency + ' ' + cost + ' | ' + Number(m.clicks || 0).toLocaleString('es-CO') + ' clics | CTR ' + ctr + '% | CPC ' + currency + ' ' + cpc + ' | ' + Number(m.conversions || 0) + ' conv';
+    }).join('\n');
+  }
+
   // 4. Construir prompt con datos reales ya formateados — Claude solo analiza, no consulta
   var clientProfile = memCtx ? memCtx() : '';
 
@@ -3827,15 +3861,22 @@ async function runDirectDiagnostic(agent) {
   diagPrompt += '- CPC promedio: ' + currency + ' ' + Math.round(avgCpc).toLocaleString('es-CO') + '\n';
   diagPrompt += '- Conversiones: ' + totalConv + '\n';
   diagPrompt += '- CPA: ' + currency + ' ' + Math.round(cpa).toLocaleString('es-CO') + '\n\n';
+  if (adGroupLines) {
+    diagPrompt += 'GRUPOS DE ANUNCIOS (últimos 30 días):\n' + adGroupLines + '\n\n';
+  }
+  if (kwLines) {
+    diagPrompt += 'PALABRAS CLAVE — Red de Búsqueda (top 50 por inversión):\n' + kwLines + '\n\n';
+  }
   diagPrompt += '=== INSTRUCCIONES PARA EL DIAGNÓSTICO ===\n';
   diagPrompt += 'CRÍTICO: Evalúa el CPA y todas las métricas en el contexto real del negocio del cliente (ticket, industria, ciclo de venta). NO uses benchmarks genéricos. Un CPA que parece alto puede ser excelente para un producto de ticket alto; un CPA bajo puede ser malo si las conversiones son de baja calidad.\n';
-  diagPrompt += 'Usa los números exactos de arriba. Moneda = ' + currency + '. No inventes datos que no están en este mensaje.\n\n';
+  diagPrompt += 'Con estos datos reales (campañas, grupos de anuncios y keywords) entrega el diagnóstico profundo. Usa los números exactos de arriba. Benchmarks siempre en ' + currency + ':\n\n';
   diagPrompt += '## 🩺 Diagnóstico de Google Ads — ' + accountName + '\n\n';
   diagPrompt += '**Resumen (últimos 30 días):** [reproduce los totales exactos en ' + currency + ']\n\n';
-  diagPrompt += '### 🔴 Problema principal (si existe — si la cuenta está bien, dilo):\n**Qué está pasando:** ...\n**Impacto (' + currency + '):** ...\n**Acción esta semana:** ...\n\n';
-  diagPrompt += '### 🟡 Segundo punto de mejora:\n**Qué está pasando:** ...\n**Acción:** ...\n\n';
+  diagPrompt += '### 🔴 Hallazgo principal:\n**Qué está pasando:** ...\n**Impacto (' + currency + '):** ...\n**Acción esta semana:** ...\n\n';
+  diagPrompt += '### 🟡 Análisis de grupos de anuncios:\n[Cuáles grupos tienen mejor/peor rendimiento, por qué, qué hacer]\n\n';
+  diagPrompt += '### 🔵 Análisis de palabras clave:\n[Keywords con mejor QS, keywords con gasto alto y cero conversiones, oportunidades de negativas]\n\n';
   diagPrompt += '### 🟢 Lo que está funcionando bien:\n...\n\n';
-  diagPrompt += '### ✅ Plan 2 semanas:\n[3 acciones en orden de impacto]\n\n';
+  diagPrompt += '### ✅ Plan 2 semanas:\n[3-5 acciones concretas en orden de impacto, indicando si son a nivel campaña, grupo o keyword]\n\n';
   diagPrompt += '---\nHabla en español LatAm. Moneda = ' + currency + '. Sé directo. No hagas más consultas a la API.';
 
   hist.push({ role: 'user', content: diagPrompt });
@@ -6363,6 +6404,19 @@ function renderSocialOptions() {
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 function exportToPDF(txt, filename) {
+  function stripEmoji(s) {
+    return (s || '')
+      .replace(/🩺/g, '')
+      .replace(/🔴/g, '[!] ')
+      .replace(/🟡/g, '[~] ')
+      .replace(/🟢/g, '[+] ')
+      .replace(/🔵/g, '[*] ')
+      .replace(/✅/g, '[ok] ')
+      .replace(/⚠️?/g, '[!] ')
+      .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '')
+      .trim();
+  }
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', putOnlyUsedFonts: true });
   const pageW = doc.internal.pageSize.getWidth();
@@ -6376,8 +6430,15 @@ function exportToPDF(txt, filename) {
   const border = [220, 221, 230];
   let y = marginT;
 
+  // Detect Google Ads diagnostic before drawHeader so the closure captures it
+  var isGoogleAdsDiag = txt.includes('Diagnóstico de Google Ads') || txt.includes('DIAGNÓSTICO DE GOOGLE ADS');
+
   function checkPage(needed) {
-    if (y + needed > pageH - marginB) { doc.addPage(); y = marginT; drawHeader(); }
+    if (y + needed > pageH - marginB) {
+      doc.addPage();
+      y = isGoogleAdsDiag ? marginT : marginT;
+      drawHeader();
+    }
   }
   function drawHeader() {
     // Franja azul top
@@ -6398,6 +6459,43 @@ function exportToPDF(txt, filename) {
   drawHeader();
   y = 20;
 
+  // Branded sub-header for Google Ads diagnostic
+  var diagClientName = '';
+  if (isGoogleAdsDiag) {
+    var titleMatch = txt.match(/Diagnóstico de Google Ads\s*[—-]\s*(.+)/);
+    diagClientName = titleMatch ? titleMatch[1].trim() : '';
+    // Google Ads color bar
+    doc.setFillColor(66, 133, 244); // Google blue
+    doc.rect(0, 12, pageW, 18, 'F');
+    // Google Ads logo "G" circle (simplified)
+    doc.setFillColor(255, 255, 255);
+    doc.circle(marginL + 7, 21, 5.5, 'F');
+    doc.setFontSize(9);
+    doc.setTextColor(66, 133, 244);
+    doc.setFont('helvetica', 'bold');
+    doc.text('G', marginL + 7, 23.5, { align: 'center' });
+    // "Google Ads" text
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Google Ads', marginL + 16, 22.5);
+    // Report type
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Reporte de rendimiento — últimos 30 días', marginL + 16, 27.5);
+    // Client name on the right
+    if (diagClientName) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(diagClientName, pageW - marginR, 22.5, { align: 'right' });
+    }
+    // Date
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' }), pageW - marginR, 27.5, { align: 'right' });
+    y = 36;
+  }
+
   // Parsear líneas con tipo
   const rawLines = txt.split('\n');
   const parsed = rawLines.map(line => {
@@ -6408,14 +6506,14 @@ function exportToPDF(txt, filename) {
     const bullet = line.match(/^[-•*]\s+(.+)/);
     const num = line.match(/^(\d+)\.\s+(.+)/);
     const empty = line.trim() === '';
-    if (h1) return { type: 'h1', text: h1[1].replace(/\*\*/g,'') };
-    if (h2) return { type: 'h2', text: h2[1].replace(/\*\*/g,'') };
-    if (h3) return { type: 'h3', text: h3[1].replace(/\*\*/g,'') };
-    if (bold) return { type: 'bold', text: bold[1] };
-    if (bullet) return { type: 'bullet', text: bullet[1].replace(/\*\*/g,'') };
-    if (num) return { type: 'num', n: num[1], text: num[2].replace(/\*\*/g,'') };
+    if (h1) return { type: 'h1', text: stripEmoji(h1[1].replace(/\*\*/g,'')) };
+    if (h2) return { type: 'h2', text: stripEmoji(h2[1].replace(/\*\*/g,'')) };
+    if (h3) return { type: 'h3', text: stripEmoji(h3[1].replace(/\*\*/g,'')) };
+    if (bold) return { type: 'bold', text: stripEmoji(bold[1]) };
+    if (bullet) return { type: 'bullet', text: stripEmoji(bullet[1].replace(/\*\*/g,'')) };
+    if (num) return { type: 'num', n: num[1], text: stripEmoji(num[2].replace(/\*\*/g,'')) };
     if (empty) return { type: 'empty' };
-    return { type: 'body', text: line.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1') };
+    return { type: 'body', text: stripEmoji(line.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1')) };
   });
 
   for (let i = 0; i < parsed.length; i++) {
