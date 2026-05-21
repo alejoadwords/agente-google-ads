@@ -11003,18 +11003,49 @@ let adsAccounts = [];       // todas las cuentas accesibles
   var savedEmail   = sessionStorage.getItem('ads_email')          || localStorage.getItem('ads_email_persist');
   var savedAccount = sessionStorage.getItem('ads_active_account') || localStorage.getItem('ads_active_account_persist');
   var savedCustId  = sessionStorage.getItem('ads_customer_id')    || localStorage.getItem('ads_customer_id_persist');
-  if (savedToken) {
-    if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', savedToken);
-    if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
-    if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
-    updateAdsUI(true, savedEmail);
-    if (savedAccount) {
-      try {
-        adsActiveAccount = JSON.parse(savedAccount);
-        if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
-        renderActiveAccount();
-      } catch {}
+  if (savedToken || clerkInstance?.user?.id) {
+    if (savedToken) {
+      if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', savedToken);
+      if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
+      if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
+      updateAdsUI(true, savedEmail);
+      if (savedAccount) {
+        try {
+          adsActiveAccount = JSON.parse(savedAccount);
+          if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
+          renderActiveAccount();
+        } catch {}
+      }
     }
+    // Auto-refresh silencioso en background: garantiza que el token no expire
+    (async function silentRefreshGoogleToken() {
+      const uid = clerkInstance?.user?.id || (() => { try { return JSON.parse(atob((clerkInstance?.session?.id||'').split('.')[1]||'{}')).sub; } catch { return ''; } })();
+      if (!uid) return;
+      try {
+        const r = await fetch('/api/refresh-google-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid }),
+        });
+        const data = await r.json();
+        if (data.access_token && !data.error) {
+          // Token fresco → actualizar storage y UI
+          sessionStorage.setItem('ads_access_token', data.access_token);
+          localStorage.setItem('ads_access_token_persist', data.access_token);
+          if (!savedToken) {
+            // Primera carga sin token local → actualizar UI como conectado
+            const emailFromStorage = sessionStorage.getItem('ads_email') || localStorage.getItem('ads_email_persist') || '';
+            updateAdsUI(true, emailFromStorage);
+            if (savedAccount) {
+              try { adsActiveAccount = JSON.parse(savedAccount); renderActiveAccount(); } catch {}
+            }
+          }
+        } else if (data.needsReconnect) {
+          // Solo mostrar "reconectar" si el usuario ya tenía un token previo (no primera carga)
+          if (savedToken) updateAdsUI(false);
+        }
+      } catch {} // Silencioso — no interrumpir la carga de la app
+    })();
   }
 })();
 
