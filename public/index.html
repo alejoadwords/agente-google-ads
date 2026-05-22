@@ -1385,6 +1385,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
             <label>Sitio web / landing page</label>
             <input type="url" id="ag-f-web" placeholder="https://www.ejemplo.com">
           </div>
+          <div id="extract-brand-wrap" style="margin-top:-6px;margin-bottom:12px">
+            <button type="button" onclick="autoExtractBrand()" id="extract-brand-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--blue-lt);color:var(--blue);border:1.5px solid var(--blue-md);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s">
+              <span id="extract-brand-icon">✨</span>
+              <span id="extract-brand-label">Analizar sitio y autocompletar</span>
+            </button>
+          </div>
           <div class="agency-field">
             <label>Logo del cliente</label>
             <div class="agency-logo-upload">

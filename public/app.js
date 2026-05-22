@@ -887,6 +887,70 @@ function briefFillForm(c) {
   if (mSel && c.metaAdAccountId)  mSel.dataset.stored = c.metaAdAccountId;
 }
 
+async function autoExtractBrand() {
+  const url = document.getElementById('ag-f-web')?.value?.trim();
+  if (!url) {
+    showToast('Primero ingresa la URL del sitio web', 'info');
+    return;
+  }
+  if (!url.startsWith('http')) {
+    showToast('La URL debe comenzar con https://', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('extract-brand-btn');
+  const icon = document.getElementById('extract-brand-icon');
+  const label = document.getElementById('extract-brand-label');
+  if (btn) btn.disabled = true;
+  if (icon) icon.textContent = '⏳';
+  if (label) label.textContent = 'Analizando sitio...';
+
+  try {
+    const res = await fetch('/api/extract-brand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      showToast('No se pudo analizar el sitio: ' + data.error, 'error');
+      return;
+    }
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    if (data.name && !document.getElementById('ag-f-name')?.value) set('ag-f-name', data.name);
+    set('ag-f-descripcion', data.descripcion);
+    if (data.industria) set('ag-f-industria', data.industria);
+    set('ag-f-audiencia', data.audiencia);
+    set('ag-f-diferenciador', data.diferenciador);
+    set('ag-f-propuesta', data.propuesta);
+    set('ag-f-competidores', data.competidores);
+    set('ag-f-colores', data.colores);
+    set('ag-f-productos', data.producto);
+
+    if (data.tono) {
+      document.querySelectorAll('[data-g="tono"]').forEach(ch => {
+        if (ch.textContent.trim() === data.tono) ch.classList.add('sel');
+      });
+    }
+
+    showToast('Perfil del cliente autocompletado desde el sitio web', 'success');
+
+    if (icon) icon.textContent = '✅';
+    if (label) label.textContent = 'Analizado — puedes editar los campos';
+
+  } catch (err) {
+    showToast('Error al analizar el sitio: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    setTimeout(() => {
+      if (icon) icon.textContent = '✨';
+      if (label) label.textContent = 'Analizar sitio y autocompletar';
+    }, 4000);
+  }
+}
+
 function briefGoStep(step) {
   briefCurrentStep = step;
   // Panels
