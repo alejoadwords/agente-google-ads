@@ -1102,11 +1102,11 @@ function agencyConnectPlatform(platform) {
 
   // Si ya está conectado, no cerrar el modal — solo informar y dejar continuar
   if (platform === 'meta' && metaToken) {
-    alert('✅ Tu cuenta de Meta Ads ya está conectada. Guarda el cliente y luego selecciona la cuenta publicitaria correcta desde la configuración del agente de Meta Ads.');
+    showToast('✅ Meta Ads ya conectado. Guarda el cliente y selecciona la cuenta desde el agente.', 'success');
     return;
   }
   if (platform === 'google' && adsToken) {
-    alert('✅ Tu cuenta de Google Ads ya está conectada. Guarda el cliente para continuar.');
+    showToast('✅ Google Ads ya conectado. Guarda el cliente para continuar.', 'success');
     return;
   }
 
@@ -1131,7 +1131,7 @@ function agencyConnectPlatform(platform) {
   } else {
     openSettings();
     setTimeout(function() {
-      alert('Ve a la sección Google Ads en configuración para conectar tu cuenta.');
+      showToast('Ve a la sección Google Ads en configuración para conectar tu cuenta.', 'info');
     }, 600);
   }
 }
