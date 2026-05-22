@@ -35,6 +35,8 @@ body{
 
 /* ══ PANEL IZQUIERDO ══ */
 .left{
+  grid-column:1;
+  grid-row:1;
   background: #0a0a0a;
   background-image: url('https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1200&q=80&fit=crop');
   background-size: cover;
@@ -45,6 +47,7 @@ body{
   padding:48px;
   position:relative;
   overflow:hidden;
+  min-height:100svh;
 }
 .left::before{
   content:'';
@@ -120,12 +123,15 @@ body{
 
 /* ══ PANEL DERECHO ══ */
 .right{
+  grid-column:2;
+  grid-row:1;
   display:flex;
   align-items:center;
   justify-content:center;
   padding:48px 56px;
   background:var(--bg);
   overflow-y:auto;
+  min-height:100svh;
 }
 .fw{width:100%;max-width:380px}
 
@@ -260,6 +266,8 @@ body{
 
   /* Panel izquierdo se convierte en banner compacto */
   .left{
+    grid-column:1;
+    grid-row:1;
     min-height:auto;
     padding:24px 20px;
     justify-content:flex-start;
@@ -287,6 +295,9 @@ body{
 
   /* Panel derecho ocupa toda la pantalla restante */
   .right{
+    grid-column:1;
+    grid-row:2;
+    min-height:auto;
     padding:28px 20px;
     align-items:flex-start;
     padding-bottom:max(28px, env(safe-area-inset-bottom));
