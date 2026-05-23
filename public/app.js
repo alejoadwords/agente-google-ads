@@ -5339,27 +5339,42 @@ function renderActionConfirmCard(actionData) {
   const danger = actionData.dangerLevel || 'medium';
 
   let detailsHtml = '';
-  const friendlyLabels = {
-    campaignName: 'Campaña',
-    status: 'Estado nuevo',
-    currentBudget: 'Presupuesto actual',
-    newBudget: 'Presupuesto nuevo',
-    keywordText: 'Keyword',
-    currentBid: 'Puja actual',
-    newBid: 'Puja nueva',
-    adGroupName: 'Grupo de anuncios',
-  };
-  Object.entries(friendlyLabels).forEach(([k, label]) => {
-    if (params[k] !== undefined) {
-      let valHtml = String(params[k]);
-      if (k === 'status') {
-        valHtml = params[k] === 'PAUSED'
-          ? '<span class="status-paused">○ Pausada</span>'
-          : '<span class="status-active">● Activa</span>';
+
+  // Renderizado especial para add-negative-keywords
+  if (actionData.action === 'add-negative-keywords' && Array.isArray(params.keywords) && params.keywords.length) {
+    const matchLabel = { PHRASE: 'Frase', EXACT: 'Exacta', BROAD: 'Amplia' }[params.matchType] || params.matchType || 'Frase';
+    const scopeLabel = params.scope === 'campaign' ? '1 campaña' : 'todas las campañas activas';
+    detailsHtml += '<div class="action-confirm-detail"><span class="label">Concordancia:</span><span class="value">[' + matchLabel + ']</span></div>';
+    detailsHtml += '<div class="action-confirm-detail"><span class="label">Se agrega a:</span><span class="value">' + scopeLabel + '</span></div>';
+    detailsHtml += '<div class="action-confirm-detail"><span class="label">Cantidad:</span><span class="value">' + params.keywords.length + ' palabras negativas</span></div>';
+    detailsHtml += '<div style="margin-top:10px;padding:10px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;max-height:180px;overflow-y:auto">';
+    params.keywords.forEach(kw => {
+      detailsHtml += '<div style="font-size:12px;color:#374151;padding:3px 0;font-family:monospace">[' + (params.matchType === 'EXACT' ? 'exacta' : params.matchType === 'BROAD' ? 'amplia' : 'frase') + '] ' + kw + '</div>';
+    });
+    detailsHtml += '</div>';
+  } else {
+    const friendlyLabels = {
+      campaignName: 'Campaña',
+      status: 'Estado nuevo',
+      currentBudget: 'Presupuesto actual',
+      newBudget: 'Presupuesto nuevo',
+      keywordText: 'Keyword',
+      currentBid: 'Puja actual',
+      newBid: 'Puja nueva',
+      adGroupName: 'Grupo de anuncios',
+    };
+    Object.entries(friendlyLabels).forEach(([k, label]) => {
+      if (params[k] !== undefined) {
+        let valHtml = String(params[k]);
+        if (k === 'status') {
+          valHtml = params[k] === 'PAUSED'
+            ? '<span class="status-paused">○ Pausada</span>'
+            : '<span class="status-active">● Activa</span>';
+        }
+        detailsHtml += '<div class="action-confirm-detail"><span class="label">' + label + ':</span><span class="value">' + valHtml + '</span></div>';
       }
-      detailsHtml += '<div class="action-confirm-detail"><span class="label">' + label + ':</span><span class="value">' + valHtml + '</span></div>';
-    }
-  });
+    });
+  }
 
   const safeData = JSON.stringify(actionData).replace(/'/g, "\\'");
   const btnClass = danger === 'high' ? 'btn-execute danger' : 'btn-execute';
@@ -5412,10 +5427,15 @@ async function executeAction(actionDataStr, btn) {
 
     // Success
     btn.closest('.msg').remove();
-    addAgent('Hecho. ' + (data.campaignName || data.adGroupName || data.keywordText || '') +
-      (data.newStatus ? ' — estado: ' + data.newStatus : '') +
-      (data.newBudget ? ' — nuevo presupuesto: $' + data.newBudget + '/dia' : '') +
-      (data.newBid ? ' — nueva puja: $' + data.newBid : ''));
+    if (actionData.action === 'add-negative-keywords') {
+      const currency = sessionStorage.getItem('ads_currency') || '';
+      addAgent('✅ **' + data.added + ' palabras clave negativas agregadas** a ' + data.campaigns + ' campaña' + (data.campaigns !== 1 ? 's' : '') + ' activa' + (data.campaigns !== 1 ? 's' : '') + '.\n\nLas búsquedas irrelevantes dejarán de activar tus anuncios en el próximo ciclo de actualización de Google (~24 horas). Revisa en 7 días el impacto en CTR y CPA.' + (data.partialErrors ? '\n\n⚠️ Algunas negativos no pudieron agregarse: ' + data.partialErrors[0] : ''));
+    } else {
+      addAgent('Hecho. ' + (data.campaignName || data.adGroupName || data.keywordText || '') +
+        (data.newStatus ? ' — estado: ' + data.newStatus : '') +
+        (data.newBudget ? ' — nuevo presupuesto: $' + data.newBudget + '/dia' : '') +
+        (data.newBid ? ' — nueva puja: $' + data.newBid : ''));
+    }
 
     // Audit log
     fetch('/api/admin?action=log-api-action', {

@@ -522,16 +522,21 @@ GAQL PARA DETECTAR GASTO DESPERDICIADO:
 [GAQL_QUERY: SELECT search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.cost_micros, metrics.conversions, metrics.ctr FROM search_term_view WHERE segments.date DURING LAST_30_DAYS AND metrics.cost_micros > 5000000 AND metrics.conversions = 0 ORDER BY metrics.cost_micros DESC LIMIT 50]
 
 FORMATO DE ENTREGA:
-Siempre agrupa los negativos por categoría lista para subir, con el tipo de concordancia recomendado:
+1. Análisis del gasto desperdiciado con tabla por categoría y monto estimado recuperable.
+2. Lista de negativos recomendados agrupada por categoría.
+3. Al final, SIEMPRE emite un bloque <ACTION_CONFIRM> con todas las palabras negativas listas para agregar con un solo clic.
 
-| Categoría | Negativas (Phrase) | Negativas (Exact) |
-|-----------|-------------------|-------------------|
-| Empleo | trabajo, vacante, empleo | [término exacto específico] |
-| Gratis | gratis, free, gratuito | [término exacto] |
-| Informacional | qué es, cómo, tutorial | [término exacto] |
-| [Industria específica] | [según el negocio] | |
+Estructura del bloque ACTION_CONFIRM para negativos (OBLIGATORIO al terminar el análisis de gasto desperdiciado):
+<ACTION_CONFIRM>
+{"action":"add-negative-keywords","label":"Agregar palabras clave negativas a Google Ads","reversible":false,"params":{"customerId":"[CUSTOMER_ID_ACTIVO del contexto]","keywords":["keyword1","keyword2","keyword3"],"matchType":"PHRASE","scope":"all_campaigns"},"confirmText":"Agregar a Google Ads","dangerLevel":"low"}
+</ACTION_CONFIRM>
 
-Incluye siempre el monto estimado de gasto recuperable por categoría.
+Reglas para el bloque ACTION_CONFIRM de negativos:
+– Incluir SOLO las keywords de texto puro como strings en el array (sin corchetes de concordancia, sin prefijos).
+– matchType debe ser "PHRASE" por defecto, "EXACT" solo para términos de competidores muy específicos.
+– El customerId debe tomarse del valor CUSTOMER_ID_ACTIVO del contexto (sin guiones).
+– Incluir todas las keywords del análisis en un solo bloque — el usuario puede cancelar si quiere revisar antes.
+– El usuario también puede decir "agrega esas palabras negativas" o "súbelas" y debes emitir el ACTION_CONFIRM de inmediato con la lista de negativos que identificaste en el análisis anterior.
 
 ════════════════════════════════════════
 SKILL 13 — SEARCH TERM MINING (EXPANSIÓN DE KEYWORDS)
@@ -904,8 +909,12 @@ Trigger: "subió el CPA", "bajó el rendimiento", "por qué no convierte", "qué
 → Aplicar SKILL 11. Pedir datos del período afectado. Si hay cuenta conectada, ejecutar GAQL de campañas y search terms.
 
 GASTO DESPERDICIADO:
-Trigger: "dónde pierdo dinero", "palabras irrelevantes", "limpiar negativos", "search terms malos", "auditoría de negativos"
-→ Aplicar SKILL 12. Ejecutar GAQL de search terms con 0 conversiones. Entregar lista de negativos agrupada por categoría.
+Trigger: "dónde pierdo dinero", "palabras irrelevantes", "limpiar negativos", "search terms malos", "auditoría de negativos", "gasto desperdiciado", "encuentra el gasto", "cuánto perdemos"
+→ Aplicar SKILL 12. Ejecutar GAQL de search terms con 0 conversiones. Entregar lista de negativos agrupada por categoría. SIEMPRE terminar con bloque <ACTION_CONFIRM> de add-negative-keywords.
+
+AGREGAR PALABRAS NEGATIVAS:
+Trigger: "agrega esas palabras negativas", "súbelas", "agrégalas a mi cuenta", "sube las negativas", "agregar negativos", "subir negativos a Google Ads", "agrega la lista"
+→ El usuario está pidiendo subir las palabras negativas del análisis anterior. Emitir inmediatamente el bloque <ACTION_CONFIRM> con todas las keywords negativas identificadas en la conversación. Usar matchType PHRASE para términos genéricos, EXACT para nombres de competidores específicos.
 
 EXPANSIÓN DE KEYWORDS:
 Trigger: "nuevas keywords", "expandir campañas", "keywords que convierten", "minar terms"

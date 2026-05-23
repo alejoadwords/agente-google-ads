@@ -715,6 +715,86 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       return res.json({ campaignId, adGroupId, adId, campaignName: name });
     }
 
+    // ── add-negative-keywords ─────────────────────────────────────────
+    if (action === 'add-negative-keywords') {
+      const { keywords = [], matchType = 'PHRASE', scope = 'all_campaigns', campaignId } = body;
+      if (!keywords.length) return res.status(400).json({ error: 'No se proporcionaron keywords.' });
+
+      const cid = customerId.replace(/-/g, '');
+      const validKws = keywords.map(k => String(k).trim().toLowerCase()).filter(Boolean).slice(0, 100);
+
+      // 1. Obtener campañas activas donde agregar las negativas
+      let campaignResources = [];
+      if (scope === 'campaign' && campaignId) {
+        campaignResources = [`customers/${cid}/campaigns/${campaignId}`];
+      } else {
+        // Traer todas las campañas ENABLED
+        const gaqlResp = await fetch(
+          `https://googleads.googleapis.com/v20/customers/${cid}/googleAds:searchStream`,
+          {
+            method: 'POST',
+            headers: makeHeaders(token),
+            body: JSON.stringify({ query: "SELECT campaign.resource_name FROM campaign WHERE campaign.status = 'ENABLED'" }),
+          }
+        );
+        const gaqlData = await gaqlResp.json();
+        if (Array.isArray(gaqlData)) {
+          gaqlData.forEach(chunk => {
+            (chunk.results || []).forEach(r => {
+              if (r.campaign?.resourceName) campaignResources.push(r.campaign.resourceName);
+            });
+          });
+        } else {
+          (gaqlData.results || []).forEach(r => {
+            if (r.campaign?.resourceName) campaignResources.push(r.campaign.resourceName);
+          });
+        }
+      }
+
+      if (!campaignResources.length) {
+        return res.status(404).json({ error: 'No se encontraron campañas activas para agregar las negativos.' });
+      }
+
+      // 2. Agregar negativas a cada campaña
+      let totalAdded = 0;
+      const errors = [];
+      for (const campaignResource of campaignResources) {
+        const ops = validKws.map(kw => ({
+          create: {
+            campaign: campaignResource,
+            negative: true,
+            keyword: { text: kw, matchType: matchType.toUpperCase() },
+          }
+        }));
+        try {
+          const mutateResp = await fetch(
+            `https://googleads.googleapis.com/v20/customers/${cid}/campaignCriteria:mutate`,
+            { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: ops }) }
+          );
+          const mutateData = await mutateResp.json();
+          if (mutateData.error) {
+            errors.push(mutateData.error.message || JSON.stringify(mutateData.error));
+          } else {
+            totalAdded += (mutateData.results || ops).length;
+          }
+        } catch (e) {
+          errors.push(e.message);
+        }
+      }
+
+      if (totalAdded === 0 && errors.length) {
+        return res.status(500).json({ error: 'Error al agregar negativos: ' + errors[0] });
+      }
+
+      return res.json({
+        added: validKws.length,
+        campaigns: campaignResources.length,
+        keywords: validKws,
+        matchType,
+        partialErrors: errors.length ? errors : undefined,
+      });
+    }
+
     return res.status(400).json({ error: 'action no reconocido' });
 
   } catch (err) {
