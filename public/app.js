@@ -4499,11 +4499,12 @@ if(currentAgentCtx==='meta-ads'){
   // Inyectar datos de contexto si hay cuenta conectada
   const gCtx = await getGoogleAdsContext().catch(()=>'');
   if(gCtx) sys = gCtx + '\n\n' + sys;
-  // Inyectar estado de conexión siempre — señal crítica para que el agente sepa si puede usar GAQL
+  // Inyectar estado de conexión + moneda — señal crítica para que el agente sepa si puede usar GAQL
   const _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   const _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
+  const _adsCurrency = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount && adsActiveAccount.currency) ? adsActiveAccount.currency : (sessionStorage.getItem('ads_currency') || '');
   const _connStatus = (_adsToken && _adsCustId)
-    ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + '\nREGLA: La cuenta ESTÁ conectada. Para CUALQUIER consulta de datos (campañas, keywords, search terms, gasto, conversiones, rendimiento), emite [GAQL_QUERY: ...] de inmediato. NUNCA des instrucciones manuales sobre la interfaz de Google Ads ni pidas que el usuario vaya a Settings.'
+    ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + (_adsCurrency ? '\nMONEDA_DE_LA_CUENTA: ' + _adsCurrency + ' — Todos los cost_micros de la API son en ' + _adsCurrency + '. Divide entre 1,000,000 para obtener el valor real. NUNCA reportes como USD si la moneda es ' + _adsCurrency + '.' : '') + '\nREGLA_GAQL: La cuenta ESTÁ conectada. Emite exactamente UN [GAQL_QUERY: ...] por respuesta. NUNCA emitas múltiples bloques GAQL en la misma respuesta — ejecuta uno, analiza los resultados, luego decide si necesitas otro. NUNCA des instrucciones manuales sobre la interfaz de Google Ads.'
     : 'CUENTA_GOOGLE_ADS_CONECTADA: NO\nREGLA: Pide al usuario que conecte su cuenta en Configuración → Conexiones antes de continuar con cualquier análisis.';
   sys = _connStatus + '\n\n' + sys;
 }
@@ -11079,11 +11080,16 @@ let adsAccounts = [];       // todas las cuentas accesibles
       if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', savedToken);
       if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
       if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
+      const _savedCurr = localStorage.getItem('ads_currency_persist');
+      if (_savedCurr && !sessionStorage.getItem('ads_currency')) sessionStorage.setItem('ads_currency', _savedCurr);
       updateAdsUI(true, savedEmail);
       if (savedAccount) {
         try {
           adsActiveAccount = JSON.parse(savedAccount);
           if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
+          if (adsActiveAccount && adsActiveAccount.currency && !sessionStorage.getItem('ads_currency')) {
+            sessionStorage.setItem('ads_currency', adsActiveAccount.currency);
+          }
           renderActiveAccount();
         } catch {}
       }
@@ -11298,9 +11304,13 @@ async function selectAdsAccount(accountId) {
   sessionStorage.setItem('ads_active_account', JSON.stringify(acc));
   localStorage.setItem('ads_active_account_persist', JSON.stringify(acc));
 
-  // Guardar también el customerId para queryGoogleAds
+  // Guardar también el customerId y currency para queryGoogleAds y contexto del agente
   sessionStorage.setItem('ads_customer_id', acc.id);
   localStorage.setItem('ads_customer_id_persist', acc.id);
+  if (acc.currency) {
+    sessionStorage.setItem('ads_currency', acc.currency);
+    localStorage.setItem('ads_currency_persist', acc.currency);
+  }
 
   renderActiveAccount();
   renderAccountSelector(); // re-render para marcar el activo
