@@ -4496,9 +4496,16 @@ if(currentAgentCtx==='meta-ads'){
   sys=(typeof SYSTEM_LINKEDIN!=='undefined'?SYSTEM_LINKEDIN:SYSTEM).replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
-  // Inyectar contexto de Google Ads si hay cuenta conectada
+  // Inyectar datos de contexto si hay cuenta conectada
   const gCtx = await getGoogleAdsContext().catch(()=>'');
   if(gCtx) sys = gCtx + '\n\n' + sys;
+  // Inyectar estado de conexión siempre — señal crítica para que el agente sepa si puede usar GAQL
+  const _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+  const _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
+  const _connStatus = (_adsToken && _adsCustId)
+    ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + '\nREGLA: La cuenta ESTÁ conectada. Para CUALQUIER consulta de datos (campañas, keywords, search terms, gasto, conversiones, rendimiento), emite [GAQL_QUERY: ...] de inmediato. NUNCA des instrucciones manuales sobre la interfaz de Google Ads ni pidas que el usuario vaya a Settings.'
+    : 'CUENTA_GOOGLE_ADS_CONECTADA: NO\nREGLA: Pide al usuario que conecte su cuenta en Configuración → Conexiones antes de continuar con cualquier análisis.';
+  sys = _connStatus + '\n\n' + sys;
 }
 // Inyectar contexto de cliente activo (Plan Agencia)
 if(activeClientContext){
