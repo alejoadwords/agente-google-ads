@@ -717,11 +717,23 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
 
     // ── add-negative-keywords ─────────────────────────────────────────
     if (action === 'add-negative-keywords') {
+      const body = req.body || {};
       const { keywords = [], matchType = 'PHRASE', scope = 'all_campaigns', campaignId } = body;
       if (!keywords.length) return res.status(400).json({ error: 'No se proporcionaron keywords.' });
 
       const cid = customerId.replace(/-/g, '');
       const validKws = keywords.map(k => String(k).trim().toLowerCase()).filter(Boolean).slice(0, 100);
+
+      // Headers helper local para esta acción
+      const negHeaders = () => {
+        const h = {
+          'Authorization': `Bearer ${token}`,
+          'developer-token': DEV_TOKEN,
+          'Content-Type': 'application/json',
+        };
+        if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+        return h;
+      };
 
       // 1. Obtener campañas activas donde agregar las negativas
       let campaignResources = [];
@@ -733,7 +745,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
           `https://googleads.googleapis.com/v20/customers/${cid}/googleAds:search`,
           {
             method: 'POST',
-            headers: makeHeaders(token),
+            headers: negHeaders(),
             body: JSON.stringify({ query: "SELECT campaign.resource_name FROM campaign WHERE campaign.status = 'ENABLED' LIMIT 50" }),
           }
         );
@@ -744,7 +756,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       }
 
       if (!campaignResources.length) {
-        return res.status(404).json({ error: 'No se encontraron campañas activas para agregar las negativos.' });
+        return res.status(200).json({ error: 'No se encontraron campañas activas. Verifica que la cuenta tenga campañas en estado ENABLED.' });
       }
 
       // 2. Agregar negativas a cada campaña
@@ -761,7 +773,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
         try {
           const mutateResp = await fetch(
             `https://googleads.googleapis.com/v20/customers/${cid}/campaignCriteria:mutate`,
-            { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: ops }) }
+            { method: 'POST', headers: negHeaders(), body: JSON.stringify({ operations: ops }) }
           );
           const mutateData = await mutateResp.json();
           if (mutateData.error) {
@@ -775,7 +787,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       }
 
       if (totalAdded === 0 && errors.length) {
-        return res.status(500).json({ error: 'Error al agregar negativos: ' + errors[0] });
+        return res.status(200).json({ error: 'Error al agregar negativos: ' + errors[0] });
       }
 
       return res.json({

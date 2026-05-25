@@ -5488,7 +5488,10 @@ async function executeAction(actionDataStr, btn) {
     if (!res.ok || data.error) {
       btn.disabled = false;
       btn.textContent = actionData.confirmText || 'Confirmar';
-      addAgent('Error al ejecutar: ' + (data.error || 'Error desconocido') + '. Puedes hacerlo manualmente en Google Ads.');
+      const _errMsg = data.error
+        ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error)))
+        : 'Error desconocido';
+      addAgent('⚠️ No se pudo ejecutar la acción: ' + _errMsg);
       return;
     }
 
