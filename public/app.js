@@ -5475,7 +5475,12 @@ async function executeAction(actionDataStr, btn) {
   btn.textContent = 'Ejecutando...';
 
   const params = actionData.params || {};
-  const endpoint = '/api/google-ads?action=' + actionData.action + '&userId=' + encodeURIComponent(userId) + '&customerId=' + (params.customerId || '');
+  // customerId: usar el del params si existe, sino el de la sesión activa (fallback)
+  const _actionCustId = params.customerId
+    || sessionStorage.getItem('ads_customer_id')
+    || localStorage.getItem('ads_customer_id_persist')
+    || '';
+  const endpoint = '/api/google-ads?action=' + actionData.action + '&userId=' + encodeURIComponent(userId) + '&customerId=' + encodeURIComponent(_actionCustId);
 
   try {
     const res = await fetch(endpoint, {
@@ -5495,8 +5500,9 @@ async function executeAction(actionDataStr, btn) {
       return;
     }
 
-    // Success
-    btn.closest('.msg').remove();
+    // Success — remover la tarjeta de confirmación de forma segura
+    const _card = btn.closest('.msg');
+    if (_card) _card.remove();
     if (actionData.action === 'add-negative-keywords') {
       const currency = sessionStorage.getItem('ads_currency') || '';
       addAgent('✅ **' + data.added + ' palabras clave negativas agregadas** a ' + data.campaigns + ' campaña' + (data.campaigns !== 1 ? 's' : '') + ' activa' + (data.campaigns !== 1 ? 's' : '') + '.\n\nLas búsquedas irrelevantes dejarán de activar tus anuncios en el próximo ciclo de actualización de Google (~24 horas). Revisa en 7 días el impacto en CTR y CPA.' + (data.partialErrors ? '\n\n⚠️ Algunas negativos no pudieron agregarse: ' + data.partialErrors[0] : ''));
