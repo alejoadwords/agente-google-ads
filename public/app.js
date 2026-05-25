@@ -4593,8 +4593,27 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       const gaqlResult = await queryGoogleAds(gaqlQuery);
       if(gaqlResult.error){
         hist.push({role:'assistant',content:replyFinalProcessed});
-        hist.push({role:'user',content:`Error al consultar Google Ads API: ${gaqlResult.error}`});
-        addAgent(`⚠️ No pude consultar tu cuenta: ${gaqlResult.error}`);
+        const is400 = gaqlResult.error.includes('[400]');
+        const is401 = gaqlResult.error.includes('[401]') || gaqlResult.error.includes('token');
+        if(is401){
+          // Token expirado — intentar refrescar el token antes de dar error definitivo
+          const uid = clerkInstance?.user?.id;
+          if(uid){
+            try{
+              const rr = await fetch('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
+              const rd = await rr.json();
+              if(rd.access_token){ sessionStorage.setItem('ads_access_token',rd.access_token); localStorage.setItem('ads_access_token_persist',rd.access_token); }
+            }catch{}
+          }
+          hist.push({role:'user',content:'El token de Google Ads expiró y fue renovado automáticamente. Por favor repite exactamente la misma consulta GAQL: ' + gaqlQuery});
+          await callClaude(); return;
+        } else if(is400){
+          // Query inválida — pedir al agente que corrija la sintaxis
+          hist.push({role:'user',content:`La query GAQL tuvo un error de sintaxis [400]: ${gaqlResult.error}\n\nQuery fallida:\n${gaqlQuery}\n\nCorrige la query: verifica los nombres de campos y la compatibilidad con la resource (campaign, keyword_view, search_term_view, etc.) y emite una nueva [GAQL_QUERY: ...] con la versión corregida.`});
+          await callClaude(); return;
+        } else {
+          addAgent(`⚠️ No pude consultar tu cuenta: ${gaqlResult.error}`);
+        }
       } else {
         const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
         hist.push({role:'assistant',content:replyFinalProcessed});
@@ -11115,7 +11134,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
       }
     }
     // Auto-refresh silencioso en background: garantiza que el token no expire
-    (async function silentRefreshGoogleToken() {
+    async function silentRefreshGoogleToken() {
       const uid = clerkInstance?.user?.id || (() => { try { return JSON.parse(atob((clerkInstance?.session?.id||'').split('.')[1]||'{}')).sub; } catch { return ''; } })();
       if (!uid) return;
       try {
@@ -11137,12 +11156,18 @@ let adsAccounts = [];       // todas las cuentas accesibles
               try { adsActiveAccount = JSON.parse(savedAccount); renderActiveAccount(); } catch {}
             }
           }
+          return true;
         } else if (data.needsReconnect) {
-          // Solo mostrar "reconectar" si el usuario ya tenía un token previo (no primera carga)
+          // Solo mostrar "reconectar" si no hubo refresh exitoso — el refresh_token puede ser inválido
           if (savedToken) updateAdsUI(false);
+          return false;
         }
       } catch {} // Silencioso — no interrumpir la carga de la app
-    })();
+      return false;
+    }
+    silentRefreshGoogleToken();
+    // Refrescar el token cada 45 minutos mientras la app está abierta
+    setInterval(silentRefreshGoogleToken, 45 * 60 * 1000);
   }
 })();
 
