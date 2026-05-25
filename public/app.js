@@ -4594,25 +4594,46 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       if(gaqlResult.error){
         hist.push({role:'assistant',content:replyFinalProcessed});
         const is400 = gaqlResult.error.includes('[400]');
-        const is401 = gaqlResult.error.includes('[401]') || gaqlResult.error.includes('token');
-        if(is401){
-          // Token expirado — intentar refrescar el token antes de dar error definitivo
+        const is401 = gaqlResult.error.includes('[401]') || gaqlResult.error.includes('token') || gaqlResult.error.includes('No hay token');
+        // Anti-loop: detectar si ya intentamos un retry en los últimos mensajes del historial
+        const recentHist = hist.slice(-4).map(m => typeof m.content === 'string' ? m.content : '').join(' ');
+        const alreadyRetried = recentHist.includes('_gaql_retry_') || recentHist.includes('_gaql_400_retry_');
+        if(is401 && !alreadyRetried){
+          // Token expirado — intentar refrescar UNA SOLA VEZ
           const uid = clerkInstance?.user?.id;
+          let refreshed = false;
           if(uid){
             try{
               const rr = await fetch('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
-              const rd = await rr.json();
-              if(rd.access_token){ sessionStorage.setItem('ads_access_token',rd.access_token); localStorage.setItem('ads_access_token_persist',rd.access_token); }
+              if(rr.ok){
+                const rd = await rr.json();
+                if(rd.access_token && !rd.needsReconnect){
+                  sessionStorage.setItem('ads_access_token',rd.access_token);
+                  localStorage.setItem('ads_access_token_persist',rd.access_token);
+                  refreshed = true;
+                }
+              }
             }catch{}
           }
-          hist.push({role:'user',content:'El token de Google Ads expiró y fue renovado automáticamente. Por favor repite exactamente la misma consulta GAQL: ' + gaqlQuery});
-          await callClaude(); return;
-        } else if(is400){
-          // Query inválida — pedir al agente que corrija la sintaxis
-          hist.push({role:'user',content:`La query GAQL tuvo un error de sintaxis [400]: ${gaqlResult.error}\n\nQuery fallida:\n${gaqlQuery}\n\nCorrige la query: verifica los nombres de campos y la compatibilidad con la resource (campaign, keyword_view, search_term_view, etc.) y emite una nueva [GAQL_QUERY: ...] con la versión corregida.`});
+          if(refreshed){
+            hist.push({role:'user',content:'_gaql_retry_ Token renovado. Repite la misma consulta GAQL: ' + gaqlQuery});
+            await callClaude(); return;
+          } else {
+            // Refresh falló — detener, no reintentar
+            loading=false; document.getElementById('sbtn').disabled=false;
+            addAgent('⚠️ Tu sesión de Google Ads expiró y no se pudo renovar automáticamente.\n\nVe a **Configuración → Conexiones**, desconecta y vuelve a conectar tu cuenta de Google Ads. Esto solo toma 30 segundos y después no necesitarás hacerlo de nuevo.');
+            updateAdsUI(false);
+            return;
+          }
+        } else if(is400 && !alreadyRetried){
+          // Query inválida — pedir al agente que corrija la sintaxis UNA SOLA VEZ
+          hist.push({role:'user',content:`_gaql_400_retry_ La query GAQL tuvo un error [400]: ${gaqlResult.error}\n\nQuery fallida:\n${gaqlQuery}\n\nCorrige la query verificando nombres de campos compatibles con la resource usada (campaign, keyword_view, search_term_view, etc.) y emite una nueva [GAQL_QUERY: ...] corregida.`});
           await callClaude(); return;
         } else {
-          addAgent(`⚠️ No pude consultar tu cuenta: ${gaqlResult.error}`);
+          // Error desconocido o ya se reintentó — mostrar al usuario y detener
+          loading=false; document.getElementById('sbtn').disabled=false;
+          addAgent(`⚠️ No pude consultar tu cuenta de Google Ads: ${gaqlResult.error.replace(/_gaql_\w+_retry_ /g,'')}`);
+          return;
         }
       } else {
         const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
