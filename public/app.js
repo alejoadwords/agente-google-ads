@@ -4502,7 +4502,22 @@ if(currentAgentCtx==='meta-ads'){
   // Inyectar estado de conexión + moneda — señal crítica para que el agente sepa si puede usar GAQL
   const _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   const _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
-  const _adsCurrency = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount && adsActiveAccount.currency) ? adsActiveAccount.currency : (sessionStorage.getItem('ads_currency') || '');
+  let _adsCurrency = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount && adsActiveAccount.currency)
+    ? adsActiveAccount.currency
+    : (sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '');
+  // Si la moneda no está en caché, consultarla una vez de la API antes de inyectar en el sistema prompt
+  if (!_adsCurrency && _adsToken && _adsCustId) {
+    try {
+      const _currRes = await queryGoogleAds('SELECT customer.currency_code FROM customer LIMIT 1');
+      const _curr = _currRes.results && _currRes.results[0] && _currRes.results[0].customer && _currRes.results[0].customer.currencyCode;
+      if (_curr) {
+        _adsCurrency = _curr;
+        sessionStorage.setItem('ads_currency', _curr);
+        localStorage.setItem('ads_currency_persist', _curr);
+        if (typeof adsActiveAccount !== 'undefined' && adsActiveAccount) adsActiveAccount.currency = _curr;
+      }
+    } catch(_e) {}
+  }
   const _connStatus = (_adsToken && _adsCustId)
     ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + (_adsCurrency ? '\nMONEDA_DE_LA_CUENTA: ' + _adsCurrency + ' — Todos los cost_micros de la API son en ' + _adsCurrency + '. Divide entre 1,000,000 para obtener el valor real. NUNCA reportes como USD si la moneda es ' + _adsCurrency + '.' : '') + '\nREGLA_GAQL: La cuenta ESTÁ conectada. Emite exactamente UN [GAQL_QUERY: ...] por respuesta. NUNCA emitas múltiples bloques GAQL en la misma respuesta — ejecuta uno, analiza los resultados, luego decide si necesitas otro. NUNCA des instrucciones manuales sobre la interfaz de Google Ads.'
     : 'CUENTA_GOOGLE_ADS_CONECTADA: NO\nREGLA: Pide al usuario que conecte su cuenta en Configuración → Conexiones antes de continuar con cualquier análisis.';
@@ -4637,6 +4652,17 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           return;
         }
       } else {
+        // Si el resultado trae customer.currencyCode, guardarlo para futuros contextos
+        const _firstResult = gaqlResult.results && gaqlResult.results[0];
+        if (_firstResult && _firstResult.customer && _firstResult.customer.currencyCode) {
+          const _curr = _firstResult.customer.currencyCode;
+          sessionStorage.setItem('ads_currency', _curr);
+          localStorage.setItem('ads_currency_persist', _curr);
+          if (typeof adsActiveAccount !== 'undefined' && adsActiveAccount) {
+            adsActiveAccount.currency = _curr;
+            localStorage.setItem('ads_active_account_persist', JSON.stringify(adsActiveAccount));
+          }
+        }
         const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
         hist.push({role:'assistant',content:replyFinalProcessed});
         hist.push({role:'user',content:`Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
