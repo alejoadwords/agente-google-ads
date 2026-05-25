@@ -17,11 +17,14 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
         'Content-Type':  'application/json',
         'Prefer':        'resolution=merge-duplicates,return=minimal',
       },
+      // IMPORTANTE: solo incluir refresh_token si Google lo devolvió.
+      // Google solo devuelve refresh_token en la primera autorización.
+      // Si se incluye null, sobreescribe el refresh_token válido existente.
       body: JSON.stringify({
         user_id:          userId,
         platform:         'google_ads',
         access_token:     tokens.access_token,
-        refresh_token:    tokens.refresh_token || null,
+        ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
         token_expires_at: expiresAt,
         account_name:     userInfo.email || '',
         updated_at:       new Date().toISOString(),

@@ -728,27 +728,19 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       if (scope === 'campaign' && campaignId) {
         campaignResources = [`customers/${cid}/campaigns/${campaignId}`];
       } else {
-        // Traer todas las campañas ENABLED
+        // Traer todas las campañas ENABLED usando googleAds:search (no searchStream)
         const gaqlResp = await fetch(
-          `https://googleads.googleapis.com/v20/customers/${cid}/googleAds:searchStream`,
+          `https://googleads.googleapis.com/v20/customers/${cid}/googleAds:search`,
           {
             method: 'POST',
             headers: makeHeaders(token),
-            body: JSON.stringify({ query: "SELECT campaign.resource_name FROM campaign WHERE campaign.status = 'ENABLED'" }),
+            body: JSON.stringify({ query: "SELECT campaign.resource_name FROM campaign WHERE campaign.status = 'ENABLED' LIMIT 50" }),
           }
         );
         const gaqlData = await gaqlResp.json();
-        if (Array.isArray(gaqlData)) {
-          gaqlData.forEach(chunk => {
-            (chunk.results || []).forEach(r => {
-              if (r.campaign?.resourceName) campaignResources.push(r.campaign.resourceName);
-            });
-          });
-        } else {
-          (gaqlData.results || []).forEach(r => {
-            if (r.campaign?.resourceName) campaignResources.push(r.campaign.resourceName);
-          });
-        }
+        (gaqlData.results || []).forEach(r => {
+          if (r.campaign?.resourceName) campaignResources.push(r.campaign.resourceName);
+        });
       }
 
       if (!campaignResources.length) {
