@@ -4627,7 +4627,8 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           }
         } else if(is400 && !alreadyRetried){
           // Query inválida — pedir al agente que corrija la sintaxis UNA SOLA VEZ
-          hist.push({role:'user',content:`_gaql_400_retry_ La query GAQL tuvo un error [400]: ${gaqlResult.error}\n\nQuery fallida:\n${gaqlQuery}\n\nCorrige la query verificando nombres de campos compatibles con la resource usada (campaign, keyword_view, search_term_view, etc.) y emite una nueva [GAQL_QUERY: ...] corregida.`});
+          const failedQ = gaqlResult.failedQuery || gaqlQuery;
+          hist.push({role:'user',content:`_gaql_400_retry_ La query GAQL tuvo un error de argumento inválido [400].\n\nQuery fallida:\n${failedQ}\n\nReglas para la query corregida:\n- Usa solo campos documentados en Google Ads API v20\n- keyword_view: usa ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc, campaign.name, ad_group.name\n- NO uses metrics.cost_per_conversion (deprecado), usa metrics.cost_per_conversion_micros\n- NO combines search_term_view con segments.device (no compatible)\n- Si usas quality_score, el account debe tener suficiente historial\n\nEmite una nueva [GAQL_QUERY: ...] simplificada y corregida.`});
           await callClaude(); return;
         } else {
           // Error desconocido o ya se reintentó — mostrar al usuario y detener

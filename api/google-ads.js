@@ -152,8 +152,8 @@ export default async function handler(req, res) {
 
       if (!r.ok) {
         const msg = data?.error?.message || data?.error?.status || JSON.stringify(data).slice(0, 300);
-        console.log('GAQL proxy error', r.status, msg);
-        return res.status(200).json({ error: `Google Ads API [${r.status}]: ${msg}` });
+        console.error('GAQL proxy error', r.status, msg, '\nFAILED QUERY:', query);
+        return res.status(200).json({ error: `Google Ads API [${r.status}]: ${msg}`, failedQuery: query });
       }
 
       // /search devuelve { results: [...] } directamente
