@@ -4671,9 +4671,35 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
             localStorage.setItem('ads_active_account_persist', JSON.stringify(adsActiveAccount));
           }
         }
+        // Auto-render botón de palabras negativas si los resultados son de search_term_view
+        // El frontend extrae las keywords con 0 conversiones y muestra el botón directamente
+        // sin depender de que el agente emita ACTION_CONFIRM correctamente.
+        const _gaqlResults = gaqlResult.results || [];
+        const _isSearchTerms = _gaqlResults.length > 0 && _gaqlResults[0].searchTermView;
+        if (_isSearchTerms) {
+          const _wastedTerms = _gaqlResults
+            .filter(r => parseFloat((r.metrics && r.metrics.conversions) || 0) === 0)
+            .map(r => r.searchTermView && r.searchTermView.searchTerm)
+            .filter(Boolean)
+            .slice(0, 60);
+          if (_wastedTerms.length > 0) {
+            setTimeout(() => renderActionConfirmCard({
+              action: 'add-negative-keywords',
+              label: 'Agregar ' + _wastedTerms.length + ' palabras negativas a Google Ads',
+              reversible: false,
+              params: { keywords: _wastedTerms, matchType: 'PHRASE', scope: 'all_campaigns' },
+              confirmText: '🚫 Agregar ' + _wastedTerms.length + ' palabras negativas',
+              dangerLevel: 'low',
+            }), 100);
+          }
+        }
         const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
         hist.push({role:'assistant',content:replyFinalProcessed});
-        hist.push({role:'user',content:`Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
+        // Si son search terms (gasto desperdiciado), pedir un resumen muy breve sin análisis extenso
+        const _resultPrompt = _isSearchTerms
+          ? `Resultados de búsquedas sin conversión (últimos 30 días):\n\`\`\`json\n${resultStr}\n\`\`\`\n\nDa un resumen BREVE en máximo 4 líneas: total de gasto desperdiciado, los 3 peores términos con su costo, y una sola frase de por qué son irrelevantes para este negocio. No agregues más análisis ni recomendaciones — el botón para agregar las negativas ya está visible para el usuario.`
+          : `Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`;
+        hist.push({role:'user',content:_resultPrompt});
         await callClaude(); return;
       }
     }

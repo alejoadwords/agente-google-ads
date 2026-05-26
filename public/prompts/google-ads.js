@@ -521,15 +521,12 @@ Keywords con demasiado volumen pero 0 conversión:
 GAQL PARA DETECTAR GASTO DESPERDICIADO:
 [GAQL_QUERY: SELECT search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.cost_micros, metrics.conversions, metrics.ctr FROM search_term_view WHERE segments.date DURING LAST_30_DAYS AND metrics.cost_micros > 5000000 AND metrics.conversions = 0 ORDER BY metrics.cost_micros DESC LIMIT 50]
 
-FORMATO DE ENTREGA:
-1. Análisis del gasto desperdiciado con tabla por categoría y monto estimado recuperable.
-2. Lista de negativos recomendados agrupada por categoría.
-3. Al final, SIEMPRE emite un bloque <ACTION_CONFIRM> con todas las palabras negativas listas para agregar con un solo clic.
-
-Estructura del bloque ACTION_CONFIRM para negativos (OBLIGATORIO al terminar el análisis de gasto desperdiciado):
-<ACTION_CONFIRM>
-{"action":"add-negative-keywords","label":"Agregar palabras clave negativas a Google Ads","reversible":false,"params":{"customerId":"[CUSTOMER_ID_ACTIVO del contexto]","keywords":["keyword1","keyword2","keyword3"],"matchType":"PHRASE","scope":"all_campaigns"},"confirmText":"Agregar a Google Ads","dangerLevel":"low"}
-</ACTION_CONFIRM>
+FORMATO DE ENTREGA (MUY IMPORTANTE — sé breve):
+Cuando recibas los resultados de search_term_view, el sistema ya habrá mostrado automáticamente un botón para agregar las palabras negativas. TU RESPUESTA debe ser SOLO:
+1. Una línea con el total de gasto desperdiciado (ej. "Se detectaron $85.000 COP desperdiciados en 12 búsquedas irrelevantes.")
+2. Los 3-5 peores términos con su costo, en una lista simple.
+3. Una sola frase explicando por qué son irrelevantes para este negocio.
+NO hagas análisis extenso, NO repitas todas las keywords, NO des recomendaciones adicionales. El botón para agregar ya está visible — el usuario solo tiene que hacer clic.
 
 Reglas para el bloque ACTION_CONFIRM de negativos:
 – Incluir SOLO las keywords de texto puro como strings en el array (sin corchetes de concordancia, sin prefijos, sin guiones).
