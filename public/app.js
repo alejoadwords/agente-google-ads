@@ -4655,15 +4655,39 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         // Detectar si son resultados de search_term_view (análisis de gasto desperdiciado)
         const _isSearchTerms = _gaqlResults.length > 0 && _gaqlResults[0].searchTermView;
 
+        // Pre-extraer términos del GAQL para el botón de fallback (en caso de que el agente no emita ACTION_CONFIRM)
+        const _wastedTerms = _isSearchTerms
+          ? _gaqlResults
+              .filter(r => r.searchTermView && r.searchTermView.searchTerm)
+              .map(r => r.searchTermView.searchTerm)
+          : [];
+
         const resultStr = JSON.stringify(_processedResults, null, 2);
         hist.push({role:'assistant',content:replyFinalProcessed});
-        // Si son search terms: pedir al agente análisis + ACTION_CONFIRM con lista curada
-        // El agente usa el contexto del negocio ({MEMORY}) para filtrar qué es realmente irrelevante
+
+        // Pedir al agente solo el análisis textual — el botón lo renderiza el frontend siempre
         const _resultPrompt = _isSearchTerms
-          ? `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores monetarios ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nSigue EXACTAMENTE este formato — nada más:\n1. Una línea: "Detecté $X ${_currency || ''} desperdiciados en N búsquedas irrelevantes."\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (solo los 5-8 peores y CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n4. El bloque <ACTION_CONFIRM> con los términos irrelevantes.\n\nPROHIBIDO: secciones de Impacto, Oportunidades, Recomendaciones adicionales, preguntas al usuario. El bloque <ACTION_CONFIRM> es OBLIGATORIO y debe ser lo último de tu respuesta. Sin él el flujo no funciona.\n\nFormato ACTION_CONFIRM — copia este formato exacto:\n<ACTION_CONFIRM>\n{"action":"add-negative-keywords","label":"Agregar palabras negativas","params":{"keywords":["término1","término2"],"matchType":"PHRASE","scope":"all_campaigns"}}\n</ACTION_CONFIRM>`
+          ? `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores monetarios ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nEntrega SOLO:\n1. Una línea: total de gasto desperdiciado.\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (5-8 términos, solo los CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n\nNada más. Sin secciones adicionales, sin preguntas, sin recomendaciones de presupuesto.`
           : `Resultados de Google Ads API (valores monetarios ya convertidos, no dividir):\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`;
         hist.push({role:'user',content:_resultPrompt});
+
+        // Marcar que aún no se ha renderizado el botón de este análisis
+        window._lastActionConfirmRendered = false;
         await callClaude();
+
+        // Renderizar botón siempre después del análisis de gasto desperdiciado,
+        // independientemente de si el agente emitió ACTION_CONFIRM o no.
+        if (_isSearchTerms && _wastedTerms.length > 0 && !window._lastActionConfirmRendered) {
+          setTimeout(() => renderActionConfirmCard({
+            action: 'add-negative-keywords',
+            label: 'Agregar palabras negativas a la cuenta',
+            params: {
+              keywords: _wastedTerms,
+              matchType: 'PHRASE',
+              scope: 'all_campaigns',
+            }
+          }), 150);
+        }
         return;
       }
     }
@@ -5456,6 +5480,9 @@ function renderActionConfirmCard(actionData) {
       }
     });
   }
+
+  // Marcar que el botón ya fue renderizado (evita duplicado con el fallback)
+  window._lastActionConfirmRendered = true;
 
   const btnClass = danger === 'high' ? 'btn-execute danger' : 'btn-execute';
   const wrap = document.createElement('div');
