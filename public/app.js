@@ -4402,6 +4402,12 @@ async function sendMsg(){
   if(!txt && !pendingImg)return;
   el.value='';autoR(el);
   
+  // Interceptar intent de gasto desperdiciado ANTES de addUser/hist para evitar duplicados
+  // runWastedSpendFlow() maneja su propio addUser() y hist.push()
+  if (!pendingImg && currentAgentCtx === 'google-ads' && isWastedSpendIntent(txt)) {
+    return runWastedSpendFlow(txt);
+  }
+
   // Construir contenido del mensaje con imagen opcional
   let msgContent;
   if(pendingImg){
@@ -4416,11 +4422,6 @@ async function sendMsg(){
     const enriched = await enrichWithCompetitiveData(txt, currentAgentCtx).catch(() => txt);
     msgContent = enriched;
     addUser(txt); // mostrar el mensaje original sin el contexto extra
-  }
-  // Interceptar intent de gasto desperdiciado: correr GAQL directamente sin pasar por Claude
-  if (currentAgentCtx === 'google-ads' && typeof txt === 'string' && isWastedSpendIntent(txt)) {
-    // No agregar a hist aquí — runWastedSpendFlow lo hace internamente
-    return runWastedSpendFlow(txt);
   }
 
   hist.push({role:'user',content:msgContent});
