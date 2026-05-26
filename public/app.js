@@ -4610,9 +4610,17 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         hist.push({role:'assistant',content:replyFinalProcessed});
         const is400 = gaqlResult.error.includes('[400]');
         const is401 = gaqlResult.error.includes('[401]') || gaqlResult.error.includes('token') || gaqlResult.error.includes('No hay token');
+        const needsReconnect = gaqlResult.needsReconnect === true;
         // Anti-loop: detectar si ya intentamos un retry en los últimos mensajes del historial
         const recentHist = hist.slice(-4).map(m => typeof m.content === 'string' ? m.content : '').join(' ');
         const alreadyRetried = recentHist.includes('_gaql_retry_') || recentHist.includes('_gaql_400_retry_');
+        if(needsReconnect){
+          // El backend confirmó que no hay refresh_token — reconexión necesaria
+          loading=false; document.getElementById('sbtn').disabled=false;
+          addAgent('⚠️ **Necesitas reconectar tu cuenta de Google Ads una vez más.**\n\nEsto sucede porque hay una sesión anterior sin guardar correctamente. Después de reconectar, el sistema renovará el token automáticamente y no tendrás que volver a hacerlo.\n\n👉 Ve a **Configuración → Conexiones → Google Ads → Desconectar** y luego vuelve a conectar. Toma 30 segundos.');
+          updateAdsUI(false);
+          return;
+        }
         if(is401 && !alreadyRetried){
           // Token expirado — intentar refrescar UNA SOLA VEZ
           const uid = clerkInstance?.user?.id;
@@ -4636,7 +4644,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           } else {
             // Refresh falló — detener, no reintentar
             loading=false; document.getElementById('sbtn').disabled=false;
-            addAgent('⚠️ Tu sesión de Google Ads expiró y no se pudo renovar automáticamente.\n\nVe a **Configuración → Conexiones**, desconecta y vuelve a conectar tu cuenta de Google Ads. Esto solo toma 30 segundos y después no necesitarás hacerlo de nuevo.');
+            addAgent('⚠️ **Necesitas reconectar tu cuenta de Google Ads una vez más.**\n\nDespués de reconectar, el token se renovará automáticamente cada 45 minutos y no necesitarás volver a hacer esto.\n\n👉 Ve a **Configuración → Conexiones → Google Ads → Desconectar** y vuelve a conectar.');
             updateAdsUI(false);
             return;
           }
@@ -11614,7 +11622,14 @@ async function queryGoogleAds(gaqlQuery) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customerId, query: gaqlQuery, accessToken: accessToken || '', userId }),
     });
-    return await res.json();
+    const data = await res.json();
+    // Si el backend renovó el token automáticamente, actualizar sessionStorage y localStorage
+    if (data._refreshedToken) {
+      sessionStorage.setItem('ads_access_token', data._refreshedToken);
+      localStorage.setItem('ads_access_token_persist', data._refreshedToken);
+      delete data._refreshedToken; // limpiar antes de devolver
+    }
+    return data;
   } catch (err) {
     return { error: err.message };
   }

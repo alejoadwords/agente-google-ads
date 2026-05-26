@@ -133,6 +133,7 @@ export default async function handler(req, res) {
 
     try {
       let r = await doReq(activeToken);
+      let newAccessToken = null; // Si el backend renueva el token, lo devolvemos al frontend
 
       // Auto-refresh en 401
       if (r.status === 401 && bodyUid) {
@@ -141,8 +142,15 @@ export default async function handler(req, res) {
           const refreshed = await refreshGoogleToken(conn.refresh_token);
           if (refreshed.access_token) {
             await updateStoredToken(bodyUid, refreshed.access_token, refreshed.expires_in);
+            newAccessToken = refreshed.access_token; // devolver al frontend para actualizar sessionStorage
             r = await doReq(refreshed.access_token);
           }
+        } else {
+          // No hay refresh_token — devolver error claro para que el frontend muestre reconexión
+          return res.status(200).json({
+            error: 'Google Ads API [401]: token expirado y no hay refresh_token. Reconecta tu cuenta.',
+            needsReconnect: true,
+          });
         }
       }
 
@@ -157,7 +165,10 @@ export default async function handler(req, res) {
       }
 
       // /search devuelve { results: [...] } directamente
-      return res.status(200).json({ results: data.results || [] });
+      // Si el backend renovó el token, incluirlo en la respuesta para que el frontend actualice sessionStorage
+      const response = { results: data.results || [] };
+      if (newAccessToken) response._refreshedToken = newAccessToken;
+      return res.status(200).json(response);
     } catch (err) {
       console.error('GAQL proxy exception:', err.message);
       return res.status(200).json({ error: `Error interno: ${err.message}` });
