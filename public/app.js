@@ -3168,7 +3168,8 @@ function showGoogleAdsActionCards() {
   ];
 
   el.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">' +
+    '<style>@keyframes gadsCardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}</style>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;opacity:0;animation:gadsCardIn .3s ease .05s forwards">' +
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
       '<div>' +
         '<div style="font-size:14px;font-weight:700;color:var(--text)">¿En qué trabajamos hoy?</div>' +
@@ -3178,9 +3179,9 @@ function showGoogleAdsActionCards() {
     '<div style="width:100%;max-width:540px;padding-left:40px">' +
       '<div style="display:flex;flex-direction:column;gap:6px">' +
         _gAdsActions.map((a, i) =>
-          `<div data-gads-card="${i}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;background:var(--bg);transition:all .15s"
-            onmouseover="this.style.borderColor='var(--blue)';this.style.background='var(--blue-lt)';this.style.transform='translateX(2px)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg)';this.style.transform=''"
+          `<div data-gads-card="${i}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;background:var(--bg);transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;opacity:0;animation:gadsCardIn .35s ease forwards;animation-delay:${i * 55}ms"
+            onmouseover="this.style.borderColor='var(--blue)';this.style.background='var(--blue-lt)';this.style.transform='translateX(3px)';this.style.boxShadow='0 2px 8px rgba(66,100,251,.10)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg)';this.style.transform='';this.style.boxShadow=''"
             onclick="window._gAdsCardActions[${i}]()">
             <div style="font-size:20px;flex-shrink:0;width:28px;text-align:center">${a.icon}</div>
             <div style="min-width:0">
@@ -4616,7 +4617,8 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         } else if(is400 && !alreadyRetried){
           // Query inválida — pedir al agente que corrija la sintaxis UNA SOLA VEZ
           const failedQ = gaqlResult.failedQuery || gaqlQuery;
-          hist.push({role:'user',content:`_gaql_400_retry_ La query GAQL tuvo un error de argumento inválido [400].\n\nQuery fallida:\n${failedQ}\n\nReglas para la query corregida:\n- Usa solo campos documentados en Google Ads API v20\n- keyword_view: usa ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc, campaign.name, ad_group.name\n- NO uses metrics.cost_per_conversion (deprecado), usa metrics.cost_per_conversion_micros\n- NO combines search_term_view con segments.device (no compatible)\n- Si usas quality_score, el account debe tener suficiente historial\n\nEmite una nueva [GAQL_QUERY: ...] simplificada y corregida.`});
+          const errDetail = gaqlResult.error || '';
+          hist.push({role:'user',content:`_gaql_400_retry_ La query GAQL falló con error 400: "${errDetail}"\n\nQuery fallida:\n${failedQ}\n\nReglas OBLIGATORIAS para la query corregida:\n- Usa ÚNICAMENTE campos confirmados en Google Ads API v20\n- campaign: campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc\n- search_term_view: search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.cost_micros, metrics.conversions, metrics.ctr\n- keyword_view: ad_group_criterion.keyword.text, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc\n- NO uses metrics.cost_per_conversion (deprecado) → usa metrics.cost_per_conversion_micros\n- NO combines search_term_view con segments.device (incompatible)\n- NO uses metrics.conversions_from_interactions_rate con campaign (incompatible)\n- NO uses ad_group_criterion.quality_info sin datos históricos suficientes\n- Si el error menciona un campo específico, elimínalo de la query\n- Simplifica la query al mínimo de campos necesarios\n\nEmite UNA SOLA [GAQL_QUERY: ...] simplificada. Sin texto adicional.`});
           await callClaude(); return;
         } else {
           // Error desconocido o ya se reintentó — mostrar al usuario y detener

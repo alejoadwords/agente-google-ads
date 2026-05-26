@@ -160,8 +160,18 @@ export default async function handler(req, res) {
 
       if (!r.ok) {
         const msg = data?.error?.message || data?.error?.status || JSON.stringify(data).slice(0, 300);
-        console.error('GAQL proxy error', r.status, msg, '\nFAILED QUERY:', query);
-        return res.status(200).json({ error: `Google Ads API [${r.status}]: ${msg}`, failedQuery: query });
+        // Extraer el detalle específico del campo inválido (Google anida el error en details[])
+        let detail = '';
+        try {
+          const gErr = data?.error?.details?.[0]?.errors?.[0];
+          if (gErr) {
+            const fieldMsg = gErr.message || '';
+            const errCode = JSON.stringify(gErr.errorCode || {});
+            detail = fieldMsg ? ` — Detalle: ${fieldMsg}` : (errCode !== '{}' ? ` — Código: ${errCode}` : '');
+          }
+        } catch {}
+        console.error('GAQL proxy error', r.status, msg + detail, '\nFAILED QUERY:', query);
+        return res.status(200).json({ error: `Google Ads API [${r.status}]: ${msg}${detail}`, failedQuery: query });
       }
 
       // /search devuelve { results: [...] } directamente
