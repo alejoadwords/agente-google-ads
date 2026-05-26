@@ -3159,7 +3159,7 @@ function showGoogleAdsActionCards() {
   el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
   // Acciones principales con íconos SVG limpios
   const _gAdsActions = [
-    { icon:'💸', label:'Encontrar gasto desperdiciado', desc:'Detecta keywords que queman presupuesto sin convertir', action:()=>{ dismissGoogleAdsCards(el); qSend('encuentra el gasto desperdiciado de mi cuenta'); } },
+    { icon:'💸', label:'Encontrar gasto desperdiciado', desc:'Detecta keywords que queman presupuesto sin convertir', action:()=>{ dismissGoogleAdsCards(el); runWastedSpendFlow('Encuentra el gasto desperdiciado de mi cuenta'); } },
     { icon:'📊', label:'Analizar rendimiento', desc:'Auditoría completa: métricas, problemas y prioridades', action:()=>{ dismissGoogleAdsCards(el); qSend('analiza el rendimiento de mi cuenta de Google Ads y dame un diagnóstico completo'); } },
     { icon:'🚀', label:'Crear campaña', desc:'Wizard guiado: keywords, anuncios RSA y segmentación', action:()=>{ dismissGoogleAdsCards(el); launchGoogleCampaignFlow(); } },
     { icon:'✍️', label:'Escribir anuncios RSA', desc:'Headlines y descriptions optimizados para conversión', action:()=>{ dismissGoogleAdsCards(el); qSend('CREAR ANUNCIOS RSA — ¿Para qué producto o servicio necesitas los anuncios? ¿Tienes keywords principales ya definidas?'); } },
@@ -4302,6 +4302,99 @@ function memCtx(){
   }
   return ctx || 'perfil no completado aún.';
 }
+// ── Flujo determinístico de Gasto Desperdiciado ──────────────────────────────
+// Corre el GAQL exacto sin pasar por Claude, para evitar que el agente elija
+// una query de campañas en lugar de search_term_view.
+const WASTED_SPEND_GAQL = 'SELECT search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.cost_micros, metrics.conversions, metrics.ctr FROM search_term_view WHERE segments.date DURING LAST_30_DAYS AND metrics.cost_micros > 5000000 AND metrics.conversions = 0 ORDER BY metrics.cost_micros DESC LIMIT 50';
+
+function isWastedSpendIntent(msg) {
+  const t = msg.toLowerCase();
+  return t.includes('gasto desperdiciado') || t.includes('encuentra el gasto') ||
+    t.includes('desperdiciando') || t.includes('dinero perdido') || t.includes('palabras irrelevantes') ||
+    t.includes('search terms malos') || t.includes('limpiar cuenta') || t.includes('auditoría de negativos') ||
+    t.includes('qué estamos botando') || t.includes('cuánto se está botando') || t.includes('qué búsquedas no convierten');
+}
+
+async function runWastedSpendFlow(userMsg) {
+  if (loading) return;
+  loading = true;
+  document.getElementById('sbtn').disabled = true;
+  const tid = addThinking();
+
+  // Mostrar mensaje del usuario
+  addUser(userMsg || 'Encuentra el gasto desperdiciado');
+  hist.push({role:'user', content: userMsg || 'Encuentra el gasto desperdiciado de mi cuenta'});
+
+  // Paso 1: correr GAQL directamente (sin pasar por Claude)
+  const gaqlResult = await queryGoogleAds(WASTED_SPEND_GAQL);
+  rmThinking(tid);
+
+  if (gaqlResult.error) {
+    loading = false; document.getElementById('sbtn').disabled = false;
+    if (gaqlResult.needsReconnect) {
+      addAgent('⚠️ **Necesitas reconectar tu cuenta de Google Ads.**\n\n👉 Ve a **Configuración → Conexiones → Google Ads → Desconectar** y vuelve a conectar.');
+      updateAdsUI(false);
+    } else {
+      addAgent('⚠️ No pude consultar tu cuenta: ' + gaqlResult.error);
+    }
+    return;
+  }
+
+  // Si el backend refrescó el token, actualizarlo
+  if (gaqlResult._refreshedToken) {
+    sessionStorage.setItem('ads_access_token', gaqlResult._refreshedToken);
+    localStorage.setItem('ads_access_token_persist', gaqlResult._refreshedToken);
+  }
+
+  const _gaqlResults = gaqlResult.results || [];
+  const _currency = sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '';
+
+  // Paso 2: convertir TODOS los *Micros a valores reales
+  const _processedResults = _gaqlResults.map(row => {
+    if (!row.metrics) return row;
+    const m = {...row.metrics};
+    const mc = v => v !== undefined && v !== null ? Math.round(Number(v) / 1000000) : undefined;
+    const curr = _currency ? ' ' + _currency : '';
+    Object.keys(m).forEach(key => {
+      if (key.endsWith('Micros') && m[key] !== undefined) {
+        m[key.slice(0, -6) + '_real'] = mc(m[key]) + curr;
+        delete m[key];
+      }
+    });
+    return {...row, metrics: m};
+  });
+
+  // Paso 3: extraer términos para el botón (top 30 por costo)
+  const _wastedTerms = _gaqlResults
+    .filter(r => r.searchTermView && r.searchTermView.searchTerm)
+    .map(r => r.searchTermView.searchTerm)
+    .slice(0, 30);
+
+  if (!_wastedTerms.length) {
+    loading = false; document.getElementById('sbtn').disabled = false;
+    addAgent('✅ **No se detectó gasto desperdiciado significativo** en los últimos 30 días. Todos los search terms con gasto notable han generado conversiones. ¡Buena señal!');
+    hist.push({role:'assistant', content:'No se detectó gasto desperdiciado significativo.'});
+    return;
+  }
+
+  // Paso 4: enviar a Claude SOLO para análisis de texto
+  const resultStr = JSON.stringify(_processedResults, null, 2);
+  const analysisPrompt = `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nEntrega SOLO:\n1. Una línea: total de gasto desperdiciado (suma de todos los cost_real).\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (5-8 términos, los CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n\nNada más. Sin secciones de impacto, sin preguntas al usuario. El botón para agregar aparece automáticamente.`;
+  hist.push({role:'user', content: analysisPrompt});
+
+  window._lastActionConfirmRendered = false;
+  await callClaude();
+
+  // Paso 5: renderizar botón siempre (independiente de lo que haga el agente)
+  if (!window._lastActionConfirmRendered && _wastedTerms.length > 0) {
+    setTimeout(() => renderActionConfirmCard({
+      action: 'add-negative-keywords',
+      label: 'Agregar palabras negativas a la cuenta',
+      params: { keywords: _wastedTerms, matchType: 'PHRASE', scope: 'all_campaigns' }
+    }), 150);
+  }
+}
+
 async function sendMsg(){
   if(loading||((!onDone)&&!pendingImg))return;
   const el=document.getElementById('cin');
@@ -4324,6 +4417,12 @@ async function sendMsg(){
     msgContent = enriched;
     addUser(txt); // mostrar el mensaje original sin el contexto extra
   }
+  // Interceptar intent de gasto desperdiciado: correr GAQL directamente sin pasar por Claude
+  if (currentAgentCtx === 'google-ads' && typeof txt === 'string' && isWastedSpendIntent(txt)) {
+    // No agregar a hist aquí — runWastedSpendFlow lo hace internamente
+    return runWastedSpendFlow(txt);
+  }
+
   hist.push({role:'user',content:msgContent});
   // Ocultar tarjetas de acción rápida del agente social al primer envío
   if(currentAgentCtx==='social'){
@@ -4638,17 +4737,22 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
             localStorage.setItem('ads_active_account_persist', JSON.stringify(adsActiveAccount));
           }
         }
-        // Pre-procesar resultados: convertir *Micros a valores reales para que el agente no tenga que dividir
+        // Pre-procesar resultados: convertir TODOS los campos *Micros a valores reales
         const _gaqlResults = gaqlResult.results || [];
         const _currency = sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '';
         const _processedResults = _gaqlResults.map(row => {
           if (!row.metrics) return row;
           const m = {...row.metrics};
-          // Convertir todos los campos Micros a valor real
-          const mc = v => v !== undefined ? Math.round(Number(v) / 1000000) : undefined;
-          if (m.costMicros !== undefined)   { m.costo_real = mc(m.costMicros) + (_currency ? ' ' + _currency : ''); delete m.costMicros; }
-          if (m.averageCpc !== undefined)   { m.cpc_real   = mc(m.averageCpc) + (_currency ? ' ' + _currency : ''); delete m.averageCpc; }
-          if (m.costPerConversionMicros !== undefined) { m.cpa_real = mc(m.costPerConversionMicros) + (_currency ? ' ' + _currency : ''); delete m.costPerConversionMicros; }
+          const mc = v => v !== undefined && v !== null ? Math.round(Number(v) / 1000000) : undefined;
+          const curr = _currency ? ' ' + _currency : '';
+          // Convertir genéricamente TODOS los campos que terminan en 'Micros'
+          Object.keys(m).forEach(key => {
+            if (key.endsWith('Micros') && m[key] !== undefined) {
+              const baseKey = key.slice(0, -6); // quitar 'Micros'
+              m[baseKey + '_real'] = mc(m[key]) + curr;
+              delete m[key];
+            }
+          });
           return {...row, metrics: m};
         });
 
