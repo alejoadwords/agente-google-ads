@@ -3157,79 +3157,44 @@ function showGoogleAdsActionCards() {
   var el = document.createElement('div');
   el.className = 'msg';
   el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
+  // Acciones principales con íconos SVG limpios
+  const _gAdsActions = [
+    { icon:'💸', label:'Encontrar gasto desperdiciado', desc:'Detecta keywords que queman presupuesto sin convertir', action:()=>{ dismissGoogleAdsCards(el); qSend('encuentra el gasto desperdiciado de mi cuenta'); } },
+    { icon:'📊', label:'Analizar rendimiento', desc:'Auditoría completa: métricas, problemas y prioridades', action:()=>{ dismissGoogleAdsCards(el); qSend('analiza el rendimiento de mi cuenta de Google Ads y dame un diagnóstico completo'); } },
+    { icon:'🚀', label:'Crear campaña', desc:'Wizard guiado: keywords, anuncios RSA y segmentación', action:()=>{ dismissGoogleAdsCards(el); launchGoogleCampaignFlow(); } },
+    { icon:'✍️', label:'Escribir anuncios RSA', desc:'Headlines y descriptions optimizados para conversión', action:()=>{ dismissGoogleAdsCards(el); qSend('CREAR ANUNCIOS RSA — ¿Para qué producto o servicio necesitas los anuncios? ¿Tienes keywords principales ya definidas?'); } },
+    { icon:'🎯', label:'Crear lista de keywords', desc:'Keywords positivas y negativas por intención de búsqueda', action:()=>{ dismissGoogleAdsCards(el); qSend('CREAR LISTA DE PALABRAS CLAVE — ¿Para qué campaña o producto necesitas las keywords?'); } },
+    { icon:'🧪', label:'Diseñar prueba A/B', desc:'Variantes de headlines, copys o audiencias listas para testear', action:()=>{ dismissGoogleAdsCards(el); qSend('DISEÑAR PRUEBA A/B — ¿Qué elemento quieres testear? (headlines, descriptions, audiencia o puja)'); } },
+  ];
+
   el.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">' +
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
+      '<div>' +
+        '<div style="font-size:14px;font-weight:700;color:var(--text)">¿En qué trabajamos hoy?</div>' +
+        '<div style="font-size:11px;color:var(--muted2);margin-top:1px">Selecciona una acción o escribe directamente</div>' +
+      '</div>' +
     '</div>' +
-    '<div style="width:100%;max-width:520px;padding-left:40px">' +
-
-      // Card 0: Crear campaña — destacada full-width
-      '<div onclick="dismissGoogleAdsCards(this);launchGoogleCampaignFlow()" style="border:2px solid #1E2BCC;border-radius:14px;padding:18px 20px;cursor:pointer;background:linear-gradient(135deg,#e8eafc 0%,#dbeafe 100%);transition:all .15s;margin-bottom:8px;display:flex;align-items:center;gap:14px" onmouseover="this.style.background=\'#d6d9f7\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'linear-gradient(135deg,#e8eafc 0%,#dbeafe 100%)\';this.style.transform=\'\'">' +
-        '<div style="font-size:28px">🚀</div>' +
-        '<div>' +
-          '<div style="font-size:14px;font-weight:700;color:#1E2BCC">Crear campaña en Google Ads</div>' +
-          '<div style="font-size:12px;color:#4B5ECC;margin-top:2px">Wizard guiado: keywords, RSA y segmentación en minutos</div>' +
-        '</div>' +
+    '<div style="width:100%;max-width:540px;padding-left:40px">' +
+      '<div style="display:flex;flex-direction:column;gap:6px">' +
+        _gAdsActions.map((a, i) =>
+          `<div data-gads-card="${i}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;background:var(--bg);transition:all .15s"
+            onmouseover="this.style.borderColor='var(--blue)';this.style.background='var(--blue-lt)';this.style.transform='translateX(2px)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg)';this.style.transform=''"
+            onclick="window._gAdsCardActions[${i}]()">
+            <div style="font-size:20px;flex-shrink:0;width:28px;text-align:center">${a.icon}</div>
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.label}</div>
+              <div style="font-size:11px;color:var(--muted2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.desc}</div>
+            </div>
+            <div style="margin-left:auto;color:var(--muted2);font-size:16px;flex-shrink:0">›</div>
+          </div>`
+        ).join('') +
       '</div>' +
+    '</div>';
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-
-      // Card 1: Analizar y optimizar campaña
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'ANALIZAR Y OPTIMIZAR mi cuenta de Google Ads - necesito una auditoría profesional completa de mis campañas actuales con análisis de métricas, identificación de problemas y recomendaciones priorizadas de mejora\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">🔍</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar y optimizar campaña</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Auditoría completa y recomendaciones de mejora</div>' +
-      '</div>' +
-
-      // Card 2: Planificar campaña
-      '<div onclick="dismissGoogleAdsCards(this);showPlanningQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">📋</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planificar campaña</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Estrategia completa y recomendación de presupuesto</div>' +
-      '</div>' +
-
-      // Card 3: Crear lista de palabras clave
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR LISTA DE PALABRAS CLAVE - Antes de generar las keywords, necesito saber: ¿Para qué tipo de campaña o producto/servicio específico necesitas las palabras clave? ¿Es para una campaña nueva o para optimizar una existente?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">🎯</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear palabras clave</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Keywords positivas + negativas por categorías</div>' +
-      '</div>' +
-
-      // Card 4: Crear anuncios RSA
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR ANUNCIOS RSA - Para generar los headlines y descriptions más efectivos, necesito saber: ¿Para qué producto/servicio específico son estos anuncios RSA? ¿Tienes keywords principales ya definidas? ¿Es para una campaña nueva o reemplazo de anuncios existentes?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios RSA</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Headlines y descriptions con estructura AIDA</div>' +
-      '</div>' +
-
-      // Card 5: A/B Test
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'DISEÑAR PRUEBA A/B — Quiero crear un test A/B en Google Ads. Antes de generar las variantes, necesito saber: ¿qué elemento quieres testear? (headlines, descriptions, landing page, audiencia, estrategia de puja) y ¿qué campaña o grupo de anuncios tienes actualmente?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">🧪</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Diseñar prueba A/B</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Variantes listas para testear headlines, copys o audiencias</div>' +
-      '</div>' +
-
-      // Card 6: Attribution Model
-      '<div onclick="dismissGoogleAdsCards(this);qSend(\'MODELO DE ATRIBUCIÓN — Ayúdame a elegir el modelo de atribución correcto para mi cuenta de Google Ads. Analiza mi objetivo de conversión principal y el ciclo de decisión de compra típico en mi industria para recomendarme el modelo más adecuado y los pasos exactos para configurarlo.\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="font-size:18px;margin-bottom:6px">📐</div>' +
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Modelo de atribución</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Cuál usar según tu ciclo de venta y cómo configurarlo</div>' +
-      '</div>' +
-
-      // Card 7: Diagnosticar cuenta — full width, destacada
-      '<div onclick="dismissGoogleAdsCards(this);showDiagnosticInput(\'google-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'\'>' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<div style="font-size:22px">🩺</div>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar cuenta</div>' +
-            '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-
-    '</div>' +   // cierra grid 2-col
-    '</div>';    // cierra contenedor externo
+  // Registrar handlers en window para poder llamarlos desde onclick inline
+  window._gAdsCardActions = _gAdsActions.map(a => a.action);
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 }
@@ -4671,37 +4636,32 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
             localStorage.setItem('ads_active_account_persist', JSON.stringify(adsActiveAccount));
           }
         }
-        // Detectar si son resultados de search_term_view (análisis de gasto desperdiciado)
-        // El botón se renderiza DESPUÉS de que el agente muestra el análisis (al final).
+        // Pre-procesar resultados: convertir *Micros a valores reales para que el agente no tenga que dividir
         const _gaqlResults = gaqlResult.results || [];
+        const _currency = sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '';
+        const _processedResults = _gaqlResults.map(row => {
+          if (!row.metrics) return row;
+          const m = {...row.metrics};
+          // Convertir todos los campos Micros a valor real
+          const mc = v => v !== undefined ? Math.round(Number(v) / 1000000) : undefined;
+          if (m.costMicros !== undefined)   { m.costo_real = mc(m.costMicros) + (_currency ? ' ' + _currency : ''); delete m.costMicros; }
+          if (m.averageCpc !== undefined)   { m.cpc_real   = mc(m.averageCpc) + (_currency ? ' ' + _currency : ''); delete m.averageCpc; }
+          if (m.costPerConversionMicros !== undefined) { m.cpa_real = mc(m.costPerConversionMicros) + (_currency ? ' ' + _currency : ''); delete m.costPerConversionMicros; }
+          return {...row, metrics: m};
+        });
+
+        // Detectar si son resultados de search_term_view (análisis de gasto desperdiciado)
         const _isSearchTerms = _gaqlResults.length > 0 && _gaqlResults[0].searchTermView;
-        let _wastedTerms = [];
-        if (_isSearchTerms) {
-          _wastedTerms = _gaqlResults
-            .filter(r => parseFloat((r.metrics && r.metrics.conversions) || 0) === 0)
-            .map(r => r.searchTermView && r.searchTermView.searchTerm)
-            .filter(Boolean)
-            .slice(0, 60);
-        }
-        const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
+
+        const resultStr = JSON.stringify(_processedResults, null, 2);
         hist.push({role:'assistant',content:replyFinalProcessed});
-        // Si son search terms, pedir análisis directo sin preguntas de seguimiento
+        // Si son search terms: pedir al agente análisis + ACTION_CONFIRM con lista curada
+        // El agente usa el contexto del negocio ({MEMORY}) para filtrar qué es realmente irrelevante
         const _resultPrompt = _isSearchTerms
-          ? `Resultados de búsquedas sin conversión (últimos 30 días):\n\`\`\`json\n${resultStr}\n\`\`\`\n\nEntrega el análisis de gasto desperdiciado: resumen ejecutivo con total perdido, tabla de los términos más costosos (máximo 8), agrupados por categoría. Termina con una proyección de ahorro. No preguntes si quieres proceder — el usuario ya tendrá el botón para agregar las negativas.`
-          : `Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`;
+          ? `Resultados de búsquedas sin conversión (últimos 30 días). Los valores monetarios ya están convertidos (no necesitas dividir nada):\n\`\`\`json\n${resultStr}\n\`\`\`\n\nEntrega:\n1. Resumen: total de gasto desperdiciado y cuántos términos son irrelevantes para este negocio.\n2. Tabla con los peores 6-8 términos (los de mayor costo_real con 0 conversiones y que son CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente para decidir).\n3. Al final, emite el bloque <ACTION_CONFIRM> SOLO con los términos que son verdaderamente irrelevantes para este negocio específico. No incluyas términos genéricos del sector que podrían convertir con mejor landing page.`
+          : `Resultados de Google Ads API (valores monetarios ya convertidos, no dividir):\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`;
         hist.push({role:'user',content:_resultPrompt});
-        // Esperar a que el agente termine el análisis, luego mostrar el botón al final
         await callClaude();
-        if (_wastedTerms.length > 0) {
-          setTimeout(() => renderActionConfirmCard({
-            action: 'add-negative-keywords',
-            label: 'Agregar ' + _wastedTerms.length + ' palabras negativas a Google Ads',
-            reversible: false,
-            params: { keywords: _wastedTerms, matchType: 'PHRASE', scope: 'all_campaigns' },
-            confirmText: '🚫 Agregar ' + _wastedTerms.length + ' palabras negativas',
-            dangerLevel: 'low',
-          }), 200);
-        }
         return;
       }
     }
