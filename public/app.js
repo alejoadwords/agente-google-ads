@@ -4656,10 +4656,12 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         const _isSearchTerms = _gaqlResults.length > 0 && _gaqlResults[0].searchTermView;
 
         // Pre-extraer términos del GAQL para el botón de fallback (en caso de que el agente no emita ACTION_CONFIRM)
+        // Limitar a 30 términos (ya vienen ordenados por costo desc del GAQL)
         const _wastedTerms = _isSearchTerms
           ? _gaqlResults
               .filter(r => r.searchTermView && r.searchTermView.searchTerm)
               .map(r => r.searchTermView.searchTerm)
+              .slice(0, 30)
           : [];
 
         const resultStr = JSON.stringify(_processedResults, null, 2);
@@ -4785,6 +4787,8 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         else { hist.push({role:'assistant',content:'Accion propuesta — confirma para ejecutar.'}); }
         try {
           const actionData = JSON.parse(actionConfirmMatch[1].trim());
+          // Setear el flag ANTES del setTimeout para que el fallback no lo sobrescriba
+          window._lastActionConfirmRendered = true;
           setTimeout(() => renderActionConfirmCard(actionData), 200);
         } catch(e) { console.warn('ACTION_CONFIRM parse error:', e); }
         if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
@@ -5531,11 +5535,15 @@ async function executeAction(actionData, btn) {
     || '';
   const endpoint = '/api/google-ads?action=' + actionData.action + '&userId=' + encodeURIComponent(userId) + '&customerId=' + encodeURIComponent(_actionCustId);
 
+  // Incluir token desde sessionStorage (igual que queryGoogleAds)
+  // El backend puede tener el token expirado en Supabase; el de sesión es el más fresco.
+  const _actionToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
+
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ ...params, userId, confirm: true }),
+      body: JSON.stringify({ ...params, userId, confirm: true, accessToken: _actionToken }),
     });
     const data = await res.json();
 

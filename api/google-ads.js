@@ -191,11 +191,21 @@ export default async function handler(req, res) {
   const dateRange  = req.query.dateRange  || 'LAST_30_DAYS';
 
   try {
-    // Obtener token de Supabase (o del body como fallback)
+    // Obtener token: primero del body/query (token fresco de sessionStorage del frontend),
+    // si no, intentar desde Supabase, y si expiró, auto-refrescar con refresh_token.
     let token = req.query.accessToken || (req.body && req.body.accessToken) || '';
     if (!token && userId) {
       const conn = await getStoredToken(userId);
-      token = conn?.access_token || '';
+      if (conn?.access_token) {
+        token = conn.access_token;
+      } else if (conn?.refresh_token) {
+        // Token ausente pero hay refresh_token → renovar automáticamente
+        const refreshed = await refreshGoogleToken(conn.refresh_token);
+        if (refreshed.access_token) {
+          await updateStoredToken(userId, refreshed.access_token, refreshed.expires_in);
+          token = refreshed.access_token;
+        }
+      }
     }
     if (!token) return res.status(401).json({ error: 'No hay token. Conecta tu cuenta de Google Ads.', needsConnect: true });
     if (!customerId) return res.status(400).json({ error: 'customerId requerido' });
