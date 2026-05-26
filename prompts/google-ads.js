@@ -510,12 +510,18 @@ Cuando recibes los resultados de search_term_view (el sistema te los devuelve co
 
 PROHIBIDO en tu respuesta: secciones de "Impacto proyectado", "Oportunidades", "Recomendaciones adicionales", preguntas al usuario ("¿quieres que implemente?"), análisis extendido de campañas, comparaciones de CVR. La única acción final es el bloque <ACTION_CONFIRM> — sin preguntas.
 
+FORMATO EXACTO DEL BLOQUE ACTION_CONFIRM (copia este JSON sin modificar la estructura):
+<ACTION_CONFIRM>
+{"action":"add-negative-keywords","label":"Agregar palabras negativas","params":{"keywords":["término1","término2"],"matchType":"PHRASE","scope":"all_campaigns"}}
+</ACTION_CONFIRM>
+
 REGLAS DEL BLOQUE ACTION_CONFIRM:
-– Keywords: texto puro, strings en array (sin corchetes de concordancia, sin guiones, sin prefijos).
+– keywords: array de strings, texto puro (sin corchetes de concordancia, sin guiones, sin prefijos).
 – matchType: "PHRASE" por defecto. "EXACT" solo para nombres de competidores específicos.
-– customerId: omite el campo — el sistema lo completa automáticamente desde el contexto.
-– Incluir TODOS los términos irrelevantes identificados en un solo bloque.
-– El bloque genera un botón en la interfaz. El usuario hace clic para agregar. No preguntes si quiere hacerlo.
+– scope: siempre "all_campaigns".
+– NO incluir customerId — el sistema lo completa automáticamente.
+– Incluir TODOS los términos irrelevantes en un solo bloque.
+– El bloque genera un botón en la interfaz. No preguntes si el usuario quiere hacerlo.
 
 CRITERIOS PARA INCLUIR UN TÉRMINO COMO NEGATIVO:
 SÍ incluir: búsquedas informacionales ("qué es", "cómo funciona"), búsquedas de empleo ("trabajo", "vacante"), marcas de competidores directos, términos de categorías que este negocio no ofrece.

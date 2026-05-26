@@ -4660,7 +4660,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         // Si son search terms: pedir al agente análisis + ACTION_CONFIRM con lista curada
         // El agente usa el contexto del negocio ({MEMORY}) para filtrar qué es realmente irrelevante
         const _resultPrompt = _isSearchTerms
-          ? `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores monetarios ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nSigue EXACTAMENTE este formato — nada más:\n1. Una línea: "Detecté $X ${_currency || ''} desperdiciados en N búsquedas irrelevantes."\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (solo los 5-8 peores y CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n4. El bloque <ACTION_CONFIRM> con los términos irrelevantes.\n\nPROHIBIDO: secciones de Impacto, Oportunidades, Recomendaciones adicionales, preguntas al usuario. El bloque <ACTION_CONFIRM> es OBLIGATORIO y debe ser lo último de tu respuesta. Sin él el flujo no funciona.\n\nFormato ACTION_CONFIRM:\n<ACTION_CONFIRM>\n{"action":"add-negative-keywords","keywords":["término1","término2"],"matchType":"PHRASE","scope":"all_campaigns"}\n</ACTION_CONFIRM>`
+          ? `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores monetarios ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nSigue EXACTAMENTE este formato — nada más:\n1. Una línea: "Detecté $X ${_currency || ''} desperdiciados en N búsquedas irrelevantes."\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (solo los 5-8 peores y CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n4. El bloque <ACTION_CONFIRM> con los términos irrelevantes.\n\nPROHIBIDO: secciones de Impacto, Oportunidades, Recomendaciones adicionales, preguntas al usuario. El bloque <ACTION_CONFIRM> es OBLIGATORIO y debe ser lo último de tu respuesta. Sin él el flujo no funciona.\n\nFormato ACTION_CONFIRM — copia este formato exacto:\n<ACTION_CONFIRM>\n{"action":"add-negative-keywords","label":"Agregar palabras negativas","params":{"keywords":["término1","término2"],"matchType":"PHRASE","scope":"all_campaigns"}}\n</ACTION_CONFIRM>`
           : `Resultados de Google Ads API (valores monetarios ya convertidos, no dividir):\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`;
         hist.push({role:'user',content:_resultPrompt});
         await callClaude();
@@ -5396,12 +5396,27 @@ async function enrichWithCompetitiveData(userMessage, agentKey) {
 }
 
 // ── SPRINT 3: ACTION CONFIRM CARD ────────────────────────
+// Registro global para datos de acciones pendientes (evita serializar JSON en atributos HTML)
+window._pendingActions = window._pendingActions || [];
+
 function renderActionConfirmCard(actionData) {
   const area = document.getElementById('chat-area');
   if (!area || !actionData) return;
-  const params = actionData.params || {};
+
+  // Normalizar: el agente puede generar JSON plano o anidado bajo params
+  const params = actionData.params || {
+    keywords:   actionData.keywords,
+    matchType:  actionData.matchType,
+    scope:      actionData.scope,
+    customerId: actionData.customerId,
+    campaignId: actionData.campaignId,
+  };
   const isReversible = actionData.reversible !== false;
   const danger = actionData.dangerLevel || 'medium';
+
+  // Guardar en registro global y obtener índice para el onclick
+  const actionIdx = window._pendingActions.length;
+  window._pendingActions.push({ ...actionData, params }); // normalizado
 
   let detailsHtml = '';
 
@@ -5414,7 +5429,8 @@ function renderActionConfirmCard(actionData) {
     detailsHtml += '<div class="action-confirm-detail"><span class="label">Cantidad:</span><span class="value">' + params.keywords.length + ' palabras negativas</span></div>';
     detailsHtml += '<div style="margin-top:10px;padding:10px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;max-height:180px;overflow-y:auto">';
     params.keywords.forEach(kw => {
-      detailsHtml += '<div style="font-size:12px;color:#374151;padding:3px 0;font-family:monospace">[' + (params.matchType === 'EXACT' ? 'exacta' : params.matchType === 'BROAD' ? 'amplia' : 'frase') + '] ' + kw + '</div>';
+      const matchTxt = params.matchType === 'EXACT' ? 'exacta' : params.matchType === 'BROAD' ? 'amplia' : 'frase';
+      detailsHtml += '<div style="font-size:12px;color:#374151;padding:3px 0;font-family:monospace">[' + matchTxt + '] ' + kw + '</div>';
     });
     detailsHtml += '</div>';
   } else {
@@ -5441,30 +5457,31 @@ function renderActionConfirmCard(actionData) {
     });
   }
 
-  const safeData = JSON.stringify(actionData).replace(/'/g, "\\'");
   const btnClass = danger === 'high' ? 'btn-execute danger' : 'btn-execute';
-
   const wrap = document.createElement('div');
   wrap.className = 'msg';
   wrap.innerHTML = '<div class="action-confirm-card">' +
     '<div class="action-confirm-header">' +
       '<span class="action-confirm-icon">⚡</span>' +
-      '<span class="action-confirm-title">' + (actionData.label || 'Accion propuesta') + '</span>' +
+      '<span class="action-confirm-title">' + (actionData.label || 'Agregar palabras negativas') + '</span>' +
       '<span class="action-confirm-badge ' + (isReversible ? 'reversible' : 'irreversible') + '">' + (isReversible ? 'Reversible' : 'Irreversible') + '</span>' +
     '</div>' +
     '<div class="action-confirm-body">' + detailsHtml + '</div>' +
     '<div class="action-confirm-footer">' +
       '<button class="btn-cancel" onclick="this.closest(\'.msg\').remove()">Cancelar</button>' +
-      '<button class="' + btnClass + '" onclick="executeAction(\'' + safeData.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', this)">' + (actionData.confirmText || 'Confirmar') + '</button>' +
+      '<button class="' + btnClass + '" onclick="executeAction(window._pendingActions[' + actionIdx + '], this)">' + (actionData.confirmText || 'Confirmar') + '</button>' +
     '</div>' +
   '</div>';
   area.appendChild(wrap);
   scrollB();
 }
 
-async function executeAction(actionDataStr, btn) {
-  let actionData;
-  try { actionData = JSON.parse(actionDataStr); } catch(e) { return; }
+async function executeAction(actionData, btn) {
+  // Soporta tanto objeto directo (desde _pendingActions) como string JSON (legado)
+  if (typeof actionData === 'string') {
+    try { actionData = JSON.parse(actionData); } catch(e) { return; }
+  }
+  if (!actionData) return;
 
   const userId = clerkInstance?.user?.id;
   if (!userId) { addAgent('Error: no hay sesion activa.'); return; }
@@ -5472,7 +5489,14 @@ async function executeAction(actionDataStr, btn) {
   btn.disabled = true;
   btn.textContent = 'Ejecutando...';
 
-  const params = actionData.params || {};
+  // Normalizar: soporta JSON plano (agente) o anidado bajo params
+  const params = actionData.params || {
+    keywords:   actionData.keywords,
+    matchType:  actionData.matchType,
+    scope:      actionData.scope,
+    customerId: actionData.customerId,
+    campaignId: actionData.campaignId,
+  };
   // customerId: usar el del params si existe, sino el de la sesión activa (fallback)
   const _actionCustId = params.customerId
     || sessionStorage.getItem('ads_customer_id')
