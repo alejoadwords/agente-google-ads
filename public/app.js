@@ -11018,8 +11018,19 @@ function openSettings() {
     const planDesc = document.getElementById('cfg-plan-card-desc');
     if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
     if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isProPlan ? 'Acceso a todos los agentes · Imágenes ilimitadas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
-    const upgradeBtn = document.querySelector('#cfg-plan-card .cfg-upgrade-btn');
-    if (upgradeBtn) upgradeBtn.textContent = isPaidPlan ? 'Gestionar' : 'Mejorar plan';
+    const upgradeBtn = document.getElementById('cfg-upgrade-btn');
+    if (upgradeBtn) {
+      if (isAgencyPlan) {
+        upgradeBtn.textContent = 'Gestionar en Hotmart';
+        upgradeBtn.onclick = () => window.open('https://app.hotmart.com/products', '_blank');
+      } else if (isIndividualPlan || isProPlan) {
+        upgradeBtn.textContent = 'Mejorar a Agencia';
+        upgradeBtn.onclick = () => window.open('https://pay.hotmart.com/L105202723X', '_blank');
+      } else {
+        upgradeBtn.textContent = 'Mejorar plan';
+        upgradeBtn.onclick = openUpgradeFlow;
+      }
+    }
     // Populate name/email rows
     const nameRow = document.getElementById('cfg-name-row');
     const emailRow = document.getElementById('cfg-email-row');
@@ -11972,6 +11983,42 @@ function copyReferralLink() {
 }
 
 // Abrir/cerrar modal de referidos
+function openUpgradeFlow() {
+  // Para usuarios free: mostrar selector de plan
+  const existing = document.getElementById('upgrade-flow-modal');
+  if (existing) { existing.remove(); }
+  const modal = document.createElement('div');
+  modal.id = 'upgrade-flow-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:var(--bg);border-radius:18px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div style="font-size:16px;font-weight:700;color:var(--text)">Elige tu plan</div>
+        <button onclick="document.getElementById('upgrade-flow-modal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:18px;line-height:1;padding:2px 6px">&times;</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:.15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="window.open('https://pay.hotmart.com/G105202218G','_blank');document.getElementById('upgrade-flow-modal').remove()">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:14px;font-weight:700;color:var(--text)">Plan Individual</div>
+            <div style="font-size:15px;font-weight:800;color:var(--blue)">$19<span style="font-size:11px;font-weight:500;color:var(--text-3)">/mes</span></div>
+          </div>
+          <div style="font-size:12px;color:var(--text-3);line-height:1.6">Todos los agentes de IA · 1 negocio · Mensajes ilimitados · Imágenes incluidas</div>
+        </div>
+        <div style="border:2px solid var(--blue);border-radius:12px;padding:18px;cursor:pointer;background:var(--blue-fade, #f0f4ff);position:relative;transition:.15s" onmouseover="this.style.borderColor='var(--blue-mid)'" onmouseout="this.style.borderColor='var(--blue)'" onclick="window.open('https://pay.hotmart.com/L105202723X','_blank');document.getElementById('upgrade-flow-modal').remove()">
+          <div style="position:absolute;top:-10px;right:14px;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;letter-spacing:.3px">MÁS POPULAR</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:14px;font-weight:700;color:var(--text)">Plan Agencia</div>
+            <div style="font-size:15px;font-weight:800;color:var(--blue)">$49<span style="font-size:11px;font-weight:500;color:var(--text-3)">/mes</span></div>
+          </div>
+          <div style="font-size:12px;color:var(--text-3);line-height:1.6">Todos los agentes · Hasta 20 clientes · Panel de agencia · Reportes · Imágenes ilimitadas</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:14px">Pago seguro a través de Hotmart · Cancela cuando quieras</div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
 function openReferralModal() {
   const modal = document.getElementById('referral-modal');
   if (!modal) return;

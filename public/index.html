@@ -2668,15 +2668,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
                 <div class="cfg-plan-name" id="cfg-plan-card-name">Plan Free</div>
                 <div class="cfg-plan-desc" id="cfg-plan-card-desc">Acceso limitado · 7 días de prueba</div>
               </div>
-              <button class="cfg-upgrade-btn" onclick="window.open('https://pay.hotmart.com/acuarius','_blank')">Mejorar plan</button>
-            </div>
-            <div class="cfg-row">
-              <span class="cfg-label">¿Tienes un código de descuento?</span>
-              <button class="cfg-edit-btn" onclick="window.open('https://pay.hotmart.com/acuarius','_blank')">Canjear</button>
-            </div>
-            <div class="cfg-row" style="border-bottom:none;padding-bottom:0">
-              <span class="cfg-label">Historial de pagos</span>
-              <button class="cfg-edit-btn" onclick="window.open('https://app.hotmart.com/products','_blank')">Ver en Hotmart</button>
+              <button class="cfg-upgrade-btn" id="cfg-upgrade-btn" onclick="openUpgradeFlow()">Mejorar plan</button>
             </div>
           </div>
         </div>
