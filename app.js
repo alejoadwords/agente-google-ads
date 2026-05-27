@@ -248,7 +248,7 @@ function updateUserUI(u){
     else badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días';
   }
   const greeting=document.getElementById('home-greeting');
-  if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
+  if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.innerHTML=t+', '+name+' 👋<br><span class="accent">¿En qué trabajamos hoy?</span>';}
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
@@ -2966,6 +2966,19 @@ REGLAS:
 
  // historial del chat general
 let homeLoading = false;
+
+// Acción rápida desde el home — abre agente y envía el mensaje
+function quickAction(agentKey, message) {
+  openAgent(agentKey).then(() => {
+    setTimeout(() => {
+      const cin = document.getElementById('cin');
+      if (cin) {
+        cin.value = message;
+        sendMsg();
+      }
+    }, 200);
+  });
+}
 
 async function homeChat() {
   const el = document.getElementById('home-cin');
