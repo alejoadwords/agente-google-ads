@@ -2609,6 +2609,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           Notificaciones
         </button>
+        <button type="button" class="cfg-nav-item" data-tab="seguridad" onclick="switchSettingsTab('seguridad')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Seguridad
+        </button>
         <button type="button" class="cfg-nav-item" data-tab="referral" onclick="switchSettingsTab('referral')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Referidos
@@ -2627,12 +2631,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
                 <div class="cfg-avatar-name" id="cfg-name">—</div>
                 <div class="cfg-avatar-email" id="cfg-email">—</div>
               </div>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Editar perfil</button>
             </div>
             <div class="cfg-section-title">Información personal</div>
-            <div class="cfg-section-sub">Gestiona tus datos de cuenta</div>
+            <div class="cfg-section-sub">Actualiza tu nombre, email y datos de contacto</div>
             <div class="cfg-row">
-              <span class="cfg-label">Plan actual</span>
-              <span class="cfg-value" id="cfg-plan">Free</span>
+              <span class="cfg-label">Nombre</span>
+              <span class="cfg-value" id="cfg-name-row">—</span>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Editar</button>
+            </div>
+            <div class="cfg-row">
+              <span class="cfg-label">Correo electrónico</span>
+              <span class="cfg-value" id="cfg-email-row">—</span>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Editar</button>
             </div>
             <div class="cfg-row">
               <span class="cfg-label">Contraseña</span>
@@ -2640,8 +2651,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
               <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Cambiar</button>
             </div>
             <div class="cfg-row" style="border-bottom:none;padding-bottom:0">
-              <span class="cfg-label">Cuenta de Clerk</span>
-              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Gestionar perfil completo</button>
+              <span class="cfg-label">Plan actual</span>
+              <span class="cfg-value" id="cfg-plan">Free</span>
             </div>
           </div>
         </div>
@@ -2833,6 +2844,35 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
                 <div style="font-size:11px;color:var(--muted)">Analytics y conversiones</div>
               </div>
               <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── SEGURIDAD ── -->
+        <div id="cfg-sec-seguridad" style="display:none">
+          <div class="cfg-section">
+            <div class="cfg-section-title">Seguridad</div>
+            <div class="cfg-section-sub">Administra tu contraseña y accesos a la cuenta</div>
+            <div class="cfg-row">
+              <div>
+                <div class="cfg-label">Contraseña</div>
+                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Actualiza tu contraseña de acceso</div>
+              </div>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Cambiar contraseña</button>
+            </div>
+            <div class="cfg-row">
+              <div>
+                <div class="cfg-label">Autenticación en dos pasos</div>
+                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Añade una capa extra de seguridad</div>
+              </div>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Configurar 2FA</button>
+            </div>
+            <div class="cfg-row" style="border-bottom:none;padding-bottom:0">
+              <div>
+                <div class="cfg-label">Sesiones activas</div>
+                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Revisa y cierra sesiones en otros dispositivos</div>
+              </div>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Ver sesiones</button>
             </div>
           </div>
         </div>

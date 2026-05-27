@@ -261,7 +261,7 @@ function updateUserUI(u){
 function initReferralButton() {
   const btn = document.getElementById('sb-referral-btn');
   if (!btn) return;
-  const isPaid = userPlan === 'pro' || userPlan === 'individual' || userPlan === 'agencia' || userPlan === 'agency' || isAdminUser();
+  const isPaid = userPlan === 'pro' || userPlan === 'individual' || userPlan === 'agencia' || userPlan === 'agency' || userPlan === 'Pro' || isAdminUser();
   if (isPaid) btn.style.display = 'flex';
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
@@ -11012,13 +11012,20 @@ function openSettings() {
     document.getElementById('cfg-email').textContent = email;
     const isAgencyPlan = userPlan === 'agency' || userPlan === 'agencia' || isAdminUser();
     const isIndividualPlan = userPlan === 'individual';
-    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : 'Free';
+    const isProPlan = userPlan === 'pro';
+    const isPaidPlan = isAgencyPlan || isIndividualPlan || isProPlan;
+    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : isProPlan ? 'Plan Pro' : 'Free';
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
-    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
+    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isProPlan ? 'Acceso a todos los agentes · Imágenes ilimitadas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
     const upgradeBtn = document.querySelector('#cfg-plan-card .cfg-upgrade-btn');
-    if (upgradeBtn) upgradeBtn.textContent = (isAgencyPlan || isIndividualPlan) ? 'Gestionar' : 'Mejorar plan';
+    if (upgradeBtn) upgradeBtn.textContent = isPaidPlan ? 'Gestionar' : 'Mejorar plan';
+    // Populate name/email rows
+    const nameRow = document.getElementById('cfg-name-row');
+    const emailRow = document.getElementById('cfg-email-row');
+    if (nameRow) nameRow.textContent = name;
+    if (emailRow) emailRow.textContent = email;
   }
   // Sincronizar estado de conexiones — sessionStorage primero, localStorage como fallback
   const metaToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
@@ -11043,8 +11050,8 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  // New cfg-sec-* section IDs (redesigned settings panel)
-  const sections = ['perfil','plan','integraciones','notificaciones','referral'];
+  // All cfg-sec-* section IDs (redesigned settings panel)
+  const sections = ['perfil','plan','integraciones','notificaciones','seguridad','referral'];
   sections.forEach(t => {
     const sec = document.getElementById('cfg-sec-'+t);
     if (sec) sec.style.display = t === tab ? 'block' : 'none';
