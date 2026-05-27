@@ -6377,6 +6377,20 @@ function openSettings() {
   const overlay = document.getElementById('settings-overlay');
   panel.style.display = 'flex';
   overlay.style.display = 'block';
+
+  // Bind nav items via event delegation (robust fallback to inline onclick)
+  const nav = panel.querySelector('.cfg-nav');
+  if (nav && !nav._tabListenerBound) {
+    nav._tabListenerBound = true;
+    nav.addEventListener('click', function(e) {
+      const item = e.target.closest('.cfg-nav-item');
+      if (item && item.dataset.tab) {
+        e.stopPropagation();
+        switchSettingsTab(item.dataset.tab);
+      }
+    });
+  }
+
   // Poblar datos de cuenta
   if (clerkInstance && clerkInstance.user) {
     const u = clerkInstance.user;
@@ -6386,14 +6400,16 @@ function openSettings() {
     document.getElementById('cfg-avatar').textContent = initials;
     document.getElementById('cfg-name').textContent = name;
     document.getElementById('cfg-email').textContent = email;
-    document.getElementById('cfg-plan').textContent = userPlan === 'agencia' ? 'Plan Agencia' : userPlan === 'individual' ? 'Plan Individual' : 'Free';
+    const isAgencyPlan = userPlan === 'agency' || userPlan === 'agencia' || isAdminUser();
+    const isIndividualPlan = userPlan === 'individual';
+    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : 'Free';
     // Update plan card
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
-    if (planCard) planCard.textContent = userPlan === 'agencia' ? 'Plan Agencia · Activo' : userPlan === 'individual' ? 'Plan Individual · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = userPlan === 'agencia' ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : userPlan === 'individual' ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
+    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : 'Plan Free';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
     const upgradeBtn = document.querySelector('#cfg-plan-card .cfg-upgrade-btn');
-    if (upgradeBtn) upgradeBtn.textContent = (userPlan === 'agencia' || userPlan === 'individual') ? 'Gestionar' : 'Mejorar plan';
+    if (upgradeBtn) upgradeBtn.textContent = (isAgencyPlan || isIndividualPlan) ? 'Gestionar' : 'Mejorar plan';
   }
   // Show first tab by default (perfil)
   switchSettingsTab('perfil');
@@ -6411,9 +6427,15 @@ function switchSettingsTab(tab) {
     if (sec) sec.style.display = t === tab ? 'block' : 'none';
   });
   // Update nav active state
-  document.querySelectorAll('.cfg-nav-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.tab === tab);
-  });
+  const panel = document.getElementById('settings-panel');
+  if (panel) {
+    panel.querySelectorAll('.cfg-nav-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === tab);
+    });
+  }
+  // Scroll content area back to top
+  const wrap = document.getElementById('settings-panel')?.querySelector('.cfg-wrap');
+  if (wrap) wrap.scrollTop = 0;
   if (tab === 'referral') loadReferralDataInSettings();
 }
 
