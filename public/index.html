@@ -954,18 +954,21 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .sb-divider{height:1px;background:var(--border);margin:6px 4px}
 
 /* ── SETTINGS FULL-PAGE redesign ── */
+.cfg-wrap{flex:1;overflow-y:auto;scrollbar-width:none}
+.cfg-wrap::-webkit-scrollbar{display:none}
+.cfg-layout{display:flex;max-width:960px;margin:0 auto;padding:28px 24px 40px;gap:0;min-height:calc(100vh - 62px)}
 .cfg-settings-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10;flex-shrink:0}
 .cfg-settings-title{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.2px}
 .cfg-close-btn{width:32px;height:32px;border-radius:9px;background:var(--bg-muted);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-2);transition:all .15s var(--ease)}
 .cfg-close-btn:hover{background:var(--bg-card);color:var(--text)}
-.cfg-nav{width:200px;flex-shrink:0}
-.cfg-nav-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);padding:0 12px 10px}
-.cfg-nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r);font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all .15s var(--ease);margin-bottom:2px}
-.cfg-nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.cfg-nav{width:220px;flex-shrink:0;padding:0 16px 24px 0;border-right:1px solid var(--border)}
+.cfg-nav-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding:0 12px 12px;margin-bottom:4px}
+.cfg-nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r);font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all .15s var(--ease);margin-bottom:2px;border:1px solid transparent}
+.cfg-nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7;transition:opacity .15s}
 .cfg-nav-item:hover{background:var(--bg-muted);color:var(--text)}
-.cfg-nav-item.active{background:var(--blue-lt);color:var(--blue);font-weight:600;border:1px solid var(--blue-md)}
+.cfg-nav-item.active{background:var(--blue-lt);color:var(--blue);font-weight:600;border-color:var(--blue-md)}
 .cfg-nav-item.active svg{opacity:1}
-.cfg-main{flex:1;min-width:0}
+.cfg-main{flex:1;min-width:0;padding-left:32px}
 .cfg-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:22px 24px;margin-bottom:16px}
 .cfg-section-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px}
 .cfg-section-sub{font-size:12px;color:var(--text-3);margin-bottom:18px;line-height:1.5}
@@ -1009,11 +1012,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .cfg-danger-btn:hover{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.35)}
 /* Settings responsive */
 @media(max-width:768px){
-  .cfg-layout{flex-direction:column;padding:16px;gap:16px}
-  .cfg-nav{width:100%;display:flex;flex-wrap:wrap;gap:4px}
-  .cfg-nav-title{display:none;width:100%}
+  .cfg-layout{flex-direction:column;padding:16px;gap:0;min-height:auto}
+  .cfg-nav{width:100%;border-right:none;border-bottom:1px solid var(--border);padding:0 0 12px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:4px}
+  .cfg-nav-title{display:none}
   .cfg-nav-item{font-size:11.5px;padding:7px 11px}
   .cfg-section{padding:16px}
+  .cfg-main{padding-left:0}
 }
 
 
