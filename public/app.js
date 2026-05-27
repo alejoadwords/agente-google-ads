@@ -254,6 +254,15 @@ function updateUserUI(u){
   }
   const greeting=document.getElementById('home-greeting');
   if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
+  // Mostrar botón de referidos si tiene plan pago o es admin
+  setTimeout(initReferralButton, 100);
+}
+
+function initReferralButton() {
+  const btn = document.getElementById('sb-referral-btn');
+  if (!btn) return;
+  const isPaid = userPlan === 'pro' || userPlan === 'individual' || userPlan === 'agencia' || userPlan === 'agency' || isAdminUser();
+  if (isPaid) btn.style.display = 'flex';
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
@@ -10978,6 +10987,20 @@ function openSettings() {
   const overlay = document.getElementById('settings-overlay');
   panel.style.display = 'flex';
   overlay.style.display = 'block';
+
+  // Bind nav buttons via event delegation (works on all browsers/devices)
+  const nav = panel.querySelector('.cfg-nav');
+  if (nav && !nav._tabListenerBound) {
+    nav._tabListenerBound = true;
+    nav.addEventListener('click', function(e) {
+      const item = e.target.closest('.cfg-nav-item');
+      if (item && item.dataset.tab) {
+        e.stopPropagation();
+        switchSettingsTab(item.dataset.tab);
+      }
+    });
+  }
+
   // Poblar datos de cuenta
   if (clerkInstance && clerkInstance.user) {
     const u = clerkInstance.user;
@@ -10987,7 +11010,15 @@ function openSettings() {
     document.getElementById('cfg-avatar').textContent = initials;
     document.getElementById('cfg-name').textContent = name;
     document.getElementById('cfg-email').textContent = email;
-    document.getElementById('cfg-plan').textContent = userPlan === 'pro' ? 'Pro' : 'Free';
+    const isAgencyPlan = userPlan === 'agency' || userPlan === 'agencia' || isAdminUser();
+    const isIndividualPlan = userPlan === 'individual';
+    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : 'Free';
+    const planCard = document.getElementById('cfg-plan-card-name');
+    const planDesc = document.getElementById('cfg-plan-card-desc');
+    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : 'Plan Free';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
+    const upgradeBtn = document.querySelector('#cfg-plan-card .cfg-upgrade-btn');
+    if (upgradeBtn) upgradeBtn.textContent = (isAgencyPlan || isIndividualPlan) ? 'Gestionar' : 'Mejorar plan';
   }
   // Sincronizar estado de conexiones — sessionStorage primero, localStorage como fallback
   const metaToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
@@ -11002,6 +11033,8 @@ function openSettings() {
   const liName  = sessionStorage.getItem('linkedin_user_name')    || localStorage.getItem('linkedin_user_name_persist') || '';
   if (liToken && !sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', liToken);
   if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName);
+  // Show first tab
+  switchSettingsTab('perfil');
 }
 
 function closeSettings() {
@@ -11010,22 +11043,23 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  ['connections','account','referral'].forEach(t => {
-    const content = document.getElementById('stab-content-'+t);
-    if (content) content.style.display = t === tab ? 'block' : 'none';
-    const btn = document.getElementById('stab-'+t);
-    if (!btn) return;
-    if (t === tab) {
-      btn.style.color = 'var(--blue)';
-      btn.style.borderBottom = '2px solid var(--blue)';
-      btn.style.fontWeight = '600';
-    } else {
-      btn.style.color = 'var(--muted)';
-      btn.style.borderBottom = '2px solid transparent';
-      btn.style.fontWeight = '500';
-    }
+  // New cfg-sec-* section IDs (redesigned settings panel)
+  const sections = ['perfil','plan','integraciones','notificaciones','referral'];
+  sections.forEach(t => {
+    const sec = document.getElementById('cfg-sec-'+t);
+    if (sec) sec.style.display = t === tab ? 'block' : 'none';
   });
-  // Cargar datos al abrir tab de referidos
+  // Update nav active state
+  const panel = document.getElementById('settings-panel');
+  if (panel) {
+    panel.querySelectorAll('.cfg-nav-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === tab);
+    });
+  }
+  // Scroll content area back to top
+  const wrap = panel ? panel.querySelector('.cfg-wrap') : null;
+  if (wrap) wrap.scrollTop = 0;
+  // Load referral data when opening that tab
   if (tab === 'referral') loadReferralData();
 }
 
