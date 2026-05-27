@@ -3231,6 +3231,9 @@ window.onload = async () => {
   // Inicializar panel de agencia si aplica
   setTimeout(function(){ agencyInit().then(function(){ if(document.getElementById('view-agency').classList.contains('active')) agencyRender(); }); }, 400);
 
+  // Inicializar botón de referidos
+  setTimeout(initReferralButton, 600);
+
   showView('home');
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
@@ -6380,9 +6383,11 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  ['connections','account'].forEach(t => {
-    document.getElementById('stab-content-'+t).style.display = t === tab ? 'block' : 'none';
+  ['connections','account','referral'].forEach(t => {
+    const content = document.getElementById('stab-content-'+t);
+    if (content) content.style.display = t === tab ? 'block' : 'none';
     const btn = document.getElementById('stab-'+t);
+    if (!btn) return;
     if (t === tab) {
       btn.style.color = 'var(--blue)';
       btn.style.borderBottom = '2px solid var(--blue)';
@@ -6393,6 +6398,171 @@ function switchSettingsTab(tab) {
       btn.style.fontWeight = '500';
     }
   });
+  if (tab === 'referral') loadReferralDataInSettings();
+}
+
+// ── SISTEMA DE REFERIDOS ─────────────────────────────────────────────────────
+
+let _referralCode = null;
+
+async function loadReferralCode() {
+  if (_referralCode) return _referralCode;
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return null;
+  try {
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch(`/api/referral?action=my-code&userId=${encodeURIComponent(userId)}`, { headers });
+    if (!res.ok) return null;
+    const { code } = await res.json();
+    _referralCode = code || null;
+    return _referralCode;
+  } catch { return null; }
+}
+
+async function loadReferralStats() {
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return null;
+  try {
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch(`/api/referral?action=stats&userId=${encodeURIComponent(userId)}`, { headers });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function getReferralLink(code) {
+  const base = window.location.origin;
+  return `${base}?ref=${code}`;
+}
+
+async function loadReferralDataInSettings() {
+  const code = await loadReferralCode();
+  const linkBox = document.getElementById('ref-link-box');
+  if (linkBox) linkBox.textContent = code ? getReferralLink(code) : 'Sin código asignado';
+
+  const stats = await loadReferralStats();
+  if (stats) {
+    const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    el('ref-stat-total',   stats.total   ?? '—');
+    el('ref-stat-active',  stats.active  ?? '—');
+    el('ref-stat-earned',  stats.earned  != null ? `$${stats.earned.toFixed(2)}` : '—');
+    el('ref-stat-pending', stats.pending != null ? `$${stats.pending.toFixed(2)}` : '—');
+    renderReferralTable(stats.referrals || []);
+  }
+}
+
+function renderReferralTable(referrals) {
+  const tbody = document.getElementById('ref-table-body');
+  if (!tbody) return;
+  if (!referrals.length) {
+    tbody.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Aún no tienes referidos registrados.</div>';
+    return;
+  }
+  tbody.innerHTML = referrals.map(r => {
+    const badge = r.status === 'active'
+      ? '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#DCFCE7;color:#16a34a;font-weight:600">activo</span>'
+      : r.status === 'registered'
+      ? '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#FEF9C3;color:#ca8a04;font-weight:600">pendiente</span>'
+      : '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#FEE2E2;color:#dc2626;font-weight:600">cancelado</span>';
+    const email = r.referred_email || '—';
+    const earned = r.total_earned != null ? `$${parseFloat(r.total_earned).toFixed(2)}` : '$0.00';
+    return `<div style="padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border2);font-size:12px">
+      <div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${email}</div>
+      <div style="font-weight:600;color:var(--text);flex-shrink:0">${earned}</div>
+      <div style="flex-shrink:0">${badge}</div>
+    </div>`;
+  }).join('');
+}
+
+async function openReferralModal() {
+  const modal = document.getElementById('referral-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const code = await loadReferralCode();
+  const urlEl = document.getElementById('ref-modal-url');
+  if (urlEl) urlEl.textContent = code ? getReferralLink(code) : 'Sin código';
+
+  const stats = await loadReferralStats();
+  if (stats) {
+    const s = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    s('ref-modal-count',   stats.active  ?? '—');
+    s('ref-modal-earned',  stats.earned  != null ? `$${stats.earned.toFixed(2)}` : '—');
+    s('ref-modal-pending', stats.pending != null ? `$${stats.pending.toFixed(2)}` : '—');
+  }
+}
+
+function closeReferralModal() {
+  const modal = document.getElementById('referral-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function copyReferralLink() {
+  const code = await loadReferralCode();
+  if (!code) return;
+  const link = getReferralLink(code);
+  try {
+    await navigator.clipboard.writeText(link);
+    // Feedback en el modal
+    const btn = document.getElementById('ref-modal-copy-btn');
+    if (btn) {
+      btn.classList.add('copied');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Copiado';
+      setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
+    }
+    // Feedback en settings panel también
+    const settingsBtn = document.getElementById('ref-copy-btn');
+    if (settingsBtn) {
+      const origText = settingsBtn.textContent;
+      settingsBtn.textContent = '✓ Copiado';
+      settingsBtn.style.background = 'var(--success)';
+      setTimeout(() => { settingsBtn.textContent = origText; settingsBtn.style.background = ''; }, 2000);
+    }
+  } catch { /* fallback */ }
+}
+
+function shareReferralWhatsApp() {
+  loadReferralCode().then(code => {
+    if (!code) return;
+    const link = getReferralLink(code);
+    const msg = encodeURIComponent(`¡Te invito a probar Acuarius, la IA para marketing digital! Regístrate con mi link y obtén acceso: ${link}`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  });
+}
+
+function shareReferralEmail() {
+  loadReferralCode().then(code => {
+    if (!code) return;
+    const link = getReferralLink(code);
+    const subject = encodeURIComponent('Te invito a Acuarius — IA para marketing digital');
+    const body = encodeURIComponent(`Hola,\n\nTe comparto Acuarius, una herramienta de IA especializada en marketing digital (Google Ads, Meta Ads, SEO y más).\n\nRegístrate con mi enlace: ${link}\n\n¡Saludos!`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  });
+}
+
+function shareReferralLinkedIn() {
+  loadReferralCode().then(code => {
+    if (!code) return;
+    const link = encodeURIComponent(getReferralLink(code));
+    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${link}`, '_blank');
+  });
+}
+
+async function initReferralButton() {
+  // Mostrar el botón de referidos solo si el usuario tiene plan activo (no free)
+  const btn = document.getElementById('sb-referral-btn');
+  if (!btn) return;
+  const isPaid = userPlan === 'pro' || userPlan === 'individual' || userPlan === 'agencia' || userPlan === 'agency' || isAdminUser();
+  if (isPaid) {
+    btn.style.display = 'flex';
+    // Pre-cargar el código en background
+    loadReferralCode();
+  }
 }
 
 // =============================================
