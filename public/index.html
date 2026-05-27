@@ -963,7 +963,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .cfg-close-btn:hover{background:var(--bg-card);color:var(--text)}
 .cfg-nav{width:220px;flex-shrink:0;padding:0 16px 24px 0;border-right:1px solid var(--border)}
 .cfg-nav-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding:0 12px 12px;margin-bottom:4px}
-.cfg-nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r);font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all .15s var(--ease);margin-bottom:2px;border:1px solid transparent}
+.cfg-nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r);font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all .15s var(--ease);margin-bottom:2px;border:1px solid transparent;width:100%;text-align:left;background:none;font-family:var(--font);line-height:1.4}
 .cfg-nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7;transition:opacity .15s;pointer-events:none}
 .cfg-nav-item:hover{background:var(--bg-muted);color:var(--text)}
 .cfg-nav-item.active{background:var(--blue-lt);color:var(--blue);font-weight:600;border-color:var(--blue-md)}
@@ -2591,29 +2591,29 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     <div class="cfg-layout">
 
       <!-- Left nav -->
-      <nav class="cfg-nav">
+      <div class="cfg-nav">
         <div class="cfg-nav-title">Secciones</div>
-        <div class="cfg-nav-item active" data-tab="perfil" onclick="switchSettingsTab('perfil')">
+        <button type="button" class="cfg-nav-item active" data-tab="perfil" onclick="switchSettingsTab('perfil')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           Perfil
-        </div>
-        <div class="cfg-nav-item" data-tab="plan" onclick="switchSettingsTab('plan')">
+        </button>
+        <button type="button" class="cfg-nav-item" data-tab="plan" onclick="switchSettingsTab('plan')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
           Plan y facturación
-        </div>
-        <div class="cfg-nav-item" data-tab="integraciones" onclick="switchSettingsTab('integraciones')">
+        </button>
+        <button type="button" class="cfg-nav-item" data-tab="integraciones" onclick="switchSettingsTab('integraciones')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           Integraciones
-        </div>
-        <div class="cfg-nav-item" data-tab="notificaciones" onclick="switchSettingsTab('notificaciones')">
+        </button>
+        <button type="button" class="cfg-nav-item" data-tab="notificaciones" onclick="switchSettingsTab('notificaciones')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           Notificaciones
-        </div>
-        <div class="cfg-nav-item" data-tab="referral" onclick="switchSettingsTab('referral')">
+        </button>
+        <button type="button" class="cfg-nav-item" data-tab="referral" onclick="switchSettingsTab('referral')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Referidos
-        </div>
-      </nav>
+        </button>
+      </div>
 
       <!-- Right content -->
       <div class="cfg-main">

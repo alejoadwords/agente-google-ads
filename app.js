@@ -249,6 +249,8 @@ function updateUserUI(u){
   }
   const greeting=document.getElementById('home-greeting');
   if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.innerHTML=t+', '+name+' 👋<br><span class="accent">¿En qué trabajamos hoy?</span>';}
+  // Inicializar referral button aquí también (userPlan ya está seteado)
+  setTimeout(initReferralButton, 100);
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
