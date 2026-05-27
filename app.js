@@ -4216,7 +4216,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       if (window.innerWidth <= 768) closeSidebar();
     });
   });
-  document.querySelectorAll('.sb-agent-header').forEach(header => {
+  document.querySelectorAll('.sb-agent-row').forEach(header => {
     header.addEventListener('click', function() {
       if (window.innerWidth <= 768) {
         // No cerrar al expandir — dejar que el usuario vea los subitems
@@ -6386,8 +6386,17 @@ function openSettings() {
     document.getElementById('cfg-avatar').textContent = initials;
     document.getElementById('cfg-name').textContent = name;
     document.getElementById('cfg-email').textContent = email;
-    document.getElementById('cfg-plan').textContent = userPlan === 'pro' ? 'Pro' : 'Free';
+    document.getElementById('cfg-plan').textContent = userPlan === 'agencia' ? 'Plan Agencia' : userPlan === 'individual' ? 'Plan Individual' : 'Free';
+    // Update plan card
+    const planCard = document.getElementById('cfg-plan-card-name');
+    const planDesc = document.getElementById('cfg-plan-card-desc');
+    if (planCard) planCard.textContent = userPlan === 'agencia' ? 'Plan Agencia · Activo' : userPlan === 'individual' ? 'Plan Individual · Activo' : 'Plan Free';
+    if (planDesc) planDesc.textContent = userPlan === 'agencia' ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : userPlan === 'individual' ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
+    const upgradeBtn = document.querySelector('#cfg-plan-card .cfg-upgrade-btn');
+    if (upgradeBtn) upgradeBtn.textContent = (userPlan === 'agencia' || userPlan === 'individual') ? 'Gestionar' : 'Mejorar plan';
   }
+  // Show first tab by default (perfil)
+  switchSettingsTab('perfil');
 }
 
 function closeSettings() {
@@ -6396,20 +6405,14 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  ['connections','account','referral'].forEach(t => {
-    const content = document.getElementById('stab-content-'+t);
-    if (content) content.style.display = t === tab ? 'block' : 'none';
-    const btn = document.getElementById('stab-'+t);
-    if (!btn) return;
-    if (t === tab) {
-      btn.style.color = 'var(--blue)';
-      btn.style.borderBottom = '2px solid var(--blue)';
-      btn.style.fontWeight = '600';
-    } else {
-      btn.style.color = 'var(--muted)';
-      btn.style.borderBottom = '2px solid transparent';
-      btn.style.fontWeight = '500';
-    }
+  const sections = ['perfil','plan','integraciones','notificaciones','referral'];
+  sections.forEach(t => {
+    const sec = document.getElementById('cfg-sec-'+t);
+    if (sec) sec.style.display = t === tab ? 'block' : 'none';
+  });
+  // Update nav active state
+  document.querySelectorAll('.cfg-nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
   });
   if (tab === 'referral') loadReferralDataInSettings();
 }

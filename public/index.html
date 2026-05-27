@@ -942,70 +942,80 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .modal-close-btn:hover { background: var(--border); color: var(--text); }
 .modal-inner { position: relative; }
 
-/* ── SETTINGS SCREEN ─────────────────────────────────────────────────────── */
-.cfg-wrap { flex: 1; overflow-y: auto; background: var(--bg-subtle); scrollbar-width: none; }
-.cfg-wrap::-webkit-scrollbar { display: none; }
-.cfg-layout { display: flex; max-width: 940px; margin: 0 auto; padding: 28px 24px; gap: 24px; }
-.cfg-nav { width: 200px; flex-shrink: 0; }
-.cfg-nav-title { font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); padding: 0 10px; margin-bottom: 8px; }
-.cfg-nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: var(--r); font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer; transition: all .15s var(--ease); border: 1px solid transparent; }
-.cfg-nav-item:hover { background: var(--bg-card); color: var(--text); }
-.cfg-nav-item.active { background: var(--bg-card); color: var(--blue); font-weight: 600; border-color: var(--border); }
-.cfg-nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
-.cfg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-.cfg-section { background: var(--bg-card); border: 1.5px solid var(--border); border-radius: var(--rxl); padding: 24px 28px; box-shadow: var(--shadow-sm); }
-.cfg-section-title { font-size: 14px; font-weight: 800; letter-spacing: -.2px; color: var(--text); margin-bottom: 4px; }
-.cfg-section-sub { font-size: 12px; color: var(--text-3); margin-bottom: 20px; }
-.cfg-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
-.cfg-row:last-child { border-bottom: none; padding-bottom: 0; }
-.cfg-label { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
-.cfg-value { font-size: 13px; color: var(--text-2); }
-.cfg-edit-btn { padding: 6px 14px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--bg); font-family: var(--font); font-size: 12px; font-weight: 600; color: var(--text-2); cursor: pointer; transition: all .15s var(--ease); }
-.cfg-edit-btn:hover { border-color: var(--blue-md); color: var(--blue); background: var(--blue-lt); }
-.cfg-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-.cfg-avatar-big { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, var(--blue), #5E6AD2); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: #fff; box-shadow: var(--shadow-blue); flex-shrink: 0; }
-.cfg-avatar-info { flex: 1; }
-.cfg-avatar-name { font-size: 15px; font-weight: 800; letter-spacing: -.2px; color: var(--text); margin-bottom: 2px; }
-.cfg-avatar-email { font-size: 12px; color: var(--text-3); }
-.cfg-plan-card { background: linear-gradient(135deg, var(--blue-lt) 0%, #E8EAFC 100%); border: 1.5px solid var(--blue-md); border-radius: var(--rlg); padding: 18px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
-.cfg-plan-icon { font-size: 28px; flex-shrink: 0; }
-.cfg-plan-info { flex: 1; }
-.cfg-plan-name { font-size: 14px; font-weight: 800; color: var(--blue); margin-bottom: 2px; }
-.cfg-plan-desc { font-size: 12px; color: var(--blue-mid); }
-.cfg-upgrade-btn { padding: 9px 18px; border-radius: 9px; background: var(--blue); color: #fff; font-family: var(--font); font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all .15s var(--ease); box-shadow: var(--shadow-blue); white-space: nowrap; }
-.cfg-upgrade-btn:hover { background: var(--blue-h); transform: translateY(-1px); }
-.integration-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.integration-row:last-child { border-bottom: none; }
-.int-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); flex-shrink: 0; }
-.int-info { flex: 1; }
-.int-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1px; }
-.int-status { font-size: 11px; color: var(--text-3); }
-.int-status.connected { color: var(--success); font-weight: 600; }
-.int-badge { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
-.int-badge.on { background: rgba(5,150,105,.1); color: var(--success); border: 1px solid rgba(5,150,105,.2); }
-.int-badge.off { background: var(--bg-muted); color: var(--text-3); border: 1px solid var(--border); }
-.cfg-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.cfg-toggle-row:last-child { border-bottom: none; }
-.cfg-toggle-label { font-size: 13px; font-weight: 500; color: var(--text); }
-.cfg-toggle-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
-.toggle { width: 38px; height: 22px; border-radius: 11px; background: var(--bg-muted); border: 1.5px solid var(--border); cursor: pointer; position: relative; transition: all .2s var(--ease); flex-shrink: 0; }
-.toggle.on { background: var(--blue); border-color: var(--blue); }
-.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .2s var(--ease); }
-.toggle.on::after { transform: translateX(16px); }
-.cfg-danger-btn { padding: 9px 18px; border-radius: 9px; background: rgba(220,38,38,.07); color: var(--danger); font-family: var(--font); font-size: 13px; font-weight: 600; border: 1.5px solid rgba(220,38,38,.2); cursor: pointer; transition: all .15s var(--ease); }
-.cfg-danger-btn:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.35); }
+/* ── SIDEBAR REDESIGN — new agent rows ── */
+.sb-new{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--r);cursor:pointer;font-size:12.5px;font-weight:600;color:var(--blue);transition:all .18s var(--ease);border:1px solid var(--blue-md);background:var(--blue-lt);margin-bottom:6px}
+.sb-new:hover{background:#E0E3FB;border-color:var(--blue-mid)}
+.sb-new svg{width:14px;height:14px;flex-shrink:0}
+.sb-agent-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r);cursor:pointer;transition:all .18s var(--ease);border:1px solid transparent;user-select:none;margin-top:1px}
+.sb-agent-row:hover,.sb-agent-row.open{background:var(--bg-muted)}
+.sb-agent-row:hover .sb-agent-name,.sb-agent-row.open .sb-agent-name{color:var(--text)}
+.sb-dot{width:4px;height:4px;border-radius:50%;background:var(--border);flex-shrink:0;margin-left:2px}
+.sb-item.active .sb-dot{background:var(--blue)}
+.sb-divider{height:1px;background:var(--border);margin:6px 4px}
 
+/* ── SETTINGS FULL-PAGE redesign ── */
+.cfg-settings-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10;flex-shrink:0}
+.cfg-settings-title{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.2px}
+.cfg-close-btn{width:32px;height:32px;border-radius:9px;background:var(--bg-muted);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-2);transition:all .15s var(--ease)}
+.cfg-close-btn:hover{background:var(--bg-card);color:var(--text)}
+.cfg-nav{width:200px;flex-shrink:0}
+.cfg-nav-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);padding:0 12px 10px}
+.cfg-nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r);font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all .15s var(--ease);margin-bottom:2px}
+.cfg-nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.cfg-nav-item:hover{background:var(--bg-muted);color:var(--text)}
+.cfg-nav-item.active{background:var(--blue-lt);color:var(--blue);font-weight:600;border:1px solid var(--blue-md)}
+.cfg-nav-item.active svg{opacity:1}
+.cfg-main{flex:1;min-width:0}
+.cfg-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:22px 24px;margin-bottom:16px}
+.cfg-section-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px}
+.cfg-section-sub{font-size:12px;color:var(--text-3);margin-bottom:18px;line-height:1.5}
+.cfg-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);gap:12px}
+.cfg-row:last-child{border-bottom:none;padding-bottom:0}
+.cfg-label{font-size:12.5px;color:var(--text-2);font-weight:500;flex-shrink:0}
+.cfg-value{font-size:12.5px;color:var(--text);font-weight:600;flex:1;text-align:right}
+.cfg-edit-btn{font-size:11.5px;font-weight:600;color:var(--blue);background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px;padding:5px 11px;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all .15s var(--ease);flex-shrink:0}
+.cfg-edit-btn:hover{background:#E0E3FB}
+.cfg-avatar-row{display:flex;align-items:center;gap:16px;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.cfg-avatar-big{width:56px;height:56px;border-radius:16px;background:var(--blue-lt);border:2px solid var(--blue-md);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:var(--blue);flex-shrink:0}
+.cfg-avatar-info{flex:1}
+.cfg-avatar-name{font-size:15px;font-weight:700;color:var(--text)}
+.cfg-avatar-email{font-size:12px;color:var(--text-3);margin-top:2px}
+.cfg-plan-card{display:flex;align-items:center;gap:14px;padding:16px;background:var(--blue-lt);border:1.5px solid var(--blue-md);border-radius:var(--rlg);margin-bottom:14px}
+.cfg-plan-icon{font-size:24px;flex-shrink:0}
+.cfg-plan-info{flex:1}
+.cfg-plan-name{font-size:14px;font-weight:700;color:var(--blue)}
+.cfg-plan-desc{font-size:11.5px;color:var(--text-2);margin-top:2px;line-height:1.4}
+.cfg-upgrade-btn{padding:8px 16px;background:var(--blue);color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s var(--ease);white-space:nowrap}
+.cfg-upgrade-btn:hover{background:var(--blue-mid)}
+.integration-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border)}
+.integration-row:last-child{border-bottom:none}
+.int-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.int-info{flex:1;min-width:0}
+.int-name{font-size:13px;font-weight:600;color:var(--text)}
+.int-status{font-size:11px;color:var(--text-3)}
+.int-status.connected{color:var(--success);font-weight:600}
+.int-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px}
+.int-badge.on{background:rgba(5,150,105,.1);color:var(--success);border:1px solid rgba(5,150,105,.2)}
+.int-badge.off{background:var(--bg-muted);color:var(--text-3);border:1px solid var(--border)}
+.cfg-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.cfg-toggle-row:last-child{border-bottom:none}
+.cfg-toggle-label{font-size:13px;font-weight:500;color:var(--text)}
+.cfg-toggle-sub{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.toggle{width:38px;height:22px;border-radius:11px;background:var(--bg-muted);border:1.5px solid var(--border);cursor:pointer;position:relative;transition:all .2s var(--ease);flex-shrink:0}
+.toggle.on{background:var(--blue);border-color:var(--blue)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s var(--ease)}
+.toggle.on::after{transform:translateX(16px)}
+.cfg-danger-btn{padding:9px 18px;border-radius:9px;background:rgba(220,38,38,.07);color:var(--danger);font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid rgba(220,38,38,.2);cursor:pointer;transition:all .15s var(--ease)}
+.cfg-danger-btn:hover{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.35)}
 /* Settings responsive */
-@media (max-width: 768px) {
-  .cfg-layout { flex-direction: column; padding: 16px; gap: 16px; }
-  .cfg-nav { width: 100%; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-  .cfg-nav::-webkit-scrollbar { display: none; }
-  .cfg-nav-title { display: none; }
-  .cfg-nav-item { white-space: nowrap; font-size: 12px; padding: 7px 12px; }
-  .cfg-section { padding: 18px 16px; }
-  .modal-inner { padding: 24px 20px 20px; }
-  .modal-socials { grid-template-columns: repeat(2,1fr); }
+@media(max-width:768px){
+  .cfg-layout{flex-direction:column;padding:16px;gap:16px}
+  .cfg-nav{width:100%;display:flex;flex-wrap:wrap;gap:4px}
+  .cfg-nav-title{display:none;width:100%}
+  .cfg-nav-item{font-size:11.5px;padding:7px 11px}
+  .cfg-section{padding:16px}
 }
+
 
 </style>
 </head>
@@ -1054,267 +1064,240 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
 
+    <!-- AGENTES -->
+    <div class="sb-section">Agentes</div>
+
     <!-- Consultor de Marketing -->
-    <div class="sb-agent-header" onclick="toggleAgent('consultor')">
-      <div class="sb-agent-icon" style="background:#F3F0FF;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#7C3AED"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('consultor')">
+      <div class="sb-agent-dot" style="background:#7C3AED"></div>
       <span class="sb-agent-name">Consultor</span>
-      <svg class="sb-chevron" id="chev-consultor" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="sb-chevron" id="chev-consultor" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-consultor">
-      <!-- Nueva conversación -->
       <div class="sb-new-conv" onclick="startNewConversation('consultor')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
         <div class="sb-item" onclick="switchSb(this);qSend('Necesito una estrategia de marketing digital completa para mi negocio')">
-          <div class="sb-icon-sm"></div>estrategia integral
+          <div class="sb-dot"></div>estrategia integral
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a definir cuánto invertir en marketing digital y cómo distribuir el presupuesto')">
-          <div class="sb-icon-sm"></div>distribución de presupuesto
+          <div class="sb-dot"></div>distribución de presupuesto
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Analiza mi situación de marketing digital y dime qué canales debo priorizar')">
-          <div class="sb-icon-sm"></div>diagnóstico de canales
+          <div class="sb-dot"></div>diagnóstico de canales
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Explícame cómo medir el ROI de mis inversiones en marketing digital')">
-          <div class="sb-icon-sm"></div>medición y ROI
+          <div class="sb-dot"></div>medición y ROI
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('¿Qué herramientas de marketing digital necesito para mi negocio?')">
-          <div class="sb-icon-sm"></div>stack de herramientas
+          <div class="sb-dot"></div>stack de herramientas
         </div>
       </div>
     </div>
 
     <!-- Google Ads -->
-    <div class="sb-agent-header" onclick="toggleAgent('ga')">
-      <div class="sb-agent-icon" style="background:#EEF0FD;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="13" height="13" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('ga')">
+      <div class="sb-agent-dot" style="background:#1E2BCC"></div>
       <span class="sb-agent-name">Google Ads</span>
-      <svg class="sb-chevron" id="chev-ga" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="sb-chevron" id="chev-ga" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-ga">
-      <!-- Nueva conversación -->
       <div class="sb-new-conv" onclick="startNewConversation('google-ads')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
         <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='google-ads')openAgent('google-ads');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Google Ads para mi negocio')">
-          <div class="sb-icon-sm"></div>planeación de campaña
+          <div class="sb-dot"></div>planeación de campaña
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto y estrategia de pujas para mi negocio en Google Ads')">
-          <div class="sb-icon-sm"></div>presupuesto
+          <div class="sb-dot"></div>presupuesto
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Hacer keyword research completo para mi negocio')">
-          <div class="sb-icon-sm"></div>keywords
+          <div class="sb-dot"></div>keywords
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Crear anuncios RSA completos para mi campaña principal de Google Ads')">
-          <div class="sb-icon-sm"></div>anuncios rsa
+          <div class="sb-dot"></div>anuncios rsa
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mi cuenta de Google Ads y dame recomendaciones de optimización')">
-          <div class="sb-icon-sm"></div>análisis y optimización
+          <div class="sb-dot"></div>análisis y optimización
         </div>
       </div>
     </div>
 
     <!-- Meta Ads -->
-    <div class="sb-agent-header" onclick="toggleAgent('meta')">
-      <div class="sb-agent-icon" style="background:#E7F0FF;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="#0866FF"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('meta')">
+      <div class="sb-agent-dot" style="background:#0668E1"></div>
       <span class="sb-agent-name">Meta Ads</span>
-      <svg class="sb-chevron" id="chev-meta" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="sb-chevron" id="chev-meta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-meta">
-      <!-- Nueva conversación -->
       <div class="sb-new-conv" onclick="startNewConversation('meta-ads')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
         <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='meta-ads')openAgent('meta-ads');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio')">
-          <div class="sb-icon-sm"></div>planeación de campaña
+          <div class="sb-dot"></div>planeación de campaña
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto para Meta Ads según mi negocio y objetivos')">
-          <div class="sb-icon-sm"></div>presupuesto
+          <div class="sb-dot"></div>presupuesto
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Crear copys profesionales para anuncios de Meta Ads para mi negocio')">
-          <div class="sb-icon-sm"></div>copys
+          <div class="sb-dot"></div>copys
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización')">
-          <div class="sb-icon-sm"></div>análisis y optimización
+          <div class="sb-dot"></div>análisis y optimización
         </div>
       </div>
     </div>
 
     <!-- TikTok Ads -->
-    <div class="sb-agent-header" onclick="toggleAgent('tiktok')">
-      <div class="sb-agent-icon" style="background:#F0F0F0;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('tiktok')">
+      <div class="sb-agent-dot" style="background:#EE1D52"></div>
       <span class="sb-agent-name">TikTok Ads</span>
-      <svg class="sb-chevron" id="chev-tiktok" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="sb-chevron" id="chev-tiktok" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-tiktok">
-      <!-- Nueva conversación -->
       <div class="sb-new-conv" onclick="startNewConversation('tiktok-ads')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <!-- Historial -->
       <div class="sb-hist-section" id="hist-section-tiktok-ads" style="display:none">
         <div class="sb-section-label">historial</div>
         <div id="hist-list-tiktok-ads"></div>
       </div>
-      <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
         <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='tiktok-ads')openAgent('tiktok-ads');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
         <div class="sb-item" onclick="qSend('Ayúdame a planear una campaña completa de TikTok Ads para mi negocio')">
-          <div class="sb-icon-sm"></div>planeación de campaña
+          <div class="sb-dot"></div>planeación de campaña
         </div>
         <div class="sb-item" onclick="qSend('Dame guión, hooks y estrategia para anuncios de video en TikTok Ads')">
-          <div class="sb-icon-sm"></div>anuncios de video
+          <div class="sb-dot"></div>anuncios de video
         </div>
         <div class="sb-item" onclick="qSend('Analizar el rendimiento de mis campañas de TikTok Ads y dame recomendaciones')">
-          <div class="sb-icon-sm"></div>análisis y optimización
+          <div class="sb-dot"></div>análisis y optimización
         </div>
       </div>
     </div>
 
     <!-- LinkedIn Ads -->
-    <div class="sb-agent-header" onclick="toggleAgent('linkedin')">
-      <div class="sb-agent-icon" style="background:#E8F3FC;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('linkedin')">
+      <div class="sb-agent-dot" style="background:#0A66C2"></div>
       <span class="sb-agent-name">LinkedIn Ads</span>
+      <svg class="sb-chevron" id="chev-linkedin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-linkedin">
       <div class="sb-item sb-roadmap" onclick="switchSb(this);openRoadmap()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         hoja de ruta
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de LinkedIn Ads para mi negocio B2B')">
-        <div class="sb-icon-sm"></div>planeación de campaña
+        <div class="sb-dot"></div>planeación de campaña
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto para LinkedIn Ads según mi negocio y objetivos B2B')">
-        <div class="sb-icon-sm"></div>presupuesto
+        <div class="sb-dot"></div>presupuesto
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Crear copys profesionales para anuncios de LinkedIn Ads orientados a audiencia B2B')">
-        <div class="sb-icon-sm"></div>copys
+        <div class="sb-dot"></div>copys
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Dame especificaciones y textos para anuncios gráficos en LinkedIn')">
-        <div class="sb-icon-sm"></div>anuncios gráficos
+        <div class="sb-dot"></div>anuncios gráficos
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Dame guión y estrategia para anuncios de video en LinkedIn Ads')">
-        <div class="sb-icon-sm"></div>anuncios de video
+        <div class="sb-dot"></div>anuncios de video
       </div>
       <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mis campañas de LinkedIn Ads y dame recomendaciones de optimización')">
-        <div class="sb-icon-sm"></div>análisis y optimización
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Generar reporte completo de mis campañas de LinkedIn Ads')">
-        <div class="sb-icon-sm"></div>reportes
+        <div class="sb-dot"></div>análisis y optimización
       </div>
     </div>
 
     <!-- SEO -->
-    <div class="sb-agent-header" onclick="toggleAgent('seo')">
-      <div class="sb-agent-icon" style="background:#ECFDF5;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#059669" stroke-width="2"/><path d="M21 21l-3.5-3.5" stroke="#059669" stroke-width="2" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="#059669" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('seo')">
+      <div class="sb-agent-dot" style="background:#059669"></div>
       <span class="sb-agent-name">SEO</span>
-      <svg class="sb-chevron" id="chev-seo" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="sb-chevron" id="chev-seo" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-seo">
-      <!-- Nueva conversación -->
       <div class="sb-new-conv" onclick="startNewConversation('seo')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
         <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='seo')openAgent('seo');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Haz una auditoría técnica SEO completa de mi sitio web')">
-          <div class="sb-icon-sm"></div>auditoría técnica
+          <div class="sb-dot"></div>auditoría técnica
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Haz un estudio completo de palabras clave para SEO de mi negocio')">
-          <div class="sb-icon-sm"></div>investigación de keywords
+          <div class="sb-dot"></div>investigación de keywords
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Dame recomendaciones de optimización on-page SEO para mi sitio')">
-          <div class="sb-icon-sm"></div>optimización on-page
+          <div class="sb-dot"></div>optimización on-page
         </div>
         <div class="sb-item" onclick="switchSb(this);qSend('Cómo puedo posicionar mi negocio en las respuestas de ChatGPT, Claude, Gemini y Perplexity?')">
-          <div class="sb-icon-sm"></div>posicionamiento en IAs (AEO)
+          <div class="sb-dot"></div>posicionamiento en IAs (AEO)
         </div>
       </div>
     </div>
 
     <!-- Contenido para redes -->
-    <div class="sb-agent-header" onclick="toggleAgent('social')">
-      <div class="sb-agent-icon" style="background:#FFFBEB;border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#D97706" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#D97706" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
+    <div class="sb-agent-row" onclick="toggleAgent('social')">
+      <div class="sb-agent-dot" style="background:#D97706"></div>
       <span class="sb-agent-name">Contenido para Redes</span>
-      <svg class="sb-chevron" id="chev-social" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="sb-chevron" id="chev-social" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-social">
-      <!-- Nueva conversación -->
       <div class="sb-new-conv" onclick="startNewConversation('social')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <!-- Acciones rápidas -->
       <div class="sb-actions-section">
         <div class="sb-section-label">acciones</div>
         <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='social')openAgent('social');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-left:4px"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           hoja de ruta
         </div>
         <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia.')">
-          <div class="sb-icon-sm"></div>diagnóstico de redes
+          <div class="sb-dot"></div>diagnóstico de redes
         </div>
         <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea una parrilla de contenido para esta semana: 5-7 publicaciones listas para ejecutar.')">
-          <div class="sb-icon-sm"></div>parrilla semanal
+          <div class="sb-dot"></div>parrilla semanal
         </div>
         <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea copys y guiones listos para publicar: posts para feed, guiones para reels y textos para stories.')">
-          <div class="sb-icon-sm"></div>copys y guiones
+          <div class="sb-dot"></div>copys y guiones
         </div>
       </div>
     </div>
 
+    <div class="sb-divider"></div>
+
     <!-- RECIENTES (historial global) -->
-    <div id="recientes-section" style="display:none;border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:0 10px 6px;display:flex;align-items:center;justify-content:space-between">
-        recientes
-      </div>
+    <div id="recientes-section" style="display:none;padding-top:4px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:0 10px 6px;display:flex;align-items:center;justify-content:space-between">recientes</div>
       <div id="recientes-list"></div>
     </div>
 
-        <!-- RECIENTES (historial global) -->
     <div class="sb-recents" id="sb-recents-panel" style="display:none">
       <div class="sb-recents-label">recientes</div>
       <div id="sb-recents-list" class="sb-recents-list"></div>
@@ -2588,300 +2571,379 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 
 
 <!-- SETTINGS PANEL -->
-<div id="settings-overlay" onclick="closeSettings()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:200;backdrop-filter:blur(2px)"></div>
-<div id="settings-panel" style="display:none;position:fixed;top:0;right:0;width:340px;height:100%;background:var(--bg);border-left:1px solid var(--border);z-index:201;flex-direction:column;overflow:hidden">
-  <!-- Header -->
-  <div style="display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-    <span style="font-size:15px;font-weight:600;letter-spacing:-.2px;flex:1">Configuración</span>
-    <button onclick="closeSettings()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted)" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='none'">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+<div id="settings-overlay" onclick="closeSettings()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;backdrop-filter:blur(3px)"></div>
+<div id="settings-panel" style="display:none;position:fixed;inset:0;background:var(--bg-subtle);z-index:201;flex-direction:column;overflow:hidden">
+
+  <!-- Sticky header -->
+  <div class="cfg-settings-header">
+    <span class="cfg-settings-title">Configuración</span>
+    <button class="cfg-close-btn" onclick="closeSettings()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
   </div>
 
-  <!-- Tabs -->
-  <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 20px">
-    <button onclick="switchSettingsTab('connections')" id="stab-connections" style="font-size:12px;font-weight:600;padding:10px 0;margin-right:20px;border:none;background:none;cursor:pointer;color:var(--blue);border-bottom:2px solid var(--blue);font-family:var(--font)">Conexiones</button>
-    <button onclick="switchSettingsTab('account')" id="stab-account" style="font-size:12px;font-weight:500;padding:10px 0;margin-right:20px;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-family:var(--font)">Cuenta</button>
-    <button onclick="switchSettingsTab('referral')" id="stab-referral" style="font-size:12px;font-weight:500;padding:10px 0;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-family:var(--font)">Referidos</button>
-  </div>
+  <!-- Two-column layout -->
+  <div class="cfg-wrap">
+    <div class="cfg-layout">
 
-  <!-- Tab: Conexiones -->
-  <div id="stab-content-connections" style="flex:1;overflow-y:auto;padding:20px">
-    <p style="font-size:11px;color:var(--muted2);margin-bottom:16px;line-height:1.5">Conecta tus plataformas para que los agentes puedan acceder a tus datos en tiempo real.</p>
-
-    <!-- Google Ads -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="width:32px;height:32px;border-radius:8px;background:#E8F0FE;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      <!-- Left nav -->
+      <nav class="cfg-nav">
+        <div class="cfg-nav-title">Secciones</div>
+        <div class="cfg-nav-item active" data-tab="perfil" onclick="switchSettingsTab('perfil')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Perfil
         </div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">Google Ads</div>
-          <div style="font-size:11px;color:var(--muted)">Campañas, keywords y rendimiento</div>
+        <div class="cfg-nav-item" data-tab="plan" onclick="switchSettingsTab('plan')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          Plan y facturación
         </div>
-        <span id="adsStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
-      </div>
+        <div class="cfg-nav-item" data-tab="integraciones" onclick="switchSettingsTab('integraciones')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Integraciones
+        </div>
+        <div class="cfg-nav-item" data-tab="notificaciones" onclick="switchSettingsTab('notificaciones')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Notificaciones
+        </div>
+        <div class="cfg-nav-item" data-tab="referral" onclick="switchSettingsTab('referral')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Referidos
+        </div>
+      </nav>
 
-      <!-- Desconectado -->
-      <div id="adsDisconnected">
-        <div style="background:var(--sidebar2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar tu cuenta desbloqueas</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard en vivo con tus KPIs reales (impresiones, clicks, CPA, ROAS)</div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente de IA lee tus datos reales y da recomendaciones basadas en tus campañas, no en ejemplos</div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas automáticas cuando una campaña está quemando presupuesto <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Detección de CTR bajo, CPA spike y frecuencia alta en tiempo real <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+      <!-- Right content -->
+      <div class="cfg-main">
+
+        <!-- ── PERFIL ── -->
+        <div id="cfg-sec-perfil">
+          <div class="cfg-section">
+            <div class="cfg-avatar-row">
+              <div class="cfg-avatar-big" id="cfg-avatar">A</div>
+              <div class="cfg-avatar-info">
+                <div class="cfg-avatar-name" id="cfg-name">—</div>
+                <div class="cfg-avatar-email" id="cfg-email">—</div>
+              </div>
+            </div>
+            <div class="cfg-section-title">Información personal</div>
+            <div class="cfg-section-sub">Gestiona tus datos de cuenta</div>
+            <div class="cfg-row">
+              <span class="cfg-label">Plan actual</span>
+              <span class="cfg-value" id="cfg-plan">Free</span>
+            </div>
+            <div class="cfg-row">
+              <span class="cfg-label">Contraseña</span>
+              <span class="cfg-value">••••••••</span>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Cambiar</button>
+            </div>
+            <div class="cfg-row" style="border-bottom:none;padding-bottom:0">
+              <span class="cfg-label">Cuenta de Clerk</span>
+              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Gestionar perfil completo</button>
+            </div>
           </div>
         </div>
-        <button onclick="connectGoogleAds()" style="width:100%;padding:8px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Google →</button>
-      </div>
 
-      <!-- Conectado -->
-      <div id="adsConnected" style="display:none">
-        <!-- Email conectado -->
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--sidebar);border-radius:7px;display:flex;align-items:center;gap:6px">
-          <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#34A853"/></svg>
-          <span id="adsEmail" style="color:var(--text);font-weight:500"></span>
-        </div>
-
-        <!-- Cargando cuentas -->
-        <div id="adsAccountsLoading" style="text-align:center;padding:16px 0;display:none">
-          <div style="font-size:12px;color:var(--muted)">Cargando tus cuentas...</div>
-        </div>
-
-        <!-- Selector de cuentas -->
-        <div id="adsAccountsList" style="display:none;margin-bottom:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Tus cuentas</label>
-            <span id="adsPlanGateMsg" style="font-size:10px;color:var(--warning);display:none">Plan individual: 1 cuenta</span>
-          </div>
-          <div id="adsAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
-        </div>
-
-        <!-- Cuenta activa -->
-        <div id="adsActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
-          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
-          <div id="adsActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
-          <div id="adsActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
-          <button onclick="showAccountSelector()" style="margin-top:8px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
-        </div>
-
-        <!-- Error cargando -->
-        <div id="adsAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
-
-        <button onclick="disconnectGoogleAds()" style="width:100%;padding:7px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
-      </div>
-    </div>
-
-    <!-- Meta Ads -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="width:32px;height:32px;border-radius:8px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">Meta Ads</div>
-          <div style="font-size:11px;color:var(--muted)">Facebook e Instagram Ads</div>
-        </div>
-        <span id="metaStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
-      </div>
-      <!-- Desconectado -->
-      <div id="metaDisconnected">
-        <div style="background:var(--sidebar2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar tu cuenta desbloqueas</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard en vivo con alcance, CPM, CTR, CPA y gasto por campaña</div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente analiza tus campañas reales y te da recomendaciones basadas en tus números</div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas cuando la frecuencia sube de 3.5 o una campaña no convierte <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Monitoreo automático 3 veces al día, sin que tengas que revisar manualmente <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+        <!-- ── PLAN ── -->
+        <div id="cfg-sec-plan" style="display:none">
+          <div class="cfg-section">
+            <div class="cfg-section-title">Plan y facturación</div>
+            <div class="cfg-section-sub">Gestiona tu suscripción en Hotmart</div>
+            <div class="cfg-plan-card" id="cfg-plan-card">
+              <div class="cfg-plan-icon">⚡</div>
+              <div class="cfg-plan-info">
+                <div class="cfg-plan-name" id="cfg-plan-card-name">Plan Free</div>
+                <div class="cfg-plan-desc" id="cfg-plan-card-desc">Acceso limitado · 7 días de prueba</div>
+              </div>
+              <button class="cfg-upgrade-btn" onclick="window.open('https://pay.hotmart.com/acuarius','_blank')">Mejorar plan</button>
+            </div>
+            <div class="cfg-row">
+              <span class="cfg-label">¿Tienes un código de descuento?</span>
+              <button class="cfg-edit-btn" onclick="window.open('https://pay.hotmart.com/acuarius','_blank')">Canjear</button>
+            </div>
+            <div class="cfg-row" style="border-bottom:none;padding-bottom:0">
+              <span class="cfg-label">Historial de pagos</span>
+              <button class="cfg-edit-btn" onclick="window.open('https://app.hotmart.com/products','_blank')">Ver en Hotmart</button>
+            </div>
           </div>
         </div>
-        <button onclick="connectMetaAds()" style="width:100%;padding:8px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Meta →</button>
-      </div>
-      <!-- Conectado -->
-      <div id="metaConnected" style="display:none">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--sidebar);border-radius:7px;display:flex;align-items:center;gap:6px">
-          <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#34A853"/></svg>
-          <span id="metaUserName" style="color:var(--text);font-weight:500"></span>
-        </div>
-        <!-- Cargando cuentas -->
-        <div id="metaAccountsLoading" style="text-align:center;padding:12px 0;display:none">
-          <div style="font-size:12px;color:var(--muted)">Cargando cuentas publicitarias...</div>
-        </div>
-        <!-- Lista de cuentas -->
-        <div id="metaAccountsList" style="display:none;margin-bottom:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cuentas publicitarias</label>
+
+        <!-- ── INTEGRACIONES ── -->
+        <div id="cfg-sec-integraciones" style="display:none">
+          <p style="font-size:11px;color:var(--muted2);margin-bottom:12px;line-height:1.5">Conecta tus plataformas para que los agentes puedan acceder a tus datos en tiempo real.</p>
+
+          <!-- Google Ads -->
+          <div class="cfg-section" style="padding:16px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <div style="width:32px;height:32px;border-radius:8px;background:#E8F0FE;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">Google Ads</div>
+                <div style="font-size:11px;color:var(--muted)">Campañas, keywords y rendimiento</div>
+              </div>
+              <span id="adsStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
+            </div>
+            <div id="adsDisconnected">
+              <div style="background:var(--bg-muted);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+                <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar desbloqueas</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard en vivo con tus KPIs reales</div>
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente lee tus datos reales y da recomendaciones basadas en tus campañas</div>
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas automáticas cuando una campaña está quemando presupuesto <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+                </div>
+              </div>
+              <button onclick="connectGoogleAds()" style="width:100%;padding:8px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Google →</button>
+            </div>
+            <div id="adsConnected" style="display:none">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--bg-muted);border-radius:7px;display:flex;align-items:center;gap:6px">
+                <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#34A853"/></svg>
+                <span id="adsEmail" style="color:var(--text);font-weight:500"></span>
+              </div>
+              <div id="adsAccountsLoading" style="text-align:center;padding:16px 0;display:none"><div style="font-size:12px;color:var(--muted)">Cargando tus cuentas...</div></div>
+              <div id="adsAccountsList" style="display:none;margin-bottom:12px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Tus cuentas</label>
+                  <span id="adsPlanGateMsg" style="font-size:10px;color:var(--warning);display:none">Plan individual: 1 cuenta</span>
+                </div>
+                <div id="adsAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
+              </div>
+              <div id="adsActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
+                <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
+                <div id="adsActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+                <div id="adsActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+                <button onclick="showAccountSelector()" style="margin-top:8px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+              </div>
+              <div id="adsAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
+              <button onclick="disconnectGoogleAds()" style="width:100%;padding:7px;background:var(--bg-muted);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
+            </div>
           </div>
-          <div id="metaAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto"></div>
-        </div>
-        <!-- Cuenta activa -->
-        <div id="metaActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
-          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
-          <div id="metaActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
-          <div id="metaActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
-          <button onclick="showMetaAccountSelector()" style="margin-top:8px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
-        </div>
-        <div id="metaAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
-        <button onclick="disconnectMetaAds()" style="width:100%;padding:7px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
-      </div>
-    </div>
 
-    <!-- LinkedIn Ads -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="width:32px;height:32px;border-radius:8px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">LinkedIn Ads</div>
-          <div style="font-size:11px;color:var(--muted)">Campañas B2B en LinkedIn</div>
-        </div>
-        <span id="linkedinStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
-      </div>
-      <!-- Desconectado -->
-      <div id="linkedinDisconnected">
-        <div style="background:var(--sidebar2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar tu cuenta desbloqueas</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard con impresiones, clicks, CPL y leads generados en tiempo real</div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente analiza tus campañas B2B reales y optimiza segmentación profesional</div>
-            <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#f59e0b;font-size:11px;line-height:1.4">★</span>Alertas cuando el CPL supera el benchmark de tu industria <span style="font-size:10px;color:var(--muted2);background:var(--border);padding:1px 5px;border-radius:10px;margin-left:2px">Pro</span></div>
+          <!-- Meta Ads -->
+          <div class="cfg-section" style="padding:16px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <div style="width:32px;height:32px;border-radius:8px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">Meta Ads</div>
+                <div style="font-size:11px;color:var(--muted)">Facebook e Instagram Ads</div>
+              </div>
+              <span id="metaStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
+            </div>
+            <div id="metaDisconnected">
+              <div style="background:var(--bg-muted);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+                <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar desbloqueas</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard en vivo con alcance, CPM, CTR, CPA y gasto por campaña</div>
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente analiza tus campañas reales y te da recomendaciones basadas en tus números</div>
+                </div>
+              </div>
+              <button onclick="connectMetaAds()" style="width:100%;padding:8px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con Meta →</button>
+            </div>
+            <div id="metaConnected" style="display:none">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--bg-muted);border-radius:7px;display:flex;align-items:center;gap:6px">
+                <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#34A853"/></svg>
+                <span id="metaUserName" style="color:var(--text);font-weight:500"></span>
+              </div>
+              <div id="metaAccountsLoading" style="text-align:center;padding:12px 0;display:none"><div style="font-size:12px;color:var(--muted)">Cargando cuentas publicitarias...</div></div>
+              <div id="metaAccountsList" style="display:none;margin-bottom:12px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cuentas publicitarias</label>
+                </div>
+                <div id="metaAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto"></div>
+              </div>
+              <div id="metaActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
+                <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
+                <div id="metaActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+                <div id="metaActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+                <button onclick="showMetaAccountSelector()" style="margin-top:8px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+              </div>
+              <div id="metaAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
+              <button onclick="disconnectMetaAds()" style="width:100%;padding:7px;background:var(--bg-muted);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
+            </div>
+          </div>
+
+          <!-- LinkedIn Ads -->
+          <div class="cfg-section" style="padding:16px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <div style="width:32px;height:32px;border-radius:8px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">LinkedIn Ads</div>
+                <div style="font-size:11px;color:var(--muted)">Campañas B2B en LinkedIn</div>
+              </div>
+              <span id="linkedinStatusBadge" style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted);white-space:nowrap">sin conectar</span>
+            </div>
+            <div id="linkedinDisconnected">
+              <div style="background:var(--bg-muted);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+                <div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Al conectar desbloqueas</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>Dashboard con impresiones, clicks, CPL y leads generados</div>
+                  <div style="font-size:11px;color:var(--text);display:flex;align-items:flex-start;gap:6px"><span style="color:#22c55e;font-size:13px;line-height:1.2">✓</span>El agente analiza tus campañas B2B reales y optimiza segmentación</div>
+                </div>
+              </div>
+              <button onclick="connectLinkedInAds()" style="width:100%;padding:8px;background:#0A66C2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con LinkedIn →</button>
+            </div>
+            <div id="linkedinConnected" style="display:none">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--bg-muted);border-radius:7px;display:flex;align-items:center;gap:6px">
+                <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#0A66C2"/></svg>
+                <span id="linkedinUserName" style="color:var(--text);font-weight:500"></span>
+              </div>
+              <div id="linkedinAccountsLoading" style="text-align:center;padding:12px 0;display:none"><div style="font-size:12px;color:var(--muted)">Cargando cuentas...</div></div>
+              <div id="linkedinAccountsList" style="display:none;margin-bottom:12px">
+                <div id="linkedinAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto"></div>
+              </div>
+              <div id="linkedinActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px">
+                <div style="font-size:10px;color:#0A66C2;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
+                <div id="linkedinActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+                <div id="linkedinActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+                <button onclick="showLinkedInAccountSelector()" style="margin-top:8px;font-size:11px;color:#0A66C2;background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+              </div>
+              <div id="linkedinAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
+              <button onclick="disconnectLinkedInAds()" style="width:100%;padding:7px;background:var(--bg-muted);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
+            </div>
+          </div>
+
+          <!-- TikTok Ads — próximamente -->
+          <div class="cfg-section" style="padding:16px;margin-bottom:12px;opacity:.55">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:32px;height:32px;border-radius:8px;background:#F0F0F0;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">TikTok Ads</div>
+                <div style="font-size:11px;color:var(--muted)">Campañas en TikTok</div>
+              </div>
+              <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+            </div>
+          </div>
+
+          <!-- Página web — próximamente -->
+          <div class="cfg-section" style="padding:16px;opacity:.55">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:32px;height:32px;border-radius:8px;background:#F0FDF4;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">Página web</div>
+                <div style="font-size:11px;color:var(--muted)">Analytics y conversiones</div>
+              </div>
+              <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
+            </div>
           </div>
         </div>
-        <button onclick="connectLinkedInAds()" style="width:100%;padding:8px;background:#0A66C2;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar con LinkedIn →</button>
-      </div>
-      <!-- Conectado -->
-      <div id="linkedinConnected" style="display:none">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:var(--sidebar);border-radius:7px;display:flex;align-items:center;gap:6px">
-          <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#0A66C2"/></svg>
-          <span id="linkedinUserName" style="color:var(--text);font-weight:500"></span>
-        </div>
-        <div id="linkedinAccountsLoading" style="text-align:center;padding:12px 0;display:none">
-          <div style="font-size:12px;color:var(--muted)">Cargando cuentas publicitarias...</div>
-        </div>
-        <div id="linkedinAccountsList" style="display:none;margin-bottom:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cuentas publicitarias</label>
+
+        <!-- ── NOTIFICACIONES ── -->
+        <div id="cfg-sec-notificaciones" style="display:none">
+          <div class="cfg-section">
+            <div class="cfg-section-title">Notificaciones</div>
+            <div class="cfg-section-sub">Controla qué avisos recibes y por qué canal</div>
+            <div class="cfg-toggle-row">
+              <div>
+                <div class="cfg-toggle-label">Resumen semanal por email</div>
+                <div class="cfg-toggle-sub">Recibe un resumen de métricas cada lunes</div>
+              </div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="cfg-toggle-row">
+              <div>
+                <div class="cfg-toggle-label">Alertas de gasto desperdiciado</div>
+                <div class="cfg-toggle-sub">Notificación cuando se detecta gasto sin conversión</div>
+              </div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="cfg-toggle-row">
+              <div>
+                <div class="cfg-toggle-label">Novedades y funciones nuevas</div>
+                <div class="cfg-toggle-sub">Emails sobre actualizaciones de Acuarius</div>
+              </div>
+              <div class="toggle" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="cfg-toggle-row">
+              <div>
+                <div class="cfg-toggle-label">Recordatorios de optimización</div>
+                <div class="cfg-toggle-sub">Avisos cuando una campaña lleva más de 7 días sin revisión</div>
+              </div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
           </div>
-          <div id="linkedinAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto"></div>
+          <!-- Zona de peligro -->
+          <div class="cfg-section" style="border-color:rgba(220,38,38,.2)">
+            <div class="cfg-section-title" style="color:var(--danger)">Zona de peligro</div>
+            <div class="cfg-section-sub">Estas acciones son irreversibles. Procede con cuidado.</div>
+            <div class="cfg-row">
+              <div>
+                <div class="cfg-label">Eliminar todos los datos</div>
+                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Borra el historial de conversaciones y configuraciones</div>
+              </div>
+              <button class="cfg-danger-btn" onclick="if(confirm('¿Confirmas que deseas eliminar todos tus datos?'))clearAllData()">Eliminar datos</button>
+            </div>
+            <div class="cfg-row" style="border-bottom:none;padding-bottom:0">
+              <div>
+                <div class="cfg-label">Cancelar suscripción</div>
+                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Gestiona o cancela tu plan en Hotmart</div>
+              </div>
+              <button class="cfg-danger-btn" onclick="window.open('https://app.hotmart.com/products','_blank')">Cancelar plan</button>
+            </div>
+          </div>
         </div>
-        <div id="linkedinActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px">
-          <div style="font-size:10px;color:#0A66C2;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Cuenta activa</div>
-          <div id="linkedinActiveName" style="font-size:13px;font-weight:600;color:var(--text)"></div>
-          <div id="linkedinActiveId" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
-          <button onclick="showLinkedInAccountSelector()" style="margin-top:8px;font-size:11px;color:#0A66C2;background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);text-decoration:underline">Cambiar cuenta</button>
+
+        <!-- ── REFERIDOS ── -->
+        <div id="cfg-sec-referral" style="display:none">
+          <!-- Link de referido -->
+          <div class="cfg-section">
+            <div class="cfg-section-title">Tu link de referido</div>
+            <div class="cfg-section-sub">Ganas <strong>$5–$10 USD/mes</strong> por cada persona que se suscriba con tu código.</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:0">
+              <div id="ref-link-box" style="flex:1;background:var(--bg-muted);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Cargando...</div>
+              <button id="ref-copy-btn" onclick="copyReferralLink()" style="padding:9px 16px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Copiar</button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="cfg-section" style="padding:16px">
+            <div class="cfg-section-title">Estadísticas</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+              <div style="padding:14px;background:var(--bg-muted);border-radius:var(--r);border:1px solid var(--border)">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px">Referidos</div>
+                <div id="ref-stat-total" style="font-size:24px;font-weight:700;color:var(--text)">—</div>
+                <div style="font-size:11px;color:var(--text-3)">total registrados</div>
+              </div>
+              <div style="padding:14px;background:var(--bg-muted);border-radius:var(--r);border:1px solid var(--border)">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px">Activos</div>
+                <div id="ref-stat-active" style="font-size:24px;font-weight:700;color:#22c55e">—</div>
+                <div style="font-size:11px;color:var(--text-3)">suscritos este mes</div>
+              </div>
+              <div style="padding:14px;background:var(--bg-muted);border-radius:var(--r);border:1px solid var(--border)">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px">Total ganado</div>
+                <div id="ref-stat-earned" style="font-size:24px;font-weight:700;color:var(--text)">—</div>
+                <div style="font-size:11px;color:var(--text-3)">USD acumulado</div>
+              </div>
+              <div style="padding:14px;background:var(--bg-muted);border-radius:var(--r);border:1px solid var(--border)">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px">Próxima liquidación</div>
+                <div id="ref-stat-pending" style="font-size:24px;font-weight:700;color:#f59e0b">—</div>
+                <div style="font-size:11px;color:var(--text-3)">USD este mes</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla -->
+          <div class="cfg-section" style="padding:0;overflow:hidden">
+            <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+              <div style="font-size:12px;font-weight:700;color:var(--text)">Historial de referidos</div>
+            </div>
+            <div id="ref-table-body" style="max-height:320px;overflow-y:auto">
+              <div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Cargando...</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;padding:12px 14px;background:var(--bg-muted);border-radius:10px;border:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--muted2);line-height:1.5">
+              💡 <strong style="color:var(--text)">¿Cómo funciona el pago?</strong> Liquidamos comisiones manualmente los primeros 5 días de cada mes por PayPal, transferencia o Nequi. Te contactamos al email de tu cuenta.
+            </div>
+          </div>
         </div>
-        <div id="linkedinAccountsError" style="display:none;margin-bottom:12px;padding:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;font-size:12px;color:var(--danger)"></div>
-        <button onclick="disconnectLinkedInAds()" style="width:100%;padding:7px;background:var(--sidebar);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar cuenta</button>
-      </div>
-    </div>
 
-    <!-- TikTok Ads — próximamente -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px;opacity:.55">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:32px;height:32px;border-radius:8px;background:#F0F0F0;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#010101"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">TikTok Ads</div>
-          <div style="font-size:11px;color:var(--muted)">Campañas en TikTok</div>
-        </div>
-        <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
-      </div>
-    </div>
-
-    <!-- Página web — próximamente -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;opacity:.55">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:32px;height:32px;border-radius:8px;background:#F0FDF4;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">Página web</div>
-          <div style="font-size:11px;color:var(--muted)">Analytics y conversiones</div>
-        </div>
-        <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--sidebar2);color:var(--muted2)">próximamente</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tab: Cuenta -->
-  <div id="stab-content-account" style="display:none;flex:1;overflow-y:auto;padding:20px">
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:12px">Tu cuenta</div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <div id="cfg-avatar" style="width:38px;height:38px;border-radius:50%;background:var(--blue-lt);border:2px solid var(--blue-md);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--blue);flex-shrink:0">A</div>
-        <div>
-          <div id="cfg-name" style="font-size:13px;font-weight:600;color:var(--text)">—</div>
-          <div id="cfg-email" style="font-size:11px;color:var(--muted);margin-top:1px">—</div>
-        </div>
-      </div>
-    </div>
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:12px">Plan actual</div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div id="cfg-plan" style="font-size:13px;font-weight:600;color:var(--text)">Free</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:1px">7 días de prueba</div>
-        </div>
-        <button style="padding:6px 12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Mejorar plan</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tab: Referidos -->
-  <div id="stab-content-referral" style="display:none;flex:1;overflow-y:auto;padding:20px">
-
-    <!-- Link de referido -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:8px">Tu link de referido</div>
-      <p style="font-size:11px;color:var(--muted2);margin-bottom:12px;line-height:1.5">Comparte este link. Ganas <strong style="color:var(--text)">$5 USD/mes</strong> por cada persona que se suscriba con tu código.</p>
-      <div style="display:flex;gap:8px;align-items:center">
-        <div id="ref-link-box" style="flex:1;background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Cargando...</div>
-        <button id="ref-copy-btn" onclick="copyReferralLink()" style="padding:8px 14px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Copiar</button>
-      </div>
-    </div>
-
-    <!-- Stats cards -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Referidos</div>
-        <div id="ref-stat-total" style="font-size:22px;font-weight:700;color:var(--text)">—</div>
-        <div style="font-size:11px;color:var(--muted)">total registrados</div>
-      </div>
-      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Activos</div>
-        <div id="ref-stat-active" style="font-size:22px;font-weight:700;color:#22c55e">—</div>
-        <div style="font-size:11px;color:var(--muted)">suscritos este mes</div>
-      </div>
-      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Total ganado</div>
-        <div id="ref-stat-earned" style="font-size:22px;font-weight:700;color:var(--text)">—</div>
-        <div style="font-size:11px;color:var(--muted)">USD acumulado</div>
-      </div>
-      <div style="border:1px solid var(--border);border-radius:var(--rlg);padding:14px">
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:6px">Próxima liquidación</div>
-        <div id="ref-stat-pending" style="font-size:22px;font-weight:700;color:#f59e0b">—</div>
-        <div style="font-size:11px;color:var(--muted)">USD este mes</div>
-      </div>
-    </div>
-
-    <!-- Tabla de referidos -->
-    <div style="border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden">
-      <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2)">Historial de referidos</div>
-      </div>
-      <div id="ref-table-body" style="max-height:280px;overflow-y:auto">
-        <div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Cargando...</div>
-      </div>
-    </div>
-
-    <!-- Nota de liquidación -->
-    <div style="margin-top:12px;padding:10px 12px;background:var(--sidebar);border-radius:10px;border:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--muted2);line-height:1.5">
-        💡 <strong style="color:var(--text)">¿Cómo funciona el pago?</strong> Liquidamos comisiones manualmente los primeros 5 días de cada mes por PayPal, transferencia o Nequi. Te contactamos al email de tu cuenta.
       </div>
     </div>
   </div>
