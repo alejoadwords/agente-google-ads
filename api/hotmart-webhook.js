@@ -1,44 +1,52 @@
-import { createClient } from '@supabase/supabase-js';
+// api/hotmart-webhook.js
+// Sin dependencias externas — usa fetch nativo igual que referral.js
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
+const SUPABASE_URL  = process.env.SUPABASE_URL;
+const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
 const HOTMART_SECRET = process.env.HOTMART_WEBHOOK_SECRET;
 
+// ── Helper REST Supabase (igual que referral.js) ──────────────────────────────
+async function sb(path, method = 'GET', body = null, prefer = 'return=representation') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    method,
+    headers: {
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type':  'application/json',
+      'Prefer':        prefer,
+    },
+    body: body ? JSON.stringify(body) : null,
+  });
+  const text = await res.text();
+  return { status: res.status, data: text ? JSON.parse(text) : null };
+}
+
 export default async function handler(req, res) {
-  const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+  // ── CORS ──
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).end();
 
-  if (req.method === 'OPTIONS') return res.status(204).set(cors).end();
-
-  // ── GET /api/hotmart-webhook?email=x → consulta plan ──
+  // ── GET ?email=x → consulta plan activo ──────────────────────────────────
   if (req.method === 'GET') {
-    Object.entries(cors).forEach(([k,v]) => res.setHeader(k, v));
     const email = req.query.email;
     if (!email) return res.status(400).json({ error: 'Missing email' });
 
-    const { data: user } = await supabase
-      .from('users').select('id').eq('email', email).single();
+    const { data: users } = await sb(`/users?email=eq.${encodeURIComponent(email)}&select=id&limit=1`);
+    if (!users || users.length === 0) return res.json({ plan: 'free', active: false });
+    const userId = users[0].id;
 
-    if (!user) return res.json({ plan: 'free', active: false });
+    const { data: billing } = await sb(
+      `/billing?user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=plan,status,period_end&order=created_at.desc&limit=1`
+    );
+    if (!billing || billing.length === 0) return res.json({ plan: 'free', active: false });
 
-    const { data: billing } = await supabase
-      .from('billing').select('plan, status, period_end')
-      .eq('user_id', user.id).eq('status', 'active')
-      .order('created_at', { ascending: false }).limit(1).single();
-
-    if (!billing) return res.json({ plan: 'free', active: false });
-
-    const active = new Date(billing.period_end) > new Date();
-    return res.json({ plan: billing.plan, active });
+    const active = new Date(billing[0].period_end) > new Date();
+    return res.json({ plan: billing[0].plan, active });
   }
 
-  // ── POST /api/hotmart-webhook → evento de Hotmart ──
+  // ── POST → evento de Hotmart ──────────────────────────────────────────────
   if (req.method !== 'POST') return res.status(405).end();
 
   const signature = req.headers['x-hotmart-hottok'];
@@ -46,123 +54,133 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const event = req.body;
+  const event     = req.body;
   const eventType = event?.event;
-  const data = event?.data;
+  const data      = event?.data;
 
-  const eventosValidos = ['PURCHASE_APPROVED','PURCHASE_COMPLETE','SUBSCRIPTION_REACTIVATED'];
+  console.log('[hotmart-webhook]', JSON.stringify({
+    eventType,
+    email:       data?.buyer?.email,
+    product:     data?.product?.name,
+    transaction: data?.purchase?.transaction,
+  }));
+
+  // SUBSCRIPTION_PURCHASE = renovación mensual automática de Hotmart
+  const eventosValidos     = ['PURCHASE_APPROVED','PURCHASE_COMPLETE','SUBSCRIPTION_REACTIVATED','SUBSCRIPTION_PURCHASE'];
   const eventosCancelacion = ['PURCHASE_REFUNDED','PURCHASE_CHARGEBACK','SUBSCRIPTION_CANCELLATION'];
 
   if (!eventosValidos.includes(eventType) && !eventosCancelacion.includes(eventType)) {
     return res.status(200).json({ received: true, action: 'ignored' });
   }
 
-  const email = data?.buyer?.email;
-  const transactionId = data?.purchase?.transaction;
+  const email          = data?.buyer?.email;
+  const transactionId  = data?.purchase?.transaction;
   const subscriptionId = data?.subscription?.subscriber?.code || null;
-  const productName = data?.product?.name || '';
+  const productName    = (data?.product?.name || '').toLowerCase();
 
   if (!email) return res.status(400).json({ error: 'Missing email' });
 
-  const { data: usuario } = await supabase
-    .from('users').select('id, video_credits_extra').eq('email', email).single();
+  // Buscar usuario en Supabase
+  const { data: users } = await sb(`/users?email=eq.${encodeURIComponent(email)}&select=id,video_credits_extra&limit=1`);
+  if (!users || users.length === 0) {
+    return res.status(200).json({ received: true, action: 'user_not_found', email });
+  }
+  const usuario = users[0];
 
-  if (!usuario) return res.status(200).json({ received: true, action: 'user_not_found', email });
-
-  // ── Compra de créditos de video ────────────────────────────────────────────
-  if (productName.toLowerCase().includes('video')) {
+  // ── Compra de créditos de video ──────────────────────────────────────────
+  if (productName.includes('video')) {
     if (eventosCancelacion.includes(eventType)) {
-      // Los créditos ya comprados no se revierten (política de no reembolso digital)
       return res.status(200).json({ received: true, action: 'video_credits_no_refund' });
     }
-
-    // Detectar cantidad: primero por nombre de oferta, luego por precio
     const offerName  = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
     const price      = data?.purchase?.price?.value || 0;
     let creditsToAdd = 0;
-
     if      (offerName.includes('10')) creditsToAdd = 10;
     else if (offerName.includes('5'))  creditsToAdd = 5;
-    else if (price <= 12)              creditsToAdd = 5;   // $9.90
-    else if (price <= 20)              creditsToAdd = 10;  // $16.90
-    else                               creditsToAdd = 5;   // fallback
+    else if (price <= 12)              creditsToAdd = 5;
+    else if (price <= 20)              creditsToAdd = 10;
+    else                               creditsToAdd = 5;
 
-    const currentExtra = usuario.video_credits_extra || 0;
-    await supabase.from('users')
-      .update({ video_credits_extra: currentExtra + creditsToAdd })
-      .eq('id', usuario.id);
-
+    await sb(
+      `/users?id=eq.${encodeURIComponent(usuario.id)}`,
+      'PATCH',
+      { video_credits_extra: (usuario.video_credits_extra || 0) + creditsToAdd },
+      'return=minimal'
+    );
     return res.status(200).json({ received: true, action: 'video_credits_added', credits: creditsToAdd, email });
   }
 
-  // ── Suscripción / plan ─────────────────────────────────────────────────────
-  let plan = 'individual';
-  if (productName.toLowerCase().includes('agencia')) plan = 'agencia';
+  // ── Suscripción / plan ──────────────────────────────────────────────────
+  const plan = productName.includes('agencia') ? 'agencia' : 'individual';
 
   if (eventosCancelacion.includes(eventType)) {
-    await supabase.from('billing').update({ status: 'cancelled' }).eq('user_id', usuario.id);
+    await sb(`/billing?user_id=eq.${encodeURIComponent(usuario.id)}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
     return res.status(200).json({ received: true, action: 'cancelled' });
   }
 
-  const ahora = new Date();
+  const ahora      = new Date();
   const vencimiento = new Date(ahora);
   vencimiento.setMonth(vencimiento.getMonth() + 1);
 
-  // Al activar/renovar plan: resetear créditos mensuales de video
-  await supabase.from('users').update({
-    video_credits_used:     0,
-    video_credits_reset_at: ahora.toISOString(),
-  }).eq('id', usuario.id);
+  // Resetear créditos mensuales de video al renovar
+  await sb(
+    `/users?id=eq.${encodeURIComponent(usuario.id)}`,
+    'PATCH',
+    { video_credits_used: 0, video_credits_reset_at: ahora.toISOString() },
+    'return=minimal'
+  );
 
-  await supabase.from('billing').upsert({
-    user_id: usuario.id,
+  // Upsert billing
+  await sb('/billing', 'POST', {
+    user_id:                  usuario.id,
     plan,
-    status: 'active',
-    amount: 19,
-    currency: 'USD',
-    period_start: ahora.toISOString(),
-    period_end: vencimiento.toISOString(),
-    hotmart_transaction: transactionId,
-    hotmart_subscription_id: subscriptionId,
-    notes: `Activado via Hotmart - ${eventType}`
-  }, { onConflict: 'user_id' });
+    status:                   'active',
+    amount:                   19,
+    currency:                 'USD',
+    period_start:             ahora.toISOString(),
+    period_end:               vencimiento.toISOString(),
+    hotmart_transaction:      transactionId,
+    hotmart_subscription_id:  subscriptionId,
+    notes:                    `Activado via Hotmart - ${eventType}`,
+  }, 'resolution=merge-duplicates,return=minimal');
 
-  // ── Rastreo de referidos ───────────────────────────────────────────────────
+  // ── Rastreo de referidos ────────────────────────────────────────────────
   try {
-    const { data: refConversion } = await supabase
-      .from('referral_conversions')
-      .select('*')
-      .eq('referred_email', email.toLowerCase())
-      .single();
+    const { data: refRows } = await sb(
+      `/referral_conversions?referred_email=eq.${encodeURIComponent(email.toLowerCase())}&limit=1`
+    );
+    const refConversion = refRows?.[0];
 
     if (refConversion) {
       if (refConversion.status === 'registered') {
-        // Primera activación: activar referido
-        await supabase
-          .from('referral_conversions')
-          .update({
+        await sb(
+          `/referral_conversions?id=eq.${refConversion.id}`,
+          'PATCH',
+          {
             status:           'active',
             referred_user_id: usuario.id,
             activated_at:     ahora.toISOString(),
             months_paid:      1,
             total_earned:     5,
             updated_at:       ahora.toISOString(),
-          })
-          .eq('id', refConversion.id);
+          },
+          'return=minimal'
+        );
       } else if (refConversion.status === 'active') {
-        // Renovación: sumar comisión del mes
-        await supabase
-          .from('referral_conversions')
-          .update({
+        await sb(
+          `/referral_conversions?id=eq.${refConversion.id}`,
+          'PATCH',
+          {
             months_paid:  (refConversion.months_paid || 0) + 1,
             total_earned: parseFloat(refConversion.total_earned || 0) + 5,
             updated_at:   ahora.toISOString(),
-          })
-          .eq('id', refConversion.id);
+          },
+          'return=minimal'
+        );
       }
     }
   } catch (refErr) {
-    console.warn('Referral tracking error:', refErr.message);
+    console.warn('[hotmart-webhook] Referral tracking error:', refErr.message);
   }
 
   return res.status(200).json({ received: true, action: 'activated', plan, email });

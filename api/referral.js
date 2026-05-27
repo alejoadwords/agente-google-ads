@@ -77,7 +77,9 @@ export default async function handler(req, res) {
     const total   = list.length;
     const active  = list.filter(c => c.status === 'active').length;
     const earned  = list.reduce((s, c) => s + parseFloat(c.total_earned || 0), 0);
-    const pending = active * COMMISSION;
+    // pending = comisión acumulada no pagada aún (earned - paid_out)
+    const paidOut = list.reduce((s, c) => s + parseFloat(c.paid_out || 0), 0);
+    const pending = Math.max(0, earned - paidOut);
 
     return res.json({ referrals: list, total, active, earned, pending });
   }
