@@ -739,7 +739,7 @@ function agencyRender() {
         <button class="agency-agent-btn seo" title="SEO" onclick="openAgentForClient('seo',agencyClients.find(x=>x.id==='${client.id}'))">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </button>
-        <button class="agency-agent-btn social" title="Contenido para Redes" onclick="openAgentForClient('social',agencyClients.find(x=>x.id==='${client.id}'))">
+        <button class="agency-agent-btn social" title="Social Media Manager" onclick="openAgentForClient('social',agencyClients.find(x=>x.id==='${client.id}'))">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         </button>
       </div>
@@ -2830,7 +2830,7 @@ async function openAgent(agentKey) {
       clientStage = mapStage(mem.etapa);
       document.getElementById('mem-card').style.display = 'block';
       document.getElementById('m-stage').textContent = clientStage;
-      const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
+      const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Social Media Manager','consultor':'Consultor de Marketing'};
       const negocioShort = mem.negocio ? mem.negocio.split('·')[0].trim() : '—';
       addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
       if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
@@ -3033,7 +3033,7 @@ function renderProSetupCard(agentKey) {
 
   const agentNames = {
     'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads',
-    'seo': 'SEO', 'social': 'Contenido para Redes', 'consultor': 'Consultor',
+    'seo': 'SEO', 'social': 'Social Media Manager', 'consultor': 'Consultor',
   };
   const agentName = agentNames[agentKey] || 'este agente';
 
@@ -4093,7 +4093,7 @@ function appendHomeMsgAgent(txt, suggestedAgent) {
   const agentLabels = {
     'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads',
     'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads',
-    'seo': 'SEO', 'social': 'Contenido para Redes', 'consultor': 'Consultor de Marketing'
+    'seo': 'SEO', 'social': 'Social Media Manager', 'consultor': 'Consultor de Marketing'
   };
 
   const suggBtn = suggestedAgent ? `
@@ -4176,7 +4176,7 @@ async function continueWithAgent(agentKey) {
   // Mensaje de transición
   const agentLabels = {
     'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads',
-    'linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'
+    'linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Social Media Manager','consultor':'Consultor de Marketing'
   };
   addAgent(`continuamos en el agente de **${agentLabels[agentKey]||agentKey}**. ¿en qué más te ayudo?`);
 }
