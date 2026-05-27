@@ -9,9 +9,10 @@
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL  = process.env.SUPABASE_URL;
-const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
-const ADMIN_SECRET  = process.env.ADMIN_SECRET;
+const SUPABASE_URL    = process.env.SUPABASE_URL;
+const SUPABASE_KEY    = process.env.SUPABASE_SERVICE_KEY;
+const ADMIN_SECRET    = process.env.ADMIN_SECRET;
+const HOTMART_SECRET  = process.env.HOTMART_WEBHOOK_SECRET;
 
 async function sb(path, method = 'GET', body = null) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -140,6 +141,10 @@ export default async function handler(req, res) {
     const { email, eventType = 'PURCHASE_APPROVED', plan = 'individual' } = req.body || {};
     if (!email) return res.status(400).json({ error: 'Missing email' });
 
+    if (!HOTMART_SECRET) {
+      return res.status(500).json({ error: 'HOTMART_WEBHOOK_SECRET no configurado' });
+    }
+
     // Construir payload igual que Hotmart
     const productName = plan === 'agencia' ? 'Plan Agencia Acuarius' : 'Plan Individual Acuarius';
     const fakePayload = {
@@ -151,22 +156,31 @@ export default async function handler(req, res) {
       },
     };
 
-    // Llamar al webhook internamente
-    const webhookUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}/api/hotmart-webhook`
-      : 'http://localhost:3000/api/hotmart-webhook';
+    // URL interna — usar dominio de producción si está disponible
+    const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000';
 
-    const r = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-hotmart-hottok':  ADMIN_SECRET, // usamos ADMIN_SECRET como proxy del secret de Hotmart en test
-      },
-      body: JSON.stringify(fakePayload),
-    });
-    const result = await r.json();
+    try {
+      const r = await fetch(`${baseUrl}/api/hotmart-webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':     'application/json',
+          'x-hotmart-hottok': HOTMART_SECRET,
+        },
+        body: JSON.stringify(fakePayload),
+      });
 
-    return res.json({ ok: true, simulated_event: eventType, plan, email, webhook_response: result });
+      let result;
+      const text = await r.text();
+      try { result = JSON.parse(text); } catch { result = { raw: text }; }
+
+      return res.json({ ok: true, simulated_event: eventType, plan, email, status: r.status, webhook_response: result });
+    } catch (fetchErr) {
+      return res.status(500).json({ error: 'Error al llamar webhook internamente', detail: fetchErr.message, baseUrl });
+    }
   }
 
   return res.status(400).json({ error: 'Unknown action' });
