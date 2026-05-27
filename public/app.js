@@ -261,8 +261,7 @@ function updateUserUI(u){
 function initReferralButton() {
   const btn = document.getElementById('sb-referral-btn');
   if (!btn) return;
-  const isPaid = userPlan === 'pro' || userPlan === 'individual' || userPlan === 'agencia' || userPlan === 'agency' || userPlan === 'Pro' || isAdminUser();
-  if (isPaid) btn.style.display = 'flex';
+  btn.style.display = 'flex';
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
@@ -11948,14 +11947,17 @@ async function loadReferralData() {
 function copyReferralLink() {
   if (!referralCode) return;
   const link = 'https://app.acuarius.app/?ref=' + referralCode;
+  const flashBtn = (btnId) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '¡Copiado!';
+    btn.style.background = '#22c55e';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
+  };
   navigator.clipboard.writeText(link).then(() => {
-    const btn = document.getElementById('ref-copy-btn');
-    if (btn) {
-      const orig = btn.textContent;
-      btn.textContent = '¡Copiado!';
-      btn.style.background = '#22c55e';
-      setTimeout(() => { btn.textContent = orig; btn.style.background = 'var(--blue)'; }, 2000);
-    }
+    flashBtn('ref-copy-btn');
+    flashBtn('ref-modal-copy-btn');
   }).catch(() => {
     // Fallback para iOS
     const el = document.createElement('textarea');
@@ -11964,7 +11966,64 @@ function copyReferralLink() {
     el.select();
     document.execCommand('copy');
     document.body.removeChild(el);
+    flashBtn('ref-copy-btn');
+    flashBtn('ref-modal-copy-btn');
   });
+}
+
+// Abrir/cerrar modal de referidos
+function openReferralModal() {
+  const modal = document.getElementById('referral-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  // Cargar link de referido en el modal
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return;
+  fetch('/api/referral?action=my-code&userId=' + encodeURIComponent(userId))
+    .then(r => r.json())
+    .then(d => {
+      if (d.code) {
+        referralCode = d.code;
+        const link = 'https://app.acuarius.app/?ref=' + d.code;
+        const urlEl = document.getElementById('ref-modal-url');
+        if (urlEl) urlEl.textContent = link;
+      }
+    }).catch(() => {});
+  // Cargar estadísticas en el modal
+  fetch('/api/referral?action=stats&userId=' + encodeURIComponent(userId))
+    .then(r => r.json())
+    .then(d => {
+      const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+      set('ref-modal-count', d.active || 0);
+      set('ref-modal-earned', '$' + parseFloat(d.earned || 0).toFixed(2));
+      set('ref-modal-pending', '$' + parseFloat(d.pending || 0).toFixed(2));
+    }).catch(() => {});
+}
+
+function closeReferralModal() {
+  const modal = document.getElementById('referral-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function shareReferralWhatsApp() {
+  if (!referralCode) return;
+  const link = 'https://app.acuarius.app/?ref=' + referralCode;
+  const msg = encodeURIComponent('Te invito a probar Acuarius, el SaaS de marketing con IA para agencias. Usa mi enlace: ' + link);
+  window.open('https://wa.me/?text=' + msg, '_blank');
+}
+
+function shareReferralEmail() {
+  if (!referralCode) return;
+  const link = 'https://app.acuarius.app/?ref=' + referralCode;
+  const subject = encodeURIComponent('Te invito a Acuarius — Marketing con IA');
+  const body = encodeURIComponent('Hola,\n\nTe comparto mi enlace de referido para que pruebes Acuarius, la plataforma de marketing con IA para agencias y empresas en LatAm:\n\n' + link + '\n\nSaludos');
+  window.open('mailto:?subject=' + subject + '&body=' + body);
+}
+
+function shareReferralLinkedIn() {
+  if (!referralCode) return;
+  const link = encodeURIComponent('https://app.acuarius.app/?ref=' + referralCode);
+  window.open('https://www.linkedin.com/sharing/share-offsite/?url=' + link, '_blank');
 }
 
 // Capturar ?ref=CODE al cargar la página y guardarlo en localStorage
