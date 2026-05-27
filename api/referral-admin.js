@@ -137,15 +137,16 @@ export default async function handler(req, res) {
 
   // ── POST webhook-test — simular evento de Hotmart (solo para testing) ──
   if (req.method === 'POST' && action === 'webhook-test') {
-    const { email, eventType = 'PURCHASE_APPROVED' } = req.body || {};
+    const { email, eventType = 'PURCHASE_APPROVED', plan = 'individual' } = req.body || {};
     if (!email) return res.status(400).json({ error: 'Missing email' });
 
     // Construir payload igual que Hotmart
+    const productName = plan === 'agencia' ? 'Plan Agencia Acuarius' : 'Plan Individual Acuarius';
     const fakePayload = {
       event: eventType,
       data: {
         buyer:    { email },
-        product:  { name: 'Plan Individual Acuarius' },
+        product:  { name: productName },
         purchase: { transaction: 'TEST-' + Date.now() },
       },
     };
@@ -165,7 +166,7 @@ export default async function handler(req, res) {
     });
     const result = await r.json();
 
-    return res.json({ ok: true, simulated_event: eventType, email, webhook_response: result });
+    return res.json({ ok: true, simulated_event: eventType, plan, email, webhook_response: result });
   }
 
   return res.status(400).json({ error: 'Unknown action' });

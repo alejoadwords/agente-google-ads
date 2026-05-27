@@ -113,6 +113,13 @@ export default async function handler(req, res) {
   // ── Suscripción / plan ──────────────────────────────────────────────────
   const plan = productName.includes('agencia') ? 'agencia' : 'individual';
 
+  // Precios y comisiones por plan
+  const PLAN_CONFIG = {
+    agencia:    { amount: 49, commission: 10 },
+    individual: { amount: 19, commission: 5  },
+  };
+  const { amount: planAmount, commission: planCommission } = PLAN_CONFIG[plan];
+
   if (eventosCancelacion.includes(eventType)) {
     await sb(`/billing?user_id=eq.${encodeURIComponent(usuario.id)}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
     return res.status(200).json({ received: true, action: 'cancelled' });
@@ -135,7 +142,7 @@ export default async function handler(req, res) {
     user_id:                  usuario.id,
     plan,
     status:                   'active',
-    amount:                   19,
+    amount:                   planAmount,
     currency:                 'USD',
     period_start:             ahora.toISOString(),
     period_end:               vencimiento.toISOString(),
@@ -161,7 +168,7 @@ export default async function handler(req, res) {
             referred_user_id: usuario.id,
             activated_at:     ahora.toISOString(),
             months_paid:      1,
-            total_earned:     5,
+            total_earned:     planCommission,
             updated_at:       ahora.toISOString(),
           },
           'return=minimal'
@@ -172,7 +179,7 @@ export default async function handler(req, res) {
           'PATCH',
           {
             months_paid:  (refConversion.months_paid || 0) + 1,
-            total_earned: parseFloat(refConversion.total_earned || 0) + 5,
+            total_earned: parseFloat(refConversion.total_earned || 0) + planCommission,
             updated_at:   ahora.toISOString(),
           },
           'return=minimal'
@@ -183,5 +190,5 @@ export default async function handler(req, res) {
     console.warn('[hotmart-webhook] Referral tracking error:', refErr.message);
   }
 
-  return res.status(200).json({ received: true, action: 'activated', plan, email });
+  return res.status(200).json({ received: true, action: 'activated', plan, amount: planAmount, commission: planCommission, email });
 }
