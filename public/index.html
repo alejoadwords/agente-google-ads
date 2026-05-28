@@ -5,7 +5,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 75 75'><rect width='75' height='75' fill='%231E2BCC' rx='8'/><path fill='%23fff' d='M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z'/><path fill='%23fff' d='M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z'/><circle fill='%23fff' cx='60.13' cy='10.7' r='5.3'/></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>acuarius — agente google ads</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>window.__CLERK_PUBLISHABLE_KEY__='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';</script>
@@ -30,13 +30,40 @@
   /* Semantic */
   --success:#059669;--warning:#D97706;--danger:#DC2626;
   /* System */
-  --font:'Outfit',sans-serif;--r:10px;--rlg:14px;--rxl:18px;
+  --font:'Nunito Sans',sans-serif;--r:10px;--rlg:14px;--rxl:18px;
   --ease:cubic-bezier(0.16,1,0.3,1);
   --shadow-sm:0 1px 3px rgba(13,15,28,.06),0 1px 2px rgba(13,15,28,.04);
   --shadow-md:0 4px 12px rgba(13,15,28,.08),0 1px 3px rgba(13,15,28,.05);
   --shadow-blue:0 4px 16px rgba(30,43,204,.18);
   --sb-w:244px;
 }
+
+/* ── DARK MODE ── */
+html[data-theme='dark'] {
+  --blue:#5C6EEE;--blue-h:#4D5EE8;--blue-mid:#6E7EF0;
+  --blue-lt:rgba(92,110,238,.15);--blue-md:rgba(92,110,238,.3);
+  --blue-dim:rgba(92,110,238,.1);--blue-glow:rgba(92,110,238,.25);--blue-ring:rgba(92,110,238,.3);
+  --text:#E8EAF8;--text-2:#8A93B8;--text-3:#525A7A;
+  --muted:#8A93B8;--muted2:#525A7A;
+  --border:#1E2240;--border2:#171929;--border-h:#2A3080;
+  --bg:#0D0F1C;--bg-subtle:#0A0C18;--bg-muted:#111328;--bg-card:#131526;
+  --sidebar:#090B16;--sidebar2:#111328;
+  --success:#10b981;--warning:#F59E0B;--danger:#EF4444;
+}
+html[data-theme='dark'] .hdr{background:rgba(9,11,22,.92);}
+html[data-theme='dark'] .sb{background:var(--sidebar);}
+html[data-theme='dark'] .cfg-layout{background:var(--bg-subtle);}
+html[data-theme='dark'] .modal-backdrop,.dark .modal-inner{background:var(--bg-card);}
+html[data-theme='dark'] #upgrade-flow-modal > div{background:var(--bg-card);}
+
+/* ── THEME TOGGLE BTN ── */
+#theme-toggle{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:var(--r);border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text-2);transition:all .15s;flex-shrink:0;}
+#theme-toggle:hover{background:var(--bg-subtle);border-color:var(--border-h);}
+#theme-toggle .icon-sun{display:none;}
+#theme-toggle .icon-moon{display:block;}
+html[data-theme='dark'] #theme-toggle .icon-sun{display:block;}
+html[data-theme='dark'] #theme-toggle .icon-moon{display:none;}
+
 body{font-family:var(--font);background:var(--bg);color:var(--text);height:100svh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
 
 /* ── HEADER ── */
@@ -1046,6 +1073,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   </button>
   <span class="hdr-badge" id="plan-badge">free · 7 días</span>
   <div class="hdr-right">
+    <button id="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+      <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
     <button id="alerts-btn" onclick="openAlertsPanel()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Alertas de campañas">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span id="alerts-badge" style="display:none;position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px">0</span>
