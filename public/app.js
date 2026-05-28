@@ -4896,16 +4896,16 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
     }
     // Detectar parrilla con exportación a Sheets + imágenes generables
     else if(replyFinalProcessed.includes('[PARRILLA_LISTA]') || replyFinalProcessed.includes('[GENERAR_IMAGENES_PARRILLA]')){
-      // Extraer y procesar bloque JSON estructurado antes de limpiar
+      // Extraer bloque JSON con etiquetas XML (evita bug de ] internos del JSON)
       let studioImported = 0;
-      const parrillaJsonMatch = replyFinalProcessed.match(/\[PARRILLA_JSON:\s*([\s\S]+?)\]/);
+      const parrillaJsonMatch = replyFinalProcessed.match(/<PARRILLA_JSON>([\s\S]*?)<\/PARRILLA_JSON>/);
       if (parrillaJsonMatch) {
         studioImported = parseParrillaJSON(parrillaJsonMatch[1].trim());
       }
       const cleanReply = replyFinalProcessed
         .replace(/\[PARRILLA_LISTA\]/g, '')
         .replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '')
-        .replace(/\[PARRILLA_JSON:\s*[\s\S]+?\]/g, '')
+        .replace(/<PARRILLA_JSON>[\s\S]*?<\/PARRILLA_JSON>/g, '')
         .trim();
       hist.push({role:'assistant', content: cleanReply});
       addAgent(cleanReply);
@@ -7252,12 +7252,201 @@ function switchStudioView(view, btn) {
 }
 
 function studioImportFromChat() {
-  if (!lastParrillaText) {
-    alert('No hay una parrilla reciente en el chat. Genera una parrilla primero con el agente.');
-    return;
-  }
-  // Try to re-parse from the raw text if no JSON available
-  alert('Para importar automáticamente, genera una nueva parrilla con el agente. La próxima parrilla se importará al Studio automáticamente.');
+  openStudioWizard();
+}
+
+// ─── Studio Wizard ────────────────────────────────────────────────────────────
+
+function openStudioWizard() {
+  const existing = document.getElementById('studio-wizard');
+  if (existing) existing.remove();
+
+  // Pull client profile for suggestions
+  const negocio = mem?.negocio || mem?.nombre || '';
+  const industria = mem?.industria || '';
+  const redesRec = mem?.redes || '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'studio-wizard';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
+  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+  <div style="background:var(--bg);border-radius:20px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.25)">
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:16px;font-weight:800;color:var(--text)">Crear parrilla de contenido</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Configura tu parrilla para obtener el mejor resultado</div>
+      </div>
+      <button onclick="document.getElementById('studio-wizard').remove()" style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:8px;line-height:1">×</button>
+    </div>
+
+    <div style="padding:20px 24px">
+
+      <!-- Duración -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Para cuántos días?</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-days">
+          ${[7,14,21,30].map(d=>`<button onclick="wizSelect(this,'wiz-days')" data-val="${d}" class="wiz-chip ${d===30?'active':''}">${d} días</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Redes sociales -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Para qué redes sociales?</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-nets">
+          ${[
+            {val:'instagram',label:'Instagram',emoji:'📸'},
+            {val:'tiktok',label:'TikTok',emoji:'🎵'},
+            {val:'facebook',label:'Facebook',emoji:'👥'},
+            {val:'linkedin',label:'LinkedIn',emoji:'💼'},
+            {val:'x',label:'X (Twitter)',emoji:'✖'},
+            {val:'youtube',label:'YouTube',emoji:'▶'},
+          ].map(n=>`<button onclick="wizToggle(this,'wiz-nets')" data-val="${n.val}" class="wiz-chip ${['instagram','facebook','tiktok'].includes(n.val)?'active':''}">${n.emoji} ${n.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Objetivo -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Objetivo principal</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-obj">
+          ${[
+            {val:'reconocimiento',label:'Reconocimiento de marca'},
+            {val:'engagement',label:'Engagement y comunidad'},
+            {val:'ventas',label:'Ventas / conversiones'},
+            {val:'educacion',label:'Educar a mi audiencia'},
+            {val:'trafico',label:'Tráfico al sitio web'},
+          ].map((o,i)=>`<button onclick="wizSelect(this,'wiz-obj')" data-val="${o.val}" class="wiz-chip ${i===0?'active':''}">${o.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Formatos -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Tipos de contenido (selecciona los que aplican)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-formats">
+          ${[
+            {val:'reel',label:'🎬 Reels / Videos'},
+            {val:'feed',label:'🖼 Imagen estática'},
+            {val:'carrusel',label:'📑 Carruseles'},
+            {val:'story',label:'📱 Stories'},
+            {val:'post',label:'📝 Post de texto'},
+          ].map((f,i)=>`<button onclick="wizToggle(this,'wiz-formats')" data-val="${f.val}" class="wiz-chip ${i<3?'active':''}">${f.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Tono -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Tono de la comunicación</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-tone">
+          ${[
+            {val:'cercano',label:'Cercano y casual'},
+            {val:'profesional',label:'Profesional'},
+            {val:'educativo',label:'Educativo'},
+            {val:'inspiracional',label:'Inspiracional'},
+            {val:'mixto',label:'Mixto (varía por post)'},
+          ].map((t,i)=>`<button onclick="wizSelect(this,'wiz-tone')" data-val="${t.val}" class="wiz-chip ${i===0?'active':''}">${t.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Temas -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Temas e ideas a tratar <span style="font-weight:400;color:var(--muted2)">(opcional — el agente también propone)</span></div>
+        <textarea id="wiz-topics" rows="3" placeholder="Ej: testimonios de clientes, tips de uso del producto, detrás de cámaras, promociones..." style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;box-sizing:border-box;transition:border .15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">${industria ? '': ''}</textarea>
+        ${industria ? `<div style="font-size:11px;color:var(--muted);margin-top:5px">💡 Tu perfil indica: <strong>${industria}</strong>${negocio?' — '+negocio:''}</div>` : ''}
+      </div>
+
+      <!-- Imágenes -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas imágenes generar con IA?</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-imgs">
+          ${[
+            {val:'0',label:'Sin imágenes'},
+            {val:'3',label:'3 imágenes'},
+            {val:'5',label:'5 imágenes'},
+            {val:'10',label:'10 imágenes'},
+            {val:'todas',label:'Todas las posibles'},
+          ].map((im,i)=>`<button onclick="wizSelect(this,'wiz-imgs')" data-val="${im.val}" class="wiz-chip ${i===2?'active':''}">${im.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Hashtags -->
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Hashtags personalizados <span style="font-weight:400;color:var(--muted2)">(opcional)</span></div>
+        <input id="wiz-hashtags" type="text" placeholder="Ej: #MiMarca #Colombia #ServicioTecnico" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--bg);box-sizing:border-box;transition:border .15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+
+    </div>
+
+    <div style="padding:14px 24px;border-top:1px solid var(--border);background:var(--bg-subtle);border-radius:0 0 20px 20px;display:flex;gap:10px;align-items:center">
+      <button onclick="document.getElementById('studio-wizard').remove()" class="btn btn-g" style="font-size:13px">Cancelar</button>
+      <button onclick="submitStudioWizard()" class="btn btn-p" style="flex:1;font-size:13px;font-weight:700">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:6px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Generar parrilla con IA
+      </button>
+    </div>
+  </div>`;
+
+  document.body.appendChild(overlay);
+}
+
+function wizSelect(btn, groupId) {
+  document.querySelectorAll('#' + groupId + ' .wiz-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function wizToggle(btn) {
+  btn.classList.toggle('active');
+}
+
+function submitStudioWizard() {
+  const get = (id) => {
+    const active = document.querySelectorAll('#' + id + ' .wiz-chip.active');
+    return [...active].map(b => b.dataset.val);
+  };
+
+  const days     = get('wiz-days')[0] || '30';
+  const nets     = get('wiz-nets');
+  const obj      = get('wiz-obj')[0] || 'reconocimiento';
+  const formats  = get('wiz-formats');
+  const tone     = get('wiz-tone')[0] || 'cercano';
+  const imgCount = get('wiz-imgs')[0] || '5';
+  const topics   = (document.getElementById('wiz-topics')?.value || '').trim();
+  const hashtags = (document.getElementById('wiz-hashtags')?.value || '').trim();
+
+  if (!nets.length) { alert('Selecciona al menos una red social.'); return; }
+  if (!formats.length) { alert('Selecciona al menos un tipo de contenido.'); return; }
+
+  const objLabels = { reconocimiento:'reconocimiento de marca', engagement:'engagement y comunidad', ventas:'ventas y conversiones', educacion:'educar a la audiencia', trafico:'tráfico al sitio web' };
+  const toneLabels = { cercano:'cercano y casual', profesional:'profesional', educativo:'educativo', inspiracional:'inspiracional', mixto:'mixto (varía por post)' };
+  const netLabels = { instagram:'Instagram', tiktok:'TikTok', facebook:'Facebook', linkedin:'LinkedIn', x:'X (Twitter)', youtube:'YouTube' };
+  const fmtLabels = { reel:'Reels/Videos', feed:'Imágenes estáticas', carrusel:'Carruseles', story:'Stories', post:'Posts de texto' };
+
+  const imgInstr = imgCount === '0'
+    ? 'No generes imágenes para esta parrilla.'
+    : imgCount === 'todas'
+    ? 'Al terminar la parrilla, genera imágenes para TODOS los posts que las necesiten (needsImage: true).'
+    : `Al terminar la parrilla, genera exactamente ${imgCount} imágenes para los posts más importantes (los que necesiten imagen).`;
+
+  const prompt =
+    `Crea una parrilla de contenido de ${days} días con las siguientes especificaciones:
+
+REDES SOCIALES: ${nets.map(n => netLabels[n]||n).join(', ')}
+OBJETIVO: ${objLabels[obj] || obj}
+TIPOS DE CONTENIDO: ${formats.map(f => fmtLabels[f]||f).join(', ')}
+TONO: ${toneLabels[tone] || tone}
+${topics ? 'TEMAS A TRATAR: ' + topics : ''}
+${hashtags ? 'HASHTAGS DE MARCA: ' + hashtags : ''}
+IMÁGENES: ${imgInstr}
+
+Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.`;
+
+  document.getElementById('studio-wizard').remove();
+  setAgentContext('social');
+  showView('chat');
+  // Small delay to ensure view is active
+  setTimeout(() => {
+    document.getElementById('cin').value = prompt;
+    sendMsg();
+  }, 150);
 }
 
 // ─── Post Modal ──────────────────────────────────────────────────────────────

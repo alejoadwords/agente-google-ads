@@ -1022,6 +1022,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 
 
 
+/* ── STUDIO WIZARD CHIPS ── */
+.wiz-chip{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);transition:all .15s;white-space:nowrap}
+.wiz-chip:hover{border-color:var(--blue-md);color:var(--blue)}
+.wiz-chip.active{background:var(--blue-lt);border-color:var(--blue);color:var(--blue);font-weight:700}
 /* ── SOCIAL MEDIA STUDIO ── */
 .sb-studio-link{color:#818cf8!important;font-weight:600}
 .sb-studio-link svg{stroke:#818cf8}
@@ -1368,7 +1372,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia.')">
           <div class="sb-dot"></div>diagnóstico de redes
         </div>
-        <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea una parrilla de contenido para esta semana: 5-7 publicaciones listas para ejecutar.')">
+        <div class="sb-item" onclick="openStudioWizard()">
           <div class="sb-dot"></div>parrilla semanal
         </div>
         <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea copys y guiones listos para publicar: posts para feed, guiones para reels y textos para stories.')">
@@ -2396,7 +2400,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
       <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px">acciones rápidas</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
-        <button class="sac-card" onclick="qSend('Crea una parrilla de contenido para esta semana: 5-7 publicaciones con red, formato, tema e idea concreta lista para ejecutar para cada una.')">
+        <button class="sac-card" onclick="openStudioWizard()">
           <span class="sac-icon">📅</span>
           <span class="sac-title">Parrilla semanal</span>
           <span class="sac-desc">Plan de contenido para esta semana</span>
@@ -2475,7 +2479,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           </div>
         </div>
         <div class="studio-hdr-right">
-          <button class="btn btn-p" style="font-size:12px;padding:7px 14px" onclick="setAgentContext('social');showView('chat');qSend('Crea una parrilla de contenido completa para el próximo mes: 20-25 publicaciones distribuidas en Instagram, TikTok y Facebook, semana a semana con temas concretos.')">
+          <button class="btn btn-p" style="font-size:12px;padding:7px 14px" onclick="openStudioWizard()">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             generar con IA
           </button>
@@ -2508,7 +2512,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <div class="studio-empty-icon">📅</div>
         <h3>Tu estudio está vacío</h3>
         <p>Genera una parrilla de contenido con el agente y se importará automáticamente aquí.</p>
-        <button class="btn btn-p" onclick="setAgentContext('social');showView('chat');qSend('Crea una parrilla de contenido completa para el próximo mes: 20-25 publicaciones distribuidas en Instagram, TikTok y Facebook, semana a semana con temas concretos.')">Generar parrilla con IA</button>
+        <button class="btn btn-p" onclick="openStudioWizard()">Generar parrilla con IA</button>
       </div>
       <div id="studio-calendar-view" style="display:none;flex:1;overflow-y:auto">
         <div class="studio-cal-cols" id="studio-cal-grid"></div>

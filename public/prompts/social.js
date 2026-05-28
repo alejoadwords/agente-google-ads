@@ -140,17 +140,18 @@ Cuando el usuario pida una parrilla de contenido (mensual, semanal, o cualquier 
 [PARRILLA_LISTA] activa el botón para exportar la parrilla a Google Sheets.
 [GENERAR_IMAGENES_PARRILLA] activa el botón para generar las imágenes.
 
-4. Después de esos dos bloques, incluye SIEMPRE un bloque JSON estructurado con los datos de la parrilla:
-[PARRILLA_JSON: {"posts":[{"week":1,"day":"Lunes","network":"instagram","format":"reel","title":"Título del post","caption":"Caption completo listo para publicar con emojis y CTA","hashtags":["#hashtag1","#hashtag2","#hashtag3"],"needsImage":false,"imagePrompt":""},{"week":1,"day":"Miércoles","network":"instagram","format":"feed","title":"Segundo post","caption":"Caption...","hashtags":["#tag1"],"needsImage":true,"imagePrompt":"Descripción detallada en español para generar la imagen, estilo fotográfico, colores, elementos visuales"}]}]
+4. Después de esos dos bloques, incluye SIEMPRE los datos estructurados usando EXACTAMENTE estas etiquetas de apertura y cierre:
+<PARRILLA_JSON>
+{"posts":[{"week":1,"day":"Lunes","network":"instagram","format":"reel","title":"Título","caption":"Caption completo con emojis y CTA","hashtags":["#hashtag1","#hashtag2"],"needsImage":false,"imagePrompt":""},{"week":1,"day":"Miércoles","network":"instagram","format":"feed","title":"Segundo post","caption":"Caption...","hashtags":["#tag1"],"needsImage":true,"imagePrompt":"Descripción detallada en español para generar imagen"}]}
+</PARRILLA_JSON>
 
-Reglas del bloque [PARRILLA_JSON]:
-- network: usar EXACTAMENTE uno de estos valores: instagram, tiktok, facebook, linkedin, x, youtube
-- format: usar EXACTAMENTE uno de estos valores: reel, story, feed, carrusel, video, post
-- needsImage: true para feed, carrusel, post, infografía, testimonio visual. false para reel, video, story de texto, guión
-- imagePrompt: descripción detallada en español para generar la imagen con IA (solo si needsImage es true, de lo contrario dejar vacío "")
-- caption: texto completo listo para publicar, con emojis y CTA incluidos
-- El bloque completo debe ser JSON válido en una sola línea
-- Incluir TODOS los posts de la parrilla en este bloque
+Reglas del bloque PARRILLA_JSON:
+- network: EXACTAMENTE uno de: instagram, tiktok, facebook, linkedin, x, youtube
+- format: EXACTAMENTE uno de: reel, story, feed, carrusel, video, post
+- needsImage: true para feed, carrusel, post, infografía, testimonio visual. false para reel, video, story de texto
+- imagePrompt: descripción detallada en español para imagen IA (solo si needsImage es true, sino dejar "")
+- caption: texto completo listo para publicar con emojis y CTA
+- JSON válido. Incluir TODOS los posts
 
 ════════════════════════════════════════
 SKILL 7: CONTENT REPURPOSER — ATOMIZACIÓN DE CONTENIDO
