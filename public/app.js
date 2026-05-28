@@ -4896,9 +4896,16 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
     }
     // Detectar parrilla con exportación a Sheets + imágenes generables
     else if(replyFinalProcessed.includes('[PARRILLA_LISTA]') || replyFinalProcessed.includes('[GENERAR_IMAGENES_PARRILLA]')){
+      // Extraer y procesar bloque JSON estructurado antes de limpiar
+      let studioImported = 0;
+      const parrillaJsonMatch = replyFinalProcessed.match(/\[PARRILLA_JSON:\s*([\s\S]+?)\]/);
+      if (parrillaJsonMatch) {
+        studioImported = parseParrillaJSON(parrillaJsonMatch[1].trim());
+      }
       const cleanReply = replyFinalProcessed
         .replace(/\[PARRILLA_LISTA\]/g, '')
         .replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '')
+        .replace(/\[PARRILLA_JSON:\s*[\s\S]+?\]/g, '')
         .trim();
       hist.push({role:'assistant', content: cleanReply});
       addAgent(cleanReply);
@@ -4906,6 +4913,24 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       // Guardar el texto de la parrilla para exportación
       lastParrillaText = cleanReply;
       setTimeout(()=>renderParrillaImagenesBtn(), 300);
+      // Mostrar acceso al Studio si se importaron posts
+      if (studioImported > 0) {
+        setTimeout(() => {
+          const area = document.getElementById('chat-area');
+          if (!area) return;
+          const btn = document.createElement('div');
+          btn.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--blue-dim);border:1px solid var(--blue-md);border-radius:10px;margin:8px 0;cursor:pointer;transition:all .15s';
+          btn.onmouseenter = () => btn.style.background = 'var(--blue-lt)';
+          btn.onmouseleave = () => btn.style.background = 'var(--blue-dim)';
+          btn.onclick = () => openSocialStudio();
+          btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+            '<div><div style="font-size:13px;font-weight:600;color:var(--blue)">' + studioImported + ' posts importados al Studio</div>' +
+            '<div style="font-size:11px;color:var(--muted)">Haz clic para ver tu calendario visual y generar imágenes</div></div>' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" style="margin-left:auto"><path d="M9 18l6-6-6-6"/></svg>';
+          area.appendChild(btn);
+          area.scrollTop = area.scrollHeight;
+        }, 600);
+      }
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     else {
@@ -6999,6 +7024,384 @@ function exportToPDF(txt, filename) {
   doc.save(filename || 'acuarius-estrategia.pdf');
 }
 
+// ── SOCIAL MEDIA STUDIO ─────────────────────────────────────────────────────
+
+const STUDIO_NETWORKS = {
+  instagram: { label:'Instagram', color:'#E1306C', bg:'#FEF0F5' },
+  tiktok:    { label:'TikTok',    color:'#000000', bg:'#F0F0F0' },
+  facebook:  { label:'Facebook',  color:'#1877F2', bg:'#EBF3FF' },
+  linkedin:  { label:'LinkedIn',  color:'#0A66C2', bg:'#E8F1FF' },
+  x:         { label:'X',         color:'#374151', bg:'#F3F4F6' },
+  youtube:   { label:'YouTube',   color:'#FF0000', bg:'#FFF0F0' }
+};
+const STUDIO_FORMATS = {
+  reel:     { label:'Reel',    icon:'🎬', falFormat:'story' },
+  story:    { label:'Story',   icon:'📱', falFormat:'story' },
+  feed:     { label:'Feed',    icon:'🖼',  falFormat:'square' },
+  carrusel: { label:'Carrusel',icon:'📑', falFormat:'square' },
+  video:    { label:'Video',   icon:'🎥', falFormat:'horizontal' },
+  post:     { label:'Post',    icon:'📝', falFormat:'square' }
+};
+const STATUS_CFG = {
+  borrador:  { bg:'#F3F4F6', color:'#6B7280' },
+  listo:     { bg:'#ECFDF5', color:'#059669' },
+  publicado: { bg:'#EFF6FF', color:'#2563EB' }
+};
+
+let studioCurrentWeek = 0;
+let studioCurrentView = 'calendar';
+
+function getStudioKey() {
+  const uid = clerkInstance?.user?.id || 'anon';
+  const cp = agencyActiveClientId ? '_' + agencyActiveClientId : '';
+  return 'acuarius_studio_' + uid + cp;
+}
+function loadStudioPosts() {
+  try { return JSON.parse(localStorage.getItem(getStudioKey()) || '[]'); } catch(e) { return []; }
+}
+function saveStudioPosts(posts) {
+  localStorage.setItem(getStudioKey(), JSON.stringify(posts));
+}
+function addStudioPost(post) {
+  const posts = loadStudioPosts();
+  post.id = post.id || 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  post.status = post.status || 'borrador';
+  post.createdAt = post.createdAt || Date.now();
+  posts.push(post);
+  saveStudioPosts(posts);
+  return post;
+}
+function updateStudioPost(id, updates) {
+  const posts = loadStudioPosts();
+  const idx = posts.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  posts[idx] = { ...posts[idx], ...updates, updatedAt: Date.now() };
+  saveStudioPosts(posts);
+  if (document.getElementById('view-social-studio')?.classList.contains('active')) renderStudio();
+}
+function deleteStudioPost(id) {
+  saveStudioPosts(loadStudioPosts().filter(p => p.id !== id));
+  closePostModal();
+  renderStudio();
+}
+
+function parseParrillaJSON(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+    const posts = data.posts || [];
+    const existing = loadStudioPosts();
+    const manual = existing.filter(p => !p._fromParrilla);
+    const newPosts = posts.map(p => ({
+      id: 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      week: parseInt(p.week) || 1,
+      day: p.day || '',
+      network: (p.network || 'instagram').toLowerCase().trim(),
+      format: (p.format || 'feed').toLowerCase().trim(),
+      title: p.title || p.tema || '',
+      caption: p.caption || '',
+      hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
+      needsImage: p.needsImage !== false,
+      imagePrompt: p.imagePrompt || '',
+      imageBase64: null,
+      imageMediaType: null,
+      status: 'borrador',
+      _fromParrilla: true,
+      createdAt: Date.now()
+    }));
+    saveStudioPosts([...manual, ...newPosts]);
+    return newPosts.length;
+  } catch(e) { console.warn('[studio] parseParrillaJSON error:', e); return 0; }
+}
+
+function openSocialStudio() {
+  setAgentContext('social');
+  showView('social-studio');
+  renderStudio();
+}
+
+function renderStudio() {
+  const posts = loadStudioPosts();
+  const filtered = studioCurrentWeek === 0 ? posts : posts.filter(p => p.week === studioCurrentWeek);
+  const emptyEl = document.getElementById('studio-empty');
+  const calView = document.getElementById('studio-calendar-view');
+  const listView = document.getElementById('studio-list-view');
+  const statsBar = document.getElementById('studio-stats-bar');
+  const filters = document.getElementById('studio-filters');
+
+  if (posts.length === 0) {
+    if (emptyEl) emptyEl.style.display = 'flex';
+    if (calView) calView.style.display = 'none';
+    if (listView) listView.style.display = 'none';
+    if (statsBar) statsBar.style.display = 'none';
+    if (filters) filters.style.display = 'none';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (statsBar) statsBar.style.display = 'flex';
+  if (filters) filters.style.display = 'flex';
+
+  // Stats
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('stat-total', posts.length);
+  setEl('stat-listos', posts.filter(p => p.status === 'listo').length);
+  setEl('stat-imagenes', posts.filter(p => p.imageBase64).length);
+  setEl('stat-publicados', posts.filter(p => p.status === 'publicado').length);
+
+  if (studioCurrentView === 'calendar') {
+    if (calView) calView.style.display = 'block';
+    if (listView) listView.style.display = 'none';
+    renderCalendarView(filtered);
+  } else {
+    if (calView) calView.style.display = 'none';
+    if (listView) listView.style.display = 'block';
+    renderListView(filtered);
+  }
+}
+
+function renderCalendarView(posts) {
+  const grid = document.getElementById('studio-cal-grid');
+  if (!grid) return;
+  const networks = [...new Set(posts.map(p => p.network))];
+  if (!networks.length) { grid.innerHTML = '<div style="padding:40px 24px;color:var(--muted);font-size:13px">No hay posts para esta semana.</div>'; return; }
+
+  let html = '';
+  networks.forEach(net => {
+    const cfg = STUDIO_NETWORKS[net] || { label: net, color:'#666', bg:'#f5f5f5' };
+    const netPosts = posts.filter(p => p.network === net);
+    html += '<div class="studio-net-col">';
+    html += '<div class="studio-net-hdr" style="border-bottom-color:' + cfg.color + '">';
+    html += '<span class="studio-net-dot" style="background:' + cfg.color + '"></span>';
+    html += '<span class="studio-net-name">' + cfg.label + '</span>';
+    html += '<span class="studio-net-count">' + netPosts.length + '</span>';
+    html += '</div><div class="studio-net-body">';
+
+    [1,2,3,4].forEach(week => {
+      const wp = netPosts.filter(p => p.week === week);
+      if (!wp.length && studioCurrentWeek !== 0) return;
+      if (studioCurrentWeek === 0) html += '<div class="studio-week-label">Semana ' + week + '</div>';
+      if (!wp.length) { html += '<div class="studio-week-empty">— sin posts</div>'; return; }
+      wp.forEach(post => { html += buildPostCard(post, cfg); });
+    });
+
+    html += '</div></div>';
+  });
+  grid.innerHTML = html;
+}
+
+function buildPostCard(post, netCfg) {
+  const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
+  const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
+  const hasImg = !!post.imageBase64;
+  const imgHtml = hasImg
+    ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" loading="lazy">'
+    : '<span style="font-size:22px">' + fmt.icon + '</span>';
+
+  return '<div class="post-card" onclick="openPostModal(\'' + post.id + '\')">' +
+    '<div class="post-card-img' + (hasImg ? '' : ' post-card-img-empty') + '">' + imgHtml + '</div>' +
+    '<div class="post-card-body">' +
+      '<div class="post-card-meta">' +
+        '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + fmt.label + '</span>' +
+        '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
+      '</div>' +
+      '<div class="post-card-title">' + esc(post.title || 'Sin título') + '</div>' +
+      (post.caption ? '<div class="post-card-caption">' + esc(post.caption.slice(0,70)) + '…</div>' : '') +
+      (post.day ? '<div class="post-card-day">' + esc(post.day) + '</div>' : '') +
+    '</div></div>';
+}
+
+function renderListView(posts) {
+  const grid = document.getElementById('studio-list-grid');
+  if (!grid) return;
+  if (!posts.length) { grid.innerHTML = '<div style="padding:40px 24px;color:var(--muted);font-size:13px">No hay posts para esta semana.</div>'; return; }
+
+  let html = '';
+  posts.sort((a,b) => (a.week*10+(a.dayNum||0)) - (b.week*10+(b.dayNum||0))).forEach(post => {
+    const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
+    const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
+    const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
+    const thumbHtml = post.imageBase64
+      ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">'
+      : '<span style="font-size:20px">' + fmt.icon + '</span>';
+
+    html += '<div class="post-list-item" onclick="openPostModal(\'' + post.id + '\')">' +
+      '<div class="post-list-thumb">' + thumbHtml + '</div>' +
+      '<div class="post-list-info">' +
+        '<div class="post-list-title">' + esc(post.title || 'Sin título') + '</div>' +
+        '<div class="post-list-meta">Sem ' + post.week + (post.day ? ' · ' + esc(post.day) : '') + ' · ' + netCfg.label + ' · ' + fmt.label + '</div>' +
+      '</div>' +
+      '<div class="post-list-right">' +
+        '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + netCfg.label + '</span>' +
+        '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
+      '</div></div>';
+  });
+  grid.innerHTML = html;
+}
+
+function filterCalendarWeek(week, btn) {
+  studioCurrentWeek = week;
+  document.querySelectorAll('.week-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderStudio();
+}
+
+function switchStudioView(view, btn) {
+  studioCurrentView = view;
+  document.querySelectorAll('.view-tog').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderStudio();
+}
+
+function studioImportFromChat() {
+  if (!lastParrillaText) {
+    alert('No hay una parrilla reciente en el chat. Genera una parrilla primero con el agente.');
+    return;
+  }
+  // Try to re-parse from the raw text if no JSON available
+  alert('Para importar automáticamente, genera una nueva parrilla con el agente. La próxima parrilla se importará al Studio automáticamente.');
+}
+
+// ─── Post Modal ──────────────────────────────────────────────────────────────
+
+let activePostId = null;
+
+function openPostModal(postId) {
+  activePostId = postId;
+  const posts = loadStudioPosts();
+  const post = posts.find(p => p.id === postId);
+  if (!post) return;
+
+  const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
+  const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
+  const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
+
+  const imgSection = post.imageBase64
+    ? '<img class="post-modal-img" src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="">'
+    : '<div class="post-modal-img-empty">' + fmt.icon + '</div>';
+
+  const hashtagsStr = (post.hashtags || []).join(' ');
+
+  const modal = document.createElement('div');
+  modal.className = 'post-modal-overlay';
+  modal.id = 'post-modal';
+  modal.onclick = function(e) { if (e.target === modal) closePostModal(); };
+  modal.innerHTML =
+    '<div class="post-modal-box">' +
+      '<div class="post-modal-hdr">' +
+        '<div>' +
+          '<div class="post-modal-title">' + esc(post.title || 'Sin título') + '</div>' +
+          '<div style="display:flex;gap:6px;margin-top:6px">' +
+            '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + netCfg.label + '</span>' +
+            '<span class="post-badge" style="background:var(--bg-muted);color:var(--muted)">' + fmt.label + '</span>' +
+            '<span style="font-size:10px;color:var(--muted)">Sem. ' + post.week + (post.day ? ' · ' + esc(post.day) : '') + '</span>' +
+            '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<button class="post-modal-close" onclick="closePostModal()">×</button>' +
+      '</div>' +
+      '<div class="post-modal-body">' +
+        imgSection +
+        '<div class="post-field"><label>Caption</label>' +
+          '<textarea id="pm-caption" rows="4" placeholder="Caption listo para publicar...">' + esc(post.caption || '') + '</textarea>' +
+        '</div>' +
+        '<div class="post-field"><label>Hashtags</label>' +
+          '<input id="pm-hashtags" type="text" value="' + esc(hashtagsStr) + '" placeholder="#hashtag1 #hashtag2">' +
+        '</div>' +
+        (post.imagePrompt ? '<div class="post-field"><label>Prompt de imagen</label><div style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--bg-muted);border-radius:8px;line-height:1.5">' + esc(post.imagePrompt) + '</div></div>' : '') +
+      '</div>' +
+      '<div class="post-modal-actions">' +
+        (post.needsImage && !post.imageBase64 ? '<button class="btn-gen-img" onclick="generateImageForPost(\'' + postId + '\')">✨ Generar imagen</button>' : '') +
+        (post.imageBase64 ? '<button class="btn-outline-sm" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar imagen</button>' : '') +
+        (post.status !== 'listo' ? '<button class="btn-mark-ready" onclick="setPostStatus(\'' + postId + '\',\'listo\')">✓ Marcar como listo</button>' : '') +
+        (post.status !== 'publicado' ? '<button class="btn-mark-ready" style="background:#EFF6FF;color:#2563EB;border-color:#BFDBFE" onclick="setPostStatus(\'' + postId + '\',\'publicado\')">🚀 Publicado</button>' : '') +
+        '<button class="btn-delete-post" onclick="if(confirm(\'Eliminar este post?\'))deleteStudioPost(\'' + postId + '\')">Eliminar</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  setTimeout(() => modal.querySelector('.post-modal-box').style.animation = 'none', 300);
+}
+
+function closePostModal() {
+  // Save caption/hashtags before closing
+  if (activePostId) {
+    const capEl = document.getElementById('pm-caption');
+    const hashEl = document.getElementById('pm-hashtags');
+    if (capEl || hashEl) {
+      const updates = {};
+      if (capEl) updates.caption = capEl.value;
+      if (hashEl) updates.hashtags = hashEl.value.split(/\s+/).filter(t => t.startsWith('#'));
+      updateStudioPost(activePostId, updates);
+    }
+  }
+  activePostId = null;
+  const modal = document.getElementById('post-modal');
+  if (modal) modal.remove();
+}
+
+function setPostStatus(postId, status) {
+  updateStudioPost(postId, { status });
+  closePostModal();
+}
+
+async function generateImageForPost(postId) {
+  const posts = loadStudioPosts();
+  const post = posts.find(p => p.id === postId);
+  if (!post) return;
+
+  closePostModal();
+  const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
+  const prompt = (post.imagePrompt || post.title || post.caption || 'Social media post') +
+    '. Todos los textos en español. Estilo profesional para redes sociales.';
+
+  const cmd = {
+    prompt: prompt,
+    format: fmt.falFormat,
+    variations: 1,
+    hasText: true,
+    _index: 1, _total: 1,
+    _social: true,
+    _studioPostId: postId
+  };
+
+  addAgent('Generando imagen para "' + esc(post.title) + '"...');
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+    const thinkId = addThinking();
+    const res = await fetch('/api/generate-image', {
+      method: 'POST', headers,
+      body: JSON.stringify({ prompt: cmd.prompt, format: cmd.format, variations: 1, hasText: true })
+    });
+    rmThinking(thinkId);
+    const data = await res.json();
+    if (data.error) { addAgent('Error al generar imagen: ' + data.error); return; }
+    if (data.images && data.images.length > 0) {
+      updateStudioPost(postId, {
+        imageBase64: data.images[0].base64,
+        imageMediaType: data.images[0].mediaType,
+        status: 'listo'
+      });
+      addAgent('✅ Imagen generada y guardada en el Studio para "' + esc(post.title) + '".');
+    }
+  } catch(err) {
+    addAgent('Error inesperado generando la imagen: ' + err.message);
+  }
+}
+
+function downloadPostImage(postId) {
+  const post = loadStudioPosts().find(p => p.id === postId);
+  if (!post || !post.imageBase64) return;
+  downloadAdImage(post.imageBase64, post.imageMediaType, 'post_' + post.network + '_sem' + post.week + '.png');
+}
+
+function downloadAllStudioImages() {
+  const posts = loadStudioPosts().filter(p => p.imageBase64);
+  if (!posts.length) { alert('No hay imágenes generadas todavía.'); return; }
+  posts.forEach(p => downloadAdImage(p.imageBase64, p.imageMediaType, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function renderParrillaImagenesBtn() {
   const area = document.getElementById('chat-area');
   if (!area) return;
@@ -7200,6 +7603,7 @@ function showView(id){
   if(el)el.classList.add('active');
   if(id==='roadmap')updateProgress();
   if(id==='agency')agencyRender();
+  if(id==='social-studio')setTimeout(renderStudio, 50);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 function toggleSidebar() {

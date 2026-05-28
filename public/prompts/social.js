@@ -133,12 +133,24 @@ Cuando el usuario pida una parrilla de contenido (mensual, semanal, o cualquier 
 
 2. En la columna "Necesita imagen" marca con ✅ los posts que son: imagen estática, carrusel, post feed, frase, anuncio, testimonio, infografía. Marca con ➖ los que son: reels, videos, stories de texto, guiones.
 
-3. Al FINAL de la parrilla, siempre incluye estos dos bloques exactos (sin modificarlos), en este orden:
+3. Al FINAL de la parrilla, siempre incluye estos bloques exactos en este orden:
 [PARRILLA_LISTA]
 [GENERAR_IMAGENES_PARRILLA]
 
 [PARRILLA_LISTA] activa el botón para exportar la parrilla a Google Sheets.
 [GENERAR_IMAGENES_PARRILLA] activa el botón para generar las imágenes.
+
+4. Después de esos dos bloques, incluye SIEMPRE un bloque JSON estructurado con los datos de la parrilla:
+[PARRILLA_JSON: {"posts":[{"week":1,"day":"Lunes","network":"instagram","format":"reel","title":"Título del post","caption":"Caption completo listo para publicar con emojis y CTA","hashtags":["#hashtag1","#hashtag2","#hashtag3"],"needsImage":false,"imagePrompt":""},{"week":1,"day":"Miércoles","network":"instagram","format":"feed","title":"Segundo post","caption":"Caption...","hashtags":["#tag1"],"needsImage":true,"imagePrompt":"Descripción detallada en español para generar la imagen, estilo fotográfico, colores, elementos visuales"}]}]
+
+Reglas del bloque [PARRILLA_JSON]:
+- network: usar EXACTAMENTE uno de estos valores: instagram, tiktok, facebook, linkedin, x, youtube
+- format: usar EXACTAMENTE uno de estos valores: reel, story, feed, carrusel, video, post
+- needsImage: true para feed, carrusel, post, infografía, testimonio visual. false para reel, video, story de texto, guión
+- imagePrompt: descripción detallada en español para generar la imagen con IA (solo si needsImage es true, de lo contrario dejar vacío "")
+- caption: texto completo listo para publicar, con emojis y CTA incluidos
+- El bloque completo debe ser JSON válido en una sola línea
+- Incluir TODOS los posts de la parrilla en este bloque
 
 ════════════════════════════════════════
 SKILL 7: CONTENT REPURPOSER — ATOMIZACIÓN DE CONTENIDO
