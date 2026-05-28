@@ -265,6 +265,23 @@ function initReferralButton() {
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
+// ── THEME ──
+function initTheme() {
+  const saved = localStorage.getItem('acuarius-theme');
+  if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+}
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('acuarius-theme', 'light');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('acuarius-theme', 'dark');
+  }
+}
+initTheme();
+
 // INIT
 
 const AGENT_GUIDES = {
