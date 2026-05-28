@@ -4913,23 +4913,10 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       // Guardar el texto de la parrilla para exportación
       lastParrillaText = cleanReply;
       setTimeout(()=>renderParrillaImagenesBtn(), 300);
-      // Mostrar acceso al Studio si se importaron posts
+      // Auto-abrir Studio si se importaron posts
       if (studioImported > 0) {
-        setTimeout(() => {
-          const area = document.getElementById('chat-area');
-          if (!area) return;
-          const btn = document.createElement('div');
-          btn.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--blue-dim);border:1px solid var(--blue-md);border-radius:10px;margin:8px 0;cursor:pointer;transition:all .15s';
-          btn.onmouseenter = () => btn.style.background = 'var(--blue-lt)';
-          btn.onmouseleave = () => btn.style.background = 'var(--blue-dim)';
-          btn.onclick = () => openSocialStudio();
-          btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-            '<div><div style="font-size:13px;font-weight:600;color:var(--blue)">' + studioImported + ' posts importados al Studio</div>' +
-            '<div style="font-size:11px;color:var(--muted)">Haz clic para ver tu calendario visual y generar imágenes</div></div>' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" style="margin-left:auto"><path d="M9 18l6-6-6-6"/></svg>';
-          area.appendChild(btn);
-          area.scrollTop = area.scrollHeight;
-        }, 600);
+        window._studioJustImported = studioImported;
+        setTimeout(() => openSocialStudio(), 1800);
       }
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
@@ -7128,6 +7115,25 @@ function renderStudio() {
   const statsBar = document.getElementById('studio-stats-bar');
   const filters = document.getElementById('studio-filters');
 
+  // Banner de import reciente
+  const existingBanner = document.getElementById('studio-import-banner');
+  if (existingBanner) existingBanner.remove();
+  if (window._studioJustImported && posts.length > 0) {
+    const count = window._studioJustImported;
+    window._studioJustImported = null;
+    const studioWrap = document.querySelector('.social-studio');
+    if (studioWrap) {
+      const banner = document.createElement('div');
+      banner.id = 'studio-import-banner';
+      banner.style.cssText = 'display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#EEF0FD,#F0F4FF);border:1.5px solid var(--blue-md);border-radius:10px;padding:12px 16px;margin-bottom:14px;animation:fadeIn .4s ease';
+      banner.innerHTML = '<span style="font-size:20px">🎉</span><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--blue)">' + count + ' posts importados a tu calendario</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Haz clic en cualquier tarjeta para editar el caption, generar imágenes y marcar como listo</div></div><button onclick="document.getElementById(\'studio-import-banner\')?.remove()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px;line-height:1">×</button>';
+      const hdr = studioWrap.querySelector('.studio-hdr');
+      if (hdr && hdr.nextSibling) studioWrap.insertBefore(banner, hdr.nextSibling);
+      else studioWrap.prepend(banner);
+      setTimeout(() => banner?.remove(), 8000);
+    }
+  }
+
   if (posts.length === 0) {
     if (emptyEl) emptyEl.style.display = 'flex';
     if (calView) calView.style.display = 'none';
@@ -7603,28 +7609,27 @@ function renderParrillaImagenesBtn() {
 
   el.innerHTML = `
     <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">${logoSvg}</div>
-    <div style="background:linear-gradient(135deg,#EEF0FD 0%,#F5F3FF 100%);border:1.5px solid var(--blue-md);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:16px 18px;max-width:500px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:18px">🎉</span>
-        <span style="font-size:14px;font-weight:700;color:var(--text)">Parrilla lista</span>
+    <div style="background:linear-gradient(135deg,#EEF0FD 0%,#F5F3FF 100%);border:1.5px solid var(--blue-md);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:16px 18px;max-width:460px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:18px">✅</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text)">Parrilla lista — abriendo Studio…</span>
       </div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">¿Qué quieres hacer con esta parrilla?</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Tu parrilla se importó al calendario. En unos segundos verás todos los posts organizados por red y día.</p>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button onclick="exportToSheets(this)" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#1a7340;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='#155c34'" onmouseout="this.style.background='#1a7340'">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="white" stroke-width="1.5"/><path d="M3 9h18M9 9v12" stroke="white" stroke-width="1.5"/><path d="M6 6h.01M6 12h3M6 16h3M13 12h3M13 16h3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-          Abrir en Google Sheets
+        <button onclick="openSocialStudio();document.getElementById('parrilla-img-btn-wrap')?.remove()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='var(--blue-h)'" onmouseout="this.style.background='var(--blue)'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Abrir Social Media Studio
         </button>
-        <button onclick="generarImagenesParrilla(this)" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='var(--blue-h)'" onmouseout="this.style.background='var(--blue)'">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          Crear imágenes de esta parrilla
-        </button>
-        <button onclick="exportToPDF(lastParrillaText,'acuarius-parrilla.pdf')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);transition:all .15s;width:100%" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='transparent'">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          Exportar como PDF
-        </button>
-        <button onclick="document.getElementById('parrilla-img-btn-wrap')?.remove()" style="padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font);width:100%">
-          Ahora no
-        </button>
+        <div style="display:flex;gap:8px">
+          <button onclick="exportToSheets(this)" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:#1a7340;border:1.5px solid #1a7340;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);flex:1" onmouseover="this.style.background='#f0faf4'" onmouseout="this.style.background='transparent'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M9 9v12" stroke="currentColor" stroke-width="1.5"/></svg>
+            Google Sheets
+          </button>
+          <button onclick="exportToPDF(lastParrillaText,'acuarius-parrilla.pdf')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);flex:1" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='transparent'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exportar PDF
+          </button>
+        </div>
       </div>
     </div>`;
 
