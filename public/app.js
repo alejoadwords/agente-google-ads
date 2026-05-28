@@ -7038,18 +7038,110 @@ const STATUS_CFG = {
 let studioCurrentWeek = 0;
 let studioCurrentView = 'calendar';
 
+// ─── Studio data model v2 ─────────────────────────────────────────────────────
+// Structure: { version:2, activeId:'parrilla_xxx', parrillas:[{ id, name, createdAt, posts:[] }] }
+
 function getStudioKey() {
   const uid = clerkInstance?.user?.id || 'anon';
   const cp = agencyActiveClientId ? '_' + agencyActiveClientId : '';
   return 'acuarius_studio_' + uid + cp;
 }
+
+function loadStudioData() {
+  try {
+    const raw = localStorage.getItem(getStudioKey());
+    if (!raw) return { version: 2, activeId: null, parrillas: [] };
+    const data = JSON.parse(raw);
+    // Migration v1 → v2: v1 stored a plain array of posts
+    if (Array.isArray(data)) {
+      if (!data.length) return { version: 2, activeId: null, parrillas: [] };
+      const id = 'parrilla_' + Date.now();
+      return { version: 2, activeId: id, parrillas: [{ id, name: 'Mi parrilla', createdAt: Date.now(), posts: data }] };
+    }
+    return data;
+  } catch(e) { return { version: 2, activeId: null, parrillas: [] }; }
+}
+
+function saveStudioData(data) {
+  try { localStorage.setItem(getStudioKey(), JSON.stringify(data)); } catch(e) {}
+}
+
+function getActiveParrilla() {
+  const data = loadStudioData();
+  if (!data.parrillas.length) return null;
+  return data.parrillas.find(p => p.id === data.activeId) || data.parrillas[0];
+}
+
+// Backward-compat wrappers used throughout
 function loadStudioPosts() {
-  try { return JSON.parse(localStorage.getItem(getStudioKey()) || '[]'); } catch(e) { return []; }
+  const p = getActiveParrilla();
+  return p ? (p.posts || []) : [];
 }
+
 function saveStudioPosts(posts) {
-  localStorage.setItem(getStudioKey(), JSON.stringify(posts));
+  const data = loadStudioData();
+  const active = data.parrillas.find(p => p.id === data.activeId);
+  if (active) { active.posts = posts; saveStudioData(data); return; }
+  if (posts.length > 0) {
+    const id = 'parrilla_' + Date.now();
+    data.parrillas.push({ id, name: 'Mi parrilla', createdAt: Date.now(), posts });
+    data.activeId = id;
+    saveStudioData(data);
+  }
 }
+
+// ─── Parrilla management ──────────────────────────────────────────────────────
+
+function createParrilla(name) {
+  const data = loadStudioData();
+  const id = 'parrilla_' + Date.now();
+  data.parrillas.unshift({ id, name: name || 'Nueva parrilla', createdAt: Date.now(), posts: [] });
+  data.activeId = id;
+  saveStudioData(data);
+  return id;
+}
+
+function setActiveParrilla(id) {
+  const data = loadStudioData();
+  if (!data.parrillas.find(p => p.id === id)) return;
+  data.activeId = id;
+  saveStudioData(data);
+  studioCurrentWeek = 0;
+  studioCurrentView = 'calendar';
+  closeHistorialPanel();
+  renderStudio();
+}
+
+function deleteParrilla(id) {
+  if (!confirm('¿Eliminar esta parrilla y todos sus posts? Esta acción no se puede deshacer.')) return;
+  const data = loadStudioData();
+  data.parrillas = data.parrillas.filter(p => p.id !== id);
+  if (data.activeId === id) data.activeId = data.parrillas[0]?.id || null;
+  saveStudioData(data);
+  renderHistorialPanel();
+  renderStudio();
+}
+
+function renameActiveParrilla() {
+  const active = getActiveParrilla();
+  if (!active) return;
+  const newName = prompt('Nuevo nombre para la parrilla:', active.name);
+  if (!newName || !newName.trim()) return;
+  const data = loadStudioData();
+  const p = data.parrillas.find(pp => pp.id === active.id);
+  if (p) { p.name = newName.trim(); saveStudioData(data); renderStudio(); }
+}
+
+// ─── Post management ──────────────────────────────────────────────────────────
+
 function addStudioPost(post) {
+  const data = loadStudioData();
+  if (!data.activeId || !data.parrillas.length) {
+    const id = 'parrilla_' + Date.now();
+    data.parrillas.unshift({ id, name: 'Mi parrilla', createdAt: Date.now(), posts: [] });
+    data.activeId = id;
+    saveStudioData(data);
+  }
   const posts = loadStudioPosts();
   post.id = post.id || 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
   post.status = post.status || 'borrador';
@@ -7058,6 +7150,7 @@ function addStudioPost(post) {
   saveStudioPosts(posts);
   return post;
 }
+
 function updateStudioPost(id, updates) {
   const posts = loadStudioPosts();
   const idx = posts.findIndex(p => p.id === id);
@@ -7066,18 +7159,34 @@ function updateStudioPost(id, updates) {
   saveStudioPosts(posts);
   if (document.getElementById('view-social-studio')?.classList.contains('active')) renderStudio();
 }
+
 function deleteStudioPost(id) {
   saveStudioPosts(loadStudioPosts().filter(p => p.id !== id));
   closePostModal();
   renderStudio();
 }
 
+function addManualPost() {
+  if (!getActiveParrilla()) createParrilla('Mi parrilla');
+  const newPost = {
+    id: 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    week: 1, day: 'Lunes', network: 'instagram', format: 'feed',
+    title: 'Nuevo post', caption: '', hashtags: [],
+    needsImage: true, imagePrompt: '',
+    imageBase64: null, imageMediaType: null,
+    status: 'borrador', createdAt: Date.now()
+  };
+  addStudioPost(newPost);
+  renderStudio();
+  setTimeout(() => openPostModal(newPost.id), 120);
+}
+
 function parseParrillaJSON(jsonStr) {
   try {
-    const data = JSON.parse(jsonStr);
-    const posts = data.posts || [];
-    const existing = loadStudioPosts();
-    const manual = existing.filter(p => !p._fromParrilla);
+    const parsed = JSON.parse(jsonStr);
+    const posts = parsed.posts || parsed;
+    if (!Array.isArray(posts) || !posts.length) return 0;
+
     const newPosts = posts.map(p => ({
       id: 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
       week: parseInt(p.week) || 1,
@@ -7095,7 +7204,21 @@ function parseParrillaJSON(jsonStr) {
       _fromParrilla: true,
       createdAt: Date.now()
     }));
-    saveStudioPosts([...manual, ...newPosts]);
+
+    // Build a descriptive name for this parrilla
+    const nets = [...new Set(newPosts.map(p => p.network))].slice(0,2);
+    const netNames = nets.map(n => (STUDIO_NETWORKS[n] || { label: n }).label).join(' + ');
+    const dateStr = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long' });
+    const parrillaName = window._studioWizardName || (netNames ? netNames + ' — ' + dateStr : 'Parrilla ' + dateStr);
+    window._studioWizardName = null;
+
+    // Create a new parrilla entry in history
+    const studioData = loadStudioData();
+    const newId = 'parrilla_' + Date.now();
+    studioData.parrillas.unshift({ id: newId, name: parrillaName, createdAt: Date.now(), posts: newPosts });
+    studioData.activeId = newId;
+    saveStudioData(studioData);
+
     return newPosts.length;
   } catch(e) { console.warn('[studio] parseParrillaJSON error:', e); return 0; }
 }
@@ -7107,6 +7230,15 @@ function openSocialStudio() {
 }
 
 function renderStudio() {
+  // Update header: parrilla name
+  const active = getActiveParrilla();
+  const nameEl = document.getElementById('studio-active-name');
+  if (nameEl) nameEl.textContent = active ? active.name : 'Sin parrilla activa';
+
+  // Dismiss loading overlay if present
+  const loadOverlay = document.getElementById('studio-gen-loading');
+  if (loadOverlay) loadOverlay.style.display = 'none';
+
   const posts = loadStudioPosts();
   const filtered = studioCurrentWeek === 0 ? posts : posts.filter(p => p.week === studioCurrentWeek);
   const emptyEl = document.getElementById('studio-empty');
@@ -7125,12 +7257,12 @@ function renderStudio() {
     if (studioWrap) {
       const banner = document.createElement('div');
       banner.id = 'studio-import-banner';
-      banner.style.cssText = 'display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#EEF0FD,#F0F4FF);border:1.5px solid var(--blue-md);border-radius:10px;padding:12px 16px;margin-bottom:14px;animation:fadeIn .4s ease';
-      banner.innerHTML = '<span style="font-size:20px">🎉</span><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--blue)">' + count + ' posts importados a tu calendario</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Haz clic en cualquier tarjeta para editar el caption, generar imágenes y marcar como listo</div></div><button onclick="document.getElementById(\'studio-import-banner\')?.remove()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px;line-height:1">×</button>';
-      const hdr = studioWrap.querySelector('.studio-hdr');
-      if (hdr && hdr.nextSibling) studioWrap.insertBefore(banner, hdr.nextSibling);
-      else studioWrap.prepend(banner);
-      setTimeout(() => banner?.remove(), 8000);
+      banner.style.cssText = 'display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#EEF0FD,#F0F4FF);border:1.5px solid var(--blue-md);border-radius:10px;padding:12px 16px;margin:0 24px 8px;animation:fadeIn .4s ease';
+      banner.innerHTML = '<span style="font-size:20px">🎉</span><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--blue)">' + count + ' posts importados · parrilla "' + esc(active?.name || '') + '"</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Haz clic en cualquier tarjeta para editar, generar imágenes y marcar como listo</div></div><button onclick="document.getElementById(\'studio-import-banner\')?.remove()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px;line-height:1">×</button>';
+      const filterBar = document.getElementById('studio-filters');
+      if (filterBar) filterBar.after(banner);
+      else { const hdr = studioWrap.querySelector('.studio-hdr'); if (hdr?.nextSibling) studioWrap.insertBefore(banner, hdr.nextSibling); else studioWrap.prepend(banner); }
+      setTimeout(() => banner?.remove(), 10000);
     }
   }
 
@@ -7162,6 +7294,76 @@ function renderStudio() {
     if (listView) listView.style.display = 'block';
     renderListView(filtered);
   }
+}
+
+// ─── Historial panel ──────────────────────────────────────────────────────────
+
+function openHistorialPanel() {
+  renderHistorialPanel();
+  const overlay = document.getElementById('studio-historial-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  setTimeout(() => overlay.querySelector('.studio-historial-panel')?.classList.add('open'), 10);
+}
+
+function closeHistorialPanel() {
+  const overlay = document.getElementById('studio-historial-overlay');
+  if (!overlay) return;
+  overlay.querySelector('.studio-historial-panel')?.classList.remove('open');
+  setTimeout(() => { overlay.style.display = 'none'; }, 260);
+}
+
+function renderHistorialPanel() {
+  const data = loadStudioData();
+  const list = document.getElementById('studio-historial-list');
+  if (!list) return;
+
+  if (!data.parrillas.length) {
+    list.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--muted);font-size:13px">No tienes parrillas guardadas aún.<br><br>Genera tu primera parrilla con el asistente de IA.</div>';
+    return;
+  }
+
+  list.innerHTML = data.parrillas.map(p => {
+    const isActive = p.id === data.activeId;
+    const nets = [...new Set((p.posts || []).map(pp => pp.network))].slice(0, 5);
+    const dateStr = new Date(p.createdAt).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+    const total = p.posts?.length || 0;
+    const listos = (p.posts || []).filter(pp => pp.status === 'listo' || pp.status === 'publicado').length;
+    const pct = total ? Math.round(listos / total * 100) : 0;
+    const netDots = nets.map(n => {
+      const cfg = STUDIO_NETWORKS[n] || { color: '#888' };
+      return '<span style="width:7px;height:7px;border-radius:50%;background:' + cfg.color + ';display:inline-block"></span>';
+    }).join('');
+
+    return '<div class="historial-card' + (isActive ? ' historial-active' : '') + '" onclick="setActiveParrilla(\'' + p.id + '\')">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="historial-name">' + esc(p.name) +
+            (isActive ? ' <span style="font-size:9px;background:var(--blue);color:#fff;padding:1px 6px;border-radius:10px;font-weight:700;vertical-align:middle">activa</span>' : '') +
+          '</div>' +
+          '<div class="historial-meta">' + total + ' posts · ' + dateStr + '</div>' +
+          (netDots ? '<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">' + netDots + '</div>' : '') +
+        '</div>' +
+        '<button onclick="event.stopPropagation();deleteParrilla(\'' + p.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--muted2);padding:3px 6px;border-radius:6px;font-size:12px;flex-shrink:0;line-height:1" title="Eliminar" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'var(--muted2)\'">✕</button>' +
+      '</div>' +
+      (total ? '<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px"><span>Progreso</span><span>' + listos + '/' + total + ' listos</span></div><div style="height:3px;background:var(--border);border-radius:2px"><div style="height:100%;width:' + pct + '%;background:var(--blue);border-radius:2px;transition:width .4s"></div></div></div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ─── Studio background generation (wizard without leaving Studio) ─────────────
+
+function studioGenerateParrilla(prompt, wizardName) {
+  window._studioWizardName = wizardName || null;
+  // Show loading overlay in Studio
+  const overlay = document.getElementById('studio-gen-loading');
+  if (overlay) overlay.style.display = 'flex';
+  // Set context to social agent and send message without switching view
+  setAgentContext('social');
+  setTimeout(() => {
+    document.getElementById('cin').value = prompt;
+    sendMsg();
+  }, 100);
 }
 
 function renderCalendarView(posts) {
@@ -7432,10 +7634,14 @@ function submitStudioWizard() {
     ? 'Al terminar la parrilla, genera imágenes para TODOS los posts que las necesiten (needsImage: true).'
     : `Al terminar la parrilla, genera exactamente ${imgCount} imágenes para los posts más importantes (los que necesiten imagen).`;
 
+  const netNames = nets.map(n => netLabels[n] || n).join(' + ');
+  const dateStr = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long' });
+  const wizardName = netNames + ' — ' + dateStr;
+
   const prompt =
     `Crea una parrilla de contenido de ${days} días con las siguientes especificaciones:
 
-REDES SOCIALES: ${nets.map(n => netLabels[n]||n).join(', ')}
+REDES SOCIALES: ${netNames}
 OBJETIVO: ${objLabels[obj] || obj}
 TIPOS DE CONTENIDO: ${formats.map(f => fmtLabels[f]||f).join(', ')}
 TONO: ${toneLabels[tone] || tone}
@@ -7446,13 +7652,8 @@ IMÁGENES: ${imgInstr}
 Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.`;
 
   document.getElementById('studio-wizard').remove();
-  setAgentContext('social');
-  showView('chat');
-  // Small delay to ensure view is active
-  setTimeout(() => {
-    document.getElementById('cin').value = prompt;
-    sendMsg();
-  }, 150);
+  // Generate without leaving Studio
+  studioGenerateParrilla(prompt, wizardName);
 }
 
 // ─── Post Modal ──────────────────────────────────────────────────────────────
