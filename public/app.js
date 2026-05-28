@@ -7689,6 +7689,9 @@ function setAgentContext(ctx, showGuide=false){
     const chatArea=document.getElementById('chat-area');
     const isEmpty=!chatArea||chatArea.children.length===0;
     if(socialBar)socialBar.style.display=isEmpty?'block':'none';
+    // Actualizar descripción del Studio banner con conteo de posts
+    const descEl=document.getElementById('studio-bar-desc');
+    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · gestiona tu parrilla';}
     if(qaBar)qaBar.style.display='none';
   } else {
     if(socialBar)socialBar.style.display='none';
