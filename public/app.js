@@ -7820,8 +7820,8 @@ function openPostModal(postId) {
       '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">🔄 Cambiar</button>' +
-        '<button class="pm-btn pm-btn-ghost" style="justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')" title="Eliminar imagen">🗑</button>' +
-      '</div>';
+      '</div>' +
+      '<button class="pm-btn pm-btn-ghost" style="width:100%;justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')">🗑 Eliminar imagen</button>';
   } else if (isVideo) {
     // Formato video sin media — mostrar opciones de creación
     mediaHTML =
