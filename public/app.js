@@ -7787,7 +7787,8 @@ function openPostModal(postId) {
       '<div style="font-size:10px;color:var(--muted);text-align:center;padding:4px 0">' + esc(post.videoFileName || 'video.mp4') + '</div>' +
       '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">🔄 Cambiar</button>' +
-      '</div>';
+      '</div>' +
+      '<button class="pm-btn pm-btn-ghost" style="width:100%;justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')">🗑 Eliminar video</button>';
   } else if (hasImage && post.carouselImages && post.carouselImages.length > 1) {
     // Carrusel con múltiples slides generados
     const slideCount = post.carouselImages.length;
