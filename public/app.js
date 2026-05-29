@@ -7826,17 +7826,21 @@ function openPostModal(postId) {
   } else if (isVideo) {
     const hasScript = !!(post.script && post.script.trim());
     if (hasScript) {
-      // Guión generado — resaltar el paso de subir el video
+      // Guión listo — mostrar opciones para crear el video
       mediaHTML =
         '<div class="post-modal-media-preview" style="flex-direction:column;gap:10px;background:var(--blue-lt)">' +
           '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="1.8" stroke-linecap="round"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>' +
-          '<div style="font-size:12px;font-weight:600;color:var(--blue);text-align:center;line-height:1.4">Guión listo ✓<br><span style="font-weight:400;color:var(--muted);font-size:11px">Grábalo y súbelo aquí</span></div>' +
+          '<div style="font-size:12px;font-weight:600;color:var(--blue);text-align:center;line-height:1.4">Guión listo ✓<br><span style="font-weight:400;color:var(--muted);font-size:11px">Elige cómo crear el video</span></div>' +
         '</div>' +
-        '<div class="post-modal-media-label">Paso 2: subir tu video</div>' +
-        '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
+        '<div class="post-modal-media-label">Crear video</div>' +
+        '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-aivideo-btn" onclick="generateVideoForPost(\'' + postId + '\')">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+          'Crear con IA · ~60 seg' +
+        '</button>' +
+        '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
           uploadIcon + 'Subir video grabado' +
         '</button>' +
-        '<div style="display:flex;gap:6px">' +
+        '<div style="display:flex;gap:6px;margin-top:2px">' +
           '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
             '↺ Regenerar guión' +
           '</button>' +
@@ -7856,7 +7860,7 @@ function openPostModal(postId) {
         '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
           uploadIcon + 'O subir video directamente' +
         '</button>' +
-        '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">Genera el guión → grábalo → sube el video</div>';
+        '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">Genera el guión → crea con IA o graba y sube</div>';
     }
   } else {
     // Formato imagen sin media — generar o subir
@@ -8063,6 +8067,83 @@ async function generateScriptForPost(postId) {
   } catch(err) { alert('Error al generar guión: ' + err.message); }
   finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar guión con IA'; }
+  }
+}
+
+// ── Generar video con IA para un post del Studio ──────────────────────────────
+async function generateVideoForPost(postId) {
+  const post = loadStudioPosts().find(p => p.id === postId);
+  if (!post) return;
+
+  const btn = document.getElementById('pm-aivideo-btn');
+  const setBtn = (html, disabled) => { if (btn) { btn.disabled = disabled; btn.innerHTML = html; } };
+
+  const spinSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>';
+
+  // Construir prompt a partir del guión + título del post
+  const scriptLines = (post.script || '').split('\n').filter(l => l.trim() && !l.startsWith('#')).slice(0, 6).join(' ');
+  const prompt = [
+    post.title,
+    scriptLines || post.caption || '',
+    'Vertical social media video, vibrant colors, engaging visual storytelling, Latin American setting, no subtitles'
+  ].filter(Boolean).join('. ').slice(0, 500);
+
+  const aspect = ['reel','story'].includes(post.format) ? '9:16' : '1:1';
+
+  setBtn(spinSvg + ' Enviando a IA…', true);
+
+  try {
+    // 1. Submit job
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+    const submitRes = await fetch('/api/video-gen', {
+      method: 'POST', headers,
+      body: JSON.stringify({ action: 'submit', prompt, aspect_ratio: aspect, duration: 10, resolution: '1080p' })
+    });
+    const submitData = await submitRes.json();
+    if (!submitRes.ok || !submitData.job_id) throw new Error(submitData.error || 'Error al iniciar generación');
+
+    const jobId = submitData.job_id;
+    setBtn(spinSvg + ' Generando video…', true);
+
+    // 2. Poll hasta completado (máx 3 min, cada 5 seg)
+    let videoUrl = null;
+    let attempts = 0;
+    const msgs = ['Procesando con IA…', 'Generando frames…', 'Casi listo…', 'Finalizando…'];
+    while (attempts < 36) {
+      await new Promise(r => setTimeout(r, 5000));
+      attempts++;
+      setBtn(spinSvg + ' ' + msgs[Math.min(Math.floor(attempts / 9), 3)], true);
+
+      const statusRes = await fetch('/api/video-gen', {
+        method: 'POST', headers,
+        body: JSON.stringify({ action: 'status', job_id: jobId })
+      });
+      const statusData = await statusRes.json();
+      if (!statusRes.ok) throw new Error(statusData.error || 'Error consultando estado');
+      if (statusData.status === 'completed' && statusData.video_url) { videoUrl = statusData.video_url; break; }
+      if (statusData.status === 'failed') throw new Error(statusData.error || 'La generación falló');
+    }
+
+    if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');
+
+    // 3. Descontar crédito
+    try {
+      await fetch('/api/video-credits', {
+        method: 'POST', headers,
+        body: JSON.stringify({ action: 'deduct' })
+      });
+    } catch(_) {}
+
+    // 4. Guardar como videoUrl en el post y reabrir modal
+    updateStudioPost(postId, { videoUrl, videoFileName: 'video-ia.mp4', status: 'listo' });
+    closePostModal();
+    setTimeout(() => openPostModal(postId), 80);
+
+  } catch(err) {
+    setBtn('<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Crear con IA · ~60 seg', false);
+    alert('Error al generar video: ' + err.message);
   }
 }
 
