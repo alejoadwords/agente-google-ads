@@ -7824,21 +7824,40 @@ function openPostModal(postId) {
       '</div>' +
       '<button class="pm-btn pm-btn-ghost" style="width:100%;justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')">🗑 Eliminar imagen</button>';
   } else if (isVideo) {
-    // Formato video sin media — mostrar opciones de creación
-    mediaHTML =
-      '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
-        '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
-        '<span style="font-size:11px;color:var(--muted)">Sin media</span>' +
-      '</div>' +
-      '<div class="post-modal-media-label">Crear tu ' + fmt.label + '</div>' +
-      '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
-        'Generar guión con IA' +
-      '</button>' +
-      '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
-        uploadIcon + 'Subir video desde mi PC' +
-      '</button>' +
-      '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">El guión aparecerá en el panel derecho para que puedas usarlo al grabar</div>';
+    const hasScript = !!(post.script && post.script.trim());
+    if (hasScript) {
+      // Guión generado — resaltar el paso de subir el video
+      mediaHTML =
+        '<div class="post-modal-media-preview" style="flex-direction:column;gap:10px;background:var(--blue-lt)">' +
+          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="1.8" stroke-linecap="round"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>' +
+          '<div style="font-size:12px;font-weight:600;color:var(--blue);text-align:center;line-height:1.4">Guión listo ✓<br><span style="font-weight:400;color:var(--muted);font-size:11px">Grábalo y súbelo aquí</span></div>' +
+        '</div>' +
+        '<div class="post-modal-media-label">Paso 2: subir tu video</div>' +
+        '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
+          uploadIcon + 'Subir video grabado' +
+        '</button>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
+            '↺ Regenerar guión' +
+          '</button>' +
+        '</div>';
+    } else {
+      // Sin guión — mostrar pasos para crear el video
+      mediaHTML =
+        '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
+          '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
+          '<span style="font-size:11px;color:var(--muted)">Sin video</span>' +
+        '</div>' +
+        '<div class="post-modal-media-label">Crear tu ' + fmt.label + '</div>' +
+        '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+          'Paso 1 · Generar guión con IA' +
+        '</button>' +
+        '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
+          uploadIcon + 'O subir video directamente' +
+        '</button>' +
+        '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">Genera el guión → grábalo → sube el video</div>';
+    }
   } else {
     // Formato imagen sin media — generar o subir
     const isCarrusel = post.format === 'carrusel';
