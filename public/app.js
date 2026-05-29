@@ -7383,6 +7383,25 @@ async function publishPostNow(postId) {
   const results = [];
 
   try {
+    // ── Subir media UNA SOLA VEZ antes del loop de redes ──────────────────────
+    // (evita subir la misma imagen N veces — una por cada red seleccionada)
+    let sharedImageUrl  = null;
+    let sharedCarouselUrls = [];
+
+    if (isCarousel) {
+      for (const slide of post.carouselImages.slice(0, 10)) {
+        const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url);
+        sharedCarouselUrls.push(url);
+      }
+    } else if (post.imageBase64 || post.imageUrl) {
+      sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl);
+      // Guardar la CDN URL en el post para futuros reposts (evita re-upload)
+      if (sharedImageUrl && sharedImageUrl !== post.imageUrl) {
+        updateStudioPost(postId, { imageUrl: sharedImageUrl });
+      }
+    }
+
+    // ── Publicar en cada red seleccionada ─────────────────────────────────────
     for (const network of selectedNets) {
       const acctList = conns[network] || [];
       const acctIdx  = parseInt(document.getElementById('pub-acct-' + network)?.value || '0');
@@ -7391,29 +7410,16 @@ async function publishPostNow(postId) {
 
       if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
 
-      let imageUrl = null;
-      let carouselUrls = [];
-
-      if (isCarousel && network === 'instagram') {
-        // Subir todos los slides del carrusel
-        for (const slide of post.carouselImages.slice(0, 10)) {
-          const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url);
-          carouselUrls.push(url);
-        }
-      } else if (post.imageBase64) {
-        imageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl);
-      }
-
       const body = {
         network,
-        pageToken:        acct.pageToken,
-        pageId:           acct.pageId,
-        igUserId:         acct.igUserId || null,
-        imageUrl,
-        videoUrl:         post.videoUrl || null,
+        pageToken:         acct.pageToken,
+        pageId:            acct.pageId,
+        igUserId:          acct.igUserId || null,
+        imageUrl:          sharedImageUrl,
+        videoUrl:          post.videoUrl || null,
         caption,
-        isCarousel:       isCarousel && network === 'instagram',
-        carouselImageUrls: carouselUrls,
+        isCarousel:        isCarousel && network === 'instagram',
+        carouselImageUrls: sharedCarouselUrls,
       };
 
       const pubRes  = await fetch('/api/social-publish', { method: 'POST', headers, body: JSON.stringify(body) });
@@ -7426,35 +7432,106 @@ async function publishPostNow(postId) {
       }
     }
 
-    // Evaluar resultados
-    const allOk  = results.every(r => r.success);
-    const anyOk  = results.some(r => r.success);
+    // ── Evaluar resultados ────────────────────────────────────────────────────
+    const allOk = results.every(r => r.success);
+    const anyOk = results.some(r => r.success);
 
     if (anyOk) {
-      // Marcar post como publicado
       updateStudioPost(postId, { status: 'publicado' });
     }
 
     if (allOk) {
       if (status) status.textContent = '✅ ¡Publicado exitosamente!';
-      showToast('Post publicado en ' + results.map(r => r.network).join(' y '), 'success');
       setTimeout(() => {
         document.getElementById('pub-modal')?.remove();
         closePostModal();
         renderStudio();
-      }, 1800);
+        showPublishSuccessModal(results, post);
+      }, 600);
     } else {
-      const errMsgs = results.filter(r => !r.success).map(r => r.network + ': ' + r.error).join('\n');
-      if (status) { status.textContent = '❌ ' + results.filter(r => !r.success).map(r => r.error).join(' · '); status.style.color = '#EF4444'; }
-      if (btn) { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
-      if (!anyOk) alert('Error publicando:\n\n' + errMsgs);
+      const failedNets = results.filter(r => !r.success);
+      const errText    = failedNets.map(r => r.network + ': ' + r.error).join(' · ');
+      if (status) { status.textContent = '❌ ' + errText; status.style.color = '#EF4444'; }
+      if (btn)    { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
+      // Si al menos una red publicó, igual mostramos el modal parcial
+      if (anyOk) {
+        setTimeout(() => {
+          document.getElementById('pub-modal')?.remove();
+          closePostModal();
+          renderStudio();
+          showPublishSuccessModal(results, post);
+        }, 600);
+      }
     }
 
   } catch (err) {
     console.error('publishPostNow error:', err);
     if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#EF4444'; }
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
+    if (btn)    { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
   }
+}
+
+// ── Modal de éxito al publicar ────────────────────────────────────────────────
+function showPublishSuccessModal(results, post) {
+  const existing = document.getElementById('pub-success-modal');
+  if (existing) existing.remove();
+
+  const ok   = results.filter(r => r.success);
+  const fail = results.filter(r => !r.success);
+
+  const netLabel = { instagram: 'Instagram', facebook: 'Facebook Page' };
+  const netIcon  = {
+    instagram: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
+    facebook:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+  };
+
+  const okRows  = ok.map(r =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#F0FDF4;border-radius:8px;margin-bottom:6px">' +
+    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
+    '<span style="margin-left:auto;font-size:12px;color:#059669;font-weight:700">✓ Publicado</span></div>'
+  ).join('');
+
+  const failRows = fail.map(r =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#FEF2F2;border-radius:8px;margin-bottom:6px">' +
+    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
+    '<span style="margin-left:auto;font-size:12px;color:#DC2626;font-weight:600">✗ Error</span></div>'
+  ).join('');
+
+  const allOk    = fail.length === 0;
+  const title    = allOk ? '¡Post publicado!' : 'Publicado parcialmente';
+  const subtitle = allOk
+    ? 'Tu contenido ya está en vivo'
+    : 'Publicado en ' + ok.length + ' de ' + results.length + ' redes';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pub-success-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease';
+
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:20px;padding:40px 36px 32px;max-width:420px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
+      '<div style="width:56px;height:56px;border-radius:50%;background:' + (allOk ? '#D1FAE5' : '#FEF3C7') + ';display:flex;align-items:center;justify-content:center;margin:0 auto 16px">' +
+        (allOk
+          ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>'
+          : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>'
+        ) +
+      '</div>' +
+      '<h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 4px;font-family:var(--font)">' + title + '</h2>' +
+      '<p style="font-size:13px;color:#666;margin:0 0 20px;font-family:var(--font)">' + subtitle + '</p>' +
+      '<div style="text-align:left;margin-bottom:22px">' + okRows + failRows + '</div>' +
+      '<button id="psm-close-btn" style="width:100%;padding:13px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
+    '</div>';
+
+  if (!document.getElementById('conn-modal-styles')) {
+    const style = document.createElement('style');
+    style.id = 'conn-modal-styles';
+    style.textContent = '@keyframes fadeInOverlay{from{opacity:0}to{opacity:1}} @keyframes scaleInCard{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}';
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(overlay);
+  const close = () => { overlay.style.opacity='0'; overlay.style.transition='opacity .25s'; setTimeout(()=>overlay.remove(),260); };
+  document.getElementById('psm-close-btn').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
 
 // ─── Studio data model v2 ─────────────────────────────────────────────────────
