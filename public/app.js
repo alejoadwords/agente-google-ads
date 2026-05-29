@@ -7753,34 +7753,50 @@ function openPostModal(postId) {
   const hashtagsStr = (post.hashtags || []).join(' ');
 
   // ── Sección de media (columna izquierda) ──────────────────────────────────
+  const uploadIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>';
   let mediaHTML = '';
-  if (post.imageBase64) {
-    // Tiene media — mostrarla con opciones de cambio
-    const isVideoMedia = post.imageMediaType && post.imageMediaType.startsWith('video');
+
+  const hasVideo = !!post.videoUrl;
+  const hasImage = !!post.imageBase64;
+
+  if (hasVideo) {
+    // Video subido (object URL — sesión)
     mediaHTML =
       '<div class="post-modal-media-preview">' +
-        (isVideoMedia
-          ? '<video src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" controls style="width:100%;height:100%;object-fit:cover;border-radius:12px"></video>'
-          : '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">') +
+        '<video src="' + post.videoUrl + '" controls style="width:100%;height:100%;object-fit:cover;border-radius:12px"></video>' +
       '</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+      '<div style="font-size:10px;color:var(--muted);text-align:center;padding:4px 0">' + esc(post.videoFileName || 'video.mp4') + '</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">🔄 Cambiar</button>' +
+      '</div>';
+  } else if (hasImage) {
+    // Imagen guardada en base64
+    mediaHTML =
+      '<div class="post-modal-media-preview">' +
+        '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
+      '</div>' +
+      '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'' + (isVideo ? 'video/*,image/*' : 'image/*') + '\')">🔄 Cambiar</button>' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">🔄 Cambiar</button>' +
       '</div>';
   } else if (isVideo) {
-    // Formato video/reel/story — no hay generación de imagen, solo subir
+    // Formato video sin media — mostrar opciones de creación
     mediaHTML =
       '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
         '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
         '<span style="font-size:11px;color:var(--muted)">Sin media</span>' +
       '</div>' +
-      '<div class="post-modal-media-label">Subir video o imagen</div>' +
+      '<div class="post-modal-media-label">Crear tu ' + fmt.label + '</div>' +
+      '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+        'Generar guión con IA' +
+      '</button>' +
       '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>' +
-        'Subir desde mi PC' +
-      '</button>';
+        uploadIcon + 'Subir video desde mi PC' +
+      '</button>' +
+      '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">El guión aparecerá en el panel derecho para que puedas usarlo al grabar</div>';
   } else {
-    // Formato imagen — ofrecer generar con IA o subir
+    // Formato imagen sin media — generar o subir
     mediaHTML =
       '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
         '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
@@ -7788,12 +7804,11 @@ function openPostModal(postId) {
       '</div>' +
       '<div class="post-modal-media-label">Crear imagen</div>' +
       '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
         'Generar con IA' +
       '</button>' +
       '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>' +
-        'Subir desde mi PC' +
+        uploadIcon + 'Subir desde mi PC' +
       '</button>';
     if (post.imagePrompt) {
       mediaHTML += '<div style="font-size:10px;color:var(--muted);line-height:1.5;padding:8px 10px;background:var(--bg-muted);border-radius:8px;margin-top:2px"><span style="font-weight:700;display:block;margin-bottom:3px">Prompt sugerido</span>' + esc(post.imagePrompt) + '</div>';
@@ -7835,9 +7850,14 @@ function openPostModal(postId) {
       '<div class="post-modal-2col">' +
         '<div class="post-modal-media">' + mediaHTML + '</div>' +
         '<div class="post-modal-content">' +
-          '<div class="post-field"><label>Caption</label>' +
-            '<textarea id="pm-caption" rows="7" placeholder="Caption listo para publicar...">' + esc(post.caption || '') + '</textarea>' +
+          '<div class="post-field"><label>Caption / Hook</label>' +
+            '<textarea id="pm-caption" rows="' + (isVideo ? '4' : '7') + '" placeholder="Caption listo para publicar...">' + esc(post.caption || '') + '</textarea>' +
           '</div>' +
+          (isVideo
+            ? '<div class="post-field"><label>Guión del video</label>' +
+                '<textarea id="pm-script" rows="5" placeholder="El guión aparecerá aquí al generarlo, o escríbelo manualmente..." style="font-size:12px;line-height:1.6">' + esc(post.script || '') + '</textarea>' +
+              '</div>'
+            : '') +
           '<div class="post-field"><label>Hashtags</label>' +
             '<input id="pm-hashtags" type="text" value="' + esc(hashtagsStr) + '" placeholder="#hashtag1 #hashtag2">' +
           '</div>' +
@@ -7855,30 +7875,90 @@ function uploadMediaForPost(postId, accept) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept || 'image/*';
-  input.onchange = async (e) => {
+  // Debe estar en el DOM para que funcione en todos los navegadores
+  input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(input);
+
+  input.onchange = (e) => {
     const file = e.target.files[0];
+    document.body.removeChild(input);
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target.result.split(',')[1];
-      updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type });
+
+    if (file.type.startsWith('video/')) {
+      // Videos: usar object URL (sesión) — no caben en localStorage
+      const videoUrl = URL.createObjectURL(file);
+      updateStudioPost(postId, {
+        videoUrl,
+        videoFileName: file.name,
+        imageBase64: null,        // limpiar imagen previa
+        imageMediaType: file.type
+      });
       closePostModal();
       setTimeout(() => openPostModal(postId), 80);
-    };
-    reader.readAsDataURL(file);
+    } else {
+      // Imágenes: convertir a base64 (límite 5 MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('La imagen es demasiado grande. Máximo 5 MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target.result.split(',')[1];
+        updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type, videoUrl: null });
+        closePostModal();
+        setTimeout(() => openPostModal(postId), 80);
+      };
+      reader.onerror = () => alert('Error al leer el archivo. Intenta de nuevo.');
+      reader.readAsDataURL(file);
+    }
   };
+
+  input.oncancel = () => { if (document.body.contains(input)) document.body.removeChild(input); };
   input.click();
 }
 
+// Generar guión del video con el agente (queda en campo de notas del post)
+async function generateScriptForPost(postId) {
+  const post = loadStudioPosts().find(p => p.id === postId);
+  if (!post) return;
+  const btn = document.getElementById('pm-script-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Generando…'; }
+
+  const prompt = 'Crea un guión de producción corto y práctico para este ' + (post.format || 'reel') + ':\n\nTÍTULO: ' + post.title + '\nCAPTION/HOOK: ' + (post.caption || '') + '\nRED: ' + post.network + '\n\nIncluye: hook de 3 segundos, estructura de escenas con duración, texto en pantalla, música o sonido sugerido y CTA final. Formato lista clara.';
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (typeof sessionToken !== 'undefined' && sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+    const sysPrompt = (typeof SYSTEM_SOCIAL !== 'undefined' ? SYSTEM_SOCIAL : '')
+      .replace('{MEMORY}', mem ? JSON.stringify(mem) : '').replace('{STAGE}', '').replace('{AGENT}', 'Social Media Manager');
+    const res = await fetch('/api/chat', {
+      method: 'POST', headers,
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt, stream: false })
+    });
+    const data = await res.json();
+    const script = data.content || data.text || (data.messages && data.messages[data.messages.length - 1]?.content) || '';
+    if (script) {
+      updateStudioPost(postId, { script: script.trim() });
+      const scriptField = document.getElementById('pm-script');
+      if (scriptField) { scriptField.value = script.trim(); scriptField.style.height = 'auto'; scriptField.style.height = scriptField.scrollHeight + 'px'; }
+    }
+  } catch(err) { alert('Error al generar guión: ' + err.message); }
+  finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar guión con IA'; }
+  }
+}
+
 function closePostModal() {
-  // Save caption/hashtags before closing
+  // Save caption/hashtags/script before closing
   if (activePostId) {
     const capEl = document.getElementById('pm-caption');
     const hashEl = document.getElementById('pm-hashtags');
-    if (capEl || hashEl) {
+    const scriptEl = document.getElementById('pm-script');
+    if (capEl || hashEl || scriptEl) {
       const updates = {};
       if (capEl) updates.caption = capEl.value;
       if (hashEl) updates.hashtags = hashEl.value.split(/\s+/).filter(t => t.startsWith('#'));
+      if (scriptEl) updates.script = scriptEl.value;
       updateStudioPost(activePostId, updates);
     }
   }
