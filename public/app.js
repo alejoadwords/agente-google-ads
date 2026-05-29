@@ -7749,23 +7749,80 @@ function openPostModal(postId) {
   const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
   const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
   const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-
-  const imgSection = post.imageBase64
-    ? '<img class="post-modal-img" src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="">'
-    : '<div class="post-modal-img-empty">' + fmt.icon + '</div>';
-
+  const isVideo = ['reel','video','story'].includes(post.format);
   const hashtagsStr = (post.hashtags || []).join(' ');
 
+  // ── Sección de media (columna izquierda) ──────────────────────────────────
+  let mediaHTML = '';
+  if (post.imageBase64) {
+    // Tiene media — mostrarla con opciones de cambio
+    const isVideoMedia = post.imageMediaType && post.imageMediaType.startsWith('video');
+    mediaHTML =
+      '<div class="post-modal-media-preview">' +
+        (isVideoMedia
+          ? '<video src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" controls style="width:100%;height:100%;object-fit:cover;border-radius:12px"></video>'
+          : '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">') +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'' + (isVideo ? 'video/*,image/*' : 'image/*') + '\')">🔄 Cambiar</button>' +
+      '</div>';
+  } else if (isVideo) {
+    // Formato video/reel/story — no hay generación de imagen, solo subir
+    mediaHTML =
+      '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
+        '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
+        '<span style="font-size:11px;color:var(--muted)">Sin media</span>' +
+      '</div>' +
+      '<div class="post-modal-media-label">Subir video o imagen</div>' +
+      '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>' +
+        'Subir desde mi PC' +
+      '</button>';
+  } else {
+    // Formato imagen — ofrecer generar con IA o subir
+    mediaHTML =
+      '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
+        '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
+        '<span style="font-size:11px;color:var(--muted)">Sin imagen</span>' +
+      '</div>' +
+      '<div class="post-modal-media-label">Crear imagen</div>' +
+      '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+        'Generar con IA' +
+      '</button>' +
+      '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>' +
+        'Subir desde mi PC' +
+      '</button>';
+    if (post.imagePrompt) {
+      mediaHTML += '<div style="font-size:10px;color:var(--muted);line-height:1.5;padding:8px 10px;background:var(--bg-muted);border-radius:8px;margin-top:2px"><span style="font-weight:700;display:block;margin-bottom:3px">Prompt sugerido</span>' + esc(post.imagePrompt) + '</div>';
+    }
+  }
+
+  // ── Pie: botones de estado ────────────────────────────────────────────────
+  const footerBtns =
+    (post.status !== 'listo'
+      ? '<button class="pm-btn pm-btn-success" onclick="setPostStatus(\'' + postId + '\',\'listo\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Marcar como listo</button>'
+      : '<button class="pm-btn pm-btn-ghost" style="cursor:default;opacity:.5">✓ Listo</button>') +
+    (post.status !== 'publicado'
+      ? '<button class="pm-btn pm-btn-info" onclick="setPostStatus(\'' + postId + '\',\'publicado\')">🚀 Publicado</button>'
+      : '') +
+    '<div style="flex:1"></div>' +
+    '<button class="pm-btn pm-btn-danger" onclick="if(confirm(\'Eliminar este post?\'))deleteStudioPost(\'' + postId + '\')">Eliminar</button>';
+
+  // ── Ensamblar modal ───────────────────────────────────────────────────────
   const modal = document.createElement('div');
   modal.className = 'post-modal-overlay';
   modal.id = 'post-modal';
   modal.onclick = function(e) { if (e.target === modal) closePostModal(); };
   modal.innerHTML =
     '<div class="post-modal-box">' +
+      // Header
       '<div class="post-modal-hdr">' +
-        '<div>' +
+        '<div style="flex:1;min-width:0">' +
           '<div class="post-modal-title">' + esc(post.title || 'Sin título') + '</div>' +
-          '<div style="display:flex;gap:6px;margin-top:6px">' +
+          '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
             '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + netCfg.label + '</span>' +
             '<span class="post-badge" style="background:var(--bg-muted);color:var(--muted)">' + fmt.label + '</span>' +
             '<span style="font-size:10px;color:var(--muted)">Sem. ' + post.week + (post.day ? ' · ' + esc(post.day) : '') + '</span>' +
@@ -7774,27 +7831,43 @@ function openPostModal(postId) {
         '</div>' +
         '<button class="post-modal-close" onclick="closePostModal()">×</button>' +
       '</div>' +
-      '<div class="post-modal-body">' +
-        imgSection +
-        '<div class="post-field"><label>Caption</label>' +
-          '<textarea id="pm-caption" rows="4" placeholder="Caption listo para publicar...">' + esc(post.caption || '') + '</textarea>' +
+      // Two-column body
+      '<div class="post-modal-2col">' +
+        '<div class="post-modal-media">' + mediaHTML + '</div>' +
+        '<div class="post-modal-content">' +
+          '<div class="post-field"><label>Caption</label>' +
+            '<textarea id="pm-caption" rows="7" placeholder="Caption listo para publicar...">' + esc(post.caption || '') + '</textarea>' +
+          '</div>' +
+          '<div class="post-field"><label>Hashtags</label>' +
+            '<input id="pm-hashtags" type="text" value="' + esc(hashtagsStr) + '" placeholder="#hashtag1 #hashtag2">' +
+          '</div>' +
         '</div>' +
-        '<div class="post-field"><label>Hashtags</label>' +
-          '<input id="pm-hashtags" type="text" value="' + esc(hashtagsStr) + '" placeholder="#hashtag1 #hashtag2">' +
-        '</div>' +
-        (post.imagePrompt ? '<div class="post-field"><label>Prompt de imagen</label><div style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--bg-muted);border-radius:8px;line-height:1.5">' + esc(post.imagePrompt) + '</div></div>' : '') +
       '</div>' +
-      '<div class="post-modal-actions">' +
-        (post.needsImage && !post.imageBase64 ? '<button class="btn-gen-img" onclick="generateImageForPost(\'' + postId + '\')">✨ Generar imagen</button>' : '') +
-        (post.imageBase64 ? '<button class="btn-outline-sm" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar imagen</button>' : '') +
-        (post.status !== 'listo' ? '<button class="btn-mark-ready" onclick="setPostStatus(\'' + postId + '\',\'listo\')">✓ Marcar como listo</button>' : '') +
-        (post.status !== 'publicado' ? '<button class="btn-mark-ready" style="background:#EFF6FF;color:#2563EB;border-color:#BFDBFE" onclick="setPostStatus(\'' + postId + '\',\'publicado\')">🚀 Publicado</button>' : '') +
-        '<button class="btn-delete-post" onclick="if(confirm(\'Eliminar este post?\'))deleteStudioPost(\'' + postId + '\')">Eliminar</button>' +
-      '</div>' +
+      // Footer
+      '<div class="post-modal-footer">' + footerBtns + '</div>' +
     '</div>';
 
   document.body.appendChild(modal);
-  setTimeout(() => modal.querySelector('.post-modal-box').style.animation = 'none', 300);
+}
+
+// Subir imagen/video desde el PC
+function uploadMediaForPost(postId, accept) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept || 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result.split(',')[1];
+      updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type });
+      closePostModal();
+      setTimeout(() => openPostModal(postId), 80);
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
 }
 
 function closePostModal() {
@@ -7824,43 +7897,43 @@ async function generateImageForPost(postId) {
   const post = posts.find(p => p.id === postId);
   if (!post) return;
 
-  closePostModal();
+  // Mostrar estado de carga en el botón del modal
+  const genBtn = document.getElementById('pm-gen-btn');
+  if (genBtn) {
+    genBtn.disabled = true;
+    genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Generando…';
+  }
+
   const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
   const prompt = (post.imagePrompt || post.title || post.caption || 'Social media post') +
     '. Todos los textos en español. Estilo profesional para redes sociales.';
 
-  const cmd = {
-    prompt: prompt,
-    format: fmt.falFormat,
-    variations: 1,
-    hasText: true,
-    _index: 1, _total: 1,
-    _social: true,
-    _studioPostId: postId
-  };
-
-  addAgent('Generando imagen para "' + esc(post.title) + '"...');
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-    const thinkId = addThinking();
     const res = await fetch('/api/generate-image', {
       method: 'POST', headers,
-      body: JSON.stringify({ prompt: cmd.prompt, format: cmd.format, variations: 1, hasText: true })
+      body: JSON.stringify({ prompt, format: fmt.falFormat, variations: 1, hasText: true })
     });
-    rmThinking(thinkId);
     const data = await res.json();
-    if (data.error) { addAgent('Error al generar imagen: ' + data.error); return; }
+    if (data.error) {
+      if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
+      alert('Error al generar imagen: ' + data.error);
+      return;
+    }
     if (data.images && data.images.length > 0) {
       updateStudioPost(postId, {
         imageBase64: data.images[0].base64,
         imageMediaType: data.images[0].mediaType,
         status: 'listo'
       });
-      addAgent('✅ Imagen generada y guardada en el Studio para "' + esc(post.title) + '".');
+      // Reabrir modal con la imagen nueva
+      closePostModal();
+      setTimeout(() => openPostModal(postId), 80);
     }
   } catch(err) {
-    addAgent('Error inesperado generando la imagen: ' + err.message);
+    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
+    alert('Error inesperado: ' + err.message);
   }
 }
 
