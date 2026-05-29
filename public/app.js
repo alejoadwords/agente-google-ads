@@ -7183,13 +7183,80 @@ function deleteStudioPost(id) {
 }
 
 function addManualPost() {
+  // Show a quick-create dialog instead of jumping directly to a blank post
+  const existing = document.getElementById('new-post-dialog');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'new-post-dialog';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const networks = Object.entries(STUDIO_NETWORKS).map(([k,v]) =>
+    '<option value="' + k + '">' + v.label + '</option>').join('');
+  const formats = Object.entries(STUDIO_FORMATS).map(([k,v]) =>
+    '<option value="' + k + '">' + v.label + '</option>').join('');
+  const days = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map(d =>
+    '<option>' + d + '</option>').join('');
+
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;padding:24px 28px;width:380px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.18)">' +
+      '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:18px">Nuevo post</div>' +
+      '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div>' +
+          '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Título</label>' +
+          '<input id="np-title" type="text" placeholder="Escribe el tema del post…" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;box-sizing:border-box">' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div>' +
+            '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Red</label>' +
+            '<select id="np-network" style="width:100%;padding:7px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff">' + networks + '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Formato</label>' +
+            '<select id="np-format" style="width:100%;padding:7px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff">' + formats + '</select>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div>' +
+            '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Semana</label>' +
+            '<select id="np-week" style="width:100%;padding:7px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff">' +
+              '<option value="1">Semana 1</option><option value="2">Semana 2</option><option value="3">Semana 3</option><option value="4">Semana 4</option>' +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Día</label>' +
+            '<select id="np-day" style="width:100%;padding:7px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff">' + days + '</select>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:20px">' +
+        '<button onclick="document.getElementById(\'new-post-dialog\').remove()" style="flex:1;padding:9px;border:1.5px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;color:var(--muted)">Cancelar</button>' +
+        '<button onclick="confirmAddManualPost()" style="flex:2;padding:9px;background:var(--blue);border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:#fff">Crear post</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  setTimeout(() => { const t = document.getElementById('np-title'); if(t) t.focus(); }, 50);
+}
+
+function confirmAddManualPost() {
   if (!getActiveParrilla()) createParrilla('Mi parrilla');
+  const title   = (document.getElementById('np-title')?.value || '').trim() || 'Nuevo post';
+  const network = document.getElementById('np-network')?.value || 'instagram';
+  const format  = document.getElementById('np-format')?.value  || 'feed';
+  const week    = parseInt(document.getElementById('np-week')?.value) || 1;
+  const day     = document.getElementById('np-day')?.value || 'Lunes';
+
+  document.getElementById('new-post-dialog')?.remove();
+
   const newPost = {
     id: 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-    week: 1, day: 'Lunes', network: 'instagram', format: 'feed',
-    title: 'Nuevo post', caption: '', hashtags: [],
+    week, day, network, format, title,
+    caption: '', hashtags: [],
     needsImage: true, imagePrompt: '',
     imageBase64: null, imageMediaType: null,
+    carouselImages: null,
     status: 'borrador', createdAt: Date.now()
   };
   addStudioPost(newPost);
@@ -7787,14 +7854,14 @@ function openPostModal(postId) {
         '<div class="post-modal-media-preview" id="pm-carousel-preview">' +
           '<img id="pm-carousel-img" src="data:' + post.carouselImages[0].mediaType + ';base64,' + post.carouselImages[0].base64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
         '</div>' +
-        // Nav arrows
         (slideCount > 1 ? '<button onclick="carouselNav(-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">‹</button>' +
         '<button onclick="carouselNav(1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">›</button>' : '') +
       '</div>' +
       '<div style="text-align:center;font-size:10px;color:var(--muted);padding:4px 0" id="pm-carousel-counter">Slide 1 de ' + slideCount + '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadCarouselSlide()">⬇ Descargar slide</button>' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadCarouselSlide()">⬇ Slide</button>' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadAllCarouselSlides(\'' + postId + '\')">⬇ Todos</button>' +
+        '<button class="pm-btn pm-btn-ghost" style="justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7" onclick="clearPostMedia(\'' + postId + '\')">🗑</button>' +
       '</div>' +
       '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
@@ -7809,6 +7876,7 @@ function openPostModal(postId) {
       '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">🔄 Cambiar</button>' +
+        '<button class="pm-btn pm-btn-ghost" style="justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7" onclick="clearPostMedia(\'' + postId + '\')">🗑</button>' +
       '</div>';
   } else if (isVideo) {
     // Formato video sin media — mostrar opciones de creación
@@ -8201,6 +8269,17 @@ function downloadAllStudioImages() {
   const posts = loadStudioPosts().filter(p => p.imageBase64);
   if (!posts.length) { alert('No hay imágenes generadas todavía.'); return; }
   posts.forEach(p => downloadAdImage(p.imageBase64, p.imageMediaType, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png'));
+}
+
+// ── Borrar media de un post (vuelve al estado vacío) ─────────────────────────
+function clearPostMedia(postId) {
+  if (!confirm('¿Eliminar la imagen/slides de este post?')) return;
+  updateStudioPost(postId, {
+    imageBase64: null, imageMediaType: null,
+    carouselImages: null, videoUrl: null, videoFileName: null
+  });
+  closePostModal();
+  setTimeout(() => openPostModal(postId), 80);
 }
 
 // ── Carousel navigator ────────────────────────────────────────────────────────
