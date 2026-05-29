@@ -37,6 +37,8 @@ export default async function handler(req, res) {
     pageId,
     igUserId,
     imageUrl,
+    imageBase64,
+    imageMediaType,
     videoUrl,
     caption        = '',
     isCarousel     = false,
@@ -149,8 +151,26 @@ export default async function handler(req, res) {
     if (network === 'facebook') {
       if (!pageId) return res.status(400).json({ error: 'pageId requerido para Facebook' });
 
+      if (imageBase64) {
+        // Upload binario directo — más rápido que URL (no necesita CDN intermediario)
+        const buffer   = Buffer.from(imageBase64, 'base64');
+        const mimeType = imageMediaType || 'image/jpeg';
+        const ext      = mimeType.includes('png') ? 'png' : 'jpg';
+        const formData = new FormData();
+        formData.append('source', new Blob([buffer], { type: mimeType }), 'photo.' + ext);
+        formData.append('message',      caption);
+        formData.append('access_token', pageToken);
+
+        const photoRes  = await fetch(`${GRAPH}/${pageId}/photos`, { method: 'POST', body: formData });
+        const photoData = await photoRes.json();
+        if (!photoRes.ok || photoData.error) {
+          throw new Error('Error publicando foto en FB: ' + (photoData.error?.message || JSON.stringify(photoData).slice(0, 200)));
+        }
+        return res.json({ success: true, postId: photoData.post_id || photoData.id, network: 'facebook', type: 'photo' });
+      }
+
       if (imageUrl) {
-        // Publicar foto con enlace
+        // URL pública (cuando se publica en IG + FB simultáneamente)
         const photoRes  = await fetch(`${GRAPH}/${pageId}/photos`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },

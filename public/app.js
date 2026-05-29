@@ -7383,23 +7383,31 @@ async function publishPostNow(postId) {
   const results = [];
 
   try {
-    // ── Subir media UNA SOLA VEZ antes del loop de redes ──────────────────────
-    // (evita subir la misma imagen N veces — una por cada red seleccionada)
-    let sharedImageUrl  = null;
+    // ── Estrategia de media según redes seleccionadas ──────────────────────────
+    // • Instagram requiere URL pública → CDN upload obligatorio
+    // • Facebook acepta upload binario directo → NO necesita CDN
+    // • Si IG + FB: subir al CDN una vez y reusar URL en ambas redes
+    const needsIg  = selectedNets.includes('instagram');
+    const needsFbOnly = selectedNets.length === 1 && selectedNets[0] === 'facebook';
+
+    let sharedImageUrl     = null;
     let sharedCarouselUrls = [];
 
-    if (isCarousel) {
+    if (isCarousel && needsIg) {
+      // Carousel: siempre necesita URLs (solo aplica a IG)
       for (const slide of post.carouselImages.slice(0, 10)) {
         const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url);
         sharedCarouselUrls.push(url);
       }
-    } else if (post.imageBase64 || post.imageUrl) {
+    } else if (!needsFbOnly && (post.imageBase64 || post.imageUrl)) {
+      // IG presente (solo o mixto): subir al CDN una vez
       sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl);
-      // Guardar la CDN URL en el post para futuros reposts (evita re-upload)
+      // Guardar CDN URL en el post para evitar re-uploads futuros
       if (sharedImageUrl && sharedImageUrl !== post.imageUrl) {
         updateStudioPost(postId, { imageUrl: sharedImageUrl });
       }
     }
+    // needsFbOnly → no CDN: pasamos imageBase64 directo a social-publish
 
     // ── Publicar en cada red seleccionada ─────────────────────────────────────
     for (const network of selectedNets) {
@@ -7410,12 +7418,18 @@ async function publishPostNow(postId) {
 
       if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
 
+      // Para Facebook-only: enviar base64 directamente (upload binario en el servidor)
+      const useDirect = network === 'facebook' && needsFbOnly && !sharedImageUrl && post.imageBase64;
+
       const body = {
         network,
         pageToken:         acct.pageToken,
         pageId:            acct.pageId,
         igUserId:          acct.igUserId || null,
         imageUrl:          sharedImageUrl,
+        // Facebook directo: enviar base64 sin pasar por CDN
+        imageBase64:       useDirect ? post.imageBase64    : null,
+        imageMediaType:    useDirect ? (post.imageMediaType || 'image/jpeg') : null,
         videoUrl:          post.videoUrl || null,
         caption,
         isCarousel:        isCarousel && network === 'instagram',
