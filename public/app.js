@@ -4672,7 +4672,21 @@ while(!streamDone){
         }
         replyFinal+=evt.delta;
         const bbl=document.getElementById('stream-bubble-text');
-        if(bbl)bbl.innerHTML=fmt(replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,''));
+        const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
+        if(bbl)bbl.innerHTML=fmt(cleanForBubble);
+        // Espejo del stream en el Studio (cuando se genera desde ahí)
+        if(window._studioGenerating){
+          const studioPreview=document.getElementById('studio-stream-preview');
+          if(studioPreview){
+            const cleanForStudio=replyFinal
+              .replace(/<PARRILLA_JSON>[\s\S]*?<\/PARRILLA_JSON>/g,'')
+              .replace(/\[PARRILLA_LISTA\]/g,'').replace(/\[GENERAR_IMAGENES_PARRILLA\]/g,'')
+              .replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'')
+              .replace(/\[SUGERENCIAS:[^\]]*\]/g,'').trim();
+            studioPreview.innerHTML=fmt(cleanForStudio);
+            studioPreview.scrollTop=studioPreview.scrollHeight;
+          }
+        }
         scrollB();
       }
       if(evt.done&&evt.full!==undefined){replyFinal=evt.full;streamDone=true;}
@@ -7236,6 +7250,7 @@ function renderStudio() {
   if (nameEl) nameEl.textContent = active ? active.name : 'Sin parrilla activa';
 
   // Dismiss loading overlay if present
+  window._studioGenerating = false;
   const loadOverlay = document.getElementById('studio-gen-loading');
   if (loadOverlay) loadOverlay.style.display = 'none';
 
@@ -7355,10 +7370,14 @@ function renderHistorialPanel() {
 
 function studioGenerateParrilla(prompt, wizardName) {
   window._studioWizardName = wizardName || null;
-  // Show loading overlay in Studio
+  window._studioGenerating = true;
+  // Limpiar preview anterior
+  const preview = document.getElementById('studio-stream-preview');
+  if (preview) preview.innerHTML = '';
+  // Mostrar overlay con preview
   const overlay = document.getElementById('studio-gen-loading');
   if (overlay) overlay.style.display = 'flex';
-  // Set context to social agent and send message without switching view
+  // Enviar al agente social sin cambiar de vista
   setAgentContext('social');
   setTimeout(() => {
     document.getElementById('cin').value = prompt;
