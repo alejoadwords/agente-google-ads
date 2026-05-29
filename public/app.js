@@ -4674,17 +4674,19 @@ while(!streamDone){
         const bbl=document.getElementById('stream-bubble-text');
         const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
         if(bbl)bbl.innerHTML=fmt(cleanForBubble);
-        // Espejo del stream en el Studio (cuando se genera desde ahí)
-        if(window._studioGenerating){
-          const studioPreview=document.getElementById('studio-stream-preview');
-          if(studioPreview){
-            const cleanForStudio=replyFinal
-              .replace(/<PARRILLA_JSON>[\s\S]*?<\/PARRILLA_JSON>/g,'')
-              .replace(/\[PARRILLA_LISTA\]/g,'').replace(/\[GENERAR_IMAGENES_PARRILLA\]/g,'')
-              .replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'')
-              .replace(/\[SUGERENCIAS:[^\]]*\]/g,'').trim();
-            studioPreview.innerHTML=fmt(cleanForStudio);
-            studioPreview.scrollTop=studioPreview.scrollHeight;
+        // Calendario en tiempo real (cuando se genera desde el Studio)
+        if(window._studioGenerating && !replyFinal.includes('<PARRILLA_JSON>')){
+          const grid=document.getElementById('studio-stream-calendar');
+          if(grid){
+            const lines=replyFinal.split('\n');
+            const parsed=[];
+            for(const line of lines){ const p=parseStreamTableRow(line); if(p)parsed.push(p); }
+            if(parsed.length!==(window._streamPostsCount||0)){
+              window._streamPostsCount=parsed.length;
+              renderStreamCalendar(parsed,grid);
+              const ctr=document.getElementById('studio-stream-counter');
+              if(ctr)ctr.textContent=parsed.length>0?parsed.length+' posts detectados…':'Analizando tu negocio…';
+            }
           }
         }
         scrollB();
@@ -7367,6 +7369,65 @@ function renderHistorialPanel() {
 }
 
 // ─── Studio background generation (wizard without leaving Studio) ─────────────
+
+// Parser de filas de tabla markdown para vista previa en tiempo real
+function parseStreamTableRow(line) {
+  if (!line.includes('|')) return null;
+  const cells = line.split('|').map(c => c.trim()).filter(c => c.length > 0);
+  if (cells.length < 4) return null;
+  // La primera celda puede ser número de semana/día o separador (---)
+  if (cells[0].includes('-') || cells[0].toLowerCase().includes('sem') || cells[0].toLowerCase().includes('día') || cells[0].toLowerCase().includes('dia')) return null;
+  const dayNum = parseInt(cells[0]);
+  // Segunda celda: nombre del día
+  const DIAS = ['lunes','martes','miércoles','miercoles','jueves','viernes','sábado','sabado','domingo'];
+  const dayName = (cells[1] || '').toLowerCase().trim();
+  if (!DIAS.includes(dayName)) return null;
+  // Estimar semana desde número de día
+  const week = isNaN(dayNum) ? 1 : Math.max(1, Math.ceil(dayNum / 7));
+  const networkRaw = (cells[2] || '').toLowerCase().trim();
+  const formatRaw  = (cells[3] || '').toLowerCase().trim();
+  const title = (cells[4] || '').replace(/^\*+|\*+$/g, '').replace(/^["']|["']$/g, '').trim();
+  const hasImage = cells.length > 5 && (cells[5].includes('✅') || cells[5].toLowerCase().includes('sí') || cells[5].toLowerCase().includes('si'));
+  const netMap  = { instagram:'instagram', tiktok:'tiktok', facebook:'facebook', linkedin:'linkedin', 'x':'x', 'x (twitter)':'x', youtube:'youtube' };
+  const fmtMap  = { reel:'reel', reels:'reel', story:'story', stories:'story', feed:'feed', carrusel:'carrusel', carousel:'carrusel', video:'video', post:'post', 'imagen':'feed', 'imagen estática':'feed', 'infografía':'feed' };
+  return { week, day: cells[1].trim(), network: netMap[networkRaw] || 'instagram', format: fmtMap[formatRaw] || 'feed', title, hasImage };
+}
+
+// Renderiza el calendario de preview en tiempo real
+function renderStreamCalendar(posts, grid) {
+  const emptyEl = document.getElementById('studio-stream-empty');
+  if (!posts.length) { grid.innerHTML = ''; if(emptyEl) emptyEl.style.display='flex'; return; }
+  if(emptyEl) emptyEl.style.display='none';
+  const networks = [...new Set(posts.map(p => p.network))];
+  let html = '';
+  networks.forEach(net => {
+    const cfg = STUDIO_NETWORKS[net] || { label: net, color:'#666', bg:'#f0f0f0' };
+    const netPosts = posts.filter(p => p.network === net);
+    html += '<div class="studio-net-col">';
+    html += '<div class="studio-net-hdr" style="border-bottom-color:'+cfg.color+'">';
+    html += '<span class="studio-net-dot" style="background:'+cfg.color+'"></span>';
+    html += '<span class="studio-net-name">'+cfg.label+'</span>';
+    html += '<span class="studio-net-count">'+netPosts.length+'</span>';
+    html += '</div><div class="studio-net-body">';
+    let lastWeek = 0;
+    netPosts.forEach(p => {
+      if (p.week !== lastWeek) { html += '<div class="studio-week-label">Semana '+p.week+'</div>'; lastWeek = p.week; }
+      const fmt = STUDIO_FORMATS[p.format] || STUDIO_FORMATS.feed;
+      html += '<div class="post-card" style="animation:fadeIn .2s ease">' +
+        '<div class="post-card-img post-card-img-empty"><span style="font-size:22px">'+fmt.icon+'</span></div>' +
+        '<div class="post-card-body">' +
+          '<div class="post-card-meta">' +
+            '<span class="post-badge" style="background:'+cfg.bg+';color:'+cfg.color+'">'+fmt.label+'</span>' +
+            (p.hasImage ? '<span class="post-status" style="background:#EFF6FF;color:#2563EB;margin-left:auto">+img</span>' : '') +
+          '</div>' +
+          '<div class="post-card-title">'+esc(p.title||p.day)+'</div>' +
+          '<div class="post-card-day">'+esc(p.day)+'</div>' +
+        '</div></div>';
+    });
+    html += '</div></div>';
+  });
+  grid.innerHTML = html;
+}
 
 function studioGenerateParrilla(prompt, wizardName) {
   window._studioWizardName = wizardName || null;
