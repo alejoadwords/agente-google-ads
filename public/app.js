@@ -7209,70 +7209,93 @@ function openPublishModal(postId) {
   const hasMedia  = !!(post.imageBase64 || post.videoUrl);
   const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
 
-  const netBadge = (network, acct, icon) => {
-    const connected = !!acct;
-    const label = network === 'instagram' ? 'Instagram' : 'Facebook';
-    const sublabel = connected
-      ? (network === 'instagram' && acct.igUsername ? '@' + acct.igUsername : acct.pageName || label)
-      : 'No conectado · ';
-    const connectBtn = !connected
-      ? '<span style="color:var(--blue);cursor:pointer;text-decoration:underline;font-size:11px" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar</span>'
-      : '';
-    const inputId = 'pub-net-' + network;
+  const igIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
+  const fbIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+
+  // Construir fila de red con: checkbox pre-marcado + selector de cuenta si hay múltiples
+  const netRow = (network, accts, icon, iconBg) => {
+    const label     = network === 'instagram' ? 'Instagram' : 'Facebook Page';
+    const connected = accts.length > 0;
+
+    if (!connected) return (
+      '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg-subtle);opacity:.6">' +
+        '<div style="width:42px;height:42px;border-radius:12px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
+        '<div style="flex:1">' +
+          '<div style="font-size:14px;font-weight:700;color:var(--muted)">' + label + '</div>' +
+          '<button style="font-size:12px;color:var(--blue);background:none;border:none;padding:0;cursor:pointer;font-family:var(--font);margin-top:2px" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar cuenta →</button>' +
+        '</div>' +
+      '</div>'
+    );
+
+    // Construir opciones del selector de cuenta
+    const acctOptions = accts.map((a, i) => {
+      const name = (network === 'instagram' && a.igUsername) ? '@' + a.igUsername : a.pageName || 'Cuenta ' + (i + 1);
+      return '<option value="' + i + '">' + esc(name) + '</option>';
+    }).join('');
+
+    const hasMultiple = accts.length > 1;
+    const firstLabel  = (network === 'instagram' && accts[0].igUsername) ? '@' + accts[0].igUsername : accts[0].pageName || label;
 
     return (
-      '<label class="pub-net-row' + (!connected ? ' disabled' : '') + '" for="' + inputId + '">' +
-        '<input type="checkbox" id="' + inputId + '" name="pub-net" value="' + network + '"' +
-          (connected ? '' : ' disabled') + ' style="width:16px;height:16px;accent-color:var(--blue);flex-shrink:0">' +
-        '<div class="social-conn-icon" style="background:' + (network === 'instagram' ? '#FEF0F5' : '#EBF3FF') + ';width:32px;height:32px">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:13px;font-weight:700;color:' + (connected ? 'var(--text)' : 'var(--muted)') + '">' + label + '</div>' +
-          '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + esc(sublabel) + connectBtn + '</div>' +
+      '<label style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--blue);background:var(--blue-lt);cursor:pointer;transition:all .15s" ' +
+             'onclick="this.querySelector(\'input[type=checkbox]\').click()">' +
+        '<input type="checkbox" name="pub-net" value="' + network + '" checked ' +
+               'style="width:18px;height:18px;accent-color:var(--blue);flex-shrink:0;cursor:pointer" ' +
+               'onclick="event.stopPropagation();var r=this.closest(\'label\');r.style.borderColor=this.checked?\'var(--blue)\':\' var(--border)\';r.style.background=this.checked?\'var(--blue-lt)\':\' var(--bg)\'">' +
+        '<div style="width:42px;height:42px;border-radius:12px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
+        '<div style="flex:1;min-width:0" onclick="event.stopPropagation()">' +
+          '<div style="font-size:14px;font-weight:700;color:var(--text)">' + label + '</div>' +
+          // Si hay múltiples cuentas, mostrar selector; si solo hay una, mostrar el nombre
+          (hasMultiple
+            ? '<select id="pub-acct-' + network + '" style="margin-top:4px;font-size:13px;color:var(--blue);background:transparent;border:none;font-family:var(--font);font-weight:600;cursor:pointer;width:100%;padding:0">' + acctOptions + '</select>'
+            : '<div style="font-size:13px;color:var(--blue);margin-top:2px;font-weight:600">' + esc(firstLabel) + '</div>'
+          ) +
         '</div>' +
-        (connected ? '<span style="font-size:18px" title="Conectado">✅</span>' : '') +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' +
       '</label>'
     );
   };
 
-  const igIcon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-  const fbIcon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+  const hasAnyConn2 = igAccts.length > 0 || fbAccts.length > 0;
 
   const overlay = document.createElement('div');
   overlay.className = 'pub-overlay';
   overlay.id = 'pub-modal';
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
-  const captionPreview = (post.caption || '').slice(0, 120) + (post.caption && post.caption.length > 120 ? '…' : '');
+  const captionPreview = (post.caption || '').slice(0, 140) + (post.caption && post.caption.length > 140 ? '…' : '');
 
   overlay.innerHTML =
-    '<div class="pub-box">' +
-      '<div class="pub-hdr">' +
+    '<div class="pub-box" style="max-width:460px">' +
+      // Header
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:22px 24px 18px;border-bottom:1px solid var(--border)">' +
         '<div>' +
-          '<div style="font-size:15px;font-weight:800;color:var(--text)">Publicar post</div>' +
-          '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + esc(post.title || 'Sin título') + '</div>' +
+          '<div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.3px">Publicar post</div>' +
+          '<div style="font-size:13px;color:var(--muted);margin-top:3px">' + esc(post.title || 'Sin título') + '</div>' +
         '</div>' +
-        '<button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:0 4px" onclick="document.getElementById(\'pub-modal\')?.remove()">×</button>' +
+        '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'pub-modal\')?.remove()">×</button>' +
       '</div>' +
-      '<div class="pub-body">' +
-        // Preview caption
-        (captionPreview ? '<div style="background:var(--bg-muted);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text-2);line-height:1.5">' + esc(captionPreview) + '</div>' : '') +
-        // Network selection
-        '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Publicar en:</div>' +
-        netBadge('instagram', igAcct, igIcon) +
-        netBadge('facebook',  fbAcct, fbIcon) +
-        // Warning if no connections
-        (!igAcct && !fbAcct
-          ? '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0">Conecta al menos una red para publicar.</div>'
+      // Body
+      '<div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">' +
+        // Caption preview
+        (captionPreview
+          ? '<div style="background:var(--bg-muted);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text-2);line-height:1.6;border-left:3px solid var(--border2)">' + esc(captionPreview) + '</div>'
           : '') +
-        // Publish now button
-        '<button id="pub-confirm-btn" class="pm-btn" style="width:100%;justify-content:center;background:var(--blue);color:#fff;font-weight:700;font-size:13px;padding:13px"' +
-          ' onclick="publishPostNow(\'' + postId + '\')"' +
-          (!igAcct && !fbAcct ? ' disabled style="width:100%;justify-content:center;background:var(--bg-muted);color:var(--muted);font-weight:700;font-size:13px;padding:13px;cursor:not-allowed"' : '') +
-        '>' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+        // Network rows
+        '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px">Publicar en:</div>' +
+        netRow('instagram', igAccts, igIcon, '#FEF0F5') +
+        netRow('facebook',  fbAccts, fbIcon, '#EBF3FF') +
+        // No connections warning
+        (!hasAnyConn2
+          ? '<div style="text-align:center;padding:12px;font-size:13px;color:var(--muted)">Conecta al menos una red para publicar. <button style="background:none;border:none;color:var(--blue);cursor:pointer;font-family:var(--font);font-size:13px;text-decoration:underline" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar →</button></div>'
+          : '') +
+        // Publish button
+        '<button id="pub-confirm-btn" style="width:100%;padding:14px;background:' + (hasAnyConn2 ? 'var(--blue)' : 'var(--bg-muted)') + ';color:' + (hasAnyConn2 ? '#fff' : 'var(--muted)') + ';border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:' + (hasAnyConn2 ? 'pointer' : 'not-allowed') + ';font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px"' +
+          (hasAnyConn2 ? ' onclick="publishPostNow(\'' + postId + '\')"' : ' disabled') + '>' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
           'Publicar ahora' +
         '</button>' +
-        '<div id="pub-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:18px"></div>' +
+        '<div id="pub-status" style="font-size:13px;color:var(--muted);text-align:center;min-height:20px"></div>' +
       '</div>' +
     '</div>';
 
@@ -7324,7 +7347,8 @@ async function publishPostNow(postId) {
   try {
     for (const network of selectedNets) {
       const acctList = conns[network] || [];
-      const acct     = acctList[0];
+      const acctIdx  = parseInt(document.getElementById('pub-acct-' + network)?.value || '0');
+      const acct     = acctList[acctIdx] || acctList[0];
       if (!acct) { results.push({ network, success: false, error: 'No hay cuenta conectada' }); continue; }
 
       if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
