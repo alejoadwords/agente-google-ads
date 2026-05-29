@@ -12581,8 +12581,21 @@ function generateBasicImage() {
     const network  = params.get('social_network') || 'instagram';
     const clientId = params.get('social_client')  || '';
 
+    // Los tokens se guardaron en sessionStorage por la página intermedia del callback
+    // (evita URLs largas con tokens de Facebook que pueden truncarse)
     let accounts = [];
-    try { accounts = JSON.parse(params.get('social_accounts') || '[]'); } catch {}
+    try {
+      const pending = sessionStorage.getItem('acuarius_social_pending');
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        accounts = parsed.accounts || [];
+        sessionStorage.removeItem('acuarius_social_pending');
+      }
+      // Fallback: si por alguna razón no hay sessionStorage, intentar leer de URL (legacy)
+      if (!accounts.length) {
+        accounts = JSON.parse(params.get('social_accounts') || '[]');
+      }
+    } catch {}
 
     if (!accounts.length) {
       showToast('Conexión completada pero no se encontraron páginas Facebook ni cuentas Instagram vinculadas. Verifica que tu cuenta tenga páginas de Facebook con Instagram Business asociado.', 'warning');
