@@ -7480,12 +7480,19 @@ function buildPostCard(post, netCfg) {
   const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
   const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
   const hasImg = !!post.imageBase64;
+  const hasVid = !!post.videoUrl;
   const imgHtml = hasImg
     ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" loading="lazy">'
-    : '<span style="font-size:22px">' + fmt.icon + '</span>';
+    : hasVid
+      ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>' +
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
+          '<div style="width:32px;height:32px;background:rgba(0,0,0,.55);border-radius:50%;display:flex;align-items:center;justify-content:center">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>' +
+          '</div></div>'
+      : '<span style="font-size:22px">' + fmt.icon + '</span>';
 
   return '<div class="post-card" onclick="openPostModal(\'' + post.id + '\')">' +
-    '<div class="post-card-img' + (hasImg ? '' : ' post-card-img-empty') + '">' + imgHtml + '</div>' +
+    '<div class="post-card-img' + ((!hasImg && !hasVid) ? ' post-card-img-empty' : '') + '" style="position:relative">' + imgHtml + '</div>' +
     '<div class="post-card-body">' +
       '<div class="post-card-meta">' +
         '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + fmt.label + '</span>' +
@@ -7509,7 +7516,9 @@ function renderListView(posts) {
     const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
     const thumbHtml = post.imageBase64
       ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">'
-      : '<span style="font-size:20px">' + fmt.icon + '</span>';
+      : post.videoUrl
+        ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>'
+        : '<span style="font-size:20px">' + fmt.icon + '</span>';
 
     html += '<div class="post-list-item" onclick="openPostModal(\'' + post.id + '\')">' +
       '<div class="post-list-thumb">' + thumbHtml + '</div>' +
@@ -7933,14 +7942,51 @@ async function generateScriptForPost(postId) {
       .replace('{MEMORY}', mem ? JSON.stringify(mem) : '').replace('{STAGE}', '').replace('{AGENT}', 'Social Media Manager');
     const res = await fetch('/api/chat', {
       method: 'POST', headers,
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt, stream: false })
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt })
     });
-    const data = await res.json();
-    const script = data.content || data.text || (data.messages && data.messages[data.messages.length - 1]?.content) || '';
-    if (script) {
-      updateStudioPost(postId, { script: script.trim() });
+
+    if (!res.ok) {
+      let errMsg = 'Error ' + res.status;
+      try { const d = await res.json(); errMsg = d.error || errMsg; } catch(_) {}
+      throw new Error(errMsg);
+    }
+
+    // /api/chat always streams SSE — consume the stream and collect full text
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        try {
+          const evt = JSON.parse(raw);
+          if (evt.error) throw new Error(evt.error);
+          if (evt.done && evt.full) { fullText = evt.full; }
+          else if (evt.delta) { fullText += evt.delta; }
+        } catch(parseErr) {
+          if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+        }
+      }
+    }
+
+    if (fullText.trim()) {
+      updateStudioPost(postId, { script: fullText.trim() });
       const scriptField = document.getElementById('pm-script');
-      if (scriptField) { scriptField.value = script.trim(); scriptField.style.height = 'auto'; scriptField.style.height = scriptField.scrollHeight + 'px'; }
+      if (scriptField) {
+        scriptField.value = fullText.trim();
+        scriptField.style.height = 'auto';
+        scriptField.style.height = scriptField.scrollHeight + 'px';
+      }
+    } else {
+      alert('No se pudo generar el guión. Intenta de nuevo.');
     }
   } catch(err) { alert('Error al generar guión: ' + err.message); }
   finally {
