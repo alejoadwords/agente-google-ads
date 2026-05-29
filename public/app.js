@@ -7129,56 +7129,37 @@ function openSocialConnectionsModal() {
   const igAccts = conns.instagram || [];
   const fbAccts = conns.facebook  || [];
 
-  const igRow = (acct) => {
-    if (!acct) return (
-      '<div class="social-conn-row">' +
-        '<div class="social-conn-icon" style="background:#FEF0F5">' +
-          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
-        '</div>' +
-        '<div class="social-conn-info">' +
-          '<div class="social-conn-name">Instagram</div>' +
-          '<div class="social-conn-status">No conectado</div>' +
-        '</div>' +
-        '<button class="pm-btn pm-btn-primary" style="font-size:11px;padding:7px 12px" onclick="connectSocialNetwork(\'instagram\')">Conectar</button>' +
-      '</div>'
-    );
-    return (
-      '<div class="social-conn-row" style="border-color:#A7F3D0">' +
-        '<div class="social-conn-icon" style="background:#FEF0F5">' +
-          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
-        '</div>' +
-        '<div class="social-conn-info">' +
-          '<div class="social-conn-name" style="color:#059669">✓ Instagram conectado</div>' +
-          '<div class="social-conn-status">' + esc(acct.igUsername ? '@' + acct.igUsername : acct.pageName || '') + '</div>' +
-        '</div>' +
-        '<button class="pm-btn pm-btn-ghost" style="font-size:11px;padding:6px 10px;color:#EF4444;border-color:#FCA5A5!important" onclick="disconnectSocialNetwork(\'instagram\')">Quitar</button>' +
-      '</div>'
-    );
-  };
+  const igSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
+  const fbSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
 
-  const fbRow = (acct) => {
-    if (!acct) return (
-      '<div class="social-conn-row">' +
-        '<div class="social-conn-icon" style="background:#EBF3FF">' +
-          '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
+  const netRow = (network, acct, icon, iconBg, label) => {
+    const connected = !!acct;
+    const sublabel  = connected
+      ? (network === 'instagram' && acct.igUsername ? '@' + acct.igUsername : acct.pageName || label)
+      : 'No conectado';
+
+    if (!connected) return (
+      '<div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;border:1.5px solid var(--border);background:var(--bg)">' +
+        '<div style="width:48px;height:48px;border-radius:14px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text)">' + label + '</div>' +
+          '<div style="font-size:13px;color:var(--muted);margin-top:2px">' + sublabel + '</div>' +
         '</div>' +
-        '<div class="social-conn-info">' +
-          '<div class="social-conn-name">Facebook Page</div>' +
-          '<div class="social-conn-status">No conectado</div>' +
-        '</div>' +
-        '<button class="pm-btn pm-btn-primary" style="font-size:11px;padding:7px 12px" onclick="connectSocialNetwork(\'facebook\')">Conectar</button>' +
+        '<button style="padding:10px 20px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap" onclick="connectSocialNetwork(\'' + network + '\')">Conectar</button>' +
       '</div>'
     );
+
     return (
-      '<div class="social-conn-row" style="border-color:#A7F3D0">' +
-        '<div class="social-conn-icon" style="background:#EBF3FF">' +
-          '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
+      '<div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;border:1.5px solid #A7F3D0;background:#F0FDF4">' +
+        '<div style="width:48px;height:48px;border-radius:14px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            '<div style="font-size:15px;font-weight:700;color:#059669">' + label + '</div>' +
+            '<span style="font-size:12px;background:#DCFCE7;color:#059669;padding:2px 8px;border-radius:20px;font-weight:600">Conectado</span>' +
+          '</div>' +
+          '<div style="font-size:13px;color:#059669;margin-top:2px;opacity:.8">' + esc(sublabel) + '</div>' +
         '</div>' +
-        '<div class="social-conn-info">' +
-          '<div class="social-conn-name" style="color:#059669">✓ Facebook conectado</div>' +
-          '<div class="social-conn-status">' + esc(acct.pageName || '') + '</div>' +
-        '</div>' +
-        '<button class="pm-btn pm-btn-ghost" style="font-size:11px;padding:6px 10px;color:#EF4444;border-color:#FCA5A5!important" onclick="disconnectSocialNetwork(\'facebook\')">Quitar</button>' +
+        '<button style="padding:8px 14px;background:none;color:#EF4444;border:1.5px solid #FCA5A5;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap" onclick="disconnectSocialNetwork(\'' + network + '\')">Quitar</button>' +
       '</div>'
     );
   };
@@ -7188,21 +7169,23 @@ function openSocialConnectionsModal() {
   overlay.id = 'social-conn-modal';
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   overlay.innerHTML =
-    '<div class="social-conn-box">' +
-      '<div class="social-conn-hdr">' +
+    '<div class="social-conn-box" style="max-width:500px">' +
+      // Header
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:24px 28px 20px;border-bottom:1px solid var(--border)">' +
         '<div>' +
-          '<div style="font-size:15px;font-weight:800;color:var(--text)">Conectar redes sociales</div>' +
-          '<div style="font-size:12px;color:var(--muted);margin-top:3px">Publica directamente desde el Studio</div>' +
+          '<div style="font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.3px">Conectar redes sociales</div>' +
+          '<div style="font-size:14px;color:var(--muted);margin-top:4px">Publica directamente desde el Studio</div>' +
         '</div>' +
-        '<button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:0 4px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
+        '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
       '</div>' +
-      '<div class="social-conn-body">' +
-        '<div style="font-size:11px;color:var(--muted);padding:10px 14px;background:var(--bg-muted);border-radius:8px;line-height:1.5">' +
-          '⚡ Al conectar usarás el mismo <b>Meta App</b> que gestiona tus cuentas de anuncios. ' +
-          'Asegúrate de que tu Meta App tenga los permisos <b>instagram_content_publish</b> y <b>pages_manage_posts</b> aprobados.' +
+      // Body
+      '<div style="padding:24px 28px;display:flex;flex-direction:column;gap:12px">' +
+        netRow('instagram', igAccts[0] || null, igSvg, '#FEF0F5', 'Instagram') +
+        netRow('facebook',  fbAccts[0] || null, fbSvg, '#EBF3FF', 'Facebook Page') +
+        // Nota informativa
+        '<div style="font-size:12px;color:var(--muted);padding:12px 16px;background:var(--bg-muted);border-radius:10px;line-height:1.6;margin-top:4px">' +
+          '💡 Conectar Instagram y Facebook simultáneamente permite publicar en ambas plataformas con un solo clic desde cada post.' +
         '</div>' +
-        igRow(igAccts[0] || null) +
-        fbRow(fbAccts[0] || null) +
       '</div>' +
     '</div>';
 
