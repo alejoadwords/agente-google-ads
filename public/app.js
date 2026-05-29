@@ -7751,6 +7751,7 @@ let activePostId = null;
 
 function openPostModal(postId) {
   activePostId = postId;
+  _carouselIdx = 0; // reset carousel slide index on each open
   const posts = loadStudioPosts();
   const post = posts.find(p => p.id === postId);
   if (!post) return;
@@ -7778,6 +7779,27 @@ function openPostModal(postId) {
       '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">🔄 Cambiar</button>' +
       '</div>';
+  } else if (hasImage && post.carouselImages && post.carouselImages.length > 1) {
+    // Carrusel con múltiples slides generados
+    const slideCount = post.carouselImages.length;
+    mediaHTML =
+      '<div style="position:relative">' +
+        '<div class="post-modal-media-preview" id="pm-carousel-preview">' +
+          '<img id="pm-carousel-img" src="data:' + post.carouselImages[0].mediaType + ';base64,' + post.carouselImages[0].base64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
+        '</div>' +
+        // Nav arrows
+        (slideCount > 1 ? '<button onclick="carouselNav(-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">‹</button>' +
+        '<button onclick="carouselNav(1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">›</button>' : '') +
+      '</div>' +
+      '<div style="text-align:center;font-size:10px;color:var(--muted);padding:4px 0" id="pm-carousel-counter">Slide 1 de ' + slideCount + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadCarouselSlide()">⬇ Descargar slide</button>' +
+        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadAllCarouselSlides(\'' + postId + '\')">⬇ Todos</button>' +
+      '</div>' +
+      '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+        'Regenerar slides' +
+      '</button>';
   } else if (hasImage) {
     // Imagen guardada en base64
     mediaHTML =
@@ -7806,20 +7828,25 @@ function openPostModal(postId) {
       '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">El guión aparecerá en el panel derecho para que puedas usarlo al grabar</div>';
   } else {
     // Formato imagen sin media — generar o subir
+    const isCarrusel = post.format === 'carrusel';
+    const numMatch2 = (post.title || '').match(/^(\d+)\s+/);
+    const estSlides = numMatch2 ? Math.min(parseInt(numMatch2[1]), 8) : 5;
     mediaHTML =
       '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
         '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
         '<span style="font-size:11px;color:var(--muted)">Sin imagen</span>' +
       '</div>' +
-      '<div class="post-modal-media-label">Crear imagen</div>' +
+      '<div class="post-modal-media-label">' + (isCarrusel ? 'Crear slides del carrusel' : 'Crear imagen') + '</div>' +
       '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
-        'Generar con IA' +
+        (isCarrusel ? 'Generar ' + estSlides + ' slides con IA' : 'Generar con IA') +
       '</button>' +
       '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">' +
-        uploadIcon + 'Subir desde mi PC' +
+        uploadIcon + (isCarrusel ? 'Subir slide desde mi PC' : 'Subir desde mi PC') +
       '</button>';
-    if (post.imagePrompt) {
+    if (isCarrusel) {
+      mediaHTML += '<div style="font-size:10px;color:var(--muted2);line-height:1.5;text-align:center">Genera un slide visual por cada concepto del carrusel.<br>Puedes añadir texto en Canva o tu herramienta de diseño.</div>';
+    } else if (post.imagePrompt) {
       mediaHTML += '<div style="font-size:10px;color:var(--muted);line-height:1.5;padding:8px 10px;background:var(--bg-muted);border-radius:8px;margin-top:2px"><span style="font-weight:700;display:block;margin-bottom:3px">Prompt sugerido</span>' + esc(post.imagePrompt) + '</div>';
     }
   }
@@ -8023,7 +8050,11 @@ async function generateImageForPost(postId) {
   const post = posts.find(p => p.id === postId);
   if (!post) return;
 
-  // Mostrar estado de carga en el botón del modal
+  // Carrusel: generar múltiples slides
+  if (post.format === 'carrusel') {
+    return generateCarouselSlides(postId, post);
+  }
+
   const genBtn = document.getElementById('pm-gen-btn');
   const resetBtn = () => {
     if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
@@ -8033,53 +8064,131 @@ async function generateImageForPost(postId) {
     genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Generando…';
   }
 
-  // falFormat for carrusel/feed/post → 'square'; for story/reel → 'story'
   const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
-  // Map 'horizontal' (video) to 'square' since API doesn't support that format
   const apiFormat = (fmt.falFormat === 'horizontal') ? 'square' : fmt.falFormat;
-  const prompt = (post.imagePrompt || post.title || post.caption || 'Social media post') +
-    '. Todos los textos en español. Estilo profesional para redes sociales.';
+  // Use imagePrompt or title — NOT the full caption (avoids garbled text in Ideogram)
+  const basePrompt = post.imagePrompt || post.title || 'Social media post';
+  const prompt = basePrompt + '. Estilo visual profesional para redes sociales, sin texto superpuesto.';
 
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
     const res = await fetch('/api/generate-image', {
       method: 'POST', headers,
-      body: JSON.stringify({ prompt, format: apiFormat, variations: 1, hasText: true })
+      body: JSON.stringify({ prompt, format: apiFormat, variations: 1, hasText: false })
     });
-
     let data;
-    try {
-      data = await res.json();
-    } catch(parseErr) {
-      resetBtn();
-      alert('Error al procesar respuesta del servidor. Intenta de nuevo.');
-      return;
+    try { data = await res.json(); } catch(_) {
+      resetBtn(); alert('Error al procesar respuesta. Intenta de nuevo.'); return;
     }
-
     if (!res.ok || data.error) {
-      resetBtn();
-      alert('Error al generar imagen: ' + (data.error || 'Error ' + res.status));
-      return;
+      resetBtn(); alert('Error: ' + (data.error || 'Error ' + res.status)); return;
     }
-
     if (data.images && data.images.length > 0) {
       updateStudioPost(postId, {
         imageBase64: data.images[0].base64,
         imageMediaType: data.images[0].mediaType || 'image/jpeg',
         status: 'listo'
       });
-      // Reabrir modal con la imagen nueva
       closePostModal();
       setTimeout(() => openPostModal(postId), 80);
     } else {
-      resetBtn();
-      alert('No se recibió imagen del servidor. Por favor intenta de nuevo.');
+      resetBtn(); alert('No se recibió imagen. Intenta de nuevo.');
     }
   } catch(err) {
-    resetBtn();
-    alert('Error inesperado: ' + err.message);
+    resetBtn(); alert('Error inesperado: ' + err.message);
   }
+}
+
+// ── Generar slides individuales para posts de tipo Carrusel ───────────────────
+async function generateCarouselSlides(postId, post) {
+  const genBtn = document.getElementById('pm-gen-btn');
+  const resetBtn = () => {
+    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar slides con IA'; }
+  };
+  if (genBtn) {
+    genBtn.disabled = true;
+    genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Generando slides…';
+  }
+
+  // Detectar número de slides del título (ej: "5 posturas de yoga" → 5)
+  const numMatch = (post.title || '').match(/^(\d+)\s+/);
+  const slideCount = numMatch ? Math.min(parseInt(numMatch[1]), 8) : 5;
+
+  // Topic visual base — usar imagePrompt o extraer del título
+  const topic = post.imagePrompt || post.title || 'content carousel';
+
+  // Generar prompts específicos por slide
+  const slidePrompts = buildCarouselSlidePrompts(topic, post, slideCount);
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+  // Mostrar progreso en el botón
+  const updateProgress = (done, total) => {
+    if (genBtn) genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>' + done + ' / ' + total + ' slides…';
+  };
+
+  const slides = [];
+  try {
+    for (let i = 0; i < slidePrompts.length; i++) {
+      updateProgress(i, slidePrompts.length);
+      const res = await fetch('/api/generate-image', {
+        method: 'POST', headers,
+        body: JSON.stringify({ prompt: slidePrompts[i], format: 'square', variations: 1, hasText: false })
+      });
+      let data;
+      try { data = await res.json(); } catch(_) { continue; }
+      if (data.images && data.images.length > 0) {
+        slides.push({ base64: data.images[0].base64, mediaType: data.images[0].mediaType || 'image/jpeg' });
+      }
+    }
+
+    if (!slides.length) {
+      resetBtn(); alert('No se pudo generar ningún slide. Intenta de nuevo.'); return;
+    }
+
+    // Guardar slides y usar el primero como thumbnail
+    updateStudioPost(postId, {
+      carouselImages: slides,
+      imageBase64: slides[0].base64,
+      imageMediaType: slides[0].mediaType,
+      status: 'listo'
+    });
+    closePostModal();
+    setTimeout(() => openPostModal(postId), 80);
+  } catch(err) {
+    resetBtn(); alert('Error generando slides: ' + err.message);
+  }
+}
+
+function buildCarouselSlidePrompts(topic, post, slideCount) {
+  const network = post.network || 'instagram';
+  const baseStyle = 'Professional social media visual for ' + network + ', clean composition, vibrant colors, no text overlay, photorealistic quality';
+
+  // Slide 1: portada / cover
+  const cover = topic + '. Cover slide for a carousel post. Eye-catching hero image. ' + baseStyle;
+
+  // Slides intermedios: variaciones del tema
+  const midPrompts = [];
+  const concepts = [
+    'detail close-up view of the topic',
+    'step by step demonstration concept',
+    'lifestyle context with people',
+    'product or subject from a different angle',
+    'before and after or transformation concept',
+    'expert tip or key insight visual metaphor',
+    'community or social proof visual',
+  ];
+  const numMid = Math.max(0, slideCount - 2);
+  for (let i = 0; i < numMid; i++) {
+    midPrompts.push(topic + '. ' + concepts[i % concepts.length] + '. ' + baseStyle);
+  }
+
+  // Slide final: CTA / cierre
+  const cta = topic + '. Call-to-action final slide concept, summary or invitation, warm and welcoming tone. ' + baseStyle;
+
+  return [cover, ...midPrompts, cta].slice(0, slideCount);
 }
 
 function downloadPostImage(postId) {
@@ -8092,6 +8201,40 @@ function downloadAllStudioImages() {
   const posts = loadStudioPosts().filter(p => p.imageBase64);
   if (!posts.length) { alert('No hay imágenes generadas todavía.'); return; }
   posts.forEach(p => downloadAdImage(p.imageBase64, p.imageMediaType, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png'));
+}
+
+// ── Carousel navigator ────────────────────────────────────────────────────────
+let _carouselIdx = 0;
+
+function carouselNav(dir) {
+  const post = activePostId ? loadStudioPosts().find(p => p.id === activePostId) : null;
+  if (!post || !post.carouselImages) return;
+  const slides = post.carouselImages;
+  _carouselIdx = (_carouselIdx + dir + slides.length) % slides.length;
+  const img = document.getElementById('pm-carousel-img');
+  if (img) {
+    img.src = 'data:' + slides[_carouselIdx].mediaType + ';base64,' + slides[_carouselIdx].base64;
+  }
+  const counter = document.getElementById('pm-carousel-counter');
+  if (counter) counter.textContent = 'Slide ' + (_carouselIdx + 1) + ' de ' + slides.length;
+}
+
+function downloadCarouselSlide() {
+  const post = activePostId ? loadStudioPosts().find(p => p.id === activePostId) : null;
+  if (!post || !post.carouselImages) return;
+  const slide = post.carouselImages[_carouselIdx];
+  if (!slide) return;
+  downloadAdImage(slide.base64, slide.mediaType, 'slide_' + (_carouselIdx + 1) + '_' + (post.title || 'carrusel').slice(0,20).replace(/\s+/g,'_') + '.jpg');
+}
+
+function downloadAllCarouselSlides(postId) {
+  const post = loadStudioPosts().find(p => p.id === postId);
+  if (!post || !post.carouselImages || !post.carouselImages.length) return;
+  post.carouselImages.forEach((slide, i) => {
+    setTimeout(() => {
+      downloadAdImage(slide.base64, slide.mediaType, 'slide_' + (i + 1) + '_' + (post.title || 'carrusel').slice(0,20).replace(/\s+/g,'_') + '.jpg');
+    }, i * 300);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
