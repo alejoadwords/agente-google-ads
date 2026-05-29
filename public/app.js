@@ -7054,6 +7054,364 @@ const STATUS_CFG = {
 let studioCurrentWeek = 0;
 let studioCurrentView = 'calendar';
 
+// ─── Social Publishing — conexiones por cliente ───────────────────────────────
+// Almacena tokens de páginas FB + cuentas IG por usuario+cliente en localStorage.
+// Formato: { instagram:[{pageId,pageName,pageToken,igUserId,igUsername},...], facebook:[...] }
+
+function getSocialPubKey() {
+  const uid = clerkInstance?.user?.id || 'anon';
+  const cp  = agencyActiveClientId ? '_' + agencyActiveClientId : '';
+  return 'acuarius_social_pub_' + uid + cp;
+}
+
+function loadSocialConnections() {
+  try {
+    const raw = localStorage.getItem(getSocialPubKey());
+    return raw ? JSON.parse(raw) : { instagram: [], facebook: [] };
+  } catch { return { instagram: [], facebook: [] }; }
+}
+
+function saveSocialConnections(data) {
+  try { localStorage.setItem(getSocialPubKey(), JSON.stringify(data)); } catch {}
+}
+
+function getSocialAccount(network) {
+  // Devuelve la primera cuenta conectada para la red, o null
+  const conns = loadSocialConnections();
+  const list  = conns[network] || [];
+  return list.length > 0 ? list[0] : null;
+}
+
+function connectSocialNetwork(network) {
+  const uid      = clerkInstance?.user?.id || '';
+  const clientId = agencyActiveClientId || '';
+  window.location.href =
+    '/api/social-connect?network=' + network +
+    '&clientId=' + encodeURIComponent(clientId) +
+    '&userId='   + encodeURIComponent(uid);
+}
+
+function disconnectSocialNetwork(network) {
+  if (!confirm('¿Desconectar la cuenta de ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '?')) return;
+  const conns = loadSocialConnections();
+  conns[network] = [];
+  saveSocialConnections(conns);
+  updateStudioConnectBtn();
+  const modal = document.getElementById('social-conn-modal');
+  if (modal) { modal.remove(); openSocialConnectionsModal(); }
+}
+
+// Actualiza el label del botón "Conectar redes" según cuentas activas
+function updateStudioConnectBtn() {
+  const lbl  = document.getElementById('studio-connect-label');
+  const btn  = document.getElementById('studio-connect-btn');
+  if (!lbl || !btn) return;
+  const conns    = loadSocialConnections();
+  const igCount  = (conns.instagram || []).length;
+  const fbCount  = (conns.facebook  || []).length;
+  const total    = igCount + fbCount;
+  if (total > 0) {
+    lbl.textContent = total + (total === 1 ? ' red conectada' : ' redes conectadas');
+    btn.style.color = '#059669';
+    btn.style.borderColor = '#A7F3D0';
+  } else {
+    lbl.textContent = 'Conectar redes';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }
+}
+
+// ── Modal de conexiones sociales ──────────────────────────────────────────────
+function openSocialConnectionsModal() {
+  document.getElementById('social-conn-modal')?.remove();
+
+  const conns   = loadSocialConnections();
+  const igAccts = conns.instagram || [];
+  const fbAccts = conns.facebook  || [];
+
+  const igRow = (acct) => {
+    if (!acct) return (
+      '<div class="social-conn-row">' +
+        '<div class="social-conn-icon" style="background:#FEF0F5">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
+        '</div>' +
+        '<div class="social-conn-info">' +
+          '<div class="social-conn-name">Instagram</div>' +
+          '<div class="social-conn-status">No conectado</div>' +
+        '</div>' +
+        '<button class="pm-btn pm-btn-primary" style="font-size:11px;padding:7px 12px" onclick="connectSocialNetwork(\'instagram\')">Conectar</button>' +
+      '</div>'
+    );
+    return (
+      '<div class="social-conn-row" style="border-color:#A7F3D0">' +
+        '<div class="social-conn-icon" style="background:#FEF0F5">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
+        '</div>' +
+        '<div class="social-conn-info">' +
+          '<div class="social-conn-name" style="color:#059669">✓ Instagram conectado</div>' +
+          '<div class="social-conn-status">' + esc(acct.igUsername ? '@' + acct.igUsername : acct.pageName || '') + '</div>' +
+        '</div>' +
+        '<button class="pm-btn pm-btn-ghost" style="font-size:11px;padding:6px 10px;color:#EF4444;border-color:#FCA5A5!important" onclick="disconnectSocialNetwork(\'instagram\')">Quitar</button>' +
+      '</div>'
+    );
+  };
+
+  const fbRow = (acct) => {
+    if (!acct) return (
+      '<div class="social-conn-row">' +
+        '<div class="social-conn-icon" style="background:#EBF3FF">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
+        '</div>' +
+        '<div class="social-conn-info">' +
+          '<div class="social-conn-name">Facebook Page</div>' +
+          '<div class="social-conn-status">No conectado</div>' +
+        '</div>' +
+        '<button class="pm-btn pm-btn-primary" style="font-size:11px;padding:7px 12px" onclick="connectSocialNetwork(\'facebook\')">Conectar</button>' +
+      '</div>'
+    );
+    return (
+      '<div class="social-conn-row" style="border-color:#A7F3D0">' +
+        '<div class="social-conn-icon" style="background:#EBF3FF">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
+        '</div>' +
+        '<div class="social-conn-info">' +
+          '<div class="social-conn-name" style="color:#059669">✓ Facebook conectado</div>' +
+          '<div class="social-conn-status">' + esc(acct.pageName || '') + '</div>' +
+        '</div>' +
+        '<button class="pm-btn pm-btn-ghost" style="font-size:11px;padding:6px 10px;color:#EF4444;border-color:#FCA5A5!important" onclick="disconnectSocialNetwork(\'facebook\')">Quitar</button>' +
+      '</div>'
+    );
+  };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'social-conn-overlay';
+  overlay.id = 'social-conn-modal';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML =
+    '<div class="social-conn-box">' +
+      '<div class="social-conn-hdr">' +
+        '<div>' +
+          '<div style="font-size:15px;font-weight:800;color:var(--text)">Conectar redes sociales</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:3px">Publica directamente desde el Studio</div>' +
+        '</div>' +
+        '<button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:0 4px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
+      '</div>' +
+      '<div class="social-conn-body">' +
+        '<div style="font-size:11px;color:var(--muted);padding:10px 14px;background:var(--bg-muted);border-radius:8px;line-height:1.5">' +
+          '⚡ Al conectar usarás el mismo <b>Meta App</b> que gestiona tus cuentas de anuncios. ' +
+          'Asegúrate de que tu Meta App tenga los permisos <b>instagram_content_publish</b> y <b>pages_manage_posts</b> aprobados.' +
+        '</div>' +
+        igRow(igAccts[0] || null) +
+        fbRow(fbAccts[0] || null) +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+}
+
+// ── Modal de publicación ──────────────────────────────────────────────────────
+function openPublishModal(postId) {
+  document.getElementById('pub-modal')?.remove();
+
+  const posts = loadStudioPosts();
+  const post  = posts.find(p => p.id === postId);
+  if (!post) return;
+
+  const conns   = loadSocialConnections();
+  const igAccts = conns.instagram || [];
+  const fbAccts = conns.facebook  || [];
+  const igAcct  = igAccts[0] || null;
+  const fbAcct  = fbAccts[0] || null;
+
+  const hasMedia  = !!(post.imageBase64 || post.videoUrl);
+  const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
+
+  const netBadge = (network, acct, icon) => {
+    const connected = !!acct;
+    const label = network === 'instagram' ? 'Instagram' : 'Facebook';
+    const sublabel = connected
+      ? (network === 'instagram' && acct.igUsername ? '@' + acct.igUsername : acct.pageName || label)
+      : 'No conectado · ';
+    const connectBtn = !connected
+      ? '<span style="color:var(--blue);cursor:pointer;text-decoration:underline;font-size:11px" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar</span>'
+      : '';
+    const inputId = 'pub-net-' + network;
+
+    return (
+      '<label class="pub-net-row' + (!connected ? ' disabled' : '') + '" for="' + inputId + '">' +
+        '<input type="checkbox" id="' + inputId + '" name="pub-net" value="' + network + '"' +
+          (connected ? '' : ' disabled') + ' style="width:16px;height:16px;accent-color:var(--blue);flex-shrink:0">' +
+        '<div class="social-conn-icon" style="background:' + (network === 'instagram' ? '#FEF0F5' : '#EBF3FF') + ';width:32px;height:32px">' + icon + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:700;color:' + (connected ? 'var(--text)' : 'var(--muted)') + '">' + label + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + esc(sublabel) + connectBtn + '</div>' +
+        '</div>' +
+        (connected ? '<span style="font-size:18px" title="Conectado">✅</span>' : '') +
+      '</label>'
+    );
+  };
+
+  const igIcon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
+  const fbIcon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'pub-overlay';
+  overlay.id = 'pub-modal';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const captionPreview = (post.caption || '').slice(0, 120) + (post.caption && post.caption.length > 120 ? '…' : '');
+
+  overlay.innerHTML =
+    '<div class="pub-box">' +
+      '<div class="pub-hdr">' +
+        '<div>' +
+          '<div style="font-size:15px;font-weight:800;color:var(--text)">Publicar post</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + esc(post.title || 'Sin título') + '</div>' +
+        '</div>' +
+        '<button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:0 4px" onclick="document.getElementById(\'pub-modal\')?.remove()">×</button>' +
+      '</div>' +
+      '<div class="pub-body">' +
+        // Preview caption
+        (captionPreview ? '<div style="background:var(--bg-muted);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text-2);line-height:1.5">' + esc(captionPreview) + '</div>' : '') +
+        // Network selection
+        '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Publicar en:</div>' +
+        netBadge('instagram', igAcct, igIcon) +
+        netBadge('facebook',  fbAcct, fbIcon) +
+        // Warning if no connections
+        (!igAcct && !fbAcct
+          ? '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0">Conecta al menos una red para publicar.</div>'
+          : '') +
+        // Publish now button
+        '<button id="pub-confirm-btn" class="pm-btn" style="width:100%;justify-content:center;background:var(--blue);color:#fff;font-weight:700;font-size:13px;padding:13px"' +
+          ' onclick="publishPostNow(\'' + postId + '\')"' +
+          (!igAcct && !fbAcct ? ' disabled style="width:100%;justify-content:center;background:var(--bg-muted);color:var(--muted);font-weight:700;font-size:13px;padding:13px;cursor:not-allowed"' : '') +
+        '>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+          'Publicar ahora' +
+        '</button>' +
+        '<div id="pub-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:18px"></div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+}
+
+// ── Publicar post en las redes seleccionadas ──────────────────────────────────
+async function publishPostNow(postId) {
+  const posts = loadStudioPosts();
+  const post  = posts.find(p => p.id === postId);
+  if (!post) return;
+
+  // Leer redes seleccionadas
+  const checkboxes  = document.querySelectorAll('input[name="pub-net"]:checked');
+  const selectedNets = Array.from(checkboxes).map(c => c.value);
+  if (!selectedNets.length) {
+    alert('Selecciona al menos una red para publicar.');
+    return;
+  }
+
+  const btn    = document.getElementById('pub-confirm-btn');
+  const status = document.getElementById('pub-status');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Publicando…'; }
+  if (status) status.textContent = 'Preparando media…';
+
+  const conns    = loadSocialConnections();
+  const caption  = post.caption || '';
+  const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
+  const headers  = { 'Content-Type': 'application/json' };
+  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+
+  // ── Helper: obtener URL pública de una imagen (sube a CDN si es solo base64) ──
+  async function getPublicUrl(base64, mediaType, existingUrl) {
+    // Si ya tenemos una URL CDN válida, usarla directamente
+    if (existingUrl && existingUrl.startsWith('https://')) return existingUrl;
+    // Subir base64 al CDN de fal.ai
+    if (status) status.textContent = 'Subiendo imagen al servidor…';
+    const upRes  = await fetch('/api/upload-media', {
+      method: 'POST', headers,
+      body: JSON.stringify({ base64, mediaType: mediaType || 'image/jpeg' }),
+    });
+    const upData = await upRes.json();
+    if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Error subiendo imagen');
+    return upData.url;
+  }
+
+  const results = [];
+
+  try {
+    for (const network of selectedNets) {
+      const acctList = conns[network] || [];
+      const acct     = acctList[0];
+      if (!acct) { results.push({ network, success: false, error: 'No hay cuenta conectada' }); continue; }
+
+      if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
+
+      let imageUrl = null;
+      let carouselUrls = [];
+
+      if (isCarousel && network === 'instagram') {
+        // Subir todos los slides del carrusel
+        for (const slide of post.carouselImages.slice(0, 10)) {
+          const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url);
+          carouselUrls.push(url);
+        }
+      } else if (post.imageBase64) {
+        imageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl);
+      }
+
+      const body = {
+        network,
+        pageToken:        acct.pageToken,
+        pageId:           acct.pageId,
+        igUserId:         acct.igUserId || null,
+        imageUrl,
+        videoUrl:         post.videoUrl || null,
+        caption,
+        isCarousel:       isCarousel && network === 'instagram',
+        carouselImageUrls: carouselUrls,
+      };
+
+      const pubRes  = await fetch('/api/social-publish', { method: 'POST', headers, body: JSON.stringify(body) });
+      const pubData = await pubRes.json();
+
+      if (!pubRes.ok || !pubData.success) {
+        results.push({ network, success: false, error: pubData.error || 'Error publicando' });
+      } else {
+        results.push({ network, success: true, postId: pubData.postId });
+      }
+    }
+
+    // Evaluar resultados
+    const allOk  = results.every(r => r.success);
+    const anyOk  = results.some(r => r.success);
+
+    if (anyOk) {
+      // Marcar post como publicado
+      updateStudioPost(postId, { status: 'publicado' });
+    }
+
+    if (allOk) {
+      if (status) status.textContent = '✅ ¡Publicado exitosamente!';
+      showToast('Post publicado en ' + results.map(r => r.network).join(' y '), 'success');
+      setTimeout(() => {
+        document.getElementById('pub-modal')?.remove();
+        closePostModal();
+        renderStudio();
+      }, 1800);
+    } else {
+      const errMsgs = results.filter(r => !r.success).map(r => r.network + ': ' + r.error).join('\n');
+      if (status) { status.textContent = '❌ ' + results.filter(r => !r.success).map(r => r.error).join(' · '); status.style.color = '#EF4444'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
+      if (!anyOk) alert('Error publicando:\n\n' + errMsgs);
+    }
+
+  } catch (err) {
+    console.error('publishPostNow error:', err);
+    if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#EF4444'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
+  }
+}
+
 // ─── Studio data model v2 ─────────────────────────────────────────────────────
 // Structure: { version:2, activeId:'parrilla_xxx', parrillas:[{ id, name, createdAt, posts:[] }] }
 
@@ -7252,6 +7610,7 @@ function openSocialStudio() {
   setAgentContext('social');
   showView('social-studio');
   renderStudio();
+  updateStudioConnectBtn();
 }
 
 function renderStudio() {
@@ -7888,13 +8247,24 @@ function openPostModal(postId) {
   }
 
   // ── Pie: botones de estado ────────────────────────────────────────────────
+  const hasMedia = !!(post.imageBase64 || post.videoUrl);
+  const igConn   = getSocialAccount('instagram');
+  const fbConn   = getSocialAccount('facebook');
+  const hasAnyConn = !!(igConn || fbConn);
+
+  // Botón principal de publicar (solo si hay media o caption)
+  const publishBtn = (hasMedia || post.caption)
+    ? '<button class="pm-btn" style="background:#1E2BCC;color:#fff;font-weight:700;gap:5px" onclick="openPublishModal(\'' + postId + '\')">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+        'Publicar' +
+      '</button>'
+    : '';
+
   const footerBtns =
     (post.status !== 'listo'
       ? '<button class="pm-btn pm-btn-success" onclick="setPostStatus(\'' + postId + '\',\'listo\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Marcar como listo</button>'
       : '<button class="pm-btn pm-btn-ghost" style="cursor:default;opacity:.5">✓ Listo</button>') +
-    (post.status !== 'publicado'
-      ? '<button class="pm-btn pm-btn-info" onclick="setPostStatus(\'' + postId + '\',\'publicado\')">🚀 Publicado</button>'
-      : '') +
+    publishBtn +
     '<div style="flex:1"></div>' +
     '<button class="pm-btn pm-btn-danger" onclick="if(confirm(\'Eliminar este post?\'))deleteStudioPost(\'' + postId + '\')">Eliminar</button>';
 
@@ -8212,8 +8582,9 @@ async function generateImageForPost(postId) {
     }
     if (data.images && data.images.length > 0) {
       updateStudioPost(postId, {
-        imageBase64: data.images[0].base64,
+        imageBase64:    data.images[0].base64,
         imageMediaType: data.images[0].mediaType || 'image/jpeg',
+        imageUrl:       data.images[0].url || null,  // URL CDN para publicación directa
         status: 'listo'
       });
       closePostModal();
@@ -8267,7 +8638,11 @@ async function generateCarouselSlides(postId, post) {
       let data;
       try { data = await res.json(); } catch(_) { continue; }
       if (data.images && data.images.length > 0) {
-        slides.push({ base64: data.images[0].base64, mediaType: data.images[0].mediaType || 'image/jpeg' });
+        slides.push({
+          base64:    data.images[0].base64,
+          mediaType: data.images[0].mediaType || 'image/jpeg',
+          url:       data.images[0].url || null,  // URL CDN para publicación directa
+        });
       }
     }
 
@@ -8278,8 +8653,9 @@ async function generateCarouselSlides(postId, post) {
     // Guardar slides y usar el primero como thumbnail
     updateStudioPost(postId, {
       carouselImages: slides,
-      imageBase64: slides[0].base64,
+      imageBase64:    slides[0].base64,
       imageMediaType: slides[0].mediaType,
+      imageUrl:       slides[0].url || null,
       status: 'listo'
     });
     closePostModal();
@@ -12186,6 +12562,87 @@ function generateBasicImage() {
 
 
 
+
+// =============================================
+// SOCIAL PUBLISHING — Callback de OAuth
+// =============================================
+(function checkSocialCallback() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('social_connected') === 'true') {
+    window.history.replaceState({}, '', window.location.pathname);
+
+    const network  = params.get('social_network') || 'instagram';
+    const clientId = params.get('social_client')  || '';
+
+    let accounts = [];
+    try { accounts = JSON.parse(params.get('social_accounts') || '[]'); } catch {}
+
+    if (!accounts.length) {
+      showToast('Conexión completada pero no se encontraron páginas Facebook ni cuentas Instagram vinculadas. Verifica que tu cuenta tenga páginas de Facebook con Instagram Business asociado.', 'warning');
+      return;
+    }
+
+    // Si el clientId no coincide con el contexto actual, intentar restaurarlo después de que Clerk cargue
+    const saveTokens = () => {
+      const conns = loadSocialConnections();
+
+      // Instagram: filtrar cuentas que tengan igUserId
+      const igAccts = accounts.filter(a => a.igUserId).map(a => ({
+        pageId:     a.pageId,
+        pageName:   a.pageName,
+        pageToken:  a.pageToken,
+        igUserId:   a.igUserId,
+        igUsername: a.igUsername || null,
+      }));
+
+      // Facebook: todas las páginas con token
+      const fbAccts = accounts.map(a => ({
+        pageId:    a.pageId,
+        pageName:  a.pageName,
+        pageToken: a.pageToken,
+      }));
+
+      if (igAccts.length > 0) conns.instagram = igAccts;
+      if (fbAccts.length > 0) conns.facebook  = fbAccts;
+
+      saveSocialConnections(conns);
+      updateStudioConnectBtn();
+
+      const igName = igAccts[0]?.igUsername ? '@' + igAccts[0].igUsername : (igAccts[0]?.pageName || '');
+      const fbName = fbAccts[0]?.pageName   || '';
+
+      const msg = [
+        igAccts.length > 0 ? 'Instagram conectado' + (igName ? ' (' + igName + ')' : '') : null,
+        fbAccts.length > 0 ? 'Facebook conectado' + (fbName ? ' (' + fbName + ')' : '') : null,
+      ].filter(Boolean).join(' · ');
+
+      showToast(msg || 'Redes sociales conectadas', 'success');
+    };
+
+    // Si agencyActiveClientId ya coincide o no hay clientId específico, guardar de inmediato
+    if (!clientId || clientId === agencyActiveClientId) {
+      setTimeout(saveTokens, 200);
+    } else {
+      // Esperar a que el cliente esté activo (puede haber redirect)
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (agencyActiveClientId === clientId || attempts > 20) {
+          clearInterval(interval);
+          saveTokens();
+        }
+      }, 300);
+    }
+  }
+
+  if (params.get('social_error')) {
+    window.history.replaceState({}, '', window.location.pathname);
+    const msg = params.get('social_error');
+    if (msg !== 'access_denied') {
+      showToast('Error conectando red social: ' + (msg || 'error desconocido'), 'error');
+    }
+  }
+})();
 
 // =============================================
 // META ADS — Conexión OAuth + Selector de cuentas

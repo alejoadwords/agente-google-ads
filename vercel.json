@@ -1,7 +1,9 @@
 {
   "functions": {
-    "api/video-gen.js": { "maxDuration": 30 },
-    "api/generate-image.js": { "maxDuration": 60 }
+    "api/video-gen.js":       { "maxDuration": 30 },
+    "api/generate-image.js":  { "maxDuration": 60 },
+    "api/upload-media.js":    { "maxDuration": 30 },
+    "api/social-publish.js":  { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/sso-callback", "destination": "/sso-callback.html" },
