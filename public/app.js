@@ -8983,6 +8983,77 @@ function showConnectionModal(platform, accountName) {
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
 
+// SOCIAL CONNECTION SUCCESS MODAL
+function showSocialConnectionModal(igAccts, fbAccts) {
+  const existing = document.getElementById('social-conn-success-modal');
+  if (existing) existing.remove();
+
+  const hasIG = igAccts && igAccts.length > 0;
+  const hasFB = fbAccts && fbAccts.length > 0;
+
+  // Construir líneas de cuentas conectadas
+  const igLines = hasIG ? igAccts.map(a =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#FFF0F7;border-radius:8px;margin-bottom:6px">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
+    '<span style="font-size:13px;color:#333;font-weight:500">' + (a.igUsername ? '@' + a.igUsername : a.pageName) + '</span>' +
+    '<span style="margin-left:auto;font-size:11px;color:#059669;font-weight:600">✓ IG</span>' +
+    '</div>'
+  ).join('') : '';
+
+  const fbLines = hasFB ? fbAccts.map(a =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#EFF6FF;border-radius:8px;margin-bottom:6px">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
+    '<span style="font-size:13px;color:#333;font-weight:500">' + a.pageName + '</span>' +
+    '<span style="margin-left:auto;font-size:11px;color:#059669;font-weight:600">✓ FB</span>' +
+    '</div>'
+  ).join('') : '';
+
+  const titleParts = [hasIG ? 'Instagram' : null, hasFB ? 'Facebook' : null].filter(Boolean);
+  const title = titleParts.join(' y ') + (titleParts.length === 1 ? ' conectado' : ' conectados');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'social-conn-success-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease';
+
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:20px;padding:44px 40px 36px;max-width:440px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
+      // Checkmark circle
+      '<div style="width:60px;height:60px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">' +
+        '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+      '</div>' +
+      '<h2 style="font-size:21px;font-weight:700;color:#111;margin:0 0 6px;font-family:var(--font)">¡' + title + '!</h2>' +
+      '<p style="font-size:14px;color:#666;margin:0 0 22px;font-family:var(--font)">Tus cuentas ya están listas para publicar desde el Studio</p>' +
+      // Lista de cuentas
+      '<div style="text-align:left;margin-bottom:24px">' + igLines + fbLines + '</div>' +
+      // Botones
+      '<button id="scm-studio-btn" style="width:100%;padding:13px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:8px;transition:opacity .2s">Ir al Social Studio</button>' +
+      '<button id="scm-close-btn" style="width:100%;padding:11px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
+    '</div>';
+
+  // Inyectar keyframes si no existen
+  if (!document.getElementById('conn-modal-styles')) {
+    const style = document.createElement('style');
+    style.id = 'conn-modal-styles';
+    style.textContent = '@keyframes fadeInOverlay{from{opacity:0}to{opacity:1}} @keyframes scaleInCard{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}';
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(overlay);
+
+  const close = () => {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity .25s';
+    setTimeout(() => overlay.remove(), 260);
+  };
+
+  document.getElementById('scm-close-btn').addEventListener('click', close);
+  document.getElementById('scm-studio-btn').addEventListener('click', () => {
+    close();
+    setTimeout(() => { showView('social-studio'); document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active')); document.querySelector('.sb-item[onclick*="social-studio"]')?.classList.add('active'); }, 280);
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
+
 // VIEWS
 function showView(id){
   // Ocultar loader la primera vez que se muestra una vista
@@ -12591,22 +12662,24 @@ function generateBasicImage() {
         accounts = parsed.accounts || [];
         sessionStorage.removeItem('acuarius_social_pending');
       }
-      // Fallback: si por alguna razón no hay sessionStorage, intentar leer de URL (legacy)
+      // Fallback legacy: leer de URL
       if (!accounts.length) {
         accounts = JSON.parse(params.get('social_accounts') || '[]');
       }
     } catch {}
 
     if (!accounts.length) {
-      showToast('Conexión completada pero no se encontraron páginas Facebook ni cuentas Instagram vinculadas. Verifica que tu cuenta tenga páginas de Facebook con Instagram Business asociado.', 'warning');
+      // Esperar a que Clerk cargue antes de mostrar el toast
+      const waitAndWarn = () => showToast('Conexión completada pero no se encontraron páginas Facebook ni cuentas Instagram vinculadas. Verifica que tu cuenta tenga páginas de Facebook con Instagram Business asociado.', 'warning');
+      if (clerkInstance?.user?.id) { waitAndWarn(); }
+      else { let t=0; const iv=setInterval(()=>{ t++; if(clerkInstance?.user?.id||t>40){clearInterval(iv);waitAndWarn();} },200); }
       return;
     }
 
-    // Si el clientId no coincide con el contexto actual, intentar restaurarlo después de que Clerk cargue
-    const saveTokens = () => {
+    const doSave = () => {
       const conns = loadSocialConnections();
 
-      // Instagram: filtrar cuentas que tengan igUserId
+      // Instagram: cuentas con igUserId
       const igAccts = accounts.filter(a => a.igUserId).map(a => ({
         pageId:     a.pageId,
         pageName:   a.pageName,
@@ -12628,30 +12701,41 @@ function generateBasicImage() {
       saveSocialConnections(conns);
       updateStudioConnectBtn();
 
-      const igName = igAccts[0]?.igUsername ? '@' + igAccts[0].igUsername : (igAccts[0]?.pageName || '');
-      const fbName = fbAccts[0]?.pageName   || '';
-
-      const msg = [
-        igAccts.length > 0 ? 'Instagram conectado' + (igName ? ' (' + igName + ')' : '') : null,
-        fbAccts.length > 0 ? 'Facebook conectado' + (fbName ? ' (' + fbName + ')' : '') : null,
-      ].filter(Boolean).join(' · ');
-
-      showToast(msg || 'Redes sociales conectadas', 'success');
+      // Modal de confirmación
+      showSocialConnectionModal(igAccts, fbAccts);
     };
 
-    // Si agencyActiveClientId ya coincide o no hay clientId específico, guardar de inmediato
-    if (!clientId || clientId === agencyActiveClientId) {
-      setTimeout(saveTokens, 200);
-    } else {
-      // Esperar a que el cliente esté activo (puede haber redirect)
+    // CLAVE: esperar a que Clerk tenga el user.id antes de guardar,
+    // si no la clave de localStorage queda como "anon" y los tokens se pierden
+    const waitForClerkAndSave = () => {
+      if (clerkInstance?.user?.id) {
+        // Clerk ya cargó → guardar de inmediato
+        doSave();
+      } else {
+        // Clerk aún no cargó → polling cada 200ms, máx 8s
+        let attempts = 0;
+        const iv = setInterval(() => {
+          attempts++;
+          if (clerkInstance?.user?.id || attempts > 40) {
+            clearInterval(iv);
+            doSave();
+          }
+        }, 200);
+      }
+    };
+
+    // Si hay clientId específico, esperar también a que agencyActiveClientId coincida
+    if (clientId && clientId !== agencyActiveClientId) {
       let attempts = 0;
-      const interval = setInterval(() => {
+      const iv = setInterval(() => {
         attempts++;
-        if (agencyActiveClientId === clientId || attempts > 20) {
-          clearInterval(interval);
-          saveTokens();
+        if (agencyActiveClientId === clientId || attempts > 30) {
+          clearInterval(iv);
+          waitForClerkAndSave();
         }
       }, 300);
+    } else {
+      waitForClerkAndSave();
     }
   }
 
