@@ -7391,7 +7391,42 @@ async function publishPostNow(postId) {
     const needsFbOnly = selectedNets.length === 1 && selectedNets[0] === 'facebook';
 
     let sharedImageUrl     = null;
+    let sharedVideoUrl     = post.videoUrl || null;
     let sharedCarouselUrls = [];
+
+    // ── Video: resolver URL pública si es blob: (upload manual, no accesible externamente) ──
+    if (sharedVideoUrl && sharedVideoUrl.startsWith('blob:')) {
+      if (status) status.textContent = 'Subiendo video al servidor…';
+      try {
+        const blobResp  = await fetch(sharedVideoUrl);
+        const blobData  = await blobResp.blob();
+        const arrBuf    = await blobData.arrayBuffer();
+        const bytes     = new Uint8Array(arrBuf);
+        // Límite ~6MB para evitar superar Vercel body limit (el video se sube comprimido igual)
+        if (bytes.byteLength > 6 * 1024 * 1024) {
+          throw new Error('El video es demasiado grande para subir directamente (>6 MB). Usa un video generado con IA o súbelo desde una URL pública.');
+        }
+        let binary = '';
+        bytes.forEach(b => { binary += String.fromCharCode(b); });
+        const videoBase64 = btoa(binary);
+        const mimeType    = blobData.type || 'video/mp4';
+        const controller  = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 55000);
+        const upRes  = await fetch('/api/upload-media', {
+          method: 'POST', headers, signal: controller.signal,
+          body: JSON.stringify({ base64: videoBase64, mediaType: mimeType, fileName: 'video.mp4' }),
+        });
+        clearTimeout(tid);
+        const upData = await upRes.json();
+        if (upRes.ok && upData.url) {
+          sharedVideoUrl = upData.url;
+          updateStudioPost(postId, { videoUrl: upData.url }); // guardar URL permanente
+        }
+      } catch (blobErr) {
+        if (blobErr.name === 'AbortError') throw new Error('Subida de video tardó demasiado. Intenta de nuevo.');
+        throw blobErr;
+      }
+    }
 
     if (isCarousel && needsIg) {
       // Carousel: siempre necesita URLs (solo aplica a IG)
@@ -7399,15 +7434,15 @@ async function publishPostNow(postId) {
         const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url);
         sharedCarouselUrls.push(url);
       }
-    } else if (!needsFbOnly && (post.imageBase64 || post.imageUrl)) {
-      // IG presente (solo o mixto): subir al CDN una vez
+    } else if (!needsFbOnly && !sharedVideoUrl && (post.imageBase64 || post.imageUrl)) {
+      // IG presente (solo o mixto), post de imagen: subir al CDN una vez
       sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl);
       // Guardar CDN URL en el post para evitar re-uploads futuros
       if (sharedImageUrl && sharedImageUrl !== post.imageUrl) {
         updateStudioPost(postId, { imageUrl: sharedImageUrl });
       }
     }
-    // needsFbOnly → no CDN: pasamos imageBase64 directo a social-publish
+    // needsFbOnly sin video → no CDN: pasamos imageBase64 directo a social-publish
 
     // ── Publicar en cada red seleccionada ─────────────────────────────────────
     for (const network of selectedNets) {
@@ -7418,8 +7453,8 @@ async function publishPostNow(postId) {
 
       if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
 
-      // Para Facebook-only: enviar base64 directamente (upload binario en el servidor)
-      const useDirect = network === 'facebook' && needsFbOnly && !sharedImageUrl && post.imageBase64;
+      // Facebook directo: enviar base64 para imágenes sin pasar por CDN (más rápido)
+      const useDirect = network === 'facebook' && needsFbOnly && !sharedImageUrl && !sharedVideoUrl && post.imageBase64;
 
       const body = {
         network,
@@ -7427,10 +7462,9 @@ async function publishPostNow(postId) {
         pageId:            acct.pageId,
         igUserId:          acct.igUserId || null,
         imageUrl:          sharedImageUrl,
-        // Facebook directo: enviar base64 sin pasar por CDN
-        imageBase64:       useDirect ? post.imageBase64    : null,
+        imageBase64:       useDirect ? post.imageBase64              : null,
         imageMediaType:    useDirect ? (post.imageMediaType || 'image/jpeg') : null,
-        videoUrl:          post.videoUrl || null,
+        videoUrl:          sharedVideoUrl,
         caption,
         isCarousel:        isCarousel && network === 'instagram',
         carouselImageUrls: sharedCarouselUrls,

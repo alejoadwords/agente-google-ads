@@ -183,6 +183,20 @@ export default async function handler(req, res) {
         return res.json({ success: true, postId: photoData.post_id || photoData.id, network: 'facebook', type: 'photo' });
       }
 
+      // Video (Reel o video normal en página)
+      if (videoUrl) {
+        const videoRes  = await fetch(`${GRAPH}/${pageId}/videos`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_url: videoUrl, description: caption, access_token: pageToken }),
+        });
+        const videoData = await videoRes.json();
+        if (!videoRes.ok || videoData.error) {
+          throw new Error('Error publicando video en FB: ' + (videoData.error?.message || JSON.stringify(videoData).slice(0, 200)));
+        }
+        return res.json({ success: true, postId: videoData.id, network: 'facebook', type: 'video' });
+      }
+
       // Post de texto solo
       const postRes  = await fetch(`${GRAPH}/${pageId}/feed`, {
         method:  'POST',
