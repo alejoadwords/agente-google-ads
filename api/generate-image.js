@@ -12,6 +12,8 @@ export default async function handler(req, res) {
     format            = 'square',
     variations        = 1,
     hasText           = false,
+    // Modo carrusel: Ideogram REALISTIC + 1080×1080 exacto + negative prompt anti-texto
+    carouselSlide     = false,
     // Nuevo modo DESIGN: genera el anuncio completo con texto integrado
     designMode        = false,
     adCopy            = null,     // { headline, subheadline, cta, brand }
@@ -241,6 +243,26 @@ export default async function handler(req, res) {
           imageUrl = ideogramData.images?.[0]?.url;
         }
 
+      } else if (carouselSlide) {
+        // ── MODO CARRUSEL: Ideogram REALISTIC + 1080×1080 + anti-text negative prompt ──
+        // Ideogram garantiza dimensiones exactas y acepta negative_prompt para excluir texto
+        const carouselRes = await fetch('https://fal.run/fal-ai/ideogram/v3', {
+          method:  'POST',
+          headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt:          prompt,  // Prompt ya viene limpio desde el frontend (solo visual)
+            negative_prompt: 'text, typography, letters, words, writing, title, caption, watermark, font, label, number, subtitle, heading, logo text, written words, inscriptions, calligraphy, graffiti, signage, banner text, overlay text, printed text',
+            image_size:      { width: 1080, height: 1080 },  // exacto 1080×1080
+            style:           'REALISTIC',
+            rendering_speed: 'QUALITY',
+            expand_prompt:   false,
+            seed:            Math.floor(Math.random() * 999999),
+          }),
+        });
+        const carouselData = await carouselRes.json();
+        if (!carouselRes.ok) throw new Error(carouselData.detail?.[0]?.msg || carouselData.error || 'Error en Ideogram carousel');
+        imageUrl = carouselData.images?.[0]?.url;
+
       } else if (hasText) {
         // ── MODO REALISTA CON TEXTO (legacy) ─────────────────────────────────
         const ideogramRes = await fetch('https://fal.run/fal-ai/ideogram/v3', {
@@ -266,7 +288,7 @@ export default async function handler(req, res) {
           headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             prompt:           buildFluxPrompt(prompt, format),
-            aspect_ratio:     spec.fluxRatio,
+            image_size:       { width: 1080, height: 1080 },  // exacto 1080×1080 en lugar de aspect_ratio
             output_format:    'jpeg',
             output_quality:   95,
             safety_tolerance: '2',
@@ -288,7 +310,7 @@ export default async function handler(req, res) {
       results.push({
         index: i + 1, format: spec.label, size: `${spec.w}x${spec.h}`,
         base64: imageBase64, mediaType,
-        model: designMode ? 'Ideogram V3 DESIGN' : (hasText ? 'Ideogram V3' : 'Flux 2 Pro'),
+        model: designMode ? 'Ideogram V3 DESIGN' : carouselSlide ? 'Ideogram V3 Realistic 1080×1080' : (hasText ? 'Ideogram V3' : 'Flux 2 Pro'),
         url: imageUrl,
       });
     }

@@ -8160,7 +8160,8 @@ async function generateCarouselSlides(postId, post) {
       updateProgress(i, slidePrompts.length);
       const res = await fetch('/api/generate-image', {
         method: 'POST', headers,
-        body: JSON.stringify({ prompt: slidePrompts[i], format: 'square', variations: 1, hasText: false })
+        // carouselSlide:true → Ideogram REALISTIC + 1080×1080 + negative prompt anti-texto
+        body: JSON.stringify({ prompt: slidePrompts[i], format: 'square', variations: 1, carouselSlide: true })
       });
       let data;
       try { data = await res.json(); } catch(_) { continue; }
@@ -8188,32 +8189,65 @@ async function generateCarouselSlides(postId, post) {
 }
 
 function buildCarouselSlidePrompts(topic, post, slideCount) {
-  const network = post.network || 'instagram';
-  const baseStyle = 'Professional social media visual for ' + network + ', clean composition, vibrant colors, no text overlay, photorealistic quality';
+  // ── REGLA CRÍTICA: los prompts deben ser 100% en inglés y 100% visuales ──
+  // Nunca incluir texto en español ni el título del post — los modelos de imagen
+  // intentarán renderizar ese texto en la imagen, produciendo texto ilegible.
+  // Usar solo descripciones visuales en inglés sin mencionar palabras a renderizar.
 
-  // Slide 1: portada / cover
-  const cover = topic + '. Cover slide for a carousel post. Eye-catching hero image. ' + baseStyle;
+  // Extraer concepto visual del imagePrompt (ya es una descripción visual del agente)
+  // Si no hay imagePrompt, construir uno visual genérico basado en el formato/red
+  const visualBase = post.imagePrompt
+    ? post.imagePrompt  // el agente ya lo generó como descripción visual
+    : inferVisualConcept(post);
 
-  // Slides intermedios: variaciones del tema
-  const midPrompts = [];
-  const concepts = [
-    'detail close-up view of the topic',
-    'step by step demonstration concept',
-    'lifestyle context with people',
-    'product or subject from a different angle',
-    'before and after or transformation concept',
-    'expert tip or key insight visual metaphor',
-    'community or social proof visual',
+  const quality = 'professional photography, vibrant warm colors, soft natural lighting, square 1:1 composition, high resolution, photorealistic';
+  const noText  = 'absolutely no text, no typography, no words, no letters, no writing';
+
+  // Slide 1 — Portada (cover hero)
+  const cover = visualBase + ', hero shot, centered composition, eye-catching, inspiring mood. ' + quality + ', ' + noText;
+
+  // Slides intermedios — cada uno con un ángulo visual distinto
+  const angleTemplates = [
+    ', close-up detail, macro shot, intimate perspective. ',
+    ', step-by-step demonstration, hands showing technique, instructional visual. ',
+    ', lifestyle scene with people, authentic candid moment, human connection. ',
+    ', wide establishing shot, environmental context, sense of place. ',
+    ', transformation concept, before/after contrast, hopeful atmosphere. ',
+    ', product or subject from a different angle, fresh perspective. ',
+    ', community gathering, group of people, social energy. ',
   ];
+  const midPrompts = [];
   const numMid = Math.max(0, slideCount - 2);
   for (let i = 0; i < numMid; i++) {
-    midPrompts.push(topic + '. ' + concepts[i % concepts.length] + '. ' + baseStyle);
+    const angle = angleTemplates[i % angleTemplates.length];
+    midPrompts.push(visualBase + angle + quality + ', ' + noText);
   }
 
-  // Slide final: CTA / cierre
-  const cta = topic + '. Call-to-action final slide concept, summary or invitation, warm and welcoming tone. ' + baseStyle;
+  // Slide final — CTA / cierre (cálido, invitador)
+  const cta = visualBase + ', warm welcoming closing scene, optimistic hopeful atmosphere, gentle smile, soft bokeh background. ' + quality + ', ' + noText;
 
   return [cover, ...midPrompts, cta].slice(0, slideCount);
+}
+
+function inferVisualConcept(post) {
+  // Construir descripción visual en inglés sin incluir el título en español
+  const fmtMap = {
+    carrusel: 'educational lifestyle content',
+    feed:     'social media lifestyle photo',
+    reel:     'dynamic lifestyle scene',
+    story:    'vertical lifestyle moment',
+    video:    'cinematic lifestyle scene',
+    post:     'authentic lifestyle moment',
+  };
+  const netMap = {
+    instagram: 'warm pastel tones, Instagram aesthetic',
+    facebook:  'friendly approachable scene',
+    tiktok:    'energetic youthful scene',
+    linkedin:  'professional business setting',
+  };
+  const base = fmtMap[post.format] || 'lifestyle scene';
+  const net  = netMap[post.network] || 'social media aesthetic';
+  return base + ', ' + net + ', Latin American setting, authentic people';
 }
 
 function downloadPostImage(postId) {
