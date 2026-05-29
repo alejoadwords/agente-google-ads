@@ -7327,27 +7327,51 @@ async function publishPostNow(postId) {
   const headers  = { 'Content-Type': 'application/json' };
   if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
 
-  // ── Helper: obtener URL pública de una imagen (sube a CDN si es solo base64) ──
+  // ── Helper: obtener URL pública de una imagen ──────────────────────────────
+  // Estrategia:
+  // 1. Si ya hay una URL (Ideogram, fal.ai, cualquier CDN) → usarla directamente.
+  //    Meta la fetchea al crear el media container. Si expiró, Meta devuelve un
+  //    error claro que el usuario puede ver.
+  // 2. Si no hay URL pero sí base64 → comprimir a JPEG (reduce PNG 3-5 MB → 200-400 KB)
+  //    y subir al CDN de fal.ai con timeout de 55s.
   async function getPublicUrl(base64, mediaType, existingUrl) {
-    // Solo reusar si es URL del CDN permanente de fal.ai
-    // Las URLs de Ideogram/otros proveedores expiran, hay que re-subir
-    const isFalCdn = existingUrl && (existingUrl.includes('fal.media') || existingUrl.includes('v3.fal.media'));
-    if (isFalCdn) return existingUrl;
+    if (existingUrl && existingUrl.startsWith('https://')) return existingUrl;
 
-    // Subir base64 al CDN de fal.ai con timeout de 25s
+    // Comprimir la imagen en cliente antes de subir (PNG/WebP → JPEG 85%)
+    if (status) status.textContent = 'Preparando imagen…';
+    let uploadBase64 = base64;
+    let uploadType   = mediaType || 'image/jpeg';
+    try {
+      const compressed = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width  = img.width;
+          canvas.height = img.height;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve(dataUrl.split(',')[1]);
+        };
+        img.onerror = reject;
+        img.src = 'data:' + uploadType + ';base64,' + base64;
+      });
+      uploadBase64 = compressed;
+      uploadType   = 'image/jpeg';
+    } catch {}
+
     if (status) status.textContent = 'Subiendo imagen al servidor…';
     const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 25000);
+    const timeoutId  = setTimeout(() => controller.abort(), 55000);
     let upRes;
     try {
       upRes = await fetch('/api/upload-media', {
         method: 'POST', headers, signal: controller.signal,
-        body: JSON.stringify({ base64, mediaType: mediaType || 'image/jpeg' }),
+        body: JSON.stringify({ base64: uploadBase64, mediaType: uploadType }),
       });
     } catch (fetchErr) {
       clearTimeout(timeoutId);
-      if (fetchErr.name === 'AbortError') throw new Error('La subida de imagen tardó demasiado. Intenta de nuevo.');
-      throw new Error('Error de red subiendo imagen: ' + fetchErr.message);
+      if (fetchErr.name === 'AbortError') throw new Error('La subida de imagen tardó demasiado. Verifica tu conexión e intenta de nuevo.');
+      throw new Error('Error de red: ' + fetchErr.message);
     }
     clearTimeout(timeoutId);
     let upData;
