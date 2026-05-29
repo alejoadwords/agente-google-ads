@@ -7979,12 +7979,18 @@ async function generateImageForPost(postId) {
 
   // Mostrar estado de carga en el botón del modal
   const genBtn = document.getElementById('pm-gen-btn');
+  const resetBtn = () => {
+    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
+  };
   if (genBtn) {
     genBtn.disabled = true;
     genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Generando…';
   }
 
+  // falFormat for carrusel/feed/post → 'square'; for story/reel → 'story'
   const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
+  // Map 'horizontal' (video) to 'square' since API doesn't support that format
+  const apiFormat = (fmt.falFormat === 'horizontal') ? 'square' : fmt.falFormat;
   const prompt = (post.imagePrompt || post.title || post.caption || 'Social media post') +
     '. Todos los textos en español. Estilo profesional para redes sociales.';
 
@@ -7993,26 +7999,39 @@ async function generateImageForPost(postId) {
     if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
     const res = await fetch('/api/generate-image', {
       method: 'POST', headers,
-      body: JSON.stringify({ prompt, format: fmt.falFormat, variations: 1, hasText: true })
+      body: JSON.stringify({ prompt, format: apiFormat, variations: 1, hasText: true })
     });
-    const data = await res.json();
-    if (data.error) {
-      if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
-      alert('Error al generar imagen: ' + data.error);
+
+    let data;
+    try {
+      data = await res.json();
+    } catch(parseErr) {
+      resetBtn();
+      alert('Error al procesar respuesta del servidor. Intenta de nuevo.');
       return;
     }
+
+    if (!res.ok || data.error) {
+      resetBtn();
+      alert('Error al generar imagen: ' + (data.error || 'Error ' + res.status));
+      return;
+    }
+
     if (data.images && data.images.length > 0) {
       updateStudioPost(postId, {
         imageBase64: data.images[0].base64,
-        imageMediaType: data.images[0].mediaType,
+        imageMediaType: data.images[0].mediaType || 'image/jpeg',
         status: 'listo'
       });
       // Reabrir modal con la imagen nueva
       closePostModal();
       setTimeout(() => openPostModal(postId), 80);
+    } else {
+      resetBtn();
+      alert('No se recibió imagen del servidor. Por favor intenta de nuevo.');
     }
   } catch(err) {
-    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
+    resetBtn();
     alert('Error inesperado: ' + err.message);
   }
 }
