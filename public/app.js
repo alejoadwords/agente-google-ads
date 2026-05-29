@@ -7329,16 +7329,30 @@ async function publishPostNow(postId) {
 
   // ── Helper: obtener URL pública de una imagen (sube a CDN si es solo base64) ──
   async function getPublicUrl(base64, mediaType, existingUrl) {
-    // Si ya tenemos una URL CDN válida, usarla directamente
-    if (existingUrl && existingUrl.startsWith('https://')) return existingUrl;
-    // Subir base64 al CDN de fal.ai
+    // Solo reusar si es URL del CDN permanente de fal.ai
+    // Las URLs de Ideogram/otros proveedores expiran, hay que re-subir
+    const isFalCdn = existingUrl && (existingUrl.includes('fal.media') || existingUrl.includes('v3.fal.media'));
+    if (isFalCdn) return existingUrl;
+
+    // Subir base64 al CDN de fal.ai con timeout de 25s
     if (status) status.textContent = 'Subiendo imagen al servidor…';
-    const upRes  = await fetch('/api/upload-media', {
-      method: 'POST', headers,
-      body: JSON.stringify({ base64, mediaType: mediaType || 'image/jpeg' }),
-    });
-    const upData = await upRes.json();
-    if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Error subiendo imagen');
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 25000);
+    let upRes;
+    try {
+      upRes = await fetch('/api/upload-media', {
+        method: 'POST', headers, signal: controller.signal,
+        body: JSON.stringify({ base64, mediaType: mediaType || 'image/jpeg' }),
+      });
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      if (fetchErr.name === 'AbortError') throw new Error('La subida de imagen tardó demasiado. Intenta de nuevo.');
+      throw new Error('Error de red subiendo imagen: ' + fetchErr.message);
+    }
+    clearTimeout(timeoutId);
+    let upData;
+    try { upData = await upRes.json(); } catch { upData = {}; }
+    if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Error subiendo imagen (HTTP ' + upRes.status + ')');
     return upData.url;
   }
 

@@ -1,8 +1,16 @@
 // api/upload-media.js
 // Sube un archivo base64 al CDN de fal.ai y devuelve una URL pública permanente
-// Usa la misma infraestructura que generate-image.js (fal-cdn-v3)
 // Body: { base64, mediaType, fileName }
 // Response: { url }
+
+// Aumentar límite del body parser (las imágenes en base64 pueden ser 3-6 MB)
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '8mb',
+    },
+  },
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
