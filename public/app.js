@@ -7334,26 +7334,59 @@ async function publishPostNow(postId) {
   //    error claro que el usuario puede ver.
   // 2. Si no hay URL pero sí base64 → comprimir a JPEG (reduce PNG 3-5 MB → 200-400 KB)
   //    y subir al CDN de fal.ai con timeout de 55s.
-  async function getPublicUrl(base64, mediaType, existingUrl) {
-    if (existingUrl && existingUrl.startsWith('https://')) return existingUrl;
+  async function getPublicUrl(base64, mediaType, existingUrl, forceRatio) {
+    if (existingUrl && existingUrl.startsWith('https://') && !forceRatio) return existingUrl;
 
     // Comprimir la imagen en cliente antes de subir (PNG/WebP → JPEG 85%)
+    // Si forceRatio=true, ajustar también el aspect ratio para Instagram (4:5 a 1.91:1)
     if (status) status.textContent = 'Preparando imagen…';
-    let uploadBase64 = base64;
+    let uploadBase64 = base64 || (existingUrl && !existingUrl.startsWith('https://') ? existingUrl : null);
     let uploadType   = mediaType || 'image/jpeg';
+
+    // Si sólo tenemos una URL existente (HTTPS) con forceRatio, cargar desde URL
+    const srcData = uploadBase64
+      ? 'data:' + uploadType + ';base64,' + uploadBase64
+      : existingUrl;
+
     try {
       const compressed = await new Promise((resolve, reject) => {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => {
+          let w = img.width;
+          let h = img.height;
+          let sx = 0, sy = 0, sw = w, sh = h;
+
+          // Ajustar aspect ratio a rango Instagram (4:5 = 0.8 a 1.91:1)
+          if (forceRatio) {
+            const MIN_RATIO = 0.8;   // 4:5  portrait
+            const MAX_RATIO = 1.91;  // 1.91:1 landscape
+            const ratio = w / h;
+            if (ratio < MIN_RATIO) {
+              // Muy alto/retrato → recortar height
+              sh = Math.round(w / MIN_RATIO);
+              sy = Math.round((h - sh) / 2);
+            } else if (ratio > MAX_RATIO) {
+              // Muy ancho/paisaje → recortar width
+              sw = Math.round(h * MAX_RATIO);
+              sx = Math.round((w - sw) / 2);
+            }
+            w = sw; h = sh;
+          }
+
+          // Escalar a max 1440px de ancho (Instagram max)
+          const MAX_W = 1440;
+          if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+
           const canvas = document.createElement('canvas');
-          canvas.width  = img.width;
-          canvas.height = img.height;
-          canvas.getContext('2d').drawImage(img, 0, 0);
+          canvas.width  = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           resolve(dataUrl.split(',')[1]);
         };
         img.onerror = reject;
-        img.src = 'data:' + uploadType + ';base64,' + base64;
+        img.src = srcData;
       });
       uploadBase64 = compressed;
       uploadType   = 'image/jpeg';
@@ -7431,12 +7464,13 @@ async function publishPostNow(postId) {
     if (isCarousel && needsIg) {
       // Carousel: siempre necesita URLs (solo aplica a IG)
       for (const slide of post.carouselImages.slice(0, 10)) {
-        const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url);
+        const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url, true);
         sharedCarouselUrls.push(url);
       }
     } else if (!needsFbOnly && !sharedVideoUrl && (post.imageBase64 || post.imageUrl)) {
       // IG presente (solo o mixto), post de imagen: subir al CDN una vez
-      sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl);
+      // forceRatio=true garantiza que la imagen cumpla el rango de aspecto de Instagram (4:5 a 1.91:1)
+      sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl, true);
       // Guardar CDN URL en el post para evitar re-uploads futuros
       if (sharedImageUrl && sharedImageUrl !== post.imageUrl) {
         updateStudioPost(postId, { imageUrl: sharedImageUrl });
@@ -7540,9 +7574,13 @@ function showPublishSuccessModal(results, post) {
   ).join('');
 
   const failRows = fail.map(r =>
-    '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#FEF2F2;border-radius:8px;margin-bottom:6px">' +
-    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
-    '<span style="margin-left:auto;font-size:12px;color:#DC2626;font-weight:600">✗ Error</span></div>'
+    '<div style="padding:9px 12px;background:#FEF2F2;border-radius:8px;margin-bottom:6px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
+        '<span style="margin-left:auto;font-size:12px;color:#DC2626;font-weight:600">✗ Error</span>' +
+      '</div>' +
+      (r.error ? '<p style="margin:5px 0 0 28px;font-size:11px;color:#B91C1C;line-height:1.4;word-break:break-word">' + r.error.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : '') +
+    '</div>'
   ).join('');
 
   const allOk    = fail.length === 0;
