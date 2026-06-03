@@ -4610,7 +4610,7 @@ if(currentAgentCtx==='meta-ads'){
     } catch(_e) {}
   }
   const _connStatus = (_adsToken && _adsCustId)
-    ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + (_adsCurrency ? '\nMONEDA_DE_LA_CUENTA: ' + _adsCurrency + ' — Todos los cost_micros de la API son en ' + _adsCurrency + '. Divide entre 1,000,000 para obtener el valor real. NUNCA reportes como USD si la moneda es ' + _adsCurrency + '.' : '') + '\nREGLA_GAQL: La cuenta ESTÁ conectada. Emite exactamente UN [GAQL_QUERY: ...] por respuesta. NUNCA emitas múltiples bloques GAQL en la misma respuesta — ejecuta uno, analiza los resultados, luego decide si necesitas otro. NUNCA des instrucciones manuales sobre la interfaz de Google Ads.\nCAMPOS_GAQL_PROHIBIDOS: metrics.cost_per_conversion_micros NO EXISTE en la API — usa metrics.cost_per_conversion para CPA. metrics.conversions_from_interactions_rate es incompatible con campaign. NO combines search_term_view con segments.device.'
+    ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + (_adsCurrency ? '\nMONEDA_DE_LA_CUENTA: ' + _adsCurrency + ' — Todos los cost_micros de la API son en ' + _adsCurrency + '. Divide entre 1,000,000 para obtener el valor real. NUNCA reportes como USD si la moneda es ' + _adsCurrency + '.' : '') + '\nREGLA_GAQL: La cuenta ESTÁ conectada. Cuando el usuario pida análisis de datos (métricas, gasto, rendimiento, keywords, etc.), emite DIRECTAMENTE el bloque [GAQL_QUERY: ...] SIN ningún texto antes — cero explicaciones previas, cero frases introductorias. El frontend muestra el indicador de carga automáticamente. Emite exactamente UN [GAQL_QUERY: ...] por respuesta. NUNCA emitas múltiples bloques GAQL en la misma respuesta. NUNCA des instrucciones manuales sobre la interfaz de Google Ads.\nCAMPOS_GAQL_PROHIBIDOS: metrics.cost_per_conversion_micros NO EXISTE en la API — usa metrics.cost_per_conversion para CPA. metrics.conversions_from_interactions_rate es incompatible con campaign. NO combines search_term_view con segments.device.'
     : 'CUENTA_GOOGLE_ADS_CONECTADA: NO\nREGLA: Pide al usuario que conecte su cuenta en Configuración → Conexiones antes de continuar con cualquier análisis.';
   sys = _connStatus + '\n\n' + sys;
 }
@@ -4672,8 +4672,14 @@ while(!streamDone){
         }
         replyFinal+=evt.delta;
         const bbl=document.getElementById('stream-bubble-text');
-        const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
-        if(bbl)bbl.innerHTML=fmt(cleanForBubble);
+        // Si la respuesta incluye una query GAQL, no mostrar el texto previo — solo el indicador de consulta
+        const hasGaql = replyFinal.includes('[GAQL_QUERY:');
+        if(hasGaql){
+          if(bbl)bbl.innerHTML='<span style="color:var(--muted);font-size:13px">Consultando tu cuenta de Google Ads…</span>';
+        } else {
+          const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
+          if(bbl)bbl.innerHTML=fmt(cleanForBubble);
+        }
         // Calendario en tiempo real (cuando se genera desde el Studio)
         if(window._studioGenerating && !replyFinal.includes('<PARRILLA_JSON>')){
           const grid=document.getElementById('studio-stream-calendar');
@@ -4711,7 +4717,8 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
     if(gaqlMatch){
       const gaqlQuery = gaqlMatch[1].trim();
       replyFinalProcessed = replyFinalProcessed.replace(gaqlMatch[0], '').trim();
-      addAgent(replyFinalProcessed || 'Consultando tu cuenta de Google Ads...');
+      // Siempre mostrar el indicador de consulta — nunca el texto explicativo previo del modelo
+      addAgent('Consultando tu cuenta de Google Ads...');
       const gaqlResult = await queryGoogleAds(gaqlQuery);
       if(gaqlResult.error){
         hist.push({role:'assistant',content:replyFinalProcessed});
