@@ -614,8 +614,13 @@ function agencyGetStorageKey() {
 
 async function agencyLoadClients() {
   try {
+    // En mobile, Clerk puede tardar más — obtener token fresco si el global es null
+    let token = sessionToken;
+    if (!token && clerkInstance?.session) {
+      try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
+    }
     const headers = {};
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch('/api/profile?type=agency_clients', { headers });
     if (res.ok) {
       const { data } = await res.json();
@@ -918,10 +923,13 @@ async function autoExtractBrand() {
     showToast('Primero ingresa la URL del sitio web', 'info');
     return;
   }
-  if (!url.startsWith('http')) {
-    showToast('La URL debe comenzar con https://', 'info');
-    return;
-  }
+  // Auto-completar protocolo si el usuario escribió solo www.xxx.com
+  let normalizedUrl = url;
+  if (!normalizedUrl.startsWith('http')) normalizedUrl = 'https://' + normalizedUrl;
+  // Actualizar el campo con la URL normalizada
+  const webEl = document.getElementById('ag-f-web');
+  if (webEl) webEl.value = normalizedUrl;
+  const urlToAnalyze = normalizedUrl;
 
   const btn = document.getElementById('extract-brand-btn');
   const icon = document.getElementById('extract-brand-icon');
@@ -934,7 +942,7 @@ async function autoExtractBrand() {
     const res = await fetch('/api/extract-brand', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url: urlToAnalyze }),
     });
     const data = await res.json();
 
