@@ -941,13 +941,11 @@ async function autoExtractBrand() {
     showToast('Primero ingresa la URL del sitio web', 'info');
     return;
   }
-  // Auto-completar protocolo si el usuario escribió solo www.xxx.com
-  let normalizedUrl = url;
-  if (!normalizedUrl.startsWith('http')) normalizedUrl = 'https://' + normalizedUrl;
-  // Actualizar el campo con la URL normalizada
+  // Normalizar URL — el usuario puede escribir solo "dominio.com", "www.dominio.com", etc.
+  const urlToAnalyze = normalizeUrl(url);
+  // Actualizar el campo con la URL normalizada para que el usuario la vea corregida
   const webEl = document.getElementById('ag-f-web');
-  if (webEl) webEl.value = normalizedUrl;
-  const urlToAnalyze = normalizedUrl;
+  if (webEl) webEl.value = urlToAnalyze;
 
   const btn = document.getElementById('extract-brand-btn');
   const icon = document.getElementById('extract-brand-icon');
@@ -1286,6 +1284,16 @@ function agencySelectHealth(val) {
   });
 }
 
+// Normaliza cualquier URL ingresada por el usuario: añade https:// si falta,
+// elimina espacios y caracteres inválidos iniciales
+function normalizeUrl(raw) {
+  if (!raw) return '';
+  const s = raw.trim().replace(/^[/\\@]+/, '');
+  if (!s) return '';
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  return 'https://' + s;
+}
+
 function briefReadForm() {
   const val = id => document.getElementById(id)?.value.trim() || '';
   const chips = g => [...document.querySelectorAll(`.agency-chip[data-g="${g}"].sel`)].map(c => c.textContent.trim()).join(', ');
@@ -1293,7 +1301,7 @@ function briefReadForm() {
     name:             val('ag-f-name'),
     pais:             val('ag-f-pais'),
     ciudad:           val('ag-f-ciudad'),
-    web:              val('ag-f-web'),
+    web:              normalizeUrl(val('ag-f-web')),
     descripcion:      val('ag-f-descripcion'),
     industria:        val('ag-f-industria'),
     modelo:           val('ag-f-modelo'),
