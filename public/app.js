@@ -579,6 +579,9 @@ async function agencyInit() {
 
   if (!isAgency && !isPro) return;
   await agencyLoadClients();
+  // Si hay clientes, asegurar que están sincronizados en Supabase.
+  // Esto repara el caso donde datos viejos sólo quedaron en localStorage del PC.
+  if (agencyClients.length > 0) agencyPersistRemote();
   if (isAgency) agencyUpdateSidebarCount();
 
   // Pro: auto-activar perfil de negocio si ya existe
@@ -652,7 +655,10 @@ async function agencyLoadClients() {
   // Fallback localStorage
   try {
     const raw = localStorage.getItem(agencyGetStorageKey());
-    agencyClients = raw ? JSON.parse(raw) : [];
+    const localData = raw ? JSON.parse(raw) : [];
+    agencyClients = localData;
+    // Si hay datos en localStorage pero no en Supabase, subirlos ahora
+    if (localData.length > 0) agencyPersistRemote();
   } catch(e) { agencyClients = []; }
 }
 
