@@ -9329,16 +9329,12 @@ function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classLi
 
 // ── ACADEMIA ─────────────────────────────────────────────────────────────────
 function openAcademia() {
-  const wrap = document.getElementById('view-academia');
-  if (wrap && !wrap.dataset.rendered) {
-    wrap.dataset.rendered = '1';
-    wrap.innerHTML = academiaHTML();
-  }
   showView('academia');
   academiaFilter('all');
 }
 
-function academiaHTML() {
+function academiaHTML() { // legacy — kept for reference, not used
+  return '';
   const card = (cat, grad, iconPath, title, desc, dur, ytId) => {
     const soon = !ytId;
     return '<div class="ac-card' + (soon ? ' ac-soon' : '') + '" onclick="acadPlay(\'' + (ytId||'') + '\',\'' + title.replace(/'/g,"\\'") + '\')">'
