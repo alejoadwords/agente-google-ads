@@ -613,24 +613,42 @@ function agencyGetStorageKey() {
 }
 
 async function agencyLoadClients() {
-  try {
-    // En mobile, Clerk puede tardar más — obtener token fresco si el global es null
-    let token = sessionToken;
-    if (!token && clerkInstance?.session) {
-      try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
-    }
-    const headers = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch('/api/profile?type=agency_clients', { headers });
-    if (res.ok) {
-      const { data } = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        agencyClients = data;
-        agencyPersistLocal();
-        return;
+  // Intentar hasta 3 veces con espera progresiva (mobile: Clerk puede tardar en hidratar la sesión)
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      // Siempre obtener token fresco — en mobile el global puede ser null al primer intento
+      let token = sessionToken;
+      if (!token && clerkInstance?.session) {
+        try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
       }
+      // Si aún no hay token en el primer intento, esperar y reintentar
+      if (!token && attempt < maxAttempts - 1) {
+        await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+        continue;
+      }
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/profile?type=agency_clients', { headers });
+      if (res.status === 401 && attempt < maxAttempts - 1) {
+        // Token rechazado — esperar y reintentar con token fresco
+        sessionToken = null; // forzar refresh en siguiente intento
+        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+      if (res.ok) {
+        const { data } = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          agencyClients = data;
+          agencyPersistLocal();
+          return;
+        }
+      }
+      break; // Respuesta ok pero vacía — no reintentar
+    } catch(e) {
+      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 600));
     }
-  } catch(e) {}
+  }
   // Fallback localStorage
   try {
     const raw = localStorage.getItem(agencyGetStorageKey());
@@ -4243,6 +4261,17 @@ window.onload = async () => {
     // Cargar clientes antes de mostrar el panel para que no aparezca vacío
     await agencyInit();
     showView('agency');
+    // Safety net para mobile: si cargó 0 clientes (posible timing de Clerk),
+    // re-intentar silenciosamente a los 3s y re-renderizar si hay datos nuevos
+    setTimeout(async function() {
+      if (agencyClients.length === 0) {
+        await agencyLoadClients();
+        if (agencyClients.length > 0) {
+          agencyRender();
+          agencyUpdateSidebarCount();
+        }
+      }
+    }, 3000);
   } else {
     showView('home');
     setTimeout(function(){ agencyInit(); }, 400);
