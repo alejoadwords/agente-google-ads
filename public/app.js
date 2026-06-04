@@ -9328,9 +9328,347 @@ function showView(id){
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 
 // ── ACADEMIA ─────────────────────────────────────────────────────────────────
-function openAcademia() {
+
+const AC_CATS = [
+  { id: 'primeros-pasos', label: '🚀 Primeros pasos',   color: '#1E2BCC', grad: 'linear-gradient(135deg,#1520B0,#3D52E5)', bg: '#EEF0FD', order: 0 },
+  { id: 'google-ads',     label: '📊 Google Ads',        color: '#1a73e8', grad: 'linear-gradient(135deg,#1a73e8,#0d47a1)', bg: '#EBF3FE', order: 1 },
+  { id: 'meta-ads',       label: '📘 Meta Ads',          color: '#1877f2', grad: 'linear-gradient(135deg,#1877f2,#6b2fba)', bg: '#EDF2FF', order: 2 },
+  { id: 'tiktok-ads',     label: '🎵 TikTok Ads',       color: '#010101', grad: 'linear-gradient(135deg,#010101,#2a2a2a)', bg: '#F0F0F0', order: 3 },
+  { id: 'seo',            label: '🔍 SEO',               color: '#059669', grad: 'linear-gradient(135deg,#059669,#065f46)', bg: '#ECFDF5', order: 4 },
+  { id: 'contenido',      label: '✨ Contenido',          color: '#7c3aed', grad: 'linear-gradient(135deg,#7c3aed,#c026d3)', bg: '#F5F3FF', order: 5 },
+  { id: 'agencia',        label: '🏢 Panel de Agencia',  color: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', bg: '#ECFEFF', order: 6 },
+];
+
+// Section headers for each category
+const AC_SECTION_META = {
+  'primeros-pasos': { title: 'Primeros pasos',            sub: 'Configura tu cuenta y conoce la plataforma de cero',                     icon: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>' },
+  'google-ads':     { title: 'Agente Google Ads',         sub: 'Domina el análisis y optimización de campañas con IA',                   icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
+  'meta-ads':       { title: 'Agente Meta Ads',           sub: 'Facebook e Instagram Ads con análisis y creación asistida por IA',       icon: '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>' },
+  'tiktok-ads':     { title: 'Agente TikTok Ads',         sub: 'Estrategias y análisis de campañas en TikTok con IA especializada',      icon: '<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>' },
+  'seo':            { title: 'Agente SEO',                sub: 'Posiciona tu sitio web en Google con análisis y estrategias de IA',       icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' },
+  'contenido':      { title: 'Contenido para Redes',      sub: 'Studio de contenido, parrilla editorial y generación de imágenes con IA', icon: '<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>' },
+  'agencia':        { title: 'Panel de Agencia',          sub: 'Gestiona múltiples clientes, reportes y configuraciones avanzadas',       icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
+};
+
+let academiaVideos = [];   // cache de videos cargados
+let academiaLoaded = false;
+
+async function openAcademia() {
   showView('academia');
+  // Mostrar botón admin si corresponde
+  const adminBtn = document.getElementById('ac-admin-btn');
+  if (adminBtn) adminBtn.style.display = isAdminUser() ? 'flex' : 'none';
+  // Cargar videos si no están cargados aún
+  if (!academiaLoaded) await academiaLoad();
   academiaFilter('all');
+}
+
+async function academiaLoad() {
+  try {
+    const res = await fetch('/api/academia-admin');
+    if (!res.ok) throw new Error('API error');
+    const videos = await res.json();
+    if (Array.isArray(videos) && videos.length > 0) {
+      academiaVideos = videos;
+      academiaLoaded = true;
+      renderAcademia(videos);
+      return;
+    }
+  } catch(e) {
+    console.warn('Academia: no se pudo cargar desde API, usando datos predeterminados', e);
+  }
+  // Sin datos en Supabase — mostrar placeholder vacío con mensaje
+  renderAcademia([]);
+}
+
+function renderAcademia(videos) {
+  const body = document.getElementById('academia-body');
+  if (!body) return;
+
+  // Stats
+  const total = videos.length;
+  const available = videos.filter(v => v.youtube_id && v.youtube_id.trim()).length;
+  const statTotal = document.getElementById('ac-stat-total');
+  const statAvail = document.getElementById('ac-stat-available');
+  if (statTotal) statTotal.textContent = total || '—';
+  if (statAvail) statAvail.textContent = available || '—';
+
+  if (total === 0) {
+    body.innerHTML = '<div style="padding:60px 32px;text-align:center;color:var(--muted)">'
+      + '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.3;margin-bottom:16px"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>'
+      + '<div style="font-size:15px;font-weight:600;margin-bottom:6px">Aún no hay videos</div>'
+      + (isAdminUser() ? '<div style="font-size:13px">Haz clic en "Editar Academia" para agregar el primero</div>' : '<div style="font-size:13px">Próximamente</div>')
+      + '</div>';
+    return;
+  }
+
+  // Group by category in defined order
+  let html = '';
+  AC_CATS.forEach(cat => {
+    const catVideos = videos.filter(v => v.category === cat.id);
+    if (!catVideos.length) return;
+    const meta = AC_SECTION_META[cat.id] || { title: cat.label, sub: '', icon: '' };
+    html += '<div class="academia-section" data-cat="' + cat.id + '">'
+      + '<div class="academia-section-hdr">'
+      + '<div class="academia-section-icon" style="background:' + cat.bg + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="' + cat.color + '" stroke-width="2.2" stroke-linecap="round">' + meta.icon + '</svg></div>'
+      + '<div class="academia-section-title">' + meta.title + '</div>'
+      + '</div>'
+      + '<div class="academia-section-sub">' + meta.sub + '</div>'
+      + '<div class="academia-grid">';
+    catVideos.forEach(v => { html += renderAcadCard(v, cat); });
+    html += '</div></div>';
+  });
+
+  body.innerHTML = html;
+}
+
+function renderAcadCard(v, cat) {
+  const soon = !v.youtube_id || !v.youtube_id.trim();
+  const shortLabel = cat.label.replace(/^[^ ]+ /, '');
+  const safeTitle = (v.title || '').replace(/'/g, "\\'");
+  return '<div class="ac-card' + (soon ? ' ac-soon' : '') + '" onclick="acadPlay(\'' + (v.youtube_id || '') + '\',\'' + safeTitle + '\')">'
+    + '<div class="ac-thumb" style="background:' + cat.grad + '">'
+    + '<div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>'
+    + '<div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">' + shortLabel + '</div>'
+    + (soon ? '<div class="ac-soon-tag">Próximamente</div>' : '')
+    + '<div class="ac-dur">' + (v.duration || '5 min') + '</div>'
+    + '<div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div>'
+    + '</div>'
+    + '<div class="ac-info"><div class="ac-title">' + (v.title || '') + '</div><div class="ac-desc">' + (v.description || '') + '</div></div>'
+    + '</div>';
+}
+
+function academiaFilter(cat) {
+  document.querySelectorAll('.academia-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  document.querySelectorAll('.academia-section').forEach(sec => {
+    sec.style.display = (cat === 'all' || sec.dataset.cat === cat) ? '' : 'none';
+  });
+}
+
+// ── ACADEMIA ADMIN ────────────────────────────────────────────────────────────
+
+let adminSecret = null;
+let acAdminSelected = null; // video seleccionado en el panel
+
+async function getAdminSecret() {
+  if (adminSecret) return adminSecret;
+  // El ADMIN_SECRET está en el entorno; lo pedimos a través de un endpoint que ya lo conoce
+  // Por simplicidad, lo buscamos en el env via un endpoint protegido, o lo ingresa el admin
+  const s = sessionStorage.getItem('ac_admin_secret');
+  if (s) { adminSecret = s; return s; }
+  const input = prompt('Ingresa el Admin Secret para gestionar la Academia:');
+  if (!input) return null;
+  adminSecret = input;
+  sessionStorage.setItem('ac_admin_secret', input);
+  return input;
+}
+
+function academiaAdminOpen() {
+  const overlay = document.getElementById('ac-admin-overlay');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  academiaAdminRenderList();
+}
+
+function academiaAdminClose() {
+  const overlay = document.getElementById('ac-admin-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+  acAdminSelected = null;
+}
+
+function academiaAdminRenderList() {
+  const list = document.getElementById('ac-admin-list-scroll');
+  if (!list) return;
+  if (!academiaVideos.length) {
+    list.innerHTML = '<div style="padding:20px 12px;font-size:12px;color:var(--muted2);text-align:center">No hay videos aún</div>';
+    return;
+  }
+  let html = '';
+  AC_CATS.forEach(cat => {
+    const vids = academiaVideos.filter(v => v.category === cat.id);
+    if (!vids.length) return;
+    html += '<div class="ac-admin-cat-hdr">' + cat.label + '</div>';
+    vids.forEach(v => {
+      const soon = !v.youtube_id || !v.youtube_id.trim();
+      const sel = acAdminSelected && acAdminSelected.id === v.id ? ' selected' : '';
+      html += '<div class="ac-admin-video-item' + sel + '" onclick="academiaAdminSelect(' + JSON.stringify(v.id) + ')">'
+        + '<div class="ac-admin-video-dot" style="background:' + (soon ? 'var(--border-h)' : '#22c55e') + '"></div>'
+        + '<div class="ac-admin-video-name">' + (v.title || 'Sin título') + '</div>'
+        + (soon ? '' : '<div class="ac-admin-video-badge" style="background:#dcfce7;color:#16a34a">Live</div>')
+        + '</div>';
+    });
+  });
+  list.innerHTML = html;
+}
+
+function academiaAdminSelect(id) {
+  acAdminSelected = academiaVideos.find(v => v.id === id) || null;
+  academiaAdminRenderList();
+  academiaAdminRenderForm(acAdminSelected);
+}
+
+function academiaAdminNew() {
+  acAdminSelected = null;
+  academiaAdminRenderList();
+  academiaAdminRenderForm(null);
+}
+
+function academiaAdminRenderForm(v) {
+  const wrap = document.getElementById('ac-admin-form-wrap');
+  if (!wrap) return;
+  const isNew = !v;
+  const ytId = v ? (v.youtube_id || '') : '';
+
+  wrap.innerHTML = '<div style="max-width:560px">'
+    + '<div class="ac-admin-form-title">'
+    + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+    + (isNew ? 'Nuevo video' : 'Editar video')
+    + '</div>'
+
+    // Categoría
+    + '<div class="ac-admin-field"><label class="ac-admin-label">Categoría</label>'
+    + '<select class="ac-admin-select" id="acf-cat">'
+    + AC_CATS.map(c => '<option value="' + c.id + '"' + (v && v.category === c.id ? ' selected' : '') + '>' + c.label + '</option>').join('')
+    + '</select></div>'
+
+    // Título
+    + '<div class="ac-admin-field"><label class="ac-admin-label">Título</label>'
+    + '<input class="ac-admin-input" id="acf-title" placeholder="Ej: Cómo analizar campañas con IA" value="' + (v ? (v.title || '') : '') + '"></div>'
+
+    // Descripción
+    + '<div class="ac-admin-field"><label class="ac-admin-label">Descripción</label>'
+    + '<textarea class="ac-admin-input textarea" id="acf-desc" placeholder="Breve descripción del video (1-2 líneas)">' + (v ? (v.description || '') : '') + '</textarea></div>'
+
+    // Duración
+    + '<div class="ac-admin-field"><label class="ac-admin-label">Duración</label>'
+    + '<input class="ac-admin-input" id="acf-dur" placeholder="Ej: 8 min" style="max-width:140px" value="' + (v ? (v.duration || '5 min') : '5 min') + '"></div>'
+
+    // YouTube ID
+    + '<div class="ac-admin-field"><label class="ac-admin-label">YouTube ID</label>'
+    + '<input class="ac-admin-input" id="acf-ytid" placeholder="Ej: dQw4w9WgXcQ (la parte después de ?v=)" oninput="acfYtPreview(this.value)" value="' + ytId + '">'
+    + '<div id="acf-yt-preview" style="margin-top:6px">' + acfYtPreviewHtml(ytId) + '</div></div>'
+
+    // Orden
+    + '<div class="ac-admin-field"><label class="ac-admin-label">Orden dentro de la categoría</label>'
+    + '<input class="ac-admin-input" id="acf-order" type="number" min="0" style="max-width:100px" value="' + (v ? (v.order_index || 0) : 0) + '"></div>'
+
+    // Acciones
+    + '<div class="ac-admin-actions">'
+    + '<button class="ac-admin-save-btn" id="acf-save-btn" onclick="academiaAdminSave()">'
+    + (isNew ? 'Crear video' : 'Guardar cambios') + '</button>'
+    + (isNew ? '' : '<button class="ac-admin-del-btn" onclick="academiaAdminDelete(' + JSON.stringify(v.id) + ')">Eliminar</button>')
+    + '</div>'
+    + '</div>';
+}
+
+function acfYtPreviewHtml(ytId) {
+  if (!ytId || !ytId.trim()) return '';
+  const clean = ytId.trim();
+  const url = 'https://img.youtube.com/vi/' + clean + '/mqdefault.jpg';
+  return '<div class="ac-admin-yt-preview ok" style="flex-direction:column;align-items:flex-start;gap:6px">'
+    + '<div style="font-weight:600">Vista previa del thumbnail:</div>'
+    + '<img src="' + url + '" style="width:100%;border-radius:6px;max-width:280px" onerror="this.parentElement.className=\'ac-admin-yt-preview\';this.outerHTML=\'<span>ID no válido o video privado</span>\'">'
+    + '<div style="font-size:11px;color:var(--muted)">youtube.com/watch?v=' + clean + '</div>'
+    + '</div>';
+}
+
+function acfYtPreview(val) {
+  const el = document.getElementById('acf-yt-preview');
+  if (el) el.innerHTML = acfYtPreviewHtml(val);
+}
+
+async function academiaAdminSave() {
+  const btn = document.getElementById('acf-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  const secret = await getAdminSecret();
+  if (!secret) {
+    if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
+    return;
+  }
+
+  const payload = {
+    category:     document.getElementById('acf-cat')?.value || 'primeros-pasos',
+    title:        document.getElementById('acf-title')?.value?.trim() || '',
+    description:  document.getElementById('acf-desc')?.value?.trim() || '',
+    duration:     document.getElementById('acf-dur')?.value?.trim() || '5 min',
+    youtube_id:   document.getElementById('acf-ytid')?.value?.trim() || '',
+    order_index:  parseInt(document.getElementById('acf-order')?.value || '0'),
+    category_order: AC_CATS.findIndex(c => c.id === (document.getElementById('acf-cat')?.value || '')),
+  };
+
+  if (!payload.title) {
+    alert('El título es obligatorio');
+    if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
+    return;
+  }
+
+  if (acAdminSelected) payload.id = acAdminSelected.id;
+
+  try {
+    const res = await fetch('/api/academia-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      if (err.error === 'Unauthorized') {
+        sessionStorage.removeItem('ac_admin_secret');
+        adminSecret = null;
+        alert('Secret incorrecto. Inténtalo de nuevo.');
+      } else {
+        alert('Error al guardar: ' + (err.error || res.status));
+      }
+      if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
+      return;
+    }
+    const saved = await res.json();
+    // Actualizar cache local
+    if (acAdminSelected) {
+      const idx = academiaVideos.findIndex(v => v.id === acAdminSelected.id);
+      if (idx >= 0) academiaVideos[idx] = { ...academiaVideos[idx], ...payload, ...saved };
+    } else {
+      academiaVideos.push({ ...payload, ...saved });
+    }
+    acAdminSelected = saved;
+    academiaAdminRenderList();
+    renderAcademia(academiaVideos);
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; btn.style.background = '#22c55e'; }
+    setTimeout(() => { if (btn) btn.style.background = ''; }, 1800);
+  } catch(e) {
+    alert('Error de conexión: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
+  }
+}
+
+async function academiaAdminDelete(id) {
+  if (!confirm('¿Eliminar este video de la Academia?')) return;
+  const secret = await getAdminSecret();
+  if (!secret) return;
+  try {
+    const res = await fetch('/api/academia-admin?id=' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'x-admin-secret': secret },
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error al eliminar: ' + (err.error || res.status));
+      return;
+    }
+    academiaVideos = academiaVideos.filter(v => v.id !== id);
+    acAdminSelected = null;
+    academiaAdminRenderList();
+    academiaAdminRenderForm(null);
+    renderAcademia(academiaVideos);
+  } catch(e) {
+    alert('Error de conexión: ' + e.message);
+  }
 }
 
 function academiaHTML() { // legacy — kept for reference, not used

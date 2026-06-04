@@ -1205,6 +1205,71 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .ac-player-ratio{position:relative;aspect-ratio:16/9}
 .ac-player-ratio iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block}
 
+/* Academia admin button */
+.ac-admin-btn{position:absolute;bottom:20px;right:24px;display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .17s;backdrop-filter:blur(4px)}
+.ac-admin-btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.4)}
+/* Academia skeleton */
+.ac-skeleton{height:180px;border-radius:14px;background:linear-gradient(90deg,var(--bg-muted) 25%,var(--border) 50%,var(--bg-muted) 75%);background-size:200% 100%;animation:acSkeletonWave 1.4s ease-in-out infinite}
+@keyframes acSkeletonWave{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* Academia admin panel */
+.ac-admin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2500;display:flex;align-items:stretch;justify-content:flex-end;opacity:0;pointer-events:none;transition:opacity .22s;backdrop-filter:blur(3px)}
+.ac-admin-overlay.open{opacity:1;pointer-events:all}
+.ac-admin-panel{width:100%;max-width:860px;background:var(--bg-subtle);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 40px rgba(0,0,0,.18)}
+.ac-admin-overlay.open .ac-admin-panel{transform:translateX(0)}
+.ac-admin-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.ac-admin-hdr-left{display:flex;align-items:center;gap:10px}
+.ac-admin-hdr-title{font-size:15px;font-weight:700;color:var(--text)}
+.ac-admin-hdr-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.ac-admin-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.ac-admin-close:hover{background:var(--bg-muted);color:var(--text)}
+.ac-admin-body{display:flex;flex:1;overflow:hidden}
+.ac-admin-list{width:280px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.ac-admin-list-top{padding:12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.ac-admin-add-btn{width:100%;padding:9px 14px;border-radius:10px;border:1.5px dashed var(--border-h);background:transparent;color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .17s;display:flex;align-items:center;justify-content:center;gap:6px}
+.ac-admin-add-btn:hover{background:var(--blue-lt);border-color:var(--blue)}
+.ac-admin-list-scroll{flex:1;overflow-y:auto}
+.ac-admin-cat-hdr{padding:10px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2);background:var(--bg-subtle)}
+.ac-admin-video-item{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s}
+.ac-admin-video-item:hover{background:var(--bg-subtle)}
+.ac-admin-video-item.selected{background:var(--blue-lt)}
+.ac-admin-video-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ac-admin-video-name{font-size:12.5px;color:var(--text);line-height:1.35;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ac-admin-video-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;flex-shrink:0}
+.ac-admin-form-wrap{flex:1;overflow-y:auto;padding:24px}
+.ac-admin-form-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.ac-admin-field{margin-bottom:16px}
+.ac-admin-label{font-size:11.5px;font-weight:600;color:var(--text-2);margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.04em}
+.ac-admin-input{width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font);transition:border-color .15s;box-sizing:border-box}
+.ac-admin-input:focus{outline:none;border-color:var(--blue)}
+.ac-admin-input.textarea{min-height:72px;resize:vertical}
+.ac-admin-select{width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font);cursor:pointer}
+.ac-admin-select:focus{outline:none;border-color:var(--blue)}
+.ac-admin-toggle-row{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-subtle);cursor:pointer;transition:all .15s}
+.ac-admin-toggle-row:hover{border-color:var(--border-h)}
+.ac-admin-toggle-row.on{border-color:#22c55e;background:#f0fdf4}
+.ac-admin-toggle{width:36px;height:20px;border-radius:10px;background:var(--border-h);position:relative;transition:background .2s;flex-shrink:0}
+.ac-admin-toggle.on{background:#22c55e}
+.ac-admin-toggle::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.ac-admin-toggle.on::after{transform:translateX(16px)}
+.ac-admin-toggle-text{font-size:13px;font-weight:500;color:var(--text)}
+.ac-admin-yt-preview{margin-top:6px;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;font-size:12px;color:#dc2626}
+.ac-admin-yt-preview.ok{background:#f0fdf4;border-color:#86efac;color:#16a34a}
+.ac-admin-actions{display:flex;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
+.ac-admin-save-btn{flex:1;padding:10px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .17s}
+.ac-admin-save-btn:hover{background:#1527b8}
+.ac-admin-save-btn:disabled{opacity:.5;cursor:default}
+.ac-admin-del-btn{padding:10px 16px;border-radius:10px;border:1.5px solid #fecaca;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .17s}
+.ac-admin-del-btn:hover{background:#fee2e2;border-color:#f87171}
+.ac-admin-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;gap:12px;padding:40px}
+.ac-admin-empty svg{opacity:.3}
+.ac-admin-empty-text{font-size:14px;font-weight:500}
+.ac-admin-empty-sub{font-size:12px;color:var(--muted2)}
+@media(max-width:640px){
+  .ac-admin-panel{max-width:100%}
+  .ac-admin-body{flex-direction:column}
+  .ac-admin-list{width:100%;max-height:220px;border-right:none;border-bottom:1px solid var(--border)}
+}
+
 @media(max-width:768px){
   .academia-hero{padding:24px 20px 22px}
   .academia-hero-title{font-size:22px}
@@ -2927,14 +2992,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div class="academia-hero-title">Academia Acuarius</div>
       <div class="academia-hero-sub">Aprende a dominar cada agente y función de la plataforma con tutoriales paso a paso. Desde configurar tu primera cuenta hasta estrategias avanzadas.</div>
       <div class="academia-hero-stats">
-        <div><div class="academia-hero-stat-val">27</div><div class="academia-hero-stat-lbl">videos planeados</div></div>
+        <div><div class="academia-hero-stat-val" id="ac-stat-total">—</div><div class="academia-hero-stat-lbl">videos</div></div>
         <div><div class="academia-hero-stat-val">7</div><div class="academia-hero-stat-lbl">categorías</div></div>
-        <div><div class="academia-hero-stat-val">~4 h</div><div class="academia-hero-stat-lbl">de contenido</div></div>
+        <div><div class="academia-hero-stat-val" id="ac-stat-available">—</div><div class="academia-hero-stat-lbl">disponibles</div></div>
       </div>
+      <!-- Botón admin solo visible para admins -->
+      <button id="ac-admin-btn" onclick="academiaAdminOpen()" class="ac-admin-btn" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar Academia
+      </button>
     </div>
 
     <div class="academia-cats-wrap">
-      <div class="academia-cats">
+      <div class="academia-cats" id="academia-cats">
         <button class="academia-cat-btn active" data-cat="all" onclick="academiaFilter('all')">Todos</button>
         <button class="academia-cat-btn" data-cat="primeros-pasos" onclick="academiaFilter('primeros-pasos')">🚀 Primeros pasos</button>
         <button class="academia-cat-btn" data-cat="google-ads" onclick="academiaFilter('google-ads')">📊 Google Ads</button>
@@ -2946,109 +3016,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       </div>
     </div>
 
-    <div class="academia-body">
-
-        <!-- PRIMEROS PASOS -->
-        <div class="academia-section" data-cat="primeros-pasos">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#EEF0FD"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1E2BCC" stroke-width="2.2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-            <div class="academia-section-title">Primeros pasos</div>
-          </div>
-          <div class="academia-section-sub">Configura tu cuenta y conoce la plataforma de cero</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1520B0,#3D52E5)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Inicio</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">10 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Tour completo de Acuarius — cómo funciona la plataforma</div><div class="ac-desc">Recorrido por todos los módulos: agentes, panel de clientes, studio y configuración.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1520B0,#3D52E5)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Inicio</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">5 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Cómo crear tu primer cliente en el Panel de Agencia</div><div class="ac-desc">Registra un cliente, carga su perfil y actívalo en los agentes paso a paso.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1520B0,#3D52E5)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Inicio</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">7 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Conectar tus cuentas publicitarias: Google, Meta y TikTok</div><div class="ac-desc">Autoriza el acceso de Acuarius a tus plataformas para análisis y optimización.</div></div></div>
-          </div>
-        </div>
-
-        <!-- GOOGLE ADS -->
-        <div class="academia-section" data-cat="google-ads">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#EBF3FE"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
-            <div class="academia-section-title">Agente Google Ads</div>
-          </div>
-          <div class="academia-section-sub">Domina el análisis y optimización de campañas con IA</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1a73e8,#0d47a1)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Google Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">4 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Conectar y verificar tu cuenta de Google Ads</div><div class="ac-desc">Autoriza OAuth, selecciona tu cuenta y verifica que los datos se cargan.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1a73e8,#0d47a1)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Google Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">9 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Analiza el rendimiento de tus campañas con IA</div><div class="ac-desc">Reportes de métricas, cómo interpretar los datos y tomar decisiones.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1a73e8,#0d47a1)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Google Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">6 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Detectar pérdida de inversión en tus campañas</div><div class="ac-desc">Encuentra dinero desperdiciado en keywords, horarios y audiencias.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1a73e8,#0d47a1)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Google Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">8 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Optimizar palabras clave con el agente</div><div class="ac-desc">Análisis de términos de búsqueda, negativas y ajuste de pujas con IA.</div></div></div>
-          </div>
-        </div>
-
-        <!-- META ADS -->
-        <div class="academia-section" data-cat="meta-ads">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#EDF2FF"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2.2" stroke-linecap="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></div>
-            <div class="academia-section-title">Agente Meta Ads</div>
-          </div>
-          <div class="academia-section-sub">Facebook e Instagram Ads con análisis y creación asistida por IA</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1877f2,#6b2fba)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Meta Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">5 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Conectar tu cuenta de Facebook Ads</div><div class="ac-desc">Autoriza el acceso, selecciona el Ad Account y verifica permisos de página.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1877f2,#6b2fba)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Meta Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">8 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Análisis de campañas Meta con el agente</div><div class="ac-desc">Reportes de ROAS, CPM, frecuencia y fatiga creativa con IA.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#1877f2,#6b2fba)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Meta Ads</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">6 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Publicar contenido en Instagram y Facebook</div><div class="ac-desc">Usa el Studio para programar y publicar posts, reels y stories.</div></div></div>
-          </div>
-        </div>
-
-        <!-- TIKTOK ADS -->
-        <div class="academia-section" data-cat="tiktok-ads">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#F0F0F0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#010101" stroke-width="2.2" stroke-linecap="round"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></svg></div>
-            <div class="academia-section-title">Agente TikTok Ads</div>
-          </div>
-          <div class="academia-section-sub">Estrategias y análisis de campañas en TikTok con IA especializada</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#010101,#2a2a2a)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">TikTok</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">8 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Conectar y analizar TikTok Ads con el agente</div><div class="ac-desc">Configura el acceso a TikTok Ads Manager y obtén análisis automáticos.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#010101,#2a2a2a)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">TikTok</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">10 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Estrategias de contenido para TikTok con IA</div><div class="ac-desc">Genera guiones, hooks efectivos y estructura de videos que convierten.</div></div></div>
-          </div>
-        </div>
-
-        <!-- SEO -->
-        <div class="academia-section" data-cat="seo">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#ECFDF5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-            <div class="academia-section-title">Agente SEO</div>
-          </div>
-          <div class="academia-section-sub">Posiciona tu sitio web en Google con análisis y estrategias de IA</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#059669,#065f46)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">SEO</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">10 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Análisis SEO completo de tu sitio web</div><div class="ac-desc">Audita tu dominio, detecta errores técnicos y recibe un plan priorizado.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#059669,#065f46)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">SEO</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">8 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Estrategia de palabras clave con IA</div><div class="ac-desc">Investiga keywords, analiza la competencia y construye tu mapa de contenidos.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#059669,#065f46)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">SEO</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">7 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Optimización on-page con el agente SEO</div><div class="ac-desc">Mejora títulos, meta-descriptions, headings y contenido de tus páginas.</div></div></div>
-          </div>
-        </div>
-
-        <!-- CONTENIDO -->
-        <div class="academia-section" data-cat="contenido">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#F5F3FF"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg></div>
-            <div class="academia-section-title">Contenido para Redes Sociales</div>
-          </div>
-          <div class="academia-section-sub">Studio de contenido, parrilla editorial y generación de imágenes con IA</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#7c3aed,#c026d3)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Contenido</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">12 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">El Studio de Contenido — guía completa</div><div class="ac-desc">Conoce todos los módulos: generador de copys, parrilla, publicación y análisis.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#7c3aed,#c026d3)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Contenido</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">8 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Genera y publica tu parrilla mensual de contenido</div><div class="ac-desc">Crea un mes de contenido en minutos: copys, imágenes y publicación directa.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#7c3aed,#c026d3)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Contenido</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">6 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Generación de imágenes con IA para redes sociales</div><div class="ac-desc">Usa el generador para crear visuales de marca listos para publicar.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#7c3aed,#c026d3)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Contenido</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">7 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Guiones para Reels, TikToks y Stories con IA</div><div class="ac-desc">Genera scripts virales con hooks probados y call-to-action optimizados.</div></div></div>
-          </div>
-        </div>
-
-        <!-- AGENCIA -->
-        <div class="academia-section" data-cat="agencia">
-          <div class="academia-section-hdr">
-            <div class="academia-section-icon" style="background:#ECFEFF"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0891b2" stroke-width="2.2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
-            <div class="academia-section-title">Panel de Agencia</div>
-          </div>
-          <div class="academia-section-sub">Gestiona múltiples clientes, reportes y configuraciones avanzadas</div>
-          <div class="academia-grid">
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#0891b2,#0e7490)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Agencia</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">8 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Gestión de múltiples clientes desde el panel</div><div class="ac-desc">Cambia entre clientes, consulta su estado y usa los agentes con contexto.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#0891b2,#0e7490)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Agencia</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">5 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Perfiles de cliente — configuración avanzada</div><div class="ac-desc">Completa el brief de marketing para que los agentes trabajen con contexto correcto.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#0891b2,#0e7490)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="11" rx="1"/><rect x="14" y="14" width="7" height="11" rx="1"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Agencia</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">9 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Reportes y dashboards en vivo por cliente</div><div class="ac-desc">Crea dashboards personalizados con métricas de Google Ads, Meta y más.</div></div></div>
-            <div class="ac-card ac-soon"><div class="ac-thumb" style="background:linear-gradient(135deg,#0891b2,#0e7490)"><div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div><div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">Agencia</div><div class="ac-soon-tag">Próximamente</div><div class="ac-dur">7 min</div><div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div></div><div class="ac-info"><div class="ac-title">Alertas automáticas y análisis de campañas</div><div class="ac-desc">Configura notificaciones de rendimiento y reportes automáticos.</div></div></div>
-          </div>
-        </div>
-
+    <div class="academia-body" id="academia-body">
+      <!-- Contenido cargado dinámicamente por renderAcademia() -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:16px;padding:28px 0">
+        <div class="ac-skeleton"></div><div class="ac-skeleton"></div><div class="ac-skeleton"></div>
+        <div class="ac-skeleton"></div><div class="ac-skeleton"></div><div class="ac-skeleton"></div>
       </div>
+    </div>
     </div>
 
   </div>
@@ -3472,6 +3446,42 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ACADEMIA ADMIN PANEL -->
+<div class="ac-admin-overlay" id="ac-admin-overlay" onclick="if(event.target===this)academiaAdminClose()">
+  <div class="ac-admin-panel">
+    <div class="ac-admin-hdr">
+      <div class="ac-admin-hdr-left">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.2" stroke-linecap="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        <div>
+          <div class="ac-admin-hdr-title">Gestión de Academia</div>
+          <div class="ac-admin-hdr-sub">Agrega y edita videos de los agentes</div>
+        </div>
+      </div>
+      <button class="ac-admin-close" onclick="academiaAdminClose()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="ac-admin-body">
+      <div class="ac-admin-list">
+        <div class="ac-admin-list-top">
+          <button class="ac-admin-add-btn" onclick="academiaAdminNew()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Agregar video
+          </button>
+        </div>
+        <div class="ac-admin-list-scroll" id="ac-admin-list-scroll"></div>
+      </div>
+      <div class="ac-admin-form-wrap" id="ac-admin-form-wrap">
+        <div class="ac-admin-empty">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          <div class="ac-admin-empty-text">Selecciona un video para editar</div>
+          <div class="ac-admin-empty-sub">o haz clic en "Agregar video" para crear uno nuevo</div>
+        </div>
       </div>
     </div>
   </div>
