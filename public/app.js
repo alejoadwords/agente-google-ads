@@ -9326,6 +9326,43 @@ function showView(id){
   if(id==='social-studio')setTimeout(renderStudio, 50);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
+
+// ── ACADEMIA ─────────────────────────────────────────────────────────────────
+function openAcademia() {
+  showView('academia');
+  academiaFilter('all');
+}
+
+function academiaFilter(cat) {
+  document.querySelectorAll('.academia-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  document.querySelectorAll('.academia-section').forEach(sec => {
+    sec.style.display = (cat === 'all' || sec.dataset.cat === cat) ? '' : 'none';
+  });
+}
+
+function acadPlay(ytId, title) {
+  if (!ytId) return; // card "Próximamente" — no hace nada
+  const overlay = document.getElementById('ac-player-overlay');
+  const iframe  = document.getElementById('ac-player-iframe');
+  const titleEl = document.getElementById('ac-player-title');
+  if (!overlay || !iframe) return;
+  if (titleEl) titleEl.textContent = title || 'Video';
+  iframe.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&rel=0&modestbranding=1';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function acadClose() {
+  const overlay = document.getElementById('ac-player-overlay');
+  const iframe  = document.getElementById('ac-player-iframe');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  setTimeout(() => { if (iframe) iframe.src = ''; }, 280);
+  document.body.style.overflow = '';
+}
+// ── FIN ACADEMIA ──────────────────────────────────────────────────────────────
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.getElementById('sb-overlay');
