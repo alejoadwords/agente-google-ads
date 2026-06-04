@@ -9329,8 +9329,135 @@ function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classLi
 
 // ── ACADEMIA ─────────────────────────────────────────────────────────────────
 function openAcademia() {
+  const wrap = document.getElementById('view-academia');
+  if (wrap && !wrap.dataset.rendered) {
+    wrap.dataset.rendered = '1';
+    wrap.innerHTML = academiaHTML();
+  }
   showView('academia');
   academiaFilter('all');
+}
+
+function academiaHTML() {
+  const card = (cat, grad, iconPath, title, desc, dur, ytId) => {
+    const soon = !ytId;
+    return '<div class="ac-card' + (soon ? ' ac-soon' : '') + '" onclick="acadPlay(\'' + (ytId||'') + '\',\'' + title.replace(/'/g,"\\'") + '\')">'
+      + '<div class="ac-thumb" style="background:' + grad + '">'
+      + '<div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">' + iconPath + '</svg></div>'
+      + '<div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">' + cat + '</div>'
+      + (soon ? '<div class="ac-soon-tag">Próximamente</div>' : '')
+      + '<div class="ac-dur">' + dur + '</div>'
+      + '<div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div>'
+      + '</div>'
+      + '<div class="ac-info"><div class="ac-title">' + title + '</div><div class="ac-desc">' + desc + '</div></div>'
+      + '</div>';
+  };
+
+  const section = (dataCat, iconBg, iconColor, iconPath, sectionTitle, sub, cards) =>
+    '<div class="academia-section" data-cat="' + dataCat + '">'
+    + '<div class="academia-section-hdr">'
+    + '<div class="academia-section-icon" style="background:' + iconBg + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2.2" stroke-linecap="round">' + iconPath + '</svg></div>'
+    + '<div class="academia-section-title">' + sectionTitle + '</div>'
+    + '</div>'
+    + '<div class="academia-section-sub">' + sub + '</div>'
+    + '<div class="academia-grid">' + cards + '</div>'
+    + '</div>';
+
+  const BL = 'linear-gradient(135deg,#1520B0,#3D52E5)';
+  const GO = 'linear-gradient(135deg,#1a73e8,#0d47a1)';
+  const ME = 'linear-gradient(135deg,#1877f2,#6b2fba)';
+  const TK = 'linear-gradient(135deg,#010101,#2a2a2a)';
+  const SE = 'linear-gradient(135deg,#059669,#065f46)';
+  const CO = 'linear-gradient(135deg,#7c3aed,#c026d3)';
+  const AG = 'linear-gradient(135deg,#0891b2,#0e7490)';
+
+  const I = {
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    pulse: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+    dollar: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+    fb: '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
+    barchart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+    insta: '<rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>',
+    tiktok: '<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>',
+    video: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
+    type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+    layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    img: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+    home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+    person: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    send: '<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>',
+  };
+
+  return ''
+    // ── Hero
+    + '<div class="academia-hero">'
+    + '<div class="academia-hero-eyebrow">Acuarius · Centro de aprendizaje</div>'
+    + '<div class="academia-hero-title">Academia Acuarius</div>'
+    + '<div class="academia-hero-sub">Aprende a dominar cada agente y función de la plataforma con tutoriales paso a paso. Desde configurar tu primera cuenta hasta estrategias avanzadas.</div>'
+    + '<div class="academia-hero-stats">'
+    + '<div><div class="academia-hero-stat-val">27</div><div class="academia-hero-stat-lbl">videos planeados</div></div>'
+    + '<div><div class="academia-hero-stat-val">7</div><div class="academia-hero-stat-lbl">categorías</div></div>'
+    + '<div><div class="academia-hero-stat-val">~4 h</div><div class="academia-hero-stat-lbl">de contenido</div></div>'
+    + '</div></div>'
+    // ── Category tabs
+    + '<div class="academia-cats-wrap">'
+    + '<div class="academia-cats">'
+    + '<button class="academia-cat-btn active" data-cat="all" onclick="academiaFilter(\'all\')">Todos</button>'
+    + '<button class="academia-cat-btn" data-cat="primeros-pasos" onclick="academiaFilter(\'primeros-pasos\')">🚀 Primeros pasos</button>'
+    + '<button class="academia-cat-btn" data-cat="google-ads" onclick="academiaFilter(\'google-ads\')">📊 Google Ads</button>'
+    + '<button class="academia-cat-btn" data-cat="meta-ads" onclick="academiaFilter(\'meta-ads\')">📘 Meta Ads</button>'
+    + '<button class="academia-cat-btn" data-cat="tiktok-ads" onclick="academiaFilter(\'tiktok-ads\')">🎵 TikTok Ads</button>'
+    + '<button class="academia-cat-btn" data-cat="seo" onclick="academiaFilter(\'seo\')">🔍 SEO</button>'
+    + '<button class="academia-cat-btn" data-cat="contenido" onclick="academiaFilter(\'contenido\')">✨ Contenido</button>'
+    + '<button class="academia-cat-btn" data-cat="agencia" onclick="academiaFilter(\'agencia\')">🏢 Panel de Agencia</button>'
+    + '</div></div>'
+    // ── Body
+    + '<div class="academia-wrap"><div class="academia-body">'
+    // Primeros pasos
+    + section('primeros-pasos','#EEF0FD','#1E2BCC','<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>','Primeros pasos','Configura tu cuenta y conoce la plataforma de cero',
+        card('Inicio',BL,I.grid,'Tour completo de Acuarius — cómo funciona la plataforma','Recorrido por todos los módulos: agentes, panel de clientes, studio y configuración.','10 min','')
+      + card('Inicio',BL,I.users,'Cómo crear tu primer cliente en el Panel de Agencia','Registra un cliente, carga su perfil y actívalo en los agentes paso a paso.','5 min','')
+      + card('Inicio',BL,I.link,'Conectar tus cuentas publicitarias: Google, Meta y TikTok','Autoriza el acceso de Acuarius a tus plataformas para análisis y optimización.','7 min',''))
+    // Google Ads
+    + section('google-ads','#EBF3FE','#1a73e8','<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>','Agente Google Ads','Domina el análisis y optimización de campañas con IA',
+        card('Google Ads',GO,I.monitor,'Conectar y verificar tu cuenta de Google Ads','Autoriza OAuth, selecciona tu cuenta y verifica que los datos se cargan.','4 min','')
+      + card('Google Ads',GO,I.pulse,'Analiza el rendimiento de tus campañas con IA','Reportes de métricas, cómo interpretar los datos y tomar decisiones.','9 min','')
+      + card('Google Ads',GO,I.dollar,'Detectar pérdida de inversión en tus campañas','Encuentra dinero desperdiciado en keywords, horarios y audiencias.','6 min','')
+      + card('Google Ads',GO,I.search,'Optimizar palabras clave con el agente','Análisis de términos de búsqueda, negativas y ajuste de pujas con IA.','8 min',''))
+    // Meta Ads
+    + section('meta-ads','#EDF2FF','#1877f2','<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>','Agente Meta Ads','Facebook e Instagram Ads con análisis y creación asistida por IA',
+        card('Meta Ads',ME,I.fb,'Conectar tu cuenta de Facebook Ads','Autoriza el acceso, selecciona el Ad Account y verifica permisos de página.','5 min','')
+      + card('Meta Ads',ME,I.barchart,'Análisis de campañas Meta con el agente','Reportes de ROAS, CPM, frecuencia y fatiga creativa con IA.','8 min','')
+      + card('Meta Ads',ME,I.insta,'Publicar contenido en Instagram y Facebook','Usa el Studio para programar y publicar posts, reels y stories.','6 min',''))
+    // TikTok Ads
+    + section('tiktok-ads','#F0F0F0','#010101','<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>','Agente TikTok Ads','Estrategias y análisis de campañas en TikTok con IA especializada',
+        card('TikTok',TK,I.tiktok,'Conectar y analizar TikTok Ads con el agente','Configura el acceso a TikTok Ads Manager y obtén análisis automáticos.','8 min','')
+      + card('TikTok',TK,I.video,'Estrategias de contenido para TikTok con IA','Genera guiones, hooks efectivos y estructura de videos que convierten.','10 min',''))
+    // SEO
+    + section('seo','#ECFDF5','#059669','<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>','Agente SEO','Posiciona tu sitio web en Google con análisis y estrategias de IA',
+        card('SEO',SE,I.search,'Análisis SEO completo de tu sitio web','Audita tu dominio, detecta errores técnicos y recibe un plan priorizado.','10 min','')
+      + card('SEO',SE,I.type,'Estrategia de palabras clave con IA','Investiga keywords, analiza la competencia y construye tu mapa de contenidos.','8 min','')
+      + card('SEO',SE,I.edit,'Optimización on-page con el agente SEO','Mejora títulos, meta-descriptions, headings y contenido de tus páginas.','7 min',''))
+    // Contenido
+    + section('contenido','#F5F3FF','#7c3aed','<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>','Contenido para Redes Sociales','Studio de contenido, parrilla editorial y generación de imágenes con IA',
+        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, publicación y análisis.','12 min','')
+      + card('Contenido',CO,I.cal,'Genera y publica tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys, imágenes y publicación directa.','8 min','')
+      + card('Contenido',CO,I.img,'Generación de imágenes con IA para redes sociales','Usa el generador de imágenes para crear visuales de marca listos para publicar.','6 min','')
+      + card('Contenido',CO,I.video,'Guiones para Reels, TikToks y Stories con IA','Genera scripts virales con hooks probados y call-to-action optimizados.','7 min',''))
+    // Agencia
+    + section('agencia','#ECFEFF','#0891b2','<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>','Panel de Agencia','Gestiona múltiples clientes, reportes y configuraciones avanzadas',
+        card('Agencia',AG,I.users,'Gestión de múltiples clientes desde el panel','Cambia entre clientes, consulta su estado y usa los agentes con contexto.','8 min','')
+      + card('Agencia',AG,I.person,'Perfiles de cliente — configuración avanzada','Completa el brief de marketing para que los agentes trabajen con contexto correcto.','5 min','')
+      + card('Agencia',AG,I.grid,'Reportes y dashboards en vivo por cliente','Crea dashboards personalizados con métricas de Google Ads, Meta y más.','9 min','')
+      + card('Agencia',AG,I.bell,'Alertas automáticas y análisis de campañas','Configura notificaciones de rendimiento y reportes automáticos.','7 min',''))
+    + '</div></div>'; // .academia-body / .academia-wrap
 }
 
 function academiaFilter(cat) {
