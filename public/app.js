@@ -9566,14 +9566,34 @@ function academiaAdminRenderForm(v) {
     + '</div>';
 }
 
-function acfYtPreviewHtml(ytId) {
-  if (!ytId || !ytId.trim()) return '';
-  const clean = ytId.trim();
-  const url = 'https://img.youtube.com/vi/' + clean + '/mqdefault.jpg';
+function extractYtId(raw) {
+  if (!raw || !raw.trim()) return '';
+  const s = raw.trim();
+  // Si es una URL completa de YouTube, extraer el ID
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,       // ?v=XXXX o &v=XXXX
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,   // youtu.be/XXXX
+    /embed\/([a-zA-Z0-9_-]{11})/,       // /embed/XXXX
+    /shorts\/([a-zA-Z0-9_-]{11})/,      // /shorts/XXXX
+  ];
+  for (const p of patterns) {
+    const m = s.match(p);
+    if (m) return m[1];
+  }
+  // Si ya es un ID de 11 caracteres, usarlo directo
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  return s; // devolver tal cual y dejar que el thumbnail falle con mensaje
+}
+
+function acfYtPreviewHtml(rawId) {
+  if (!rawId || !rawId.trim()) return '';
+  const clean = extractYtId(rawId.trim());
+  if (!clean) return '';
+  const thumbUrl = 'https://img.youtube.com/vi/' + clean + '/mqdefault.jpg';
   return '<div class="ac-admin-yt-preview ok" style="flex-direction:column;align-items:flex-start;gap:6px">'
     + '<div style="font-weight:600">Vista previa del thumbnail:</div>'
-    + '<img src="' + url + '" style="width:100%;border-radius:6px;max-width:280px" onerror="this.parentElement.className=\'ac-admin-yt-preview\';this.outerHTML=\'<span>ID no válido o video privado</span>\'">'
-    + '<div style="font-size:11px;color:var(--muted)">youtube.com/watch?v=' + clean + '</div>'
+    + '<img src="' + thumbUrl + '" style="width:100%;border-radius:6px;max-width:280px" onerror="this.parentElement.className=\'ac-admin-yt-preview\';this.outerHTML=\'<span style=&quot;font-size:12px&quot;>ID no válido o video privado</span>\'">'
+    + '<div style="font-size:11px;color:var(--muted)">ID: <b>' + clean + '</b></div>'
     + '</div>';
 }
 
@@ -9597,7 +9617,7 @@ async function academiaAdminSave() {
     title:        document.getElementById('acf-title')?.value?.trim() || '',
     description:  document.getElementById('acf-desc')?.value?.trim() || '',
     duration:     document.getElementById('acf-dur')?.value?.trim() || '5 min',
-    youtube_id:   document.getElementById('acf-ytid')?.value?.trim() || '',
+    youtube_id:   extractYtId(document.getElementById('acf-ytid')?.value?.trim() || ''),
     order_index:  parseInt(document.getElementById('acf-order')?.value || '0'),
     category_order: AC_CATS.findIndex(c => c.id === (document.getElementById('acf-cat')?.value || '')),
   };
