@@ -14340,51 +14340,30 @@ async function loadAdsAccounts() {
   }
 }
 
-function adsCanSelectMultiple() {
-  // Puede seleccionar cualquier cuenta si: es agencia, es admin, o tiene plan pro
-  if (userPlan === 'agency') return true;
-  if (isAdminUser()) return true;
-  // Chequeo directo en ADMIN_EMAILS sin depender de isAdminUser()
-  try {
-    const email = clerkInstance?.user?.primaryEmailAddress?.emailAddress?.toLowerCase() || '';
-    if (email && ADMIN_EMAILS.includes(email)) return true;
-  } catch(e) {}
-  return false;
-}
-
 function renderAccountSelector() {
   const container = document.getElementById('adsAccountsContainer');
-  const canMulti   = adsCanSelectMultiple();
   const nonManager = adsAccounts.filter(a => !a.isManager);
   const toShow     = nonManager.length > 0 ? nonManager : adsAccounts;
 
-  // Gate de plan: individual solo puede ver/activar 1 cuenta
+  // Ocultar siempre el mensaje de plan — todas las cuentas son seleccionables
   const gateMsg = document.getElementById('adsPlanGateMsg');
-  if (!canMulti && toShow.length > 1) {
-    gateMsg.style.display = 'block';
-  } else {
-    gateMsg.style.display = 'none';
-  }
+  if (gateMsg) gateMsg.style.display = 'none';
 
-  // Renderizar siempre todas las cuentas; el lock se evalúa en onclick con adsCanSelectMultiple()
-  container.innerHTML = toShow.map((acc, idx) => {
+  container.innerHTML = toShow.map((acc) => {
     const isActive = adsActiveAccount?.id === acc.id;
-    // isLocked se re-evalúa en runtime al hacer clic (no hardcodeado)
-    const lockedVisual = !canMulti && idx > 0;
     return `
-    <div onclick="adsAccountClick('${acc.id}', ${idx})"
+    <div onclick="selectAdsAccount('${acc.id}')"
       style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;
       border:1.5px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
-      background:${isActive ? 'var(--blue-lt)' : lockedVisual ? 'var(--sidebar2)' : 'var(--bg)'};
-      opacity:${lockedVisual ? '.6' : '1'};transition:all .15s"
-      onmouseover="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--blue-md)'}'"
-      onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}'">
+      background:${isActive ? 'var(--blue-lt)' : 'var(--bg)'};
+      transition:all .15s"
+      onmouseover="this.style.borderColor='var(--blue-md)';this.style.background='var(--blue-lt)'"
+      onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}';this.style.background='${isActive ? 'var(--blue-lt)' : 'var(--bg)'}'">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:1px">ID: ${acc.id} · ${acc.currency}${acc.isTest ? ' · cuenta de prueba' : ''}</div>
       </div>
       ${isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
-      ${lockedVisual ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--muted2)" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"/></svg>' : ''}
     </div>`;
   }).join('');
 
@@ -14560,7 +14539,10 @@ function renderActiveAccount() {
 }
 
 function showAccountSelector() {
-  document.getElementById('adsActiveAccount').style.display = 'none';
+  const activeEl = document.getElementById('adsActiveAccount');
+  if (activeEl) activeEl.style.display = 'none';
+  const listEl = document.getElementById('adsAccountsList');
+  if (listEl) listEl.style.display = 'block';
   if (adsAccounts.length > 0) {
     renderAccountSelector();
   } else {
