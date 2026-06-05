@@ -14342,11 +14342,11 @@ async function loadAdsAccounts() {
 
 function renderAccountSelector() {
   const container = document.getElementById('adsAccountsContainer');
-  const isAgency  = userPlan === 'agency';
+  const isAgency  = userPlan === 'agency' || isAdminUser();
   const nonManager = adsAccounts.filter(a => !a.isManager);
   const toShow    = nonManager.length > 0 ? nonManager : adsAccounts;
 
-  // Gate de plan: individual solo puede ver/activar 1 cuenta
+  // Gate de plan: individual solo puede ver/activar 1 cuenta (admin siempre libre)
   const gateMsg = document.getElementById('adsPlanGateMsg');
   if (!isAgency && toShow.length > 1) {
     gateMsg.style.display = 'block';
