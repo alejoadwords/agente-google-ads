@@ -14342,11 +14342,13 @@ async function loadAdsAccounts() {
 
 function renderAccountSelector() {
   const container = document.getElementById('adsAccountsContainer');
-  const isAgency  = userPlan === 'agency' || isAdminUser();
+  // Admin siempre tiene acceso sin restricción de plan
+  const adminFree = isAdminUser() || (typeof clerkInstance !== 'undefined' && clerkInstance?.user && ADMIN_EMAILS.includes((clerkInstance.user.primaryEmailAddress?.emailAddress || '').toLowerCase()));
+  const isAgency  = userPlan === 'agency' || adminFree;
   const nonManager = adsAccounts.filter(a => !a.isManager);
   const toShow    = nonManager.length > 0 ? nonManager : adsAccounts;
 
-  // Gate de plan: individual solo puede ver/activar 1 cuenta (admin siempre libre)
+  // Gate de plan: individual solo puede ver/activar 1 cuenta (admin y agencia siempre libres)
   const gateMsg = document.getElementById('adsPlanGateMsg');
   if (!isAgency && toShow.length > 1) {
     gateMsg.style.display = 'block';
@@ -14358,7 +14360,7 @@ function renderAccountSelector() {
     const isLocked = !isAgency && idx > 0; // solo la primera disponible en plan individual
     const isActive = adsActiveAccount?.id === acc.id;
     return `
-    <div onclick="${isLocked ? 'showUpgradeHint()' : `selectAdsAccount('${acc.id}')`}"
+    <div onclick="${isLocked ? `showUpgradeHint('${acc.id}')` : `selectAdsAccount('${acc.id}')`}"
       style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:${isLocked ? 'default' : 'pointer'};
       border:1.5px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
       background:${isActive ? 'var(--blue-lt)' : isLocked ? 'var(--sidebar2)' : 'var(--bg)'};
@@ -14559,7 +14561,12 @@ function showAdsError(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
-function showUpgradeHint() {
+function showUpgradeHint(accountId) {
+  // Admin nunca ve el bloqueo — selecciona directamente
+  if (isAdminUser()) {
+    if (accountId) selectAdsAccount(accountId);
+    return;
+  }
   showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
 }
 
