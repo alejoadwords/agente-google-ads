@@ -14340,39 +14340,51 @@ async function loadAdsAccounts() {
   }
 }
 
+function adsCanSelectMultiple() {
+  // Puede seleccionar cualquier cuenta si: es agencia, es admin, o tiene plan pro
+  if (userPlan === 'agency') return true;
+  if (isAdminUser()) return true;
+  // Chequeo directo en ADMIN_EMAILS sin depender de isAdminUser()
+  try {
+    const email = clerkInstance?.user?.primaryEmailAddress?.emailAddress?.toLowerCase() || '';
+    if (email && ADMIN_EMAILS.includes(email)) return true;
+  } catch(e) {}
+  return false;
+}
+
 function renderAccountSelector() {
   const container = document.getElementById('adsAccountsContainer');
-  // Admin siempre tiene acceso sin restricción de plan
-  const adminFree = isAdminUser() || (typeof clerkInstance !== 'undefined' && clerkInstance?.user && ADMIN_EMAILS.includes((clerkInstance.user.primaryEmailAddress?.emailAddress || '').toLowerCase()));
-  const isAgency  = userPlan === 'agency' || adminFree;
+  const canMulti   = adsCanSelectMultiple();
   const nonManager = adsAccounts.filter(a => !a.isManager);
-  const toShow    = nonManager.length > 0 ? nonManager : adsAccounts;
+  const toShow     = nonManager.length > 0 ? nonManager : adsAccounts;
 
-  // Gate de plan: individual solo puede ver/activar 1 cuenta (admin y agencia siempre libres)
+  // Gate de plan: individual solo puede ver/activar 1 cuenta
   const gateMsg = document.getElementById('adsPlanGateMsg');
-  if (!isAgency && toShow.length > 1) {
+  if (!canMulti && toShow.length > 1) {
     gateMsg.style.display = 'block';
   } else {
     gateMsg.style.display = 'none';
   }
 
+  // Renderizar siempre todas las cuentas; el lock se evalúa en onclick con adsCanSelectMultiple()
   container.innerHTML = toShow.map((acc, idx) => {
-    const isLocked = !isAgency && idx > 0; // solo la primera disponible en plan individual
     const isActive = adsActiveAccount?.id === acc.id;
+    // isLocked se re-evalúa en runtime al hacer clic (no hardcodeado)
+    const lockedVisual = !canMulti && idx > 0;
     return `
-    <div onclick="${isLocked ? `showUpgradeHint('${acc.id}')` : `selectAdsAccount('${acc.id}')`}"
-      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:${isLocked ? 'default' : 'pointer'};
+    <div onclick="adsAccountClick('${acc.id}', ${idx})"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;
       border:1.5px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
-      background:${isActive ? 'var(--blue-lt)' : isLocked ? 'var(--sidebar2)' : 'var(--bg)'};
-      opacity:${isLocked ? '.5' : '1'};transition:all .15s"
-      onmouseover="if(!${isLocked})this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--blue-md)'}'"
+      background:${isActive ? 'var(--blue-lt)' : lockedVisual ? 'var(--sidebar2)' : 'var(--bg)'};
+      opacity:${lockedVisual ? '.6' : '1'};transition:all .15s"
+      onmouseover="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--blue-md)'}'"
       onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}'">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:1px">ID: ${acc.id} · ${acc.currency}${acc.isTest ? ' · cuenta de prueba' : ''}</div>
       </div>
       ${isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
-      ${isLocked ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--muted2)" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"/></svg>' : ''}
+      ${lockedVisual ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--muted2)" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"/></svg>' : ''}
     </div>`;
   }).join('');
 
@@ -14561,9 +14573,17 @@ function showAdsError(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
+function adsAccountClick(accountId, idx) {
+  // Re-evalúa permisos en runtime (no depende del render inicial)
+  if (idx === 0 || adsCanSelectMultiple()) {
+    selectAdsAccount(accountId);
+  } else {
+    showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
+  }
+}
+
 function showUpgradeHint(accountId) {
-  // Admin nunca ve el bloqueo — selecciona directamente
-  if (isAdminUser()) {
+  if (adsCanSelectMultiple()) {
     if (accountId) selectAdsAccount(accountId);
     return;
   }
