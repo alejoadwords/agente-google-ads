@@ -684,6 +684,23 @@ function agencyRender() {
           <button class="agency-open-btn" onclick="agencyOpenClient('${client.id}')">abrir →</button>
         </div>
       </div>
+      <div class="agency-card-agents">
+        <button class="agency-agent-btn gads" title="Google Ads" onclick="openAgentForClient('google-ads',agencyClients.find(x=>x.id==='${client.id}'))">
+          <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        </button>
+        <button class="agency-agent-btn meta" title="Meta Ads" onclick="openAgentForClient('meta-ads',agencyClients.find(x=>x.id==='${client.id}'))">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </button>
+        <button class="agency-agent-btn tiktok" title="TikTok Ads" onclick="openAgentForClient('tiktok-ads',agencyClients.find(x=>x.id==='${client.id}'))">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z"/></svg>
+        </button>
+        <button class="agency-agent-btn seo" title="SEO" onclick="openAgentForClient('seo',agencyClients.find(x=>x.id==='${client.id}'))">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+        <button class="agency-agent-btn social" title="Social Media" onclick="openAgentForClient('social',agencyClients.find(x=>x.id==='${client.id}'))">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+        </button>
+      </div>
     `;
 
     if (existing[client.id]) {
@@ -3243,16 +3260,27 @@ window.onload = async () => {
   // Inicializar límites de imágenes
   loadImageUsage();
 
-  // Inicializar panel de agencia si aplica
-  setTimeout(function(){ agencyInit().then(function(){ if(document.getElementById('view-agency').classList.contains('active')) agencyRender(); }); }, 400);
-
   // Mostrar botón Leads (disponible para todos los usuarios autenticados)
   setTimeout(function(){ const b = document.getElementById('sb-leads-btn'); if(b) b.style.display = 'block'; }, 500);
 
   // Inicializar botón de referidos
   setTimeout(initReferralButton, 600);
 
-  showView('home');
+  // Vista inicial: panel de clientes para agencia/admin, home para el resto
+  const isAgencyOnLoad = userPlan === 'agency' || isAdminUser();
+  if (isAgencyOnLoad) {
+    await agencyInit();
+    showView('agency');
+    setTimeout(async function() {
+      if (agencyClients.length === 0) {
+        await agencyLoadClients();
+        if (agencyClients.length > 0) { agencyRender(); agencyUpdateSidebarCount(); }
+      }
+    }, 3000);
+  } else {
+    showView('home');
+    setTimeout(function(){ agencyInit(); }, 400);
+  }
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
   // Mostrar tour si es la primera vez
@@ -7875,13 +7903,13 @@ async function crmCopilotAction(action, btn) {
   copilotLoading = false;
 }
 
-// Extiende crmInit para cargar también agentes e inbox count
-const _crmInitOrig = crmInit;
+// crmInit — carga stages + leads + agents en paralelo y renderiza al final
 async function crmInit() {
   if (crmInited) { crmRender(); return; }
   crmInited = true;
   await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents()]);
-  crmLoadInbox(); // carga silenciosa para el badge
+  crmRender(); // garantiza render con todos los datos cargados
+  crmLoadInbox();
   crmUpdateSidebarCount();
 }
 
