@@ -788,6 +788,9 @@ function agencyRender() {
         <button class="agency-agent-btn social" title="Social Media Manager" onclick="openAgentForClient('social',agencyClients.find(x=>x.id==='${client.id}'))">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
         </button>
+        <button class="agency-agent-btn leads" title="Leads / CRM" onclick="openLeadsForClient(agencyClients.find(x=>x.id==='${client.id}'))">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </button>
       </div>
     `;
 
@@ -5593,6 +5596,22 @@ function openAgentForClient(agentKey, client) {
   }
   updateActiveClientBar();
   openAgent(agentKey);
+}
+
+function openLeadsForClient(client) {
+  if (!client) return;
+  agencyActiveClientId = client.id;
+  activeClientContext = {
+    clientId:      client.id,
+    clientName:    client.client_name || client.name || '',
+    clientIndustry: client.client_industry || '',
+    monthlyBudget: client.monthly_budget || '',
+    notes:         client.notes || '',
+  };
+  updateActiveClientBar();
+  showView('crm');
+  crmInited = false;
+  crmInit();
 }
 
 function clearActiveClientContext() {
@@ -16060,9 +16079,8 @@ async function crmInit() {
 
 async function crmLoadStages() {
   try {
-    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
-    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
-    const res = await fetch(`/api/pipeline-stages${qs}`, { headers: await getAuthHeaders() });
+    // Stages are global per user (not per client)
+    const res = await fetch('/api/pipeline-stages', { headers: await getAuthHeaders() });
     if (!res.ok) throw new Error();
     const data = await res.json();
     crmStages = data.stages || [];

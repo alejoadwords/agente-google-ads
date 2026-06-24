@@ -58,7 +58,7 @@ export default async function handler(req) {
   // Build base filter: user_id + optional client_id + not deleted
   const scopeFilter = clientId
     ? `user_id=eq.${userId}&client_id=eq.${clientId}&deleted_at=is.null`
-    : `user_id=eq.${userId}&client_id=is.null&deleted_at=is.null`;
+    : `user_id=eq.${userId}&deleted_at=is.null`;
 
   // GET — list leads
   if (req.method === 'GET' && !url.searchParams.get('id')) {

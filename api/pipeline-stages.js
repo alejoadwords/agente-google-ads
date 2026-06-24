@@ -62,17 +62,10 @@ export default async function handler(req) {
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
-  const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
-
-  const scopeFilter = clientId
-    ? `user_id=eq.${userId}&client_id=eq.${clientId}`
-    : `user_id=eq.${userId}&client_id=is.null`;
-
-  // GET — list stages, seed defaults if none exist
+  // GET — list stages (global per user, not per client)
   if (req.method === 'GET') {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/pipeline_stages?${scopeFilter}&select=*&order=position.asc`,
+      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}&select=*&order=position.asc`,
       { headers: sbHeaders() }
     );
     let rows = await res.json();
@@ -81,7 +74,6 @@ export default async function handler(req) {
       // Seed defaults
       const seeds = DEFAULT_STAGES.map(s => ({
         user_id: userId,
-        client_id: clientId,
         key: s.key,
         label: s.label,
         color: s.color,
@@ -92,11 +84,13 @@ export default async function handler(req) {
         headers: sbHeaders(),
         body: JSON.stringify(seeds),
       });
-      rows = await seedRes.json();
+      if (seedRes.ok) rows = await seedRes.json();
     }
 
-    return jsonResp({ stages: rows || [] });
+    return jsonResp({ stages: Array.isArray(rows) ? rows : [] });
   }
+
+  const url = new URL(req.url);
 
   // PUT — update a single stage (label, color)
   if (req.method === 'PUT') {
