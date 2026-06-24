@@ -4026,7 +4026,7 @@ function toggleCheck(item){item.classList.toggle('done');updateProgress()}
 function updateProgress(){const all=document.querySelectorAll('.stage-panel.active .cl-item').length;const done=document.querySelectorAll('.stage-panel.active .cl-item.done').length;document.getElementById('pt-count').textContent=`${done} / ${all} tareas`;document.getElementById('pt-fill').style.width=all?`${(done/all)*100}%`:'0%'}
 
 // VIEWS
-function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();if(id==='agency')agencyRender();}
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();if(id==='agency')agencyRender();if(id==='crm')crmInit();}
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
@@ -6990,3 +6990,916 @@ function closeComingSoon() {
   document.getElementById('coming-soon-modal').style.display = 'none';
   document.body.style.overflow = '';
 }
+
+// ── MÓDULO LEADS / CRM ────────────────────────────────────────────────────────
+let crmStages = [];
+let crmLeads = [];
+let crmView = 'kanban'; // 'kanban' | 'list'
+let crmEditingId = null;
+let crmDetailLead = null;
+let crmInited = false;
+
+async function crmInit() {
+  if (crmInited) { crmRender(); return; }
+  crmInited = true;
+  await crmLoadStages();
+  await crmLoadLeads();
+  crmUpdateSidebarCount();
+}
+
+async function crmLoadStages() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/pipeline-stages${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    crmStages = data.stages || [];
+    crmPopulateStageSelects();
+  } catch(e) {
+    console.error('crmLoadStages', e);
+  }
+}
+
+async function crmLoadLeads() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/leads${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    crmLeads = data.leads || [];
+    crmRender();
+  } catch(e) {
+    console.error('crmLoadLeads', e);
+  }
+}
+
+function crmPopulateStageSelects() {
+  ['crm-f-stage', 'crm-d-stage'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = crmStages.map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
+  });
+}
+
+function crmSetView(v) {
+  crmView = v;
+  document.getElementById('crm-btn-kanban').classList.toggle('active', v === 'kanban');
+  document.getElementById('crm-btn-list').classList.toggle('active', v === 'list');
+  document.getElementById('crm-kanban').style.display = v === 'kanban' ? 'flex' : 'none';
+  document.getElementById('crm-list-view').style.display = v === 'list' ? 'block' : 'none';
+  crmRender();
+}
+
+function crmRender() {
+  if (crmView === 'kanban') crmRenderKanban();
+  else crmRenderList();
+  crmUpdateClientTag();
+  crmUpdateSidebarCount();
+}
+
+function crmRenderKanban() {
+  const container = document.getElementById('crm-kanban');
+  if (!container) return;
+  container.innerHTML = '';
+  crmStages.forEach(stage => {
+    const leads = crmLeads.filter(l => l.stage === stage.key);
+    const col = document.createElement('div');
+    col.className = 'crm-col';
+    col.innerHTML = `
+      <div class="crm-col-head">
+        <div class="crm-col-dot" style="background:${esc(stage.color)}"></div>
+        <div class="crm-col-label">${esc(stage.label)}</div>
+        <div class="crm-col-count">${leads.length}</div>
+      </div>
+      <div class="crm-col-body" id="crm-col-${esc(stage.key)}" data-stage="${esc(stage.key)}">
+        ${leads.length === 0 ? `<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>` : leads.map(l => crmCardHTML(l)).join('')}
+        <button class="crm-add-card" onclick="crmOpenModal('${esc(stage.key)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Agregar
+        </button>
+      </div>`;
+    container.appendChild(col);
+    crmSetupDrop(col.querySelector('.crm-col-body'), stage.key);
+  });
+  container.querySelectorAll('.crm-card').forEach(card => {
+    card.draggable = true;
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('click', () => crmOpenDetail(card.dataset.id));
+  });
+}
+
+function crmCardHTML(lead) {
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  return `<div class="crm-card" data-id="${esc(lead.id)}">
+    <div class="crm-card-name">${esc(lead.name)}</div>
+    <div class="crm-card-meta">
+      ${lead.company ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>${esc(lead.company)}</div>` : ''}
+      ${lead.email ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(lead.email)}</div>` : ''}
+      ${lead.phone ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>${esc(lead.phone)}</div>` : ''}
+    </div>
+    <div class="crm-card-source">${esc(sourceLabels[lead.source] || lead.source || 'Manual')}</div>
+    ${lead.value ? `<div class="crm-card-value">$${Number(lead.value).toLocaleString()}</div>` : ''}
+  </div>`;
+}
+
+function crmSetupDrop(el, stageKey) {
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', async e => {
+    e.preventDefault();
+    el.classList.remove('drag-over');
+    const leadId = e.dataTransfer.getData('text/plain');
+    if (!leadId) return;
+    const lead = crmLeads.find(l => l.id === leadId);
+    if (!lead || lead.stage === stageKey) return;
+    const oldStage = lead.stage;
+    lead.stage = stageKey;
+    crmRenderKanban();
+    try {
+      await fetch(`/api/leads`, {
+        method: 'PUT',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: leadId, stage: stageKey }),
+      });
+      // log stage change activity
+      await fetch('/api/lead-activities', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Movido de ${oldStage} a ${stageKey}`, metadata: { from: oldStage, to: stageKey } }),
+      });
+    } catch(e) { console.error('crmDrop', e); }
+  });
+}
+
+function crmRenderList() {
+  const tbody = document.getElementById('crm-list-body');
+  if (!tbody) return;
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  if (crmLeads.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Sin leads aún. Crea el primero.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = crmLeads.map(l => {
+    const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: '#6B7280' };
+    return `<tr onclick="crmOpenDetail('${esc(l.id)}')">
+      <td style="font-weight:600">${esc(l.name)}</td>
+      <td>${esc(l.company || '—')}</td>
+      <td style="color:var(--muted)">${esc(l.email || '—')}</td>
+      <td><span class="crm-stage-pill" style="background:${esc(stage.color)}20;color:${esc(stage.color)}">${esc(stage.label)}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${esc(sourceLabels[l.source] || l.source || 'Manual')}</td>
+      <td style="font-size:11px;color:var(--muted2)">${l.created_at ? new Date(l.created_at).toLocaleDateString('es-CO') : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function crmUpdateClientTag() {
+  const tag = document.getElementById('crm-client-tag');
+  const nameEl = document.getElementById('crm-client-tag-name');
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  if (tag && clientId) {
+    tag.style.display = 'flex';
+    if (nameEl) {
+      const clients = typeof agencyClients !== 'undefined' ? agencyClients : [];
+      const c = clients.find(x => x.id === clientId);
+      nameEl.textContent = c ? c.name : clientId;
+    }
+  } else if (tag) {
+    tag.style.display = 'none';
+  }
+}
+
+function crmUpdateSidebarCount() {
+  const el = document.getElementById('sb-leads-count');
+  if (el) el.textContent = crmLeads.length;
+  const btn = document.getElementById('sb-leads-btn');
+  if (btn) btn.style.display = 'block';
+}
+
+// ── Modal crear/editar ────────────────────────────────────────────────────────
+function crmOpenModal(defaultStage) {
+  crmEditingId = null;
+  document.getElementById('crm-modal-title').textContent = 'Nuevo lead';
+  document.getElementById('crm-f-name').value = '';
+  document.getElementById('crm-f-email').value = '';
+  document.getElementById('crm-f-phone').value = '';
+  document.getElementById('crm-f-company').value = '';
+  document.getElementById('crm-f-notes').value = '';
+  document.getElementById('crm-f-source').value = 'manual';
+  crmPopulateStageSelects();
+  if (defaultStage) document.getElementById('crm-f-stage').value = defaultStage;
+  document.getElementById('crm-save-btn').disabled = false;
+  document.getElementById('crm-modal').classList.add('open');
+  setTimeout(() => document.getElementById('crm-f-name').focus(), 100);
+}
+
+function crmCloseModal() {
+  document.getElementById('crm-modal').classList.remove('open');
+  crmEditingId = null;
+}
+
+async function crmSaveLead() {
+  const name = document.getElementById('crm-f-name').value.trim();
+  if (!name) { document.getElementById('crm-f-name').focus(); return; }
+  const btn = document.getElementById('crm-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const payload = {
+    name,
+    email: document.getElementById('crm-f-email').value.trim() || null,
+    phone: document.getElementById('crm-f-phone').value.trim() || null,
+    company: document.getElementById('crm-f-company').value.trim() || null,
+    stage: document.getElementById('crm-f-stage').value,
+    source: document.getElementById('crm-f-source').value,
+    notes: document.getElementById('crm-f-notes').value.trim() || null,
+    client_id: clientId,
+  };
+  try {
+    if (crmEditingId) {
+      payload.id = crmEditingId;
+      const res = await fetch('/api/leads', {
+        method: 'PUT',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const idx = crmLeads.findIndex(l => l.id === crmEditingId);
+      if (idx >= 0) crmLeads[idx] = data.lead;
+    } else {
+      const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+      const res = await fetch(`/api/leads${qs}`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      crmLeads.unshift(data.lead);
+      // log creation activity
+      await fetch('/api/lead-activities', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: data.lead.id, type: 'creacion', content: 'Lead creado', metadata: {} }),
+      });
+    }
+    crmCloseModal();
+    crmRender();
+  } catch(e) {
+    console.error('crmSaveLead', e);
+    btn.textContent = 'Error — reintentar';
+    btn.disabled = false;
+  }
+}
+
+// ── Panel de detalle ──────────────────────────────────────────────────────────
+async function crmOpenDetail(leadId) {
+  const lead = crmLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  crmDetailLead = lead;
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  document.getElementById('crm-d-name').textContent = lead.name;
+  document.getElementById('crm-d-email').textContent = lead.email || '—';
+  document.getElementById('crm-d-phone').textContent = lead.phone || '—';
+  document.getElementById('crm-d-company').textContent = lead.company || '—';
+  document.getElementById('crm-d-source').textContent = sourceLabels[lead.source] || lead.source || 'Manual';
+  const notesSection = document.getElementById('crm-d-notes-section');
+  if (lead.notes) {
+    notesSection.style.display = 'flex';
+    document.getElementById('crm-d-notes').textContent = lead.notes;
+  } else {
+    notesSection.style.display = 'none';
+  }
+  crmPopulateStageSelects();
+  document.getElementById('crm-d-stage').value = lead.stage;
+  document.getElementById('crm-detail-overlay').classList.add('open');
+  document.getElementById('crm-detail-panel').classList.add('open');
+  document.getElementById('crm-activity-input').value = '';
+  await crmLoadActivities(leadId);
+}
+
+function crmCloseDetail() {
+  document.getElementById('crm-detail-overlay').classList.remove('open');
+  document.getElementById('crm-detail-panel').classList.remove('open');
+  crmDetailLead = null;
+}
+
+async function crmChangeStage(newStage) {
+  if (!crmDetailLead) return;
+  const leadId = crmDetailLead.id;
+  const oldStage = crmDetailLead.stage;
+  if (oldStage === newStage) return;
+  crmDetailLead.stage = newStage;
+  const lead = crmLeads.find(l => l.id === leadId);
+  if (lead) lead.stage = newStage;
+  crmRender();
+  try {
+    await fetch('/api/leads', {
+      method: 'PUT',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: leadId, stage: newStage }),
+    });
+    await fetch('/api/lead-activities', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Etapa cambiada de "${oldStage}" a "${newStage}"`, metadata: { from: oldStage, to: newStage } }),
+    });
+    await crmLoadActivities(leadId);
+  } catch(e) { console.error('crmChangeStage', e); }
+}
+
+async function crmLoadActivities(leadId) {
+  const list = document.getElementById('crm-activity-list');
+  if (!list) return;
+  try {
+    const res = await fetch(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const acts = data.activities || [];
+    if (acts.length === 0) {
+      list.innerHTML = `<div style="font-size:12px;color:var(--muted)">Sin actividad registrada.</div>`;
+      return;
+    }
+    const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Cambio de etapa', creacion: 'Creación' };
+    list.innerHTML = acts.map(a => `
+      <div class="crm-activity-item">
+        <div class="crm-activity-dot ${a.type === 'stage_change' ? 'stage' : a.type === 'creacion' ? 'creacion' : ''}"></div>
+        <div class="crm-activity-content">
+          <div class="crm-activity-text"><strong>${esc(typeLabels[a.type] || a.type)}:</strong> ${esc(a.content || '')}</div>
+          <div class="crm-activity-time">${new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</div>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('crmLoadActivities', e); }
+}
+
+async function crmAddActivity() {
+  if (!crmDetailLead) return;
+  const input = document.getElementById('crm-activity-input');
+  const content = input.value.trim();
+  if (!content) return;
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  try {
+    await fetch('/api/lead-activities', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: crmDetailLead.id, type: 'nota', content }),
+    });
+    input.value = '';
+    await crmLoadActivities(crmDetailLead.id);
+  } catch(e) { console.error('crmAddActivity', e); }
+  btn.disabled = false;
+}
+
+function crmEditCurrentLead() {
+  if (!crmDetailLead) return;
+  crmCloseDetail();
+  crmEditingId = crmDetailLead.id;
+  document.getElementById('crm-modal-title').textContent = 'Editar lead';
+  document.getElementById('crm-f-name').value = crmDetailLead.name || '';
+  document.getElementById('crm-f-email').value = crmDetailLead.email || '';
+  document.getElementById('crm-f-phone').value = crmDetailLead.phone || '';
+  document.getElementById('crm-f-company').value = crmDetailLead.company || '';
+  document.getElementById('crm-f-notes').value = crmDetailLead.notes || '';
+  document.getElementById('crm-f-source').value = crmDetailLead.source || 'manual';
+  crmPopulateStageSelects();
+  document.getElementById('crm-f-stage').value = crmDetailLead.stage;
+  document.getElementById('crm-save-btn').disabled = false;
+  document.getElementById('crm-save-btn').textContent = 'Guardar';
+  document.getElementById('crm-modal').classList.add('open');
+}
+
+async function crmDeleteCurrentLead() {
+  if (!crmDetailLead) return;
+  if (!confirm(`¿Eliminar el lead "${crmDetailLead.name}"? Esta acción no se puede deshacer.`)) return;
+  const leadId = crmDetailLead.id;
+  crmCloseDetail();
+  try {
+    await fetch(`/api/leads?id=${encodeURIComponent(leadId)}`, {
+      method: 'DELETE',
+      headers: await getAuthHeaders(),
+    });
+    crmLeads = crmLeads.filter(l => l.id !== leadId);
+    crmRender();
+  } catch(e) { console.error('crmDeleteCurrentLead', e); }
+}
+// ── AGENTES IA / INBOX ───────────────────────────────────────────────────────
+let crmAgents = [];
+let inboxConversations = [];
+let inboxActiveConvId = null;
+let inboxFilter = 'all';
+let agEditingId = null;
+let agFaqs = [];
+
+// ── Vista de Agentes ──────────────────────────────────────────────────────────
+async function crmLoadAgents() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/chat-agents${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    crmAgents = data.agents || [];
+    crmRenderAgents();
+  } catch(e) { console.error('crmLoadAgents', e); }
+}
+
+function crmRenderAgents() {
+  const list = document.getElementById('crm-agents-list');
+  if (!list) return;
+  if (crmAgents.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  const channelIcons = { messenger: '💬', instagram: '📷', whatsapp: '📱', tiktok: '🎵' };
+  list.innerHTML = crmAgents.map(ag => {
+    const connections = ag.channel_connections || [];
+    const activeConns = connections.filter(c => c.is_active);
+    return `<div class="crm-agent-card" onclick="crmOpenAgentModal('${esc(ag.id)}')">
+      <div class="crm-agent-avatar">${esc(ag.name.charAt(0).toUpperCase())}</div>
+      <div class="crm-agent-info">
+        <div class="crm-agent-name">${esc(ag.name)}</div>
+        <div class="crm-agent-desc">${esc((ag.business_ctx || 'Sin contexto de negocio').slice(0, 80))}${(ag.business_ctx || '').length > 80 ? '...' : ''}</div>
+        <div class="crm-agent-channels">
+          ${activeConns.length === 0 ? '<span class="crm-channel-badge inactive">Sin canales</span>' : activeConns.map(c => `<span class="crm-channel-badge ${c.channel}">${channelIcons[c.channel] || ''} ${esc(c.channel_name || c.channel)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="crm-agent-status ${ag.is_active ? 'active' : 'inactive'}"></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Modal Agente ──────────────────────────────────────────────────────────────
+function crmOpenAgentModal(agentId) {
+  agEditingId = agentId || null;
+  agFaqs = [];
+  const isEdit = !!agentId;
+  document.getElementById('crm-agent-modal-title').textContent = isEdit ? 'Editar agente' : 'Nuevo agente de IA';
+  document.getElementById('ag-save-btn').textContent = isEdit ? 'Guardar cambios' : 'Crear agente';
+
+  if (isEdit) {
+    const ag = crmAgents.find(a => a.id === agentId);
+    if (!ag) return;
+    document.getElementById('ag-f-name').value = ag.name || '';
+    document.getElementById('ag-f-persona').value = ag.persona || '';
+    document.getElementById('ag-f-business').value = ag.business_ctx || '';
+    document.getElementById('ag-f-escalate').value = ag.escalate_phrase || '';
+    document.getElementById('ag-f-tone').value = ag.tone || 'informal';
+    agFaqs = (ag.faqs || []).map(f => ({ ...f }));
+    // Show channels section
+    const chSect = document.getElementById('ag-channels-section');
+    if (chSect) { chSect.style.display = 'block'; agRenderChannels(ag); }
+  } else {
+    document.getElementById('ag-f-name').value = '';
+    document.getElementById('ag-f-persona').value = '';
+    document.getElementById('ag-f-business').value = '';
+    document.getElementById('ag-f-escalate').value = 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?';
+    document.getElementById('ag-f-tone').value = 'informal';
+    const chSect = document.getElementById('ag-channels-section');
+    if (chSect) chSect.style.display = 'none';
+  }
+  agRenderFaqs();
+  document.getElementById('crm-agent-modal').classList.add('open');
+  setTimeout(() => document.getElementById('ag-f-name').focus(), 100);
+}
+
+function crmCloseAgentModal() {
+  document.getElementById('crm-agent-modal').classList.remove('open');
+  agEditingId = null;
+  agFaqs = [];
+}
+
+function agRenderFaqs() {
+  const list = document.getElementById('ag-faqs-list');
+  if (!list) return;
+  if (agFaqs.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = agFaqs.map((f, i) => `
+    <div class="crm-faq-item">
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+        <input class="crm-faq-input" placeholder="Pregunta (ej: ¿Cuáles son los precios?)" value="${esc(f.q || '')}" oninput="agFaqs[${i}].q=this.value" />
+        <input class="crm-faq-input" placeholder="Respuesta" value="${esc(f.a || '')}" oninput="agFaqs[${i}].a=this.value" />
+      </div>
+      <button class="crm-faq-del" onclick="agRemoveFaq(${i})">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function agAddFaq() {
+  agFaqs.push({ q: '', a: '' });
+  agRenderFaqs();
+}
+
+function agRemoveFaq(i) {
+  agFaqs.splice(i, 1);
+  agRenderFaqs();
+}
+
+function agRenderChannels(agent) {
+  const list = document.getElementById('ag-channels-list');
+  if (!list) return;
+  const conns = agent.channel_connections || [];
+  const channels = [
+    { key: 'whatsapp', label: 'WhatsApp Business', icon: '📱', color: '#128C7E', desc: 'Conecta un número de WhatsApp Business' },
+    { key: 'messenger', label: 'Messenger', icon: '💬', color: '#1877F2', desc: 'Conecta una Página de Facebook' },
+    { key: 'instagram', label: 'Instagram DMs', icon: '📷', color: '#C13584', desc: 'Conecta una cuenta Instagram Business' },
+  ];
+  list.innerHTML = channels.map(ch => {
+    const conn = conns.find(c => c.channel === ch.key && c.is_active);
+    return `<div class="crm-channel-connect-row">
+      <div class="crm-channel-icon" style="background:${ch.color}20">${ch.icon}</div>
+      <div class="crm-channel-connect-info">
+        <div class="crm-channel-connect-name">${ch.label}</div>
+        <div class="crm-channel-connect-status">${conn ? `Conectado: ${esc(conn.channel_name || conn.external_id)}` : ch.desc}</div>
+      </div>
+      ${conn
+        ? `<button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Desconectar</button>`
+        : `<button class="crm-channel-btn connect" onclick="agConnectChannel('${esc(ch.key)}','${esc(agent.id)}')">Conectar</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+async function crmSaveAgent() {
+  const name = document.getElementById('ag-f-name').value.trim();
+  if (!name) { document.getElementById('ag-f-name').focus(); return; }
+  const btn = document.getElementById('ag-save-btn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+
+  const payload = {
+    name,
+    persona: document.getElementById('ag-f-persona').value.trim(),
+    business_ctx: document.getElementById('ag-f-business').value.trim(),
+    escalate_phrase: document.getElementById('ag-f-escalate').value.trim(),
+    tone: document.getElementById('ag-f-tone').value,
+    faqs: agFaqs.filter(f => f.q && f.a),
+  };
+
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    if (agEditingId) {
+      payload.id = agEditingId;
+      const res = await fetch('/api/chat-agents', {
+        method: 'PUT',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+    } else {
+      const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+      const res = await fetch(`/api/chat-agents${qs}`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+    }
+    crmCloseAgentModal();
+    await crmLoadAgents();
+  } catch(e) {
+    console.error('crmSaveAgent', e);
+    btn.textContent = 'Error — reintentar';
+    btn.disabled = false;
+  }
+}
+
+async function agConnectChannel(channel, agentId) {
+  if (channel === 'whatsapp') {
+    // WhatsApp: pedir datos manualmente
+    const phoneNumberId = prompt('Phone Number ID de WhatsApp Business (lo encuentras en Meta Business Suite → WhatsApp → Número):');
+    if (!phoneNumberId) return;
+    const token = prompt('Access Token con permiso whatsapp_business_messaging:');
+    if (!token) return;
+    const name = prompt('Nombre del número (ej: +57 300 123 4567):') || phoneNumberId;
+
+    // Verify the token works
+    const testRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}?access_token=${token}`);
+    const testData = await testRes.json();
+    if (testData.error) { alert('Token o Phone Number ID inválido: ' + testData.error.message); return; }
+
+    const res = await fetch('/api/channel-connections', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, channel, external_id: phoneNumberId, access_token: token, channel_name: name }),
+    });
+    if (res.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
+    else alert('Error conectando WhatsApp. Verifica los datos.');
+
+  } else {
+    // Messenger / Instagram: usar token Meta existente
+    const metaToken = sessionStorage.getItem('metaToken') || localStorage.getItem('meta_access_token');
+    if (!metaToken) {
+      alert('Primero conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads');
+      return;
+    }
+    const res = await fetch(`/api/channel-connections?action=list_pages&token=${encodeURIComponent(metaToken)}`, { headers: await getAuthHeaders() });
+    if (!res.ok) { alert('Error listando páginas de Meta.'); return; }
+    const data = await res.json();
+    const pages = data.pages || [];
+    if (pages.length === 0) { alert('No se encontraron páginas de Facebook administradas por esta cuenta.'); return; }
+
+    let options = '';
+    if (channel === 'messenger') {
+      options = pages.map((p, i) => `${i + 1}. ${p.name} (ID: ${p.id})`).join('\n');
+      const choice = prompt(`Selecciona el número de la página para Messenger:\n\n${options}`);
+      const idx = parseInt(choice) - 1;
+      if (isNaN(idx) || !pages[idx]) return;
+      const page = pages[idx];
+      // Get page access token
+      const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
+      const ptData = await ptRes.json();
+      const pageToken = ptData.access_token;
+      const connRes = await fetch('/api/channel-connections', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, channel: 'messenger', external_id: page.id, access_token: pageToken, channel_name: page.name }),
+      });
+      if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
+    } else if (channel === 'instagram') {
+      const igPages = pages.filter(p => p.instagram_business_account);
+      if (igPages.length === 0) { alert('No se encontraron cuentas de Instagram Business conectadas a tus páginas.'); return; }
+      options = igPages.map((p, i) => `${i + 1}. ${p.instagram_business_account.name || p.name}`).join('\n');
+      const choice = prompt(`Selecciona la cuenta de Instagram:\n\n${options}`);
+      const idx = parseInt(choice) - 1;
+      if (isNaN(idx) || !igPages[idx]) return;
+      const page = igPages[idx];
+      const igAcct = page.instagram_business_account;
+      const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
+      const ptData = await ptRes.json();
+      const connRes = await fetch('/api/channel-connections', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, channel: 'instagram', external_id: igAcct.id, access_token: ptData.access_token, channel_name: igAcct.name || page.name }),
+      });
+      if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
+    }
+  }
+}
+
+async function agDisconnectChannel(connId, agentId) {
+  if (!confirm('¿Desconectar este canal? El agente dejará de responder mensajes por este canal.')) return;
+  await fetch(`/api/channel-connections?id=${encodeURIComponent(connId)}`, {
+    method: 'DELETE', headers: await getAuthHeaders(),
+  });
+  await crmLoadAgents();
+  crmOpenAgentModal(agentId);
+}
+
+// ── Inbox ─────────────────────────────────────────────────────────────────────
+async function crmLoadInbox(filterStatus) {
+  if (filterStatus) inboxFilter = filterStatus;
+  try {
+    let qs = inboxFilter === 'all' ? '' : `&status=${inboxFilter}`;
+    const res = await fetch(`/api/chat-conversations?${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    inboxConversations = data.conversations || [];
+    inboxRenderList();
+    inboxUpdateBadge();
+  } catch(e) { console.error('crmLoadInbox', e); }
+}
+
+function inboxRenderList() {
+  const list = document.getElementById('crm-inbox-conv-list');
+  if (!list) return;
+  const channelIcons = { messenger: '💬', instagram: '📷', whatsapp: '📱', tiktok: '🎵' };
+  if (inboxConversations.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted)">Sin conversaciones aún. Los mensajes de tus canales conectados aparecerán aquí.</div>';
+    return;
+  }
+  list.innerHTML = inboxConversations.map(conv => {
+    const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
+    const time = conv.last_message_at ? timeAgo(conv.last_message_at) : '';
+    return `<div class="crm-inbox-conv-item${inboxActiveConvId === conv.id ? ' active' : ''}" onclick="inboxOpenConv('${esc(conv.id)}')">
+      <div class="crm-inbox-conv-avatar">${name.charAt(0).toUpperCase()}</div>
+      <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+        <div class="crm-inbox-conv-info">
+          <div class="crm-inbox-conv-name">${esc(name)}</div>
+          <div class="crm-inbox-conv-preview">${esc((conv.last_message || '').slice(0, 50))}</div>
+        </div>
+      </div>
+      <div class="crm-inbox-conv-meta">
+        <div class="crm-inbox-conv-time">${time}</div>
+        ${conv.unread_count > 0 ? `<div class="crm-inbox-unread">${conv.unread_count}</div>` : ''}
+        <div class="crm-inbox-channel-dot ${conv.channel}" title="${conv.channel}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function inboxOpenConv(convId) {
+  inboxActiveConvId = convId;
+  inboxRenderList();
+  const conv = inboxConversations.find(c => c.id === convId);
+  if (!conv) return;
+
+  // Mark as read
+  if (conv.unread_count > 0) {
+    conv.unread_count = 0;
+    await fetch('/api/chat-conversations', {
+      method: 'PUT',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: convId, unread_count: 0 }),
+    });
+    inboxUpdateBadge();
+  }
+
+  // Load messages
+  const res = await fetch(`/api/chat-conversations?messages=${encodeURIComponent(convId)}`, { headers: await getAuthHeaders() });
+  if (!res.ok) return;
+  const data = await res.json();
+  const messages = data.messages || [];
+
+  const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
+  const channelLabels = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok' };
+  const statusLabels = { bot: 'Bot activo', human: 'Escalado', resolved: 'Resuelto' };
+
+  const chat = document.getElementById('crm-inbox-chat');
+  chat.innerHTML = `
+    <div class="crm-inbox-chat-head">
+      <div style="display:flex;flex-direction:column">
+        <div class="crm-inbox-chat-name">${esc(name)}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(channelLabels[conv.channel] || conv.channel)}${conv.lead_id ? ` · <button class="crm-lead-link-btn" onclick="crmOpenDetail('${esc(conv.lead_id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Ver lead</button>` : ''}</div>
+      </div>
+      <button class="crm-inbox-status-btn ${conv.status}" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
+    </div>
+    <div class="crm-inbox-messages" id="inbox-msgs">
+      ${messages.map(m => `
+        <div class="crm-inbox-bubble-wrap ${m.role}">
+          <div class="crm-inbox-bubble ${m.role}">${esc(m.content.replace(/\[CAPTURA:.*?\]/gs, '').replace(/\[ESCALAR\]/g, '').trim())}</div>
+          <div class="crm-inbox-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+        </div>`).join('')}
+    </div>
+    <div class="crm-inbox-reply">
+      <textarea class="crm-inbox-reply-input" id="inbox-reply-input" placeholder="Escribe un mensaje manual..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inboxSendManual('${esc(convId)}')}" rows="1"></textarea>
+      <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
+    </div>`;
+
+  // Scroll to bottom
+  setTimeout(() => {
+    const msgs = document.getElementById('inbox-msgs');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }, 50);
+}
+
+async function inboxSendManual(convId) {
+  const input = document.getElementById('inbox-reply-input');
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+  const btn = input.nextElementSibling;
+  if (btn) btn.disabled = true;
+  try {
+    await fetch('/api/chat-conversations', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: convId, content }),
+    });
+    await inboxOpenConv(convId);
+  } catch(e) { console.error('inboxSendManual', e); }
+  if (btn) btn.disabled = false;
+}
+
+async function inboxCycleStatus(convId, current) {
+  const next = current === 'bot' ? 'human' : current === 'human' ? 'resolved' : 'bot';
+  await fetch('/api/chat-conversations', {
+    method: 'PUT',
+    headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: convId, status: next }),
+  });
+  const conv = inboxConversations.find(c => c.id === convId);
+  if (conv) conv.status = next;
+  await inboxOpenConv(convId);
+}
+
+function inboxUpdateBadge() {
+  const total = inboxConversations.reduce((s, c) => s + (c.unread_count || 0), 0);
+  const badge = document.getElementById('crm-inbox-unread-badge');
+  if (badge) { badge.style.display = total > 0 ? 'inline-flex' : 'none'; badge.textContent = total; }
+}
+
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'ahora';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function inboxSetFilter(status, btn) {
+  document.querySelectorAll('.crm-inbox-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  crmLoadInbox(status);
+}
+
+// ── Copiloto IA en panel de detalle ───────────────────────────────────────────
+let copilotActiveAction = 'analyze';
+let copilotLoading = false;
+
+function crmCopilotToggle() {
+  const panel = document.getElementById('crm-copilot-panel');
+  const overlay = document.getElementById('crm-copilot-overlay');
+  if (!panel || !crmDetailLead) return;
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    overlay.style.display = 'block';
+  } else {
+    crmCopilotClose();
+  }
+}
+
+function crmCopilotClose() {
+  const panel = document.getElementById('crm-copilot-panel');
+  const overlay = document.getElementById('crm-copilot-overlay');
+  if (panel) panel.style.display = 'none';
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function crmCopilotAction(action, btn) {
+  if (copilotLoading || !crmDetailLead) return;
+  copilotActiveAction = action;
+  document.querySelectorAll('.crm-copilot-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  copilotLoading = true;
+  const content = document.getElementById('crm-copilot-content');
+  content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px">Analizando con IA...</div>';
+
+  try {
+    const res = await fetch('/api/lead-copilot', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: crmDetailLead.id, action }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    if (action === 'score' && data.score) {
+      const s = data.score;
+      content.innerHTML = `
+        <div class="crm-copilot-panel">
+          <div class="crm-copilot-score">
+            <div class="crm-score-num">${s.score}</div>
+            <div style="flex:1">
+              <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:5px">Prob. de cierre: ${esc(s.label || '')}</div>
+              <div class="crm-score-bar-wrap"><div class="crm-score-bar" style="width:${s.score * 10}%"></div></div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text);line-height:1.5">${esc(s.reason || '')}</div>
+          ${s.days_estimate ? `<div style="font-size:11px;color:var(--muted)">Estimado de cierre: ~${s.days_estimate} días</div>` : ''}
+        </div>`;
+    } else if (action === 'draft_message' && data.result) {
+      content.innerHTML = `
+        <div class="crm-copilot-panel">
+          <div class="crm-copilot-result">${esc(data.result)}</div>
+          <button class="crm-copy-msg-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(data.result)}).then(()=>{this.textContent='✓ Copiado'})">Copiar mensaje</button>
+        </div>`;
+    } else if (data.result) {
+      content.innerHTML = `<div class="crm-copilot-panel"><div class="crm-copilot-result">${data.result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div></div>`;
+    }
+  } catch(e) {
+    content.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:10px 0">Error al consultar la IA. Intenta de nuevo.</div>';
+  }
+  copilotLoading = false;
+}
+
+// Extiende crmInit para cargar también agentes e inbox count
+const _crmInitOrig = crmInit;
+async function crmInit() {
+  if (crmInited) { crmRender(); return; }
+  crmInited = true;
+  await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents()]);
+  crmLoadInbox(); // carga silenciosa para el badge
+  crmUpdateSidebarCount();
+}
+
+// Extiende crmSetView para los nuevos tabs
+const _crmSetViewOrig = crmSetView;
+function crmSetView(v) {
+  crmView = v;
+  ['kanban','list','agents','inbox'].forEach(id => {
+    const btn = document.getElementById(`crm-btn-${id}`);
+    if (btn) btn.classList.toggle('active', v === id);
+  });
+  document.getElementById('crm-kanban').style.display = v === 'kanban' ? 'flex' : 'none';
+  document.getElementById('crm-list-view').style.display = v === 'list' ? 'block' : 'none';
+  document.getElementById('crm-agents-view').style.display = v === 'agents' ? 'flex' : 'none';
+  document.getElementById('crm-inbox-view').style.display = v === 'inbox' ? 'flex' : 'none';
+  const addBtn = document.getElementById('crm-add-btn');
+  if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
+  if (v === 'kanban' || v === 'list') crmRender();
+  if (v === 'agents') crmRenderAgents();
+  if (v === 'inbox') crmLoadInbox();
+}
+// ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
+
+// ── FIN MÓDULO LEADS ──────────────────────────────────────────────────────────
