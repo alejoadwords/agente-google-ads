@@ -1077,6 +1077,27 @@ async function agencyDeleteClient(id) {
   agencyRender();
 }
 
+function openAgentForClient(agentKey, client) {
+  if (!client) return;
+  agencyActiveClientId = client.id;
+  activeClientContext = {
+    clientId:       client.id,
+    clientName:     client.client_name || client.name || '',
+    clientIndustry: client.client_industry || '',
+    monthlyBudget:  client.monthly_budget || '',
+    notes:          client.notes || '',
+  };
+  if (agentKey === 'google-ads' && client.googleCustomerId) {
+    const custId = String(client.googleCustomerId).replace(/-/g, '');
+    sessionStorage.setItem('ads_customer_id', custId);
+    localStorage.setItem('ads_customer_id_persist', custId);
+    adsActiveAccount = { id: custId, name: client.googleAccountName || client.name || custId };
+    if (typeof renderActiveAccount === 'function') renderActiveAccount();
+  }
+  updateActiveClientBar();
+  openAgent(agentKey);
+}
+
 // ── Health change inline ──────────────────────────────────────────────────────
 function agencyChangeHealth(id) {
   agencyCloseAllDropdowns();
