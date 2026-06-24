@@ -6,9 +6,6 @@ let clerkInstance=null,sessionToken=null,userPlan='free';
 let lastParrillaText=''; // Guarda la última parrilla generada para exportar a Sheets
 // Declaración temprana para evitar ReferenceError en getProfileKey
 let adsActiveAccount = null;
-// Contexto de cliente activo para usuarios Plan Agencia y Pro
-let activeClientContext = null; // { clientId, clientName, clientIndustry, monthlyBudget, notes }
-let pendingAgentAfterSetup = null; // agentKey a abrir después de que Pro complete su perfil
 
 // Sistema de límites de imágenes
 let imageUsage = { generated: 0, limit: 2 }; // Plan gratuito: 2 imágenes en 7 días
@@ -228,8 +225,6 @@ async function initAuth(){
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     updateUserUI(clerkInstance.user);
-    // Registrar referido pendiente si llegó con ?ref=CODE
-    setTimeout(() => { if (typeof registerPendingReferral === 'function') registerPendingReferral(); }, 1500);
     return true;
   } catch(e) {
     console.error('Auth error:', e.message);
@@ -253,34 +248,11 @@ function updateUserUI(u){
     else badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días';
   }
   const greeting=document.getElementById('home-greeting');
-  if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
-  // Mostrar botón de referidos si tiene plan pago o es admin
+  if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.innerHTML=t+', '+name+' 👋<br><span class="accent">¿En qué trabajamos hoy?</span>';}
+  // Inicializar referral button aquí también (userPlan ya está seteado)
   setTimeout(initReferralButton, 100);
 }
-
-function initReferralButton() {
-  const btn = document.getElementById('sb-referral-btn');
-  if (!btn) return;
-  btn.style.display = 'flex';
-}
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
-
-// ── THEME ──
-function initTheme() {
-  const saved = localStorage.getItem('acuarius-theme');
-  if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-}
-function toggleTheme() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  if (isDark) {
-    document.documentElement.removeAttribute('data-theme');
-    localStorage.setItem('acuarius-theme', 'light');
-  } else {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    localStorage.setItem('acuarius-theme', 'dark');
-  }
-}
-initTheme();
 
 // INIT
 
@@ -568,45 +540,11 @@ let agencyActiveClientId = null; // cliente en contexto de chat actual
 // ── Inicialización ──────────────────────────────────────────────────────────
 async function agencyInit() {
   const isAgency = userPlan === 'agency' || isAdminUser();
-  const isPro    = !isAdminUser() && userPlan !== 'agency';
-
-  const agencyBtn  = document.getElementById('sb-agency-btn');
-  const proBtn     = document.getElementById('sb-pro-btn');
-  const dashBtn    = document.getElementById('agency-dash-btn');
-  if (agencyBtn) agencyBtn.style.display = isAgency ? 'block' : 'none';
-  if (proBtn)    proBtn.style.display    = isPro    ? 'block' : 'none';
-  if (dashBtn)   dashBtn.style.display   = isAgency ? 'flex'  : 'none';
-
-  if (!isAgency && !isPro) return;
+  const btn = document.getElementById('sb-agency-btn');
+  if (btn) btn.style.display = isAgency ? 'block' : 'none';
+  if (!isAgency) return;
   await agencyLoadClients();
-  // Si hay clientes, asegurar que están sincronizados en Supabase.
-  // Esto repara el caso donde datos viejos sólo quedaron en localStorage del PC.
-  if (agencyClients.length > 0) agencyPersistRemote();
-  if (isAgency) agencyUpdateSidebarCount();
-
-  // Pro: auto-activar perfil de negocio si ya existe
-  if (isPro && agencyClients.length > 0) {
-    const proClient = agencyClients.find(c => c.id === 'pro_main') || agencyClients[0];
-    if (proClient) {
-      agencyActiveClientId = proClient.id;
-      activeClientContext = {
-        clientId:       proClient.id,
-        clientName:     proClient.name || '',
-        clientIndustry: proClient.industria || proClient.business || '',
-        monthlyBudget:  proClient.presupuesto || '',
-        notes:          proClient.descripcion || '',
-      };
-      // Actualizar sidebar con nombre del negocio
-      proUpdateSidebarLabel(proClient);
-      // Personalizar saludo en home
-      if (document.getElementById('home-consultor-hero')) renderClientHomeGreeting(proClient);
-    }
-  }
-
-  // Pro sin perfil → mostrar banner en home para usuarios existentes
-  if (isPro && agencyClients.length === 0) {
-    if (document.getElementById('home-consultor-hero')) renderProHomeBanner();
-  }
+  agencyUpdateSidebarCount();
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -616,49 +554,23 @@ function agencyGetStorageKey() {
 }
 
 async function agencyLoadClients() {
-  // Intentar hasta 3 veces con espera progresiva (mobile: Clerk puede tardar en hidratar la sesión)
-  const maxAttempts = 3;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      // Siempre obtener token fresco — en mobile el global puede ser null al primer intento
-      let token = sessionToken;
-      if (!token && clerkInstance?.session) {
-        try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
+  try {
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch('/api/profile?type=agency_clients', { headers });
+    if (res.ok) {
+      const { data } = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        agencyClients = data;
+        agencyPersistLocal();
+        return;
       }
-      // Si aún no hay token en el primer intento, esperar y reintentar
-      if (!token && attempt < maxAttempts - 1) {
-        await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
-        continue;
-      }
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('/api/profile?type=agency_clients', { headers });
-      if (res.status === 401 && attempt < maxAttempts - 1) {
-        // Token rechazado — esperar y reintentar con token fresco
-        sessionToken = null; // forzar refresh en siguiente intento
-        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-        continue;
-      }
-      if (res.ok) {
-        const { data } = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          agencyClients = data;
-          agencyPersistLocal();
-          return;
-        }
-      }
-      break; // Respuesta ok pero vacía — no reintentar
-    } catch(e) {
-      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 600));
     }
-  }
+  } catch(e) {}
   // Fallback localStorage
   try {
     const raw = localStorage.getItem(agencyGetStorageKey());
-    const localData = raw ? JSON.parse(raw) : [];
-    agencyClients = localData;
-    // Si hay datos en localStorage pero no en Supabase, subirlos ahora
-    if (localData.length > 0) agencyPersistRemote();
+    agencyClients = raw ? JSON.parse(raw) : [];
   } catch(e) { agencyClients = []; }
 }
 
@@ -764,30 +676,13 @@ function agencyRender() {
           <div class="agency-health-dot"></div>
           ${healthLabels[healthClass] || 'Sin definir'}
         </div>
-        <button class="agency-report-btn" onclick="warOpen('${client.id}')" title="Generar reporte para WhatsApp">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-          reporte
-        </button>
-      </div>
-      <div class="agency-card-agents">
-        <button class="agency-agent-btn gads" title="Google Ads" onclick="openAgentForClient('google-ads',agencyClients.find(x=>x.id==='${client.id}'))">
-          <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-        </button>
-        <button class="agency-agent-btn meta" title="Meta Ads" onclick="openAgentForClient('meta-ads',agencyClients.find(x=>x.id==='${client.id}'))">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-        </button>
-        <button class="agency-agent-btn tiktok" title="TikTok Ads" onclick="openAgentForClient('tiktok-ads',agencyClients.find(x=>x.id==='${client.id}'))">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z"/></svg>
-        </button>
-        <button class="agency-agent-btn linkedin" title="LinkedIn Ads" onclick="openAgentForClient('linkedin-ads',agencyClients.find(x=>x.id==='${client.id}'))">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-        </button>
-        <button class="agency-agent-btn seo" title="SEO" onclick="openAgentForClient('seo',agencyClients.find(x=>x.id==='${client.id}'))">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        </button>
-        <button class="agency-agent-btn social" title="Social Media Manager" onclick="openAgentForClient('social',agencyClients.find(x=>x.id==='${client.id}'))">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="agency-report-btn" onclick="warOpen('${client.id}')" title="Generar reporte para WhatsApp">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            reporte
+          </button>
+          <button class="agency-open-btn" onclick="agencyOpenClient('${client.id}')">abrir →</button>
+        </div>
       </div>
     `;
 
@@ -819,32 +714,20 @@ const BRIEF_TOTAL_STEPS = 8;
 let briefLogoDataUrl = null; // base64 del logo del cliente
 
 function agencyOpenModal(editId = null) {
-  const isPro  = !isAdminUser() && userPlan !== 'agency';
-  const limit  = isAdminUser() ? 999 : isPro ? 1 : AGENCY_CLIENT_LIMIT;
-  // Pro solo puede tener 1 perfil; si ya existe, siempre abrir en edición
-  const resolvedEditId = isPro && !editId && agencyClients.length > 0
-    ? (agencyClients.find(c => c.id === 'pro_main')?.id || agencyClients[0].id)
-    : editId;
-  if (!resolvedEditId && agencyClients.length >= limit && !isPro) {
+  const limit = isAdminUser() ? 999 : AGENCY_CLIENT_LIMIT;
+  if (!editId && agencyClients.length >= limit) {
     alert(`Has alcanzado el límite de ${limit} clientes en tu plan. Contacta a soporte para ampliar tu plan.`);
     return;
   }
-  agencyEditingId = resolvedEditId;
+  agencyEditingId = editId;
   agencySelectedHealth = 'gris';
   briefCurrentStep = 0;
   briefLogoDataUrl = null;
 
-  if (isPro) {
-    document.getElementById('agency-modal-title').textContent = resolvedEditId ? 'Editar perfil de mi negocio' : 'Perfil de mi negocio';
-    document.getElementById('agency-modal-sub').textContent = resolvedEditId
-      ? 'Actualiza la información de tu negocio para mantener el contexto actualizado'
-      : 'Esta información personaliza todos los agentes de Acuarius para tu negocio';
-  } else {
-    document.getElementById('agency-modal-title').textContent = resolvedEditId ? 'Editar brief de cliente' : 'Brief de cliente';
-    document.getElementById('agency-modal-sub').textContent = resolvedEditId
-      ? 'Actualiza la información del perfil del cliente'
-      : 'Completa el perfil para que todos los agentes tengan contexto desde el inicio';
-  }
+  document.getElementById('agency-modal-title').textContent = editId ? 'Editar brief de cliente' : 'Brief de cliente';
+  document.getElementById('agency-modal-sub').textContent = editId
+    ? 'Actualiza la información del perfil del cliente'
+    : 'Completa el perfil para que todos los agentes tengan contexto desde el inicio';
 
   // Reset todos los campos
   const fieldIds = ['ag-f-name','ag-f-pais','ag-f-ciudad','ag-f-web',
@@ -865,8 +748,8 @@ function agencyOpenModal(editId = null) {
   agencyResetLogoPreview();
 
   // Cargar datos si es edición
-  if (resolvedEditId) {
-    const c = agencyClients.find(x => x.id === resolvedEditId);
+  if (editId) {
+    const c = agencyClients.find(x => x.id === editId);
     if (c) briefFillForm(c);
   }
 
@@ -934,76 +817,6 @@ function briefFillForm(c) {
     agencyShowLogoPreview(c.logo);
   }
   agencySelectHealth(c.health || 'gris');
-  // Cuentas publicitarias — guardar en dataset para que briefLoadPlatformAccounts las pre-seleccione
-  const gSel = document.getElementById('ag-f-google-account');
-  const mSel = document.getElementById('ag-f-meta-account');
-  if (gSel && c.googleCustomerId) gSel.dataset.stored = c.googleCustomerId;
-  if (mSel && c.metaAdAccountId)  mSel.dataset.stored = c.metaAdAccountId;
-}
-
-async function autoExtractBrand() {
-  const url = document.getElementById('ag-f-web')?.value?.trim();
-  if (!url) {
-    showToast('Primero ingresa la URL del sitio web', 'info');
-    return;
-  }
-  // Normalizar URL — el usuario puede escribir solo "dominio.com", "www.dominio.com", etc.
-  const urlToAnalyze = normalizeUrl(url);
-  // Actualizar el campo con la URL normalizada para que el usuario la vea corregida
-  const webEl = document.getElementById('ag-f-web');
-  if (webEl) webEl.value = urlToAnalyze;
-
-  const btn = document.getElementById('extract-brand-btn');
-  const icon = document.getElementById('extract-brand-icon');
-  const label = document.getElementById('extract-brand-label');
-  if (btn) btn.disabled = true;
-  if (icon) icon.textContent = '⏳';
-  if (label) label.textContent = 'Analizando sitio...';
-
-  try {
-    const res = await fetch('/api/extract-brand', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: urlToAnalyze }),
-    });
-    const data = await res.json();
-
-    if (data.error) {
-      showToast('No se pudo analizar el sitio: ' + data.error, 'error');
-      return;
-    }
-
-    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-    if (data.name && !document.getElementById('ag-f-name')?.value) set('ag-f-name', data.name);
-    set('ag-f-descripcion', data.descripcion);
-    if (data.industria) set('ag-f-industria', data.industria);
-    set('ag-f-audiencia', data.audiencia);
-    set('ag-f-diferenciador', data.diferenciador);
-    set('ag-f-propuesta', data.propuesta);
-    set('ag-f-competidores', data.competidores);
-    set('ag-f-colores', data.colores);
-    set('ag-f-productos', data.producto);
-
-    if (data.tono) {
-      document.querySelectorAll('[data-g="tono"]').forEach(ch => {
-        if (ch.textContent.trim() === data.tono) ch.classList.add('sel');
-      });
-    }
-
-    showToast('Perfil del cliente autocompletado desde el sitio web', 'success');
-
-    if (icon) icon.textContent = '✅';
-    if (label) label.textContent = 'Analizado — puedes editar los campos';
-
-  } catch (err) {
-    showToast('Error al analizar el sitio: ' + err.message, 'error');
-  } finally {
-    if (btn) btn.disabled = false;
-    setTimeout(() => {
-      if (icon) icon.textContent = '✨';
-      if (label) label.textContent = 'Analizar sitio y autocompletar';
-    }, 4000);
-  }
 }
 
 function briefGoStep(step) {
@@ -1034,94 +847,6 @@ function briefGoStep(step) {
   // Scroll body al top
   const body = document.querySelector('.agency-modal-body');
   if (body) body.scrollTop = 0;
-
-  // Cargar cuentas en paso 7 (Plataformas)
-  if (step === 7) briefLoadPlatformAccounts();
-}
-
-// Carga cuentas de Google y Meta en los selectors del paso 8 del brief
-async function briefLoadPlatformAccounts() {
-  const uid        = clerkInstance?.user?.id || '';
-  const adsToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist')   || '';
-  const metaToken  = sessionStorage.getItem('meta_access_token')  || localStorage.getItem('meta_access_token_persist')  || '';
-
-  // ── Google Ads ────────────────────────────────────────────────
-  const googleRow    = document.getElementById('plat-google-account-row');
-  const googleSel    = document.getElementById('ag-f-google-account');
-  const googleStatus = document.getElementById('plat-google-status');
-  const googleBtn    = document.querySelector('#plat-google .agency-platform-btn');
-  if (googleRow && googleSel) {
-    const hasGoogleConn = !!(adsToken || uid); // mostrar si hay token local O userId (Supabase como fallback)
-    if (hasGoogleConn) {
-      // Actualizar badge de estado
-      if (googleStatus) { googleStatus.textContent = '● conectado'; googleStatus.style.color = 'var(--success)'; }
-      if (googleBtn)    { googleBtn.textContent = 'Cambiar'; googleBtn.classList.remove('connect'); googleBtn.classList.add('connected'); }
-      googleRow.style.display = 'block';
-      googleSel.innerHTML = '<option value="">Cargando cuentas...</option>';
-      try {
-        const r = await fetch('/api/list-accounts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken: adsToken || '', userId: uid }),
-        });
-        const data = await r.json();
-        const accounts = data.accounts || [];
-        if (accounts.length) {
-          const stored = document.getElementById('ag-f-google-account')?.dataset.stored || '';
-          googleSel.innerHTML = '<option value="">— Sin asignar —</option>' +
-            accounts.map(a => {
-              const val = String(a.id || a.customerId || '').replace(/-/g, '');
-              const label = (a.name || a.descriptiveName || a.id) + (val ? ' (' + val + ')' : '');
-              return '<option value="' + val + '"' + (val === stored ? ' selected' : '') + '>' + label + '</option>';
-            }).join('');
-          if (googleStatus && !adsToken) {
-            googleStatus.textContent = '● conectado';
-            googleStatus.style.color = 'var(--success)';
-          }
-        } else if (data.needsReconnect) {
-          googleSel.innerHTML = '<option value="">Sesión expirada — reconecta tu cuenta</option>';
-          if (googleStatus) { googleStatus.textContent = '⚠ sesión expirada'; googleStatus.style.color = '#F59E0B'; }
-          if (googleBtn)    { googleBtn.textContent = 'Reconectar'; googleBtn.classList.remove('connected'); googleBtn.classList.add('connect'); googleBtn.onclick = connectGoogleAds; }
-        } else {
-          const errMsg = data.googleError ? data.googleError.slice(0, 100) : 'Sin cuentas accesibles';
-          googleSel.innerHTML = '<option value="">' + errMsg + '</option>';
-        }
-      } catch(e) {
-        googleSel.innerHTML = '<option value="">Error al cargar: ' + e.message.slice(0, 60) + '</option>';
-      }
-    } else {
-      googleRow.style.display = 'none';
-    }
-  }
-
-  // ── Meta Ads ──────────────────────────────────────────────────
-  const metaRow = document.getElementById('plat-meta-account-row');
-  const metaSel = document.getElementById('ag-f-meta-account');
-  if (metaRow && metaSel) {
-    if (metaToken) {
-      metaRow.style.display = 'block';
-      metaSel.innerHTML = '<option value="">Cargando...</option>';
-      try {
-        const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
-        const data = await r.json();
-        const accounts = data.accounts || [];
-        if (accounts.length) {
-          const stored = metaSel.dataset.stored || '';
-          metaSel.innerHTML = '<option value="">— Sin asignar —</option>' +
-            accounts.map(a => {
-              const label = (a.name || a.id) + (a.business ? ' · ' + a.business : '') + ' (' + (a.currency || '') + ')';
-              return '<option value="' + a.id + '"' + (a.id === stored ? ' selected' : '') + '>' + label + '</option>';
-            }).join('');
-        } else {
-          metaSel.innerHTML = '<option value="">Sin cuentas accesibles</option>';
-        }
-      } catch(e) {
-        metaSel.innerHTML = '<option value="">Error cargando cuentas</option>';
-      }
-    } else {
-      metaRow.style.display = 'none';
-    }
-  }
 }
 
 function agencyGoStep(step) {
@@ -1216,88 +941,24 @@ function agencyResetLogoPreview() {
 
 // ── Conectar plataformas desde el brief ───────────────────────────────────────
 function agencyConnectPlatform(platform) {
-  const metaToken = sessionStorage.getItem('meta_access_token');
-  const adsToken  = sessionStorage.getItem('ads_access_token');
-
-  // Si ya está conectado, no cerrar el modal — solo informar y dejar continuar
-  if (platform === 'meta' && metaToken) {
-    showToast('✅ Meta Ads ya conectado. Guarda el cliente y selecciona la cuenta desde el agente.', 'success');
-    return;
-  }
-  if (platform === 'google' && adsToken) {
-    showToast('✅ Google Ads ya conectado. Guarda el cliente para continuar.', 'success');
-    return;
-  }
-
-  // No conectado: guardar el formulario en localStorage antes del redirect
-  try {
-    const formSnapshot = briefReadForm();
-    localStorage.setItem('acuarius_pending_brief', JSON.stringify({
-      formData:  formSnapshot,
-      editingId: agencyEditingId || null,
-      health:    agencySelectedHealth || 'gris',
-      platform,
-      ts:        Date.now(),
-    }));
-  } catch(e) {}
-
+  // Si hay un cliente activo (editando), redirigir a Settings con contexto
+  // Si no, guardar nota y redirigir a Settings general
   agencyCloseModal();
-
-  if (platform === 'meta') {
-    // Redirigir al OAuth de Meta
-    const uid = clerkInstance?.user?.id || '';
-    window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
-  } else {
-    openSettings();
-    setTimeout(function() {
-      showToast('Ve a la sección Google Ads en configuración para conectar tu cuenta.', 'info');
-    }, 600);
-  }
+  openSettings();
+  // Mostrar mensaje orientador
+  setTimeout(function() {
+    const msg = platform === 'google'
+      ? 'Ve a la sección Google Ads en configuración para conectar la cuenta de este cliente.'
+      : 'Ve a la sección Meta Ads en configuración para conectar la cuenta de este cliente.';
+    alert(msg);
+  }, 600);
 }
-
-// Restaurar brief pendiente si el usuario volvió de un OAuth
-(function restorePendingBrief() {
-  const raw = localStorage.getItem('acuarius_pending_brief');
-  if (!raw) return;
-  try {
-    const saved = JSON.parse(raw);
-    // Descartar si tiene más de 30 min (evitar restaurar un formulario viejo)
-    if (Date.now() - saved.ts > 30 * 60 * 1000) { localStorage.removeItem('acuarius_pending_brief'); return; }
-    // Solo restaurar si el OAuth fue exitoso (meta_token en sessionStorage)
-    const metaOK = saved.platform === 'meta' && !!sessionStorage.getItem('meta_access_token');
-    const googleOK = saved.platform === 'google' && !!sessionStorage.getItem('ads_access_token');
-    if (!metaOK && !googleOK) return;
-    localStorage.removeItem('acuarius_pending_brief');
-    // Esperar a que la app esté lista antes de abrir el modal
-    setTimeout(function() {
-      try {
-        agencyOpenAddClient(saved.editingId);
-        setTimeout(function() {
-          if (saved.formData) briefFillForm(saved.formData);
-          if (saved.health) agencySelectHealth(saved.health);
-          // Ir al último paso directamente
-          briefGoStep(BRIEF_TOTAL_STEPS - 1);
-        }, 300);
-      } catch(e) {}
-    }, 2000);
-  } catch(e) { localStorage.removeItem('acuarius_pending_brief'); }
-})();
 
 function agencySelectHealth(val) {
   agencySelectedHealth = val;
   document.querySelectorAll('.agency-health-opt').forEach(o => {
     o.className = 'agency-health-opt' + (o.dataset.val === val ? ` selected-${val}` : '');
   });
-}
-
-// Normaliza cualquier URL ingresada por el usuario: añade https:// si falta,
-// elimina espacios y caracteres inválidos iniciales
-function normalizeUrl(raw) {
-  if (!raw) return '';
-  const s = raw.trim().replace(/^[/\\@]+/, '');
-  if (!s) return '';
-  if (s.startsWith('http://') || s.startsWith('https://')) return s;
-  return 'https://' + s;
 }
 
 function briefReadForm() {
@@ -1307,7 +968,7 @@ function briefReadForm() {
     name:             val('ag-f-name'),
     pais:             val('ag-f-pais'),
     ciudad:           val('ag-f-ciudad'),
-    web:              normalizeUrl(val('ag-f-web')),
+    web:              val('ag-f-web'),
     descripcion:      val('ag-f-descripcion'),
     industria:        val('ag-f-industria'),
     modelo:           val('ag-f-modelo'),
@@ -1349,9 +1010,6 @@ function briefReadForm() {
     // Logo
     logo:             briefLogoDataUrl || null,
     health:           agencySelectedHealth,
-    // Cuentas publicitarias del cliente
-    googleCustomerId: val('ag-f-google-account') || '',
-    metaAdAccountId:  val('ag-f-meta-account')   || '',
     // Campos legacy para compatibilidad con renderCard
     business:         val('ag-f-industria') || val('ag-f-descripcion').slice(0, 60),
   };
@@ -1367,46 +1025,15 @@ async function agencySaveClient() {
     briefGoStep(0);
     return;
   }
-
-  const isPro = !isAdminUser() && userPlan !== 'agency';
-
   if (agencyEditingId) {
     const idx = agencyClients.findIndex(c => c.id === agencyEditingId);
     if (idx !== -1) agencyClients[idx] = { ...agencyClients[idx], ...data, updatedAt: now };
   } else {
-    // Pro siempre usa id fijo 'pro_main'
-    const newId = isPro ? 'pro_main' : 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-    agencyClients.push({ id: newId, ...data, createdAt: now, updatedAt: now });
+    agencyClients.push({ id: 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), ...data, createdAt: now, updatedAt: now });
   }
-
   await agencyPersist();
   agencyCloseModal();
-
-  if (isPro) {
-    // Auto-activar perfil y personalizar experiencia
-    const proClient = agencyClients.find(c => c.id === 'pro_main') || agencyClients[0];
-    if (proClient) {
-      agencyActiveClientId = proClient.id;
-      activeClientContext = {
-        clientId:       proClient.id,
-        clientName:     proClient.name || '',
-        clientIndustry: proClient.industria || proClient.business || '',
-        monthlyBudget:  proClient.presupuesto || '',
-        notes:          proClient.descripcion || '',
-      };
-      proUpdateSidebarLabel(proClient);
-      renderClientHomeGreeting(proClient);
-    }
-    // Si hay un agente pendiente, abrirlo ahora
-    if (pendingAgentAfterSetup) {
-      const ag = pendingAgentAfterSetup;
-      pendingAgentAfterSetup = null;
-      setTimeout(() => openAgent(ag), 400);
-    }
-  } else {
-    agencyRender();
-  }
-
+  agencyRender();
   if (btn) { btn.disabled = false; btn.textContent = 'guardar cliente'; }
 }
 
@@ -1415,22 +1042,13 @@ function agencyEditClient(id) {
   agencyOpenModal(id);
 }
 
-// Eliminar cliente desde la barra de contexto activo (botón en header)
-async function agencyResetClientProfile(id) {
-  const c = agencyClients.find(x => x.id === id);
-  if (!c) return;
-  if (!confirm(`¿Eliminar el perfil de "${c.name}"?\n\nEsto borrará:\n• El perfil del cliente\n• El entrenamiento de todos los agentes\n• El historial de conversaciones\n• El progreso de la hoja de ruta\n\nPodrás crear un perfil nuevo inmediatamente.`)) return;
-  agencyExitClientContext();
-  await agencyDeleteClient(id, true); // true = skip second confirm
-}
-
-async function agencyDeleteClient(id, skipConfirm = false) {
+async function agencyDeleteClient(id) {
   agencyCloseAllDropdowns();
   const c = agencyClients.find(x => x.id === id);
   if (!c) return;
-  if (!skipConfirm && !confirm(`¿Eliminar el perfil de "${c.name}"?\n\nEsto borrará el entrenamiento de todos los agentes y el historial de conversaciones de este cliente.`)) return;
+  if (!confirm(`¿Eliminar al cliente "${c.name}"? Se perderá su historial de conversaciones en este dispositivo.`)) return;
   agencyClients = agencyClients.filter(x => x.id !== id);
-  // Limpiar todo el localStorage relacionado con este cliente
+  // Limpiar historial local del cliente
   try {
     const uid = clerkInstance?.user?.id || 'anon';
     for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -1463,15 +1081,6 @@ async function agencyOpenClient(id) {
 
   // Setear el clientId activo
   agencyActiveClientId = id;
-
-  // Setear activeClientContext para inyeccion en system prompt
-  activeClientContext = {
-    clientId:       c.id,
-    clientName:     c.client_name || c.name || '',
-    clientIndustry: c.client_industry || c.industria || c.business || '',
-    monthlyBudget:  c.monthly_budget || c.presupuesto || '',
-    notes:          c.notes || c.descripcion || '',
-  };
 
   // Ir a la pantalla de inicio con saludo personalizado del cliente
   showView('home');
@@ -1543,9 +1152,6 @@ function agencyShowContextBar(client) {
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
       reporte WA
     </button>
-    <button class="agency-ctx-exit" onclick="agencyResetClientProfile(agencyActiveClientId)" title="Eliminar perfil y reiniciar entrenamiento de agentes" style="background:transparent;border:1px solid rgba(239,68,68,.35);color:#EF4444;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;cursor:pointer;font-family:var(--font);margin-right:2px;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.08)'" onmouseout="this.style.background='transparent'">
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:middle;margin-right:3px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>eliminar perfil
-    </button>
     <button class="agency-ctx-exit" onclick="agencyExitClientContext()" title="Salir del contexto de este cliente">✕ salir</button>
   `;
   // Insertar después de la barra de navegación (nav), antes del chat-area
@@ -1602,13 +1208,6 @@ function agencyToggleDropdown(event, ddId) {
 
 function agencyCloseAllDropdowns() {
   document.querySelectorAll('.agency-card-dropdown.open').forEach(d => d.classList.remove('open'));
-}
-
-function agencyOpenAgentDropdown(event, ddId) {
-  event.stopPropagation();
-  agencyCloseAllDropdowns();
-  const dd = document.getElementById(ddId);
-  if (dd) dd.classList.toggle('open');
 }
 
 // Cerrar dropdowns al hacer click fuera
@@ -1687,219 +1286,6 @@ let warSelectedKpis = {}; // { google: ['inversion','clics',...], meta: [...] }
 let warCustomKpis   = {}; // { google: [{id:'custom_0', label:'Mi métrica'}], ... }
 
 let warClientId = null;
-// ── LIVE DASHBOARDS ──────────────────────────────────────────────────────────
-
-let dashManualData = {};
-let dashCurrentTab = 'list';
-
-function dashboardOpen() {
-  document.getElementById('dash-modal').style.display = 'flex';
-  dashManualData = {};
-  document.getElementById('dash-manual-tags').innerHTML = '';
-  document.getElementById('dash-manual-key').value = '';
-  document.getElementById('dash-manual-val').value = '';
-  document.getElementById('dash-success-msg').style.display = 'none';
-  document.getElementById('dash-new-url-wrap').style.display = 'none';
-  dashSwitchTab('list');
-  dashLoadList();
-  dashPopulateClients();
-}
-
-function dashboardClose() {
-  document.getElementById('dash-modal').style.display = 'none';
-}
-
-function dashSwitchTab(tab) {
-  dashCurrentTab = tab;
-  document.getElementById('dash-panel-list').style.display   = tab === 'list'   ? 'block' : 'none';
-  document.getElementById('dash-panel-create').style.display = tab === 'create' ? 'block' : 'none';
-  document.getElementById('dash-footer-list').style.display   = tab === 'list'   ? 'flex'  : 'none';
-  document.getElementById('dash-footer-create').style.display = tab === 'create' ? 'flex'  : 'none';
-  document.getElementById('dash-tab-list').className   = 'dash-tab' + (tab === 'list'   ? ' active' : '');
-  document.getElementById('dash-tab-create').className = 'dash-tab' + (tab === 'create' ? ' active' : '');
-}
-
-function dashPopulateClients() {
-  const sel = document.getElementById('dash-client-select');
-  sel.innerHTML = '<option value="">— Selecciona un cliente —</option>';
-  agencyClients.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.id;
-    opt.textContent = c.name || c.business || 'Sin nombre';
-    sel.appendChild(opt);
-  });
-}
-
-function dashClientSelected() {
-  const clientId = document.getElementById('dash-client-select').value;
-  if (!clientId) return;
-  const client = agencyClients.find(c => c.id === clientId);
-  if (!client) return;
-  // Pre-fill agency name if blank
-  const agNameInput = document.getElementById('dash-agency-name');
-  if (!agNameInput.value) {
-    agNameInput.value = '';
-  }
-}
-
-function dashTogglePlat(el) {
-  el.classList.toggle('selected');
-}
-
-function dashAddManual() {
-  const k = document.getElementById('dash-manual-key').value.trim();
-  const v = document.getElementById('dash-manual-val').value.trim();
-  if (!k || !v) return;
-  dashManualData[k] = v;
-  document.getElementById('dash-manual-key').value = '';
-  document.getElementById('dash-manual-val').value = '';
-  dashRenderManualTags();
-}
-
-function dashRenderManualTags() {
-  const wrap = document.getElementById('dash-manual-tags');
-  wrap.innerHTML = Object.entries(dashManualData).map(([k, v]) => `
-    <div class="dash-manual-tag">
-      <span><strong>${k}:</strong> ${v}</span>
-      <button onclick="dashRemoveManual('${k.replace(/'/g, "\\'")}')">×</button>
-    </div>
-  `).join('');
-}
-
-function dashRemoveManual(key) {
-  delete dashManualData[key];
-  dashRenderManualTags();
-}
-
-function dashCopyUrl(elId) {
-  const url = document.getElementById(elId).textContent.trim();
-  navigator.clipboard.writeText(url).then(() => {
-    const btn = event.target.closest('button');
-    const orig = btn.innerHTML;
-    btn.textContent = '✓ Copiado';
-    setTimeout(() => { btn.innerHTML = orig; }, 2000);
-  }).catch(() => {
-    prompt('Copia este enlace:', url);
-  });
-}
-
-function dashOpenUrl(elId) {
-  const url = document.getElementById(elId).textContent.trim();
-  window.open(url, '_blank');
-}
-
-async function dashLoadList() {
-  const loading = document.getElementById('dash-list-loading');
-  const items = document.getElementById('dash-list-items');
-  const empty = document.getElementById('dash-list-empty');
-  loading.style.display = 'block';
-  items.innerHTML = '';
-  empty.style.display = 'none';
-
-  try {
-    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
-    if (!token) { loading.textContent = 'Inicia sesión para ver tus dashboards'; return; }
-
-    const res = await fetch('/api/dashboard?action=list', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    const data = await res.json();
-    const dashes = data.dashboards || [];
-
-    loading.style.display = 'none';
-
-    if (dashes.length === 0) {
-      empty.style.display = 'block';
-      return;
-    }
-
-    const platLabels = { google_ads: 'Google Ads', meta_ads: 'Meta Ads' };
-    items.innerHTML = dashes.map(d => {
-      const url = window.location.origin + '/dashboard.html?id=' + d.id;
-      const plats = (d.platforms || []).map(p => platLabels[p] || p).join(', ') || 'Sin plataformas';
-      const updated = d.updated_at ? new Date(d.updated_at).toLocaleDateString('es-CO', { day:'2-digit', month:'short' }) : '';
-      return `
-        <div class="dash-list-item">
-          <div class="dash-list-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E2BCC" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          </div>
-          <div class="dash-list-info">
-            <div class="dash-list-name">${esc(d.client_name)}</div>
-            <div class="dash-list-meta">${plats} · ${updated} · ${d.views || 0} vistas</div>
-          </div>
-          <div class="dash-list-actions">
-            <button class="dash-list-btn" onclick="navigator.clipboard.writeText('${url}').then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='Copiar'},1500)})" title="Copiar enlace">Copiar</button>
-            <button class="dash-list-btn primary" onclick="window.open('${url}','_blank')" title="Abrir dashboard">Abrir ↗</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (e) {
-    loading.textContent = 'Error al cargar dashboards';
-  }
-}
-
-async function dashCreate() {
-  const clientId = document.getElementById('dash-client-select').value;
-  if (!clientId) { alert('Selecciona un cliente'); return; }
-  const client = agencyClients.find(c => c.id === clientId);
-
-  const selectedPlats = Array.from(document.querySelectorAll('.dash-plat-check.selected'))
-    .map(el => el.dataset.plat);
-
-  const body = {
-    client_name:   client?.name || client?.business || 'Cliente',
-    agency_name:   document.getElementById('dash-agency-name').value.trim() || null,
-    agency_color:  document.getElementById('dash-agency-color').value,
-    period:        document.getElementById('dash-period').value,
-    platforms:     selectedPlats,
-    manual_data:   dashManualData,
-  };
-
-  const btn = document.getElementById('dash-create-btn');
-  btn.disabled = true;
-  btn.textContent = 'Creando...';
-
-  try {
-    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
-    if (!token) throw new Error('No autenticado');
-
-    const res = await fetch('/api/dashboard', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error');
-
-    const fullUrl = window.location.origin + data.url;
-
-    // Switch to list tab and show success
-    dashSwitchTab('list');
-    document.getElementById('dash-success-msg').style.display = 'block';
-    document.getElementById('dash-new-url-wrap').style.display = 'block';
-    document.getElementById('dash-new-url').textContent = fullUrl;
-
-    // Reset form
-    document.getElementById('dash-client-select').value = '';
-    document.getElementById('dash-agency-name').value = '';
-    document.getElementById('dash-period').value = '30d';
-    document.querySelectorAll('.dash-plat-check.selected').forEach(el => el.classList.remove('selected'));
-    dashManualData = {};
-    dashRenderManualTags();
-
-    // Reload list
-    dashLoadList();
-  } catch (e) {
-    alert('Error al crear dashboard: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Crear dashboard';
-  }
-}
-
-// ── WAR (WhatsApp report) ─────────────────────────────────────────────────────
-
 let warStep = 0;
 let warPeriod = 'mes';
 let warGeneratedText = null;
@@ -1978,7 +1364,7 @@ function warGoStep(step) {
   // Build KPI step when arriving at step 1
   if (step === 1) warBuildKpiStep();
   // Build metrics form when arriving at step 3
-  if (step === 3) { warBuildMetricsForm(); warLoadMetaAccountsForPicker(); }
+  if (step === 3) warBuildMetricsForm();
 
   // Scroll to top
   const body = document.querySelector('.war-body');
@@ -2105,151 +1491,8 @@ function warBuildMetricsForm() {
       const label = labelMap[kid] || kid;
       return '<div class="war-metric-field"><label>' + label + '</label><input type="text" id="war-' + plat + '-' + kid + '" placeholder="ej. 1200"></div>';
     }).join('');
-
-    // Botón auto-fill solo si hay cuenta conectada
-    var hasConn = false;
-    var autoBtn = '';
-    if (plat === 'google' && sessionStorage.getItem('ads_customer_id')) hasConn = true;
-    if (plat === 'meta'   && (sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist'))) hasConn = true;
-    if (hasConn) {
-      if (plat === 'meta') {
-        // Para Meta: selector de cuenta + botón (puede tener múltiples cuentas de clientes)
-        autoBtn = '<div id="war-meta-account-picker" style="margin-bottom:10px">' +
-          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-          '<select id="war-meta-account-select" style="font-size:11px;font-family:var(--font);border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 8px;background:#EEF0FF;color:#1E2BCC;font-weight:600;cursor:pointer;max-width:240px">' +
-          '<option value="">Cargando cuentas...</option></select>' +
-          '<button id="war-autofill-btn-meta" onclick="warAutoFill(\'meta\')" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1E2BCC;background:#EEF0FF;border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 11px;cursor:pointer;font-family:var(--font);transition:all .15s" onmouseover="this.style.background=\'#dde0ff\'" onmouseout="this.style.background=\'#EEF0FF\'">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
-          'Auto-llenar</button>' +
-          '</div></div>';
-      } else {
-        autoBtn = '<button id="war-autofill-btn-' + plat + '" onclick="warAutoFill(\'' + plat + '\')" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1E2BCC;background:#EEF0FF;border:1.5px solid #C7CEFF;border-radius:7px;padding:5px 11px;cursor:pointer;font-family:var(--font);transition:all .15s;margin-bottom:10px" onmouseover="this.style.background=\'#dde0ff\'" onmouseout="this.style.background=\'#EEF0FF\'">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
-          'Auto-llenar desde cuenta conectada</button>';
-      }
-    }
-
-    return '<div class="war-platform-section"><div class="war-platform-header">' + (platIcons[plat]||'') + '<span class="war-platform-label">' + platInfo.name + '</span></div>' + autoBtn + '<div class="war-metrics-grid">' + fields + '</div></div>';
+    return '<div class="war-platform-section"><div class="war-platform-header">' + (platIcons[plat]||'') + '<span class="war-platform-label">' + platInfo.name + '</span></div><div class="war-metrics-grid">' + fields + '</div></div>';
   }).join('');
-}
-
-// Mapeo de IDs de KPIs del WAR → campos de la API
-const WAR_API_MAP = {
-  google: {
-    inversion:    d => d.totalCost       || '',
-    impresiones:  d => d.impressions     || '',
-    clics:        d => d.clicks          || '',
-    ctr:          d => d.ctr             || '',
-    cpc:          d => d.avgCpc          || '',
-    conversiones: d => d.conversions     || '',
-    cpa:          d => d.cpa             || '',
-    roas:         d => d.roas            || '',
-  },
-  meta: {
-    inversion:   d => d.spend       || '',
-    alcance:     d => d.reach       || '',
-    impresiones: d => d.impressions || '',
-    frecuencia:  d => d.frequency   || '',
-    cpm:         d => d.cpm         || '',
-    clics:       d => d.clicks      || '',
-    ctr:         d => d.ctr         || '',
-    leads:       d => d.conversions || '',
-    cpr:         d => d.cpa         || '',
-  },
-};
-
-// Mapeo de período WAR → dateRange de API
-function warPeriodToRange(period) {
-  if (period === 'semana')    return { google: 'LAST_7_DAYS',  meta: 'last_7d' };
-  if (period === 'quincena')  return { google: 'LAST_14_DAYS', meta: 'last_14d' };
-  if (period === 'trimestre') return { google: 'LAST_90_DAYS', meta: 'last_90d' };
-  return { google: 'LAST_30_DAYS', meta: 'last_month' }; // mes (default)
-}
-
-// Carga las cuentas de Meta en el selector del WAR paso 4
-async function warLoadMetaAccountsForPicker() {
-  const sel = document.getElementById('war-meta-account-select');
-  if (!sel) return;
-
-  const token = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
-  if (!token) {
-    sel.innerHTML = '<option value="">Sin token Meta — conecta tu cuenta</option>';
-    return;
-  }
-
-  try {
-    const uid = clerkInstance?.user?.id || '';
-    const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
-    const data = await r.json();
-    const accounts = data.accounts || [];
-
-    if (!accounts.length) {
-      sel.innerHTML = '<option value="">Sin cuentas disponibles</option>';
-      return;
-    }
-
-    // Preferir cuenta del cliente si está guardada, si no usar la activa en sesión
-    const client = agencyClients.find(c => c.id === warClientId);
-    const clientMetaId = client?.metaAdAccountId || '';
-    const stored = clientMetaId || sessionStorage.getItem('meta_ad_account_id') || '';
-    sel.innerHTML = accounts.map(a => {
-      const label = (a.name || a.id) + (a.business ? ' · ' + a.business : '') + ' (' + a.currency + ')';
-      const selected = (a.id === stored || 'act_' + a.id === stored || a.id === 'act_' + stored) ? ' selected' : '';
-      return '<option value="' + a.id + '"' + selected + '>' + label + '</option>';
-    }).join('');
-  } catch(e) {
-    sel.innerHTML = '<option value="">Error cargando cuentas</option>';
-    console.error('warLoadMetaAccountsForPicker error:', e);
-  }
-}
-
-async function warAutoFill(plat) {
-  const btn = document.getElementById('war-autofill-btn-' + plat);
-  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Cargando...'; }
-
-  try {
-    const uid = clerkInstance?.user?.id || '';
-    const ranges = warPeriodToRange(warPeriod);
-    let apiData = null;
-
-    if (plat === 'google') {
-      const warClient  = agencyClients.find(c => c.id === warClientId);
-      const customerId = warClient?.googleCustomerId || sessionStorage.getItem('ads_customer_id');
-      if (!customerId || !uid) throw new Error('Sin cuenta conectada');
-      const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
-      apiData = await r.json();
-    }
-
-    if (plat === 'meta') {
-      // Usar cuenta seleccionada en el picker (o fallback al sessionStorage)
-      const pickerSel  = document.getElementById('war-meta-account-select');
-      const adAccountId = (pickerSel && pickerSel.value) ? pickerSel.value : sessionStorage.getItem('meta_ad_account_id');
-      const metaToken  = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
-      if (!adAccountId) throw new Error('Selecciona una cuenta publicitaria');
-      if (!metaToken)   throw new Error('No hay token. Conecta tu cuenta de Meta Ads.');
-      const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
-      apiData = await r.json();
-    }
-
-    if (!apiData || apiData.error) throw new Error(apiData?.error || 'Sin datos');
-
-    // Llenar campos con los datos de la API
-    const map = WAR_API_MAP[plat] || {};
-    const kpis = warSelectedKpis[plat] || [];
-    let filled = 0;
-    kpis.forEach(kid => {
-      const val = map[kid] ? String(map[kid](apiData)) : '';
-      if (val && val !== '0' && val !== '0.00') {
-        const el = document.getElementById('war-' + plat + '-' + kid);
-        if (el) { el.value = val; el.style.background = '#F0FDF4'; el.style.borderColor = '#86EFAC'; filled++; }
-      }
-    });
-
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> <span style="color:#16a34a">' + filled + ' métricas cargadas</span>'; }
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span style="color:#dc2626">Error: ' + (e.message || 'intenta de nuevo') + '</span>'; }
-    console.error('warAutoFill error:', e);
-  }
 }
 
 function warGetMetricData() {
@@ -2859,7 +2102,6 @@ async function dbLoadProfile(agentKey) {
 async function openAgent(agentKey) {
   setAgentContext(agentKey);
   showView('chat');
-  updateActiveClientBar();
   // Esperar a que Clerk esté listo Y tenga usuario antes de cargar perfil
   if (!clerkInstance?.user?.id) {
     await new Promise(res => {
@@ -2887,14 +2129,15 @@ async function openAgent(agentKey) {
       clientStage = mapStage(mem.etapa);
       document.getElementById('mem-card').style.display = 'block';
       document.getElementById('m-stage').textContent = clientStage;
-      const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Social Media Manager','consultor':'Consultor de Marketing'};
+      const agentLabels = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'};
       const negocioShort = mem.negocio ? mem.negocio.split('·')[0].trim() : '—';
       addAgent(`hola de nuevo. todo listo para **${negocioShort}**.\n\n¿en qué trabajamos hoy?`);
-      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
-      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
-      if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
-      if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
+      if (agentKey === 'meta-ads')    { setTimeout(showMetaActionCards, 400); }
+      if (agentKey === 'google-ads')  { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'consultor')   { setTimeout(showConsultorActionCards, 400); }
+      if (agentKey === 'seo')         { setTimeout(showSeoActionCards, 400); }
+      if (agentKey === 'social')      { setTimeout(showSocialActionCards, 400); }
+      if (agentKey === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
       return;
     } catch(e) {
@@ -2994,32 +2237,6 @@ function briefSummaryForAgent(client, agentKey) {
 }
 
 function launchOnboarding(agentKey) {
-  const isPro = !isAdminUser() && userPlan !== 'agency';
-
-  // Pro sin perfil de negocio → mostrar card de configuración
-  if (isPro && agencyClients.length === 0 && !agencyActiveClientId) {
-    pendingAgentAfterSetup = agentKey;
-    renderProSetupCard(agentKey);
-    return;
-  }
-
-  // Pro con perfil → auto-activar y usar como contexto (igual que agencia)
-  if (isPro && agencyClients.length > 0 && !agencyActiveClientId) {
-    const proClient = agencyClients.find(c => c.id === 'pro_main') || agencyClients[0];
-    if (proClient) {
-      agencyActiveClientId = proClient.id;
-      activeClientContext = {
-        clientId:       proClient.id,
-        clientName:     proClient.name || '',
-        clientIndustry: proClient.industria || proClient.business || '',
-        monthlyBudget:  proClient.presupuesto || '',
-        notes:          proClient.descripcion || '',
-      };
-      launchOnboarding(agentKey); // Re-llamar con contexto activo
-      return;
-    }
-  }
-
   // Si hay un cliente de agencia activo con brief completo, no hacer onboarding — usar brief como contexto
   if (agencyActiveClientId) {
     const client = agencyClients.find(c => c.id === agencyActiveClientId);
@@ -3033,110 +2250,44 @@ function launchOnboarding(agentKey) {
       document.getElementById('m-stage').textContent = clientStage;
       const summary = briefSummaryForAgent(client, agentKey);
       addAgent(summary);
-      if (agentKey === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(showMetaAdsDashboard, 600); }
-      if (agentKey === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(showGoogleAdsDashboard, 600); }
-      if (agentKey === 'seo')          { setTimeout(showSeoActionCards, 400); }
-      if (agentKey === 'tiktok-ads')   { setTimeout(showTikTokActionCards, 400); }
-      if (agentKey === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); }
+      if (agentKey === 'meta-ads')   { setTimeout(showMetaActionCards, 400); }
+      if (agentKey === 'google-ads') { setTimeout(showGoogleAdsActionCards, 400); }
+      if (agentKey === 'consultor')  { setTimeout(showConsultorActionCards, 400); }
+      if (agentKey === 'seo')        { setTimeout(showSeoActionCards, 400); }
+      if (agentKey === 'social')     { setTimeout(showSocialActionCards, 400); }
+      if (agentKey === 'tiktok-ads') { setTimeout(showTikTokActionCards, 400); }
       setTimeout(function(){ loadRecentConversations(); }, 700);
       // Guardar el perfil del brief como perfil del agente para este cliente
       setTimeout(function(){ dbSaveProfile(agentKey, mem); }, 800);
       return;
     }
   }
-  // Sin cliente de agencia — flujo normal: siempre lanzar cuestionario para usuarios sin perfil
+  // Sin cliente de agencia — flujo normal
   mem = {}; hist = []; onDone = false; obStep = 0;
   document.getElementById('mem-card').style.display = 'none';
+  if (agentKey === 'meta-ads') {
+    onDone = true;
+    addAgent(`hola, soy tu **agente de Meta Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Facebook e Instagram que generen resultados reales. ¿qué quieres hacer hoy?`);
+    setTimeout(showMetaActionCards, 400);
+    setTimeout(function(){ loadRecentConversations(); }, 700);
+    return;
+  }
+  if (agentKey === 'google-ads') {
+    onDone = true;
+    addAgent(`hola, soy tu **agente de Google Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas efectivas en Google Search que generen resultados reales. ¿qué quieres hacer hoy?`);
+    setTimeout(showGoogleAdsActionCards, 400);
+    setTimeout(function(){ loadRecentConversations(); }, 700);
+    return;
+  }
+  if (agentKey === 'tiktok-ads') {
+    onDone = true;
+    addAgent(`hola, soy tu **agente de TikTok Ads** en acuarius.\n\nestoy aquí para ayudarte a crear campañas en TikTok que generen resultados reales en la plataforma de mayor crecimiento en LatAm. ¿qué quieres hacer hoy?`);
+    setTimeout(showTikTokActionCards, 400);
+    return;
+  }
   const guide = AGENT_GUIDES[agentKey] || AGENT_GUIDES['google-ads'];
   addAgent(guide);
   setTimeout(() => renderOb(), 600);
-}
-
-// ── Configuración de negocio para usuarios Pro ────────────────────────────────
-
-// Banner en home para usuarios existentes Pro sin perfil de negocio configurado
-function renderProHomeBanner() {
-  const heroEl = document.getElementById('home-consultor-hero');
-  if (!heroEl) return;
-
-  heroEl.innerHTML =
-    '<div style="display:flex;align-items:flex-start;gap:14px;width:100%">' +
-      '<div style="width:42px;height:42px;border-radius:12px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>' +
-      '</div>' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:13px;font-weight:700;color:#4C1D95;margin-bottom:4px;display:flex;align-items:center;gap:8px">' +
-          '✨ Novedad: Perfil de negocio unificado' +
-          '<span style="font-size:10px;background:#7C3AED;color:#fff;padding:2px 7px;border-radius:20px;font-weight:600">NUEVO</span>' +
-        '</div>' +
-        '<div style="font-size:12px;color:#6D28D9;line-height:1.5;margin-bottom:10px">' +
-          'Configura tu negocio una sola vez y todos los agentes tendrán contexto completo desde el primer mensaje.' +
-        '</div>' +
-        '<button onclick="proOpenSetupModal()" style="padding:8px 16px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:6px" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-          'Configurar mi negocio' +
-        '</button>' +
-      '</div>' +
-    '</div>';
-
-  // Clic en el hero también abre el modal
-  heroEl.style.cursor = 'default';
-  heroEl.onclick = null;
-}
-
-function renderProSetupCard(agentKey) {
-  const chatBox = document.getElementById('chat-area');
-  if (!chatBox) return;
-
-  const agentNames = {
-    'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads',
-    'seo': 'SEO', 'social': 'Social Media Manager', 'consultor': 'Consultor',
-  };
-  const agentName = agentNames[agentKey] || 'este agente';
-
-  const el = document.createElement('div');
-  el.className = 'msg agent';
-  el.innerHTML =
-    '<div style="background:var(--bg);border:2px solid #7C3AED;border-radius:16px;padding:24px;max-width:500px;width:100%">' +
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">' +
-        '<div style="width:44px;height:44px;border-radius:12px;background:#7C3AED;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>' +
-        '</div>' +
-        '<div>' +
-          '<div style="font-size:15px;font-weight:700;color:var(--text)">Antes de empezar con ' + agentName + '</div>' +
-          '<div style="font-size:12px;color:var(--muted2);margin-top:2px">Configura el perfil de tu negocio una sola vez</div>' +
-        '</div>' +
-      '</div>' +
-      '<p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0 0 16px">' +
-        'Para que todos los agentes tengan contexto desde el primer mensaje — industria, audiencia, presupuesto, competencia y tono de marca — necesitamos conocer tu negocio.' +
-      '</p>' +
-      '<div style="background:#F5F3FF;border-radius:10px;padding:14px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Nombre e industria</div>' +
-        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Presupuesto y objetivos</div>' +
-        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Audiencia objetivo</div>' +
-        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap=6px"><span>✓</span> Competencia y tono</div>' +
-        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Canales activos</div>' +
-        '<div style="font-size:11px;color:#6D28D9;display:flex;align-items:center;gap:6px"><span>✓</span> Lo que funciona (y lo que no)</div>' +
-      '</div>' +
-      '<button onclick="proOpenSetupModal()" style="width:100%;padding:12px;background:#7C3AED;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s" onmouseover="this.style.opacity=\'.88\'" onmouseout="this.style.opacity=\'1\'">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-        'Configurar mi negocio ahora' +
-      '</button>' +
-      '<div style="text-align:center;margin-top:10px;font-size:11px;color:var(--muted2)">Solo toma ~5 minutos · Se guarda para siempre</div>' +
-    '</div>';
-  chatBox.appendChild(el);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function proOpenSetupModal() {
-  // Abrir el modal de brief en modo "Mi negocio" para usuarios Pro
-  const proClient = agencyClients.find(c => c.id === 'pro_main');
-  agencyOpenModal(proClient ? 'pro_main' : null);
-}
-
-function proUpdateSidebarLabel(client) {
-  const nameEl = document.getElementById('sb-pro-name');
-  if (nameEl && client && client.name) nameEl.textContent = client.name;
 }
 
 // Cards de acción para Meta Ads
@@ -3144,74 +2295,54 @@ function showMetaActionCards() {
   var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
   var el = document.createElement('div');
   el.className = 'msg';
-  el.style.cssText = 'flex-direction:column;align-items:stretch;max-width:100%;width:100%;padding:0';
-
-  // helper para cards estándar
-  function card(icon, title, desc, onclick) {
-    return '<div onclick="' + onclick + '" style="border:1.5px solid var(--border);border-radius:14px;padding:20px 18px;cursor:pointer;background:var(--bg);transition:all .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px" ' +
-      'onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 16px rgba(30,43,204,.08)\'" ' +
-      'onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
-      '<div style="font-size:26px;margin-bottom:10px">' + icon + '</div>' +
-      '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">' + title + '</div>' +
-      '<div style="font-size:11px;color:var(--muted2);line-height:1.4">' + desc + '</div>' +
-      '</div>';
-  }
-
+  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
   el.innerHTML =
-    // Header
-    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">' +
-      '<div style="width:32px;height:32px;flex-shrink:0;overflow:hidden;border-radius:8px">' + logoSvg + '</div>' +
-      '<div>' +
-        '<div style="font-size:15px;font-weight:700;color:var(--text)">Agente Meta Ads</div>' +
-        '<div style="font-size:12px;color:var(--muted2)">¿en qué trabajamos hoy?</div>' +
-      '</div>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
     '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
-    // Fila 1: 2 cards destacadas (Publicar campaña + Video ad)
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">' +
-
-      // Publicar campaña — azul Meta
-      '<div onclick="dismissMetaCards(this);launchMetaCampaignFlow()" style="border:2px solid #1877F2;border-radius:14px;padding:20px 18px;cursor:pointer;background:linear-gradient(135deg,#e8f0fe 0%,#dbeafe 100%);transition:all .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px" ' +
-        'onmouseover="this.style.background=\'linear-gradient(135deg,#d0e4fd 0%,#bfdbfe 100%)\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 20px rgba(24,119,242,.2)\'" ' +
-        'onmouseout="this.style.background=\'linear-gradient(135deg,#e8f0fe 0%,#dbeafe 100%)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
-        '<div style="font-size:26px;margin-bottom:10px">🚀</div>' +
-        '<div style="font-size:13px;font-weight:700;color:#1877F2;margin-bottom:3px">Publicar campaña</div>' +
-        '<div style="font-size:11px;color:#1877F2;opacity:.8;line-height:1.4">Tengo mis creativos listos y quiero publicar en Facebook o Instagram</div>' +
+      // Card 1: Crear anuncios de imagen
+      '<div onclick="showMetaImageSubCards(this)" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">🖼️</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios de imagen</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Genera creativos profesionales para Facebook e Instagram</div>' +
       '</div>' +
 
-      // Video ad con IA — púrpura
-      '<div onclick="dismissMetaCards(this);showVideoAdFormWithContext()" style="border:2px solid #7C3AED;border-radius:14px;padding:20px 18px;cursor:pointer;background:linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 100%);transition:all .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px" ' +
-        'onmouseover="this.style.background=\'linear-gradient(135deg,#EDE9FE 0%,#DDD6FE 100%)\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 20px rgba(124,58,237,.2)\'" ' +
-        'onmouseout="this.style.background=\'linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 100%)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
-        '<div style="font-size:26px;margin-bottom:10px">🎬</div>' +
-        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
-          '<div style="font-size:13px;font-weight:700;color:#7C3AED">Crear video ad con IA</div>' +
-          '<span style="font-size:9px;background:#7C3AED;color:#fff;padding:2px 6px;border-radius:8px;font-weight:700">NUEVO</span>' +
+      // Card 2: Planear campaña
+      '<div onclick="dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">📋</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planear campaña</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Estructura, audiencias, objetivo y presupuesto</div>' +
+      '</div>' +
+
+      // Card 3: Analizar campañas
+      '<div onclick="dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">📊</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar campañas</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Métricas, optimización y recomendaciones</div>' +
+      '</div>' +
+
+      // Card 4: Copys para anuncios
+      '<div onclick="dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear copys</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Textos persuasivos para feed, stories y carrusel</div>' +
+      '</div>' +
+
+      // Card 5: Diagnosticar campañas — full width, destacada
+      '<div onclick="dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🩺</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar campañas</div>' +
+            '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>' +
+          '</div>' +
         '</div>' +
-        '<div style="font-size:11px;color:#6D28D9;opacity:.85;line-height:1.4">Video real para Reels o TikTok con Seedance 2.0</div>' +
       '</div>' +
 
-    '</div>' +
-
-    // Fila 2: 3 cards estándar
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">' +
-      card('🖼️', 'Crear anuncios de imagen', 'Creativos profesionales para Facebook e Instagram', 'showMetaImageSubCards(this)') +
-      card('📋', 'Planear campaña', 'Estructura, objetivos, audiencias y presupuesto', 'dismissMetaCards(this);qSend(\'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio\')') +
-      card('📊', 'Analizar campañas', 'Métricas, optimización y recomendaciones de mejora', 'dismissMetaCards(this);qSend(\'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización\')') +
-    '</div>' +
-
-    // Fila 3: 4 cards estándar
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">' +
-      card('✍️', 'Crear copys', 'Textos persuasivos para feed, stories y carrusel', 'dismissMetaCards(this);qSend(\'Crear copys profesionales para anuncios de Meta Ads (Facebook e Instagram) para mi negocio\')') +
-      card('🩺', 'Diagnosticar campañas', 'Pega tus métricas y te digo dónde estás perdiendo dinero', 'dismissMetaCards(this);showDiagnosticInput(\'meta-ads\')') +
-    '</div>' +
-
-    // Fila 4: A/B Test + Attribution Model
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-      card('🧪', 'Diseñar prueba A/B', 'Variantes de creative, copy o audiencia listas para testear', 'dismissMetaCards(this);qSend(\'DISEÑAR PRUEBA A/B — Quiero crear un test A/B en Meta Ads. Antes de generar las variantes, dime: ¿qué elemento quieres testear? (creative, copy, audiencia, ubicación, presupuesto) y ¿cuál es la campaña o conjunto de anuncios que tienes actualmente?\')') +
-      card('📐', 'Modelo de atribución', 'Ventana de atribución óptima según tu ciclo de compra', 'dismissMetaCards(this);qSend(\'MODELO DE ATRIBUCIÓN — Ayúdame a elegir la ventana de atribución correcta para mis campañas de Meta Ads. Analiza mi objetivo principal y el ciclo de decisión de compra de mis clientes para recomendarme la configuración más adecuada y los pasos para aplicarla en Meta Business Suite.\')') +
     '</div>';
-
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 }
@@ -3222,45 +2353,53 @@ function showGoogleAdsActionCards() {
   var el = document.createElement('div');
   el.className = 'msg';
   el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
-  // Acciones principales con íconos SVG limpios
-  const _gAdsActions = [
-    { icon:'💸', label:'Encontrar gasto desperdiciado', desc:'Detecta keywords que queman presupuesto sin convertir', action:()=>{ dismissGoogleAdsCards(el); runWastedSpendFlow('Encuentra el gasto desperdiciado de mi cuenta'); } },
-    { icon:'📊', label:'Analizar rendimiento', desc:'Auditoría completa: métricas, problemas y prioridades', action:()=>{ dismissGoogleAdsCards(el); qSend('analiza el rendimiento de mi cuenta de Google Ads y dame un diagnóstico completo'); } },
-    { icon:'🚀', label:'Crear campaña', desc:'Wizard guiado: keywords, anuncios RSA y segmentación', action:()=>{ dismissGoogleAdsCards(el); launchGoogleCampaignFlow(); } },
-    { icon:'✍️', label:'Escribir anuncios RSA', desc:'Headlines y descriptions optimizados para conversión', action:()=>{ dismissGoogleAdsCards(el); qSend('CREAR ANUNCIOS RSA — ¿Para qué producto o servicio necesitas los anuncios? ¿Tienes keywords principales ya definidas?'); } },
-    { icon:'🎯', label:'Crear lista de keywords', desc:'Keywords positivas y negativas por intención de búsqueda', action:()=>{ dismissGoogleAdsCards(el); qSend('CREAR LISTA DE PALABRAS CLAVE — ¿Para qué campaña o producto necesitas las keywords?'); } },
-    { icon:'🧪', label:'Diseñar prueba A/B', desc:'Variantes de headlines, copys o audiencias listas para testear', action:()=>{ dismissGoogleAdsCards(el); qSend('DISEÑAR PRUEBA A/B — ¿Qué elemento quieres testear? (headlines, descriptions, audiencia o puja)'); } },
-  ];
-
   el.innerHTML =
-    '<style>@keyframes gadsCardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}</style>' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;opacity:0;animation:gadsCardIn .3s ease .05s forwards">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-      '<div>' +
-        '<div style="font-size:14px;font-weight:700;color:var(--text)">¿En qué trabajamos hoy?</div>' +
-        '<div style="font-size:11px;color:var(--muted2);margin-top:1px">Selecciona una acción o escribe directamente</div>' +
-      '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>' +
     '</div>' +
-    '<div style="width:100%;max-width:540px;padding-left:40px">' +
-      '<div style="display:flex;flex-direction:column;gap:6px">' +
-        _gAdsActions.map((a, i) =>
-          `<div data-gads-card="${i}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;background:var(--bg);transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;opacity:0;animation:gadsCardIn .35s ease forwards;animation-delay:${i * 55}ms"
-            onmouseover="this.style.borderColor='var(--blue)';this.style.background='var(--blue-lt)';this.style.transform='translateX(3px)';this.style.boxShadow='0 2px 8px rgba(66,100,251,.10)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg)';this.style.transform='';this.style.boxShadow=''"
-            onclick="window._gAdsCardActions[${i}]()">
-            <div style="font-size:20px;flex-shrink:0;width:28px;text-align:center">${a.icon}</div>
-            <div style="min-width:0">
-              <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.label}</div>
-              <div style="font-size:11px;color:var(--muted2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.desc}</div>
-            </div>
-            <div style="margin-left:auto;color:var(--muted2);font-size:16px;flex-shrink:0">›</div>
-          </div>`
-        ).join('') +
-      '</div>' +
-    '</div>';
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
-  // Registrar handlers en window para poder llamarlos desde onclick inline
-  window._gAdsCardActions = _gAdsActions.map(a => a.action);
+      // Card 1: Analizar y optimizar campaña
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'ANALIZAR Y OPTIMIZAR mi cuenta de Google Ads - necesito una auditoría profesional completa de mis campañas actuales con análisis de métricas, identificación de problemas y recomendaciones priorizadas de mejora\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">🔍</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Analizar y optimizar campaña</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Auditoría completa y recomendaciones de mejora</div>' +
+      '</div>' +
+
+      // Card 2: Planificar campaña
+      '<div onclick="dismissGoogleAdsCards(this);showPlanningQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">📋</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Planificar campaña</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Estrategia completa y recomendación de presupuesto</div>' +
+      '</div>' +
+
+      // Card 3: Crear lista de palabras clave
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR LISTA DE PALABRAS CLAVE - Antes de generar las keywords, necesito saber: ¿Para qué tipo de campaña o producto/servicio específico necesitas las palabras clave? ¿Es para una campaña nueva o para optimizar una existente?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">🎯</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear palabras clave</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Keywords positivas + negativas por categorías</div>' +
+      '</div>' +
+
+      // Card 4: Crear anuncios RSA
+      '<div onclick="dismissGoogleAdsCards(this);qSend(\'CREAR ANUNCIOS RSA - Para generar los headlines y descriptions más efectivos, necesito saber: ¿Para qué producto/servicio específico son estos anuncios RSA? ¿Tienes keywords principales ya definidas? ¿Es para una campaña nueva o reemplazo de anuncios existentes?\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
+        '<div style="font-size:18px;margin-bottom:6px">✍️</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Crear anuncios RSA</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Headlines y descriptions con estructura AIDA</div>' +
+      '</div>' +
+
+      // Card 5: Diagnosticar cuenta — full width, destacada
+      '<div onclick="dismissGoogleAdsCards(this);showDiagnosticInput(\'google-ads\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'\'>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:22px">🩺</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar cuenta</div>' +
+            '<div style="font-size:11px;color:var(--blue);opacity:.75">Pega tus métricas y te digo exactamente dónde estás perdiendo dinero</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+    '</div>';
   document.getElementById('chat-area').appendChild(el);
   scrollB();
 }
@@ -3456,7 +2595,6 @@ function showSeoActionCards() {
     { icon: '🏥', titulo: 'Auditoría SEO rápida', desc: 'Los problemas técnicos que más están afectando tu posicionamiento.', prompt: 'Ayúdame a identificar los principales problemas SEO de mi sitio web y cómo corregirlos' },
     { icon: '✍️', titulo: 'Estrategia de contenido', desc: 'Qué artículos crear para atraer tráfico orgánico calificado.', prompt: 'Crea una estrategia de contenido SEO para los próximos 3 meses para mi negocio' },
     { icon: '🤖', titulo: 'Optimización para IAs (AEO)', desc: 'Cómo aparecer cuando alguien le pregunta a ChatGPT o Gemini sobre tu industria.', prompt: 'Explícame cómo optimizar mi sitio para que aparezca en las respuestas de IAs como ChatGPT, Claude y Gemini' },
-    { icon: '🔎', titulo: 'Analizar competencia', desc: 'Quién aparece antes que tú y qué mensajes están usando.', prompt: 'Haz un análisis de competencia para mi negocio en los resultados de búsqueda' },
   ];
   var cards = pasos.map(function(p) {
     return '<div class="next-step-card" onclick="this.closest(\'.msg\').style.display=\'none\';qSend(\'' + p.prompt.replace(/'/g,"\\'") + '\')">' +
@@ -3521,31 +2659,11 @@ function showMetaImageSubCards(parentCard) {
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">' +
 
-      // Opción 1: Crear desde cero
+      // Única opción: Crear desde cero
       '<div onclick="dismissMetaCards(this);showDesignQuestionnaire()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
         '<div style="font-size:22px;margin-bottom:8px">✨</div>' +
         '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crear anuncio profesional</div>' +
         '<div style="font-size:11px;color:var(--muted2);line-height:1.4">La IA diseña creativos con tu marca, oferta y línea gráfica — listos para publicar en Meta</div>' +
-      '</div>' +
-
-      // Opción 1b: Diseño estructurado (HTML Design System)
-      '<div onclick="dismissMetaCards(this);showHtmlDesignWizard()" style="border:1.5px solid var(--border);border-radius:12px;padding:16px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-          '<div style="font-size:20px">🎨</div>' +
-          '<div style="font-size:13px;font-weight:700;color:var(--text)">Diseño estructurado <span style="font-size:10px;background:var(--blue);color:#fff;padding:1px 7px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
-        '</div>' +
-        '<div style="font-size:11px;color:var(--muted2);line-height:1.4;padding-left:28px">Layouts tipo agencia — texto, iconos e imagen perfectamente organizados. 3, 5 o 10 variaciones.</div>' +
-      '</div>' +
-
-      // Opción 2: Variaciones A/B de anuncio existente
-      '<div onclick="dismissMetaCards(this);showAdVariationAB()" style="border:2px solid #059669;border-radius:12px;padding:16px 14px;cursor:pointer;background:#ECFDF5;transition:all .15s" onmouseover="this.style.background=\'#D1FAE5\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#ECFDF5\';this.style.transform=\'\'">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<div style="font-size:22px">🔄</div>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:#065F46;margin-bottom:2px">Variaciones A/B de anuncio existente <span style="font-size:10px;background:#059669;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">NUEVO</span></div>' +
-            '<div style="font-size:11px;color:#047857;opacity:.9;line-height:1.4">Sube tu anuncio actual y la IA crea 2 variaciones optimizadas para test A/B</div>' +
-          '</div>' +
-        '</div>' +
       '</div>' +
 
     '</div>' +
@@ -3574,16 +2692,6 @@ function showTikTokActionCards() {
   html += '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>';
   html += '</div>';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">';
-
-  // Card 0: Crear video ad con IA — full width, destacada
-  html += '<div onclick="dismissTikTokCards(this);showVideoAdFormWithContext()" style="border:2px solid #7C3AED;border-radius:12px;padding:14px 16px;cursor:pointer;background:#F5F3FF;transition:all .15s;grid-column:1/-1" onmouseover="this.style.background=\'#EDE9FE\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'#F5F3FF\';this.style.transform=\'\'">';
-  html += '<div style="display:flex;align-items:center;gap:10px">';
-  html += '<div style="font-size:22px">🎬</div>';
-  html += '<div>';
-  html += '<div style="font-size:13px;font-weight:700;color:#7C3AED;margin-bottom:2px">Crear video ad con IA</div>';
-  html += '<div style="font-size:11px;color:#7C3AED;opacity:.75">Genera un video publicitario para TikTok con Seedance 2.0</div>';
-  html += '</div></div>';
-  html += '</div>';
 
   // Card 1: Planear campaña
   html += '<div onclick="dismissTikTokCards(this);qSend(\'Ayúdame a planear una campaña completa de TikTok Ads para mi negocio: objetivo, estructura, audiencias, presupuesto y cronograma\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
@@ -3663,27 +2771,15 @@ function showDiagnosticInput(agent) {
 
   html += '<div style="padding-left:40px;width:100%;max-width:580px">';
 
-  // Cuando hay cuenta conectada en Google Ads → flujo directo, sin capturas
-  if (isGoogle && adsActiveAccount) {
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:12px;margin-bottom:16px">';
-    html += '<div style="font-size:20px">✅</div>';
-    html += '<div style="flex:1">';
-    html += '<div style="font-size:13px;font-weight:700;color:#065F46">Cuenta conectada</div>';
-    html += '<div style="font-size:12px;color:#047857;margin-top:2px">' + adsActiveAccount.name + ' · El agente accede a tus datos directamente</div>';
-    html += '</div></div>';
-
-    html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:20px">';
-    html += '<div style="font-size:13px;color:var(--text);margin-bottom:6px;font-weight:600">¿Qué quieres analizar?</div>';
-    html += '<div style="font-size:12px;color:var(--muted2);margin-bottom:18px">El agente consultará tu cuenta en tiempo real: campañas, métricas, keywords, anuncios y más.</div>';
-    html += '<div style="display:flex;gap:8px;">';
-    html += '<button onclick="runDirectDiagnostic(\'' + agent + '\')" style="flex:1;padding:12px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:-.2px">🔍 Analizar cuenta ahora →</button>';
-    html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:12px 16px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
-    html += '</div></div>';
-
-  } else {
-    // Sin cuenta conectada (o Meta): mostrar formulario completo con capturas + texto
-
-    if (isGoogle) {
+  // Banner cuenta conectada / no conectada (solo Google)
+  if (isGoogle) {
+    if (adsActiveAccount) {
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:10px;margin-bottom:14px">';
+      html += '<div style="font-size:16px">✅</div>';
+      html += '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:#065F46">Cuenta conectada: ' + adsActiveAccount.name + '</div>';
+      html += '<div style="font-size:11px;color:#047857;margin-top:1px">Puedes subir capturas de pantalla de cualquier sección de tu cuenta</div></div>';
+      html += '</div>';
+    } else {
       html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:10px;margin-bottom:14px">';
       html += '<div style="font-size:16px">🔗</div>';
       html += '<div style="flex:1">';
@@ -3692,39 +2788,37 @@ function showDiagnosticInput(agent) {
       html += '<button onclick="connectGoogleAds()" style="padding:6px 12px;background:#F97316;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar cuenta de Google Ads →</button>';
       html += '</div></div>';
     }
-
-    html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
-
-    // Sección capturas — multi-imagen
-    html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📷 Capturas de pantalla <span style="font-weight:400;color:var(--muted2)">(hasta 4 — campañas, grupos, anuncios, keywords...)</span></div>';
-    html += '<div id="diag-img-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px"></div>';
-    html += '<label id="diag-add-img-btn" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;transition:background .15s">';
-    html += '<div style="font-size:16px">➕</div>';
-    html += '<div style="font-size:12px;color:var(--muted)">Agregar captura <span style="color:var(--muted2)">(PNG, JPG)</span></div>';
-    html += '<input type="file" id="diag-file-input" accept="image/*" multiple style="display:none" onchange="diagAddImages(this)">';
-    html += '</label>';
-
-    // Separador
-    html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
-    html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
-    html += '<div style="font-size:11px;color:var(--muted2)">o también</div>';
-    html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
-    html += '</div>';
-
-    // Textarea métricas
-    html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">📋 Pega tus métricas en texto</div>';
-    html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:90px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
-
-    // Botones
-    html += '<div style="display:flex;gap:8px;margin-top:14px">';
-    html += '<button onclick="runDiagnostic(\'' + agent + '\')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
-    html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
-    html += '</div>';
-
-    html += '</div>';
   }
 
+  html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
+
+  // Sección capturas — multi-imagen
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📷 Capturas de pantalla <span style="font-weight:400;color:var(--muted2)">(hasta 4 — campañas, grupos, anuncios, keywords...)</span></div>';
+  html += '<div id="diag-img-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px"></div>';
+  html += '<label id="diag-add-img-btn" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;transition:background .15s">';
+  html += '<div style="font-size:16px">➕</div>';
+  html += '<div style="font-size:12px;color:var(--muted)">Agregar captura <span style="color:var(--muted2)">(PNG, JPG)</span></div>';
+  html += '<input type="file" id="diag-file-input" accept="image/*" multiple style="display:none" onchange="diagAddImages(this)">';
+  html += '</label>';
+
+  // Separador
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:14px 0">';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+  html += '<div style="font-size:11px;color:var(--muted2)">o también</div>';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
   html += '</div>';
+
+  // Textarea métricas
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">📋 Pega tus métricas en texto</div>';
+  html += '<textarea id="diag-textarea" placeholder="' + metricsHint + '" style="width:100%;min-height:90px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;outline:none;line-height:1.5"></textarea>';
+
+  // Botones
+  html += '<div style="display:flex;gap:8px;margin-top:14px">';
+  html += '<button onclick="runDiagnostic(\'' + agent + '\')" style="flex:1;padding:10px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Analizar ahora →</button>';
+  html += '<button onclick="document.getElementById(\'diagnostic-input-panel\').remove();' + cancelFn + '" style="padding:10px 14px;background:transparent;color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
+  html += '</div>';
+
+  html += '</div></div>';
 
   el.innerHTML = html;
   document.getElementById('chat-area').appendChild(el);
@@ -3844,139 +2938,6 @@ async function runDiagnostic(agent) {
   hist.push({ role: 'user', content: msgContent });
   await callClaude();
 }
-async function runDirectDiagnostic(agent) {
-  var panel = document.getElementById('diagnostic-input-panel');
-  if (panel) panel.remove();
-
-  var accountName = adsActiveAccount ? adsActiveAccount.name : 'la cuenta conectada';
-
-  // Mostrar estado de carga mientras consultamos la API
-  var loadBubble = document.createElement('div');
-  loadBubble.className = 'msg';
-  loadBubble.id = 'diag-load-bubble';
-  loadBubble.style.cssText = 'flex-direction:column;align-items:flex-start';
-  loadBubble.innerHTML = '<div style="font-size:13px;color:var(--muted)">⏳ Consultando datos reales de <b>' + accountName + '</b>...</div>';
-  document.getElementById('chat-area').appendChild(loadBubble);
-  scrollB();
-
-  // 1. Obtener moneda de la cuenta
-  var currency = (adsActiveAccount && adsActiveAccount.currency) || '';
-  if (!currency) {
-    var curRes = await queryGoogleAds('SELECT customer.currency_code FROM customer LIMIT 1');
-    currency = curRes.results && curRes.results[0] && curRes.results[0].customer && curRes.results[0].customer.currencyCode || 'COP';
-  }
-
-  // 2. Consultar campañas últimos 30 días
-  var gaqlQuery = 'SELECT campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc FROM campaign WHERE segments.date DURING LAST_30_DAYS ORDER BY metrics.cost_micros DESC LIMIT 20';
-  var result = await queryGoogleAds(gaqlQuery);
-
-  // Quitar burbuja de carga
-  var lb = document.getElementById('diag-load-bubble');
-  if (lb) lb.remove();
-
-  if (result.error) {
-    addAgent('⚠️ No pude consultar la cuenta: ' + result.error);
-    return;
-  }
-
-  // 3. Formatear datos con la moneda correcta
-  var rows = result.results || [];
-  var fmt2 = function(micros) { return Math.round(Number(micros || 0) / 1000000).toLocaleString('es-CO'); };
-  var fmtPct = function(v) { return (Number(v || 0) * 100).toFixed(2); };
-
-  var totalCostMicros = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.costMicros || 0); }, 0);
-  var totalClics      = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.clicks || 0); }, 0);
-  var totalImp        = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.impressions || 0); }, 0);
-  var totalConv       = rows.reduce(function(s, r) { return s + Number(r.metrics && r.metrics.conversions || 0); }, 0);
-  var totalCost       = totalCostMicros / 1000000;
-  var avgCpc          = totalClics > 0 ? totalCost / totalClics : 0;
-  var avgCtr          = totalImp   > 0 ? (totalClics / totalImp * 100) : 0;
-  var cpa             = totalConv  > 0 ? totalCost / totalConv : 0;
-
-  var dataLines = rows.length === 0
-    ? 'No hay campañas con datos en los últimos 30 días.'
-    : rows.map(function(r) {
-        var c = r.campaign || {};
-        var m = r.metrics  || {};
-        return '- ' + (c.name || 'Sin nombre') + ' [' + (c.status || '') + ']: '
-          + currency + ' ' + fmt2(m.costMicros) + ' | '
-          + Number(m.impressions || 0).toLocaleString('es-CO') + ' imp | '
-          + Number(m.clicks || 0).toLocaleString('es-CO') + ' clics | CTR ' + fmtPct(m.ctr) + '% | '
-          + 'CPC ' + currency + ' ' + fmt2(m.averageCpc) + ' | '
-          + Number(m.conversions || 0) + ' conv';
-      }).join('\n');
-
-  // 3b. Ad groups query
-  var adGroupResult = await queryGoogleAds('SELECT campaign.name, ad_group.name, ad_group.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc FROM ad_group WHERE segments.date DURING LAST_30_DAYS AND ad_group.status != \'REMOVED\' ORDER BY metrics.cost_micros DESC LIMIT 30');
-  var adGroupLines = '';
-  if (adGroupResult.results && adGroupResult.results.length > 0) {
-    adGroupLines = adGroupResult.results.map(function(r) {
-      var ag = r.adGroup || {};
-      var c  = r.campaign || {};
-      var m  = r.metrics  || {};
-      var cost = Math.round(Number(m.costMicros || 0) / 1000000).toLocaleString('es-CO');
-      var cpc  = Math.round(Number(m.averageCpc  || 0) / 1000000).toLocaleString('es-CO');
-      var ctr  = (Number(m.ctr || 0) * 100).toFixed(2);
-      return '  - ' + (ag.name || '?') + ' [' + (ag.status || '') + '] (camp: ' + (c.name || '?') + '): '
-        + currency + ' ' + cost + ' | ' + Number(m.clicks || 0).toLocaleString('es-CO') + ' clics | CTR ' + ctr + '% | CPC ' + currency + ' ' + cpc + ' | ' + Number(m.conversions || 0) + ' conv';
-    }).join('\n');
-  }
-
-  // 3c. Keywords query (search campaigns)
-  var kwResult = await queryGoogleAds('SELECT campaign.name, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc, ad_group_criterion.quality_info.quality_score FROM keyword_view WHERE segments.date DURING LAST_30_DAYS AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC LIMIT 50');
-  var kwLines = '';
-  if (kwResult.results && kwResult.results.length > 0) {
-    kwLines = kwResult.results.map(function(r) {
-      var kw = r.adGroupCriterion && r.adGroupCriterion.keyword || {};
-      var qi = r.adGroupCriterion && r.adGroupCriterion.qualityInfo || {};
-      var ag = r.adGroup || {};
-      var m  = r.metrics || {};
-      var cost = Math.round(Number(m.costMicros || 0) / 1000000).toLocaleString('es-CO');
-      var cpc  = Math.round(Number(m.averageCpc  || 0) / 1000000).toLocaleString('es-CO');
-      var ctr  = (Number(m.ctr || 0) * 100).toFixed(2);
-      var qs   = qi.qualityScore ? ' QS:' + qi.qualityScore : '';
-      return '  - [' + (kw.matchType || '?') + '] "' + (kw.text || '?') + '"' + qs + ' (grupo: ' + (ag.name || '?') + '): '
-        + currency + ' ' + cost + ' | ' + Number(m.clicks || 0).toLocaleString('es-CO') + ' clics | CTR ' + ctr + '% | CPC ' + currency + ' ' + cpc + ' | ' + Number(m.conversions || 0) + ' conv';
-    }).join('\n');
-  }
-
-  // 4. Construir prompt con datos reales ya formateados — Claude solo analiza, no consulta
-  var clientProfile = memCtx ? memCtx() : '';
-
-  var diagPrompt = '=== PERFIL DEL CLIENTE ===\n';
-  diagPrompt += clientProfile + '\n\n';
-  diagPrompt += '=== DATOS REALES DE LA CUENTA GOOGLE ADS — ' + accountName + ' (últimos 30 días) ===\n';
-  diagPrompt += 'Moneda de la cuenta: ' + currency + ' (TODOS los valores monetarios están en ' + currency + ', NO en USD)\n\n';
-  diagPrompt += 'CAMPAÑAS:\n' + dataLines + '\n\n';
-  diagPrompt += 'TOTALES:\n';
-  diagPrompt += '- Inversión total: ' + currency + ' ' + Math.round(totalCost).toLocaleString('es-CO') + '\n';
-  diagPrompt += '- Impresiones: ' + totalImp.toLocaleString('es-CO') + '\n';
-  diagPrompt += '- Clics: ' + totalClics.toLocaleString('es-CO') + '\n';
-  diagPrompt += '- CTR promedio: ' + avgCtr.toFixed(2) + '%\n';
-  diagPrompt += '- CPC promedio: ' + currency + ' ' + Math.round(avgCpc).toLocaleString('es-CO') + '\n';
-  diagPrompt += '- Conversiones: ' + totalConv + '\n';
-  diagPrompt += '- CPA: ' + currency + ' ' + Math.round(cpa).toLocaleString('es-CO') + '\n\n';
-  if (adGroupLines) {
-    diagPrompt += 'GRUPOS DE ANUNCIOS (últimos 30 días):\n' + adGroupLines + '\n\n';
-  }
-  if (kwLines) {
-    diagPrompt += 'PALABRAS CLAVE — Red de Búsqueda (top 50 por inversión):\n' + kwLines + '\n\n';
-  }
-  diagPrompt += '=== INSTRUCCIONES PARA EL DIAGNÓSTICO ===\n';
-  diagPrompt += 'CRÍTICO: Evalúa el CPA y todas las métricas en el contexto real del negocio del cliente (ticket, industria, ciclo de venta). NO uses benchmarks genéricos. Un CPA que parece alto puede ser excelente para un producto de ticket alto; un CPA bajo puede ser malo si las conversiones son de baja calidad.\n';
-  diagPrompt += 'Con estos datos reales (campañas, grupos de anuncios y keywords) entrega el diagnóstico profundo. Usa los números exactos de arriba. Benchmarks siempre en ' + currency + ':\n\n';
-  diagPrompt += '## 🩺 Diagnóstico de Google Ads — ' + accountName + '\n\n';
-  diagPrompt += '**Resumen (últimos 30 días):** [reproduce los totales exactos en ' + currency + ']\n\n';
-  diagPrompt += '### 🔴 Hallazgo principal:\n**Qué está pasando:** ...\n**Impacto (' + currency + '):** ...\n**Acción esta semana:** ...\n\n';
-  diagPrompt += '### 🟡 Análisis de grupos de anuncios:\n[Cuáles grupos tienen mejor/peor rendimiento, por qué, qué hacer]\n\n';
-  diagPrompt += '### 🔵 Análisis de palabras clave:\n[Keywords con mejor QS, keywords con gasto alto y cero conversiones, oportunidades de negativas]\n\n';
-  diagPrompt += '### 🟢 Lo que está funcionando bien:\n...\n\n';
-  diagPrompt += '### ✅ Plan 2 semanas:\n[3-5 acciones concretas en orden de impacto, indicando si son a nivel campaña, grupo o keyword]\n\n';
-  diagPrompt += '---\nHabla en español LatAm. Moneda = ' + currency + '. Sé directo. No hagas más consultas a la API.';
-
-  hist.push({ role: 'user', content: diagPrompt });
-  await callClaude();
-}
 // ── FIN MÓDULO DIAGNÓSTICO ───────────────────────────────────────────────────
 
 
@@ -4007,6 +2968,19 @@ REGLAS:
 
  // historial del chat general
 let homeLoading = false;
+
+// Acción rápida desde el home — abre agente y envía el mensaje
+function quickAction(agentKey, message) {
+  openAgent(agentKey).then(() => {
+    setTimeout(() => {
+      const cin = document.getElementById('cin');
+      if (cin) {
+        cin.value = message;
+        sendMsg();
+      }
+    }, 200);
+  });
+}
 
 async function homeChat() {
   const el = document.getElementById('home-cin');
@@ -4150,7 +3124,7 @@ function appendHomeMsgAgent(txt, suggestedAgent) {
   const agentLabels = {
     'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads',
     'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads',
-    'seo': 'SEO', 'social': 'Social Media Manager', 'consultor': 'Consultor de Marketing'
+    'seo': 'SEO', 'social': 'Contenido para Redes', 'consultor': 'Consultor de Marketing'
   };
 
   const suggBtn = suggestedAgent ? `
@@ -4233,7 +3207,7 @@ async function continueWithAgent(agentKey) {
   // Mensaje de transición
   const agentLabels = {
     'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads',
-    'linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Social Media Manager','consultor':'Consultor de Marketing'
+    'linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Contenido para Redes','consultor':'Consultor de Marketing'
   };
   addAgent(`continuamos en el agente de **${agentLabels[agentKey]||agentKey}**. ¿en qué más te ayudo?`);
 }
@@ -4265,41 +3239,24 @@ window.onload = async () => {
   } catch(e) {
     console.warn('initAuth error:', e.message);
   }
-
+  
   // Inicializar límites de imágenes
   loadImageUsage();
 
-  // Vista inicial: panel de clientes para agencia/admin, home para el resto
-  const isAgencyOnLoad = userPlan === 'agency' || isAdminUser();
-  if (isAgencyOnLoad) {
-    // Cargar clientes antes de mostrar el panel para que no aparezca vacío
-    await agencyInit();
-    showView('agency');
-    // Safety net para mobile: si cargó 0 clientes (posible timing de Clerk),
-    // re-intentar silenciosamente a los 3s y re-renderizar si hay datos nuevos
-    setTimeout(async function() {
-      if (agencyClients.length === 0) {
-        await agencyLoadClients();
-        if (agencyClients.length > 0) {
-          agencyRender();
-          agencyUpdateSidebarCount();
-        }
-      }
-    }, 3000);
-  } else {
-    showView('home');
-    setTimeout(function(){ agencyInit(); }, 400);
-  }
+  // Inicializar panel de agencia si aplica
+  setTimeout(function(){ agencyInit().then(function(){ if(document.getElementById('view-agency').classList.contains('active')) agencyRender(); }); }, 400);
+
+  // Mostrar botón Leads (disponible para todos los usuarios autenticados)
+  setTimeout(function(){ const b = document.getElementById('sb-leads-btn'); if(b) b.style.display = 'block'; }, 500);
+
+  // Inicializar botón de referidos
+  setTimeout(initReferralButton, 600);
+
+  showView('home');
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
   // Mostrar tour si es la primera vez
   setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
-  // Actualizar badge de historial
-  setTimeout(function(){ updateHistorialBadge(); }, 2000);
-  // Restaurar conexiones desde Supabase si no hay token en sessionStorage
-  setTimeout(function(){ restoreConnectionsFromSupabase(); }, 2500);
-  // Inicializar alertas
-  setTimeout(function(){ initAlertsBadge(); }, 3000);
 };
 
 // ONBOARDING
@@ -4378,99 +3335,6 @@ function memCtx(){
   }
   return ctx || 'perfil no completado aún.';
 }
-// ── Flujo determinístico de Gasto Desperdiciado ──────────────────────────────
-// Corre el GAQL exacto sin pasar por Claude, para evitar que el agente elija
-// una query de campañas en lugar de search_term_view.
-const WASTED_SPEND_GAQL = 'SELECT search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.cost_micros, metrics.conversions, metrics.ctr FROM search_term_view WHERE segments.date DURING LAST_30_DAYS AND metrics.cost_micros > 5000000 AND metrics.conversions = 0 ORDER BY metrics.cost_micros DESC LIMIT 50';
-
-function isWastedSpendIntent(msg) {
-  const t = msg.toLowerCase();
-  return t.includes('gasto desperdiciado') || t.includes('encuentra el gasto') ||
-    t.includes('desperdiciando') || t.includes('dinero perdido') || t.includes('palabras irrelevantes') ||
-    t.includes('search terms malos') || t.includes('limpiar cuenta') || t.includes('auditoría de negativos') ||
-    t.includes('qué estamos botando') || t.includes('cuánto se está botando') || t.includes('qué búsquedas no convierten');
-}
-
-async function runWastedSpendFlow(userMsg) {
-  if (loading) return;
-  loading = true;
-  document.getElementById('sbtn').disabled = true;
-  const tid = addThinking();
-
-  // Mostrar mensaje del usuario
-  addUser(userMsg || 'Encuentra el gasto desperdiciado');
-  hist.push({role:'user', content: userMsg || 'Encuentra el gasto desperdiciado de mi cuenta'});
-
-  // Paso 1: correr GAQL directamente (sin pasar por Claude)
-  const gaqlResult = await queryGoogleAds(WASTED_SPEND_GAQL);
-  rmThinking(tid);
-
-  if (gaqlResult.error) {
-    loading = false; document.getElementById('sbtn').disabled = false;
-    if (gaqlResult.needsReconnect) {
-      addAgent('⚠️ **Necesitas reconectar tu cuenta de Google Ads.**\n\n👉 Ve a **Configuración → Conexiones → Google Ads → Desconectar** y vuelve a conectar.');
-      updateAdsUI(false);
-    } else {
-      addAgent('⚠️ No pude consultar tu cuenta: ' + gaqlResult.error);
-    }
-    return;
-  }
-
-  // Si el backend refrescó el token, actualizarlo
-  if (gaqlResult._refreshedToken) {
-    sessionStorage.setItem('ads_access_token', gaqlResult._refreshedToken);
-    localStorage.setItem('ads_access_token_persist', gaqlResult._refreshedToken);
-  }
-
-  const _gaqlResults = gaqlResult.results || [];
-  const _currency = sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '';
-
-  // Paso 2: convertir TODOS los *Micros a valores reales
-  const _processedResults = _gaqlResults.map(row => {
-    if (!row.metrics) return row;
-    const m = {...row.metrics};
-    const mc = v => v !== undefined && v !== null ? Math.round(Number(v) / 1000000) : undefined;
-    const curr = _currency ? ' ' + _currency : '';
-    Object.keys(m).forEach(key => {
-      if (key.endsWith('Micros') && m[key] !== undefined) {
-        m[key.slice(0, -6) + '_real'] = mc(m[key]) + curr;
-        delete m[key];
-      }
-    });
-    return {...row, metrics: m};
-  });
-
-  // Paso 3: extraer términos para el botón (top 30 por costo)
-  const _wastedTerms = _gaqlResults
-    .filter(r => r.searchTermView && r.searchTermView.searchTerm)
-    .map(r => r.searchTermView.searchTerm)
-    .slice(0, 30);
-
-  if (!_wastedTerms.length) {
-    loading = false; document.getElementById('sbtn').disabled = false;
-    addAgent('✅ **No se detectó gasto desperdiciado significativo** en los últimos 30 días. Todos los search terms con gasto notable han generado conversiones. ¡Buena señal!');
-    hist.push({role:'assistant', content:'No se detectó gasto desperdiciado significativo.'});
-    return;
-  }
-
-  // Paso 4: enviar a Claude SOLO para análisis de texto
-  const resultStr = JSON.stringify(_processedResults, null, 2);
-  const analysisPrompt = `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nEntrega SOLO:\n1. Una línea: total de gasto desperdiciado (suma de todos los cost_real).\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (5-8 términos, los CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n\nNada más. Sin secciones de impacto, sin preguntas al usuario. El botón para agregar aparece automáticamente.`;
-  hist.push({role:'user', content: analysisPrompt});
-
-  window._lastActionConfirmRendered = false;
-  await callClaude();
-
-  // Paso 5: renderizar botón siempre (independiente de lo que haga el agente)
-  if (!window._lastActionConfirmRendered && _wastedTerms.length > 0) {
-    setTimeout(() => renderActionConfirmCard({
-      action: 'add-negative-keywords',
-      label: 'Agregar palabras negativas a la cuenta',
-      params: { keywords: _wastedTerms, matchType: 'PHRASE', scope: 'all_campaigns' }
-    }), 150);
-  }
-}
-
 async function sendMsg(){
   if(loading||((!onDone)&&!pendingImg))return;
   const el=document.getElementById('cin');
@@ -4478,12 +3342,6 @@ async function sendMsg(){
   if(!txt && !pendingImg)return;
   el.value='';autoR(el);
   
-  // Interceptar intent de gasto desperdiciado ANTES de addUser/hist para evitar duplicados
-  // runWastedSpendFlow() maneja su propio addUser() y hist.push()
-  if (!pendingImg && currentAgentCtx === 'google-ads' && isWastedSpendIntent(txt)) {
-    return runWastedSpendFlow(txt);
-  }
-
   // Construir contenido del mensaje con imagen opcional
   let msgContent;
   if(pendingImg){
@@ -4494,12 +3352,9 @@ async function sendMsg(){
     addUser(txt||'[Imagen adjunta]', pendingImg);
     clearImg();
   } else {
-    // Enriquecer con datos competitivos si aplica
-    const enriched = await enrichWithCompetitiveData(txt, currentAgentCtx).catch(() => txt);
-    msgContent = enriched;
-    addUser(txt); // mostrar el mensaje original sin el contexto extra
+    msgContent=txt;
+    addUser(txt);
   }
-
   hist.push({role:'user',content:msgContent});
   // Ocultar tarjetas de acción rápida del agente social al primer envío
   if(currentAgentCtx==='social'){
@@ -4624,8 +3479,6 @@ async function callClaude(){loading=true;document.getElementById('sbtn').disable
 let sys;
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
-  const metaCtx = await getMetaAdsContext().catch(()=>'');
-  if(metaCtx) sys = metaCtx + '\n\n' + sys;
 }else if(currentAgentCtx==='seo'){
   sys=SYSTEM_SEO.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='consultor'){
@@ -4634,45 +3487,8 @@ if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_SOCIAL.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else if(currentAgentCtx==='tiktok-ads'){
   sys=SYSTEM_TIKTOK.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
-}else if(currentAgentCtx==='linkedin-ads'){
-  sys=(typeof SYSTEM_LINKEDIN!=='undefined'?SYSTEM_LINKEDIN:SYSTEM).replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
 }else{
   sys=SYSTEM.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage).replace('{AGENT}',agentLabels[currentAgentCtx]||'Google Ads');
-  // Inyectar datos de contexto si hay cuenta conectada
-  const gCtx = await getGoogleAdsContext().catch(()=>'');
-  if(gCtx) sys = gCtx + '\n\n' + sys;
-  // Inyectar estado de conexión + moneda — señal crítica para que el agente sepa si puede usar GAQL
-  const _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
-  const _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
-  let _adsCurrency = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount && adsActiveAccount.currency)
-    ? adsActiveAccount.currency
-    : (sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '');
-  // Si la moneda no está en caché, consultarla una vez de la API antes de inyectar en el sistema prompt
-  if (!_adsCurrency && _adsToken && _adsCustId) {
-    try {
-      const _currRes = await queryGoogleAds('SELECT customer.currency_code FROM customer LIMIT 1');
-      const _curr = _currRes.results && _currRes.results[0] && _currRes.results[0].customer && _currRes.results[0].customer.currencyCode;
-      if (_curr) {
-        _adsCurrency = _curr;
-        sessionStorage.setItem('ads_currency', _curr);
-        localStorage.setItem('ads_currency_persist', _curr);
-        if (typeof adsActiveAccount !== 'undefined' && adsActiveAccount) adsActiveAccount.currency = _curr;
-      }
-    } catch(_e) {}
-  }
-  const _connStatus = (_adsToken && _adsCustId)
-    ? 'CUENTA_GOOGLE_ADS_CONECTADA: SI\nCUSTOMER_ID_ACTIVO: ' + _adsCustId + (_adsCurrency ? '\nMONEDA_DE_LA_CUENTA: ' + _adsCurrency + ' — Todos los cost_micros de la API son en ' + _adsCurrency + '. Divide entre 1,000,000 para obtener el valor real. NUNCA reportes como USD si la moneda es ' + _adsCurrency + '.' : '') + '\nREGLA_GAQL: La cuenta ESTÁ conectada. Cuando el usuario pida análisis de datos (métricas, gasto, rendimiento, keywords, etc.), emite DIRECTAMENTE el bloque [GAQL_QUERY: ...] SIN ningún texto antes — cero explicaciones previas, cero frases introductorias. El frontend muestra el indicador de carga automáticamente. Emite exactamente UN [GAQL_QUERY: ...] por respuesta. NUNCA emitas múltiples bloques GAQL en la misma respuesta. NUNCA des instrucciones manuales sobre la interfaz de Google Ads.\nCAMPOS_GAQL_PROHIBIDOS: metrics.cost_per_conversion_micros NO EXISTE en la API — usa metrics.cost_per_conversion para CPA. metrics.conversions_from_interactions_rate es incompatible con campaign. NO combines search_term_view con segments.device.'
-    : 'CUENTA_GOOGLE_ADS_CONECTADA: NO\nREGLA: Pide al usuario que conecte su cuenta en Configuración → Conexiones antes de continuar con cualquier análisis.';
-  sys = _connStatus + '\n\n' + sys;
-}
-// Inyectar contexto de cliente activo (Plan Agencia)
-if(activeClientContext){
-  const clientCtx = 'CLIENTE ACTIVO: ' + activeClientContext.clientName +
-    (activeClientContext.clientIndustry ? ' (' + activeClientContext.clientIndustry + ')' : '') +
-    (activeClientContext.monthlyBudget ? '\nPresupuesto mensual: $' + activeClientContext.monthlyBudget : '') +
-    (activeClientContext.notes ? '\nNotas: ' + activeClientContext.notes : '') +
-    '\nEstas ayudando a gestionar las campanas de este cliente especifico.';
-  sys = clientCtx + '\n\n' + sys;
 }
 if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{// Truncar historial: mantener los últimos MAX_HIST_MESSAGES mensajes
 const histTruncated = hist.length > MAX_HIST_MESSAGES
@@ -4723,29 +3539,7 @@ while(!streamDone){
         }
         replyFinal+=evt.delta;
         const bbl=document.getElementById('stream-bubble-text');
-        // Si la respuesta incluye una query GAQL, no mostrar el texto previo — solo el indicador de consulta
-        const hasGaql = replyFinal.includes('[GAQL_QUERY:');
-        if(hasGaql){
-          if(bbl)bbl.innerHTML='<span style="color:var(--muted);font-size:13px">Consultando tu cuenta de Google Ads…</span>';
-        } else {
-          const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
-          if(bbl)bbl.innerHTML=fmt(cleanForBubble);
-        }
-        // Calendario en tiempo real (cuando se genera desde el Studio)
-        if(window._studioGenerating && !replyFinal.includes('<PARRILLA_JSON>')){
-          const grid=document.getElementById('studio-stream-calendar');
-          if(grid){
-            const lines=replyFinal.split('\n');
-            const parsed=[];
-            for(const line of lines){ const p=parseStreamTableRow(line); if(p)parsed.push(p); }
-            if(parsed.length!==(window._streamPostsCount||0)){
-              window._streamPostsCount=parsed.length;
-              renderStreamCalendar(parsed,grid);
-              const ctr=document.getElementById('studio-stream-counter');
-              if(ctr)ctr.textContent=parsed.length>0?parsed.length+' posts detectados…':'Analizando tu negocio…';
-            }
-          }
-        }
+        if(bbl)bbl.innerHTML=fmt(replyFinal);
         scrollB();
       }
       if(evt.done&&evt.full!==undefined){replyFinal=evt.full;streamDone=true;}
@@ -4768,133 +3562,17 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
     if(gaqlMatch){
       const gaqlQuery = gaqlMatch[1].trim();
       replyFinalProcessed = replyFinalProcessed.replace(gaqlMatch[0], '').trim();
-      // Siempre mostrar el indicador de consulta — nunca el texto explicativo previo del modelo
-      addAgent('Consultando tu cuenta de Google Ads...');
+      addAgent(replyFinalProcessed || 'Consultando tu cuenta de Google Ads...');
       const gaqlResult = await queryGoogleAds(gaqlQuery);
       if(gaqlResult.error){
         hist.push({role:'assistant',content:replyFinalProcessed});
-        const is400 = gaqlResult.error.includes('[400]');
-        const is401 = gaqlResult.error.includes('[401]') || gaqlResult.error.includes('token') || gaqlResult.error.includes('No hay token');
-        const needsReconnect = gaqlResult.needsReconnect === true;
-        // Anti-loop: detectar si ya intentamos un retry en los últimos mensajes del historial
-        const recentHist = hist.slice(-4).map(m => typeof m.content === 'string' ? m.content : '').join(' ');
-        const alreadyRetried = recentHist.includes('_gaql_retry_') || recentHist.includes('_gaql_400_retry_');
-        if(needsReconnect){
-          // El backend confirmó que no hay refresh_token — reconexión necesaria
-          loading=false; document.getElementById('sbtn').disabled=false;
-          addAgent('⚠️ **Necesitas reconectar tu cuenta de Google Ads una vez más.**\n\nEsto sucede porque hay una sesión anterior sin guardar correctamente. Después de reconectar, el sistema renovará el token automáticamente y no tendrás que volver a hacerlo.\n\n👉 Ve a **Configuración → Conexiones → Google Ads → Desconectar** y luego vuelve a conectar. Toma 30 segundos.');
-          updateAdsUI(false);
-          return;
-        }
-        if(is401 && !alreadyRetried){
-          // Token expirado — intentar refrescar UNA SOLA VEZ
-          const uid = clerkInstance?.user?.id;
-          let refreshed = false;
-          if(uid){
-            try{
-              const rr = await fetch('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
-              if(rr.ok){
-                const rd = await rr.json();
-                if(rd.access_token && !rd.needsReconnect){
-                  sessionStorage.setItem('ads_access_token',rd.access_token);
-                  localStorage.setItem('ads_access_token_persist',rd.access_token);
-                  refreshed = true;
-                }
-              }
-            }catch{}
-          }
-          if(refreshed){
-            hist.push({role:'user',content:'_gaql_retry_ Token renovado. Repite la misma consulta GAQL: ' + gaqlQuery});
-            await callClaude(); return;
-          } else {
-            // Refresh falló — detener, no reintentar
-            loading=false; document.getElementById('sbtn').disabled=false;
-            addAgent('⚠️ **Necesitas reconectar tu cuenta de Google Ads una vez más.**\n\nDespués de reconectar, el token se renovará automáticamente cada 45 minutos y no necesitarás volver a hacer esto.\n\n👉 Ve a **Configuración → Conexiones → Google Ads → Desconectar** y vuelve a conectar.');
-            updateAdsUI(false);
-            return;
-          }
-        } else if(is400 && !alreadyRetried){
-          // Query inválida — pedir al agente que corrija la sintaxis UNA SOLA VEZ
-          const failedQ = gaqlResult.failedQuery || gaqlQuery;
-          const errDetail = gaqlResult.error || '';
-          hist.push({role:'user',content:`_gaql_400_retry_ La query GAQL falló con error 400: "${errDetail}"\n\nQuery fallida:\n${failedQ}\n\nReglas OBLIGATORIAS para la query corregida:\n- Usa ÚNICAMENTE campos confirmados en Google Ads API v20\n- campaign: campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc\n- search_term_view: search_term_view.search_term, metrics.clicks, metrics.impressions, metrics.cost_micros, metrics.conversions, metrics.ctr\n- keyword_view: ad_group_criterion.keyword.text, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.ctr, metrics.average_cpc\n- NO uses metrics.cost_per_conversion_micros (no existe) → usa metrics.cost_per_conversion si necesitas CPA\n- NO combines search_term_view con segments.device (incompatible)\n- NO uses metrics.conversions_from_interactions_rate con campaign (incompatible)\n- NO uses ad_group_criterion.quality_info sin datos históricos suficientes\n- Si el error menciona un campo específico, elimínalo de la query\n- Simplifica la query al mínimo de campos necesarios\n\nEmite UNA SOLA [GAQL_QUERY: ...] simplificada. Sin texto adicional.`});
-          await callClaude(); return;
-        } else {
-          // Error desconocido o ya se reintentó — mostrar al usuario y detener
-          loading=false; document.getElementById('sbtn').disabled=false;
-          addAgent(`⚠️ No pude consultar tu cuenta de Google Ads: ${gaqlResult.error.replace(/_gaql_\w+_retry_ /g,'')}`);
-          return;
-        }
+        hist.push({role:'user',content:`Error al consultar Google Ads API: ${gaqlResult.error}`});
+        addAgent(`⚠️ No pude consultar tu cuenta: ${gaqlResult.error}`);
       } else {
-        // Si el resultado trae customer.currencyCode, guardarlo para futuros contextos
-        const _firstResult = gaqlResult.results && gaqlResult.results[0];
-        if (_firstResult && _firstResult.customer && _firstResult.customer.currencyCode) {
-          const _curr = _firstResult.customer.currencyCode;
-          sessionStorage.setItem('ads_currency', _curr);
-          localStorage.setItem('ads_currency_persist', _curr);
-          if (typeof adsActiveAccount !== 'undefined' && adsActiveAccount) {
-            adsActiveAccount.currency = _curr;
-            localStorage.setItem('ads_active_account_persist', JSON.stringify(adsActiveAccount));
-          }
-        }
-        // Pre-procesar resultados: convertir TODOS los campos *Micros a valores reales
-        const _gaqlResults = gaqlResult.results || [];
-        const _currency = sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '';
-        const _processedResults = _gaqlResults.map(row => {
-          if (!row.metrics) return row;
-          const m = {...row.metrics};
-          const mc = v => v !== undefined && v !== null ? Math.round(Number(v) / 1000000) : undefined;
-          const curr = _currency ? ' ' + _currency : '';
-          // Convertir genéricamente TODOS los campos que terminan en 'Micros'
-          Object.keys(m).forEach(key => {
-            if (key.endsWith('Micros') && m[key] !== undefined) {
-              const baseKey = key.slice(0, -6); // quitar 'Micros'
-              m[baseKey + '_real'] = mc(m[key]) + curr;
-              delete m[key];
-            }
-          });
-          return {...row, metrics: m};
-        });
-
-        // Detectar si son resultados de search_term_view (análisis de gasto desperdiciado)
-        const _isSearchTerms = _gaqlResults.length > 0 && _gaqlResults[0].searchTermView;
-
-        // Pre-extraer términos del GAQL para el botón de fallback (en caso de que el agente no emita ACTION_CONFIRM)
-        // Limitar a 30 términos (ya vienen ordenados por costo desc del GAQL)
-        const _wastedTerms = _isSearchTerms
-          ? _gaqlResults
-              .filter(r => r.searchTermView && r.searchTermView.searchTerm)
-              .map(r => r.searchTermView.searchTerm)
-              .slice(0, 30)
-          : [];
-
-        const resultStr = JSON.stringify(_processedResults, null, 2);
+        const resultStr = JSON.stringify(gaqlResult.results||gaqlResult, null, 2);
         hist.push({role:'assistant',content:replyFinalProcessed});
-
-        // Pedir al agente solo el análisis textual — el botón lo renderiza el frontend siempre
-        const _resultPrompt = _isSearchTerms
-          ? `Resultados de search_term_view (últimos 30 días, 0 conversiones). Valores monetarios ya convertidos — NO dividir.\n\`\`\`json\n${resultStr}\n\`\`\`\n\nEntrega SOLO:\n1. Una línea: total de gasto desperdiciado.\n2. Tabla: Término | Gasto | Clics | Por qué es irrelevante (5-8 términos, solo los CLARAMENTE irrelevantes para este negocio — usa el perfil del cliente).\n3. Una frase de conclusión.\n\nNada más. Sin secciones adicionales, sin preguntas, sin recomendaciones de presupuesto.`
-          : `Resultados de Google Ads API (valores monetarios ya convertidos, no dividir):\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`;
-        hist.push({role:'user',content:_resultPrompt});
-
-        // Marcar que aún no se ha renderizado el botón de este análisis
-        window._lastActionConfirmRendered = false;
-        await callClaude();
-
-        // Renderizar botón siempre después del análisis de gasto desperdiciado,
-        // independientemente de si el agente emitió ACTION_CONFIRM o no.
-        if (_isSearchTerms && _wastedTerms.length > 0 && !window._lastActionConfirmRendered) {
-          setTimeout(() => renderActionConfirmCard({
-            action: 'add-negative-keywords',
-            label: 'Agregar palabras negativas a la cuenta',
-            params: {
-              keywords: _wastedTerms,
-              matchType: 'PHRASE',
-              scope: 'all_campaigns',
-            }
-          }), 150);
-        }
-        return;
+        hist.push({role:'user',content:`Resultados de Google Ads API:\n\`\`\`json\n${resultStr}\n\`\`\`\nAnaliza estos datos y dame conclusiones y recomendaciones concretas.`});
+        await callClaude(); return;
       }
     }
     // Detectar bloque META_API
@@ -4970,16 +3648,9 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
     }
     // Detectar parrilla con exportación a Sheets + imágenes generables
     else if(replyFinalProcessed.includes('[PARRILLA_LISTA]') || replyFinalProcessed.includes('[GENERAR_IMAGENES_PARRILLA]')){
-      // Extraer bloque JSON con etiquetas XML (evita bug de ] internos del JSON)
-      let studioImported = 0;
-      const parrillaJsonMatch = replyFinalProcessed.match(/<PARRILLA_JSON>([\s\S]*?)<\/PARRILLA_JSON>/);
-      if (parrillaJsonMatch) {
-        studioImported = parseParrillaJSON(parrillaJsonMatch[1].trim());
-      }
       const cleanReply = replyFinalProcessed
         .replace(/\[PARRILLA_LISTA\]/g, '')
         .replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '')
-        .replace(/<PARRILLA_JSON>[\s\S]*?<\/PARRILLA_JSON>/g, '')
         .trim();
       hist.push({role:'assistant', content: cleanReply});
       addAgent(cleanReply);
@@ -4987,80 +3658,12 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
       // Guardar el texto de la parrilla para exportación
       lastParrillaText = cleanReply;
       setTimeout(()=>renderParrillaImagenesBtn(), 300);
-      // Auto-abrir Studio si se importaron posts
-      if (studioImported > 0) {
-        window._studioJustImported = studioImported;
-        setTimeout(() => openSocialStudio(), 1800);
-      }
       loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     else {
-      // Detectar bloque ACTION_CONFIRM
-      const actionConfirmMatch = replyFinalProcessed.match(/<ACTION_CONFIRM>([\s\S]*?)<\/ACTION_CONFIRM>/);
-      if (actionConfirmMatch) {
-        const cleanReply = replyFinalProcessed.replace(/<ACTION_CONFIRM>[\s\S]*?<\/ACTION_CONFIRM>/,'').trim();
-        if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
-        else { hist.push({role:'assistant',content:'Accion propuesta — confirma para ejecutar.'}); }
-        try {
-          const actionData = JSON.parse(actionConfirmMatch[1].trim());
-          // Setear el flag ANTES del setTimeout para que el fallback no lo sobrescriba
-          window._lastActionConfirmRendered = true;
-          setTimeout(() => renderActionConfirmCard(actionData), 200);
-        } catch(e) { console.warn('ACTION_CONFIRM parse error:', e); }
-        if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
-        loading=false; document.getElementById('sbtn').disabled=false; return;
-      }
-      // Detectar bloque VIDEO_BRIEF
-      const videoBriefMatch = replyFinalProcessed.match(/<VIDEO_BRIEF>([\s\S]*?)<\/VIDEO_BRIEF>/);
-      if (videoBriefMatch) {
-        const cleanReply = replyFinalProcessed.replace(/<VIDEO_BRIEF>[\s\S]*?<\/VIDEO_BRIEF>/,'').trim();
-        if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
-        else { hist.push({role:'assistant',content:'Brief de video generado — listo para producir.'}); }
-        try {
-          const briefRaw = videoBriefMatch[1].trim();
-          const briefData = JSON.parse(briefRaw);
-          setTimeout(() => renderVideoBriefCard(briefData), 200);
-        } catch(e) {
-          console.warn('VIDEO_BRIEF parse error:', e);
-          // El agente puso texto en lugar de JSON — mostrar el contenido como respuesta normal
-          const fallbackText = videoBriefMatch[1].trim();
-          if (fallbackText && !cleanReply) {
-            hist.push({role:'assistant', content: fallbackText});
-            addAgent(fallbackText);
-          }
-        }
-        if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
-        loading=false; document.getElementById('sbtn').disabled=false; return;
-      }
-      // Detectar bloque REPORTE_DATA
-      const reportData = detectReportData(replyFinalProcessed);
-      if (reportData) {
-        const cleanReply = replyFinalProcessed.replace(/<REPORTE_DATA>[\s\S]*?<\/REPORTE_DATA>/,'').trim();
-        if (cleanReply) { hist.push({role:'assistant',content:cleanReply}); addAgent(cleanReply); }
-        else { hist.push({role:'assistant',content:'Reporte generado.'}); }
-        setTimeout(() => renderReportCard(reportData), 200);
-      } else {
-        hist.push({role:'assistant',content:replyFinalProcessed});
-        addAgent(replyFinalProcessed);
-      }
+      hist.push({role:'assistant',content:replyFinalProcessed});
+      addAgent(replyFinalProcessed);
       if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
-      // Guardar recomendación silenciosamente si aplica
-      const recAgents = ['google-ads','meta-ads','tiktok-ads','linkedin-ads','seo','consultor'];
-      if (recAgents.includes(currentAgentCtx) && replyFinalProcessed.length > 200) {
-        setTimeout(() => saveRecommendation(currentAgentCtx, replyFinalProcessed), 1000);
-      }
-      // Actualizar snapshot con análisis si corresponde
-      if (_snapshotPendingId && _snapshotAgent === currentAgentCtx) {
-        const snapId = _snapshotPendingId;
-        _snapshotPendingId = null; _snapshotAgent = null;
-        setTimeout(() => {
-          fetch('/api/admin?action=save-snapshot', {
-            method: 'PATCH',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({id: snapId, analysis: replyFinalProcessed})
-          }).catch(()=>{});
-        }, 500);
-      }
     }
     setTimeout(function(){ saveCurrentConversation(); agencyOnMessageReceived(); }, 500);
     }catch(e){console.error('callClaude error:',e);rmThinking(tid);addAgent('error de conexión. verifica tu conexión a internet e intenta de nuevo.');}loading=false;document.getElementById('sbtn').disabled=false;}
@@ -5077,1713 +3680,6 @@ function renderSugerencias(opciones) {
   area.appendChild(wrap);
   scrollB();
 }
-
-// ── FEATURE 1: RECOMMENDATIONS ───────────────────────────────
-async function saveRecommendation(agent, content) {
-  const user = window.Clerk?.user || clerkInstance?.user;
-  if (!user) return;
-  try {
-    await fetch('/api/admin?action=save-recommendation', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({userId: user.id, agent, content})
-    });
-    updateHistorialBadge();
-  } catch(e) { /* silencioso */ }
-}
-
-async function loadRecommendations(agentFilter) {
-  const user = window.Clerk?.user || clerkInstance?.user;
-  if (!user) return [];
-  try {
-    let url = `/api/admin?action=get-recommendations&userId=${encodeURIComponent(user.id)}`;
-    if (agentFilter && agentFilter !== 'all') url += `&agent=${encodeURIComponent(agentFilter)}`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    return await res.json();
-  } catch(e) { return []; }
-}
-
-async function updateRecommendation(id, status) {
-  try {
-    await fetch('/api/admin?action=update-recommendation', {
-      method: 'PATCH',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({id, status})
-    });
-  } catch(e) { /* silencioso */ }
-}
-
-async function updateHistorialBadge() {
-  const user = window.Clerk?.user || clerkInstance?.user;
-  if (!user) return;
-  try {
-    const res = await fetch(`/api/admin?action=get-recommendations&userId=${encodeURIComponent(user.id)}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const pending = (data || []).filter(r => r.status === 'pending').length;
-    const badge = document.getElementById('historial-badge');
-    if (badge) { badge.textContent = pending; badge.style.display = pending > 0 ? 'inline-flex' : 'none'; }
-  } catch(e) {}
-}
-
-function openHistorialPanel() {
-  let panel = document.getElementById('historial-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'historial-panel';
-    panel.style.cssText = 'position:fixed;top:0;right:0;width:380px;max-width:100vw;height:100vh;background:var(--bg);border-left:1px solid var(--border);z-index:800;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.08);transition:transform .25s';
-    panel.innerHTML = `
-      <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-        <div style="font-size:15px;font-weight:700;letter-spacing:-.2px">Historial</div>
-        <button onclick="closeHistorialPanel()" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);font-size:18px;line-height:1">×</button>
-      </div>
-      <div style="padding:12px 20px;border-bottom:1px solid var(--border2);display:flex;gap:8px;align-items:center;flex-shrink:0">
-        <div id="htab-rec" class="htab active" onclick="switchHistorialTab('rec')">Recomendaciones</div>
-        <div id="htab-ana" class="htab" onclick="switchHistorialTab('ana')">Análisis</div>
-        <select id="historial-agent-filter" onchange="reloadHistorialContent()" style="margin-left:auto;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--bg);color:var(--text)">
-          <option value="all">Todos</option>
-          <option value="google-ads">Google Ads</option>
-          <option value="meta-ads">Meta Ads</option>
-          <option value="tiktok-ads">TikTok Ads</option>
-          <option value="linkedin-ads">LinkedIn Ads</option>
-          <option value="seo">SEO</option>
-          <option value="consultor">Consultor</option>
-        </select>
-      </div>
-      <div id="historial-body" style="flex:1;overflow-y:auto;padding:16px 20px"></div>`;
-    document.body.appendChild(panel);
-  }
-  panel.style.display = 'flex';
-  panel.style.transform = 'translateX(0)';
-  reloadHistorialContent();
-  updateHistorialBadge();
-}
-
-function closeHistorialPanel() {
-  const panel = document.getElementById('historial-panel');
-  if (panel) panel.style.display = 'none';
-}
-
-function switchHistorialTab(tab) {
-  document.getElementById('htab-rec')?.classList.toggle('active', tab === 'rec');
-  document.getElementById('htab-ana')?.classList.toggle('active', tab === 'ana');
-  reloadHistorialContent();
-}
-
-async function reloadHistorialContent() {
-  const body = document.getElementById('historial-body');
-  if (!body) return;
-  const tabRec = document.getElementById('htab-rec')?.classList.contains('active');
-  const agent = document.getElementById('historial-agent-filter')?.value || 'all';
-  body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">Cargando...</div>';
-  if (tabRec) {
-    const data = await loadRecommendations(agent);
-    if (!data.length) { body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">No hay recomendaciones todavía.</div>'; return; }
-    const agentColors = {'google-ads':'#4285F4','meta-ads':'#1877F2','tiktok-ads':'#010101','linkedin-ads':'#0A66C2','seo':'#059669','consultor':'#1E2BCC','social':'#D97706'};
-    const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','consultor':'Consultor','social':'Social'};
-    body.innerHTML = data.map(r => {
-      const ago = timeAgo(r.created_at);
-      const color = agentColors[r.agent] || '#6B7280';
-      const name = agentNames[r.agent] || r.agent;
-      const preview = r.content.length > 120 ? r.content.slice(0,120)+'...' : r.content;
-      const statusIcon = r.status === 'applied' ? '<span style="color:#16a34a;font-weight:600">✓ Aplicada</span>' : r.status === 'dismissed' ? '<span style="color:#9CA3AF;text-decoration:line-through">Descartada</span>' : `<button onclick="applyRec('${r.id}',this)" style="padding:3px 10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:6px;font-size:11px;color:var(--blue);cursor:pointer;font-weight:600" onmouseover="this.style.background='#dde0fc'" onmouseout="this.style.background='var(--blue-lt)'">Aplicar</button> <button onclick="dismissRec('${r.id}',this)" style="padding:3px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='var(--bg)'">Descartar</button>`;
-      return `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:10px;${r.status==='dismissed'?'opacity:.5':''}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:10px;font-weight:700;background:${color}20;color:${color};padding:2px 8px;border-radius:10px">${name}</span>
-          <span style="font-size:11px;color:var(--muted)">${ago}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:10px">${preview}</div>
-        <div style="display:flex;gap:7px;align-items:center">${statusIcon}</div>
-      </div>`;
-    }).join('');
-  } else {
-    // Tab Análisis
-    const snapshots = await loadSnapshots(agent);
-    if (!snapshots.length) { body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">No hay análisis guardados todavía.</div>'; return; }
-    const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','consultor':'Consultor','social':'Social'};
-    body.innerHTML = snapshots.map(s => {
-      const ago = timeAgo(s.created_at);
-      const name = agentNames[s.agent] || s.agent;
-      const preview = s.analysis ? (s.analysis.length > 120 ? s.analysis.slice(0,120)+'...' : s.analysis) : 'Sin análisis generado.';
-      return `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:12px;font-weight:700;color:var(--text)">${s.period_label}</span>
-          <span style="font-size:11px;color:var(--muted)">· ${name} · ${ago}</span>
-        </div>
-        <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:8px">${preview}</div>
-        ${s.analysis ? `<button onclick="this.closest('div[style]').querySelector('.snap-full').style.display=this.closest('div[style]').querySelector('.snap-full').style.display==='none'?'block':'none'" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0">Ver análisis completo ▾</button><div class='snap-full' style='display:none;margin-top:8px;font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap'>${s.analysis}</div>` : ''}
-      </div>`;
-    }).join('');
-  }
-}
-
-function applyRec(id, btn) {
-  updateRecommendation(id, 'applied');
-  const card = btn.closest('div[style]');
-  const actionsDiv = btn.parentElement;
-  actionsDiv.innerHTML = '<span style="color:#16a34a;font-weight:600">✓ Aplicada</span>';
-  updateHistorialBadge();
-}
-
-function dismissRec(id, btn) {
-  updateRecommendation(id, 'dismissed');
-  const card = btn.closest('div[style]');
-  card.style.opacity = '.5';
-  const actionsDiv = btn.parentElement;
-  actionsDiv.innerHTML = '<span style="color:#9CA3AF;text-decoration:line-through">Descartada</span>';
-  updateHistorialBadge();
-}
-
-function timeAgo(ts) {
-  const d = new Date(ts), now = new Date();
-  const diff = Math.floor((now - d) / 1000);
-  if (diff < 60) return 'hace un momento';
-  if (diff < 3600) return `hace ${Math.floor(diff/60)} min`;
-  if (diff < 86400) return `hace ${Math.floor(diff/3600)} h`;
-  if (diff < 604800) return `hace ${Math.floor(diff/86400)} días`;
-  return d.toLocaleDateString('es');
-}
-
-// ── FEATURE 2: REPORTE PDF ─────────────────────────────────
-function detectReportData(text) {
-  const match = text.match(/<REPORTE_DATA>([\s\S]*?)<\/REPORTE_DATA>/);
-  if (!match) return null;
-  try { return JSON.parse(match[1].trim()); } catch(e) { return null; }
-}
-
-var _reportCache = {};
-
-function renderReportCard(data) {
-  const reportId = 'report_' + Date.now();
-  _reportCache[reportId] = data;
-  const el = document.createElement('div');
-  el.className = 'msg';
-  el.innerHTML = `
-    <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div>
-    <div style="border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--bg);max-width:380px;display:flex;align-items:center;gap:12px">
-      <div style="font-size:28px;flex-shrink:0">📄</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${data.titulo||'Reporte'}</div>
-        <div style="font-size:11px;color:var(--muted)">${data.periodo||''} · ${data.negocio||''}</div>
-      </div>
-      <button id="${reportId}-btn" onclick="downloadReport('${reportId}')" style="padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">Descargar PDF</button>
-    </div>`;
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-  // Auto-generar
-  setTimeout(() => downloadReport(reportId), 300);
-}
-
-function downloadReport(reportId) {
-  const data = _reportCache[reportId];
-  if (!data) return;
-  const btn = document.getElementById(reportId + '-btn');
-  if (btn) { btn.textContent = 'Generando...'; btn.disabled = true; }
-  try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const W = 210, margin = 18, cW = W - margin*2;
-    const blue = [37,99,235], gray = [55,65,81], lightGray = [243,244,246];
-    const green = [22,163,74], red = [220,38,38];
-    let y = margin;
-
-    // Header
-    doc.setFillColor(...blue);
-    doc.rect(0,0,W,20,'F');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(14); doc.setFont('helvetica','bold');
-    doc.text('Acuarius', margin, 13);
-    doc.setFontSize(9); doc.setFont('helvetica','normal');
-    doc.text(data.negocio||'', W-margin, 13, {align:'right'});
-    y = 30;
-
-    // Título
-    doc.setTextColor(...gray); doc.setFontSize(16); doc.setFont('helvetica','bold');
-    doc.text(data.titulo||'Reporte', margin, y); y += 7;
-    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(107,114,128);
-    doc.text(data.periodo||'', margin, y); y += 8;
-    doc.setDrawColor(...blue); doc.setLineWidth(.5);
-    doc.line(margin, y, W-margin, y); y += 8;
-
-    // Resumen ejecutivo
-    doc.setFillColor(...lightGray);
-    doc.roundedRect(margin, y, cW, 2,'r','F');
-    doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(...gray);
-    doc.text('Resumen Ejecutivo', margin, y+6); y += 10;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
-    const resumLines = doc.splitTextToSize(data.resumen_ejecutivo||'', cW);
-    doc.setFillColor(...lightGray);
-    doc.roundedRect(margin, y-2, cW, resumLines.length*5+8, 2,'F');
-    doc.text(resumLines, margin+4, y+4); y += resumLines.length*5+14;
-
-    // Métricas
-    doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(...gray);
-    doc.text('Métricas Principales', margin, y); y += 7;
-    const metrics = data.metricas || [];
-    const cols = 3, cellW = cW/cols, cellH = 18;
-    metrics.slice(0,6).forEach((m, i) => {
-      const col = i % cols, row = Math.floor(i/cols);
-      const x = margin + col*cellW, cy = y + row*cellH;
-      doc.setFillColor(...lightGray); doc.roundedRect(x+1, cy, cellW-2, cellH-2, 2, 'F');
-      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(107,114,128);
-      doc.text(m.nombre||'', x+3, cy+5);
-      doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(...gray);
-      doc.text(String(m.valor||''), x+3, cy+12);
-      if (m.cambio) {
-        const isUp = m.tendencia === 'up';
-        doc.setFontSize(8); doc.setFont('helvetica','normal');
-        doc.setTextColor(...(isUp ? green : red));
-        doc.text(m.cambio, x+cellW-3, cy+12, {align:'right'});
-      }
-    });
-    y += Math.ceil(metrics.length/cols)*cellH + 10;
-
-    // Análisis — check if new page needed
-    if (y > 220) { doc.addPage(); y = margin; }
-    doc.setDrawColor(...blue); doc.line(margin, y, W-margin, y); y += 6;
-    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
-    doc.text('Análisis Detallado', margin, y); y += 8;
-    (data.analisis||[]).forEach(a => {
-      if (y > 255) { doc.addPage(); y = margin; }
-      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
-      doc.text(a.titulo||'', margin, y); y += 5;
-      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
-      const lines = doc.splitTextToSize(a.contenido||'', cW);
-      doc.text(lines, margin, y); y += lines.length*5+6;
-    });
-
-    // Recomendaciones
-    if (y > 220) { doc.addPage(); y = margin; }
-    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
-    doc.text('Recomendaciones', margin, y); y += 8;
-    const priorColors = {alta:[220,38,38], media:[217,119,6], baja:[107,114,128]};
-    (data.recomendaciones||[]).forEach(r => {
-      if (y > 260) { doc.addPage(); y = margin; }
-      const pc = priorColors[r.prioridad]||[107,114,128];
-      doc.setFillColor(...pc); doc.circle(margin+2, y-1, 2,'F');
-      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
-      const lines = doc.splitTextToSize(r.accion||'', cW-8);
-      doc.text(lines, margin+7, y); y += lines.length*5+5;
-    });
-
-    // Próximos pasos
-    if (y > 220) { doc.addPage(); y = margin; }
-    if (data.proximos_pasos) {
-      doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...blue);
-      doc.text('Próximos Pasos', margin, y); y += 7;
-      doc.setFillColor(...lightGray); doc.setDrawColor(...blue); doc.setLineWidth(.5);
-      const psLines = doc.splitTextToSize(data.proximos_pasos, cW-6);
-      doc.rect(margin, y-2, cW, psLines.length*5+8,'F');
-      doc.line(margin, y-2, margin, y-2+psLines.length*5+8);
-      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...gray);
-      doc.text(psLines, margin+4, y+4); y += psLines.length*5+14;
-    }
-
-    // Footer en cada página
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= pageCount; p++) {
-      doc.setPage(p);
-      doc.setFontSize(8); doc.setTextColor(156,163,175);
-      doc.text(`Generado por Acuarius · acuarius.app · ${new Date().toLocaleDateString('es')}`, W/2, 292, {align:'center'});
-    }
-
-    const filename = `reporte-${(data.negocio||'acuarius').replace(/\s+/g,'-')}-${(data.periodo||'').replace(/\s+/g,'-')}.pdf`;
-    doc.save(filename);
-    if (btn) { btn.textContent = '✓ Descargado'; btn.style.background = '#16a34a'; btn.disabled = false; }
-    // Log en servidor (silencioso)
-    const userId = (window.Clerk?.user || clerkInstance?.user)?.id;
-    if (userId) fetch('/api/generate-report', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,userId})}).catch(()=>{});
-  } catch(err) {
-    console.error('PDF error:', err);
-    if (btn) { btn.textContent = 'Error — reintentar'; btn.disabled = false; }
-  }
-}
-
-// ── FEATURE 3: LINKEDIN ADS ACTION CARDS ──────────────────
-function showLinkedInActionCards() {
-  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
-  var html = '';
-  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">';
-  html += '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>';
-  html += '<div style="font-size:13px;font-weight:600;color:var(--text)">¿qué quieres hacer?</div>';
-  html += '</div>';
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:520px;padding-left:40px">';
-
-  var cards = [
-    {icon:'🏢',title:'Planear campaña B2B',desc:'Estructura completa para tomadores de decisión',prompt:'Ayúdame a planear una campaña de LinkedIn Ads B2B desde cero'},
-    {icon:'🎯',title:'Definir segmentación',desc:'Cargo, industria y empresa para LatAm',prompt:'Ayúdame a definir la segmentación profesional para mi campaña de LinkedIn'},
-    {icon:'✍️',title:'Crear anuncios',desc:'Copys y creatividades para audiencias ejecutivas',prompt:'Necesito crear anuncios profesionales para LinkedIn Ads'},
-    {icon:'📊',title:'Analizar campañas',desc:'Métricas del Campaign Manager con benchmarks B2B',prompt:'Analiza el rendimiento de mis campañas de LinkedIn Ads'}
-  ];
-  cards.forEach(function(c) {
-    html += '<div onclick="dismissLinkedInCards(this);qSend(\'' + c.prompt.replace(/'/g,"\\'") + '\')" style="border:1.5px solid var(--border);border-radius:12px;padding:14px 14px;cursor:pointer;background:var(--bg);transition:all .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg)\';this.style.transform=\'\'">';
-    html += '<div style="font-size:18px;margin-bottom:6px">' + c.icon + '</div>';
-    html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">' + c.title + '</div>';
-    html += '<div style="font-size:11px;color:var(--muted2)">' + c.desc + '</div>';
-    html += '</div>';
-  });
-
-  // Card 5 full-width
-  html += '<div onclick="dismissLinkedInCards(this);qSend(\'Diagnostica por qué mis campañas de LinkedIn no están generando los resultados esperados\')" style="border:2px solid var(--blue-md);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--blue-lt);transition:all .15s;grid-column:1/-1" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'#E0E3FC\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'var(--blue-md)\';this.style.background=\'var(--blue-lt)\';this.style.transform=\'\'">';
-  html += '<div style="display:flex;align-items:center;gap:10px">';
-  html += '<div style="font-size:22px">🔍</div><div>';
-  html += '<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:2px">Diagnosticar resultados</div>';
-  html += '<div style="font-size:11px;color:var(--blue);opacity:.75">Encuentra por qué tu campaña no está convirtiendo</div>';
-  html += '</div></div></div>';
-  html += '</div>';
-  el.innerHTML = html;
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-}
-function dismissLinkedInCards(el) { var msg = el.closest('.msg'); if (msg) msg.style.display = 'none'; }
-
-// ── FEATURE 4: ANÁLISIS PERIÓDICO ─────────────────────────
-var _snapshotPendingId = null;
-var _snapshotAgent = null;
-
-const PERIODIC_METRICS = {
-  'google-ads':   ['Impresiones','Clicks','CTR (%)','CPC ($)','Conversiones','CPA ($)','Gasto total ($)'],
-  'meta-ads':     ['Impresiones','Alcance','CTR (%)','CPM ($)','Conversiones','CPA ($)','Gasto total ($)'],
-  'tiktok-ads':   ['Impresiones','Alcance','VVR (%)','CTR (%)','Conversiones','CPA ($)','Gasto total ($)'],
-  'linkedin-ads': ['Impresiones','Clicks','CTR (%)','CPC ($)','Leads','CPL ($)','Gasto total ($)'],
-  'seo':          ['Sesiones orgánicas','Posición promedio','Clicks Search Console','Impresiones SC','Páginas/sesión','Tasa de rebote (%)'],
-  'consultor':    ['Presupuesto total ($)','Canales activos','Leads generados','Costo por lead ($)','ROAS general']
-};
-
-const PREV_METRICS = {
-  'google-ads': ['Impresiones','Clicks','CPA ($)'],
-  'meta-ads':   ['Impresiones','Conversiones','CPA ($)'],
-  'tiktok-ads': ['Impresiones','Conversiones','CPA ($)'],
-  'linkedin-ads':['Impresiones','Leads','CPL ($)'],
-  'seo':        ['Sesiones orgánicas','Posición promedio','Clicks SC'],
-  'consultor':  ['Leads generados','Costo por lead ($)','ROAS general']
-};
-
-function openAnalisisModal() {
-  const agent = currentAgentCtx;
-  const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'Social','consultor':'Consultor'};
-  const metrics = PERIODIC_METRICS[agent] || PERIODIC_METRICS['google-ads'];
-  const prevMetrics = PREV_METRICS[agent] || PREV_METRICS['google-ads'];
-  const now = new Date();
-  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const defaultPeriod = months[now.getMonth()] + ' ' + now.getFullYear();
-
-  let existing = document.getElementById('analisis-modal');
-  if (existing) existing.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'analisis-modal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.innerHTML = `
-    <div style="background:var(--bg);border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-        <div style="font-size:15px;font-weight:700;letter-spacing:-.2px">📊 Análisis periódico · ${agentNames[agent]||agent}</div>
-        <button onclick="document.getElementById('analisis-modal').remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted)">×</button>
-      </div>
-      <div style="display:flex;gap:16px;margin-bottom:14px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="radio" name="period-type" value="weekly" id="pt-weekly"> Semanal
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="radio" name="period-type" value="monthly" id="pt-monthly" checked> Mensual
-        </label>
-      </div>
-      <div style="margin-bottom:14px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted2);display:block;margin-bottom:5px">PERÍODO</label>
-        <input id="am-period" type="text" value="${defaultPeriod}" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;background:var(--bg);color:var(--text)">
-      </div>
-      <div style="margin-bottom:14px">
-        <div style="font-size:12px;font-weight:600;color:var(--muted2);margin-bottom:10px">MÉTRICAS DEL PERÍODO</div>
-        ${metrics.map(m => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><label style="font-size:12px;color:var(--text);width:160px;flex-shrink:0">${m}</label><input data-metric="${m}" type="text" placeholder="0" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:13px;background:var(--bg);color:var(--text)"></div>`).join('')}
-      </div>
-      <details style="margin-bottom:14px">
-        <summary style="font-size:12px;font-weight:600;color:var(--muted2);cursor:pointer;margin-bottom:8px">PERÍODO ANTERIOR (opcional)</summary>
-        <div style="margin-top:8px">
-          ${prevMetrics.map(m => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><label style="font-size:12px;color:var(--text);width:160px;flex-shrink:0">${m}</label><input data-prev-metric="${m}" type="text" placeholder="0" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:13px;background:var(--bg);color:var(--text)"></div>`).join('')}
-        </div>
-      </details>
-      <div style="margin-bottom:18px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted2);display:block;margin-bottom:5px">NOTAS ADICIONALES</label>
-        <textarea id="am-notes" rows="2" placeholder="Contexto extra, anomalías, eventos del período..." style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;background:var(--bg);color:var(--text);resize:vertical;font-family:var(--font)"></textarea>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button onclick="document.getElementById('analisis-modal').remove()" style="padding:9px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;color:var(--muted)">Cancelar</button>
-        <button onclick="submitAnalisis()" style="padding:9px 18px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Analizar con IA →</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
-async function submitAnalisis() {
-  const modal = document.getElementById('analisis-modal');
-  if (!modal) return;
-  const agent = currentAgentCtx;
-  const periodLabel = document.getElementById('am-period')?.value?.trim() || 'Período actual';
-  const periodType = document.querySelector('input[name="period-type"]:checked')?.value || 'monthly';
-  const notes = document.getElementById('am-notes')?.value?.trim() || '';
-
-  const metrics = {};
-  modal.querySelectorAll('[data-metric]').forEach(inp => {
-    if (inp.value.trim()) metrics[inp.dataset.metric] = inp.value.trim();
-  });
-  const prevMetrics = {};
-  modal.querySelectorAll('[data-prev-metric]').forEach(inp => {
-    if (inp.value.trim()) prevMetrics[inp.dataset.prevMetric] = inp.value.trim();
-  });
-
-  modal.remove();
-
-  // Save snapshot
-  const user = window.Clerk?.user || clerkInstance?.user;
-  if (user) {
-    try {
-      const res = await fetch('/api/admin?action=save-snapshot', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({userId: user.id, agent, period_label: periodLabel, period_type: periodType, metrics})
-      });
-      const json = await res.json();
-      _snapshotPendingId = json.id;
-      _snapshotAgent = agent;
-    } catch(e) {}
-  }
-
-  // Build prompt and inject into chat
-  showView('chat');
-  const metricsText = buildMetricsPrompt({period_label: periodLabel, metrics, prev_metrics: prevMetrics, notes}, agent);
-  const cin = document.getElementById('cin');
-  if (cin) { cin.value = metricsText; sendMsg(); }
-}
-
-function buildMetricsPrompt(data, agent) {
-  let txt = 'Aquí están mis métricas de ' + (data.period_label || 'este período') + ':\n\n';
-  Object.entries(data.metrics || {}).forEach(([k,v]) => { if (v) txt += k + ': ' + v + '\n'; });
-  if (data.prev_metrics && Object.values(data.prev_metrics).some(v => v)) {
-    txt += '\nPeríodo anterior:\n';
-    Object.entries(data.prev_metrics).forEach(([k,v]) => { if (v) txt += k + ': ' + v + '\n'; });
-  }
-  if (data.notes) txt += '\nNotas: ' + data.notes;
-  txt += '\n\nPor favor analiza el rendimiento, identifica tendencias, y dame recomendaciones priorizadas para el siguiente período.';
-  return txt;
-}
-
-// ── SPRINT 3: ACTIVE CLIENT CONTEXT ──────────────────────
-function openAgentForClient(agentKey, client) {
-  agencyActiveClientId = client.id; // necesario para que getProfileKey use el cliente correcto
-  activeClientContext = {
-    clientId:      client.id,
-    clientName:    client.client_name || client.name || '',
-    clientIndustry: client.client_industry || '',
-    monthlyBudget: client.monthly_budget || '',
-    notes:         client.notes || '',
-  };
-  // Si es Google Ads y el cliente tiene cuenta asignada, activarla
-  if (agentKey === 'google-ads' && client.googleCustomerId) {
-    const custId = String(client.googleCustomerId).replace(/-/g, '');
-    sessionStorage.setItem('ads_customer_id', custId);
-    localStorage.setItem('ads_customer_id_persist', custId);
-    adsActiveAccount = { id: custId, name: client.googleAccountName || client.name || custId };
-    if (typeof renderActiveAccount === 'function') renderActiveAccount();
-  }
-  updateActiveClientBar();
-  openAgent(agentKey);
-}
-
-function clearActiveClientContext() {
-  activeClientContext = null;
-  updateActiveClientBar();
-}
-
-function updateActiveClientBar() {
-  const bar  = document.getElementById('agency-ctx-bar');
-  const name = document.getElementById('agency-ctx-name');
-  if (!bar) return;
-  if (activeClientContext) {
-    if (name) name.textContent = activeClientContext.clientName;
-    bar.style.display = 'flex';
-  } else {
-    bar.style.display = 'none';
-  }
-}
-
-// ── SPRINT 3: COMPETITIVE SEARCH ─────────────────────────
-async function enrichWithCompetitiveData(userMessage, agentKey) {
-  if (!['consultor', 'seo'].includes(agentKey)) return userMessage;
-  const competitiveKeywords = ['competencia', 'competidores', 'competidor', 'quien aparece',
-    'quién aparece', 'que estan haciendo', 'qué están haciendo', 'analisis de mercado',
-    'análisis de mercado', 'benchmark'];
-  const isCompetitiveQuery = competitiveKeywords.some(k => userMessage.toLowerCase().includes(k));
-  if (!isCompetitiveQuery) return userMessage;
-
-  const profile = mem;
-  if (!profile?.negocio || !profile?.industria) return userMessage;
-
-  try {
-    const query = profile.negocio + ' ' + profile.industria + ' ' + (profile.pais || 'Colombia');
-    const res = await fetch('/api/admin?action=competitive-search', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ query, type: 'serp' })
-    });
-    if (!res.ok) return userMessage;
-    const data = await res.json();
-    if (!data.results?.length) return userMessage;
-    const context = data.results.slice(0, 8).map((r, i) =>
-      (i + 1) + '. ' + r.title + '\n   URL: ' + r.url + '\n   ' + (r.description || '')
-    ).join('\n\n');
-    return userMessage + '\n\n[DATOS DE BUSQUEDA REAL — usar para el analisis]\n' + context;
-  } catch(e) { return userMessage; }
-}
-
-// ── SPRINT 3: ACTION CONFIRM CARD ────────────────────────
-// Registro global para datos de acciones pendientes (evita serializar JSON en atributos HTML)
-window._pendingActions = window._pendingActions || [];
-
-function renderActionConfirmCard(actionData) {
-  const area = document.getElementById('chat-area');
-  if (!area || !actionData) return;
-
-  // Normalizar: el agente puede generar JSON plano o anidado bajo params
-  const params = actionData.params || {
-    keywords:   actionData.keywords,
-    matchType:  actionData.matchType,
-    scope:      actionData.scope,
-    customerId: actionData.customerId,
-    campaignId: actionData.campaignId,
-  };
-  const isReversible = actionData.reversible !== false;
-  const danger = actionData.dangerLevel || 'medium';
-
-  // Guardar en registro global y obtener índice para el onclick
-  const actionIdx = window._pendingActions.length;
-  window._pendingActions.push({ ...actionData, params }); // normalizado
-
-  let detailsHtml = '';
-
-  // Renderizado especial para add-negative-keywords
-  if (actionData.action === 'add-negative-keywords' && Array.isArray(params.keywords) && params.keywords.length) {
-    const matchLabel = { PHRASE: 'Frase', EXACT: 'Exacta', BROAD: 'Amplia' }[params.matchType] || params.matchType || 'Frase';
-    const scopeLabel = params.scope === 'campaign' ? '1 campaña' : 'todas las campañas activas';
-    detailsHtml += '<div class="action-confirm-detail"><span class="label">Concordancia:</span><span class="value">[' + matchLabel + ']</span></div>';
-    detailsHtml += '<div class="action-confirm-detail"><span class="label">Se agrega a:</span><span class="value">' + scopeLabel + '</span></div>';
-    detailsHtml += '<div class="action-confirm-detail"><span class="label">Cantidad:</span><span class="value">' + params.keywords.length + ' palabras negativas</span></div>';
-    detailsHtml += '<div style="margin-top:10px;padding:10px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;max-height:180px;overflow-y:auto">';
-    params.keywords.forEach(kw => {
-      const matchTxt = params.matchType === 'EXACT' ? 'exacta' : params.matchType === 'BROAD' ? 'amplia' : 'frase';
-      detailsHtml += '<div style="font-size:12px;color:#374151;padding:3px 0;font-family:monospace">[' + matchTxt + '] ' + kw + '</div>';
-    });
-    detailsHtml += '</div>';
-  } else {
-    const friendlyLabels = {
-      campaignName: 'Campaña',
-      status: 'Estado nuevo',
-      currentBudget: 'Presupuesto actual',
-      newBudget: 'Presupuesto nuevo',
-      keywordText: 'Keyword',
-      currentBid: 'Puja actual',
-      newBid: 'Puja nueva',
-      adGroupName: 'Grupo de anuncios',
-    };
-    Object.entries(friendlyLabels).forEach(([k, label]) => {
-      if (params[k] !== undefined) {
-        let valHtml = String(params[k]);
-        if (k === 'status') {
-          valHtml = params[k] === 'PAUSED'
-            ? '<span class="status-paused">○ Pausada</span>'
-            : '<span class="status-active">● Activa</span>';
-        }
-        detailsHtml += '<div class="action-confirm-detail"><span class="label">' + label + ':</span><span class="value">' + valHtml + '</span></div>';
-      }
-    });
-  }
-
-  // Marcar que el botón ya fue renderizado (evita duplicado con el fallback)
-  window._lastActionConfirmRendered = true;
-
-  const btnClass = danger === 'high' ? 'btn-execute danger' : 'btn-execute';
-  const wrap = document.createElement('div');
-  wrap.className = 'msg';
-  wrap.innerHTML = '<div class="action-confirm-card">' +
-    '<div class="action-confirm-header">' +
-      '<span class="action-confirm-icon">⚡</span>' +
-      '<span class="action-confirm-title">' + (actionData.label || 'Agregar palabras negativas') + '</span>' +
-      '<span class="action-confirm-badge ' + (isReversible ? 'reversible' : 'irreversible') + '">' + (isReversible ? 'Reversible' : 'Irreversible') + '</span>' +
-    '</div>' +
-    '<div class="action-confirm-body">' + detailsHtml + '</div>' +
-    '<div class="action-confirm-footer">' +
-      '<button class="btn-cancel" onclick="this.closest(\'.msg\').remove()">Cancelar</button>' +
-      '<button class="' + btnClass + '" onclick="executeAction(window._pendingActions[' + actionIdx + '], this)">' + (actionData.confirmText || 'Confirmar') + '</button>' +
-    '</div>' +
-  '</div>';
-  area.appendChild(wrap);
-  scrollB();
-}
-
-async function executeAction(actionData, btn) {
-  // Soporta tanto objeto directo (desde _pendingActions) como string JSON (legado)
-  if (typeof actionData === 'string') {
-    try { actionData = JSON.parse(actionData); } catch(e) { return; }
-  }
-  if (!actionData) return;
-
-  const userId = clerkInstance?.user?.id;
-  if (!userId) { addAgent('Error: no hay sesion activa.'); return; }
-
-  btn.disabled = true;
-  btn.textContent = 'Ejecutando...';
-
-  // Normalizar: soporta JSON plano (agente) o anidado bajo params
-  const params = actionData.params || {
-    keywords:   actionData.keywords,
-    matchType:  actionData.matchType,
-    scope:      actionData.scope,
-    customerId: actionData.customerId,
-    campaignId: actionData.campaignId,
-  };
-  // customerId: usar el del params si existe, sino el de la sesión activa (fallback)
-  const _actionCustId = params.customerId
-    || sessionStorage.getItem('ads_customer_id')
-    || localStorage.getItem('ads_customer_id_persist')
-    || '';
-  const endpoint = '/api/google-ads?action=' + actionData.action + '&userId=' + encodeURIComponent(userId) + '&customerId=' + encodeURIComponent(_actionCustId);
-
-  // Incluir token desde sessionStorage (igual que queryGoogleAds)
-  // El backend puede tener el token expirado en Supabase; el de sesión es el más fresco.
-  const _actionToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
-
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ ...params, userId, confirm: true, accessToken: _actionToken }),
-    });
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      btn.disabled = false;
-      btn.textContent = actionData.confirmText || 'Confirmar';
-      const _errMsg = data.error
-        ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error)))
-        : 'Error desconocido';
-      addAgent('⚠️ No se pudo ejecutar la acción: ' + _errMsg);
-      return;
-    }
-
-    // Success — remover la tarjeta de confirmación de forma segura
-    const _card = btn.closest('.msg');
-    if (_card) _card.remove();
-    if (actionData.action === 'add-negative-keywords') {
-      const currency = sessionStorage.getItem('ads_currency') || '';
-      addAgent('✅ **' + data.added + ' palabras clave negativas agregadas** a ' + data.campaigns + ' campaña' + (data.campaigns !== 1 ? 's' : '') + ' activa' + (data.campaigns !== 1 ? 's' : '') + '.\n\nLas búsquedas irrelevantes dejarán de activar tus anuncios en el próximo ciclo de actualización de Google (~24 horas). Revisa en 7 días el impacto en CTR y CPA.' + (data.partialErrors ? '\n\n⚠️ Algunas negativos no pudieron agregarse: ' + data.partialErrors[0] : ''));
-    } else {
-      addAgent('Hecho. ' + (data.campaignName || data.adGroupName || data.keywordText || '') +
-        (data.newStatus ? ' — estado: ' + data.newStatus : '') +
-        (data.newBudget ? ' — nuevo presupuesto: $' + data.newBudget + '/dia' : '') +
-        (data.newBid ? ' — nueva puja: $' + data.newBid : ''));
-    }
-
-    // Audit log
-    fetch('/api/admin?action=log-api-action', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        userId, platform: 'google_ads', actionType: actionData.action,
-        entityId: params.campaignId || params.adGroupId || params.criterionId,
-        entityName: params.campaignName || params.adGroupName || params.keywordText,
-        newValue: params, confirmed: true,
-      }),
-    }).catch(()=>{});
-
-  } catch(e) {
-    btn.disabled = false;
-    btn.textContent = actionData.confirmText || 'Confirmar';
-    addAgent('Error de conexion al ejecutar la accion. Intenta de nuevo.');
-  }
-}
-
-// ── VIDEO AD GENERATION (Seedance 2.0 / BytePlus) ────────────────────────────
-
-// Abre el formulario de video pre-llenado con el contexto del cliente activo
-// Usado por los botones de acción de Meta/TikTok — evita pasar por el agente
-function showVideoAdFormWithContext() {
-  showVideoAdForm();
-  // Esperar a que el formulario se renderice (incluye fetch a /api/video-credits)
-  setTimeout(() => {
-    const desc = document.getElementById('vaf-desc');
-    if (!desc || desc.value.trim()) return; // ya tiene contenido o no existe
-
-    // Construir descripción desde el perfil del cliente activo
-    const parts = [];
-    if (mem.negocio)     parts.push(mem.negocio);
-    if (mem.descripcion) parts.push(mem.descripcion);
-    else if (mem.producto) parts.push(mem.producto);
-    if (mem.diferenciador) parts.push(mem.diferenciador);
-    if (mem.audiencia)   parts.push('Audiencia: ' + mem.audiencia);
-    if (mem.industria && !parts.some(p => p.toLowerCase().includes(mem.industria.toLowerCase())))
-      parts.push('Sector: ' + mem.industria);
-
-    if (parts.length) {
-      desc.value = parts.join('. ');
-      // Resize automático del textarea
-      desc.style.height = 'auto';
-      desc.style.height = desc.scrollHeight + 'px';
-      desc.style.borderColor = '#7C3AED'; // highlight para que el usuario vea que está listo
-    }
-  }, 700);
-}
-
-async function showVideoAdForm() {
-  const chatBox = document.getElementById('chat-area');
-
-  // ── Verificar créditos antes de mostrar el formulario ──────────────────────
-  let credits = null;
-  try {
-    const tok = sessionToken || (clerkInstance?.session ? await clerkInstance.session.getToken().catch(()=>null) : null);
-    const r = await fetch('/api/video-credits', { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
-    if (r.ok) credits = await r.json();
-  } catch(e) { /* fail open: mostrar formulario aunque no se pueda verificar */ }
-
-  // Sin créditos → mostrar paywall
-  if (credits && credits.available <= 0) {
-    const el = document.createElement('div');
-    el.className = 'msg agent';
-    const url5  = 'https://pay.hotmart.com/R105597226A?off=2muq4ex2';
-    const url10 = 'https://pay.hotmart.com/R105597226A?off=mfjz53b5';
-    el.innerHTML =
-      '<div style="background:var(--bg);border:2px solid #E5E7EB;border-radius:16px;padding:20px;max-width:480px;width:100%">' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
-          '<span style="font-size:22px">🎬</span>' +
-          '<div>' +
-            '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
-            (credits.is_free
-              ? '<div style="font-size:11px;color:#EF4444;font-weight:600">Plan gratuito · video de prueba utilizado</div>'
-              : '<div style="font-size:11px;color:#EF4444;font-weight:600">Usaste tus ' + credits.monthly_limit + ' videos de este mes</div>') +
-          '</div>' +
-        '</div>' +
-        '<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:14px;margin-bottom:16px">' +
-          '<div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:6px">⚡ Sin créditos disponibles</div>' +
-          '<div style="font-size:12px;color:#78350F;line-height:1.6">' +
-            (credits.is_free
-              ? 'El plan gratuito incluye 1 video de prueba. Actualiza a Pro para obtener 5 videos/mes incluidos.'
-              : 'Tu plan incluye ' + credits.monthly_limit + ' videos/mes. Compra créditos extra o espera al próximo ciclo.') +
-          '</div>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:8px">' +
-          (credits.is_free
-            ? '<a href="/pricing.html" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#7C3AED;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">🚀 Actualizar a Pro — 5 videos/mes incluidos</a>'
-            : '') +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            '<a href="' + url5 + '" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:12px 10px;background:#7C3AED;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;text-align:center;gap:3px">' +
-              '<span style="font-size:18px">🎬</span>' +
-              '<span>5 créditos</span>' +
-              '<span style="font-size:15px;font-weight:800">$9.90</span>' +
-            '</a>' +
-            '<a href="' + url10 + '" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:12px 10px;background:#6D28D9;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;text-align:center;gap:3px;position:relative">' +
-              '<span style="position:absolute;top:-8px;background:#F59E0B;color:#fff;font-size:9px;padding:2px 7px;border-radius:20px;font-weight:700">MEJOR VALOR</span>' +
-              '<span style="font-size:18px">🎬🎬</span>' +
-              '<span>10 créditos</span>' +
-              '<span style="font-size:15px;font-weight:800">$16.90</span>' +
-            '</a>' +
-          '</div>' +
-          '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:2px">Los créditos extra no vencen · Se suman a tu plan actual</div>' +
-        '</div>' +
-      '</div>';
-    chatBox.appendChild(el);
-    chatBox.scrollTop = chatBox.scrollHeight;
-    return;
-  }
-
-  // ── Mostrar formulario con contador de créditos ────────────────────────────
-  const creditsBadge = credits
-    ? '<span style="font-size:11px;background:#EDE9FE;color:#7C3AED;padding:3px 8px;border-radius:20px;font-weight:600">' + credits.available + ' crédito' + (credits.available !== 1 ? 's' : '') + ' disponible' + (credits.available !== 1 ? 's' : '') + '</span>'
-    : '';
-
-  const el = document.createElement('div');
-  el.className = 'msg agent';
-  el.innerHTML =
-    '<div style="background:var(--bg);border:2px solid #7C3AED;border-radius:16px;padding:20px;max-width:520px;width:100%">' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">' +
-        '<span style="font-size:22px">🎬</span>' +
-        '<div style="flex:1">' +
-          '<div style="display:flex;align-items:center;gap:8px">' +
-            '<div style="font-size:14px;font-weight:700;color:var(--text)">Crear video ad con IA</div>' +
-            creditsBadge +
-          '</div>' +
-          '<div style="font-size:11px;color:var(--muted2)">Seedance 2.0 · ~60 seg · 1 crédito por video</div>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="margin-bottom:12px">' +
-        '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">FOTO DEL PRODUCTO <span style="color:#7C3AED">★ recomendado</span></label>' +
-        '<div id="vaf-img-drop" onclick="document.getElementById(\'vaf-img-input\').click()" style="border:1.5px dashed #7C3AED;border-radius:8px;padding:10px;cursor:pointer;background:#F5F3FF;display:flex;align-items:center;gap:10px;transition:background .15s" onmouseover="this.style.background=\'#EDE9FE\'" onmouseout="this.style.background=\'#F5F3FF\'">' +
-          '<input type="file" id="vaf-img-input" accept="image/*" style="display:none" onchange="vafPreviewImage(this)">' +
-          '<span style="font-size:18px">📷</span>' +
-          '<div id="vaf-img-label" style="font-size:12px;color:#7C3AED;font-weight:500">Subir foto del producto (mejora el resultado y evita filtros de contenido)</div>' +
-        '</div>' +
-        '<div id="vaf-img-preview" style="display:none;margin-top:6px"><img id="vaf-img-thumb" style="max-height:70px;border-radius:6px;border:1.5px solid #7C3AED"></div>' +
-      '</div>' +
-
-      '<div style="margin-bottom:12px">' +
-        '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">DESCRIBE TU PRODUCTO O ESCENA</label>' +
-        '<textarea id="vaf-desc" placeholder="Ej: Shampoo orgánico en botella blanca elegante, cabello brillante y natural, ingredientes como aloe vera y coco..." style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;resize:vertical;min-height:60px;background:var(--sidebar2);color:var(--text);box-sizing:border-box;outline:none"></textarea>' +
-      '</div>' +
-
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">' +
-        '<div>' +
-          '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">PLATAFORMA</label>' +
-          '<select id="vaf-platform" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;background:var(--sidebar2);color:var(--text);outline:none">' +
-            '<option value="9:16|Meta Reels">Reels / Stories 9:16</option>' +
-            '<option value="9:16|TikTok">TikTok In-Feed 9:16</option>' +
-            '<option value="1:1|Meta Feed">Feed cuadrado 1:1</option>' +
-            '<option value="16:9|YouTube">YouTube / Horizontal 16:9</option>' +
-          '</select>' +
-        '</div>' +
-        '<div>' +
-          '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.5px">ESTILO VISUAL</label>' +
-          '<select id="vaf-style" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px;background:var(--sidebar2);color:var(--text);outline:none">' +
-            '<option value="cinematic">Cinematic (premium)</option>' +
-            '<option value="realistic">UGC / Orgánico</option>' +
-            '<option value="realistic">Lifestyle</option>' +
-            '<option value="3d_render">Producto hero</option>' +
-          '</select>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="margin-bottom:16px">' +
-        '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:8px;letter-spacing:.5px">DURACIÓN</label>' +
-        '<div style="display:flex;gap:12px">' +
-          '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)"><input type="radio" name="vaf-dur" value="10" checked style="accent-color:#7C3AED"> 10 segundos</label>' +
-          '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)"><input type="radio" name="vaf-dur" value="15" style="accent-color:#7C3AED"> 15 segundos</label>' +
-        '</div>' +
-      '</div>' +
-
-      '<button onclick="submitVideoAdForm(this)" style="width:100%;padding:11px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
-        'Generar video con IA' +
-      '</button>' +
-    '</div>';
-  chatBox.appendChild(el);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function vafPreviewImage(input) {
-  if (!input.files || !input.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    document.getElementById('vaf-img-thumb').src = e.target.result;
-    document.getElementById('vaf-img-preview').style.display = 'block';
-    document.getElementById('vaf-img-label').textContent = input.files[0].name;
-  };
-  reader.readAsDataURL(input.files[0]);
-}
-
-async function submitVideoAdForm(btn) {
-  const desc = document.getElementById('vaf-desc').value.trim();
-  if (!desc) {
-    document.getElementById('vaf-desc').style.borderColor = '#EF4444';
-    document.getElementById('vaf-desc').focus();
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = 'Preparando…';
-
-  const platformVal = document.getElementById('vaf-platform').value;
-  const [aspectRatio, platform] = platformVal.split('|');
-  const style = document.getElementById('vaf-style').value;
-  const duration = parseInt(document.querySelector('input[name="vaf-dur"]:checked').value);
-
-  // Construir prompt rico y cinematográfico para Seedance 2.0
-  const cameraMovements = {
-    cinematic: 'slow cinematic dolly-in, shallow depth of field, anamorphic bokeh, rack focus reveal',
-    realistic: 'slight handheld movement, organic camera drift, authentic POV, natural imperfections',
-    '3d_render': 'smooth orbit rotation, dramatic reveal from low angle, 360 product turntable',
-  };
-  const lightingStyle = {
-    cinematic: 'warm golden hour lighting, dramatic shadows, premium color grading with teal and orange tones',
-    realistic: 'natural soft daylight, window light diffusion, true-to-life colors, no harsh shadows',
-    '3d_render': 'studio three-point lighting, dramatic top backlight, clean white or dark background, product highlights',
-  };
-  const platformContext = aspectRatio === '9:16'
-    ? 'vertical social media ad, mobile-first composition, subject centered in frame'
-    : aspectRatio === '1:1'
-    ? 'square social media ad, balanced centered composition'
-    : 'horizontal widescreen ad, cinematic letterbox composition';
-  const motionStyle = duration <= 10
-    ? 'tight edit, one hero moment, single product reveal'
-    : 'multi-moment narrative, 2-3 scene cuts, beginning-middle-end structure';
-  const prompt =
-    (lightingStyle[style] || lightingStyle.cinematic) + ', ' +
-    (cameraMovements[style] || cameraMovements.cinematic) + '. ' +
-    'Subject: ' + desc + '. ' +
-    platformContext + '. ' + motionStyle + '. ' +
-    'Professional advertising quality, high production value, no text overlays, photorealistic, 4K detail.';
-
-  // Leer y comprimir imagen de referencia si existe
-  let referenceImage = null;
-  const imgInput = document.getElementById('vaf-img-input');
-  if (imgInput && imgInput.files && imgInput.files[0]) {
-    referenceImage = await new Promise(resolve => {
-      const file = imgInput.files[0];
-      const img = new Image();
-      img.onload = function() {
-        const canvas = document.createElement('canvas');
-        const max = 1024;
-        let w = img.width, h = img.height;
-        if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
-  const briefData = { prompt, aspect_ratio: aspectRatio, duration, resolution: '1080p', style, platform, description: desc, reference_image: referenceImage };
-  btn.closest('.msg').remove();
-  renderVideoBriefCard(briefData);
-}
-
-// Map global para brief de video — evita pasar JSON por onclick (rompe con apóstrofes/paréntesis)
-const _videoBriefMap = new Map();
-
-function renderVideoBriefCard(briefData) {
-  const chatBox = document.getElementById('chat-area');
-  if (!chatBox) return;
-
-  const formatLabels = { '9:16':'Vertical 9:16', '1:1':'Cuadrado 1:1', '16:9':'Horizontal 16:9' };
-  const platformIcon = briefData.platform && briefData.platform.toLowerCase().includes('tiktok') ? '🎵' : '📱';
-
-  // Guardar en Map para evitar problemas con caracteres especiales en onclick
-  const briefId = 'vbr_' + Date.now();
-  _videoBriefMap.set(briefId, briefData);
-
-  const card = document.createElement('div');
-  card.className = 'msg agent';
-  card.innerHTML =
-    '<div class="video-brief-card">' +
-      '<div class="video-brief-header">' +
-        '<span class="video-brief-icon">' + platformIcon + '</span>' +
-        '<span class="video-brief-title">Brief de video publicitario</span>' +
-        '<span class="video-brief-platform">' + (briefData.platform || 'Video Ad') + '</span>' +
-      '</div>' +
-      '<div class="video-brief-specs">' +
-        '<span class="video-brief-spec">' + (formatLabels[briefData.aspect_ratio] || briefData.aspect_ratio) + '</span>' +
-        '<span class="video-brief-spec">' + (briefData.duration || 10) + ' seg</span>' +
-        '<span class="video-brief-spec">' + (briefData.resolution || '1080p') + '</span>' +
-        (briefData.style ? '<span class="video-brief-spec">' + briefData.style + '</span>' : '') +
-      '</div>' +
-      (briefData.description ? '<div class="video-brief-description">' + briefData.description + '</div>' : '') +
-      '<div class="video-brief-prompt">' + (briefData.prompt || '') + '</div>' +
-      '<div class="video-brief-footer">' +
-        '<button class="btn-generate" data-brief-id="' + briefId + '" onclick="generateVideo(this.dataset.briefId, this)">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
-          'Generar video' +
-        '</button>' +
-        '<span class="video-brief-cost">~$0.30 · ~60 seg</span>' +
-      '</div>' +
-    '</div>';
-
-  chatBox.appendChild(card);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-async function generateVideo(briefId, btn) {
-  const briefData = _videoBriefMap.get(briefId);
-  if (!briefData) { console.error('Brief no encontrado:', briefId); return; }
-
-  btn.disabled = true;
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Generando...';
-
-  // Mostrar barra de progreso
-  const card = btn.closest('.video-brief-card');
-  const progress = document.createElement('div');
-  progress.className = 'video-gen-progress';
-  progress.innerHTML = '<div class="video-gen-spinner"></div><span>Enviando a Seedance 2.0… esto tarda ~60 segundos</span>';
-  card.appendChild(progress);
-
-  try {
-    // 1. Submit job
-    const submitRes = await fetch('/api/video-gen', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        action: 'submit',
-        prompt: briefData.prompt,
-        aspect_ratio: briefData.aspect_ratio || '9:16',
-        duration: briefData.duration || 10,
-        resolution: briefData.resolution || '1080p',
-        style: briefData.style || null,
-        reference_image: briefData.reference_image || null,
-      })
-    });
-
-    const submitData = await submitRes.json();
-    if (!submitRes.ok || !submitData.job_id) throw new Error(submitData.error || 'Error al iniciar generación');
-
-    const jobId = submitData.job_id;
-    progress.querySelector('span').textContent = 'Video en proceso… (ID: ' + jobId.slice(0,8) + '…)';
-
-    // 2. Poll hasta completado (máx 3 min, cada 5 seg)
-    let videoUrl = null;
-    let attempts = 0;
-    while (attempts < 36) {
-      await new Promise(r => setTimeout(r, 5000));
-      attempts++;
-
-      const statusRes = await fetch('/api/video-gen', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ action: 'status', job_id: jobId })
-      });
-      let statusData;
-      try { statusData = await statusRes.json(); } catch(je) {
-        const txt = await statusRes.text().catch(()=>'');
-        throw new Error('Status no-JSON HTTP ' + statusRes.status + ': ' + txt.slice(0,200));
-      }
-      if (!statusRes.ok) throw new Error('Status error ' + statusRes.status + ': ' + (statusData.error || statusData._debug || JSON.stringify(statusData).slice(0,200)));
-
-      if (statusData.status === 'completed' && statusData.video_url) {
-        videoUrl = statusData.video_url;
-        break;
-      } else if (statusData.status === 'failed') {
-        throw new Error(statusData.error || 'La generación falló. Debug: ' + (statusData._debug || ''));
-      }
-      const elapsed = attempts * 5;
-      if (statusData._debug) console.log('[video-gen debug]', statusData._debug);
-      const progressMsg =
-        elapsed < 20  ? 'Procesando tu brief con IA…' :
-        elapsed < 50  ? 'Generando el video… esto tarda ~60 segundos' :
-        elapsed < 90  ? 'Casi listo, renderizando frames…' :
-                        'Finalizando… un momento más';
-      progress.querySelector('span').textContent = progressMsg;
-      if (statusData.status === 'completed' && !statusData.video_url) {
-        throw new Error('Video completado pero URL no encontrada. Debug: ' + (statusData._debug || ''));
-      }
-    }
-
-    if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');
-
-    // 3. Descontar 1 crédito (generación exitosa)
-    try {
-      const tok = sessionToken || (clerkInstance?.session ? await clerkInstance.session.getToken().catch(()=>null) : null);
-      await fetch('/api/video-credits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}) },
-        body: JSON.stringify({ action: 'deduct' })
-      });
-    } catch(ce) { console.warn('No se pudo descontar crédito:', ce.message); }
-
-    // 4. Renderizar video
-    card.closest('.msg').remove();
-    const chatBox = document.getElementById('chat-area');
-    const videoMsg = document.createElement('div');
-    videoMsg.className = 'msg agent';
-    videoMsg.innerHTML =
-      '<div class="video-player-wrap">' +
-        '<video controls autoplay muted playsinline style="max-height:480px">' +
-          '<source src="' + videoUrl + '" type="video/mp4">' +
-        '</video>' +
-        '<div class="video-player-actions">' +
-          '<a class="video-download-btn" href="' + videoUrl + '" download="video-ad.mp4" target="_blank">' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
-            'Descargar video' +
-          '</a>' +
-        '</div>' +
-      '</div>';
-    chatBox.appendChild(videoMsg);
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-  } catch(e) {
-    progress.remove();
-    btn.disabled = false;
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generar video';
-    console.error('[video-gen]', e.message);
-    addAgent('Tuvimos un error inesperado al generar el video. Por favor contacta a soporte si el problema persiste.');
-  }
-}
-
-async function loadSnapshots(agentFilter) {
-  const user = window.Clerk?.user || clerkInstance?.user;
-  if (!user) return [];
-  try {
-    let url = `/api/admin?action=get-snapshots&userId=${encodeURIComponent(user.id)}&limit=10`;
-    if (agentFilter && agentFilter !== 'all') url += `&agent=${encodeURIComponent(agentFilter)}`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    return await res.json();
-  } catch(e) { return []; }
-}
-
-// ═══════════════════════════════════════════════════════════
-// SPRINT 2 — Features 5C, 5D, 6B, 6C, 7D, 8C
-// ═══════════════════════════════════════════════════════════
-
-// ── isAgencyPlan (Feature 8C) ─────────────────────────────
-function isAgencyPlan() {
-  return userPlan === 'admin' || userPlan === 'agency' || isAdminUser();
-}
-
-// ── Restore connections from Supabase on load (Feature 5B) ─
-async function restoreConnectionsFromSupabase() {
-  const uid = clerkInstance?.user?.id;
-  if (!uid) return;
-  const hasGoogleToken   = !!sessionStorage.getItem('ads_access_token');
-  const hasMetaToken     = !!sessionStorage.getItem('meta_access_token');
-  const hasLinkedInToken = !!sessionStorage.getItem('linkedin_access_token');
-  if (hasGoogleToken && hasMetaToken && hasLinkedInToken) return; // ya restaurado desde sessionStorage
-
-  try {
-    const [gConn, mConn, liConn] = await Promise.all([
-      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=google_ads').then(r => r.json()).catch(() => ({})),
-      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads').then(r => r.json()).catch(() => ({})),
-      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads').then(r => r.json()).catch(() => ({})),
-    ]);
-
-    if (!hasGoogleToken && gConn.connected && gConn.access_token) {
-      sessionStorage.setItem('ads_access_token', gConn.access_token);
-      sessionStorage.setItem('ads_email', gConn.account_name || '');
-      localStorage.setItem('ads_access_token_persist', gConn.access_token);
-      localStorage.setItem('ads_email_persist', gConn.account_name || '');
-      updateAdsUI(true, gConn.account_name);
-    }
-    // Restaurar cuenta activa de Google Ads desde localStorage
-    if (!sessionStorage.getItem('ads_customer_id')) {
-      var persistedGId  = localStorage.getItem('ads_customer_id_persist');
-      var persistedGAcc = localStorage.getItem('ads_active_account_persist');
-      if (persistedGId) {
-        sessionStorage.setItem('ads_customer_id', persistedGId);
-        if (persistedGAcc) {
-          sessionStorage.setItem('ads_active_account', persistedGAcc);
-          try { if (typeof adsActiveAccount !== 'undefined') { adsActiveAccount = JSON.parse(persistedGAcc); if (typeof renderActiveAccount === 'function') renderActiveAccount(); } } catch(e){}
-        }
-      }
-    }
-    if (!hasMetaToken && mConn.connected && mConn.access_token) {
-      sessionStorage.setItem('meta_access_token', mConn.access_token);
-      localStorage.setItem('meta_access_token_persist', mConn.access_token);
-      sessionStorage.setItem('meta_user_name', mConn.account_name || '');
-      if (mConn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', mConn.extra_data.meta_user_id);
-      updateMetaUI(true, mConn.account_name);
-    }
-    // Restaurar cuenta publicitaria desde localStorage (persiste entre recargas)
-    if (!sessionStorage.getItem('meta_ad_account_id')) {
-      const persistedAccId = localStorage.getItem('meta_ad_account_id_persist');
-      const persistedAcc   = localStorage.getItem('meta_active_account_persist');
-      if (persistedAccId) {
-        sessionStorage.setItem('meta_ad_account_id', persistedAccId);
-        if (persistedAcc) sessionStorage.setItem('meta_active_account', persistedAcc);
-      }
-    }
-
-    // Refrescar token de Meta si expira pronto
-    if (mConn.connected) {
-      fetch('/api/admin?action=refresh-meta-token', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: uid })
-      }).catch(() => {});
-    }
-
-    // Restaurar LinkedIn Ads
-    if (!hasLinkedInToken && liConn.connected && liConn.access_token) {
-      sessionStorage.setItem('linkedin_access_token', liConn.access_token);
-      sessionStorage.setItem('linkedin_user_name', liConn.account_name || '');
-      localStorage.setItem('linkedin_access_token_persist', liConn.access_token);
-      localStorage.setItem('linkedin_user_name_persist', liConn.account_name || '');
-      if (typeof updateLinkedInUI === 'function') updateLinkedInUI(true, liConn.account_name);
-    }
-    // Restaurar cuenta activa de LinkedIn desde localStorage
-    if (!sessionStorage.getItem('linkedin_account_id')) {
-      var persistedLiId  = localStorage.getItem('linkedin_account_id_persist');
-      var persistedLiAcc = localStorage.getItem('linkedin_active_account_persist');
-      if (persistedLiId) {
-        sessionStorage.setItem('linkedin_account_id', persistedLiId);
-        if (persistedLiAcc) {
-          sessionStorage.setItem('linkedin_active_account', persistedLiAcc);
-          try { linkedinActiveAccount = JSON.parse(persistedLiAcc); renderLinkedInActiveAccount(); } catch {}
-        }
-      }
-    }
-  } catch {}
-}
-
-// ── Google Ads Dashboard (Feature 5C) ────────────────────────
-let _gDashPeriod = 'LAST_30_DAYS';
-let _gDashCollapsed = true;
-
-async function showGoogleAdsDashboard() {
-  const uid        = clerkInstance?.user?.id;
-  const customerId = sessionStorage.getItem('ads_customer_id');
-  const dash       = document.getElementById('ads-dashboard');
-  if (!uid || !customerId || !dash) return;
-
-  dash.style.display = 'block';
-  _renderGDashSkeleton();
-
-  const cacheKey = `gads_dashboard_${customerId}_${_gDashPeriod}_${Math.floor(Date.now() / 900000)}`;
-  let overview, campaigns;
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      const d = JSON.parse(cached);
-      overview = d.overview; campaigns = d.campaigns;
-    } else {
-      [overview, campaigns] = await Promise.all([
-        fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
-        fetch(`/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
-      ]);
-      localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
-    }
-  } catch { return; }
-
-  if (overview?.testAccess) {
-    document.getElementById('ads-dashboard-inner').innerHTML = `
-      <div style="padding:10px 16px;font-size:12px;color:var(--muted2);display:flex;align-items:center;gap:8px">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Tu cuenta está en modo de prueba. Las métricas reales estarán disponibles cuando Google apruebe el acceso completo.
-      </div>`;
-    return;
-  }
-  if (overview?.error) { dash.style.display = 'none'; return; }
-
-  _renderGDashContent(overview, campaigns?.campaigns || []);
-}
-
-function _gDashUpgradeBanner() {
-  if (userPlan === 'pro' || userPlan === 'agency' || isAdminUser()) return '';
-  return `<div style="margin:0 16px 8px;padding:8px 12px;background:#fefce8;border:1px solid #fef08a;border-radius:7px;display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">★</span>
-    <span style="font-size:11px;color:#713f12;flex:1">Estás viendo tus datos reales. Con <strong>Pro</strong> recibes alertas automáticas cuando una campaña falla.</span>
-    <button onclick="showUpgradeHint()" style="font-size:11px;font-weight:600;color:#92400e;background:#fef9c3;border:1px solid #fde68a;border-radius:5px;padding:3px 8px;cursor:pointer;white-space:nowrap">Ver planes</button>
-  </div>`;
-}
-
-function _renderGDashSkeleton() {
-  document.getElementById('ads-dashboard-inner').innerHTML = `
-    <div style="padding:10px 16px">
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
-        <div style="width:120px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
-        <div style="width:80px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
-      </div>
-      <div style="display:flex;gap:16px">
-        ${[1,2,3,4,5].map(() => '<div style="flex:1;height:32px;background:var(--border);border-radius:6px;animation:pulse 1.2s infinite"></div>').join('')}
-      </div>
-    </div>`;
-}
-
-function _renderGDashContent(ov, campaigns) {
-  const periodLabels = { 'LAST_7_DAYS': '7 días', 'LAST_30_DAYS': '30 días', 'LAST_90_DAYS': '90 días', 'THIS_MONTH': 'Este mes', 'LAST_MONTH': 'Mes ant.' };
-  const periods = Object.entries(periodLabels).map(([v,l]) =>
-    `<option value="${v}" ${v === _gDashPeriod ? 'selected' : ''}>${l}</option>`
-  ).join('');
-
-  const kpis = [
-    { label: 'Impresiones', value: (ov.impressions||0).toLocaleString() },
-    { label: 'Clicks',      value: (ov.clicks||0).toLocaleString() },
-    { label: 'CTR',         value: (ov.ctr||'0')+'%' },
-    { label: 'CPC prom.',   value: '$'+(ov.avgCpc||0) },
-    { label: 'Conversiones',value: (ov.conversions||0) },
-    { label: 'CPA',         value: '$'+(ov.cpa||0) },
-    { label: 'Gasto total', value: '$'+(ov.totalCost||0) },
-  ];
-
-  const campRows = campaigns.slice(0, 5).map(c => {
-    const dot = c.status === 'ENABLED' ? '#22c55e' : '#9ca3af';
-    return `<div onclick="injectCampaignAnalysis('google','${c.name.replace(/'/g, '').replace(/"/g, '')}')"
-      style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px"
-      onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'">
-      <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${c.name}</span>
-      <span style="color:var(--muted2);flex-shrink:0">$${c.cpa} CPA · ${(c.clicks||0).toLocaleString()} clicks</span>
-    </div>`;
-  }).join('');
-
-  document.getElementById('ads-dashboard-inner').innerHTML = `
-    ${_gDashCollapsed ? '' : _gDashUpgradeBanner()}
-    <div style="padding:8px 16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${_gDashCollapsed ? '0' : '10px'}">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="var(--blue)" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/></svg>
-        <span style="font-size:11px;font-weight:600;color:var(--text)">Google Ads</span>
-        <select onchange="changeGDashPeriod(this.value)" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:1px 4px;background:var(--bg);color:var(--text)">${periods}</select>
-        <button onclick="showGoogleAdsDashboard()" style="font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">↻</button>
-        <button onclick="toggleGDash()" style="margin-left:auto;font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">${_gDashCollapsed ? '▼ expandir' : '▲ colapsar'}</button>
-      </div>
-      ${_gDashCollapsed ? '' : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:10px">
-          ${kpis.map(k => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px">
-            <div style="font-size:10px;color:var(--muted2);margin-bottom:2px">${k.label}</div>
-            <div style="font-size:14px;font-weight:700;color:var(--text)">${k.value}</div>
-          </div>`).join('')}
-        </div>
-        ${campRows ? `<div style="border-top:1px solid var(--border2);padding-top:6px;font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Campañas</div>${campRows}` : ''}
-      `}
-    </div>`;
-}
-
-function toggleGDash() { _gDashCollapsed = !_gDashCollapsed; showGoogleAdsDashboard(); }
-function changeGDashPeriod(v) { _gDashPeriod = v; showGoogleAdsDashboard(); }
-
-// ── Meta Ads Dashboard (Feature 6B) ──────────────────────────
-let _mDashPeriod = 'last_30d';
-let _mDashCollapsed = true;
-
-async function showMetaAdsDashboard() {
-  const uid       = clerkInstance?.user?.id;
-  const accountId = sessionStorage.getItem('meta_ad_account_id');
-  const dash      = document.getElementById('ads-dashboard');
-  if (!uid || !accountId || !dash) return;
-
-  dash.style.display = 'block';
-  document.getElementById('ads-dashboard-inner').innerHTML = `
-    <div style="padding:10px 16px">
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
-        <div style="width:120px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
-        <div style="width:80px;height:12px;background:var(--border);border-radius:4px;animation:pulse 1.2s infinite"></div>
-      </div>
-      <div style="display:flex;gap:16px">
-        ${[1,2,3,4,5].map(() => '<div style="flex:1;height:32px;background:var(--border);border-radius:6px;animation:pulse 1.2s infinite"></div>').join('')}
-      </div>
-    </div>`;
-
-  const cacheKey = `meta_dashboard_${accountId}_${_mDashPeriod}_${Math.floor(Date.now() / 900000)}`;
-  let overview, campaigns;
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      const d = JSON.parse(cached);
-      overview = d.overview; campaigns = d.campaigns;
-    } else {
-      [overview, campaigns] = await Promise.all([
-        fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
-        fetch(`/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
-      ]);
-      localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
-    }
-  } catch { return; }
-
-  if (overview?.error) {
-    if (overview.retryAfter) {
-      document.getElementById('ads-dashboard-inner').innerHTML = `<div style="padding:10px 16px;font-size:12px;color:var(--muted2)">Los datos de Meta se actualizarán en un momento (rate limit).</div>`;
-    } else { dash.style.display = 'none'; }
-    return;
-  }
-
-  const periodLabels = { 'last_7d': '7 días', 'last_30d': '30 días', 'last_90d': '90 días', 'this_month': 'Este mes', 'last_month': 'Mes ant.' };
-  const periods = Object.entries(periodLabels).map(([v,l]) =>
-    `<option value="${v}" ${v === _mDashPeriod ? 'selected' : ''}>${l}</option>`
-  ).join('');
-
-  const kpis = [
-    { label: 'Alcance',      value: (overview.reach||0).toLocaleString() },
-    { label: 'Impresiones',  value: (overview.impressions||0).toLocaleString() },
-    { label: 'CPM',          value: '$'+(overview.cpm||0) },
-    { label: 'CTR',          value: (overview.ctr||'0')+'%' },
-    { label: 'Conversiones', value: overview.conversions||0 },
-    { label: 'CPA',          value: '$'+(overview.cpa||0) },
-    { label: 'Gasto',        value: '$'+(overview.spend||0) },
-  ];
-
-  const campRows = (campaigns?.campaigns||[]).slice(0, 5).map(c => {
-    const isActive = c.status === 'ACTIVE';
-    const dot = isActive ? '#22c55e' : '#9ca3af';
-    const safeName = (c.name||'').replace(/'/g, '').replace(/"/g, '');
-    const toggleLabel = isActive ? '⏸' : '▶';
-    const toggleTitle = isActive ? 'Pausar campaña' : 'Activar campaña';
-    const toggleAction = isActive ? 'PAUSED' : 'ACTIVE';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:5px;font-size:11px">
-      <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
-      <span onclick="injectCampaignAnalysis('meta','${safeName}')" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);cursor:pointer" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${c.name}</span>
-      <span style="color:var(--muted2);flex-shrink:0;font-size:10px">$${c.spend}</span>
-      <button onclick="manageCampaignStatus('${c.id}','${safeName}','${toggleAction}')" title="${toggleTitle}"
-        style="flex-shrink:0;background:${isActive ? '#fef3c7' : '#dcfce7'};border:1px solid ${isActive ? '#fde68a' : '#bbf7d0'};border-radius:4px;cursor:pointer;padding:2px 6px;font-size:10px;color:${isActive ? '#92400e' : '#15803d'};font-weight:600">
-        ${toggleLabel}
-      </button>
-    </div>`;
-  }).join('');
-
-  document.getElementById('ads-dashboard-inner').innerHTML = `
-    ${_mDashCollapsed ? '' : (() => {
-      if (userPlan === 'pro' || userPlan === 'agency' || isAdminUser()) return '';
-      return '<div style="margin:0 16px 8px;padding:8px 12px;background:#fefce8;border:1px solid #fef08a;border-radius:7px;display:flex;align-items:center;gap:8px"><span style="font-size:14px">★</span><span style="font-size:11px;color:#713f12;flex:1">Estás viendo tus datos reales. Con <strong>Pro</strong> recibes alertas automáticas cuando la frecuencia sube o una campaña no convierte.</span><button onclick="showUpgradeHint()" style="font-size:11px;font-weight:600;color:#92400e;background:#fef9c3;border:1px solid #fde68a;border-radius:5px;padding:3px 8px;cursor:pointer;white-space:nowrap">Ver planes</button></div>';
-    })()}
-    <div style="padding:8px 16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${_mDashCollapsed ? '0' : '10px'}">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" fill="#1877F2"/><path d="M13 21v-8h3l.5-3H13V8.5c0-.83.42-1.5 1.5-1.5H17V4.1a20 20 0 00-2.57-.1C11.92 4 10 5.7 10 8.29V10H7v3h3v8z" fill="#fff"/></svg>
-        <span style="font-size:11px;font-weight:600;color:var(--text)">Meta Ads</span>
-        <select onchange="changeMDashPeriod(this.value)" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:1px 4px;background:var(--bg);color:var(--text)">${periods}</select>
-        <button onclick="showMetaAdsDashboard()" style="font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">↻</button>
-        <button onclick="toggleMDash()" style="margin-left:auto;font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--muted2)">${_mDashCollapsed ? '▼ expandir' : '▲ colapsar'}</button>
-      </div>
-      ${_mDashCollapsed ? '' : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:10px">
-          ${kpis.map(k => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px">
-            <div style="font-size:10px;color:var(--muted2);margin-bottom:2px">${k.label}</div>
-            <div style="font-size:14px;font-weight:700;color:var(--text)">${k.value}</div>
-          </div>`).join('')}
-        </div>
-        ${campRows ? `<div style="border-top:1px solid var(--border2);padding-top:6px;font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Campañas</div>${campRows}` : ''}
-      `}
-    </div>`;
-}
-
-function toggleMDash() { _mDashCollapsed = !_mDashCollapsed; showMetaAdsDashboard(); }
-function changeMDashPeriod(v) { _mDashPeriod = v; showMetaAdsDashboard(); }
-
-function hidePlatformDashboard() {
-  const dash = document.getElementById('ads-dashboard');
-  if (dash) dash.style.display = 'none';
-}
-
-function injectCampaignAnalysis(platform, campaignName) {
-  const label = platform === 'google' ? 'Google Ads' : 'Meta Ads';
-  const msg = `Dame un análisis detallado de la campaña "${campaignName}" en ${label}.`;
-  document.getElementById('inp').value = msg;
-  sendMsg();
-}
-
-async function manageCampaignStatus(campaignId, campaignName, newStatus) {
-  const label  = newStatus === 'ACTIVE' ? 'activar' : 'pausar';
-  const emoji  = newStatus === 'ACTIVE' ? '▶' : '⏸';
-  const spend  = newStatus === 'ACTIVE' ? '\n\n⚠️ La campaña comenzará a gastar presupuesto inmediatamente.' : '';
-  if (!confirm(`¿Quieres ${label} la campaña "${campaignName}"?${spend}`)) return;
-
-  const token     = sessionStorage.getItem('meta_access_token');
-  const accountId = sessionStorage.getItem('meta_ad_account_id');
-  const uid       = clerkInstance?.user?.id;
-  if (!token) { alert('No hay sesión de Meta Ads. Reconecta tu cuenta.'); return; }
-
-  try {
-    const r = await fetch('/api/meta-ads?action=update-campaign', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken: token, adAccountId: accountId, campaignId, status: newStatus }),
-    });
-    const data = await r.json();
-    if (!r.ok || data.error) throw new Error(data.error || 'Error');
-
-    // Limpiar caché del dashboard para forzar recarga
-    Object.keys(localStorage).filter(k => k.startsWith('meta_dashboard_')).forEach(k => localStorage.removeItem(k));
-    // Registrar acción en logs
-    if (uid) fetch('/api/admin?action=log-api-action', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: uid, platform: 'meta_ads', actionType: 'campaign_status_change', entityId: campaignId, entityName: campaignName, newValue: { status: newStatus }, confirmed: true })
-    }).catch(() => {});
-
-    addAgent(`${emoji} **Campaña ${newStatus === 'ACTIVE' ? 'activada' : 'pausada'}**: "${campaignName}"\n\n` +
-      (newStatus === 'ACTIVE' ? 'La campaña está activa y comenzará a entregar anuncios.' : 'La campaña está pausada. No se gastará presupuesto hasta que la actives nuevamente.'));
-    showMetaAdsDashboard();
-  } catch(err) {
-    alert('Error: ' + err.message);
-  }
-}
-
-// ── Context injection (Features 5D / 6C) ─────────────────────
-async function getGoogleAdsContext() {
-  const uid        = clerkInstance?.user?.id;
-  const customerId = sessionStorage.getItem('ads_customer_id');
-  if (!uid || !customerId) return '';
-  try {
-    const cacheKey = `gads_ctx_${customerId}_${Math.floor(Date.now() / 900000)}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) return cached;
-    const res  = await fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=LAST_30_DAYS`);
-    const data = await res.json();
-    if (data.testAccess || data.error || !data.impressions) return '';
-    const ctx = `DATOS REALES DE LA CUENTA GOOGLE ADS (últimos 30 días):
-- Gasto total: $${data.totalCost}
-- Impresiones: ${(data.impressions||0).toLocaleString()}
-- Clicks: ${(data.clicks||0).toLocaleString()}
-- CTR: ${data.ctr}%
-- CPC promedio: $${data.avgCpc}
-- Conversiones: ${data.conversions}
-- CPA: $${data.cpa}
-- Campañas activas: ${data.activeCampaigns}
-- Campañas pausadas: ${data.pausedCampaigns}`;
-    localStorage.setItem(cacheKey, ctx);
-    return ctx;
-  } catch { return ''; }
-}
-
-async function getMetaAdsContext() {
-  const uid       = clerkInstance?.user?.id;
-  const accountId = sessionStorage.getItem('meta_ad_account_id');
-  if (!uid || !accountId) return '';
-  try {
-    const cacheKey = `meta_ctx_${accountId}_${Math.floor(Date.now() / 900000)}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) return cached;
-    // Obtener moneda de la cuenta activa
-    let currency = 'USD';
-    try { const acc = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}'); currency = acc.currency || 'USD'; } catch {}
-    const accountName = (() => { try { return JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').name || ''; } catch { return ''; } })();
-    const res  = await fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
-    const data = await res.json();
-    if (data.error || !data.impressions) return '';
-    // Nota de conversión si no es USD
-    const currencyNote = currency !== 'USD'
-      ? `\n⚠️ MONEDA DE CUENTA: ${currency} — Los valores de gasto, CPC, CPM y CPA están en ${currency}, NO en USD. Ajusta todos los benchmarks y análisis en consecuencia. Los benchmarks de LatAm en USD deben multiplicarse por el tipo de cambio aproximado para comparar correctamente.`
-      : '';
-    const ctx = `CUENTA META ADS ACTIVA: ${accountName} (${accountId})
-MONEDA DE LA CUENTA: ${currency}
-DATOS REALES (últimos 30 días, valores en ${currency}):
-- Gasto total: ${data.spend} ${currency}
-- Alcance: ${(data.reach||0).toLocaleString()}
-- Impresiones: ${(data.impressions||0).toLocaleString()}
-- Clicks: ${(data.clicks||0).toLocaleString()}
-- CTR: ${data.ctr}%
-- CPC: ${data.cpc} ${currency}
-- CPM: ${data.cpm} ${currency}
-- Frecuencia: ${data.frequency}
-- Conversiones: ${data.conversions}
-- CPA: ${data.cpa} ${currency}${currencyNote}`;
-    localStorage.setItem(cacheKey, ctx);
-    return ctx;
-  } catch { return ''; }
-}
-
-// ── Alerts (Feature 7D) ──────────────────────────────────────
-let _alertsOpen = false;
-
-async function initAlertsBadge() {
-  const uid = clerkInstance?.user?.id;
-  if (!uid) return;
-  try {
-    const r = await fetch(`/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}&unreadOnly=true`);
-    const alerts = await r.json();
-    updateAlertsBadge(Array.isArray(alerts) ? alerts.length : 0);
-    // Check nuevas alertas silencioso
-    fetch('/api/admin?action=check-alerts', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ userId: uid })
-    }).then(r => r.json()).then(d => {
-      if (d.count > 0) updateAlertsBadge(alerts.length + d.count);
-    }).catch(() => {});
-  } catch {}
-}
-
-function updateAlertsBadge(count) {
-  const btn   = document.getElementById('alerts-btn');
-  const badge = document.getElementById('alerts-badge');
-  if (!btn || !badge) return;
-  if (count > 0) {
-    btn.style.display   = 'flex';
-    badge.style.display = 'flex';
-    badge.textContent   = count > 99 ? '99+' : count;
-  } else {
-    btn.style.display   = 'flex';
-    badge.style.display = 'none';
-  }
-}
-
-async function openAlertsPanel() {
-  if (_alertsOpen) { closeAlertsPanel(); return; }
-  _alertsOpen = true;
-  const uid = clerkInstance?.user?.id;
-
-  // Crear panel si no existe
-  let panel = document.getElementById('alerts-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'alerts-panel';
-    panel.style.cssText = 'position:fixed;top:0;right:0;width:360px;height:100vh;background:var(--bg);border-left:1px solid var(--border);z-index:2000;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.08)';
-    document.body.appendChild(panel);
-  }
-
-  panel.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;padding:16px 18px;border-bottom:1px solid var(--border2);flex-shrink:0">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Alertas de campañas</span>
-      <select id="alerts-filter" onchange="reloadAlerts()" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:2px 6px;background:var(--bg);color:var(--text)">
-        <option value="all">Todas</option>
-        <option value="google_ads">Google Ads</option>
-        <option value="meta_ads">Meta Ads</option>
-      </select>
-      <button onclick="closeAlertsPanel()" style="background:none;border:none;cursor:pointer;color:var(--muted2);font-size:16px;line-height:1;padding:2px">✕</button>
-    </div>
-    <div id="alerts-list" style="flex:1;overflow-y:auto;padding:12px"></div>`;
-
-  panel.style.display = 'flex';
-
-  // Marcar como leídas
-  if (uid) {
-    fetch('/api/admin?action=mark-alerts-read', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ userId: uid })
-    }).then(() => { const b = document.getElementById('alerts-badge'); if (b) b.style.display = 'none'; }).catch(() => {});
-  }
-
-  await reloadAlerts();
-}
-
-async function reloadAlerts() {
-  const uid    = clerkInstance?.user?.id;
-  const filter = document.getElementById('alerts-filter')?.value || 'all';
-  const list   = document.getElementById('alerts-list');
-  if (!uid || !list) return;
-  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Cargando...</div>';
-  try {
-    let url = `/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}`;
-    if (filter !== 'all') url += `&platform=${filter}`;
-    const r      = await fetch(url);
-    const alerts = await r.json();
-    if (!alerts.length) {
-      list.innerHTML = '<div style="text-align:center;padding:32px 16px;color:var(--muted2)"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-size:13px">No hay alertas activas</div></div>';
-      return;
-    }
-    list.innerHTML = alerts.map(a => {
-      const severityColor = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' }[a.severity] || '#9ca3af';
-      const severityLabel = { critical: 'CRÍTICO', warning: 'AVISO', info: 'INFO' }[a.severity] || a.severity;
-      const platform = a.platform === 'google_ads' ? 'Google Ads' : 'Meta Ads';
-      return `<div style="border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:8px;border-left:3px solid ${severityColor}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:10px;font-weight:700;color:${severityColor};background:${severityColor}18;padding:1px 6px;border-radius:10px">${severityLabel}</span>
-          <span style="font-size:10px;color:var(--muted2)">${platform}</span>
-          <span style="font-size:10px;color:var(--muted2);margin-left:auto">${timeAgo(a.created_at)}</span>
-        </div>
-        ${a.campaign_name ? `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">${a.campaign_name}</div>` : ''}
-        <div style="font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:8px">${a.message}</div>
-        <div style="display:flex;gap:6px">
-          <button onclick="alertGoToAgent('${a.platform}','${a.message.replace(/'/g,'')}')" style="flex:1;font-size:11px;padding:4px 8px;background:var(--blue-lt);color:var(--blue);border:1px solid var(--blue-md);border-radius:6px;cursor:pointer">Ver en agente</button>
-          <button onclick="dismissAlert('${a.id}',this.parentElement.parentElement)" style="font-size:11px;padding:4px 8px;background:var(--bg);color:var(--muted2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Descartar</button>
-        </div>
-      </div>`;
-    }).join('');
-  } catch {
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Error al cargar alertas.</div>';
-  }
-}
-
-function closeAlertsPanel() {
-  _alertsOpen = false;
-  const panel = document.getElementById('alerts-panel');
-  if (panel) panel.style.display = 'none';
-}
-
-async function dismissAlert(id, el) {
-  el?.remove();
-  fetch('/api/admin?action=dismiss-alert', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ id })
-  }).catch(() => {});
-}
-
-function alertGoToAgent(platform, message) {
-  closeAlertsPanel();
-  const agentCtx = platform === 'google_ads' ? 'google-ads' : 'meta-ads';
-  openAgent(agentCtx);
-  setTimeout(() => {
-    const msg = `Tengo una alerta en mis campañas: ${message} ¿Qué me recomiendas hacer?`;
-    document.getElementById('inp').value = msg;
-    sendMsg();
-  }, 600);
-}
-
-// ═══════════════════════════════════════════════════════════
-// FIN SPRINT 2 — Frontend
-// ═══════════════════════════════════════════════════════════
 
 function renderSocialOptions() {
   const area = document.getElementById('chat-area');
@@ -6845,19 +3741,6 @@ function renderSocialOptions() {
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 function exportToPDF(txt, filename) {
-  function stripEmoji(s) {
-    return (s || '')
-      .replace(/🩺/g, '')
-      .replace(/🔴/g, '[!] ')
-      .replace(/🟡/g, '[~] ')
-      .replace(/🟢/g, '[+] ')
-      .replace(/🔵/g, '[*] ')
-      .replace(/✅/g, '[ok] ')
-      .replace(/⚠️?/g, '[!] ')
-      .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '')
-      .trim();
-  }
-
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', putOnlyUsedFonts: true });
   const pageW = doc.internal.pageSize.getWidth();
@@ -6871,15 +3754,8 @@ function exportToPDF(txt, filename) {
   const border = [220, 221, 230];
   let y = marginT;
 
-  // Detect Google Ads diagnostic before drawHeader so the closure captures it
-  var isGoogleAdsDiag = txt.includes('Diagnóstico de Google Ads') || txt.includes('DIAGNÓSTICO DE GOOGLE ADS');
-
   function checkPage(needed) {
-    if (y + needed > pageH - marginB) {
-      doc.addPage();
-      y = isGoogleAdsDiag ? marginT : marginT;
-      drawHeader();
-    }
+    if (y + needed > pageH - marginB) { doc.addPage(); y = marginT; drawHeader(); }
   }
   function drawHeader() {
     // Franja azul top
@@ -6900,43 +3776,6 @@ function exportToPDF(txt, filename) {
   drawHeader();
   y = 20;
 
-  // Branded sub-header for Google Ads diagnostic
-  var diagClientName = '';
-  if (isGoogleAdsDiag) {
-    var titleMatch = txt.match(/Diagnóstico de Google Ads\s*[—-]\s*(.+)/);
-    diagClientName = titleMatch ? titleMatch[1].trim() : '';
-    // Google Ads color bar
-    doc.setFillColor(66, 133, 244); // Google blue
-    doc.rect(0, 12, pageW, 18, 'F');
-    // Google Ads logo "G" circle (simplified)
-    doc.setFillColor(255, 255, 255);
-    doc.circle(marginL + 7, 21, 5.5, 'F');
-    doc.setFontSize(9);
-    doc.setTextColor(66, 133, 244);
-    doc.setFont('helvetica', 'bold');
-    doc.text('G', marginL + 7, 23.5, { align: 'center' });
-    // "Google Ads" text
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Google Ads', marginL + 16, 22.5);
-    // Report type
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Reporte de rendimiento — últimos 30 días', marginL + 16, 27.5);
-    // Client name on the right
-    if (diagClientName) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(diagClientName, pageW - marginR, 22.5, { align: 'right' });
-    }
-    // Date
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text(new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' }), pageW - marginR, 27.5, { align: 'right' });
-    y = 36;
-  }
-
   // Parsear líneas con tipo
   const rawLines = txt.split('\n');
   const parsed = rawLines.map(line => {
@@ -6947,14 +3786,14 @@ function exportToPDF(txt, filename) {
     const bullet = line.match(/^[-•*]\s+(.+)/);
     const num = line.match(/^(\d+)\.\s+(.+)/);
     const empty = line.trim() === '';
-    if (h1) return { type: 'h1', text: stripEmoji(h1[1].replace(/\*\*/g,'')) };
-    if (h2) return { type: 'h2', text: stripEmoji(h2[1].replace(/\*\*/g,'')) };
-    if (h3) return { type: 'h3', text: stripEmoji(h3[1].replace(/\*\*/g,'')) };
-    if (bold) return { type: 'bold', text: stripEmoji(bold[1]) };
-    if (bullet) return { type: 'bullet', text: stripEmoji(bullet[1].replace(/\*\*/g,'')) };
-    if (num) return { type: 'num', n: num[1], text: stripEmoji(num[2].replace(/\*\*/g,'')) };
+    if (h1) return { type: 'h1', text: h1[1].replace(/\*\*/g,'') };
+    if (h2) return { type: 'h2', text: h2[1].replace(/\*\*/g,'') };
+    if (h3) return { type: 'h3', text: h3[1].replace(/\*\*/g,'') };
+    if (bold) return { type: 'bold', text: bold[1] };
+    if (bullet) return { type: 'bullet', text: bullet[1].replace(/\*\*/g,'') };
+    if (num) return { type: 'num', n: num[1], text: num[2].replace(/\*\*/g,'') };
     if (empty) return { type: 'empty' };
-    return { type: 'body', text: stripEmoji(line.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1')) };
+    return { type: 'body', text: line.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1') };
   });
 
   for (let i = 0; i < parsed.length; i++) {
@@ -7085,1973 +3924,6 @@ function exportToPDF(txt, filename) {
   doc.save(filename || 'acuarius-estrategia.pdf');
 }
 
-// ── SOCIAL MEDIA STUDIO ─────────────────────────────────────────────────────
-
-const STUDIO_NETWORKS = {
-  instagram: { label:'Instagram', color:'#E1306C', bg:'#FEF0F5' },
-  tiktok:    { label:'TikTok',    color:'#000000', bg:'#F0F0F0' },
-  facebook:  { label:'Facebook',  color:'#1877F2', bg:'#EBF3FF' },
-  linkedin:  { label:'LinkedIn',  color:'#0A66C2', bg:'#E8F1FF' },
-  x:         { label:'X',         color:'#374151', bg:'#F3F4F6' },
-  youtube:   { label:'YouTube',   color:'#FF0000', bg:'#FFF0F0' }
-};
-const STUDIO_FORMATS = {
-  reel:     { label:'Reel',    icon:'🎬', falFormat:'story' },
-  story:    { label:'Story',   icon:'📱', falFormat:'story' },
-  feed:     { label:'Feed',    icon:'🖼',  falFormat:'square' },
-  carrusel: { label:'Carrusel',icon:'📑', falFormat:'square' },
-  video:    { label:'Video',   icon:'🎥', falFormat:'horizontal' },
-  post:     { label:'Post',    icon:'📝', falFormat:'square' }
-};
-const STATUS_CFG = {
-  borrador:  { bg:'#F3F4F6', color:'#6B7280' },
-  listo:     { bg:'#ECFDF5', color:'#059669' },
-  publicado: { bg:'#EFF6FF', color:'#2563EB' }
-};
-
-let studioCurrentWeek = 0;
-let studioCurrentView = 'calendar';
-
-// ─── Social Publishing — conexiones por cliente ───────────────────────────────
-// Almacena tokens de páginas FB + cuentas IG por usuario+cliente en localStorage.
-// Formato: { instagram:[{pageId,pageName,pageToken,igUserId,igUsername},...], facebook:[...] }
-
-function getSocialPubKey() {
-  const uid = clerkInstance?.user?.id || 'anon';
-  const cp  = agencyActiveClientId ? '_' + agencyActiveClientId : '';
-  return 'acuarius_social_pub_' + uid + cp;
-}
-
-function loadSocialConnections() {
-  try {
-    const raw = localStorage.getItem(getSocialPubKey());
-    return raw ? JSON.parse(raw) : { instagram: [], facebook: [] };
-  } catch { return { instagram: [], facebook: [] }; }
-}
-
-function saveSocialConnections(data) {
-  try { localStorage.setItem(getSocialPubKey(), JSON.stringify(data)); } catch {}
-}
-
-function getSocialAccount(network) {
-  // Devuelve la primera cuenta conectada para la red, o null
-  const conns = loadSocialConnections();
-  const list  = conns[network] || [];
-  return list.length > 0 ? list[0] : null;
-}
-
-function connectSocialNetwork(network) {
-  const uid      = clerkInstance?.user?.id || '';
-  const clientId = agencyActiveClientId || '';
-  window.location.href =
-    '/api/social-connect?network=' + network +
-    '&clientId=' + encodeURIComponent(clientId) +
-    '&userId='   + encodeURIComponent(uid);
-}
-
-function disconnectSocialNetwork(network) {
-  if (!confirm('¿Desconectar la cuenta de ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '?')) return;
-  const conns = loadSocialConnections();
-  conns[network] = [];
-  saveSocialConnections(conns);
-  updateStudioConnectBtn();
-  const modal = document.getElementById('social-conn-modal');
-  if (modal) { modal.remove(); openSocialConnectionsModal(); }
-}
-
-// Actualiza el label del botón "Conectar redes" según cuentas activas
-function updateStudioConnectBtn() {
-  const lbl  = document.getElementById('studio-connect-label');
-  const btn  = document.getElementById('studio-connect-btn');
-  if (!lbl || !btn) return;
-  const conns    = loadSocialConnections();
-  const igCount  = (conns.instagram || []).length;
-  const fbCount  = (conns.facebook  || []).length;
-  const total    = igCount + fbCount;
-  if (total > 0) {
-    lbl.textContent = total + (total === 1 ? ' red conectada' : ' redes conectadas');
-    btn.style.color = '#059669';
-    btn.style.borderColor = '#A7F3D0';
-  } else {
-    lbl.textContent = 'Conectar redes';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-  }
-}
-
-// ── Modal de conexiones sociales ──────────────────────────────────────────────
-function openSocialConnectionsModal() {
-  document.getElementById('social-conn-modal')?.remove();
-
-  const conns   = loadSocialConnections();
-  const igAccts = conns.instagram || [];
-  const fbAccts = conns.facebook  || [];
-
-  const igSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-  const fbSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
-
-  const netRow = (network, acct, icon, iconBg, label) => {
-    const connected = !!acct;
-    const sublabel  = connected
-      ? (network === 'instagram' && acct.igUsername ? '@' + acct.igUsername : acct.pageName || label)
-      : 'No conectado';
-
-    if (!connected) return (
-      '<div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;border:1.5px solid var(--border);background:var(--bg)">' +
-        '<div style="width:48px;height:48px;border-radius:14px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:15px;font-weight:700;color:var(--text)">' + label + '</div>' +
-          '<div style="font-size:13px;color:var(--muted);margin-top:2px">' + sublabel + '</div>' +
-        '</div>' +
-        '<button style="padding:10px 20px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap" onclick="connectSocialNetwork(\'' + network + '\')">Conectar</button>' +
-      '</div>'
-    );
-
-    return (
-      '<div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;border:1.5px solid #A7F3D0;background:#F0FDF4">' +
-        '<div style="width:48px;height:48px;border-radius:14px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:center;gap:6px">' +
-            '<div style="font-size:15px;font-weight:700;color:#059669">' + label + '</div>' +
-            '<span style="font-size:12px;background:#DCFCE7;color:#059669;padding:2px 8px;border-radius:20px;font-weight:600">Conectado</span>' +
-          '</div>' +
-          '<div style="font-size:13px;color:#059669;margin-top:2px;opacity:.8">' + esc(sublabel) + '</div>' +
-        '</div>' +
-        '<button style="padding:8px 14px;background:none;color:#EF4444;border:1.5px solid #FCA5A5;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap" onclick="disconnectSocialNetwork(\'' + network + '\')">Quitar</button>' +
-      '</div>'
-    );
-  };
-
-  const overlay = document.createElement('div');
-  overlay.className = 'social-conn-overlay';
-  overlay.id = 'social-conn-modal';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  overlay.innerHTML =
-    '<div class="social-conn-box" style="max-width:500px">' +
-      // Header
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:24px 28px 20px;border-bottom:1px solid var(--border)">' +
-        '<div>' +
-          '<div style="font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.3px">Conectar redes sociales</div>' +
-          '<div style="font-size:14px;color:var(--muted);margin-top:4px">Publica directamente desde el Studio</div>' +
-        '</div>' +
-        '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
-      '</div>' +
-      // Body
-      '<div style="padding:24px 28px;display:flex;flex-direction:column;gap:12px">' +
-        netRow('instagram', igAccts[0] || null, igSvg, '#FEF0F5', 'Instagram') +
-        netRow('facebook',  fbAccts[0] || null, fbSvg, '#EBF3FF', 'Facebook Page') +
-        // Nota informativa
-        '<div style="font-size:12px;color:var(--muted);padding:12px 16px;background:var(--bg-muted);border-radius:10px;line-height:1.6;margin-top:4px">' +
-          '💡 Conectar Instagram y Facebook simultáneamente permite publicar en ambas plataformas con un solo clic desde cada post.' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-
-  document.body.appendChild(overlay);
-}
-
-// ── Modal de publicación ──────────────────────────────────────────────────────
-function openPublishModal(postId) {
-  document.getElementById('pub-modal')?.remove();
-
-  const posts = loadStudioPosts();
-  const post  = posts.find(p => p.id === postId);
-  if (!post) return;
-
-  const conns   = loadSocialConnections();
-  const igAccts = conns.instagram || [];
-  const fbAccts = conns.facebook  || [];
-  const igAcct  = igAccts[0] || null;
-  const fbAcct  = fbAccts[0] || null;
-
-  const hasMedia  = !!(post.imageBase64 || post.videoUrl);
-  const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
-
-  const igIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-  const fbIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
-
-  // Construir fila de red con: checkbox pre-marcado + selector de cuenta si hay múltiples
-  const netRow = (network, accts, icon, iconBg) => {
-    const label     = network === 'instagram' ? 'Instagram' : 'Facebook Page';
-    const connected = accts.length > 0;
-
-    if (!connected) return (
-      '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg-subtle);opacity:.6">' +
-        '<div style="width:42px;height:42px;border-radius:12px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1">' +
-          '<div style="font-size:14px;font-weight:700;color:var(--muted)">' + label + '</div>' +
-          '<button style="font-size:12px;color:var(--blue);background:none;border:none;padding:0;cursor:pointer;font-family:var(--font);margin-top:2px" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar cuenta →</button>' +
-        '</div>' +
-      '</div>'
-    );
-
-    // Construir opciones del selector de cuenta
-    const acctOptions = accts.map((a, i) => {
-      const name = (network === 'instagram' && a.igUsername) ? '@' + a.igUsername : a.pageName || 'Cuenta ' + (i + 1);
-      return '<option value="' + i + '">' + esc(name) + '</option>';
-    }).join('');
-
-    const hasMultiple = accts.length > 1;
-    const firstLabel  = (network === 'instagram' && accts[0].igUsername) ? '@' + accts[0].igUsername : accts[0].pageName || label;
-
-    return (
-      '<label style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--blue);background:var(--blue-lt);cursor:pointer;transition:all .15s" ' +
-             'onclick="this.querySelector(\'input[type=checkbox]\').click()">' +
-        '<input type="checkbox" name="pub-net" value="' + network + '" checked ' +
-               'style="width:18px;height:18px;accent-color:var(--blue);flex-shrink:0;cursor:pointer" ' +
-               'onclick="event.stopPropagation();var r=this.closest(\'label\');r.style.borderColor=this.checked?\'var(--blue)\':\' var(--border)\';r.style.background=this.checked?\'var(--blue-lt)\':\' var(--bg)\'">' +
-        '<div style="width:42px;height:42px;border-radius:12px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0" onclick="event.stopPropagation()">' +
-          '<div style="font-size:14px;font-weight:700;color:var(--text)">' + label + '</div>' +
-          // Si hay múltiples cuentas, mostrar selector; si solo hay una, mostrar el nombre
-          (hasMultiple
-            ? '<select id="pub-acct-' + network + '" style="margin-top:4px;font-size:13px;color:var(--blue);background:transparent;border:none;font-family:var(--font);font-weight:600;cursor:pointer;width:100%;padding:0">' + acctOptions + '</select>'
-            : '<div style="font-size:13px;color:var(--blue);margin-top:2px;font-weight:600">' + esc(firstLabel) + '</div>'
-          ) +
-        '</div>' +
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' +
-      '</label>'
-    );
-  };
-
-  const hasAnyConn2 = igAccts.length > 0 || fbAccts.length > 0;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'pub-overlay';
-  overlay.id = 'pub-modal';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
-  const captionPreview = (post.caption || '').slice(0, 140) + (post.caption && post.caption.length > 140 ? '…' : '');
-
-  overlay.innerHTML =
-    '<div class="pub-box" style="max-width:460px">' +
-      // Header
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:22px 24px 18px;border-bottom:1px solid var(--border)">' +
-        '<div>' +
-          '<div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.3px">Publicar post</div>' +
-          '<div style="font-size:13px;color:var(--muted);margin-top:3px">' + esc(post.title || 'Sin título') + '</div>' +
-        '</div>' +
-        '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'pub-modal\')?.remove()">×</button>' +
-      '</div>' +
-      // Body
-      '<div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">' +
-        // Caption preview
-        (captionPreview
-          ? '<div style="background:var(--bg-muted);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text-2);line-height:1.6;border-left:3px solid var(--border2)">' + esc(captionPreview) + '</div>'
-          : '') +
-        // Network rows
-        '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px">Publicar en:</div>' +
-        netRow('instagram', igAccts, igIcon, '#FEF0F5') +
-        netRow('facebook',  fbAccts, fbIcon, '#EBF3FF') +
-        // No connections warning
-        (!hasAnyConn2
-          ? '<div style="text-align:center;padding:12px;font-size:13px;color:var(--muted)">Conecta al menos una red para publicar. <button style="background:none;border:none;color:var(--blue);cursor:pointer;font-family:var(--font);font-size:13px;text-decoration:underline" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar →</button></div>'
-          : '') +
-        // Publish button
-        '<button id="pub-confirm-btn" style="width:100%;padding:14px;background:' + (hasAnyConn2 ? 'var(--blue)' : 'var(--bg-muted)') + ';color:' + (hasAnyConn2 ? '#fff' : 'var(--muted)') + ';border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:' + (hasAnyConn2 ? 'pointer' : 'not-allowed') + ';font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px"' +
-          (hasAnyConn2 ? ' onclick="publishPostNow(\'' + postId + '\')"' : ' disabled') + '>' +
-          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
-          'Publicar ahora' +
-        '</button>' +
-        '<div id="pub-status" style="font-size:13px;color:var(--muted);text-align:center;min-height:20px"></div>' +
-      '</div>' +
-    '</div>';
-
-  document.body.appendChild(overlay);
-}
-
-// ── Publicar post en las redes seleccionadas ──────────────────────────────────
-async function publishPostNow(postId) {
-  const posts = loadStudioPosts();
-  const post  = posts.find(p => p.id === postId);
-  if (!post) return;
-
-  // Leer redes seleccionadas
-  const checkboxes  = document.querySelectorAll('input[name="pub-net"]:checked');
-  const selectedNets = Array.from(checkboxes).map(c => c.value);
-  if (!selectedNets.length) {
-    alert('Selecciona al menos una red para publicar.');
-    return;
-  }
-
-  const btn    = document.getElementById('pub-confirm-btn');
-  const status = document.getElementById('pub-status');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Publicando…'; }
-  if (status) status.textContent = 'Preparando media…';
-
-  const conns    = loadSocialConnections();
-  const caption  = post.caption || '';
-  const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
-  const headers  = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-  // ── Helper: obtener URL pública de una imagen ──────────────────────────────
-  // Estrategia:
-  // 1. Si ya hay una URL (Ideogram, fal.ai, cualquier CDN) → usarla directamente.
-  //    Meta la fetchea al crear el media container. Si expiró, Meta devuelve un
-  //    error claro que el usuario puede ver.
-  // 2. Si no hay URL pero sí base64 → comprimir a JPEG (reduce PNG 3-5 MB → 200-400 KB)
-  //    y subir al CDN de fal.ai con timeout de 55s.
-  async function getPublicUrl(base64, mediaType, existingUrl, forceRatio) {
-    if (existingUrl && existingUrl.startsWith('https://') && !forceRatio) return existingUrl;
-
-    // Comprimir la imagen en cliente antes de subir (PNG/WebP → JPEG 85%)
-    // Si forceRatio=true, ajustar también el aspect ratio para Instagram (4:5 a 1.91:1)
-    if (status) status.textContent = 'Preparando imagen…';
-    let uploadBase64 = base64 || (existingUrl && !existingUrl.startsWith('https://') ? existingUrl : null);
-    let uploadType   = mediaType || 'image/jpeg';
-
-    // Si sólo tenemos una URL existente (HTTPS) con forceRatio, cargar desde URL
-    const srcData = uploadBase64
-      ? 'data:' + uploadType + ';base64,' + uploadBase64
-      : existingUrl;
-
-    try {
-      const compressed = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          let w = img.width;
-          let h = img.height;
-          let sx = 0, sy = 0, sw = w, sh = h;
-
-          // Ajustar aspect ratio a rango Instagram (4:5 = 0.8 a 1.91:1)
-          if (forceRatio) {
-            const MIN_RATIO = 0.8;   // 4:5  portrait
-            const MAX_RATIO = 1.91;  // 1.91:1 landscape
-            const ratio = w / h;
-            if (ratio < MIN_RATIO) {
-              // Muy alto/retrato → recortar height
-              sh = Math.round(w / MIN_RATIO);
-              sy = Math.round((h - sh) / 2);
-            } else if (ratio > MAX_RATIO) {
-              // Muy ancho/paisaje → recortar width
-              sw = Math.round(h * MAX_RATIO);
-              sx = Math.round((w - sw) / 2);
-            }
-            w = sw; h = sh;
-          }
-
-          // Escalar a max 1440px de ancho (Instagram max)
-          const MAX_W = 1440;
-          if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
-
-          const canvas = document.createElement('canvas');
-          canvas.width  = w;
-          canvas.height = h;
-          canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          resolve(dataUrl.split(',')[1]);
-        };
-        img.onerror = reject;
-        img.src = srcData;
-      });
-      uploadBase64 = compressed;
-      uploadType   = 'image/jpeg';
-    } catch {}
-
-    if (status) status.textContent = 'Subiendo imagen al servidor…';
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 55000);
-    let upRes;
-    try {
-      upRes = await fetch('/api/upload-media', {
-        method: 'POST', headers, signal: controller.signal,
-        body: JSON.stringify({ base64: uploadBase64, mediaType: uploadType }),
-      });
-    } catch (fetchErr) {
-      clearTimeout(timeoutId);
-      if (fetchErr.name === 'AbortError') throw new Error('La subida de imagen tardó demasiado. Verifica tu conexión e intenta de nuevo.');
-      throw new Error('Error de red: ' + fetchErr.message);
-    }
-    clearTimeout(timeoutId);
-    let upData;
-    try { upData = await upRes.json(); } catch { upData = {}; }
-    if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Error subiendo imagen (HTTP ' + upRes.status + ')');
-    return upData.url;
-  }
-
-  const results = [];
-
-  try {
-    // ── Estrategia de media según redes seleccionadas ──────────────────────────
-    // • Instagram requiere URL pública → CDN upload obligatorio
-    // • Facebook acepta upload binario directo → NO necesita CDN
-    // • Si IG + FB: subir al CDN una vez y reusar URL en ambas redes
-    const needsIg  = selectedNets.includes('instagram');
-    const needsFbOnly = selectedNets.length === 1 && selectedNets[0] === 'facebook';
-
-    let sharedImageUrl     = null;
-    let sharedVideoUrl     = post.videoUrl || null;
-    let sharedCarouselUrls = [];
-
-    // ── Video: resolver URL pública si es blob: (upload manual, no accesible externamente) ──
-    if (sharedVideoUrl && sharedVideoUrl.startsWith('blob:')) {
-      if (status) status.textContent = 'Subiendo video al servidor…';
-      try {
-        const blobResp  = await fetch(sharedVideoUrl);
-        const blobData  = await blobResp.blob();
-        const arrBuf    = await blobData.arrayBuffer();
-        const bytes     = new Uint8Array(arrBuf);
-        // Límite ~6MB para evitar superar Vercel body limit (el video se sube comprimido igual)
-        if (bytes.byteLength > 6 * 1024 * 1024) {
-          throw new Error('El video es demasiado grande para subir directamente (>6 MB). Usa un video generado con IA o súbelo desde una URL pública.');
-        }
-        let binary = '';
-        bytes.forEach(b => { binary += String.fromCharCode(b); });
-        const videoBase64 = btoa(binary);
-        const mimeType    = blobData.type || 'video/mp4';
-        const controller  = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 55000);
-        const upRes  = await fetch('/api/upload-media', {
-          method: 'POST', headers, signal: controller.signal,
-          body: JSON.stringify({ base64: videoBase64, mediaType: mimeType, fileName: 'video.mp4' }),
-        });
-        clearTimeout(tid);
-        const upData = await upRes.json();
-        if (upRes.ok && upData.url) {
-          sharedVideoUrl = upData.url;
-          updateStudioPost(postId, { videoUrl: upData.url }); // guardar URL permanente
-        }
-      } catch (blobErr) {
-        if (blobErr.name === 'AbortError') throw new Error('Subida de video tardó demasiado. Intenta de nuevo.');
-        throw blobErr;
-      }
-    }
-
-    if (isCarousel && needsIg) {
-      // Carousel: siempre necesita URLs (solo aplica a IG)
-      for (const slide of post.carouselImages.slice(0, 10)) {
-        const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url, true);
-        sharedCarouselUrls.push(url);
-      }
-    } else if (!needsFbOnly && !sharedVideoUrl && (post.imageBase64 || post.imageUrl)) {
-      // IG presente (solo o mixto), post de imagen: subir al CDN una vez
-      // forceRatio=true garantiza que la imagen cumpla el rango de aspecto de Instagram (4:5 a 1.91:1)
-      sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl, true);
-      // Guardar CDN URL en el post para evitar re-uploads futuros
-      if (sharedImageUrl && sharedImageUrl !== post.imageUrl) {
-        updateStudioPost(postId, { imageUrl: sharedImageUrl });
-      }
-    }
-    // needsFbOnly sin video → no CDN: pasamos imageBase64 directo a social-publish
-
-    // ── Publicar en cada red seleccionada ─────────────────────────────────────
-    for (const network of selectedNets) {
-      const acctList = conns[network] || [];
-      const acctIdx  = parseInt(document.getElementById('pub-acct-' + network)?.value || '0');
-      const acct     = acctList[acctIdx] || acctList[0];
-      if (!acct) { results.push({ network, success: false, error: 'No hay cuenta conectada' }); continue; }
-
-      if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
-
-      // Facebook directo: enviar base64 para imágenes sin pasar por CDN (más rápido)
-      const useDirect = network === 'facebook' && needsFbOnly && !sharedImageUrl && !sharedVideoUrl && post.imageBase64;
-
-      const body = {
-        network,
-        pageToken:         acct.pageToken,
-        pageId:            acct.pageId,
-        igUserId:          acct.igUserId || null,
-        imageUrl:          sharedImageUrl,
-        imageBase64:       useDirect ? post.imageBase64              : null,
-        imageMediaType:    useDirect ? (post.imageMediaType || 'image/jpeg') : null,
-        videoUrl:          sharedVideoUrl,
-        caption,
-        isCarousel:        isCarousel && network === 'instagram',
-        carouselImageUrls: sharedCarouselUrls,
-      };
-
-      const pubRes  = await fetch('/api/social-publish', { method: 'POST', headers, body: JSON.stringify(body) });
-      const pubData = await pubRes.json();
-
-      if (!pubRes.ok || !pubData.success) {
-        results.push({ network, success: false, error: pubData.error || 'Error publicando' });
-      } else {
-        results.push({ network, success: true, postId: pubData.postId });
-      }
-    }
-
-    // ── Evaluar resultados ────────────────────────────────────────────────────
-    const allOk = results.every(r => r.success);
-    const anyOk = results.some(r => r.success);
-
-    if (anyOk) {
-      updateStudioPost(postId, { status: 'publicado' });
-    }
-
-    if (allOk) {
-      if (status) status.textContent = '✅ ¡Publicado exitosamente!';
-      setTimeout(() => {
-        document.getElementById('pub-modal')?.remove();
-        closePostModal();
-        renderStudio();
-        showPublishSuccessModal(results, post);
-      }, 600);
-    } else {
-      const failedNets = results.filter(r => !r.success);
-      const errText    = failedNets.map(r => r.network + ': ' + r.error).join(' · ');
-      if (status) { status.textContent = '❌ ' + errText; status.style.color = '#EF4444'; }
-      if (btn)    { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
-      // Si al menos una red publicó, igual mostramos el modal parcial
-      if (anyOk) {
-        setTimeout(() => {
-          document.getElementById('pub-modal')?.remove();
-          closePostModal();
-          renderStudio();
-          showPublishSuccessModal(results, post);
-        }, 600);
-      }
-    }
-
-  } catch (err) {
-    console.error('publishPostNow error:', err);
-    if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#EF4444'; }
-    if (btn)    { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
-  }
-}
-
-// ── Modal de éxito al publicar ────────────────────────────────────────────────
-function showPublishSuccessModal(results, post) {
-  const existing = document.getElementById('pub-success-modal');
-  if (existing) existing.remove();
-
-  const ok   = results.filter(r => r.success);
-  const fail = results.filter(r => !r.success);
-
-  const netLabel = { instagram: 'Instagram', facebook: 'Facebook Page' };
-  const netIcon  = {
-    instagram: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
-    facebook:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-  };
-
-  const okRows  = ok.map(r =>
-    '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#F0FDF4;border-radius:8px;margin-bottom:6px">' +
-    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
-    '<span style="margin-left:auto;font-size:12px;color:#059669;font-weight:700">✓ Publicado</span></div>'
-  ).join('');
-
-  const failRows = fail.map(r =>
-    '<div style="padding:9px 12px;background:#FEF2F2;border-radius:8px;margin-bottom:6px">' +
-      '<div style="display:flex;align-items:center;gap:10px">' +
-        netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
-        '<span style="margin-left:auto;font-size:12px;color:#DC2626;font-weight:600">✗ Error</span>' +
-      '</div>' +
-      (r.error ? '<p style="margin:5px 0 0 28px;font-size:11px;color:#B91C1C;line-height:1.4;word-break:break-word">' + r.error.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : '') +
-    '</div>'
-  ).join('');
-
-  const allOk    = fail.length === 0;
-  const title    = allOk ? '¡Post publicado!' : 'Publicado parcialmente';
-  const subtitle = allOk
-    ? 'Tu contenido ya está en vivo'
-    : 'Publicado en ' + ok.length + ' de ' + results.length + ' redes';
-
-  const overlay = document.createElement('div');
-  overlay.id = 'pub-success-modal';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease';
-
-  overlay.innerHTML =
-    '<div style="background:#fff;border-radius:20px;padding:40px 36px 32px;max-width:420px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
-      '<div style="width:56px;height:56px;border-radius:50%;background:' + (allOk ? '#D1FAE5' : '#FEF3C7') + ';display:flex;align-items:center;justify-content:center;margin:0 auto 16px">' +
-        (allOk
-          ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>'
-          : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>'
-        ) +
-      '</div>' +
-      '<h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 4px;font-family:var(--font)">' + title + '</h2>' +
-      '<p style="font-size:13px;color:#666;margin:0 0 20px;font-family:var(--font)">' + subtitle + '</p>' +
-      '<div style="text-align:left;margin-bottom:22px">' + okRows + failRows + '</div>' +
-      '<button id="psm-close-btn" style="width:100%;padding:13px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
-    '</div>';
-
-  if (!document.getElementById('conn-modal-styles')) {
-    const style = document.createElement('style');
-    style.id = 'conn-modal-styles';
-    style.textContent = '@keyframes fadeInOverlay{from{opacity:0}to{opacity:1}} @keyframes scaleInCard{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}';
-    document.head.appendChild(style);
-  }
-
-  document.body.appendChild(overlay);
-  const close = () => { overlay.style.opacity='0'; overlay.style.transition='opacity .25s'; setTimeout(()=>overlay.remove(),260); };
-  document.getElementById('psm-close-btn').addEventListener('click', close);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-}
-
-// ─── Studio data model v2 ─────────────────────────────────────────────────────
-// Structure: { version:2, activeId:'parrilla_xxx', parrillas:[{ id, name, createdAt, posts:[] }] }
-
-function getStudioKey() {
-  const uid = clerkInstance?.user?.id || 'anon';
-  const cp = agencyActiveClientId ? '_' + agencyActiveClientId : '';
-  return 'acuarius_studio_' + uid + cp;
-}
-
-function loadStudioData() {
-  try {
-    const raw = localStorage.getItem(getStudioKey());
-    if (!raw) return { version: 2, activeId: null, parrillas: [] };
-    const data = JSON.parse(raw);
-    // Migration v1 → v2: v1 stored a plain array of posts
-    if (Array.isArray(data)) {
-      if (!data.length) return { version: 2, activeId: null, parrillas: [] };
-      const id = 'parrilla_' + Date.now();
-      return { version: 2, activeId: id, parrillas: [{ id, name: 'Mi parrilla', createdAt: Date.now(), posts: data }] };
-    }
-    return data;
-  } catch(e) { return { version: 2, activeId: null, parrillas: [] }; }
-}
-
-function saveStudioData(data) {
-  try { localStorage.setItem(getStudioKey(), JSON.stringify(data)); } catch(e) {}
-}
-
-function getActiveParrilla() {
-  const data = loadStudioData();
-  if (!data.parrillas.length) return null;
-  return data.parrillas.find(p => p.id === data.activeId) || data.parrillas[0];
-}
-
-// Backward-compat wrappers used throughout
-function loadStudioPosts() {
-  const p = getActiveParrilla();
-  return p ? (p.posts || []) : [];
-}
-
-function saveStudioPosts(posts) {
-  const data = loadStudioData();
-  const active = data.parrillas.find(p => p.id === data.activeId);
-  if (active) { active.posts = posts; saveStudioData(data); return; }
-  if (posts.length > 0) {
-    const id = 'parrilla_' + Date.now();
-    data.parrillas.push({ id, name: 'Mi parrilla', createdAt: Date.now(), posts });
-    data.activeId = id;
-    saveStudioData(data);
-  }
-}
-
-// ─── Parrilla management ──────────────────────────────────────────────────────
-
-function createParrilla(name) {
-  const data = loadStudioData();
-  const id = 'parrilla_' + Date.now();
-  data.parrillas.unshift({ id, name: name || 'Nueva parrilla', createdAt: Date.now(), posts: [] });
-  data.activeId = id;
-  saveStudioData(data);
-  return id;
-}
-
-function setActiveParrilla(id) {
-  const data = loadStudioData();
-  if (!data.parrillas.find(p => p.id === id)) return;
-  data.activeId = id;
-  saveStudioData(data);
-  studioCurrentWeek = 0;
-  studioCurrentView = 'calendar';
-  closeHistorialPanel();
-  renderStudio();
-}
-
-function deleteParrilla(id) {
-  if (!confirm('¿Eliminar esta parrilla y todos sus posts? Esta acción no se puede deshacer.')) return;
-  const data = loadStudioData();
-  data.parrillas = data.parrillas.filter(p => p.id !== id);
-  if (data.activeId === id) data.activeId = data.parrillas[0]?.id || null;
-  saveStudioData(data);
-  renderHistorialPanel();
-  renderStudio();
-}
-
-function renameActiveParrilla() {
-  const active = getActiveParrilla();
-  if (!active) return;
-  const newName = prompt('Nuevo nombre para la parrilla:', active.name);
-  if (!newName || !newName.trim()) return;
-  const data = loadStudioData();
-  const p = data.parrillas.find(pp => pp.id === active.id);
-  if (p) { p.name = newName.trim(); saveStudioData(data); renderStudio(); }
-}
-
-// ─── Post management ──────────────────────────────────────────────────────────
-
-function addStudioPost(post) {
-  const data = loadStudioData();
-  if (!data.activeId || !data.parrillas.length) {
-    const id = 'parrilla_' + Date.now();
-    data.parrillas.unshift({ id, name: 'Mi parrilla', createdAt: Date.now(), posts: [] });
-    data.activeId = id;
-    saveStudioData(data);
-  }
-  const posts = loadStudioPosts();
-  post.id = post.id || 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-  post.status = post.status || 'borrador';
-  post.createdAt = post.createdAt || Date.now();
-  posts.push(post);
-  saveStudioPosts(posts);
-  return post;
-}
-
-function updateStudioPost(id, updates) {
-  const posts = loadStudioPosts();
-  const idx = posts.findIndex(p => p.id === id);
-  if (idx === -1) return;
-  posts[idx] = { ...posts[idx], ...updates, updatedAt: Date.now() };
-  saveStudioPosts(posts);
-  if (document.getElementById('view-social-studio')?.classList.contains('active')) renderStudio();
-}
-
-function deleteStudioPost(id) {
-  saveStudioPosts(loadStudioPosts().filter(p => p.id !== id));
-  closePostModal();
-  renderStudio();
-}
-
-function addManualPost() {
-  if (!getActiveParrilla()) createParrilla('Mi parrilla');
-  const newPost = {
-    id: 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-    week: 1, day: 'Lunes', network: 'instagram', format: 'feed',
-    title: 'Nuevo post', caption: '', hashtags: [],
-    needsImage: true, imagePrompt: '',
-    imageBase64: null, imageMediaType: null,
-    carouselImages: null,
-    status: 'borrador', createdAt: Date.now()
-  };
-  addStudioPost(newPost);
-  renderStudio();
-  setTimeout(() => openPostModal(newPost.id), 120);
-}
-
-// Called from the inline selects inside the post modal header
-function updatePostMeta(postId, field, value) {
-  updateStudioPost(postId, { [field]: field === 'week' ? parseInt(value) : value });
-  // Rerender the modal to reflect format change (media section may change)
-  closePostModal();
-  setTimeout(() => openPostModal(postId), 60);
-}
-
-function parseParrillaJSON(jsonStr) {
-  try {
-    const parsed = JSON.parse(jsonStr);
-    const posts = parsed.posts || parsed;
-    if (!Array.isArray(posts) || !posts.length) return 0;
-
-    const newPosts = posts.map(p => ({
-      id: 'sp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-      week: parseInt(p.week) || 1,
-      day: p.day || '',
-      network: (p.network || 'instagram').toLowerCase().trim(),
-      format: (p.format || 'feed').toLowerCase().trim(),
-      title: p.title || p.tema || '',
-      caption: p.caption || '',
-      hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
-      needsImage: p.needsImage !== false,
-      imagePrompt: p.imagePrompt || '',
-      imageBase64: null,
-      imageMediaType: null,
-      status: 'borrador',
-      _fromParrilla: true,
-      createdAt: Date.now()
-    }));
-
-    // Build a descriptive name for this parrilla
-    const nets = [...new Set(newPosts.map(p => p.network))].slice(0,2);
-    const netNames = nets.map(n => (STUDIO_NETWORKS[n] || { label: n }).label).join(' + ');
-    const dateStr = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long' });
-    const parrillaName = window._studioWizardName || (netNames ? netNames + ' — ' + dateStr : 'Parrilla ' + dateStr);
-    window._studioWizardName = null;
-
-    // Create a new parrilla entry in history
-    const studioData = loadStudioData();
-    const newId = 'parrilla_' + Date.now();
-    studioData.parrillas.unshift({ id: newId, name: parrillaName, createdAt: Date.now(), posts: newPosts });
-    studioData.activeId = newId;
-    saveStudioData(studioData);
-
-    return newPosts.length;
-  } catch(e) { console.warn('[studio] parseParrillaJSON error:', e); return 0; }
-}
-
-function openSocialStudio() {
-  setAgentContext('social');
-  showView('social-studio');
-  renderStudio();
-  updateStudioConnectBtn();
-}
-
-function renderStudio() {
-  // Update header: parrilla name
-  const active = getActiveParrilla();
-  const nameEl = document.getElementById('studio-active-name');
-  if (nameEl) nameEl.textContent = active ? active.name : 'Sin parrilla activa';
-
-  // Dismiss loading overlay if present
-  window._studioGenerating = false;
-  const loadOverlay = document.getElementById('studio-gen-loading');
-  if (loadOverlay) loadOverlay.style.display = 'none';
-
-  const posts = loadStudioPosts();
-  const filtered = studioCurrentWeek === 0 ? posts : posts.filter(p => p.week === studioCurrentWeek);
-  const emptyEl = document.getElementById('studio-empty');
-  const calView = document.getElementById('studio-calendar-view');
-  const listView = document.getElementById('studio-list-view');
-  const statsBar = document.getElementById('studio-stats-bar');
-  const filters = document.getElementById('studio-filters');
-
-  // Banner de import reciente
-  const existingBanner = document.getElementById('studio-import-banner');
-  if (existingBanner) existingBanner.remove();
-  if (window._studioJustImported && posts.length > 0) {
-    const count = window._studioJustImported;
-    window._studioJustImported = null;
-    const studioWrap = document.querySelector('.social-studio');
-    if (studioWrap) {
-      const banner = document.createElement('div');
-      banner.id = 'studio-import-banner';
-      banner.style.cssText = 'display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#EEF0FD,#F0F4FF);border:1.5px solid var(--blue-md);border-radius:10px;padding:12px 16px;margin:0 24px 8px;animation:fadeIn .4s ease';
-      banner.innerHTML = '<span style="font-size:20px">🎉</span><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--blue)">' + count + ' posts importados · parrilla "' + esc(active?.name || '') + '"</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Haz clic en cualquier tarjeta para editar, generar imágenes y marcar como listo</div></div><button onclick="document.getElementById(\'studio-import-banner\')?.remove()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px;line-height:1">×</button>';
-      const filterBar = document.getElementById('studio-filters');
-      if (filterBar) filterBar.after(banner);
-      else { const hdr = studioWrap.querySelector('.studio-hdr'); if (hdr?.nextSibling) studioWrap.insertBefore(banner, hdr.nextSibling); else studioWrap.prepend(banner); }
-      setTimeout(() => banner?.remove(), 10000);
-    }
-  }
-
-  if (posts.length === 0) {
-    if (emptyEl) emptyEl.style.display = 'flex';
-    if (calView) calView.style.display = 'none';
-    if (listView) listView.style.display = 'none';
-    if (statsBar) statsBar.style.display = 'none';
-    if (filters) filters.style.display = 'none';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-  if (statsBar) statsBar.style.display = 'flex';
-  if (filters) filters.style.display = 'flex';
-
-  // Stats
-  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
-  setEl('stat-total', posts.length);
-  setEl('stat-listos', posts.filter(p => p.status === 'listo').length);
-  setEl('stat-imagenes', posts.filter(p => p.imageBase64).length);
-  setEl('stat-publicados', posts.filter(p => p.status === 'publicado').length);
-
-  if (studioCurrentView === 'calendar') {
-    if (calView) calView.style.display = 'block';
-    if (listView) listView.style.display = 'none';
-    renderCalendarView(filtered);
-  } else {
-    if (calView) calView.style.display = 'none';
-    if (listView) listView.style.display = 'block';
-    renderListView(filtered);
-  }
-}
-
-// ─── Historial panel ──────────────────────────────────────────────────────────
-
-function openHistorialPanel() {
-  renderHistorialPanel();
-  const overlay = document.getElementById('studio-historial-overlay');
-  if (!overlay) return;
-  overlay.style.display = 'flex';
-  setTimeout(() => overlay.querySelector('.studio-historial-panel')?.classList.add('open'), 10);
-}
-
-function closeHistorialPanel() {
-  const overlay = document.getElementById('studio-historial-overlay');
-  if (!overlay) return;
-  overlay.querySelector('.studio-historial-panel')?.classList.remove('open');
-  setTimeout(() => { overlay.style.display = 'none'; }, 260);
-}
-
-function renderHistorialPanel() {
-  const data = loadStudioData();
-  const list = document.getElementById('studio-historial-list');
-  if (!list) return;
-
-  if (!data.parrillas.length) {
-    list.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--muted);font-size:13px">No tienes parrillas guardadas aún.<br><br>Genera tu primera parrilla con el asistente de IA.</div>';
-    return;
-  }
-
-  list.innerHTML = data.parrillas.map(p => {
-    const isActive = p.id === data.activeId;
-    const nets = [...new Set((p.posts || []).map(pp => pp.network))].slice(0, 5);
-    const dateStr = new Date(p.createdAt).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
-    const total = p.posts?.length || 0;
-    const listos = (p.posts || []).filter(pp => pp.status === 'listo' || pp.status === 'publicado').length;
-    const pct = total ? Math.round(listos / total * 100) : 0;
-    const netDots = nets.map(n => {
-      const cfg = STUDIO_NETWORKS[n] || { color: '#888' };
-      return '<span style="width:7px;height:7px;border-radius:50%;background:' + cfg.color + ';display:inline-block"></span>';
-    }).join('');
-
-    return '<div class="historial-card' + (isActive ? ' historial-active' : '') + '" onclick="setActiveParrilla(\'' + p.id + '\')">' +
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
-        '<div style="flex:1;min-width:0">' +
-          '<div class="historial-name">' + esc(p.name) +
-            (isActive ? ' <span style="font-size:9px;background:var(--blue);color:#fff;padding:1px 6px;border-radius:10px;font-weight:700;vertical-align:middle">activa</span>' : '') +
-          '</div>' +
-          '<div class="historial-meta">' + total + ' posts · ' + dateStr + '</div>' +
-          (netDots ? '<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">' + netDots + '</div>' : '') +
-        '</div>' +
-        '<button onclick="event.stopPropagation();deleteParrilla(\'' + p.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--muted2);padding:3px 6px;border-radius:6px;font-size:12px;flex-shrink:0;line-height:1" title="Eliminar" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'var(--muted2)\'">✕</button>' +
-      '</div>' +
-      (total ? '<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px"><span>Progreso</span><span>' + listos + '/' + total + ' listos</span></div><div style="height:3px;background:var(--border);border-radius:2px"><div style="height:100%;width:' + pct + '%;background:var(--blue);border-radius:2px;transition:width .4s"></div></div></div>' : '') +
-    '</div>';
-  }).join('');
-}
-
-// ─── Studio background generation (wizard without leaving Studio) ─────────────
-
-// Parser de filas de tabla markdown para vista previa en tiempo real
-function parseStreamTableRow(line) {
-  if (!line.includes('|')) return null;
-  const cells = line.split('|').map(c => c.trim()).filter(c => c.length > 0);
-  if (cells.length < 4) return null;
-  // La primera celda puede ser número de semana/día o separador (---)
-  if (cells[0].includes('-') || cells[0].toLowerCase().includes('sem') || cells[0].toLowerCase().includes('día') || cells[0].toLowerCase().includes('dia')) return null;
-  const dayNum = parseInt(cells[0]);
-  // Segunda celda: nombre del día
-  const DIAS = ['lunes','martes','miércoles','miercoles','jueves','viernes','sábado','sabado','domingo'];
-  const dayName = (cells[1] || '').toLowerCase().trim();
-  if (!DIAS.includes(dayName)) return null;
-  // Estimar semana desde número de día
-  const week = isNaN(dayNum) ? 1 : Math.max(1, Math.ceil(dayNum / 7));
-  const networkRaw = (cells[2] || '').toLowerCase().trim();
-  const formatRaw  = (cells[3] || '').toLowerCase().trim();
-  const title = (cells[4] || '').replace(/^\*+|\*+$/g, '').replace(/^["']|["']$/g, '').trim();
-  const hasImage = cells.length > 5 && (cells[5].includes('✅') || cells[5].toLowerCase().includes('sí') || cells[5].toLowerCase().includes('si'));
-  const netMap  = { instagram:'instagram', tiktok:'tiktok', facebook:'facebook', linkedin:'linkedin', 'x':'x', 'x (twitter)':'x', youtube:'youtube' };
-  const fmtMap  = { reel:'reel', reels:'reel', story:'story', stories:'story', feed:'feed', carrusel:'carrusel', carousel:'carrusel', video:'video', post:'post', 'imagen':'feed', 'imagen estática':'feed', 'infografía':'feed' };
-  return { week, day: cells[1].trim(), network: netMap[networkRaw] || 'instagram', format: fmtMap[formatRaw] || 'feed', title, hasImage };
-}
-
-// Renderiza el calendario de preview en tiempo real
-function renderStreamCalendar(posts, grid) {
-  const emptyEl = document.getElementById('studio-stream-empty');
-  if (!posts.length) { grid.innerHTML = ''; if(emptyEl) emptyEl.style.display='flex'; return; }
-  if(emptyEl) emptyEl.style.display='none';
-  const networks = [...new Set(posts.map(p => p.network))];
-  let html = '';
-  networks.forEach(net => {
-    const cfg = STUDIO_NETWORKS[net] || { label: net, color:'#666', bg:'#f0f0f0' };
-    const netPosts = posts.filter(p => p.network === net);
-    html += '<div class="studio-net-col">';
-    html += '<div class="studio-net-hdr" style="border-bottom-color:'+cfg.color+'">';
-    html += '<span class="studio-net-dot" style="background:'+cfg.color+'"></span>';
-    html += '<span class="studio-net-name">'+cfg.label+'</span>';
-    html += '<span class="studio-net-count">'+netPosts.length+'</span>';
-    html += '</div><div class="studio-net-body">';
-    let lastWeek = 0;
-    netPosts.forEach(p => {
-      if (p.week !== lastWeek) { html += '<div class="studio-week-label">Semana '+p.week+'</div>'; lastWeek = p.week; }
-      const fmt = STUDIO_FORMATS[p.format] || STUDIO_FORMATS.feed;
-      html += '<div class="post-card" style="animation:fadeIn .2s ease">' +
-        '<div class="post-card-img post-card-img-empty"><span style="font-size:22px">'+fmt.icon+'</span></div>' +
-        '<div class="post-card-body">' +
-          '<div class="post-card-meta">' +
-            '<span class="post-badge" style="background:'+cfg.bg+';color:'+cfg.color+'">'+fmt.label+'</span>' +
-            (p.hasImage ? '<span class="post-status" style="background:#EFF6FF;color:#2563EB;margin-left:auto">+img</span>' : '') +
-          '</div>' +
-          '<div class="post-card-title">'+esc(p.title||p.day)+'</div>' +
-          '<div class="post-card-day">'+esc(p.day)+'</div>' +
-        '</div></div>';
-    });
-    html += '</div></div>';
-  });
-  grid.innerHTML = html;
-}
-
-function studioGenerateParrilla(prompt, wizardName) {
-  window._studioWizardName = wizardName || null;
-  window._studioGenerating = true;
-  // Limpiar preview anterior
-  const preview = document.getElementById('studio-stream-preview');
-  if (preview) preview.innerHTML = '';
-  // Mostrar overlay con preview
-  const overlay = document.getElementById('studio-gen-loading');
-  if (overlay) overlay.style.display = 'flex';
-  // Enviar al agente social sin cambiar de vista
-  setAgentContext('social');
-  setTimeout(() => {
-    document.getElementById('cin').value = prompt;
-    sendMsg();
-  }, 100);
-}
-
-function renderCalendarView(posts) {
-  const grid = document.getElementById('studio-cal-grid');
-  if (!grid) return;
-  const networks = [...new Set(posts.map(p => p.network))];
-  if (!networks.length) { grid.innerHTML = '<div style="padding:40px 24px;color:var(--muted);font-size:13px">No hay posts para esta semana.</div>'; return; }
-
-  let html = '';
-  networks.forEach(net => {
-    const cfg = STUDIO_NETWORKS[net] || { label: net, color:'#666', bg:'#f5f5f5' };
-    const netPosts = posts.filter(p => p.network === net);
-    html += '<div class="studio-net-col">';
-    html += '<div class="studio-net-hdr" style="border-bottom-color:' + cfg.color + '">';
-    html += '<span class="studio-net-dot" style="background:' + cfg.color + '"></span>';
-    html += '<span class="studio-net-name">' + cfg.label + '</span>';
-    html += '<span class="studio-net-count">' + netPosts.length + '</span>';
-    html += '</div><div class="studio-net-body">';
-
-    [1,2,3,4].forEach(week => {
-      const wp = netPosts.filter(p => p.week === week);
-      if (!wp.length && studioCurrentWeek !== 0) return;
-      if (studioCurrentWeek === 0) html += '<div class="studio-week-label">Semana ' + week + '</div>';
-      if (!wp.length) { html += '<div class="studio-week-empty">— sin posts</div>'; return; }
-      wp.forEach(post => { html += buildPostCard(post, cfg); });
-    });
-
-    html += '</div></div>';
-  });
-  grid.innerHTML = html;
-}
-
-function buildPostCard(post, netCfg) {
-  const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
-  const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-  const hasImg = !!post.imageBase64;
-  const hasVid = !!post.videoUrl;
-  const imgHtml = hasImg
-    ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" loading="lazy">'
-    : hasVid
-      ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>' +
-        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
-          '<div style="width:32px;height:32px;background:rgba(0,0,0,.55);border-radius:50%;display:flex;align-items:center;justify-content:center">' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>' +
-          '</div></div>'
-      : '<span style="font-size:22px">' + fmt.icon + '</span>';
-
-  return '<div class="post-card" onclick="openPostModal(\'' + post.id + '\')">' +
-    '<div class="post-card-img' + ((!hasImg && !hasVid) ? ' post-card-img-empty' : '') + '" style="position:relative">' + imgHtml + '</div>' +
-    '<div class="post-card-body">' +
-      '<div class="post-card-meta">' +
-        '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + fmt.label + '</span>' +
-        '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
-      '</div>' +
-      '<div class="post-card-title">' + esc(post.title || 'Sin título') + '</div>' +
-      (post.caption ? '<div class="post-card-caption">' + esc(post.caption.slice(0,70)) + '…</div>' : '') +
-      (post.day ? '<div class="post-card-day">' + esc(post.day) + '</div>' : '') +
-    '</div></div>';
-}
-
-function renderListView(posts) {
-  const grid = document.getElementById('studio-list-grid');
-  if (!grid) return;
-  if (!posts.length) { grid.innerHTML = '<div style="padding:40px 24px;color:var(--muted);font-size:13px">No hay posts para esta semana.</div>'; return; }
-
-  let html = '';
-  posts.sort((a,b) => (a.week*10+(a.dayNum||0)) - (b.week*10+(b.dayNum||0))).forEach(post => {
-    const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
-    const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
-    const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-    const thumbHtml = post.imageBase64
-      ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">'
-      : post.videoUrl
-        ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>'
-        : '<span style="font-size:20px">' + fmt.icon + '</span>';
-
-    html += '<div class="post-list-item" onclick="openPostModal(\'' + post.id + '\')">' +
-      '<div class="post-list-thumb">' + thumbHtml + '</div>' +
-      '<div class="post-list-info">' +
-        '<div class="post-list-title">' + esc(post.title || 'Sin título') + '</div>' +
-        '<div class="post-list-meta">Sem ' + post.week + (post.day ? ' · ' + esc(post.day) : '') + ' · ' + netCfg.label + ' · ' + fmt.label + '</div>' +
-      '</div>' +
-      '<div class="post-list-right">' +
-        '<span class="post-badge" style="background:' + netCfg.bg + ';color:' + netCfg.color + '">' + netCfg.label + '</span>' +
-        '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
-      '</div></div>';
-  });
-  grid.innerHTML = html;
-}
-
-function filterCalendarWeek(week, btn) {
-  studioCurrentWeek = week;
-  document.querySelectorAll('.week-tab').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderStudio();
-}
-
-function switchStudioView(view, btn) {
-  studioCurrentView = view;
-  document.querySelectorAll('.view-tog').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderStudio();
-}
-
-function studioImportFromChat() {
-  openStudioWizard();
-}
-
-// ─── Studio Wizard ────────────────────────────────────────────────────────────
-
-function openStudioWizard() {
-  const existing = document.getElementById('studio-wizard');
-  if (existing) existing.remove();
-
-  // Pull client profile for suggestions
-  const negocio = mem?.negocio || mem?.nombre || '';
-  const industria = mem?.industria || '';
-  const redesRec = mem?.redes || '';
-
-  const overlay = document.createElement('div');
-  overlay.id = 'studio-wizard';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
-  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
-
-  overlay.innerHTML = `
-  <div style="background:var(--bg);border-radius:20px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.25)">
-    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <div style="font-size:16px;font-weight:800;color:var(--text)">Crear parrilla de contenido</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">Configura tu parrilla para obtener el mejor resultado</div>
-      </div>
-      <button onclick="document.getElementById('studio-wizard').remove()" style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:8px;line-height:1">×</button>
-    </div>
-
-    <div style="padding:20px 24px">
-
-      <!-- Duración -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Para cuántos días?</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-days">
-          ${[7,14,21,30].map(d=>`<button onclick="wizSelect(this,'wiz-days')" data-val="${d}" class="wiz-chip ${d===30?'active':''}">${d} días</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Redes sociales -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Para qué redes sociales?</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-nets">
-          ${[
-            {val:'instagram',label:'Instagram',emoji:'📸'},
-            {val:'tiktok',label:'TikTok',emoji:'🎵'},
-            {val:'facebook',label:'Facebook',emoji:'👥'},
-            {val:'linkedin',label:'LinkedIn',emoji:'💼'},
-            {val:'x',label:'X (Twitter)',emoji:'✖'},
-            {val:'youtube',label:'YouTube',emoji:'▶'},
-          ].map(n=>`<button onclick="wizToggle(this,'wiz-nets')" data-val="${n.val}" class="wiz-chip ${['instagram','facebook','tiktok'].includes(n.val)?'active':''}">${n.emoji} ${n.label}</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Objetivo -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Objetivo principal</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-obj">
-          ${[
-            {val:'reconocimiento',label:'Reconocimiento de marca'},
-            {val:'engagement',label:'Engagement y comunidad'},
-            {val:'ventas',label:'Ventas / conversiones'},
-            {val:'educacion',label:'Educar a mi audiencia'},
-            {val:'trafico',label:'Tráfico al sitio web'},
-          ].map((o,i)=>`<button onclick="wizSelect(this,'wiz-obj')" data-val="${o.val}" class="wiz-chip ${i===0?'active':''}">${o.label}</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Formatos -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Tipos de contenido (selecciona los que aplican)</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-formats">
-          ${[
-            {val:'reel',label:'🎬 Reels / Videos'},
-            {val:'feed',label:'🖼 Imagen estática'},
-            {val:'carrusel',label:'📑 Carruseles'},
-            {val:'story',label:'📱 Stories'},
-            {val:'post',label:'📝 Post de texto'},
-          ].map((f,i)=>`<button onclick="wizToggle(this,'wiz-formats')" data-val="${f.val}" class="wiz-chip ${i<3?'active':''}">${f.label}</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Tono -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Tono de la comunicación</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-tone">
-          ${[
-            {val:'cercano',label:'Cercano y casual'},
-            {val:'profesional',label:'Profesional'},
-            {val:'educativo',label:'Educativo'},
-            {val:'inspiracional',label:'Inspiracional'},
-            {val:'mixto',label:'Mixto (varía por post)'},
-          ].map((t,i)=>`<button onclick="wizSelect(this,'wiz-tone')" data-val="${t.val}" class="wiz-chip ${i===0?'active':''}">${t.label}</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Temas -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Temas e ideas a tratar <span style="font-weight:400;color:var(--muted2)">(opcional — el agente también propone)</span></div>
-        <textarea id="wiz-topics" rows="3" placeholder="Ej: testimonios de clientes, tips de uso del producto, detrás de cámaras, promociones..." style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--bg);resize:vertical;box-sizing:border-box;transition:border .15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">${industria ? '': ''}</textarea>
-        ${industria ? `<div style="font-size:11px;color:var(--muted);margin-top:5px">💡 Tu perfil indica: <strong>${industria}</strong>${negocio?' — '+negocio:''}</div>` : ''}
-      </div>
-
-      <!-- Imágenes -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas imágenes generar con IA?</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-imgs">
-          ${[
-            {val:'0',label:'Sin imágenes'},
-            {val:'3',label:'3 imágenes'},
-            {val:'5',label:'5 imágenes'},
-            {val:'10',label:'10 imágenes'},
-            {val:'todas',label:'Todas las posibles'},
-          ].map((im,i)=>`<button onclick="wizSelect(this,'wiz-imgs')" data-val="${im.val}" class="wiz-chip ${i===2?'active':''}">${im.label}</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Hashtags -->
-      <div style="margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Hashtags personalizados <span style="font-weight:400;color:var(--muted2)">(opcional)</span></div>
-        <input id="wiz-hashtags" type="text" placeholder="Ej: #MiMarca #Colombia #ServicioTecnico" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--bg);box-sizing:border-box;transition:border .15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">
-      </div>
-
-    </div>
-
-    <div style="padding:14px 24px;border-top:1px solid var(--border);background:var(--bg-subtle);border-radius:0 0 20px 20px;display:flex;gap:10px;align-items:center">
-      <button onclick="document.getElementById('studio-wizard').remove()" class="btn btn-g" style="font-size:13px">Cancelar</button>
-      <button onclick="submitStudioWizard()" class="btn btn-p" style="flex:1;font-size:13px;font-weight:700">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:6px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        Generar parrilla con IA
-      </button>
-    </div>
-  </div>`;
-
-  document.body.appendChild(overlay);
-}
-
-function wizSelect(btn, groupId) {
-  document.querySelectorAll('#' + groupId + ' .wiz-chip').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-}
-function wizToggle(btn) {
-  btn.classList.toggle('active');
-}
-
-function submitStudioWizard() {
-  const get = (id) => {
-    const active = document.querySelectorAll('#' + id + ' .wiz-chip.active');
-    return [...active].map(b => b.dataset.val);
-  };
-
-  const days     = get('wiz-days')[0] || '30';
-  const nets     = get('wiz-nets');
-  const obj      = get('wiz-obj')[0] || 'reconocimiento';
-  const formats  = get('wiz-formats');
-  const tone     = get('wiz-tone')[0] || 'cercano';
-  const imgCount = get('wiz-imgs')[0] || '5';
-  const topics   = (document.getElementById('wiz-topics')?.value || '').trim();
-  const hashtags = (document.getElementById('wiz-hashtags')?.value || '').trim();
-
-  if (!nets.length) { alert('Selecciona al menos una red social.'); return; }
-  if (!formats.length) { alert('Selecciona al menos un tipo de contenido.'); return; }
-
-  const objLabels = { reconocimiento:'reconocimiento de marca', engagement:'engagement y comunidad', ventas:'ventas y conversiones', educacion:'educar a la audiencia', trafico:'tráfico al sitio web' };
-  const toneLabels = { cercano:'cercano y casual', profesional:'profesional', educativo:'educativo', inspiracional:'inspiracional', mixto:'mixto (varía por post)' };
-  const netLabels = { instagram:'Instagram', tiktok:'TikTok', facebook:'Facebook', linkedin:'LinkedIn', x:'X (Twitter)', youtube:'YouTube' };
-  const fmtLabels = { reel:'Reels/Videos', feed:'Imágenes estáticas', carrusel:'Carruseles', story:'Stories', post:'Posts de texto' };
-
-  const imgInstr = imgCount === '0'
-    ? 'No generes imágenes para esta parrilla.'
-    : imgCount === 'todas'
-    ? 'Al terminar la parrilla, genera imágenes para TODOS los posts que las necesiten (needsImage: true).'
-    : `Al terminar la parrilla, genera exactamente ${imgCount} imágenes para los posts más importantes (los que necesiten imagen).`;
-
-  const netNames = nets.map(n => netLabels[n] || n).join(' + ');
-  const dateStr = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long' });
-  const wizardName = netNames + ' — ' + dateStr;
-
-  const prompt =
-    `Crea una parrilla de contenido de ${days} días con las siguientes especificaciones:
-
-REDES SOCIALES: ${netNames}
-OBJETIVO: ${objLabels[obj] || obj}
-TIPOS DE CONTENIDO: ${formats.map(f => fmtLabels[f]||f).join(', ')}
-TONO: ${toneLabels[tone] || tone}
-${topics ? 'TEMAS A TRATAR: ' + topics : ''}
-${hashtags ? 'HASHTAGS DE MARCA: ' + hashtags : ''}
-IMÁGENES: ${imgInstr}
-
-Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.`;
-
-  document.getElementById('studio-wizard').remove();
-  // Generate without leaving Studio
-  studioGenerateParrilla(prompt, wizardName);
-}
-
-// ─── Post Modal ──────────────────────────────────────────────────────────────
-
-let activePostId = null;
-
-function openPostModal(postId) {
-  activePostId = postId;
-  _carouselIdx = 0; // reset carousel slide index on each open
-  const posts = loadStudioPosts();
-  const post = posts.find(p => p.id === postId);
-  if (!post) return;
-
-  const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
-  const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
-  const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-  const isVideo = ['reel','video','story'].includes(post.format);
-  const hashtagsStr = (post.hashtags || []).join(' ');
-
-  // ── Sección de media (columna izquierda) ──────────────────────────────────
-  const uploadIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>';
-  let mediaHTML = '';
-
-  const hasVideo = !!post.videoUrl;
-  const hasImage = !!post.imageBase64;
-
-  if (hasVideo) {
-    // Video subido (object URL — sesión)
-    mediaHTML =
-      '<div class="post-modal-media-preview">' +
-        '<video src="' + post.videoUrl + '" controls style="width:100%;height:100%;object-fit:cover;border-radius:12px"></video>' +
-      '</div>' +
-      '<div style="font-size:10px;color:var(--muted);text-align:center;padding:4px 0">' + esc(post.videoFileName || 'video.mp4') + '</div>' +
-      '<div style="display:flex;gap:6px">' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">🔄 Cambiar</button>' +
-      '</div>' +
-      '<button class="pm-btn pm-btn-ghost" style="width:100%;justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')">🗑 Eliminar video</button>';
-  } else if (hasImage && post.carouselImages && post.carouselImages.length > 1) {
-    // Carrusel con múltiples slides generados
-    const slideCount = post.carouselImages.length;
-    mediaHTML =
-      '<div style="position:relative">' +
-        '<div class="post-modal-media-preview" id="pm-carousel-preview">' +
-          '<img id="pm-carousel-img" src="data:' + post.carouselImages[0].mediaType + ';base64,' + post.carouselImages[0].base64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
-        '</div>' +
-        (slideCount > 1 ? '<button onclick="carouselNav(-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">‹</button>' +
-        '<button onclick="carouselNav(1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">›</button>' : '') +
-      '</div>' +
-      '<div style="text-align:center;font-size:10px;color:var(--muted);padding:4px 0" id="pm-carousel-counter">Slide 1 de ' + slideCount + '</div>' +
-      '<div style="display:flex;gap:6px">' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadCarouselSlide()">⬇ Slide</button>' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadAllCarouselSlides(\'' + postId + '\')">⬇ Todos</button>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px">' +
-        '<button class="pm-btn pm-btn-primary" style="flex:1;justify-content:center" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
-          'Regenerar' +
-        '</button>' +
-        '<button class="pm-btn pm-btn-ghost" style="justify-content:center;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')" title="Eliminar slides">🗑</button>' +
-      '</div>';
-  } else if (hasImage) {
-    // Imagen guardada en base64
-    mediaHTML =
-      '<div class="post-modal-media-preview">' +
-        '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
-      '</div>' +
-      '<div style="display:flex;gap:6px">' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
-        '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">🔄 Cambiar</button>' +
-      '</div>' +
-      '<button class="pm-btn pm-btn-ghost" style="width:100%;justify-content:center;font-size:11px;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')">🗑 Eliminar imagen</button>';
-  } else if (isVideo) {
-    const hasScript = !!(post.script && post.script.trim());
-    if (hasScript) {
-      // Guión listo — mostrar opciones para crear el video
-      mediaHTML =
-        '<div class="post-modal-media-preview" style="flex-direction:column;gap:10px;background:var(--blue-lt)">' +
-          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="1.8" stroke-linecap="round"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>' +
-          '<div style="font-size:12px;font-weight:600;color:var(--blue);text-align:center;line-height:1.4">Guión listo ✓<br><span style="font-weight:400;color:var(--muted);font-size:11px">Elige cómo crear el video</span></div>' +
-        '</div>' +
-        '<div class="post-modal-media-label">Crear video</div>' +
-        '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-aivideo-btn" onclick="generateVideoForPost(\'' + postId + '\')">' +
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
-          'Crear con IA · ~60 seg' +
-        '</button>' +
-        '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
-          uploadIcon + 'Subir video grabado' +
-        '</button>' +
-        '<div style="display:flex;gap:6px;margin-top:2px">' +
-          '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
-            '↺ Regenerar guión' +
-          '</button>' +
-        '</div>';
-    } else {
-      // Sin guión — mostrar pasos para crear el video
-      mediaHTML =
-        '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
-          '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
-          '<span style="font-size:11px;color:var(--muted)">Sin video</span>' +
-        '</div>' +
-        '<div class="post-modal-media-label">Crear tu ' + fmt.label + '</div>' +
-        '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-script-btn" onclick="generateScriptForPost(\'' + postId + '\')">' +
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
-          'Paso 1 · Generar guión con IA' +
-        '</button>' +
-        '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'video/*,image/*\')">' +
-          uploadIcon + 'O subir video directamente' +
-        '</button>' +
-        '<div style="font-size:10px;color:var(--muted2);text-align:center;line-height:1.4">Genera el guión → crea con IA o graba y sube</div>';
-    }
-  } else {
-    // Formato imagen sin media — generar o subir
-    const isCarrusel = post.format === 'carrusel';
-    const numMatch2 = (post.title || '').match(/^(\d+)\s+/);
-    const estSlides = numMatch2 ? Math.min(parseInt(numMatch2[1]), 8) : 5;
-    mediaHTML =
-      '<div class="post-modal-media-preview" style="flex-direction:column;gap:8px">' +
-        '<span class="post-modal-media-empty">' + fmt.icon + '</span>' +
-        '<span style="font-size:11px;color:var(--muted)">Sin imagen</span>' +
-      '</div>' +
-      '<div class="post-modal-media-label">' + (isCarrusel ? 'Crear slides del carrusel' : 'Crear imagen') + '</div>' +
-      '<button class="pm-btn pm-btn-primary" style="width:100%;justify-content:center" id="pm-gen-btn" onclick="generateImageForPost(\'' + postId + '\')">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
-        (isCarrusel ? 'Generar ' + estSlides + ' slides con IA' : 'Generar con IA') +
-      '</button>' +
-      '<button class="pm-btn pm-btn-upload" onclick="uploadMediaForPost(\'' + postId + '\',\'image/*\')">' +
-        uploadIcon + (isCarrusel ? 'Subir slide desde mi PC' : 'Subir desde mi PC') +
-      '</button>';
-    if (isCarrusel) {
-      mediaHTML += '<div style="font-size:10px;color:var(--muted2);line-height:1.5;text-align:center">Genera un slide visual por cada concepto del carrusel.<br>Puedes añadir texto en Canva o tu herramienta de diseño.</div>';
-    } else if (post.imagePrompt) {
-      mediaHTML += '<div style="font-size:10px;color:var(--muted);line-height:1.5;padding:8px 10px;background:var(--bg-muted);border-radius:8px;margin-top:2px"><span style="font-weight:700;display:block;margin-bottom:3px">Prompt sugerido</span>' + esc(post.imagePrompt) + '</div>';
-    }
-  }
-
-  // ── Pie: botones de estado ────────────────────────────────────────────────
-  const hasMedia = !!(post.imageBase64 || post.videoUrl);
-  const igConn   = getSocialAccount('instagram');
-  const fbConn   = getSocialAccount('facebook');
-  const hasAnyConn = !!(igConn || fbConn);
-
-  // Botón principal de publicar (solo si hay media o caption)
-  const publishBtn = (hasMedia || post.caption)
-    ? '<button class="pm-btn" style="background:#1E2BCC;color:#fff;font-weight:700;gap:5px" onclick="openPublishModal(\'' + postId + '\')">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
-        'Publicar' +
-      '</button>'
-    : '';
-
-  const footerBtns =
-    (post.status !== 'listo'
-      ? '<button class="pm-btn pm-btn-success" onclick="setPostStatus(\'' + postId + '\',\'listo\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Marcar como listo</button>'
-      : '<button class="pm-btn pm-btn-ghost" style="cursor:default;opacity:.5">✓ Listo</button>') +
-    publishBtn +
-    '<div style="flex:1"></div>' +
-    '<button class="pm-btn pm-btn-danger" onclick="if(confirm(\'Eliminar este post?\'))deleteStudioPost(\'' + postId + '\')">Eliminar</button>';
-
-  // ── Ensamblar modal ───────────────────────────────────────────────────────
-  const modal = document.createElement('div');
-  modal.className = 'post-modal-overlay';
-  modal.id = 'post-modal';
-  modal.onclick = function(e) { if (e.target === modal) closePostModal(); };
-  modal.innerHTML =
-    '<div class="post-modal-box">' +
-      // Header
-      '<div class="post-modal-hdr">' +
-        '<div style="flex:1;min-width:0">' +
-          '<div class="post-modal-title">' + esc(post.title || 'Sin título') + '</div>' +
-          '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:4px">' +
-            // Network select styled as badge
-            '<select onchange="updatePostMeta(\'' + postId + '\',\'network\',this.value)" style="font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 5px;border-radius:5px;border:none;cursor:pointer;background:' + netCfg.bg + ';color:' + netCfg.color + '">' +
-              Object.entries(STUDIO_NETWORKS).map(([k,v]) => '<option value="' + k + '"' + (post.network === k ? ' selected' : '') + '>' + v.label.toUpperCase() + '</option>').join('') +
-            '</select>' +
-            // Format select styled as badge
-            '<select onchange="updatePostMeta(\'' + postId + '\',\'format\',this.value)" style="font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 5px;border-radius:5px;border:none;cursor:pointer;background:var(--bg-muted);color:var(--muted)">' +
-              Object.entries(STUDIO_FORMATS).map(([k,v]) => '<option value="' + k + '"' + (post.format === k ? ' selected' : '') + '>' + v.label.toUpperCase() + '</option>').join('') +
-            '</select>' +
-            // Week select
-            '<select onchange="updatePostMeta(\'' + postId + '\',\'week\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--muted);background:#fff">' +
-              [1,2,3,4].map(w => '<option value="' + w + '"' + (post.week == w ? ' selected' : '') + '>Sem. ' + w + '</option>').join('') +
-            '</select>' +
-            // Day select
-            '<select onchange="updatePostMeta(\'' + postId + '\',\'day\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--muted);background:#fff">' +
-              ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map(d => '<option' + (post.day === d ? ' selected' : '') + '>' + d + '</option>').join('') +
-            '</select>' +
-            '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<button class="post-modal-close" onclick="closePostModal()">×</button>' +
-      '</div>' +
-      // Two-column body
-      '<div class="post-modal-2col">' +
-        '<div class="post-modal-media">' + mediaHTML + '</div>' +
-        '<div class="post-modal-content">' +
-          '<div class="post-field"><label>Caption / Hook</label>' +
-            '<textarea id="pm-caption" rows="' + (isVideo ? '4' : '7') + '" placeholder="Caption listo para publicar...">' + esc(post.caption || '') + '</textarea>' +
-          '</div>' +
-          (isVideo
-            ? '<div class="post-field"><label>Guión del video</label>' +
-                '<textarea id="pm-script" rows="5" placeholder="El guión aparecerá aquí al generarlo, o escríbelo manualmente..." style="font-size:12px;line-height:1.6">' + esc(post.script || '') + '</textarea>' +
-              '</div>'
-            : '') +
-          '<div class="post-field"><label>Hashtags</label>' +
-            '<input id="pm-hashtags" type="text" value="' + esc(hashtagsStr) + '" placeholder="#hashtag1 #hashtag2">' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      // Footer
-      '<div class="post-modal-footer">' + footerBtns + '</div>' +
-    '</div>';
-
-  document.body.appendChild(modal);
-}
-
-// Subir imagen/video desde el PC
-function uploadMediaForPost(postId, accept) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = accept || 'image/*';
-  // Debe estar en el DOM para que funcione en todos los navegadores
-  input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-  document.body.appendChild(input);
-
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    document.body.removeChild(input);
-    if (!file) return;
-
-    if (file.type.startsWith('video/')) {
-      // Videos: usar object URL (sesión) — no caben en localStorage
-      const videoUrl = URL.createObjectURL(file);
-      updateStudioPost(postId, {
-        videoUrl,
-        videoFileName: file.name,
-        imageBase64: null,        // limpiar imagen previa
-        imageMediaType: file.type
-      });
-      closePostModal();
-      setTimeout(() => openPostModal(postId), 80);
-    } else {
-      // Imágenes: convertir a base64 (límite 5 MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('La imagen es demasiado grande. Máximo 5 MB.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target.result.split(',')[1];
-        updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type, videoUrl: null });
-        closePostModal();
-        setTimeout(() => openPostModal(postId), 80);
-      };
-      reader.onerror = () => alert('Error al leer el archivo. Intenta de nuevo.');
-      reader.readAsDataURL(file);
-    }
-  };
-
-  input.oncancel = () => { if (document.body.contains(input)) document.body.removeChild(input); };
-  input.click();
-}
-
-// Generar guión del video con el agente (queda en campo de notas del post)
-async function generateScriptForPost(postId) {
-  const post = loadStudioPosts().find(p => p.id === postId);
-  if (!post) return;
-  const btn = document.getElementById('pm-script-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Generando…'; }
-
-  const prompt = 'Crea un guión de producción corto y práctico para este ' + (post.format || 'reel') + ':\n\nTÍTULO: ' + post.title + '\nCAPTION/HOOK: ' + (post.caption || '') + '\nRED: ' + post.network + '\n\nIncluye: hook de 3 segundos, estructura de escenas con duración, texto en pantalla, música o sonido sugerido y CTA final. Formato lista clara.';
-
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (typeof sessionToken !== 'undefined' && sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-    const sysPrompt = (typeof SYSTEM_SOCIAL !== 'undefined' ? SYSTEM_SOCIAL : '')
-      .replace('{MEMORY}', mem ? JSON.stringify(mem) : '').replace('{STAGE}', '').replace('{AGENT}', 'Social Media Manager');
-    const res = await fetch('/api/chat', {
-      method: 'POST', headers,
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt })
-    });
-
-    if (!res.ok) {
-      let errMsg = 'Error ' + res.status;
-      try { const d = await res.json(); errMsg = d.error || errMsg; } catch(_) {}
-      throw new Error(errMsg);
-    }
-
-    // /api/chat always streams SSE — consume the stream and collect full text
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let sseBuffer = '';
-    let fullText = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      sseBuffer += decoder.decode(value, { stream: true });
-      const lines = sseBuffer.split('\n');
-      sseBuffer = lines.pop(); // keep incomplete line
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6).trim();
-        try {
-          const evt = JSON.parse(raw);
-          if (evt.error) throw new Error(evt.error);
-          if (evt.done && evt.full) { fullText = evt.full; }
-          else if (evt.delta) { fullText += evt.delta; }
-        } catch(parseErr) {
-          if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
-        }
-      }
-    }
-
-    if (fullText.trim()) {
-      updateStudioPost(postId, { script: fullText.trim() });
-      const scriptField = document.getElementById('pm-script');
-      if (scriptField) {
-        scriptField.value = fullText.trim();
-        scriptField.style.height = 'auto';
-        scriptField.style.height = scriptField.scrollHeight + 'px';
-      }
-    } else {
-      alert('No se pudo generar el guión. Intenta de nuevo.');
-    }
-  } catch(err) { alert('Error al generar guión: ' + err.message); }
-  finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar guión con IA'; }
-  }
-}
-
-// ── Generar video con IA para un post del Studio ──────────────────────────────
-async function generateVideoForPost(postId) {
-  const post = loadStudioPosts().find(p => p.id === postId);
-  if (!post) return;
-
-  const btn = document.getElementById('pm-aivideo-btn');
-  const setBtn = (html, disabled) => { if (btn) { btn.disabled = disabled; btn.innerHTML = html; } };
-
-  const spinSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>';
-
-  // Construir prompt a partir del guión + título del post
-  const scriptLines = (post.script || '').split('\n').filter(l => l.trim() && !l.startsWith('#')).slice(0, 6).join(' ');
-  const prompt = [
-    post.title,
-    scriptLines || post.caption || '',
-    'Vertical social media video, vibrant colors, engaging visual storytelling, Latin American setting, no subtitles'
-  ].filter(Boolean).join('. ').slice(0, 500);
-
-  const aspect = ['reel','story'].includes(post.format) ? '9:16' : '1:1';
-
-  setBtn(spinSvg + ' Enviando a IA…', true);
-
-  try {
-    // 1. Submit job
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-    const submitRes = await fetch('/api/video-gen', {
-      method: 'POST', headers,
-      body: JSON.stringify({ action: 'submit', prompt, aspect_ratio: aspect, duration: 10, resolution: '1080p' })
-    });
-    const submitData = await submitRes.json();
-    if (!submitRes.ok || !submitData.job_id) throw new Error(submitData.error || 'Error al iniciar generación');
-
-    const jobId = submitData.job_id;
-    setBtn(spinSvg + ' Generando video…', true);
-
-    // 2. Poll hasta completado (máx 3 min, cada 5 seg)
-    let videoUrl = null;
-    let attempts = 0;
-    const msgs = ['Procesando con IA…', 'Generando frames…', 'Casi listo…', 'Finalizando…'];
-    while (attempts < 36) {
-      await new Promise(r => setTimeout(r, 5000));
-      attempts++;
-      setBtn(spinSvg + ' ' + msgs[Math.min(Math.floor(attempts / 9), 3)], true);
-
-      const statusRes = await fetch('/api/video-gen', {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'status', job_id: jobId })
-      });
-      const statusData = await statusRes.json();
-      if (!statusRes.ok) throw new Error(statusData.error || 'Error consultando estado');
-      if (statusData.status === 'completed' && statusData.video_url) { videoUrl = statusData.video_url; break; }
-      if (statusData.status === 'failed') throw new Error(statusData.error || 'La generación falló');
-    }
-
-    if (!videoUrl) throw new Error('Tiempo de espera agotado. Intenta de nuevo.');
-
-    // 3. Descontar crédito
-    try {
-      await fetch('/api/video-credits', {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'deduct' })
-      });
-    } catch(_) {}
-
-    // 4. Guardar como videoUrl en el post y reabrir modal
-    updateStudioPost(postId, { videoUrl, videoFileName: 'video-ia.mp4', status: 'listo' });
-    closePostModal();
-    setTimeout(() => openPostModal(postId), 80);
-
-  } catch(err) {
-    setBtn('<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Crear con IA · ~60 seg', false);
-    alert('Error al generar video: ' + err.message);
-  }
-}
-
-function closePostModal() {
-  // Save caption/hashtags/script before closing
-  if (activePostId) {
-    const capEl = document.getElementById('pm-caption');
-    const hashEl = document.getElementById('pm-hashtags');
-    const scriptEl = document.getElementById('pm-script');
-    if (capEl || hashEl || scriptEl) {
-      const updates = {};
-      if (capEl) updates.caption = capEl.value;
-      if (hashEl) updates.hashtags = hashEl.value.split(/\s+/).filter(t => t.startsWith('#'));
-      if (scriptEl) updates.script = scriptEl.value;
-      updateStudioPost(activePostId, updates);
-    }
-  }
-  activePostId = null;
-  const modal = document.getElementById('post-modal');
-  if (modal) modal.remove();
-}
-
-function setPostStatus(postId, status) {
-  updateStudioPost(postId, { status });
-  closePostModal();
-}
-
-async function generateImageForPost(postId) {
-  const posts = loadStudioPosts();
-  const post = posts.find(p => p.id === postId);
-  if (!post) return;
-
-  // Carrusel: generar múltiples slides
-  if (post.format === 'carrusel') {
-    return generateCarouselSlides(postId, post);
-  }
-
-  const genBtn = document.getElementById('pm-gen-btn');
-  const resetBtn = () => {
-    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar con IA'; }
-  };
-  if (genBtn) {
-    genBtn.disabled = true;
-    genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Generando…';
-  }
-
-  const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
-  const apiFormat = (fmt.falFormat === 'horizontal') ? 'square' : fmt.falFormat;
-  // Use imagePrompt or title — NOT the full caption (avoids garbled text in Ideogram)
-  const basePrompt = post.imagePrompt || post.title || 'Social media post';
-  const prompt = basePrompt + '. Estilo visual profesional para redes sociales, sin texto superpuesto.';
-
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-    const res = await fetch('/api/generate-image', {
-      method: 'POST', headers,
-      body: JSON.stringify({ prompt, format: apiFormat, variations: 1, hasText: false })
-    });
-    let data;
-    try { data = await res.json(); } catch(_) {
-      resetBtn(); alert('Error al procesar respuesta. Intenta de nuevo.'); return;
-    }
-    if (!res.ok || data.error) {
-      resetBtn(); alert('Error: ' + (data.error || 'Error ' + res.status)); return;
-    }
-    if (data.images && data.images.length > 0) {
-      updateStudioPost(postId, {
-        imageBase64:    data.images[0].base64,
-        imageMediaType: data.images[0].mediaType || 'image/jpeg',
-        imageUrl:       data.images[0].url || null,  // URL CDN para publicación directa
-        status: 'listo'
-      });
-      closePostModal();
-      setTimeout(() => openPostModal(postId), 80);
-    } else {
-      resetBtn(); alert('No se recibió imagen. Intenta de nuevo.');
-    }
-  } catch(err) {
-    resetBtn(); alert('Error inesperado: ' + err.message);
-  }
-}
-
-// ── Generar slides individuales para posts de tipo Carrusel ───────────────────
-async function generateCarouselSlides(postId, post) {
-  const genBtn = document.getElementById('pm-gen-btn');
-  const resetBtn = () => {
-    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '✨ Generar slides con IA'; }
-  };
-  if (genBtn) {
-    genBtn.disabled = true;
-    genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Generando slides…';
-  }
-
-  // Detectar número de slides del título (ej: "5 posturas de yoga" → 5)
-  const numMatch = (post.title || '').match(/^(\d+)\s+/);
-  const slideCount = numMatch ? Math.min(parseInt(numMatch[1]), 8) : 5;
-
-  // Topic visual base — usar imagePrompt o extraer del título
-  const topic = post.imagePrompt || post.title || 'content carousel';
-
-  // Generar prompts específicos por slide
-  const slidePrompts = buildCarouselSlidePrompts(topic, post, slideCount);
-
-  const headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-  // Mostrar progreso en el botón
-  const updateProgress = (done, total) => {
-    if (genBtn) genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>' + done + ' / ' + total + ' slides…';
-  };
-
-  const slides = [];
-  try {
-    for (let i = 0; i < slidePrompts.length; i++) {
-      updateProgress(i, slidePrompts.length);
-      const res = await fetch('/api/generate-image', {
-        method: 'POST', headers,
-        // carouselSlide:true → Ideogram REALISTIC + 1080×1080 + negative prompt anti-texto
-        body: JSON.stringify({ prompt: slidePrompts[i], format: 'square', variations: 1, carouselSlide: true })
-      });
-      let data;
-      try { data = await res.json(); } catch(_) { continue; }
-      if (data.images && data.images.length > 0) {
-        slides.push({
-          base64:    data.images[0].base64,
-          mediaType: data.images[0].mediaType || 'image/jpeg',
-          url:       data.images[0].url || null,  // URL CDN para publicación directa
-        });
-      }
-    }
-
-    if (!slides.length) {
-      resetBtn(); alert('No se pudo generar ningún slide. Intenta de nuevo.'); return;
-    }
-
-    // Guardar slides y usar el primero como thumbnail
-    updateStudioPost(postId, {
-      carouselImages: slides,
-      imageBase64:    slides[0].base64,
-      imageMediaType: slides[0].mediaType,
-      imageUrl:       slides[0].url || null,
-      status: 'listo'
-    });
-    closePostModal();
-    setTimeout(() => openPostModal(postId), 80);
-  } catch(err) {
-    resetBtn(); alert('Error generando slides: ' + err.message);
-  }
-}
-
-function buildCarouselSlidePrompts(topic, post, slideCount) {
-  // ── REGLA CRÍTICA: los prompts deben ser 100% en inglés y 100% visuales ──
-  // Nunca incluir texto en español ni el título del post — los modelos de imagen
-  // intentarán renderizar ese texto en la imagen, produciendo texto ilegible.
-  // Usar solo descripciones visuales en inglés sin mencionar palabras a renderizar.
-
-  // Extraer concepto visual del imagePrompt (ya es una descripción visual del agente)
-  // Si no hay imagePrompt, construir uno visual genérico basado en el formato/red
-  const visualBase = post.imagePrompt
-    ? post.imagePrompt  // el agente ya lo generó como descripción visual
-    : inferVisualConcept(post);
-
-  const quality = 'professional photography, vibrant warm colors, soft natural lighting, square 1:1 composition, high resolution, photorealistic';
-  const noText  = 'absolutely no text, no typography, no words, no letters, no writing';
-
-  // Slide 1 — Portada (cover hero)
-  const cover = visualBase + ', hero shot, centered composition, eye-catching, inspiring mood. ' + quality + ', ' + noText;
-
-  // Slides intermedios — cada uno con un ángulo visual distinto
-  const angleTemplates = [
-    ', close-up detail, macro shot, intimate perspective. ',
-    ', step-by-step demonstration, hands showing technique, instructional visual. ',
-    ', lifestyle scene with people, authentic candid moment, human connection. ',
-    ', wide establishing shot, environmental context, sense of place. ',
-    ', transformation concept, before/after contrast, hopeful atmosphere. ',
-    ', product or subject from a different angle, fresh perspective. ',
-    ', community gathering, group of people, social energy. ',
-  ];
-  const midPrompts = [];
-  const numMid = Math.max(0, slideCount - 2);
-  for (let i = 0; i < numMid; i++) {
-    const angle = angleTemplates[i % angleTemplates.length];
-    midPrompts.push(visualBase + angle + quality + ', ' + noText);
-  }
-
-  // Slide final — CTA / cierre (cálido, invitador)
-  const cta = visualBase + ', warm welcoming closing scene, optimistic hopeful atmosphere, gentle smile, soft bokeh background. ' + quality + ', ' + noText;
-
-  return [cover, ...midPrompts, cta].slice(0, slideCount);
-}
-
-function inferVisualConcept(post) {
-  // Construir descripción visual en inglés sin incluir el título en español
-  const fmtMap = {
-    carrusel: 'educational lifestyle content',
-    feed:     'social media lifestyle photo',
-    reel:     'dynamic lifestyle scene',
-    story:    'vertical lifestyle moment',
-    video:    'cinematic lifestyle scene',
-    post:     'authentic lifestyle moment',
-  };
-  const netMap = {
-    instagram: 'warm pastel tones, Instagram aesthetic',
-    facebook:  'friendly approachable scene',
-    tiktok:    'energetic youthful scene',
-    linkedin:  'professional business setting',
-  };
-  const base = fmtMap[post.format] || 'lifestyle scene';
-  const net  = netMap[post.network] || 'social media aesthetic';
-  return base + ', ' + net + ', Latin American setting, authentic people';
-}
-
-function downloadPostImage(postId) {
-  const post = loadStudioPosts().find(p => p.id === postId);
-  if (!post || !post.imageBase64) return;
-  downloadAdImage(post.imageBase64, post.imageMediaType, 'post_' + post.network + '_sem' + post.week + '.png');
-}
-
-function downloadAllStudioImages() {
-  const posts = loadStudioPosts().filter(p => p.imageBase64);
-  if (!posts.length) { alert('No hay imágenes generadas todavía.'); return; }
-  posts.forEach(p => downloadAdImage(p.imageBase64, p.imageMediaType, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png'));
-}
-
-// ── Borrar media de un post (vuelve al estado vacío) ─────────────────────────
-function clearPostMedia(postId) {
-  if (!confirm('¿Eliminar la imagen/slides de este post?')) return;
-  updateStudioPost(postId, {
-    imageBase64: null, imageMediaType: null,
-    carouselImages: null, videoUrl: null, videoFileName: null
-  });
-  closePostModal();
-  setTimeout(() => openPostModal(postId), 80);
-}
-
-// ── Carousel navigator ────────────────────────────────────────────────────────
-let _carouselIdx = 0;
-
-function carouselNav(dir) {
-  const post = activePostId ? loadStudioPosts().find(p => p.id === activePostId) : null;
-  if (!post || !post.carouselImages) return;
-  const slides = post.carouselImages;
-  _carouselIdx = (_carouselIdx + dir + slides.length) % slides.length;
-  const img = document.getElementById('pm-carousel-img');
-  if (img) {
-    img.src = 'data:' + slides[_carouselIdx].mediaType + ';base64,' + slides[_carouselIdx].base64;
-  }
-  const counter = document.getElementById('pm-carousel-counter');
-  if (counter) counter.textContent = 'Slide ' + (_carouselIdx + 1) + ' de ' + slides.length;
-}
-
-function downloadCarouselSlide() {
-  const post = activePostId ? loadStudioPosts().find(p => p.id === activePostId) : null;
-  if (!post || !post.carouselImages) return;
-  const slide = post.carouselImages[_carouselIdx];
-  if (!slide) return;
-  downloadAdImage(slide.base64, slide.mediaType, 'slide_' + (_carouselIdx + 1) + '_' + (post.title || 'carrusel').slice(0,20).replace(/\s+/g,'_') + '.jpg');
-}
-
-function downloadAllCarouselSlides(postId) {
-  const post = loadStudioPosts().find(p => p.id === postId);
-  if (!post || !post.carouselImages || !post.carouselImages.length) return;
-  post.carouselImages.forEach((slide, i) => {
-    setTimeout(() => {
-      downloadAdImage(slide.base64, slide.mediaType, 'slide_' + (i + 1) + '_' + (post.title || 'carrusel').slice(0,20).replace(/\s+/g,'_') + '.jpg');
-    }, i * 300);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 function renderParrillaImagenesBtn() {
   const area = document.getElementById('chat-area');
   if (!area) return;
@@ -9064,27 +3936,28 @@ function renderParrillaImagenesBtn() {
 
   el.innerHTML = `
     <div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">${logoSvg}</div>
-    <div style="background:linear-gradient(135deg,#EEF0FD 0%,#F5F3FF 100%);border:1.5px solid var(--blue-md);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:16px 18px;max-width:460px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:18px">✅</span>
-        <span style="font-size:14px;font-weight:700;color:var(--text)">Parrilla lista — abriendo Studio…</span>
+    <div style="background:linear-gradient(135deg,#EEF0FD 0%,#F5F3FF 100%);border:1.5px solid var(--blue-md);border-radius:4px var(--rlg) var(--rlg) var(--rlg);padding:16px 18px;max-width:500px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:18px">🎉</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text)">Parrilla lista</span>
       </div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Tu parrilla se importó al calendario. En unos segundos verás todos los posts organizados por red y día.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">¿Qué quieres hacer con esta parrilla?</p>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button onclick="openSocialStudio();document.getElementById('parrilla-img-btn-wrap')?.remove()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='var(--blue-h)'" onmouseout="this.style.background='var(--blue)'">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          Abrir Social Media Studio
+        <button onclick="exportToSheets(this)" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:#1a7340;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='#155c34'" onmouseout="this.style.background='#1a7340'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="white" stroke-width="1.5"/><path d="M3 9h18M9 9v12" stroke="white" stroke-width="1.5"/><path d="M6 6h.01M6 12h3M6 16h3M13 12h3M13 16h3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Abrir en Google Sheets
         </button>
-        <div style="display:flex;gap:8px">
-          <button onclick="exportToSheets(this)" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:#1a7340;border:1.5px solid #1a7340;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);flex:1" onmouseover="this.style.background='#f0faf4'" onmouseout="this.style.background='transparent'">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M9 9v12" stroke="currentColor" stroke-width="1.5"/></svg>
-            Google Sheets
-          </button>
-          <button onclick="exportToPDF(lastParrillaText,'acuarius-parrilla.pdf')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);flex:1" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='transparent'">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Exportar PDF
-          </button>
-        </div>
+        <button onclick="generarImagenesParrilla(this)" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%" onmouseover="this.style.background='var(--blue-h)'" onmouseout="this.style.background='var(--blue)'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          Crear imágenes de esta parrilla
+        </button>
+        <button onclick="exportToPDF(lastParrillaText,'acuarius-parrilla.pdf')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);transition:all .15s;width:100%" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='transparent'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Exportar como PDF
+        </button>
+        <button onclick="document.getElementById('parrilla-img-btn-wrap')?.remove()" style="padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font);width:100%">
+          Ahora no
+        </button>
       </div>
     </div>`;
 
@@ -9155,695 +4028,9 @@ function setStage(s,btn){curStage=s;document.querySelectorAll('.stage-btn').forE
 function toggleCheck(item){item.classList.toggle('done');updateProgress()}
 function updateProgress(){const all=document.querySelectorAll('.stage-panel.active .cl-item').length;const done=document.querySelectorAll('.stage-panel.active .cl-item.done').length;document.getElementById('pt-count').textContent=`${done} / ${all} tareas`;document.getElementById('pt-fill').style.width=all?`${(done/all)*100}%`:'0%'}
 
-// ── Toast notification ────────────────────────────────────────────────────────
-function showToast(msg, type = 'success') {
-  const existing = document.getElementById('acuarius-toast');
-  if (existing) existing.remove();
-  const colors = {
-    success: { bg: '#D1FAE5', border: '#6EE7B7', text: '#065F46' },
-    error:   { bg: '#FEE2E2', border: '#FCA5A5', text: '#991B1B' },
-    info:    { bg: '#EFF6FF', border: '#93C5FD', text: '#1E40AF' },
-  };
-  const c = colors[type] || colors.info;
-  const t = document.createElement('div');
-  t.id = 'acuarius-toast';
-  t.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);z-index:9999;background:${c.bg};border:1.5px solid ${c.border};color:${c.text};padding:13px 24px;border-radius:10px;font-size:14px;font-weight:600;font-family:var(--font);box-shadow:0 8px 30px rgba(0,0,0,.12);transition:transform .35s cubic-bezier(.34,1.56,.64,1);max-width:420px;text-align:center;pointer-events:none`;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  requestAnimationFrame(() => { t.style.transform = 'translateX(-50%) translateY(0)'; });
-  setTimeout(() => {
-    t.style.transform = 'translateX(-50%) translateY(-80px)';
-    setTimeout(() => t.remove(), 400);
-  }, 4000);
-}
-
-// CONNECTION SUCCESS MODAL — large centered overlay with blur
-function showConnectionModal(platform, accountName) {
-  const existing = document.getElementById('acuarius-conn-modal');
-  if (existing) existing.remove();
-
-  const icons = {
-    google_ads: '🎯',
-    meta_ads:   '📘',
-    tiktok_ads: '🎵',
-    linkedin:   '💼',
-  };
-  const labels = {
-    google_ads: 'Google Ads',
-    meta_ads:   'Meta Ads',
-    tiktok_ads: 'TikTok Ads',
-    linkedin:   'LinkedIn Ads',
-  };
-  const icon  = icons[platform]  || '✅';
-  const label = labels[platform] || platform;
-
-  const overlay = document.createElement('div');
-  overlay.id = 'acuarius-conn-modal';
-  overlay.style.cssText = `position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease`;
-
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:20px;padding:48px 44px 40px;max-width:420px;width:90%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.25);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">
-      <div style="font-size:56px;margin-bottom:16px;line-height:1">${icon}</div>
-      <div style="width:56px;height:56px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>
-      <h2 style="font-size:22px;font-weight:700;color:#111;margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
-      <p style="font-size:15px;color:#555;margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
-      <p style="font-size:13px;color:#888;margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
-      <button id="conn-modal-settings-btn" style="width:100%;padding:14px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
-      <button id="conn-modal-close-btn" style="width:100%;padding:12px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);transition:background .2s">Cerrar</button>
-    </div>
-  `;
-
-  // Inject keyframe animations once
-  if (!document.getElementById('conn-modal-styles')) {
-    const style = document.createElement('style');
-    style.id = 'conn-modal-styles';
-    style.textContent = `
-      @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
-      @keyframes scaleInCard { from{opacity:0;transform:scale(.88)} to{opacity:1;transform:scale(1)} }
-    `;
-    document.head.appendChild(style);
-  }
-
-  document.body.appendChild(overlay);
-
-  const close = () => {
-    overlay.style.opacity = '0';
-    overlay.style.transition = 'opacity .25s';
-    setTimeout(() => overlay.remove(), 260);
-  };
-
-  document.getElementById('conn-modal-close-btn').addEventListener('click', close);
-  document.getElementById('conn-modal-settings-btn').addEventListener('click', () => {
-    close();
-    setTimeout(() => openSettings(), 280);
-  });
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-}
-
-// SOCIAL CONNECTION SUCCESS MODAL
-function showSocialConnectionModal(igAccts, fbAccts) {
-  const existing = document.getElementById('social-conn-success-modal');
-  if (existing) existing.remove();
-
-  const hasIG = igAccts && igAccts.length > 0;
-  const hasFB = fbAccts && fbAccts.length > 0;
-
-  // Construir líneas de cuentas conectadas
-  const igLines = hasIG ? igAccts.map(a =>
-    '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#FFF0F7;border-radius:8px;margin-bottom:6px">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
-    '<span style="font-size:13px;color:#333;font-weight:500">' + (a.igUsername ? '@' + a.igUsername : a.pageName) + '</span>' +
-    '<span style="margin-left:auto;font-size:11px;color:#059669;font-weight:600">✓ IG</span>' +
-    '</div>'
-  ).join('') : '';
-
-  const fbLines = hasFB ? fbAccts.map(a =>
-    '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#EFF6FF;border-radius:8px;margin-bottom:6px">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
-    '<span style="font-size:13px;color:#333;font-weight:500">' + a.pageName + '</span>' +
-    '<span style="margin-left:auto;font-size:11px;color:#059669;font-weight:600">✓ FB</span>' +
-    '</div>'
-  ).join('') : '';
-
-  const titleParts = [hasIG ? 'Instagram' : null, hasFB ? 'Facebook' : null].filter(Boolean);
-  const title = titleParts.join(' y ') + (titleParts.length === 1 ? ' conectado' : ' conectados');
-
-  const overlay = document.createElement('div');
-  overlay.id = 'social-conn-success-modal';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease';
-
-  overlay.innerHTML =
-    '<div style="background:#fff;border-radius:20px;padding:44px 40px 36px;max-width:440px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
-      // Checkmark circle
-      '<div style="width:60px;height:60px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">' +
-        '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
-      '</div>' +
-      '<h2 style="font-size:21px;font-weight:700;color:#111;margin:0 0 6px;font-family:var(--font)">¡' + title + '!</h2>' +
-      '<p style="font-size:14px;color:#666;margin:0 0 22px;font-family:var(--font)">Tus cuentas ya están listas para publicar desde el Studio</p>' +
-      // Lista de cuentas
-      '<div style="text-align:left;margin-bottom:24px">' + igLines + fbLines + '</div>' +
-      // Botones
-      '<button id="scm-studio-btn" style="width:100%;padding:13px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:8px;transition:opacity .2s">Ir al Social Studio</button>' +
-      '<button id="scm-close-btn" style="width:100%;padding:11px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
-    '</div>';
-
-  // Inyectar keyframes si no existen
-  if (!document.getElementById('conn-modal-styles')) {
-    const style = document.createElement('style');
-    style.id = 'conn-modal-styles';
-    style.textContent = '@keyframes fadeInOverlay{from{opacity:0}to{opacity:1}} @keyframes scaleInCard{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}';
-    document.head.appendChild(style);
-  }
-
-  document.body.appendChild(overlay);
-
-  const close = () => {
-    overlay.style.opacity = '0';
-    overlay.style.transition = 'opacity .25s';
-    setTimeout(() => overlay.remove(), 260);
-  };
-
-  document.getElementById('scm-close-btn').addEventListener('click', close);
-  document.getElementById('scm-studio-btn').addEventListener('click', () => {
-    close();
-    setTimeout(() => { showView('social-studio'); document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active')); document.querySelector('.sb-item[onclick*="social-studio"]')?.classList.add('active'); }, 280);
-  });
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-}
-
 // VIEWS
-function showView(id){
-  // Ocultar loader la primera vez que se muestra una vista
-  var loader=document.getElementById('app-loader');
-  if(loader&&!loader.classList.contains('hidden')){loader.classList.add('hidden');setTimeout(function(){loader.style.display='none';},260);}
-  document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
-  var el=document.getElementById('view-'+id);
-  if(el)el.classList.add('active');
-  if(id==='roadmap')updateProgress();
-  if(id==='agency')agencyRender();
-  if(id==='social-studio')setTimeout(renderStudio, 50);
-}
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));const el=document.getElementById('view-'+id);if(el)el.classList.add('active');if(id==='roadmap')updateProgress();if(id==='agency')agencyRender();if(id==='crm')crmInit();}
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
-
-// ── ACADEMIA ─────────────────────────────────────────────────────────────────
-
-const AC_CATS = [
-  { id: 'primeros-pasos', label: '🚀 Primeros pasos',   color: '#1E2BCC', grad: 'linear-gradient(135deg,#1520B0,#3D52E5)', bg: '#EEF0FD', order: 0 },
-  { id: 'google-ads',     label: '📊 Google Ads',        color: '#1a73e8', grad: 'linear-gradient(135deg,#1a73e8,#0d47a1)', bg: '#EBF3FE', order: 1 },
-  { id: 'meta-ads',       label: '📘 Meta Ads',          color: '#1877f2', grad: 'linear-gradient(135deg,#1877f2,#6b2fba)', bg: '#EDF2FF', order: 2 },
-  { id: 'tiktok-ads',     label: '🎵 TikTok Ads',       color: '#010101', grad: 'linear-gradient(135deg,#010101,#2a2a2a)', bg: '#F0F0F0', order: 3 },
-  { id: 'seo',            label: '🔍 SEO',               color: '#059669', grad: 'linear-gradient(135deg,#059669,#065f46)', bg: '#ECFDF5', order: 4 },
-  { id: 'contenido',      label: '✨ Contenido',          color: '#7c3aed', grad: 'linear-gradient(135deg,#7c3aed,#c026d3)', bg: '#F5F3FF', order: 5 },
-  { id: 'agencia',        label: '🏢 Panel de Agencia',  color: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', bg: '#ECFEFF', order: 6 },
-];
-
-// Section headers for each category
-const AC_SECTION_META = {
-  'primeros-pasos': { title: 'Primeros pasos',            sub: 'Configura tu cuenta y conoce la plataforma de cero',                     icon: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>' },
-  'google-ads':     { title: 'Agente Google Ads',         sub: 'Domina el análisis y optimización de campañas con IA',                   icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
-  'meta-ads':       { title: 'Agente Meta Ads',           sub: 'Facebook e Instagram Ads con análisis y creación asistida por IA',       icon: '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>' },
-  'tiktok-ads':     { title: 'Agente TikTok Ads',         sub: 'Estrategias y análisis de campañas en TikTok con IA especializada',      icon: '<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>' },
-  'seo':            { title: 'Agente SEO',                sub: 'Posiciona tu sitio web en Google con análisis y estrategias de IA',       icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' },
-  'contenido':      { title: 'Contenido para Redes',      sub: 'Studio de contenido, parrilla editorial y generación de imágenes con IA', icon: '<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>' },
-  'agencia':        { title: 'Panel de Agencia',          sub: 'Gestiona múltiples clientes, reportes y configuraciones avanzadas',       icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
-};
-
-let academiaVideos = [];   // cache de videos cargados
-let academiaLoaded = false;
-
-async function openAcademia() {
-  showView('academia');
-  // Mostrar botón admin si corresponde
-  const adminBtn = document.getElementById('ac-admin-btn');
-  if (adminBtn) adminBtn.style.display = isAdminUser() ? 'flex' : 'none';
-  // Cargar videos si no están cargados aún
-  if (!academiaLoaded) await academiaLoad();
-  academiaFilter('all');
-}
-
-async function academiaLoad() {
-  try {
-    const res = await fetch('/api/academia-admin');
-    if (!res.ok) throw new Error('API error');
-    const videos = await res.json();
-    if (Array.isArray(videos) && videos.length > 0) {
-      academiaVideos = videos;
-      academiaLoaded = true;
-      renderAcademia(videos);
-      return;
-    }
-  } catch(e) {
-    console.warn('Academia: no se pudo cargar desde API, usando datos predeterminados', e);
-  }
-  // Sin datos en Supabase — mostrar placeholder vacío con mensaje
-  renderAcademia([]);
-}
-
-function renderAcademia(videos) {
-  const body = document.getElementById('academia-body');
-  if (!body) return;
-
-  // Stats
-  const total = videos.length;
-  const available = videos.filter(v => v.youtube_id && v.youtube_id.trim()).length;
-  const statTotal = document.getElementById('ac-stat-total');
-  const statAvail = document.getElementById('ac-stat-available');
-  if (statTotal) statTotal.textContent = total || '—';
-  if (statAvail) statAvail.textContent = available || '—';
-
-  if (total === 0) {
-    body.innerHTML = '<div style="padding:60px 32px;text-align:center;color:var(--muted)">'
-      + '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.3;margin-bottom:16px"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>'
-      + '<div style="font-size:15px;font-weight:600;margin-bottom:6px">Aún no hay videos</div>'
-      + (isAdminUser() ? '<div style="font-size:13px">Haz clic en "Editar Academia" para agregar el primero</div>' : '<div style="font-size:13px">Próximamente</div>')
-      + '</div>';
-    return;
-  }
-
-  // Group by category in defined order
-  let html = '';
-  AC_CATS.forEach(cat => {
-    const catVideos = videos.filter(v => v.category === cat.id);
-    if (!catVideos.length) return;
-    const meta = AC_SECTION_META[cat.id] || { title: cat.label, sub: '', icon: '' };
-    html += '<div class="academia-section" data-cat="' + cat.id + '">'
-      + '<div class="academia-section-hdr">'
-      + '<div class="academia-section-icon" style="background:' + cat.bg + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="' + cat.color + '" stroke-width="2.2" stroke-linecap="round">' + meta.icon + '</svg></div>'
-      + '<div class="academia-section-title">' + meta.title + '</div>'
-      + '</div>'
-      + '<div class="academia-section-sub">' + meta.sub + '</div>'
-      + '<div class="academia-grid">';
-    catVideos.forEach(v => { html += renderAcadCard(v, cat); });
-    html += '</div></div>';
-  });
-
-  body.innerHTML = html;
-}
-
-function renderAcadCard(v, cat) {
-  const soon = !v.youtube_id || !v.youtube_id.trim();
-  const shortLabel = cat.label.replace(/^[^ ]+ /, '');
-  const safeTitle = (v.title || '').replace(/'/g, "\\'");
-  return '<div class="ac-card' + (soon ? ' ac-soon' : '') + '" onclick="acadPlay(\'' + (v.youtube_id || '') + '\',\'' + safeTitle + '\')">'
-    + '<div class="ac-thumb" style="background:' + cat.grad + '">'
-    + '<div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>'
-    + '<div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">' + shortLabel + '</div>'
-    + (soon ? '<div class="ac-soon-tag">Próximamente</div>' : '')
-    + '<div class="ac-dur">' + (v.duration || '5 min') + '</div>'
-    + '<div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div>'
-    + '</div>'
-    + '<div class="ac-info"><div class="ac-title">' + (v.title || '') + '</div><div class="ac-desc">' + (v.description || '') + '</div></div>'
-    + '</div>';
-}
-
-function academiaFilter(cat) {
-  document.querySelectorAll('.academia-cat-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.cat === cat);
-  });
-  document.querySelectorAll('.academia-section').forEach(sec => {
-    sec.style.display = (cat === 'all' || sec.dataset.cat === cat) ? '' : 'none';
-  });
-}
-
-// ── ACADEMIA ADMIN ────────────────────────────────────────────────────────────
-
-let adminSecret = null;
-let acAdminSelected = null; // video seleccionado en el panel
-
-async function getAdminSecret() {
-  if (adminSecret) return adminSecret;
-  // El ADMIN_SECRET está en el entorno; lo pedimos a través de un endpoint que ya lo conoce
-  // Por simplicidad, lo buscamos en el env via un endpoint protegido, o lo ingresa el admin
-  const s = sessionStorage.getItem('ac_admin_secret');
-  if (s) { adminSecret = s; return s; }
-  const input = prompt('Ingresa el Admin Secret para gestionar la Academia:');
-  if (!input) return null;
-  adminSecret = input;
-  sessionStorage.setItem('ac_admin_secret', input);
-  return input;
-}
-
-function academiaAdminOpen() {
-  const overlay = document.getElementById('ac-admin-overlay');
-  if (!overlay) return;
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  academiaAdminRenderList();
-}
-
-function academiaAdminClose() {
-  const overlay = document.getElementById('ac-admin-overlay');
-  if (!overlay) return;
-  overlay.classList.remove('open');
-  document.body.style.overflow = '';
-  acAdminSelected = null;
-}
-
-function academiaAdminRenderList() {
-  const list = document.getElementById('ac-admin-list-scroll');
-  if (!list) return;
-  if (!academiaVideos.length) {
-    list.innerHTML = '<div style="padding:20px 12px;font-size:12px;color:var(--muted2);text-align:center">No hay videos aún</div>';
-    return;
-  }
-  let html = '';
-  AC_CATS.forEach(cat => {
-    const vids = academiaVideos.filter(v => v.category === cat.id);
-    if (!vids.length) return;
-    html += '<div class="ac-admin-cat-hdr">' + cat.label + '</div>';
-    vids.forEach(v => {
-      const soon = !v.youtube_id || !v.youtube_id.trim();
-      const sel = acAdminSelected && acAdminSelected.id === v.id ? ' selected' : '';
-      html += '<div class="ac-admin-video-item' + sel + '" onclick="academiaAdminSelect(' + JSON.stringify(v.id) + ')">'
-        + '<div class="ac-admin-video-dot" style="background:' + (soon ? 'var(--border-h)' : '#22c55e') + '"></div>'
-        + '<div class="ac-admin-video-name">' + (v.title || 'Sin título') + '</div>'
-        + (soon ? '' : '<div class="ac-admin-video-badge" style="background:#dcfce7;color:#16a34a">Live</div>')
-        + '</div>';
-    });
-  });
-  list.innerHTML = html;
-}
-
-function academiaAdminSelect(id) {
-  acAdminSelected = academiaVideos.find(v => v.id === id) || null;
-  academiaAdminRenderList();
-  academiaAdminRenderForm(acAdminSelected);
-}
-
-function academiaAdminNew() {
-  acAdminSelected = null;
-  academiaAdminRenderList();
-  academiaAdminRenderForm(null);
-}
-
-function academiaAdminRenderForm(v) {
-  const wrap = document.getElementById('ac-admin-form-wrap');
-  if (!wrap) return;
-  const isNew = !v;
-  const ytId = v ? (v.youtube_id || '') : '';
-
-  wrap.innerHTML = '<div style="max-width:560px">'
-    + '<div class="ac-admin-form-title">'
-    + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
-    + (isNew ? 'Nuevo video' : 'Editar video')
-    + '</div>'
-
-    // Categoría
-    + '<div class="ac-admin-field"><label class="ac-admin-label">Categoría</label>'
-    + '<select class="ac-admin-select" id="acf-cat">'
-    + AC_CATS.map(c => '<option value="' + c.id + '"' + (v && v.category === c.id ? ' selected' : '') + '>' + c.label + '</option>').join('')
-    + '</select></div>'
-
-    // Título
-    + '<div class="ac-admin-field"><label class="ac-admin-label">Título</label>'
-    + '<input class="ac-admin-input" id="acf-title" placeholder="Ej: Cómo analizar campañas con IA" value="' + (v ? (v.title || '') : '') + '"></div>'
-
-    // Descripción
-    + '<div class="ac-admin-field"><label class="ac-admin-label">Descripción</label>'
-    + '<textarea class="ac-admin-input textarea" id="acf-desc" placeholder="Breve descripción del video (1-2 líneas)">' + (v ? (v.description || '') : '') + '</textarea></div>'
-
-    // Duración
-    + '<div class="ac-admin-field"><label class="ac-admin-label">Duración</label>'
-    + '<input class="ac-admin-input" id="acf-dur" placeholder="Ej: 8 min" style="max-width:140px" value="' + (v ? (v.duration || '5 min') : '5 min') + '"></div>'
-
-    // YouTube ID
-    + '<div class="ac-admin-field"><label class="ac-admin-label">YouTube ID</label>'
-    + '<input class="ac-admin-input" id="acf-ytid" placeholder="Ej: dQw4w9WgXcQ (la parte después de ?v=)" oninput="acfYtPreview(this.value)" value="' + ytId + '">'
-    + '<div id="acf-yt-preview" style="margin-top:6px">' + acfYtPreviewHtml(ytId) + '</div></div>'
-
-    // Orden
-    + '<div class="ac-admin-field"><label class="ac-admin-label">Orden dentro de la categoría</label>'
-    + '<input class="ac-admin-input" id="acf-order" type="number" min="0" style="max-width:100px" value="' + (v ? (v.order_index || 0) : 0) + '"></div>'
-
-    // Acciones
-    + '<div class="ac-admin-actions">'
-    + '<button class="ac-admin-save-btn" id="acf-save-btn" onclick="academiaAdminSave()">'
-    + (isNew ? 'Crear video' : 'Guardar cambios') + '</button>'
-    + (isNew ? '' : '<button class="ac-admin-del-btn" onclick="academiaAdminDelete(' + JSON.stringify(v.id) + ')">Eliminar</button>')
-    + '</div>'
-    + '</div>';
-}
-
-function extractYtId(raw) {
-  if (!raw || !raw.trim()) return '';
-  const s = raw.trim();
-  // Si es una URL completa de YouTube, extraer el ID
-  const patterns = [
-    /[?&]v=([a-zA-Z0-9_-]{11})/,       // ?v=XXXX o &v=XXXX
-    /youtu\.be\/([a-zA-Z0-9_-]{11})/,   // youtu.be/XXXX
-    /embed\/([a-zA-Z0-9_-]{11})/,       // /embed/XXXX
-    /shorts\/([a-zA-Z0-9_-]{11})/,      // /shorts/XXXX
-  ];
-  for (const p of patterns) {
-    const m = s.match(p);
-    if (m) return m[1];
-  }
-  // Si ya es un ID de 11 caracteres, usarlo directo
-  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  return s; // devolver tal cual y dejar que el thumbnail falle con mensaje
-}
-
-function acfYtPreviewHtml(rawId) {
-  if (!rawId || !rawId.trim()) return '';
-  const clean = extractYtId(rawId.trim());
-  if (!clean) return '';
-  const thumbUrl = 'https://img.youtube.com/vi/' + clean + '/mqdefault.jpg';
-  return '<div class="ac-admin-yt-preview ok" style="flex-direction:column;align-items:flex-start;gap:6px">'
-    + '<div style="font-weight:600">Vista previa del thumbnail:</div>'
-    + '<img src="' + thumbUrl + '" style="width:100%;border-radius:6px;max-width:280px" onerror="this.parentElement.className=\'ac-admin-yt-preview\';this.outerHTML=\'<span style=&quot;font-size:12px&quot;>ID no válido o video privado</span>\'">'
-    + '<div style="font-size:11px;color:var(--muted)">ID: <b>' + clean + '</b></div>'
-    + '</div>';
-}
-
-function acfYtPreview(val) {
-  const el = document.getElementById('acf-yt-preview');
-  if (el) el.innerHTML = acfYtPreviewHtml(val);
-}
-
-async function academiaAdminSave() {
-  const btn = document.getElementById('acf-save-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
-
-  const secret = await getAdminSecret();
-  if (!secret) {
-    if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
-    return;
-  }
-
-  const payload = {
-    category:     document.getElementById('acf-cat')?.value || 'primeros-pasos',
-    title:        document.getElementById('acf-title')?.value?.trim() || '',
-    description:  document.getElementById('acf-desc')?.value?.trim() || '',
-    duration:     document.getElementById('acf-dur')?.value?.trim() || '5 min',
-    youtube_id:   extractYtId(document.getElementById('acf-ytid')?.value?.trim() || ''),
-    order_index:  parseInt(document.getElementById('acf-order')?.value || '0'),
-    category_order: AC_CATS.findIndex(c => c.id === (document.getElementById('acf-cat')?.value || '')),
-  };
-
-  if (!payload.title) {
-    alert('El título es obligatorio');
-    if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
-    return;
-  }
-
-  if (acAdminSelected) payload.id = acAdminSelected.id;
-
-  try {
-    const res = await fetch('/api/academia-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      if (err.error === 'Unauthorized') {
-        sessionStorage.removeItem('ac_admin_secret');
-        adminSecret = null;
-        alert('Secret incorrecto. Inténtalo de nuevo.');
-      } else {
-        alert('Error al guardar: ' + (err.error || res.status));
-      }
-      if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
-      return;
-    }
-    const saved = await res.json();
-    // Actualizar cache local
-    if (acAdminSelected) {
-      const idx = academiaVideos.findIndex(v => v.id === acAdminSelected.id);
-      if (idx >= 0) academiaVideos[idx] = { ...academiaVideos[idx], ...payload, ...saved };
-    } else {
-      academiaVideos.push({ ...payload, ...saved });
-    }
-    acAdminSelected = saved;
-    academiaAdminRenderList();
-    renderAcademia(academiaVideos);
-    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; btn.style.background = '#22c55e'; }
-    setTimeout(() => { if (btn) btn.style.background = ''; }, 1800);
-  } catch(e) {
-    alert('Error de conexión: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = acAdminSelected ? 'Guardar cambios' : 'Crear video'; }
-  }
-}
-
-async function academiaAdminDelete(id) {
-  if (!confirm('¿Eliminar este video de la Academia?')) return;
-  const secret = await getAdminSecret();
-  if (!secret) return;
-  try {
-    const res = await fetch('/api/academia-admin?id=' + encodeURIComponent(id), {
-      method: 'DELETE',
-      headers: { 'x-admin-secret': secret },
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      alert('Error al eliminar: ' + (err.error || res.status));
-      return;
-    }
-    academiaVideos = academiaVideos.filter(v => v.id !== id);
-    acAdminSelected = null;
-    academiaAdminRenderList();
-    academiaAdminRenderForm(null);
-    renderAcademia(academiaVideos);
-  } catch(e) {
-    alert('Error de conexión: ' + e.message);
-  }
-}
-
-function academiaHTML() { // legacy — kept for reference, not used
-  return '';
-  const card = (cat, grad, iconPath, title, desc, dur, ytId) => {
-    const soon = !ytId;
-    return '<div class="ac-card' + (soon ? ' ac-soon' : '') + '" onclick="acadPlay(\'' + (ytId||'') + '\',\'' + title.replace(/'/g,"\\'") + '\')">'
-      + '<div class="ac-thumb" style="background:' + grad + '">'
-      + '<div class="ac-thumb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">' + iconPath + '</svg></div>'
-      + '<div class="ac-cat-tag" style="background:rgba(255,255,255,.18);color:#fff">' + cat + '</div>'
-      + (soon ? '<div class="ac-soon-tag">Próximamente</div>' : '')
-      + '<div class="ac-dur">' + dur + '</div>'
-      + '<div class="ac-play"><svg viewBox="0 0 24 24" fill="var(--blue)"><polygon points="5,3 19,12 5,21"/></svg></div>'
-      + '</div>'
-      + '<div class="ac-info"><div class="ac-title">' + title + '</div><div class="ac-desc">' + desc + '</div></div>'
-      + '</div>';
-  };
-
-  const section = (dataCat, iconBg, iconColor, iconPath, sectionTitle, sub, cards) =>
-    '<div class="academia-section" data-cat="' + dataCat + '">'
-    + '<div class="academia-section-hdr">'
-    + '<div class="academia-section-icon" style="background:' + iconBg + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2.2" stroke-linecap="round">' + iconPath + '</svg></div>'
-    + '<div class="academia-section-title">' + sectionTitle + '</div>'
-    + '</div>'
-    + '<div class="academia-section-sub">' + sub + '</div>'
-    + '<div class="academia-grid">' + cards + '</div>'
-    + '</div>';
-
-  const BL = 'linear-gradient(135deg,#1520B0,#3D52E5)';
-  const GO = 'linear-gradient(135deg,#1a73e8,#0d47a1)';
-  const ME = 'linear-gradient(135deg,#1877f2,#6b2fba)';
-  const TK = 'linear-gradient(135deg,#010101,#2a2a2a)';
-  const SE = 'linear-gradient(135deg,#059669,#065f46)';
-  const CO = 'linear-gradient(135deg,#7c3aed,#c026d3)';
-  const AG = 'linear-gradient(135deg,#0891b2,#0e7490)';
-
-  const I = {
-    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
-    monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
-    pulse: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
-    dollar: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-    search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
-    fb: '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
-    barchart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
-    insta: '<rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>',
-    tiktok: '<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>',
-    video: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
-    type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
-    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
-    layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
-    cal: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-    img: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
-    home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
-    person: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-    send: '<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>',
-  };
-
-  return ''
-    // ── Hero
-    + '<div class="academia-hero">'
-    + '<div class="academia-hero-eyebrow">Acuarius · Centro de aprendizaje</div>'
-    + '<div class="academia-hero-title">Academia Acuarius</div>'
-    + '<div class="academia-hero-sub">Aprende a dominar cada agente y función de la plataforma con tutoriales paso a paso. Desde configurar tu primera cuenta hasta estrategias avanzadas.</div>'
-    + '<div class="academia-hero-stats">'
-    + '<div><div class="academia-hero-stat-val">27</div><div class="academia-hero-stat-lbl">videos planeados</div></div>'
-    + '<div><div class="academia-hero-stat-val">7</div><div class="academia-hero-stat-lbl">categorías</div></div>'
-    + '<div><div class="academia-hero-stat-val">~4 h</div><div class="academia-hero-stat-lbl">de contenido</div></div>'
-    + '</div></div>'
-    // ── Category tabs
-    + '<div class="academia-cats-wrap">'
-    + '<div class="academia-cats">'
-    + '<button class="academia-cat-btn active" data-cat="all" onclick="academiaFilter(\'all\')">Todos</button>'
-    + '<button class="academia-cat-btn" data-cat="primeros-pasos" onclick="academiaFilter(\'primeros-pasos\')">🚀 Primeros pasos</button>'
-    + '<button class="academia-cat-btn" data-cat="google-ads" onclick="academiaFilter(\'google-ads\')">📊 Google Ads</button>'
-    + '<button class="academia-cat-btn" data-cat="meta-ads" onclick="academiaFilter(\'meta-ads\')">📘 Meta Ads</button>'
-    + '<button class="academia-cat-btn" data-cat="tiktok-ads" onclick="academiaFilter(\'tiktok-ads\')">🎵 TikTok Ads</button>'
-    + '<button class="academia-cat-btn" data-cat="seo" onclick="academiaFilter(\'seo\')">🔍 SEO</button>'
-    + '<button class="academia-cat-btn" data-cat="contenido" onclick="academiaFilter(\'contenido\')">✨ Contenido</button>'
-    + '<button class="academia-cat-btn" data-cat="agencia" onclick="academiaFilter(\'agencia\')">🏢 Panel de Agencia</button>'
-    + '</div></div>'
-    // ── Body
-    + '<div class="academia-wrap"><div class="academia-body">'
-    // Primeros pasos
-    + section('primeros-pasos','#EEF0FD','#1E2BCC','<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>','Primeros pasos','Configura tu cuenta y conoce la plataforma de cero',
-        card('Inicio',BL,I.grid,'Tour completo de Acuarius — cómo funciona la plataforma','Recorrido por todos los módulos: agentes, panel de clientes, studio y configuración.','10 min','')
-      + card('Inicio',BL,I.users,'Cómo crear tu primer cliente en el Panel de Agencia','Registra un cliente, carga su perfil y actívalo en los agentes paso a paso.','5 min','')
-      + card('Inicio',BL,I.link,'Conectar tus cuentas publicitarias: Google, Meta y TikTok','Autoriza el acceso de Acuarius a tus plataformas para análisis y optimización.','7 min',''))
-    // Google Ads
-    + section('google-ads','#EBF3FE','#1a73e8','<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>','Agente Google Ads','Domina el análisis y optimización de campañas con IA',
-        card('Google Ads',GO,I.monitor,'Conectar y verificar tu cuenta de Google Ads','Autoriza OAuth, selecciona tu cuenta y verifica que los datos se cargan.','4 min','')
-      + card('Google Ads',GO,I.pulse,'Analiza el rendimiento de tus campañas con IA','Reportes de métricas, cómo interpretar los datos y tomar decisiones.','9 min','')
-      + card('Google Ads',GO,I.dollar,'Detectar pérdida de inversión en tus campañas','Encuentra dinero desperdiciado en keywords, horarios y audiencias.','6 min','')
-      + card('Google Ads',GO,I.search,'Optimizar palabras clave con el agente','Análisis de términos de búsqueda, negativas y ajuste de pujas con IA.','8 min',''))
-    // Meta Ads
-    + section('meta-ads','#EDF2FF','#1877f2','<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>','Agente Meta Ads','Facebook e Instagram Ads con análisis y creación asistida por IA',
-        card('Meta Ads',ME,I.fb,'Conectar tu cuenta de Facebook Ads','Autoriza el acceso, selecciona el Ad Account y verifica permisos de página.','5 min','')
-      + card('Meta Ads',ME,I.barchart,'Análisis de campañas Meta con el agente','Reportes de ROAS, CPM, frecuencia y fatiga creativa con IA.','8 min','')
-      + card('Meta Ads',ME,I.insta,'Publicar contenido en Instagram y Facebook','Usa el Studio para programar y publicar posts, reels y stories.','6 min',''))
-    // TikTok Ads
-    + section('tiktok-ads','#F0F0F0','#010101','<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>','Agente TikTok Ads','Estrategias y análisis de campañas en TikTok con IA especializada',
-        card('TikTok',TK,I.tiktok,'Conectar y analizar TikTok Ads con el agente','Configura el acceso a TikTok Ads Manager y obtén análisis automáticos.','8 min','')
-      + card('TikTok',TK,I.video,'Estrategias de contenido para TikTok con IA','Genera guiones, hooks efectivos y estructura de videos que convierten.','10 min',''))
-    // SEO
-    + section('seo','#ECFDF5','#059669','<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>','Agente SEO','Posiciona tu sitio web en Google con análisis y estrategias de IA',
-        card('SEO',SE,I.search,'Análisis SEO completo de tu sitio web','Audita tu dominio, detecta errores técnicos y recibe un plan priorizado.','10 min','')
-      + card('SEO',SE,I.type,'Estrategia de palabras clave con IA','Investiga keywords, analiza la competencia y construye tu mapa de contenidos.','8 min','')
-      + card('SEO',SE,I.edit,'Optimización on-page con el agente SEO','Mejora títulos, meta-descriptions, headings y contenido de tus páginas.','7 min',''))
-    // Contenido
-    + section('contenido','#F5F3FF','#7c3aed','<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>','Contenido para Redes Sociales','Studio de contenido, parrilla editorial y generación de imágenes con IA',
-        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, publicación y análisis.','12 min','')
-      + card('Contenido',CO,I.cal,'Genera y publica tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys, imágenes y publicación directa.','8 min','')
-      + card('Contenido',CO,I.img,'Generación de imágenes con IA para redes sociales','Usa el generador de imágenes para crear visuales de marca listos para publicar.','6 min','')
-      + card('Contenido',CO,I.video,'Guiones para Reels, TikToks y Stories con IA','Genera scripts virales con hooks probados y call-to-action optimizados.','7 min',''))
-    // Agencia
-    + section('agencia','#ECFEFF','#0891b2','<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>','Panel de Agencia','Gestiona múltiples clientes, reportes y configuraciones avanzadas',
-        card('Agencia',AG,I.users,'Gestión de múltiples clientes desde el panel','Cambia entre clientes, consulta su estado y usa los agentes con contexto.','8 min','')
-      + card('Agencia',AG,I.person,'Perfiles de cliente — configuración avanzada','Completa el brief de marketing para que los agentes trabajen con contexto correcto.','5 min','')
-      + card('Agencia',AG,I.grid,'Reportes y dashboards en vivo por cliente','Crea dashboards personalizados con métricas de Google Ads, Meta y más.','9 min','')
-      + card('Agencia',AG,I.bell,'Alertas automáticas y análisis de campañas','Configura notificaciones de rendimiento y reportes automáticos.','7 min',''))
-    + '</div></div>'; // .academia-body / .academia-wrap
-}
-
-function academiaFilter(cat) {
-  document.querySelectorAll('.academia-cat-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.cat === cat);
-  });
-  document.querySelectorAll('.academia-section').forEach(sec => {
-    sec.style.display = (cat === 'all' || sec.dataset.cat === cat) ? '' : 'none';
-  });
-}
-
-function acadPlay(ytId, title) {
-  if (!ytId) return; // card "Próximamente" — no hace nada
-  const overlay = document.getElementById('ac-player-overlay');
-  const iframe  = document.getElementById('ac-player-iframe');
-  const titleEl = document.getElementById('ac-player-title');
-  if (!overlay || !iframe) return;
-  if (titleEl) titleEl.textContent = title || 'Video';
-  iframe.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&rel=0&modestbranding=1';
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function acadClose() {
-  const overlay = document.getElementById('ac-player-overlay');
-  const iframe  = document.getElementById('ac-player-iframe');
-  if (!overlay) return;
-  overlay.classList.remove('open');
-  setTimeout(() => { if (iframe) iframe.src = ''; }, 280);
-  document.body.style.overflow = '';
-}
-// ── FIN ACADEMIA ──────────────────────────────────────────────────────────────
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.getElementById('sb-overlay');
@@ -9898,7 +4085,7 @@ let currentAgentCtx='google-ads';
 function updateQaBar(ctx){
   const QA={
     'google-ads':[],
-    'meta-ads':[['🚀 crear campaña',null,'launchMetaCampaignFlow'],['crear anuncio','Crear un anuncio de Meta Ads para mi negocio'],['presupuesto','Presupuesto recomendado para Meta Ads'],['audiencias','Cómo definir audiencias en Meta Ads'],['creativos','Dame ideas de creativos para mis anuncios'],['analizar','Analizar rendimiento de mis campañas de Meta']],
+    'meta-ads':[['crear anuncio','Crear un anuncio de Meta Ads para mi negocio'],['presupuesto','Presupuesto recomendado para Meta Ads'],['audiencias','Cómo definir audiencias en Meta Ads'],['creativos','Dame ideas de creativos para mis anuncios'],['analizar','Analizar rendimiento de mis campañas de Meta']],
     'tiktok-ads':[['crear anuncio','Crear un anuncio para TikTok Ads'],['presupuesto','Presupuesto recomendado para TikTok'],['hooks','Dame ideas de hooks para mis videos'],['tendencias','Qué tendencias de TikTok puedo aprovechar']],
     'linkedin-ads':[['crear anuncio','Crear un anuncio de LinkedIn Ads'],['presupuesto','Presupuesto recomendado para LinkedIn'],['audiencia B2B','Cómo segmentar audiencia B2B en LinkedIn'],['formatos','Qué formatos de anuncio funcionan mejor en LinkedIn']],
     'seo':[['auditoría','Haz una auditoría SEO de mi sitio web'],['keywords','Estudio de palabras clave para mi negocio'],['contenido','Estrategia de contenido SEO para mi sitio'],['competencia','Analizar competencia SEO de mi negocio']],
@@ -9908,17 +4095,13 @@ function updateQaBar(ctx){
   const bar=document.getElementById('qa');
   if(!bar)return;
   const items=QA[ctx]||QA['google-ads'];
-  bar.innerHTML=items.map(([label,prompt,fn])=>{
-    const onclick=fn?`${fn}()`:`qSend('${(prompt||'').replace(/'/g,"\\'")}')`;
-    return `<button class="qb" onclick="${onclick}">${label}</button>`;
-  }).join('');
+  bar.innerHTML=items.map(([label,prompt])=>`<button class="qb" onclick="qSend('${prompt.replace(/'/g,"\\'")}')"> ${label}</button>`).join('');
 }
 function setAgentContext(ctx, showGuide=false){
   currentAgentCtx=ctx;
   const labels={'google-ads':'agente google ads','meta-ads':'agente meta ads','tiktok-ads':'agente tiktok ads','linkedin-ads':'agente linkedin ads','seo':'agente seo','social':'agente contenido para redes','consultor':'consultor de marketing'};
   const el=document.querySelector('.hdr-agent');if(el)el.textContent=labels[ctx]||ctx;
   const navTitle=document.getElementById('nav-agent-title');if(navTitle)navTitle.textContent=labels[ctx]||ctx;
-  const toolbarLabel=document.getElementById('chat-agent-label');if(toolbarLabel)toolbarLabel.textContent=labels[ctx]||ctx;
   // Mostrar/ocultar panel de acciones social vs píldoras QA
   const socialBar=document.getElementById('social-action-bar');
   const qaBar=document.getElementById('qa');
@@ -9927,9 +4110,6 @@ function setAgentContext(ctx, showGuide=false){
     const chatArea=document.getElementById('chat-area');
     const isEmpty=!chatArea||chatArea.children.length===0;
     if(socialBar)socialBar.style.display=isEmpty?'block':'none';
-    // Actualizar descripción del Studio banner con conteo de posts
-    const descEl=document.getElementById('studio-bar-desc');
-    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · gestiona tu parrilla';}
     if(qaBar)qaBar.style.display='none';
   } else {
     if(socialBar)socialBar.style.display='none';
@@ -9967,83 +4147,67 @@ function rmThinking(id){document.getElementById(id)?.remove()}
 function appendRaw(html){const a=document.getElementById('chat-area');const d=document.createElement('div');d.innerHTML=html;a.appendChild(d.firstElementChild)}
 function scrollB(){const a=document.getElementById('chat-area');setTimeout(()=>{a.scrollTop=a.scrollHeight},50)}
 function fmt(t){
-  // Step 1: Extract fenced code blocks BEFORE escaping (preserve content verbatim)
-  const cb=[];
-  t=t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g,function(_,lang,code){
-    cb.push({lang:lang.trim(),code:code.replace(/\n+$/,'')});
-    return '\x00CB'+(cb.length-1)+'\x00';
-  });
+  // 1. Escape HTML first
+  let s = esc(t);
 
-  // Step 2: Escape HTML
-  let s=esc(t);
-
-  // Step 3: Restore code blocks as styled <pre> elements
-  s=s.replace(/\x00CB(\d+)\x00/g,function(_,idx){
-    const b=cb[+idx];
-    const code=b.code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const label=b.lang
-      ? '<div style="font-size:10px;font-family:monospace;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em;opacity:.7">'+b.lang.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'
-      : '';
-    return '<pre style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0 8px;font-size:0">'+label
-      +'<code style="font-family:\'SF Mono\',\'Fira Code\',Consolas,monospace;font-size:12.5px;line-height:1.6;color:var(--text);white-space:pre">'+code+'</code></pre>';
-  });
-
-  // Step 4: Markdown tables
-  s=s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g,function(block){
-    const lines=block.trim().split('\n').filter(l=>l.trim());
-    if(lines.length<2||!/^\|[\s\-:|]+\|/.test(lines[1]))return block;
-    const heads=lines[0].split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
-    let h='<div style="overflow-x:auto;margin:14px 0"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-    h+='<thead><tr>'+heads.map(c=>'<th style="background:var(--sidebar);border:1px solid var(--border);padding:8px 13px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">'+fmtI(c)+'</th>').join('')+'</tr></thead><tbody>';
-    lines.slice(2).forEach(function(row,ri){
-      const cells=row.split('|').filter((_,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
-      h+='<tr style="background:'+(ri%2===0?'var(--bg)':'var(--sidebar)')+'">'+cells.map(c=>'<td style="border:1px solid var(--border);padding:7px 13px;color:var(--text);line-height:1.45">'+fmtI(c)+'</td>').join('')+'</tr>';
+  // 2. Render markdown tables BEFORE other replacements
+  // Match table blocks: header row | separator row | data rows
+  s = s.replace(/(\|[^\n]+\|\n\|[-| :]+\|\n(?:\|[^\n]+\|\n?)+)/g, function(tableBlock) {
+    const lines = tableBlock.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return tableBlock;
+    // Check if second line is a separator (----)
+    if (!/^\|[\s\-:|]+\|/.test(lines[1])) return tableBlock;
+    const headerCells = lines[0].split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
+    const dataRows = lines.slice(2);
+    let html = '<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr>' + headerCells.map(c =>
+      `<th style="background:var(--sidebar);border:1px solid var(--border);padding:7px 10px;text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${c}</th>`
+    ).join('') + '</tr></thead>';
+    html += '<tbody>';
+    dataRows.forEach(function(row, ri) {
+      const cells = row.split('|').filter((_,i,a)=> i>0 && i<a.length-1).map(c=>c.trim());
+      html += `<tr style="background:${ri%2===0?'var(--bg)':'var(--sidebar)'}">` +
+        cells.map(c => `<td style="border:1px solid var(--border);padding:6px 10px;color:var(--text)">${c}</td>`).join('') +
+      '</tr>';
     });
-    h+='</tbody></table></div>';
-    return h;
+    html += '</tbody></table></div>';
+    return html;
   });
 
-  // Step 5: Headings (h1 → h2 → h3 → h4 with clear visual hierarchy)
-  s=s.replace(/^# (.+)$/gm,'<h2 style="margin:24px 0 10px;font-size:20px;font-weight:700;color:var(--text);line-height:1.3;letter-spacing:-.01em">$1</h2>');
-  s=s.replace(/^## (.+)$/gm,'<h3 style="margin:20px 0 8px;font-size:16px;font-weight:700;color:var(--text);padding-bottom:5px;border-bottom:1.5px solid var(--border)">$1</h3>');
-  s=s.replace(/^### (.+)$/gm,'<h4 style="margin:16px 0 5px;font-size:14px;font-weight:700;color:var(--text)">$1</h4>');
+  // 3. Headers
+  s = s.replace(/### (.*?)(\n|$)/g,'<h4 style="margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--text)">$1</h4>');
+  s = s.replace(/## (.*?)(\n|$)/g,'<h3 style="margin:16px 0 8px;font-size:14px;font-weight:700;color:var(--text)">$1</h3>');
 
-  // Step 6: Blockquotes (&gt; because > was HTML-escaped in step 2)
-  s=s.replace(/^&gt; (.+)$/gm,'<blockquote style="border-left:3px solid var(--blue);margin:12px 0;padding:6px 14px;background:var(--sidebar);border-radius:0 6px 6px 0;color:var(--muted);font-style:italic;line-height:1.55">$1</blockquote>');
+  // 4. Bold and inline code
+  s = s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/`(.*?)`/g,'<code style="background:var(--sidebar);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>');
 
-  // Step 7: Horizontal rule
-  s=s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">');
-
-  // Step 8: Inline formatting — bold first, then italic (safe after bold is consumed), then inline code
-  s=s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
-  s=s.replace(/`([^`\n]+)`/g,'<code style="background:var(--sidebar);padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:monospace;color:var(--text);border:1px solid var(--border)">$1</code>');
-
-  // Step 9: Lists — collapse blank lines between consecutive bullet/numbered lines
-  for(var _i=0;_i<5;_i++){
-    s=s.replace(/^([–\-•] .+)\n\n([–\-•] )/gm,'$1\n$2');
-    s=s.replace(/^(\d+\. .+)\n\n(\d+\. )/gm,'$1\n$2');
+  // 5. Lists — collapse ALL blank lines between bullet lines aggressively
+  // Keep collapsing until no more double-newlines exist between bullet chars
+  let prev = '';
+  while (prev !== s) {
+    prev = s;
+    s = s.replace(/(<br>|^|\n)([ \t]*[–\-•].+?)(<br>|\n)\n+([ \t]*[–\-•])/gm, '$1$2$3$4');
   }
-  s=s.replace(/^[–•] (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
-  s=s.replace(/^- (.+)$/gm,'<li style="margin:3px 0;line-height:1.55">$1</li>');
-  s=s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:4px 0;line-height:1.55">$2</li>');
-  // Wrap consecutive <li> in <ul> — strip \n inside so step 10 doesn't inject <br> between items
-  s=s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,function(_,g){
-    return '<ul style="margin:6px 0 10px;padding-left:20px">'+g.replace(/\n/g,'')+'</ul>';
-  });
+  // Also collapse \n\n between bullets in raw text before <br> conversion
+  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
+  s = s.replace(/(\n[–\-•][^\n]+)\n\n([–\-•])/g, '$1\n$2');
 
-  // Step 10: Paragraphs and line breaks
-  s=s.replace(/\n{3,}/g,'\n\n');
-  s=s.replace(/\n\n/g,'</p><p style="margin-top:9px">');
-  s=s.replace(/\n/g,'<br>');
-  s='<p style="margin:0;line-height:1.65;font-size:14px">'+s+'</p>';
-  return s;
-}
-// Inline-only formatting for table cells (no block elements)
-function fmtI(s){
-  s=s.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
-  s=s.replace(/`([^`\n]+)`/g,'<code style="background:rgba(0,0,0,.07);padding:1px 5px;border-radius:3px;font-size:12px;font-family:monospace">$1</code>');
+  s = s.replace(/^– (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
+  s = s.replace(/^- (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
+  s = s.replace(/^• (.+)$/gm,'<li style="margin:1px 0;line-height:1.5">$1</li>');
+  s = s.replace(/^(\d+)\. (.+)$/gm,'<li style="list-style-type:decimal;margin:1px 0;line-height:1.5">$2</li>');
+  s = s.replace(/(<li[^>]*>.*?<\/li>(?:\s*<li[^>]*>.*?<\/li>)*)/gs,'<ul style="margin:3px 0 5px;padding-left:15px">$1</ul>');
+
+  // 6. Horizontal rule
+  s = s.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">');
+
+  // 7. Paragraphs and line breaks — collapse excess blank lines first
+  s = s.replace(/\n{3,}/g,'\n\n');
+  s = s.replace(/\n\n/g,'</p><p style="margin-top:5px">');
+  s = s.replace(/\n/g,'<br>');
+  s = '<p style="margin:0;line-height:1.55">' + s + '</p>';
+
   return s;
 }
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -10057,7 +4221,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       if (window.innerWidth <= 768) closeSidebar();
     });
   });
-  document.querySelectorAll('.sb-agent-header').forEach(header => {
+  document.querySelectorAll('.sb-agent-row').forEach(header => {
     header.addEventListener('click', function() {
       if (window.innerWidth <= 768) {
         // No cerrar al expandir — dejar que el usuario vea los subitems
@@ -10386,58 +4550,6 @@ const ROADMAP_CONTENT = {
   }
 };
 
-// ── ROADMAP PERSISTENCE ──────────────────────────────────────────────────────
-
-function rmStorageKey() {
-  const uid = clerkInstance?.user?.id || 'anon';
-  const clientId = agencyActiveClientId || 'solo';
-  const agentKey = currentAgentCtx || 'google-ads';
-  return `rm_progress_${uid}_${clientId}_${agentKey}`;
-}
-
-function rmSaveProgress() {
-  const progress = {};
-  document.querySelectorAll('#rm-panel-body .cl-item[data-ridx]').forEach(item => {
-    progress[item.dataset.ridx] = item.classList.contains('done');
-  });
-  try { localStorage.setItem(rmStorageKey(), JSON.stringify(progress)); } catch(e) {}
-}
-
-function rmLoadProgress() {
-  try { return JSON.parse(localStorage.getItem(rmStorageKey()) || '{}'); } catch { return {}; }
-}
-
-function rmToggleTask(el) {
-  el.classList.toggle('done');
-  const done = el.classList.contains('done');
-  const check = el.querySelector('.cl-check');
-  const mark  = el.querySelector('.cl-check-mark');
-  if (done) {
-    check.style.background   = 'var(--success)';
-    check.style.borderColor  = 'var(--success)';
-    mark.style.display       = 'block';
-  } else {
-    check.style.background   = 'var(--bg)';
-    check.style.borderColor  = 'var(--border2)';
-    mark.style.display       = 'none';
-  }
-  rmSaveProgress();
-}
-
-function rmRestoreProgress() {
-  const progress = rmLoadProgress();
-  document.querySelectorAll('#rm-panel-body .cl-item[data-ridx]').forEach(item => {
-    if (progress[item.dataset.ridx]) {
-      item.classList.add('done');
-      const check = item.querySelector('.cl-check');
-      const mark  = item.querySelector('.cl-check-mark');
-      check.style.background  = 'var(--success)';
-      check.style.borderColor = 'var(--success)';
-      mark.style.display      = 'block';
-    }
-  });
-}
-
 function openRoadmap() {
   const agentKey = currentAgentCtx || 'google-ads';
   const data = ROADMAP_CONTENT[agentKey] || ROADMAP_CONTENT['google-ads'];
@@ -10469,11 +4581,10 @@ function openRoadmap() {
     }
     html += `</div>`;
     
-    // Checklist — data-ridx = "stageIdx_taskIdx" para persistencia
+    // Checklist
     html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">`;
-    stage.tasks.forEach((task, tidx) => {
-      const ridx = `${idx}_${tidx}`;
-      html += `<div class="cl-item" data-ridx="${ridx}" onclick="rmToggleTask(this)" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer">`;
+    stage.tasks.forEach(task => {
+      html += `<div class="cl-item" onclick="this.classList.toggle('done')" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer">`;
       html += `<div class="cl-check" style="width:16px;height:16px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;background:var(--bg);transition:all .15s">`;
       html += `<svg class="cl-check-mark" style="display:none;width:8px;height:8px" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`;
       html += `</div>`;
@@ -10482,17 +4593,32 @@ function openRoadmap() {
       html += `</div>`;
     });
     html += `</div>`;
-
+    
     // Botón preguntar al agente
     html += `<button class="ask-agent-btn" onclick="askAgentFromRoadmap('${stage.id}')" style="margin-bottom:16px">▸ preguntar al agente sobre esta etapa</button>`;
     html += `</div>`;
   });
-
+  
   document.getElementById('rm-panel-body').innerHTML = html;
-
-  // Restaurar progreso guardado desde localStorage
-  rmRestoreProgress();
-
+  
+  // Añadir estilos de done a los checks del panel
+  document.querySelectorAll('#rm-panel-body .cl-item').forEach(item => {
+    const check = item.querySelector('.cl-check');
+    const mark = item.querySelector('.cl-check-mark');
+    item.addEventListener('click', function() {
+      const done = this.classList.contains('done');
+      if(done) {
+        check.style.background = 'var(--success)';
+        check.style.borderColor = 'var(--success)';
+        mark.style.display = 'block';
+      } else {
+        check.style.background = 'var(--bg)';
+        check.style.borderColor = 'var(--border2)';
+        mark.style.display = 'none';
+      }
+    });
+  });
+  
   document.getElementById('rm-overlay').classList.add('open');
   document.getElementById('rm-panel').classList.add('open');
 }
@@ -10551,8 +4677,7 @@ async function generateAdImages(cmd) {
     }
   } catch (err) {
     rmThinking(thinkId);
-    console.error('[generate-image]', err.message);
-    addAgent('Tuvimos un error inesperado al generar el creativo. Por favor contacta a soporte si el problema persiste.');
+    addAgent('Error generando creativo ' + batchIndex + ': ' + err.message);
   }
 }
 
@@ -10715,1361 +4840,18 @@ function publishToMeta(imgIndex) {
   if (cin) { cin.value = 'Quiero publicar la variacion ' + img.index + ' en una campana de Meta Ads.'; sendMsg(); }
 }
 
-// ─── WIZARD DE CREACIÓN DE CAMPAÑA EN META ────────────────────────────────────
-var campaignWizardStep = 1;
-var campaignWizardData = {};
-var campaignWizardImages = [];
-
-async function launchMetaCampaignFlow() {
-  // 1. Buscar token en sessionStorage → localStorage → Supabase (en ese orden)
-  let token  = sessionStorage.getItem('meta_access_token')
-            || localStorage.getItem('meta_access_token_persist');
-
-  if (!token) {
-    // Intentar desde Supabase directamente (Clerk ya cargó cuando el usuario hizo click)
-    try {
-      var uid = clerkInstance?.user?.id;
-      if (uid) {
-        var connRes  = await fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads');
-        var connData = await connRes.json();
-        if (connData.connected && connData.access_token) {
-          token = connData.access_token;
-          sessionStorage.setItem('meta_access_token', token);
-          localStorage.setItem('meta_access_token_persist', token);
-          updateMetaUI(true, connData.account_name || '');
-        }
-      }
-    } catch(e) {}
-  }
-
-  if (!token) {
-    addAgent('Para crear una campaña necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuración > Conexiones > Meta Ads**.');
+function launchMetaCampaignFlow() {
+  if (!metaActiveAccount) {
+    addAgent('Para publicar necesitas conectar tu cuenta de Meta Ads primero. Ve a **Configuracion > Conexiones > Meta Ads**.');
     return;
   }
-
-  // 2. Buscar account_id en sessionStorage → localStorage → Meta API
-  let acctId = sessionStorage.getItem('meta_ad_account_id')
-             || localStorage.getItem('meta_ad_account_id_persist');
-
-  if (acctId) {
-    // Restaurar en sessionStorage si venía de localStorage
-    sessionStorage.setItem('meta_ad_account_id', acctId);
-    var persistedAcc = localStorage.getItem('meta_active_account_persist');
-    if (persistedAcc && !sessionStorage.getItem('meta_active_account')) {
-      sessionStorage.setItem('meta_active_account', persistedAcc);
-    }
-  } else {
-    // Auto-seleccionar primera cuenta disponible
-    try {
-      var accRes  = await fetch('/api/meta-list-accounts', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ accessToken: token }),
-      });
-      var accData = await accRes.json();
-      if (accData.accounts && accData.accounts.length > 0) {
-        var acc = accData.accounts[0];
-        acctId  = acc.id;
-        sessionStorage.setItem('meta_ad_account_id', acc.id);
-        sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
-        localStorage.setItem('meta_ad_account_id_persist', acc.id);
-        localStorage.setItem('meta_active_account_persist', JSON.stringify(acc));
-      } else {
-        addAgent('No se encontró ninguna cuenta publicitaria. Ve a **Configuración > Conexiones > Meta Ads** para seleccionar una.');
-        return;
-      }
-    } catch(e) {
-      addAgent('Para crear una campaña necesitas seleccionar una cuenta publicitaria en **Configuración > Conexiones > Meta Ads**.');
-      return;
-    }
-  }
-
-  campaignWizardImages = (generatedAdImages || []).slice();
-  var acctCurrency = 'USD';
-  try { acctCurrency = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').currency || 'USD'; } catch(e) {}
-  campaignWizardData   = { adAccountId: acctId, token, currency: acctCurrency };
-  campaignWizardStep   = 1;
-  renderCampaignWizard();
-}
-
-function renderCampaignWizard() {
-  var existing = document.getElementById('cw-overlay');
-  if (existing) existing.remove();
-
-  var steps = ['Objetivo','Presupuesto','Audiencia','Creativos','Lanzar'];
-  var pills  = steps.map(function(s,i){
-    var active = (i+1 === campaignWizardStep) ? 'background:#1877F2;color:#fff' : (i+1 < campaignWizardStep ? 'background:#e8f0fe;color:#1877F2' : 'background:#f3f4f6;color:#999');
-    return '<div style="flex:1;text-align:center;padding:6px 4px;border-radius:20px;font-size:11px;font-weight:600;'+active+'">'+(i+1)+'. '+s+'</div>';
-  }).join('');
-
-  var body = '';
-  if (campaignWizardStep === 1) {
-    body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Nombre de la campaña</label>'+
-      '<input id="cw-name" placeholder="Ej: Leads Noviembre 2025" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.name||'')+'"></div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px">Objetivo de la campaña</label>'+
-      [['OUTCOME_LEADS','🎯 Generación de leads','Formularios nativos de Meta para captar contactos'],
-       ['OUTCOME_TRAFFIC','🌐 Tráfico al sitio web','Lleva personas a tu landing page o sitio web'],
-       ['OUTCOME_AWARENESS','👁 Reconocimiento','Muestra el anuncio al mayor número de personas'],
-       ['OUTCOME_SALES','🛒 Ventas','Optimiza para conversiones en tu sitio o tienda'],
-       ['OUTCOME_ENGAGEMENT','💬 Interacción','Más likes, comentarios y reacciones en tu publicación'],
-       ['OUTCOME_MESSAGES','📱 Mensajes','Lleva personas a que te escriban por WhatsApp, Messenger o Instagram DM']
-      ].map(function(o){
-        var sel = campaignWizardData.objective === o[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
-        return '<div onclick="cwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px">'+
-          '<div style="font-size:20px">'+o[1].split(' ')[0]+'</div>'+
-          '<div><div style="font-weight:600;font-size:13px">'+o[1].split(' ').slice(1).join(' ')+'</div><div style="font-size:11px;color:#666">'+o[2]+'</div></div></div>';
-      }).join('') +
-      // Selector de app de mensajería — aparece solo cuando el objetivo es OUTCOME_MESSAGES
-      (campaignWizardData.objective === 'OUTCOME_MESSAGES' ?
-        '<div style="margin-top:4px;padding:12px;background:#e8f0fe;border-radius:10px;border:2px solid #1877F2">' +
-        '<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:#1877F2">¿Por qué app recibirás los mensajes?</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
-        [['whatsapp','💬 WhatsApp'],['messenger','📨 Messenger'],['instagram','📸 Instagram DM']].map(function(a){
-          var sel2 = (campaignWizardData.messagingApp||'whatsapp') === a[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#333;border-color:#ddd';
-          return '<button onclick="cwSelectMessagingApp(\''+a[0]+'\')" style="'+sel2+';border:1px solid;border-radius:20px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)">'+a[1]+'</button>';
-        }).join('') +
-        '</div></div>'
-      : '') +
-      '</div>';
-  } else if (campaignWizardStep === 2) {
-    var cwCurrency = (function(){ try { return JSON.parse(sessionStorage.getItem('meta_active_account')||'{}').currency || 'USD'; } catch(e){ return 'USD'; } })();
-    var cwMinBudget = cwCurrency === 'COP' ? '20.000' : cwCurrency === 'MXN' ? '100' : cwCurrency === 'ARS' ? '1.000' : '5';
-    var cwSugBudget = cwCurrency === 'COP' ? '50.000–200.000' : cwCurrency === 'MXN' ? '200–800' : cwCurrency === 'ARS' ? '5.000–20.000' : '5–20';
-    body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario ('+cwCurrency+')</label>'+
-      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px;color:#555">$</span>'+
-      '<input id="cw-budget" type="number" min="1" placeholder="'+cwMinBudget+'" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700" value="'+(campaignWizardData.budget||'')+'">'+
-      '<span style="color:#777;font-size:13px">'+cwCurrency+'/día</span></div>'+
-      '<div style="margin-top:8px;font-size:12px;color:#888">Mínimo $'+cwMinBudget+' '+cwCurrency+'/día. Para leads recomendamos $'+cwSugBudget+' '+cwCurrency+'/día.</div></div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px">Duración</label>'+
-      [['7','7 días'],['14','14 días'],['30','30 días'],['0','Sin fecha de fin']].map(function(d){
-        var sel = String(campaignWizardData.durationDays) === d[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
-        return '<div onclick="cwSelectDuration('+d[0]+')" style="'+sel+';border-radius:8px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:13px;font-weight:500">'+d[1]+'</div>';
-      }).join('') + '</div>';
-  } else if (campaignWizardStep === 3) {
-    body = '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">País</label>'+
-      '<input id="cw-country" placeholder="Colombia" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.country||'Colombia')+'"></div>'+
-      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Ciudad (opcional)</label>'+
-      '<input id="cw-city" placeholder="Bogotá" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(campaignWizardData.city||'')+'"></div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Edad mínima</label>'+
-      '<input id="cw-age-min" type="number" min="18" max="65" value="'+(campaignWizardData.ageMin||18)+'" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box"></div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Edad máxima</label>'+
-      '<input id="cw-age-max" type="number" min="18" max="65" value="'+(campaignWizardData.ageMax||55)+'" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box"></div></div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Género</label>'+
-      '<div style="display:flex;gap:8px">'+
-      [['0','Todos'],['2','Mujeres'],['1','Hombres']].map(function(g){
-        var sel = String(campaignWizardData.gender) === g[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#333;border-color:#ddd';
-        return '<button onclick="cwSelectGender('+g[0]+')" style="'+sel+';border:1px solid;border-radius:20px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:500">'+g[1]+'</button>';
-      }).join('')+'</div></div>';
-  } else if (campaignWizardStep === 4) {
-    var fmt = campaignWizardData.adFormat || 'image';
-
-    // ── Selector de formato ────────────────────────────────
-    var fmtSel = '<div style="display:flex;gap:6px;margin-bottom:16px">'+
-      [['image','📷 Imagen'],['carousel','🎠 Carrusel'],['video','🎬 Video']].map(function(f){
-        var a = fmt===f[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#555;border-color:#ddd';
-        return '<button onclick="cwSetFormat(\''+f[0]+'\')" style="'+a+';border:1px solid;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)">'+f[1]+'</button>';
-      }).join('')+'</div>';
-
-    // ── Grid de imágenes generadas ─────────────────────────
-    var imgGrid = '';
-    if (campaignWizardImages && campaignWizardImages.length) {
-      var gridLabel = fmt==='carousel' ? 'Imágenes generadas — selecciona hasta 5' : 'Imágenes generadas — selecciona una';
-      imgGrid = '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">'+gridLabel+'</label>'+
-        '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
-        campaignWizardImages.map(function(img,i){
-          var sel,badge;
-          if (fmt==='carousel') {
-            var idxs = campaignWizardData.carouselIndexes||[];
-            var pos = idxs.indexOf(i);
-            sel = pos>=0 ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
-            badge = pos>=0 ? '<div style="position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">'+(pos+1)+'</div>' : '';
-          } else {
-            sel = campaignWizardData.adImageIndex===i ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
-            badge = campaignWizardData.adImageIndex===i ? '<div style="position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:10px;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">✓</div>' : '';
-          }
-          return '<div class="cw-img-thumb" data-idx="'+i+'" onclick="cwSelectImage('+i+')" style="'+sel+'border-radius:8px;overflow:hidden;cursor:pointer;width:80px;height:80px;flex-shrink:0;position:relative">'+
-            '<img src="data:'+img.mediaType+';base64,'+img.base64+'" style="width:100%;height:100%;object-fit:cover">'+badge+'</div>';
-        }).join('')+'</div></div>';
-    }
-
-    // ── Sección de copy con botón IA ───────────────────────
-    var copySection =
-      '<div style="margin-bottom:12px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-          '<label style="font-weight:600;font-size:13px">Texto del anuncio <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
-          '<button id="cw-gen-btn" onclick="cwGenerateCopy()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1877F2;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
-        '</div>'+
-        '<textarea id="cw-ad-body" rows="3" placeholder="Ej: ¿Buscas crecer tu negocio? 🚀 Llegamos a más clientes para ti. ¡Escríbenos hoy!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(campaignWizardData.adBody||'')+'</textarea>'+
-      '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 125 caracteres</div>'+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
-        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
-          '<input id="cw-ad-title" placeholder="Ej: ¡Empieza gratis hoy!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adTitle||'')+'">'+
-          '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 40 caracteres</div></div>'+
-        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descripción <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
-          '<input id="cw-ad-description" placeholder="Ej: Envío gratis · Sin contrato" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adDescription||'')+'">'+
-          '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 30 caracteres</div></div>'+
-      '</div>';
-
-    var urlSection = ['OUTCOME_TRAFFIC','OUTCOME_SALES','OUTCOME_MESSAGES'].includes(campaignWizardData.objective) ?
-      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL de destino</label>'+
-        '<input id="cw-ad-url" type="url" placeholder="https://tudominio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adUrl||'')+'"></div>' : '';
-
-    // La página de Facebook se carga en background — no se muestra al usuario
-    var pageSection = '<div id="cw-pages-container" style="display:none"></div>';
-
-    var skipNote = '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #eee;font-size:12px;color:#999">'+
-      '💡 Si prefieres agregar los anuncios luego, puedes continuar sin imagen — la campaña quedará pausada en Meta Ads Manager.</div>';
-
-    if (fmt === 'video') {
-      // ── Formato Video ──────────────────────────────────
-      body = fmtSel+
-        '<div style="background:#fff8e6;border:1px solid #ffd970;border-radius:8px;padding:12px;font-size:12px;color:#7a5700;margin-bottom:14px">'+
-          '🎬 <strong>Subir video desde Acuarius</strong> — Selecciona un MP4 o MOV. Los videos se suben directamente a Meta y pueden tardar 1-2 min en procesar antes de publicarse.</div>'+
-        '<div style="margin-bottom:14px">'+
-          '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Archivo de video</label>'+
-          '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">'+
-            '⬆️ Subir video (MP4 / MOV)'+
-            '<input type="file" accept="video/mp4,video/quicktime" onchange="cwHandleVideoUpload(this)" style="display:none">'+
-          '</label>'+
-          (campaignWizardData.adVideoName ? '<div style="margin-top:8px;font-size:12px;color:#1877F2;font-weight:600">✅ '+campaignWizardData.adVideoName+'</div>' : '')+
-        '</div>'+
-        copySection + urlSection + pageSection + skipNote;
-    } else if (fmt === 'carousel') {
-      // ── Formato Carrusel ───────────────────────────────
-      var carouselPreviews = '';
-      if (campaignWizardData.carouselPreviews && campaignWizardData.carouselPreviews.length) {
-        carouselPreviews = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'+
-          campaignWizardData.carouselPreviews.map(function(src){
-            return '<img src="'+src+'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid #1877F2">';
-          }).join('')+'</div>';
-      }
-      body = fmtSel + imgGrid +
-        '<div style="margin-bottom:14px">'+
-          '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">O sube imágenes nuevas (hasta 5)</label>'+
-          '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">'+
-            '⬆️ Subir imágenes'+
-            '<input type="file" accept="image/jpeg,image/png,image/webp" multiple onchange="cwHandleImageUpload(this)" style="display:none">'+
-          '</label>'+
-          carouselPreviews+
-        '</div>'+
-        copySection + urlSection + pageSection + skipNote;
-    } else {
-      // ── Formato Imagen (single) ────────────────────────
-      var singlePreview = campaignWizardData.adImagePreview
-        ? '<img src="'+campaignWizardData.adImagePreview+'" style="max-height:80px;border-radius:8px;display:block;margin-top:8px;border:2px solid #1877F2">'
-        : '';
-      body = fmtSel + imgGrid +
-        '<div style="margin-bottom:14px">'+
-          '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">'+(campaignWizardImages&&campaignWizardImages.length?'O sube una imagen nueva':'📎 Imagen del anuncio')+'</label>'+
-          '<label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#f3f4f6;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">'+
-            '⬆️ Subir imagen'+
-            '<input type="file" accept="image/jpeg,image/png,image/webp" onchange="cwHandleImageUpload(this)" style="display:none">'+
-          '</label>'+
-          singlePreview+
-        '</div>'+
-        copySection + urlSection + pageSection + skipNote;
-    }
-    setTimeout(function(){ cwLoadPages(); }, 50);
-
-  } else if (campaignWizardStep === 5) {
-    var objLabels = {OUTCOME_LEADS:'Generación de leads',OUTCOME_TRAFFIC:'Tráfico al sitio web',OUTCOME_AWARENESS:'Reconocimiento',OUTCOME_SALES:'Ventas',OUTCOME_ENGAGEMENT:'Interacción',OUTCOME_MESSAGES:'Mensajes / WhatsApp'};
-    var dur = campaignWizardData.durationDays === 0 ? 'Sin fecha de fin' : campaignWizardData.durationDays + ' días';
-    var msgAppLabel = {whatsapp:'💬 WhatsApp',messenger:'📨 Messenger',instagram:'📸 Instagram DM'}[campaignWizardData.messagingApp||'whatsapp'] || 'WhatsApp';
-    body = '<div style="background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:16px">'+
-      '<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:#1877F2">Resumen de campaña</div>'+
-      [['Nombre',campaignWizardData.name],['Objetivo',objLabels[campaignWizardData.objective]],
-       ...(campaignWizardData.objective==='OUTCOME_MESSAGES' ? [['App de mensajería', msgAppLabel]] : []),
-       ['Presupuesto','$'+(campaignWizardData.budget||campaignWizardData.budgetUSD)+' '+(campaignWizardData.currency||'USD')+'/día'],['Duración',dur],
-       ['País',campaignWizardData.country+(campaignWizardData.city?' · '+campaignWizardData.city:'')],
-       ['Edad',campaignWizardData.ageMin+' – '+campaignWizardData.ageMax+' años'],
-       ['Género',{0:'Todos',1:'Hombres',2:'Mujeres'}[campaignWizardData.gender]||'Todos'],
-       ['Creativos', (function(){
-         var f=campaignWizardData.adFormat||'image';
-         if(f==='carousel'){var n=(campaignWizardData.carouselImages||[]).length;return n>0?'🎠 '+n+' imágenes (carrusel)':'Sin imágenes — agregar luego';}
-         if(f==='video'){return campaignWizardData.adVideo?'🎬 Video listo':'Sin video — agregar luego';}
-         return campaignWizardData.adImage?'✅ Imagen lista':'Sin imagen — agregar luego';
-       })()]
-      ].map(function(r){
-        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px"><span style="color:#666">'+r[0]+'</span><span style="font-weight:600">'+r[1]+'</span></div>';
-      }).join('')+'</div>'+
-      '<div style="background:#fff3cd;border-radius:8px;padding:12px;font-size:12px;color:#856404;margin-bottom:8px">'+
-      '⚠️ La campaña se creará en estado <strong>PAUSADA</strong> para que puedas revisarla antes de activarla en Meta Ads Manager.</div>'+
-      '<div id="cw-launch-msg" style="display:none"></div>';
-  }
-
-  var html = '<div id="cw-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center">'+
-    '<div style="background:#fff;border-radius:16px;padding:28px;width:min(500px,92vw);max-height:90vh;overflow-y:auto;position:relative;z-index:9999">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'+
-    '<h3 style="margin:0;font-size:18px">🚀 Crear campaña en Meta</h3>'+
-    '<button onclick="closeCampaignWizard()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button></div>'+
-    '<div style="display:flex;gap:6px;margin-bottom:20px">'+pills+'</div>'+
-    '<div id="cw-body">'+body+'</div>'+
-    '<div style="display:flex;gap:10px;margin-top:20px">'+
-    (campaignWizardStep > 1 ? '<button onclick="cwPrev()" style="flex:1;padding:12px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px">← Atrás</button>' : '')+
-    (campaignWizardStep < 5
-      ? '<button onclick="cwNext()" style="flex:2;padding:12px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">Continuar →</button>'
-      : '<button id="cw-launch-btn" onclick="cwLaunch()" style="flex:2;padding:12px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🚀 Crear campaña</button>')+
-    '</div></div></div>';
-
-  var el = document.createElement('div');
-  el.innerHTML = html;
-  document.body.appendChild(el.firstElementChild);
-}
-
-// Helpers para guardar campos activos antes de re-renderizar (evita que se borren)
-function cwSaveStep1Fields() {
-  var n = document.getElementById('cw-name'); if (n) campaignWizardData.name = n.value;
-}
-function cwSaveStep2Fields() {
-  var b = document.getElementById('cw-budget'); if (b && b.value) campaignWizardData.budget = parseFloat(b.value) || campaignWizardData.budget;
-}
-function cwSaveStep3Fields() {
-  var co = document.getElementById('cw-country'); if (co) campaignWizardData.country = co.value;
-  var ci = document.getElementById('cw-city');    if (ci) campaignWizardData.city    = ci.value;
-  var am = document.getElementById('cw-age-min'); if (am) campaignWizardData.ageMin  = parseInt(am.value)||18;
-  var ax = document.getElementById('cw-age-max'); if (ax) campaignWizardData.ageMax  = parseInt(ax.value)||55;
-}
-function cwSaveStep4Fields() {
-  var t = document.getElementById('cw-ad-title');       if (t) campaignWizardData.adTitle       = t.value;
-  var b = document.getElementById('cw-ad-body');        if (b) campaignWizardData.adBody        = b.value;
-  var d = document.getElementById('cw-ad-description'); if (d) campaignWizardData.adDescription = d.value;
-  var u = document.getElementById('cw-ad-url');         if (u) campaignWizardData.adUrl         = u.value;
-}
-
-function cwSelectObj(obj) {
-  cwSaveStep1Fields(); // guardar nombre antes de re-renderizar
-  campaignWizardData.objective = obj;
-  if (obj === 'OUTCOME_MESSAGES' && !campaignWizardData.messagingApp) campaignWizardData.messagingApp = 'whatsapp';
-  renderCampaignWizard();
-}
-function cwSelectMessagingApp(app) { cwSaveStep1Fields(); campaignWizardData.messagingApp = app; renderCampaignWizard(); }
-function cwSelectDuration(d) { cwSaveStep2Fields(); campaignWizardData.durationDays = d; renderCampaignWizard(); }
-function cwSelectGender(g) { cwSaveStep3Fields(); campaignWizardData.gender = g; renderCampaignWizard(); }
-
-function cwSetFormat(fmt) {
-  cwSaveStep4Fields(); // guardar copy antes de re-renderizar
-  campaignWizardData.adFormat = fmt;
-  renderCampaignWizard();
-}
-
-async function cwGenerateCopy() {
-  var btn = document.getElementById('cw-gen-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
-  try {
-    var clientProfile = '';
-    try { clientProfile = JSON.stringify(mem || {}); } catch(e) {}
-    var r = await fetch('/api/meta-ads?action=generate-copy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accessToken:   campaignWizardData.token,
-        adAccountId:   campaignWizardData.adAccountId,
-        campaignName:  campaignWizardData.name,
-        objective:     campaignWizardData.objective,
-        clientProfile: clientProfile,
-      }),
-    });
-    var data = await r.json();
-    if (data.error) throw new Error(data.error);
-    if (data.title)       { var t=document.getElementById('cw-ad-title');       if(t) t.value=data.title;       }
-    if (data.body)        { var b=document.getElementById('cw-ad-body');        if(b) b.value=data.body;        }
-    if (data.description) { var d=document.getElementById('cw-ad-description'); if(d) d.value=data.description; }
-    if (!data.title && !data.body) throw new Error('La IA no generó texto. Inténtalo de nuevo.');
-    campaignWizardData.adTitle       = data.title       || '';
-    campaignWizardData.adBody        = data.body        || '';
-    campaignWizardData.adDescription = data.description || '';
-  } catch(e) {
-    if (btn) btn.innerHTML = '✨ Generar con IA';
-    var errDiv = document.getElementById('cw-gen-error');
-    if (!errDiv) {
-      errDiv = document.createElement('div');
-      errDiv.id = 'cw-gen-error';
-      errDiv.style.cssText = 'color:#dc2626;font-size:12px;margin-top:4px';
-      var genBtn = document.getElementById('cw-gen-btn');
-      if (genBtn && genBtn.parentNode) genBtn.parentNode.parentNode.appendChild(errDiv);
-    }
-    errDiv.textContent = '⚠️ ' + e.message;
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar con IA'; }
-  }
-}
-
-function cwHandleVideoUpload(input) {
-  var file = input.files[0];
-  if (!file) return;
-  if (file.size > 200 * 1024 * 1024) { alert('El video no puede superar 200 MB.'); return; }
-  campaignWizardData.adVideoName = file.name;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var dataUrl = e.target.result;
-    var match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (match) { campaignWizardData.adVideo = { base64: match[2], mediaType: match[1] }; }
-    var nameEl = input.closest('div').querySelector('.cw-video-name');
-    if (!nameEl) {
-      nameEl = document.createElement('div');
-      nameEl.className = 'cw-video-name';
-      nameEl.style.cssText = 'margin-top:8px;font-size:12px;color:#1877F2;font-weight:600';
-      input.closest('label').after(nameEl);
-    }
-    nameEl.textContent = '✅ ' + file.name;
-  };
-  reader.readAsDataURL(file);
-}
-
-function cwSelectImage(idx) {
-  var fmt = campaignWizardData.adFormat || 'image';
-  var img = campaignWizardImages[idx];
-  if (!img) return;
-
-  if (fmt === 'carousel') {
-    // Toggle selection en carrusel — máx 5
-    var idxs = campaignWizardData.carouselIndexes || [];
-    var pos = idxs.indexOf(idx);
-    if (pos >= 0) {
-      idxs.splice(pos, 1);
-    } else {
-      if (idxs.length >= 5) { alert('Máximo 5 imágenes en un carrusel.'); return; }
-      idxs.push(idx);
-    }
-    campaignWizardData.carouselIndexes = idxs;
-    campaignWizardData.carouselImages  = idxs.map(function(i){ return { base64: campaignWizardImages[i].base64, mediaType: campaignWizardImages[i].mediaType }; });
-    // Actualizar visual sin re-render
-    document.querySelectorAll('.cw-img-thumb').forEach(function(el) {
-      var i = parseInt(el.dataset.idx);
-      var p = idxs.indexOf(i);
-      el.style.border = p>=0 ? '3px solid #1877F2' : '2px solid #e5e7eb';
-      var badge = el.querySelector('div');
-      if (p>=0) {
-        if (!badge) { badge=document.createElement('div'); badge.style.cssText='position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center'; el.appendChild(badge); }
-        badge.textContent = p+1;
-      } else { if (badge) badge.remove(); }
-    });
-  } else {
-    // Imagen simple
-    campaignWizardData.adImageIndex   = idx;
-    campaignWizardData.adImage        = { base64: img.base64, mediaType: img.mediaType };
-    campaignWizardData.adImagePreview = 'data:' + img.mediaType + ';base64,' + img.base64;
-    document.querySelectorAll('.cw-img-thumb').forEach(function(el, i) {
-      el.style.border = i === idx ? '3px solid #1877F2' : '2px solid #e5e7eb';
-    });
-  }
-}
-
-function cwHandleImageUpload(input) {
-  var files = Array.from(input.files || []);
-  if (!files.length) return;
-  var fmt = campaignWizardData.adFormat || 'image';
-
-  if (fmt === 'carousel') {
-    // Leer hasta 5 archivos para carrusel
-    var total = Math.min(files.length, 5);
-    var results = [];
-    var previews = [];
-    files.slice(0, total).forEach(function(file, i) {
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        var dataUrl = e.target.result;
-        var match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) { results[i] = { base64: match[2], mediaType: match[1] }; previews[i] = dataUrl; }
-        if (results.filter(Boolean).length === total) {
-          campaignWizardData.carouselImages  = results.filter(Boolean);
-          campaignWizardData.carouselPreviews = previews.filter(Boolean);
-          campaignWizardData.carouselIndexes = [];
-          // Show previews inline
-          var label = input.closest('label');
-          if (label) {
-            var existing = label.parentElement.querySelector('.cw-carousel-previews');
-            if (existing) existing.remove();
-            var div = document.createElement('div');
-            div.className = 'cw-carousel-previews';
-            div.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
-            previews.filter(Boolean).forEach(function(src) {
-              var img = document.createElement('img');
-              img.src = src;
-              img.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid #1877F2';
-              div.appendChild(img);
-            });
-            label.parentElement.appendChild(div);
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  } else {
-    // Imagen simple
-    var reader2 = new FileReader();
-    reader2.onload = function(e) {
-      var dataUrl = e.target.result;
-      var match2 = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (!match2) return;
-      campaignWizardData.adImage        = { base64: match2[2], mediaType: match2[1] };
-      campaignWizardData.adImagePreview = dataUrl;
-      campaignWizardData.adImageIndex   = undefined;
-      var label = input.closest('label');
-      if (label) {
-        var existing = label.parentElement.querySelector('img.cw-upload-preview');
-        if (existing) existing.remove();
-        var preview = document.createElement('img');
-        preview.src = dataUrl;
-        preview.className = 'cw-upload-preview';
-        preview.style.cssText = 'max-height:80px;border-radius:8px;display:block;margin-top:8px;border:2px solid #1877F2';
-        label.parentElement.appendChild(preview);
-      }
-    };
-    reader2.readAsDataURL(files[0]);
-  }
-}
-
-// cwLoadPages — carga la página de Facebook en BACKGROUND sin mostrar nada al usuario.
-// Auto-selecciona la primera página encontrada via promote_pages o me/accounts.
-async function cwLoadPages() {
-  if (campaignWizardData.pageId) return; // ya tenemos página — nada que hacer
-  // Restaurar desde localStorage
-  var lsPageKey = 'meta_saved_page_' + (campaignWizardData.adAccountId || 'default');
-  var saved = localStorage.getItem(lsPageKey);
-  if (saved) {
-    try { var sp = JSON.parse(saved); campaignWizardData.pageId = sp.id; return; } catch(e){}
-  }
-  // Llamar al endpoint (usa promote_pages primero, luego me/accounts)
-  try {
-    var url = '/api/meta-ads?action=get-pages&accessToken=' + encodeURIComponent(campaignWizardData.token) +
-              '&adAccountId=' + encodeURIComponent(campaignWizardData.adAccountId || '');
-    var r = await fetch(url);
-    var pages = await r.json();
-    if (Array.isArray(pages) && pages.length > 0) {
-      campaignWizardData.pageId = pages[0].id;
-      localStorage.setItem(lsPageKey, JSON.stringify({ id: pages[0].id, name: pages[0].name }));
-    }
-  } catch(e) { /* silencioso — la campaña se crea sin ad si no hay página */ }
-}
-
-function cwNext() {
-  if (campaignWizardStep === 1) {
-    var name = (document.getElementById('cw-name')||{}).value||'';
-    if (!name.trim()) { alert('Ingresa un nombre para la campaña.'); return; }
-    if (!campaignWizardData.objective) { alert('Selecciona un objetivo.'); return; }
-    campaignWizardData.name = name.trim();
-  } else if (campaignWizardStep === 2) {
-    var budget = parseFloat((document.getElementById('cw-budget')||{}).value||0);
-    if (!budget || budget < 1) { alert('Ingresa un presupuesto válido.'); return; }
-    if (campaignWizardData.durationDays === undefined) { alert('Selecciona la duración.'); return; }
-    campaignWizardData.budget = budget;
-    campaignWizardData.budgetUSD = budget; // alias legacy
-    // Guardar moneda de la cuenta
-    try { campaignWizardData.currency = JSON.parse(sessionStorage.getItem('meta_active_account')||'{}').currency || 'USD'; } catch(e) { campaignWizardData.currency = 'USD'; }
-  } else if (campaignWizardStep === 3) {
-    campaignWizardData.country = (document.getElementById('cw-country')||{}).value||'Colombia';
-    campaignWizardData.city    = (document.getElementById('cw-city')||{}).value||'';
-    campaignWizardData.ageMin  = parseInt((document.getElementById('cw-age-min')||{}).value||18);
-    campaignWizardData.ageMax  = parseInt((document.getElementById('cw-age-max')||{}).value||55);
-  } else if (campaignWizardStep === 4) {
-    campaignWizardData.adTitle       = (document.getElementById('cw-ad-title')||{}).value||'';
-    campaignWizardData.adBody        = (document.getElementById('cw-ad-body')||{}).value||'';
-    campaignWizardData.adDescription = (document.getElementById('cw-ad-description')||{}).value||'';
-    campaignWizardData.adUrl         = (document.getElementById('cw-ad-url')||{}).value||'';
-    // pageId se carga en background por cwLoadPages — no hay input visible
-    if (!campaignWizardData.adFormat) campaignWizardData.adFormat = 'image';
-  }
-  campaignWizardStep++;
-  renderCampaignWizard();
-}
-
-function cwPrev() { campaignWizardStep--; renderCampaignWizard(); }
-
-function closeCampaignWizard() {
-  var el = document.getElementById('cw-overlay');
-  if (el) el.remove();
-}
-
-async function cwLaunch() {
-  var btn = document.getElementById('cw-launch-btn');
-  var msg = document.getElementById('cw-launch-msg');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creando campaña...'; }
-
-  try {
-    var r = await fetch('/api/meta-ads?action=create-campaign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accessToken:   campaignWizardData.token,
-        adAccountId:   campaignWizardData.adAccountId,
-        name:          campaignWizardData.name,
-        objective:     campaignWizardData.objective,
-        budget:        campaignWizardData.budget,
-        currency:      campaignWizardData.currency || 'USD',
-        durationDays:  campaignWizardData.durationDays,
-        country:       campaignWizardData.country,
-        city:          campaignWizardData.city,
-        ageMin:        campaignWizardData.ageMin,
-        ageMax:        campaignWizardData.ageMax,
-        gender:        campaignWizardData.gender,
-        pageId:        campaignWizardData.pageId       || '',
-        messagingApp:  campaignWizardData.messagingApp || 'whatsapp',
-      }),
-    });
-    var data = await r.json();
-    if (!r.ok || data.error) throw new Error(data.error || 'Error al crear la campaña');
-
-    // Guardar IDs para el botón de activar
-    campaignWizardData.createdCampaignId = data.campaignId;
-    campaignWizardData.createdAdsetId    = data.adsetId;
-
-    // Crear anuncio según formato seleccionado
-    // Para WhatsApp: el creative requiere WhatsApp Business vinculado a la página,
-    // lo que depende de la configuración del cliente en Meta Business → se omite y se guía al usuario.
-    var isMessagingCampaign = campaignWizardData.objective === 'OUTCOME_MESSAGES';
-    var adFmt = campaignWizardData.adFormat || 'image';
-    var hasCreative = (adFmt==='carousel' && (campaignWizardData.carouselImages||[]).length>0) ||
-                      (adFmt==='video'    && campaignWizardData.adVideo) ||
-                      (adFmt==='image'    && campaignWizardData.adImage);
-    if (!isMessagingCampaign && hasCreative && campaignWizardData.pageId) {
-      try {
-        var adPayload = {
-          accessToken:   campaignWizardData.token,
-          adAccountId:   campaignWizardData.adAccountId,
-          adsetId:       data.adsetId,
-          pageId:        campaignWizardData.pageId,
-          adTitle:       campaignWizardData.adTitle,
-          adBody:        campaignWizardData.adBody,
-          adDescription: campaignWizardData.adDescription || '',
-          adUrl:         campaignWizardData.adUrl || 'https://www.facebook.com',
-          format:        adFmt,
-        };
-        if (adFmt === 'carousel') {
-          adPayload.imagesBase64 = campaignWizardData.carouselImages.map(function(i){ return i.base64; });
-        } else if (adFmt === 'video') {
-          adPayload.videoBase64 = campaignWizardData.adVideo.base64;
-        } else {
-          adPayload.imageBase64 = campaignWizardData.adImage.base64;
-        }
-        var adR = await fetch('/api/meta-ads?action=create-ad', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(adPayload),
-        });
-        var adData = await adR.json();
-        if (adData.adId) data.adId = adData.adId;
-        if (adData.error) data.adWarning = adData.error;
-      } catch(adErr) {
-        console.warn('Ad creation failed (campaign still created):', adErr.message);
-        data.adWarning = 'Campaña creada. Error en el anuncio: ' + adErr.message;
-      }
-    } else if (isMessagingCampaign) {
-      // Para WhatsApp/Messenger/IG DM: el creative necesita configuración específica en Meta
-      data.adWarning = 'whatsapp_manual';
-    }
-
-    // Mostrar pantalla de éxito dentro del wizard
-    var overlay = document.getElementById('cw-overlay');
-    if (overlay) {
-      overlay.querySelector('div').innerHTML =
-        '<div style="text-align:center;padding:32px 24px">' +
-        '<div style="font-size:48px;margin-bottom:12px">✅</div>' +
-        '<h3 style="margin:0 0 8px;font-size:18px;color:#111">Campaña creada</h3>' +
-        '<p style="color:#555;font-size:14px;margin:0 0 4px"><strong>' + campaignWizardData.name + '</strong></p>' +
-        '<p style="color:#888;font-size:12px;margin:0 0 24px">Estado actual: <strong style="color:#f59e0b">PAUSADA</strong> — no está gastando presupuesto</p>' +
-        '<div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left;font-size:12px;color:#666">' +
-        '<div style="margin-bottom:4px">Campaign ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.campaignId + '</code></div>' +
-        '<div style="margin-bottom:4px">Ad Set ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adsetId + '</code></div>' +
-        (data.adId ? '<div>Ad ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adId + '</code></div>' : '') +
-        '</div>' +
-        (data.adWarning === 'whatsapp_manual'
-          ? '<div style="background:#e8f5e9;border-radius:8px;padding:12px;font-size:12px;color:#2e7d32;margin-bottom:16px;text-align:left">'+
-            '💬 <strong>Campaña de WhatsApp creada.</strong> Para agregar el anuncio ve a <strong>Meta Ads Manager → ' + campaignWizardData.name + ' → Agregar anuncio</strong> y selecciona tu número de WhatsApp Business como destino.</div>'
-          : data.adWarning
-            ? '<div style="background:#fff3cd;border-radius:8px;padding:10px;font-size:12px;color:#856404;margin-bottom:16px;text-align:left">⚠️ ' + data.adWarning + '</div>'
-            : '') +
-        '<p style="font-size:12px;color:#888;margin-bottom:20px">¿Quieres activarla ahora? Confirma que los creativos y el targeting están listos antes de gastar presupuesto.</p>' +
-        '<div style="display:flex;flex-direction:column;gap:10px">' +
-        '<button id="cw-activate-btn" onclick="activateCreatedCampaign()" style="width:100%;padding:13px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">▶ Activar campaña ahora</button>' +
-        '<button onclick="closeCampaignWizard()" style="width:100%;padding:12px;background:#f3f4f6;color:#333;border:none;border-radius:8px;cursor:pointer;font-size:13px">Dejar pausada · activar luego en Meta Ads Manager</button>' +
-        '</div></div>';
-    }
-  } catch(err) {
-    if (btn) { btn.disabled = false; btn.textContent = '🚀 Crear campaña'; }
-    if (msg) { msg.style.display='block'; msg.style.cssText='display:block;background:#fee2e2;color:#991b1b;border-radius:8px;padding:12px;font-size:13px;margin-top:8px'; msg.textContent = '❌ ' + err.message; }
-  }
-}
-
-async function activateCreatedCampaign() {
-  var campaignId = campaignWizardData.createdCampaignId;
-  var adsetId    = campaignWizardData.createdAdsetId;
-  var token      = campaignWizardData.token;
-  if (!campaignId || !token) return;
-  var btn = document.getElementById('cw-activate-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
-  try {
-    var r = await fetch('/api/meta-ads?action=update-campaign', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken: token, adAccountId: campaignWizardData.adAccountId, campaignId, adsetId, status: 'ACTIVE' }),
-    });
-    var data = await r.json();
-    if (!r.ok || data.error) throw new Error(data.error || 'Error al activar');
-    closeCampaignWizard();
-    addAgent('▶️ **Campaña activada — está gastando presupuesto**\n\n' +
-      '**' + campaignWizardData.name + '** está ahora activa en Meta Ads.\n\n' +
-      'Monitorearé el rendimiento y te alertaré si detecto anomalías (frecuencia alta, CPA elevado, 0 conversiones). ' +
-      'Puedes pausarla o ajustar el presupuesto directamente desde aquí cuando quieras.');
-  } catch(err) {
-    if (btn) { btn.disabled = false; btn.textContent = '▶ Activar campaña ahora'; }
-    alert('Error al activar: ' + err.message);
-  }
+  hist.push({ role: 'user', content: 'Tengo ' + generatedAdImages.length + ' creativos listos y quiero crear una campana completa en Meta Ads. Guiame paso a paso: objetivo, audiencia, presupuesto y lanzamiento.' });
+  callClaude();
 }
 
 function requestImageVariation(encodedPrompt, format) {
   var cin = document.getElementById('cin');
   if (cin) { cin.value = 'Genera una variacion diferente, mismo concepto pero composicion distinta. Formato: ' + format + '.'; sendMsg(); }
-}
-
-// =============================================
-// GOOGLE ADS CAMPAIGN WIZARD
-// =============================================
-
-var googleWizardStep = 1;
-var googleWizardData = {};
-
-async function launchGoogleCampaignFlow() {
-  var token      = sessionStorage.getItem('ads_access_token')  || localStorage.getItem('ads_access_token_persist');
-  var customerId = sessionStorage.getItem('ads_customer_id')   || localStorage.getItem('ads_customer_id_persist');
-  var accStr     = sessionStorage.getItem('ads_active_account')|| localStorage.getItem('ads_active_account_persist') || '{}';
-  var acc = {}; try { acc = JSON.parse(accStr); } catch(e){}
-
-  if (!token) {
-    alert('Para crear una campaña necesitas conectar tu cuenta de Google Ads en Configuración.');
-    openSettings(); return;
-  }
-  if (!customerId) {
-    alert('Selecciona una cuenta de Google Ads en Configuración → Conexiones.');
-    openSettings(); return;
-  }
-
-  googleWizardData  = { token: token, customerId: customerId, currency: acc.currency || 'USD', accountName: acc.name || '' };
-  googleWizardStep  = 1;
-  renderGoogleCampaignWizard();
-}
-
-function gcwSelectObj(obj) {
-  gcwSaveStep1Fields();
-  googleWizardData.objective = obj;
-  renderGoogleCampaignWizard();
-}
-function gcwSelectLang(id) {
-  gcwSaveStep2Fields();
-  googleWizardData.languageId = id;
-  renderGoogleCampaignWizard();
-}
-function gcwSaveStep1Fields() {
-  var n = document.getElementById('gcw-name');   if (n) googleWizardData.name   = n.value;
-  var b = document.getElementById('gcw-budget'); if (b) googleWizardData.budget = parseFloat(b.value)||0;
-}
-function gcwSaveStep2Fields() {
-  var c = document.getElementById('gcw-country'); if (c) googleWizardData.countryGeoId = c.value;
-}
-function gcwSaveStep3Fields() {
-  var k = document.getElementById('gcw-keywords');          if (k) googleWizardData.keywordsText          = k.value;
-  var n = document.getElementById('gcw-negative-keywords'); if (n) googleWizardData.negativeKeywordsText  = n.value;
-}
-function gcwSaveStep4Fields() {
-  var u = document.getElementById('gcw-final-url'); if (u) googleWizardData.finalUrl = u.value;
-  var heads = document.querySelectorAll('.gcw-headline');
-  var descs = document.querySelectorAll('.gcw-description');
-  googleWizardData.headlines    = Array.from(heads).map(function(el){ return el.value; });
-  googleWizardData.descriptions = Array.from(descs).map(function(el){ return el.value; });
-}
-function gcwCountChars(input, max) {
-  var len = input.value.length;
-  var counter = input.nextElementSibling;
-  if (counter) {
-    counter.textContent = len + '/' + max;
-    counter.style.color = len > max ? '#dc2626' : (len > max * 0.9 ? '#f59e0b' : '#888');
-  }
-  input.style.borderColor = len > max ? '#dc2626' : '#ddd';
-}
-
-function gcwNext() {
-  if (googleWizardStep === 1) {
-    gcwSaveStep1Fields();
-    if (!googleWizardData.name || !googleWizardData.name.trim()) { alert('Ingresa un nombre para la campaña.'); return; }
-    if (!googleWizardData.objective) { alert('Selecciona un objetivo.'); return; }
-    if (!googleWizardData.budget || googleWizardData.budget <= 0) { alert('Ingresa el presupuesto diario.'); return; }
-  } else if (googleWizardStep === 2) {
-    gcwSaveStep2Fields();
-    if (!googleWizardData.countryGeoId) googleWizardData.countryGeoId = '2170';
-    if (!googleWizardData.languageId)   googleWizardData.languageId   = '1003';
-  } else if (googleWizardStep === 3) {
-    gcwSaveStep3Fields();
-  } else if (googleWizardStep === 4) {
-    gcwSaveStep4Fields();
-  }
-  googleWizardStep++;
-  renderGoogleCampaignWizard();
-}
-function gcwPrev() {
-  if (googleWizardStep === 2) gcwSaveStep2Fields();
-  if (googleWizardStep === 3) gcwSaveStep3Fields();
-  if (googleWizardStep === 4) gcwSaveStep4Fields();
-  googleWizardStep--;
-  renderGoogleCampaignWizard();
-}
-function closeGoogleCampaignWizard() {
-  var el = document.getElementById('gcw-overlay');
-  if (el) el.remove();
-}
-
-async function gcwGenerateContent() {
-  var btn = document.getElementById('gcw-gen-btn') || document.querySelector('[onclick*="gcwGenerateContent"]');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
-  try {
-    var clientProfile = '';
-    try { clientProfile = JSON.stringify(mem || {}); } catch(e){}
-    var r = await fetch('/api/google-ads?action=generate-ad-content', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        campaignName:  googleWizardData.name,
-        objective:     googleWizardData.objective,
-        clientProfile: clientProfile,
-        userId:        (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '',
-        customerId:    googleWizardData.customerId,
-        accessToken:   googleWizardData.token,
-      }),
-    });
-    var data = await r.json();
-    if (data.error) throw new Error(data.error);
-
-    // Guardar todo en wizardData
-    if (data.keywords)         googleWizardData.generatedKeywords    = data.keywords;
-    if (data.negativeKeywords) googleWizardData.generatedNegatives   = data.negativeKeywords;
-    if (data.headlines)        googleWizardData.headlines            = data.headlines;
-    if (data.descriptions)     googleWizardData.descriptions         = data.descriptions;
-
-    // Si estamos en el paso 3, poblar los textareas
-    if (googleWizardStep === 3) {
-      var kwEl = document.getElementById('gcw-keywords');
-      var negEl = document.getElementById('gcw-negative-keywords');
-      if (kwEl && data.keywords) {
-        googleWizardData.keywordsText = data.keywords.map(function(k){
-          if (k.matchType === 'EXACT')   return '[' + k.text + ']';
-          if (k.matchType === 'PHRASE')  return '"' + k.text + '"';
-          return k.text;
-        }).join('\n');
-        kwEl.value = googleWizardData.keywordsText;
-      }
-      if (negEl && data.negativeKeywords) {
-        googleWizardData.negativeKeywordsText = data.negativeKeywords.join('\n');
-        negEl.value = googleWizardData.negativeKeywordsText;
-      }
-    }
-
-    // Si estamos en el paso 4, poblar los inputs RSA
-    if (googleWizardStep === 4) {
-      renderGoogleCampaignWizard(); // re-render con los nuevos headlines/descriptions
-    }
-
-  } catch(e) {
-    var errEl = document.getElementById('gcw-gen-error');
-    if (!errEl) {
-      errEl = document.createElement('div');
-      errEl.id = 'gcw-gen-error';
-      errEl.style.cssText = 'color:#dc2626;font-size:12px;margin-top:6px';
-      var genBtn = document.getElementById('gcw-gen-btn');
-      if (genBtn && genBtn.parentNode) genBtn.parentNode.parentNode.appendChild(errEl);
-    }
-    errEl.textContent = '⚠️ ' + e.message;
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Generar con IA'; }
-  }
-}
-
-function renderGoogleCampaignWizard() {
-  var steps = ['Campaña','Segmentación','Keywords','Anuncio RSA'];
-  var stepInd = steps.map(function(s, i) {
-    var done    = i + 1 < googleWizardStep;
-    var current = i + 1 === googleWizardStep;
-    var dotSt   = current ? 'background:#1E2BCC;color:#fff' : (done ? 'background:#e8eafc;color:#1E2BCC' : 'background:#f3f4f6;color:#999');
-    var lblSt   = 'font-size:11px;color:' + (current ? '#1E2BCC' : '#999') + ';font-weight:' + (current ? '600' : '400');
-    return '<div style="display:flex;align-items:center;gap:5px">' +
-      '<div style="width:22px;height:22px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;'+dotSt+'">'+(done?'✓':(i+1))+'</div>'+
-      '<span style="'+lblSt+'">'+s+'</span></div>' +
-      (i < steps.length - 1 ? '<div style="flex:1;height:1px;background:#e5e7eb;margin:0 2px"></div>' : '');
-  }).join('');
-
-  var body = '';
-  var isLastStep = googleWizardStep === 4;
-
-  if (googleWizardStep === 1) {
-    var objectives = [
-      ['LEADS',    '🎯','Generación de leads',  'Formularios y llamadas'],
-      ['SALES',    '🛒','Ventas',               'Conversiones en el sitio web'],
-      ['TRAFFIC',  '🌐','Tráfico',              'Visitas al sitio web'],
-      ['AWARENESS','👁️','Reconocimiento de marca','Impresiones y visibilidad'],
-    ];
-    body =
-      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Nombre de la campaña</label>'+
-        '<input id="gcw-name" placeholder="Ej: Leads - Servicios Contables Nov 2025" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(googleWizardData.name||'')+'"></div>'+
-      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Objetivo de campaña</label>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-          objectives.map(function(o){
-            var sel = googleWizardData.objective === o[0] ? 'border:2px solid #1E2BCC;background:#e8eafc' : 'border:1px solid #e5e7eb;background:#fff';
-            return '<div onclick="gcwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;cursor:pointer;transition:all .1s">'+
-              '<div style="font-size:18px;margin-bottom:4px">'+o[1]+'</div>'+
-              '<div style="font-size:12px;font-weight:600;color:#1E2BCC">'+o[2]+'</div>'+
-              '<div style="font-size:11px;color:#888;margin-top:2px">'+o[3]+'</div></div>';
-          }).join('')+
-        '</div></div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario ('+googleWizardData.currency+')</label>'+
-        '<input id="gcw-budget" type="number" min="1" placeholder="Ej: 50" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700;box-sizing:border-box" value="'+(googleWizardData.budget||'')+'"></div>';
-
-  } else if (googleWizardStep === 2) {
-    var countries = [
-      ['Colombia','2170'],['México','2484'],['Argentina','2032'],['Chile','2152'],
-      ['Perú','2604'],['Venezuela','2862'],['Ecuador','2218'],['Bolivia','2068'],
-      ['Costa Rica','2188'],['Guatemala','2320'],['El Salvador','2222'],['Honduras','2340'],
-      ['Panamá','2591'],['Rep. Dominicana','2214'],['Uruguay','2858'],['Paraguay','2600'],
-      ['España','2724'],['USA','2840'],
-    ];
-    var selGeoId = googleWizardData.countryGeoId || '2170';
-    body =
-      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">País de segmentación</label>'+
-        '<select id="gcw-country" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff">'+
-          countries.map(function(c){ return '<option value="'+c[1]+'"'+(selGeoId===c[1]?' selected':'')+'>'+c[0]+'</option>'; }).join('')+
-        '</select></div>'+
-      '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Idioma del anuncio</label>'+
-        '<div style="display:flex;gap:8px">'+
-          [['1003','Español'],['1000','English'],['1014','Português']].map(function(l){
-            var sel = (googleWizardData.languageId||'1003') === l[0] ? 'background:#1E2BCC;color:#fff;border-color:#1E2BCC' : 'background:#fff;color:#333;border-color:#ddd';
-            return '<button onclick="gcwSelectLang(\''+l[0]+'\')" style="padding:8px 16px;border:1px solid;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font);'+sel+'">'+l[1]+'</button>';
-          }).join('')+
-        '</div></div>'+
-      '<div style="background:#f0f4ff;border:1px solid #c7d7ff;border-radius:8px;padding:12px;font-size:12px;color:#1E2BCC">'+
-        'ℹ️ La campaña se creará en estado <strong>Pausada</strong> para que puedas revisarla antes de activarla en Google Ads.</div>';
-
-  } else if (googleWizardStep === 3) {
-    body =
-      '<div style="margin-bottom:12px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-          '<label style="font-weight:600;font-size:13px">Palabras clave <span style="font-weight:400;color:#888;font-size:12px">(una por línea)</span></label>'+
-          '<button id="gcw-gen-btn" onclick="gcwGenerateContent()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1E2BCC;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
-        '</div>'+
-        '<div style="font-size:11px;color:#888;margin-bottom:6px">Usa [corchetes] para exacta, "comillas" para frase, sin símbolo para amplia.</div>'+
-        '<textarea id="gcw-keywords" rows="6" placeholder="servicios contables bogota\ncontador publico colombia\n[outsourcing contable]" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(googleWizardData.keywordsText||'')+'</textarea>'+
-      '</div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Keywords negativas <span style="font-weight:400;color:#888;font-size:12px">(opcional, una por línea)</span></label>'+
-        '<textarea id="gcw-negative-keywords" rows="3" placeholder="gratis\ncomo hacer\ncurso" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(googleWizardData.negativeKeywordsText||'')+'</textarea></div>'+
-      '<div id="gcw-gen-error" style="color:#dc2626;font-size:12px;margin-top:6px"></div>';
-
-  } else if (googleWizardStep === 4) {
-    var defaultH = googleWizardData.headlines || ['','','','','','','','','',''];
-    var defaultD = googleWizardData.descriptions || ['','',''];
-    body =
-      '<div style="margin-bottom:12px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">URL final del anuncio</label>'+
-        '<input id="gcw-final-url" type="url" placeholder="https://tusitio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(googleWizardData.finalUrl||'')+'"></div>'+
-      '<div style="margin-bottom:12px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-          '<label style="font-weight:600;font-size:13px">Headlines RSA <span style="font-weight:400;color:#888;font-size:12px">(máx 30c c/u — al menos 3)</span></label>'+
-          '<button onclick="gcwGenerateContent()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1E2BCC;border:1px solid #c7d7ff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Regenerar IA</button>'+
-        '</div>'+
-        defaultH.map(function(h, i){
-          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
-            '<span style="font-size:11px;color:#aaa;width:14px;text-align:right">'+(i+1)+'</span>'+
-            '<input class="gcw-headline" maxlength="30" placeholder="Headline '+(i+1)+'" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;box-sizing:border-box" value="'+(h||'')+'" oninput="gcwCountChars(this,30)">'+
-            '<span style="font-size:10px;color:#aaa;min-width:30px;text-align:right">'+(h?Math.min(h.length,30):0)+'/30</span>'+
-          '</div>';
-        }).join('')+
-      '</div>'+
-      '<div>'+
-        '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descriptions RSA <span style="font-weight:400;color:#888;font-size:12px">(máx 90c c/u — al menos 2)</span></label>'+
-        defaultD.map(function(d, i){
-          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
-            '<span style="font-size:11px;color:#aaa;width:14px;text-align:right">'+(i+1)+'</span>'+
-            '<input class="gcw-description" maxlength="90" placeholder="Description '+(i+1)+'" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;box-sizing:border-box" value="'+(d||'')+'" oninput="gcwCountChars(this,90)">'+
-            '<span style="font-size:10px;color:#aaa;min-width:36px;text-align:right">'+(d?Math.min(d.length,90):0)+'/90</span>'+
-          '</div>';
-        }).join('')+
-      '</div>'+
-      '<div id="gcw-launch-msg" style="margin-top:8px;font-size:13px;color:#dc2626"></div>';
-  }
-
-  var overlay = document.getElementById('gcw-overlay');
-  if (!overlay) { overlay = document.createElement('div'); overlay.id = 'gcw-overlay'; document.body.appendChild(overlay); }
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;font-family:var(--font)">'+
-      '<div style="background:#1E2BCC;border-radius:16px 16px 0 0;padding:18px 20px;display:flex;justify-content:space-between;align-items:center">'+
-        '<div>'+
-          (googleWizardData.accountName ? '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:2px">'+googleWizardData.accountName+'</div>' : '')+
-          '<h3 style="margin:0;font-size:17px;color:#fff">🚀 Crear campaña en Google Ads</h3>'+
-        '</div>'+
-        '<button onclick="closeGoogleCampaignWizard()" style="background:none;border:none;font-size:22px;cursor:pointer;color:rgba(255,255,255,.7);line-height:1">×</button>'+
-      '</div>'+
-      '<div style="padding:16px 20px 8px">'+
-        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:18px">'+stepInd+'</div>'+
-        body+
-      '</div>'+
-      '<div style="padding:12px 20px 18px;display:flex;gap:10px;border-top:1px solid #eee">'+
-        (googleWizardStep > 1 ? '<button onclick="gcwPrev()" style="flex:1;padding:12px;background:#f3f4f6;color:#555;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font)">← Atrás</button>' : '')+
-        (isLastStep
-          ? '<button id="gcw-launch-btn" onclick="gcwLaunch()" style="flex:2;padding:12px;background:#1E2BCC;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:var(--font)">🚀 Crear campaña</button>'
-          : '<button onclick="gcwNext()" style="flex:2;padding:12px;background:#1E2BCC;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:var(--font)">Siguiente →</button>')+
-      '</div>'+
-    '</div>';
-}
-
-async function gcwLaunch() {
-  gcwSaveStep4Fields();
-  var btn = document.getElementById('gcw-launch-btn');
-  var msg = document.getElementById('gcw-launch-msg');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creando campaña...'; }
-
-  // Parsear keywords del textarea
-  var keywords = [];
-  var negatives = [];
-  try {
-    var lines = (googleWizardData.keywordsText || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
-    lines.forEach(function(line) {
-      if (/^\[.+\]$/.test(line))       keywords.push({ text: line.slice(1,-1), matchType: 'EXACT' });
-      else if (/^".+"$/.test(line))    keywords.push({ text: line.slice(1,-1), matchType: 'PHRASE' });
-      else                             keywords.push({ text: line, matchType: 'PHRASE' });
-    });
-    negatives = (googleWizardData.negativeKeywordsText || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
-    // Si el usuario usó keywords generadas por IA y no editó, también están en generatedKeywords
-    if (!keywords.length && googleWizardData.generatedKeywords) keywords = googleWizardData.generatedKeywords;
-  } catch(e){}
-
-  try {
-    var uid = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
-    var r = await fetch('/api/google-ads?action=create-campaign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accessToken:      googleWizardData.token,
-        customerId:       googleWizardData.customerId,
-        userId:           uid,
-        name:             googleWizardData.name,
-        objective:        googleWizardData.objective,
-        dailyBudget:      googleWizardData.budget,
-        currency:         googleWizardData.currency,
-        countryGeoId:     googleWizardData.countryGeoId || '2170',
-        languageId:       googleWizardData.languageId   || '1003',
-        keywords:         keywords,
-        negativeKeywords: negatives,
-        headlines:        (googleWizardData.headlines    || []).filter(function(h){ return h && h.trim(); }),
-        descriptions:     (googleWizardData.descriptions || []).filter(function(d){ return d && d.trim(); }),
-        finalUrl:         googleWizardData.finalUrl || '',
-      }),
-    });
-    var data = await r.json();
-    if (!r.ok || data.error) throw new Error(data.error || 'Error al crear la campaña');
-
-    // Pantalla de éxito
-    var overlay = document.getElementById('gcw-overlay');
-    if (overlay) {
-      overlay.querySelector('div').innerHTML =
-        '<div style="background:#1E2BCC;border-radius:16px 16px 0 0;padding:18px 20px">'+
-          '<h3 style="margin:0;font-size:17px;color:#fff">✅ ¡Campaña creada!</h3>'+
-        '</div>'+
-        '<div style="padding:24px 20px">'+
-          '<div style="background:#f0f4ff;border-radius:12px;padding:16px;margin-bottom:16px">'+
-            '<div style="font-size:13px;font-weight:700;color:#1E2BCC;margin-bottom:8px">'+googleWizardData.name+'</div>'+
-            '<div style="font-size:12px;color:#555;line-height:1.7">'+
-              '📋 Campaign ID: <strong>'+data.campaignId+'</strong><br>'+
-              '📦 Ad Group ID: <strong>'+data.adGroupId+'</strong>'+
-              (data.adId ? '<br>📢 Ad RSA ID: <strong>'+data.adId+'</strong>' : '')+
-            '</div>'+
-          '</div>'+
-          '<div style="background:#fff8e6;border:1px solid #ffd970;border-radius:8px;padding:12px;font-size:12px;color:#7a5700;margin-bottom:16px">'+
-            '⏸️ La campaña está <strong>Pausada</strong>. Revísala en Google Ads Manager y actívala cuando estés listo.'+
-          '</div>'+
-          '<a href="https://ads.google.com" target="_blank" style="display:block;text-align:center;padding:11px;background:#1E2BCC;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;margin-bottom:8px">Abrir Google Ads →</a>'+
-          '<button onclick="closeGoogleCampaignWizard()" style="width:100%;padding:10px;background:#f3f4f6;color:#555;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--font)">Cerrar</button>'+
-        '</div>';
-    }
-    addAgent('✅ **Campaña creada en Google Ads**\n\n**'+googleWizardData.name+'** está lista (Pausada).\n\n'+(data.adId?'Se creó el anuncio RSA con '+((googleWizardData.headlines||[]).filter(function(h){return h&&h.trim();}).length)+' headlines y '+((googleWizardData.descriptions||[]).filter(function(d){return d&&d.trim();}).length)+' descriptions.\n\n':'')+'Actívala en Google Ads Manager cuando quieras. ¿Necesitas ajustar pujas, agregar más keywords o revisar la estructura antes de activarla?');
-
-  } catch(err) {
-    if (btn) { btn.disabled = false; btn.textContent = '🚀 Crear campaña'; }
-    if (msg) msg.textContent = '⚠️ ' + err.message;
-  }
-}
-
-// =============================================
-// VARIACIONES A/B — Flujo Manus-style
-// Sube anuncio → Claude analiza → genera N variaciones en paralelo → grid display
-// =============================================
-
-var _abImageData = null;
-var _abVarCount = 2;
-var _AB_LABELS = ['A','B','C','D'];
-var _AB_COLORS = ['#2563EB','#7C3AED','#059669','#D97706'];
-var _AB_BG = ['#EFF6FF','#F5F3FF','#ECFDF5','#FFFBEB'];
-
-function showAdVariationAB() {
-  _abImageData = null;
-  _abVarCount = 2;
-  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.id = 'ab-variation-card';
-  el.innerHTML =
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
-    '<div style="max-width:480px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
-        '<h4 style="margin:0 0 4px;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Sube tu anuncio actual. Claude genera <strong>variaciones donde el producto sigue siendo el protagonista</strong> — mismo mensaje de campaña, diferente tratamiento visual.</div>' +
-
-        '<div id="ab-upload-zone" style="border:2px dashed var(--border2);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all .15s;background:white" onclick="document.getElementById(\'ab-file-input\').click()" ondragover="event.preventDefault();this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-lt)\'" ondragleave="this.style.borderColor=\'var(--border2)\';this.style.background=\'white\'" ondrop="handleABDrop(event)">' +
-          '<div id="ab-upload-placeholder">' +
-            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px">Sube tu anuncio actual</div>' +
-            '<div style="font-size:11px;color:var(--muted2)">JPG, PNG o WebP · máx 8 MB</div>' +
-          '</div>' +
-          '<img id="ab-preview" style="display:none;max-height:160px;max-width:100%;border-radius:8px;object-fit:contain" src="" alt="preview"/>' +
-          '<input type="file" id="ab-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="handleABFile(this.files[0])">' +
-        '</div>' +
-
-        '<div id="ab-generate-wrap" style="display:none;margin-top:14px">' +
-
-          // Campo de contexto adicional
-          '<div style="margin-bottom:12px">' +
-            '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Contexto adicional <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>' +
-            '<textarea id="ab-context-input" placeholder="Ej: Camiseta blanca premium. Quiero que el producto sea el foco principal. La campaña es Black Friday 50% off." style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);font-family:var(--font);resize:none;height:64px;line-height:1.5;background:white" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,100)+\'px\'"></textarea>' +
-          '</div>' +
-
-          '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas variaciones?</div>' +
-          '<div style="display:flex;gap:6px;margin-bottom:12px">' +
-            [2,3,4].map(function(n){
-              return '<div id="ab-chip-' + n + '" onclick="selectABCount(' + n + ')" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ' + (n===2?'#059669':'var(--border)') + ';background:' + (n===2?'#ECFDF5':'white') + ';color:' + (n===2?'#065F46':'var(--muted)') + ';transition:all .15s">' + n + '</div>';
-            }).join('') +
-          '</div>' +
-          '<button id="ab-generate-btn" onclick="startABVariation()" style="width:100%;padding:12px;background:#059669;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🔬 Analizar y generar variaciones</button>' +
-        '</div>' +
-
-      '</div>' +
-    '</div>';
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-}
-
-function selectABCount(n) {
-  _abVarCount = n;
-  [2,3,4].forEach(function(i) {
-    var chip = document.getElementById('ab-chip-' + i);
-    if (!chip) return;
-    var sel = (i === n);
-    chip.style.borderColor = sel ? '#059669' : 'var(--border)';
-    chip.style.background = sel ? '#ECFDF5' : 'white';
-    chip.style.color = sel ? '#065F46' : 'var(--muted)';
-  });
-}
-
-function handleABDrop(event) {
-  event.preventDefault();
-  var zone = document.getElementById('ab-upload-zone');
-  if (zone) { zone.style.borderColor = 'var(--border2)'; zone.style.background = 'white'; }
-  var file = event.dataTransfer.files[0];
-  if (file) handleABFile(file);
-}
-
-function handleABFile(file) {
-  if (!file || !file.type.startsWith('image/')) { addAgent('Por favor sube una imagen en formato JPG, PNG o WebP.'); return; }
-  if (file.size > 8 * 1024 * 1024) { addAgent('La imagen debe ser menor a 8 MB.'); return; }
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    _abImageData = e.target.result;
-    var placeholder = document.getElementById('ab-upload-placeholder');
-    var preview = document.getElementById('ab-preview');
-    var zone = document.getElementById('ab-upload-zone');
-    if (placeholder) placeholder.style.display = 'none';
-    if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
-    if (zone) { zone.style.borderColor = '#059669'; zone.style.borderStyle = 'solid'; }
-    var wrap = document.getElementById('ab-generate-wrap');
-    if (wrap) wrap.style.display = 'block';
-    scrollB();
-  };
-  reader.readAsDataURL(file);
-}
-
-async function startABVariation() {
-  if (!_abImageData) { addAgent('Primero sube tu anuncio.'); return; }
-  if (!canGenerateImage()) { showImageLimitReached(); return; }
-
-  var count = _abVarCount || 2;
-  var userContext = (document.getElementById('ab-context-input') || {}).value || '';
-
-  var btn = document.getElementById('ab-generate-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Analizando anuncio...'; }
-  var card = document.getElementById('ab-variation-card');
-  if (card) card.style.display = 'none';
-
-  var thinkId = addThinking();
-  setTimeout(function() {
-    var el = document.getElementById(thinkId);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>analizando tu anuncio con Claude Vision...'; }
-  }, 100);
-
-  // Detectar formato por dimensiones
-  var adFormat = 'square';
-  await new Promise(function(resolve) {
-    var img = new Image();
-    img.onload = function() { adFormat = (img.width / img.height < 0.85) ? 'vertical' : 'square'; resolve(); };
-    img.onerror = resolve;
-    img.src = _abImageData;
-  });
-
-  // Construir instrucción JSON para N variaciones — MODO KONTEXT
-  // Kontext edita la imagen original con instrucciones de texto, no genera desde cero
-  var varFields = _AB_LABELS.slice(0, count).map(function(lbl) {
-    return '"variation_' + lbl.toLowerCase() + '":{"concept":"nombre corto descriptivo del cambio (ej: Fondo oscuro dramático / Ambiente exterior soleado)","instruction":"instruccion de edicion en ingles ~40 palabras: empieza con KEEP o PRESERVE para lo que NO debe cambiar, luego CHANGE/REPLACE para lo que si cambia. Solo cambiar 1-2 elementos por variacion."}';
-  }).join(',');
-  var jsonInstruction = '{"ad_description":"descripcion breve del anuncio original en 1 linea","campaign_message":"mensaje o promocion central detectada",' + varFields + '}';
-
-  var contextLine = userContext ? '\n\nCONTEXTO ADICIONAL DEL USUARIO: ' + userContext : '';
-
-  var analysisResult = null;
-  try {
-    var mediaType = _abImageData.split(';')[0].split(':')[1];
-    var b64 = _abImageData.split(',')[1];
-    var fullText = await fetchChatFull({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 150 + count * 200,
-      system: 'Eres experto en edicion de imagenes publicitarias con IA. Generas instrucciones de edicion para Flux Kontext, un modelo que EDITA una imagen existente siguiendo instrucciones de texto precisas. Las instrucciones deben decir EXACTAMENTE que conservar y que cambiar. Responde SOLO con JSON valido, sin markdown, sin backticks.',
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-        { type: 'text', text: 'Analiza este anuncio. El modelo de IA recibira ESTA MISMA IMAGEN y aplicara los cambios que le indiques. Genera ' + count + ' instrucciones de edicion distintas para A/B testing.' + contextLine + '\n\nREGLAS PARA LAS INSTRUCCIONES:\n1. Siempre empezar con "Keep [producto/sujeto principal] exactly as is." — NO cambiar el producto\n2. Luego indicar exactamente QUE cambiar: el fondo, la iluminacion, el color dominante, o el ambiente\n3. Cada variacion debe cambiar algo DIFERENTE a las demas\n4. Las instrucciones deben ser concisas y muy especificas — el modelo las aplica literalmente\n5. Ejemplos de buenas instrucciones: "Keep the white t-shirt exactly as is. Replace the background with a dark dramatic studio backdrop with rim lighting." / "Keep the product unchanged. Change the background to a bright outdoor sunny park setting with green bokeh."\n\nResponde SOLO con este JSON:\n' + jsonInstruction }
-      ]}]
-    });
-    var clean = fullText.replace(/```json|```/g, '').trim();
-    var bi = clean.indexOf('{'); if (bi > 0) clean = clean.slice(bi);
-    analysisResult = JSON.parse(clean);
-  } catch(e) {
-    console.error('[AB] Error analizando anuncio:', e.message);
-  }
-
-  rmThinking(thinkId);
-
-  if (!analysisResult) {
-    addAgent('No pude analizar el anuncio. Por favor intenta con otra imagen.');
-    return;
-  }
-
-  var fmt = adFormat;
-  var variations = _AB_LABELS.slice(0, count).map(function(lbl) {
-    var v = analysisResult['variation_' + lbl.toLowerCase()];
-    return v || { concept: 'Variacion ' + lbl, instruction: 'Keep the main subject exactly as is. Change the background lighting and mood.' };
-  });
-
-  var conceptList = variations.map(function(v, i) { return '**' + _AB_LABELS[i] + '**: ' + v.concept; }).join(' · ');
-  addAgent('Anuncio analizado. Editando imagen con Flux Kontext — ' + conceptList + '...');
-
-  var thinkId2 = addThinking();
-  setTimeout(function() {
-    var el = document.getElementById(thinkId2);
-    if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>aplicando variaciones con Flux Kontext...'; }
-  }, 100);
-
-  var headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-  try {
-    // Usar modo kontext: envía la imagen original + instrucción de edición
-    // Flux Kontext edita la imagen manteniendo lo que se indica y cambiando solo lo especificado
-    var fetchPromises = variations.map(function(v) {
-      return fetch('/api/generate-image', {
-        method: 'POST', headers: headers,
-        body: JSON.stringify({
-          mode: 'kontext',
-          referenceImage: _abImageData,   // imagen original completa en base64
-          prompt: v.instruction,           // instrucción de edición (qué cambiar)
-          format: fmt,
-        })
-      }).then(function(r){ return r.json(); });
-    });
-    var results = await Promise.all(fetchPromises);
-    rmThinking(thinkId2);
-
-    var images = results.map(function(r) { return (r.images && r.images.length) ? r.images[0] : null; });
-    var anyOk = images.some(function(img) { return img !== null; });
-    if (!anyOk) {
-      var firstErr = results.map(function(r){ return r.error; }).filter(Boolean)[0] || 'Sin respuesta del servidor';
-      addAgent('Error al generar variaciones: ' + firstErr);
-      return;
-    }
-
-    images.forEach(function(img) { if (img) incrementImageUsage(); });
-
-    renderVariationsGrid(images, variations.map(function(v){ return v.concept; }), fmt, analysisResult.ad_description || '', analysisResult.campaign_message || '');
-
-  } catch(err) {
-    rmThinking(thinkId2);
-    console.error('[generate-image]', err.message);
-    addAgent('Tuvimos un error inesperado al generar las variaciones. Por favor contacta a soporte si el problema persiste.');
-  }
-}
-
-function renderVariationsGrid(images, concepts, format, adDesc, campaignMsg) {
-  var logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-  var count = images.length;
-  var ratio = format === 'vertical' ? '4/5' : '1/1';
-  var maxH = format === 'vertical' ? '240px' : '200px';
-  // 2 imágenes: side by side; 3-4: grid 2 columnas
-  var gridCols = count === 2 ? '1fr 1fr' : '1fr 1fr';
-
-  function imgBlock(img, idx) {
-    var label = _AB_LABELS[idx];
-    var labelColor = _AB_COLORS[idx] || '#2563EB';
-    var labelBg = _AB_BG[idx] || '#EFF6FF';
-    var concept = (concepts[idx] || 'Variación ' + label).replace(/</g,'&lt;');
-    var b64 = img ? img.base64 : null;
-    var mt = img ? img.mediaType : 'image/jpeg';
-    var dlOnClick = b64 ? 'downloadAdImage(\'' + b64 + '\',\'' + mt + '\',\'variacion_' + label.toLowerCase() + '_' + format + '.png\')' : '';
-    var lbOnClick = b64 ? 'openAdLightbox(\'' + b64 + '\',\'' + mt + '\',\'Variaci\\u00f3n ' + label + '\')' : '';
-
-    return '<div style="display:flex;flex-direction:column;gap:7px;min-width:0">' +
-      '<div style="display:flex;align-items:center;gap:6px">' +
-        '<div style="background:' + labelBg + ';color:' + labelColor + ';font-size:11px;font-weight:800;padding:2px 9px;border-radius:100px">Var. ' + label + '</div>' +
-      '</div>' +
-      '<div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3">' + concept + '</div>' +
-      (b64
-        ? '<div style="cursor:zoom-in;border-radius:9px;overflow:hidden;aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:#F3F4F6" onclick="' + lbOnClick + '">' +
-            '<img src="data:' + mt + ';base64,' + b64 + '" style="width:100%;height:100%;object-fit:cover" alt="Variacion ' + label + '">' +
-          '</div>'
-        : '<div style="border-radius:9px;background:#FEF2F2;border:1px solid #FCA5A5;aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center;font-size:11px;color:#EF4444;text-align:center;padding:12px">Error al generar</div>'
-      ) +
-      '<div style="display:flex;gap:5px">' +
-        (b64
-          ? '<button onclick="' + dlOnClick + '" style="flex:1;padding:6px 0;background:white;border:1px solid var(--border);border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;color:var(--text);font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Descargar</button>'
-          : ''
-        ) +
-        '<button onclick="qSend(\'Quiero publicar la Variacion ' + label + ' en Meta Ads. Ayudame a crear la campana.\')" style="flex:1;padding:6px 0;background:' + labelColor + ';color:white;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font)">Lanzar →</button>' +
-      '</div>' +
-    '</div>';
-  }
-
-  var concatConcepts = concepts.map(function(c,i){ return _AB_LABELS[i] + ': ' + c.replace(/'/g,''); }).join('. ');
-
-  var el = document.createElement('div');
-  el.className = 'msg';
-  el.style.cssText = 'flex-direction:column;align-items:flex-start;max-width:100%';
-  el.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
-      '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-      '<div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text)">' + count + ' variaciones listas para test en Meta</div>' +
-        (campaignMsg
-          ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">Campaña: ' + campaignMsg.replace(/</g,'&lt;').slice(0,100) + '</div>'
-          : (adDesc ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + adDesc.replace(/</g,'&lt;').slice(0,100) + '</div>' : '')
-        ) +
-      '</div>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:' + gridCols + ';gap:12px;width:100%;max-width:600px;padding-left:40px">' +
-      images.map(function(img, i){ return imgBlock(img, i); }).join('') +
-    '</div>' +
-    '<div style="padding-left:40px;margin-top:12px">' +
-      '<button onclick="qSend(\'Tengo ' + count + ' variaciones listas para test A/B. ' + concatConcepts + '. Como estructuro el test A/B en Meta Ads: presupuesto, duracion, metrica de exito y como interpretar los resultados?\')" style="background:none;border:1.5px solid #059669;color:#059669;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📊 Cómo estructurar el test en Meta</button>' +
-    '</div>';
-
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
 }
 
 // =============================================
@@ -12419,8 +5201,7 @@ async function launchAxisVariations(designEncoded, format, count) {
     results.forEach(function(r) { if (r.images && r.images.length) allImages.push(r.images[0]); });
   } catch(err) {
     rmThinking(thinkId);
-    console.error('[generate-image]', err.message);
-    addAgent('Tuvimos un error inesperado al generar las variaciones. Por favor contacta a soporte si el problema persiste.');
+    addAgent('Error generando variaciones: ' + err.message);
     return;
   }
 
@@ -13384,8 +6165,7 @@ async function dqGenerateSelectedConcepts() {
 
     } catch(err) {
       rmThinking(thinkId);
-      console.error('[generate-image]', err.message);
-      addAgent('Tuvimos un error inesperado al generar la imagen. Por favor contacta a soporte si el problema persiste.');
+      addAgent('Error generando "' + concept.nombre + '": ' + err.message);
     }
   }
 
@@ -13410,120 +6190,13 @@ function generateBasicImage() {
       imgCmd._index = 1; imgCmd._total = 1;
       generateAdImages(imgCmd);
       incrementImageUsage();
-    } catch(e) { console.error('[generate-image]', e.message); addAgent('Tuvimos un error inesperado al generar la imagen. Por favor contacta a soporte si el problema persiste.'); }
+    } catch(e) { addAgent('Error generando imagen básica'); }
   }
 }
 
 
 
 
-
-// =============================================
-// SOCIAL PUBLISHING — Callback de OAuth
-// =============================================
-(function checkSocialCallback() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('social_connected') === 'true') {
-    window.history.replaceState({}, '', window.location.pathname);
-
-    const network  = params.get('social_network') || 'instagram';
-    const clientId = params.get('social_client')  || '';
-
-    // Los tokens se guardaron en sessionStorage por la página intermedia del callback
-    // (evita URLs largas con tokens de Facebook que pueden truncarse)
-    let accounts = [];
-    try {
-      const pending = sessionStorage.getItem('acuarius_social_pending');
-      if (pending) {
-        const parsed = JSON.parse(pending);
-        accounts = parsed.accounts || [];
-        sessionStorage.removeItem('acuarius_social_pending');
-      }
-      // Fallback legacy: leer de URL
-      if (!accounts.length) {
-        accounts = JSON.parse(params.get('social_accounts') || '[]');
-      }
-    } catch {}
-
-    if (!accounts.length) {
-      // Esperar a que Clerk cargue antes de mostrar el toast
-      const waitAndWarn = () => showToast('Conexión completada pero no se encontraron páginas Facebook ni cuentas Instagram vinculadas. Verifica que tu cuenta tenga páginas de Facebook con Instagram Business asociado.', 'warning');
-      if (clerkInstance?.user?.id) { waitAndWarn(); }
-      else { let t=0; const iv=setInterval(()=>{ t++; if(clerkInstance?.user?.id||t>40){clearInterval(iv);waitAndWarn();} },200); }
-      return;
-    }
-
-    const doSave = () => {
-      const conns = loadSocialConnections();
-
-      // Instagram: cuentas con igUserId
-      const igAccts = accounts.filter(a => a.igUserId).map(a => ({
-        pageId:     a.pageId,
-        pageName:   a.pageName,
-        pageToken:  a.pageToken,
-        igUserId:   a.igUserId,
-        igUsername: a.igUsername || null,
-      }));
-
-      // Facebook: todas las páginas con token
-      const fbAccts = accounts.map(a => ({
-        pageId:    a.pageId,
-        pageName:  a.pageName,
-        pageToken: a.pageToken,
-      }));
-
-      if (igAccts.length > 0) conns.instagram = igAccts;
-      if (fbAccts.length > 0) conns.facebook  = fbAccts;
-
-      saveSocialConnections(conns);
-      updateStudioConnectBtn();
-
-      // Modal de confirmación
-      showSocialConnectionModal(igAccts, fbAccts);
-    };
-
-    // CLAVE: esperar a que Clerk tenga el user.id antes de guardar,
-    // si no la clave de localStorage queda como "anon" y los tokens se pierden
-    const waitForClerkAndSave = () => {
-      if (clerkInstance?.user?.id) {
-        // Clerk ya cargó → guardar de inmediato
-        doSave();
-      } else {
-        // Clerk aún no cargó → polling cada 200ms, máx 8s
-        let attempts = 0;
-        const iv = setInterval(() => {
-          attempts++;
-          if (clerkInstance?.user?.id || attempts > 40) {
-            clearInterval(iv);
-            doSave();
-          }
-        }, 200);
-      }
-    };
-
-    // Si hay clientId específico, esperar también a que agencyActiveClientId coincida
-    if (clientId && clientId !== agencyActiveClientId) {
-      let attempts = 0;
-      const iv = setInterval(() => {
-        attempts++;
-        if (agencyActiveClientId === clientId || attempts > 30) {
-          clearInterval(iv);
-          waitForClerkAndSave();
-        }
-      }, 300);
-    } else {
-      waitForClerkAndSave();
-    }
-  }
-
-  if (params.get('social_error')) {
-    window.history.replaceState({}, '', window.location.pathname);
-    const msg = params.get('social_error');
-    if (msg !== 'access_denied') {
-      showToast('Error conectando red social: ' + (msg || 'error desconocido'), 'error');
-    }
-  }
-})();
 
 // =============================================
 // META ADS — Conexión OAuth + Selector de cuentas
@@ -13534,56 +6207,27 @@ let metaActiveAccount = null;
 (function checkMetaCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('meta_connected') === 'true') {
-    const token    = params.get('meta_token');   // solo en fallback sin userId
-    const name     = params.get('meta_name');
-    const email    = params.get('meta_email');
-    const metaUid  = params.get('meta_user_id');
-    const platform = params.get('platform');     // 'meta_ads' cuando se guardó en Supabase
-    window.history.replaceState({}, '', window.location.pathname);
+    const token  = params.get('meta_token');
+    const name   = params.get('meta_name');
+    const email  = params.get('meta_email');
+    const userId = params.get('meta_user_id');
     if (token) {
       sessionStorage.setItem('meta_access_token', token);
-      localStorage.setItem('meta_access_token_persist', token);
       sessionStorage.setItem('meta_user_name',   name   || '');
       sessionStorage.setItem('meta_user_email',  email  || '');
-      sessionStorage.setItem('meta_user_id',     metaUid || '');
+      sessionStorage.setItem('meta_user_id',     userId || '');
       updateMetaUI(true, name);
       setTimeout(() => { openSettings(); loadMetaAccounts(); }, 400);
-    } else if (platform === 'meta_ads') {
-      updateMetaUI(true, name || 'Conectado');
-      // Clerk tarda 1-4s en cargar después de un redirect — reintentamos con backoff
-      (async function waitForClerkAndLoad() {
-        const delays = [800, 1500, 2500, 4000];
-        for (const delay of delays) {
-          await new Promise(res => setTimeout(res, delay));
-          const uid = clerkInstance?.user?.id;
-          if (!uid) continue;
-          try {
-            const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
-            const conn = await r.json();
-            if (conn.connected && conn.access_token) {
-              sessionStorage.setItem('meta_access_token', conn.access_token);
-              localStorage.setItem('meta_access_token_persist', conn.access_token);
-              sessionStorage.setItem('meta_user_name', conn.account_name || name || '');
-              if (conn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', conn.extra_data.meta_user_id);
-              updateMetaUI(true, conn.account_name || name);
-              openSettings(); loadMetaAccounts();
-              return;
-            }
-          } catch {}
-        }
-      })();
     }
+    window.history.replaceState({}, '', window.location.pathname);
   }
   if (params.get('meta_error')) {
     window.history.replaceState({}, '', window.location.pathname);
   }
-  // Restaurar desde sessionStorage o localStorage (persiste entre sesiones del browser)
-  const savedToken   = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
-  const savedName    = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
+  const savedToken   = sessionStorage.getItem('meta_access_token');
+  const savedName    = sessionStorage.getItem('meta_user_name');
   const savedAccount = sessionStorage.getItem('meta_active_account');
   if (savedToken) {
-    if (!sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', savedToken);
-    if (savedName && !sessionStorage.getItem('meta_user_name')) sessionStorage.setItem('meta_user_name', savedName);
     updateMetaUI(true, savedName);
     if (savedAccount) {
       try { metaActiveAccount = JSON.parse(savedAccount); renderMetaActiveAccount(); } catch {}
@@ -13591,19 +6235,13 @@ let metaActiveAccount = null;
   }
 })();
 
-function connectMetaAds() {
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
-}
+function connectMetaAds() { window.location.href = '/api/meta-auth'; }
 
 function disconnectMetaAds() {
   ['meta_access_token','meta_user_name','meta_user_email','meta_user_id','meta_active_account','meta_ad_account_id']
     .forEach(k => sessionStorage.removeItem(k));
   metaAccounts = []; metaActiveAccount = null;
   updateMetaUI(false);
-  hidePlatformDashboard();
-  const uid = clerkInstance?.user?.id;
-  if (uid) fetch('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'meta_ads' }) }).catch(() => {});
 }
 
 async function loadMetaAccounts() {
@@ -13658,17 +6296,6 @@ async function selectMetaAccount(accountId) {
   metaActiveAccount = acc;
   sessionStorage.setItem('meta_active_account', JSON.stringify(acc));
   sessionStorage.setItem('meta_ad_account_id', acc.id);
-  // Persistir en localStorage para restaurar tras recarga de página
-  localStorage.setItem('meta_active_account_persist', JSON.stringify(acc));
-  localStorage.setItem('meta_ad_account_id_persist', acc.id);
-  // Guardar account_id en Supabase para que los crons de alertas/reportes lo usen
-  const uid2 = clerkInstance?.user?.id;
-  if (uid2) {
-    fetch('/api/admin?action=save-platform-account', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: uid2, platform: 'meta_ads', accountId: acc.id, accountName: acc.name })
-    }).catch(() => {});
-  }
   renderMetaActiveAccount();
   renderMetaAccountSelector();
   closeSettings();
@@ -13756,7 +6383,7 @@ function openSettings() {
   panel.style.display = 'flex';
   overlay.style.display = 'block';
 
-  // Bind nav buttons via event delegation (works on all browsers/devices)
+  // Bind nav items via event delegation (robust fallback to inline onclick)
   const nav = panel.querySelector('.cfg-nav');
   if (nav && !nav._tabListenerBound) {
     nav._tabListenerBound = true;
@@ -13780,46 +6407,16 @@ function openSettings() {
     document.getElementById('cfg-email').textContent = email;
     const isAgencyPlan = userPlan === 'agency' || userPlan === 'agencia' || isAdminUser();
     const isIndividualPlan = userPlan === 'individual';
-    const isProPlan = userPlan === 'pro';
-    const isPaidPlan = isAgencyPlan || isIndividualPlan || isProPlan;
-    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : isProPlan ? 'Plan Pro' : 'Free';
+    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : 'Free';
+    // Update plan card
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
-    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isProPlan ? 'Acceso a todos los agentes · Imágenes ilimitadas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
-    const upgradeBtn = document.getElementById('cfg-upgrade-btn');
-    if (upgradeBtn) {
-      if (isAgencyPlan) {
-        upgradeBtn.textContent = 'Gestionar en Hotmart';
-        upgradeBtn.onclick = () => window.open('https://app.hotmart.com/products', '_blank');
-      } else if (isIndividualPlan || isProPlan) {
-        upgradeBtn.textContent = 'Mejorar a Agencia';
-        upgradeBtn.onclick = () => window.open('https://pay.hotmart.com/L105202723X', '_blank');
-      } else {
-        upgradeBtn.textContent = 'Mejorar plan';
-        upgradeBtn.onclick = openUpgradeFlow;
-      }
-    }
-    // Populate name/email rows
-    const nameRow = document.getElementById('cfg-name-row');
-    const emailRow = document.getElementById('cfg-email-row');
-    if (nameRow) nameRow.textContent = name;
-    if (emailRow) emailRow.textContent = email;
+    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : 'Plan Free';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
+    const upgradeBtn = document.querySelector('#cfg-plan-card .cfg-upgrade-btn');
+    if (upgradeBtn) upgradeBtn.textContent = (isAgencyPlan || isIndividualPlan) ? 'Gestionar' : 'Mejorar plan';
   }
-  // Sincronizar estado de conexiones — sessionStorage primero, localStorage como fallback
-  const metaToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
-  const metaName  = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
-  if (metaToken && !sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', metaToken);
-  updateMetaUI(!!metaToken, metaName);
-  const adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
-  const adsEmail = sessionStorage.getItem('ads_email')        || localStorage.getItem('ads_email_persist') || '';
-  if (adsToken && !sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', adsToken);
-  if (typeof updateAdsUI === 'function') updateAdsUI(!!adsToken, adsEmail);
-  const liToken = sessionStorage.getItem('linkedin_access_token') || localStorage.getItem('linkedin_access_token_persist');
-  const liName  = sessionStorage.getItem('linkedin_user_name')    || localStorage.getItem('linkedin_user_name_persist') || '';
-  if (liToken && !sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', liToken);
-  if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName);
-  // Show first tab
+  // Show first tab by default (perfil)
   switchSettingsTab('perfil');
 }
 
@@ -13829,8 +6426,7 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
-  // All cfg-sec-* section IDs (redesigned settings panel)
-  const sections = ['perfil','plan','integraciones','notificaciones','seguridad','referral'];
+  const sections = ['perfil','plan','integraciones','notificaciones','referral'];
   sections.forEach(t => {
     const sec = document.getElementById('cfg-sec-'+t);
     if (sec) sec.style.display = t === tab ? 'block' : 'none';
@@ -13843,233 +6439,172 @@ function switchSettingsTab(tab) {
     });
   }
   // Scroll content area back to top
-  const wrap = panel ? panel.querySelector('.cfg-wrap') : null;
+  const wrap = document.getElementById('settings-panel')?.querySelector('.cfg-wrap');
   if (wrap) wrap.scrollTop = 0;
-  // Load referral data when opening that tab
-  if (tab === 'referral') loadReferralData();
+  if (tab === 'referral') loadReferralDataInSettings();
 }
 
-// =============================================
-// =============================================
-// LINKEDIN ADS — Conexión OAuth + Selector de cuentas
-// =============================================
+// ── SISTEMA DE REFERIDOS ─────────────────────────────────────────────────────
 
-let linkedinAccounts      = [];
-let linkedinActiveAccount = null;
+let _referralCode = null;
 
-(function checkLinkedInCallback() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('linkedin_connected') === 'true') {
-    const token    = params.get('linkedin_token');
-    const name     = params.get('linkedin_name')  || '';
-    const email    = params.get('linkedin_email') || '';
-    const platform = params.get('platform');
-    window.history.replaceState({}, '', window.location.pathname);
-
-    if (token) {
-      // Fallback: token en URL
-      sessionStorage.setItem('linkedin_access_token', token);
-      sessionStorage.setItem('linkedin_user_name', name || email);
-      localStorage.setItem('linkedin_access_token_persist', token);
-      localStorage.setItem('linkedin_user_name_persist', name || email);
-      updateLinkedInUI(true, name || email);
-      setTimeout(() => { openSettings(); loadLinkedInAccounts(); }, 400);
-    } else if (platform === 'linkedin_ads') {
-      // Token guardado en Supabase
-      updateLinkedInUI(true, name || email || 'Conectado');
-      setTimeout(async () => {
-        const uid = clerkInstance?.user?.id;
-        if (!uid) return;
-        try {
-          const r    = await fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads');
-          const conn = await r.json();
-          if (conn.connected && conn.access_token) {
-            sessionStorage.setItem('linkedin_access_token', conn.access_token);
-            sessionStorage.setItem('linkedin_user_name', conn.account_name || name || email || '');
-            localStorage.setItem('linkedin_access_token_persist', conn.access_token);
-            localStorage.setItem('linkedin_user_name_persist', conn.account_name || name || email || '');
-            updateLinkedInUI(true, conn.account_name || name || email);
-            openSettings(); loadLinkedInAccounts();
-          }
-        } catch {}
-      }, 600);
-    }
-  }
-  if (params.get('linkedin_error')) {
-    window.history.replaceState({}, '', window.location.pathname);
-  }
-  // Restaurar sesión desde sessionStorage / localStorage
-  var savedToken   = sessionStorage.getItem('linkedin_access_token')   || localStorage.getItem('linkedin_access_token_persist');
-  var savedName    = sessionStorage.getItem('linkedin_user_name')       || localStorage.getItem('linkedin_user_name_persist');
-  var savedAccount = sessionStorage.getItem('linkedin_active_account') || localStorage.getItem('linkedin_active_account_persist');
-  if (savedToken) {
-    if (!sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', savedToken);
-    if (savedName && !sessionStorage.getItem('linkedin_user_name'))   sessionStorage.setItem('linkedin_user_name', savedName);
-    updateLinkedInUI(true, savedName);
-    if (savedAccount) {
-      try {
-        linkedinActiveAccount = JSON.parse(savedAccount);
-        if (!sessionStorage.getItem('linkedin_active_account')) sessionStorage.setItem('linkedin_active_account', savedAccount);
-        renderLinkedInActiveAccount();
-      } catch {}
-    }
-  }
-})();
-
-function connectLinkedInAds() {
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/linkedin-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
-}
-
-function disconnectLinkedInAds() {
-  ['linkedin_access_token','linkedin_user_name','linkedin_active_account','linkedin_account_id']
-    .forEach(k => { sessionStorage.removeItem(k); localStorage.removeItem(k + '_persist'); });
-  localStorage.removeItem('linkedin_user_name_persist');
-  linkedinAccounts = []; linkedinActiveAccount = null;
-  updateLinkedInUI(false);
-  const uid = clerkInstance?.user?.id;
-  if (uid) fetch('/api/admin?action=disconnect-platform', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ userId: uid, platform: 'linkedin_ads' })
-  }).catch(() => {});
-}
-
-async function loadLinkedInAccounts() {
-  const token = sessionStorage.getItem('linkedin_access_token');
-  if (!token) return;
-  document.getElementById('linkedinAccountsLoading').style.display = 'block';
-  document.getElementById('linkedinAccountsList').style.display    = 'none';
-  document.getElementById('linkedinActiveAccount').style.display   = 'none';
-  document.getElementById('linkedinAccountsError').style.display   = 'none';
+async function loadReferralCode() {
+  if (_referralCode) return _referralCode;
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return null;
   try {
-    const res  = await fetch('/api/linkedin-ads', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ accessToken: token, action: 'list-accounts' }),
-    });
-    const data = await res.json();
-    document.getElementById('linkedinAccountsLoading').style.display = 'none';
-    if (data.error === 'PENDING_APPROVAL') {
-      showLinkedInPending();
-      return;
-    }
-    if (data.error || !data.accounts?.length) {
-      showLinkedInError(data.error || 'No se encontraron cuentas publicitarias. Verifica que tengas acceso a LinkedIn Campaign Manager.');
-      return;
-    }
-    linkedinAccounts = data.accounts;
-    renderLinkedInAccountSelector();
-  } catch(e) {
-    document.getElementById('linkedinAccountsLoading').style.display = 'none';
-    showLinkedInError('Error de conexión al cargar las cuentas.');
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch(`/api/referral?action=my-code&userId=${encodeURIComponent(userId)}`, { headers });
+    if (!res.ok) return null;
+    const { code } = await res.json();
+    _referralCode = code || null;
+    return _referralCode;
+  } catch { return null; }
+}
+
+async function loadReferralStats() {
+  const userId = clerkInstance?.user?.id;
+  if (!userId) return null;
+  try {
+    const headers = {};
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    const res = await fetch(`/api/referral?action=stats&userId=${encodeURIComponent(userId)}`, { headers });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function getReferralLink(code) {
+  const base = window.location.origin;
+  return `${base}?ref=${code}`;
+}
+
+async function loadReferralDataInSettings() {
+  const code = await loadReferralCode();
+  const linkBox = document.getElementById('ref-link-box');
+  if (linkBox) linkBox.textContent = code ? getReferralLink(code) : 'Sin código asignado';
+
+  const stats = await loadReferralStats();
+  if (stats) {
+    const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    el('ref-stat-total',   stats.total   ?? '—');
+    el('ref-stat-active',  stats.active  ?? '—');
+    el('ref-stat-earned',  stats.earned  != null ? `$${stats.earned.toFixed(2)}` : '—');
+    el('ref-stat-pending', stats.pending != null ? `$${stats.pending.toFixed(2)}` : '—');
+    renderReferralTable(stats.referrals || []);
   }
 }
 
-function renderLinkedInAccountSelector() {
-  const container = document.getElementById('linkedinAccountsContainer');
-  container.innerHTML = linkedinAccounts.map(acc => {
-    const isActive = linkedinActiveAccount?.id === acc.id;
-    return '<div onclick="selectLinkedInAccount(\'' + acc.id + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;' +
-      'border:1.5px solid ' + (isActive ? '#0A66C2' : 'var(--border)') + ';' +
-      'background:' + (isActive ? '#EFF6FF' : 'var(--bg)') + ';transition:all .15s"' +
-      ' onmouseover="this.style.borderColor=\'#BFDBFE\'"' +
-      ' onmouseout="this.style.borderColor=\'' + (isActive ? '#0A66C2' : 'var(--border)') + '\'">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + acc.name + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);margin-top:1px">' + acc.id + ' · ' + acc.currency + ' · ' + acc.status + '</div>' +
-      '</div>' +
-      (isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="#0A66C2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '') +
-      '</div>';
+function renderReferralTable(referrals) {
+  const tbody = document.getElementById('ref-table-body');
+  if (!tbody) return;
+  if (!referrals.length) {
+    tbody.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Aún no tienes referidos registrados.</div>';
+    return;
+  }
+  tbody.innerHTML = referrals.map(r => {
+    const badge = r.status === 'active'
+      ? '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#DCFCE7;color:#16a34a;font-weight:600">activo</span>'
+      : r.status === 'registered'
+      ? '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#FEF9C3;color:#ca8a04;font-weight:600">pendiente</span>'
+      : '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#FEE2E2;color:#dc2626;font-weight:600">cancelado</span>';
+    const email = r.referred_email || '—';
+    const earned = r.total_earned != null ? `$${parseFloat(r.total_earned).toFixed(2)}` : '$0.00';
+    return `<div style="padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border2);font-size:12px">
+      <div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${email}</div>
+      <div style="font-weight:600;color:var(--text);flex-shrink:0">${earned}</div>
+      <div style="flex-shrink:0">${badge}</div>
+    </div>`;
   }).join('');
-  document.getElementById('linkedinAccountsList').style.display = 'block';
-  if (linkedinActiveAccount) renderLinkedInActiveAccount();
 }
 
-async function selectLinkedInAccount(accountId) {
-  const acc = linkedinAccounts.find(a => a.id === accountId);
-  if (!acc) return;
-  linkedinActiveAccount = acc;
-  sessionStorage.setItem('linkedin_active_account', JSON.stringify(acc));
-  sessionStorage.setItem('linkedin_account_id', acc.id);
-  localStorage.setItem('linkedin_active_account_persist', JSON.stringify(acc));
-  localStorage.setItem('linkedin_account_id_persist', acc.id);
-  const uid2 = clerkInstance?.user?.id;
-  if (uid2) {
-    fetch('/api/admin?action=save-platform-account', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ userId: uid2, platform: 'linkedin_ads', accountId: acc.id, accountName: acc.name })
-    }).catch(() => {});
-  }
-  renderLinkedInActiveAccount();
-  renderLinkedInAccountSelector();
-  closeSettings();
-  setTimeout(async () => {
-    const saved = await dbLoadProfile('linkedin-ads');
-    if (saved) {
-      try {
-        Object.assign(mem, saved); updateMem(); onDone = true;
-        clientStage = mapStage(mem.etapa);
-        document.getElementById('mem-card').style.display = 'block';
-        document.getElementById('m-stage').textContent = clientStage;
-        hist = [];
-        addAgent('cuenta LinkedIn cambiada a **' + acc.name + '**.\n\n¿En qué trabajamos hoy?');
-      } catch { startNewLinkedInOnboarding(acc); }
-    } else { startNewLinkedInOnboarding(acc); }
-  }, 300);
-}
+async function openReferralModal() {
+  const modal = document.getElementById('referral-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
 
-function startNewLinkedInOnboarding(acc) {
-  mem = {}; hist = []; onDone = false; obStep = 0;
-  document.getElementById('mem-card').style.display = 'none';
-  document.getElementById('chat-area').innerHTML = '';
-  showView('chat'); setAgentContext('linkedin-ads');
-  addAgent('nueva cuenta LinkedIn: **' + acc.name + '**.\n\nPara darte recomendaciones B2B precisas, necesito conocer este negocio. Son 6 preguntas rápidas.');
-  setTimeout(() => renderOb(), 600);
-}
+  const code = await loadReferralCode();
+  const urlEl = document.getElementById('ref-modal-url');
+  if (urlEl) urlEl.textContent = code ? getReferralLink(code) : 'Sin código';
 
-function renderLinkedInActiveAccount() {
-  if (!linkedinActiveAccount) return;
-  const el = document.getElementById('linkedinActiveAccount');
-  document.getElementById('linkedinActiveName').textContent = linkedinActiveAccount.name;
-  document.getElementById('linkedinActiveId').textContent   = linkedinActiveAccount.id + ' · ' + linkedinActiveAccount.currency;
-  if (el) el.style.display = 'block';
-}
-
-function showLinkedInAccountSelector() {
-  document.getElementById('linkedinActiveAccount').style.display = 'none';
-  linkedinAccounts.length ? renderLinkedInAccountSelector() : loadLinkedInAccounts();
-}
-
-function showLinkedInError(msg) {
-  const el = document.getElementById('linkedinAccountsError');
-  if (el) { el.textContent = msg; el.style.display = 'block'; }
-}
-
-function showLinkedInPending() {
-  const el = document.getElementById('linkedinAccountsError');
-  if (el) {
-    el.style.background = '#FFF7ED';
-    el.style.borderColor = '#FED7AA';
-    el.style.color = '#92400E';
-    el.innerHTML = '⏳ <b>Advertising API pendiente de aprobación.</b> Tu cuenta ya está conectada — el agente puede ayudarte con estrategia y análisis. Las métricas en tiempo real se activarán cuando LinkedIn apruebe el acceso.';
-    el.style.display = 'block';
+  const stats = await loadReferralStats();
+  if (stats) {
+    const s = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    s('ref-modal-count',   stats.active  ?? '—');
+    s('ref-modal-earned',  stats.earned  != null ? `$${stats.earned.toFixed(2)}` : '—');
+    s('ref-modal-pending', stats.pending != null ? `$${stats.pending.toFixed(2)}` : '—');
   }
 }
 
-function updateLinkedInUI(connected, name) {
-  const badge    = document.getElementById('linkedinStatusBadge');
-  const discDiv  = document.getElementById('linkedinDisconnected');
-  const connDiv  = document.getElementById('linkedinConnected');
-  const nameSpan = document.getElementById('linkedinUserName');
-  if (connected) {
-    if (badge)    { badge.textContent = '● conectado'; badge.style.background = 'rgba(10,102,194,.1)'; badge.style.color = '#0A66C2'; }
-    if (discDiv)  discDiv.style.display = 'none';
-    if (connDiv)  connDiv.style.display = 'block';
-    if (name && nameSpan) nameSpan.textContent = name;
-    if (!linkedinAccounts.length && !linkedinActiveAccount) loadLinkedInAccounts();
-  } else {
-    if (badge)   { badge.textContent = 'sin conectar'; badge.style.background = 'var(--sidebar2)'; badge.style.color = 'var(--muted)'; }
-    if (discDiv) discDiv.style.display = 'block';
-    if (connDiv) connDiv.style.display = 'none';
+function closeReferralModal() {
+  const modal = document.getElementById('referral-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function copyReferralLink() {
+  const code = await loadReferralCode();
+  if (!code) return;
+  const link = getReferralLink(code);
+  try {
+    await navigator.clipboard.writeText(link);
+    // Feedback en el modal
+    const btn = document.getElementById('ref-modal-copy-btn');
+    if (btn) {
+      btn.classList.add('copied');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Copiado';
+      setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
+    }
+    // Feedback en settings panel también
+    const settingsBtn = document.getElementById('ref-copy-btn');
+    if (settingsBtn) {
+      const origText = settingsBtn.textContent;
+      settingsBtn.textContent = '✓ Copiado';
+      settingsBtn.style.background = 'var(--success)';
+      setTimeout(() => { settingsBtn.textContent = origText; settingsBtn.style.background = ''; }, 2000);
+    }
+  } catch { /* fallback */ }
+}
+
+function shareReferralWhatsApp() {
+  loadReferralCode().then(code => {
+    if (!code) return;
+    const link = getReferralLink(code);
+    const msg = encodeURIComponent(`¡Te invito a probar Acuarius, la IA para marketing digital! Regístrate con mi link y obtén acceso: ${link}`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  });
+}
+
+function shareReferralEmail() {
+  loadReferralCode().then(code => {
+    if (!code) return;
+    const link = getReferralLink(code);
+    const subject = encodeURIComponent('Te invito a Acuarius — IA para marketing digital');
+    const body = encodeURIComponent(`Hola,\n\nTe comparto Acuarius, una herramienta de IA especializada en marketing digital (Google Ads, Meta Ads, SEO y más).\n\nRegístrate con mi enlace: ${link}\n\n¡Saludos!`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  });
+}
+
+function shareReferralLinkedIn() {
+  loadReferralCode().then(code => {
+    if (!code) return;
+    const link = encodeURIComponent(getReferralLink(code));
+    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${link}`, '_blank');
+  });
+}
+
+async function initReferralButton() {
+  // Mostrar el botón de referidos solo si el usuario tiene plan activo (no free)
+  const btn = document.getElementById('sb-referral-btn');
+  if (!btn) return;
+  const isPaid = userPlan === 'pro' || userPlan === 'individual' || userPlan === 'agencia' || userPlan === 'agency' || isAdminUser();
+  if (isPaid) {
+    btn.style.display = 'flex';
+    // Pre-cargar el código en background
+    loadReferralCode();
   }
 }
 
@@ -14084,202 +6619,38 @@ let adsAccounts = [];       // todas las cuentas accesibles
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('ads_connected') === 'true') {
-    const token    = params.get('ads_token');
-    const refresh  = params.get('ads_refresh');
-    const email    = params.get('ads_email');
-    const platform = params.get('platform');   // 'google_ads' = guardado en Supabase
-    const urlUid   = params.get('uid') || '';
-    window.history.replaceState({}, '', window.location.pathname);
-
+    const token   = params.get('ads_token');
+    const refresh = params.get('ads_refresh');
+    const email   = params.get('ads_email');
     if (token) {
-      // Guardar token en sessionStorage/localStorage inmediatamente
       sessionStorage.setItem('ads_access_token', token);
       sessionStorage.setItem('ads_refresh_token', refresh || '');
       sessionStorage.setItem('ads_email', email || '');
-      localStorage.setItem('ads_access_token_persist', token);
-      localStorage.setItem('ads_refresh_token_persist', refresh || '');
-      localStorage.setItem('ads_email_persist', email || '');
-
-      if (platform === 'google_ads') {
-        // Flujo con userId: mostrar modal grande y abrir configuración
-        showConnectionModal('google_ads', email || 'Google Ads');
-        // Abrir settings después de que el DOM esté listo
-        setTimeout(() => { updateAdsUI(true, email); openSettings(); loadAdsAccounts(); }, 500);
-      } else {
-        // Flujo legacy sin userId
-        updateAdsUI(true, email);
-        setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
-      }
-    } else if (platform === 'google_ads') {
-      // Sin token en URL (backwards compat): intentar recuperar desde Supabase
-      showConnectionModal('google_ads', email || 'Google Ads');
-      (async function restoreGoogleToken() {
-        const tryFetch = async (uid) => {
-          if (!uid) return false;
-          try {
-            const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
-            const conn = await r.json();
-            if (conn.connected && conn.access_token) {
-              sessionStorage.setItem('ads_access_token', conn.access_token);
-              sessionStorage.setItem('ads_email', conn.account_name || email || '');
-              localStorage.setItem('ads_access_token_persist', conn.access_token);
-              localStorage.setItem('ads_email_persist', conn.account_name || email || '');
-              updateAdsUI(true, conn.account_name || email);
-              return true;
-            }
-          } catch {}
-          return false;
-        };
-        if (await tryFetch(urlUid)) { openSettings(); loadAdsAccounts(); return; }
-        for (const delay of [800, 1800, 3000, 5000]) {
-          await new Promise(res => setTimeout(res, delay));
-          const clerkUid = clerkInstance?.user?.id;
-          if (await tryFetch(clerkUid || urlUid)) { openSettings(); loadAdsAccounts(); return; }
-        }
-        openSettings();
-      })();
+      updateAdsUI(true, email);
+      setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
     }
+    window.history.replaceState({}, '', window.location.pathname);
   }
   if (params.get('ads_error')) {
-    const errCode = params.get('ads_error');
     window.history.replaceState({}, '', window.location.pathname);
-    const errMsg = errCode === 'access_denied' ? 'Cancelaste la conexión con Google.'
-      : errCode === 'token_failed' ? 'Error al obtener el token de Google. Intenta de nuevo.'
-      : 'Error al conectar con Google Ads. Intenta de nuevo.';
-    showToast('❌ ' + errMsg, 'error');
   }
-  // Restaurar sesión — sessionStorage primero, luego localStorage como fallback
-  var savedToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist');
-  var savedEmail   = sessionStorage.getItem('ads_email')          || localStorage.getItem('ads_email_persist');
-  var savedAccount = sessionStorage.getItem('ads_active_account') || localStorage.getItem('ads_active_account_persist');
-  var savedCustId  = sessionStorage.getItem('ads_customer_id')    || localStorage.getItem('ads_customer_id_persist');
-  if (savedToken || clerkInstance?.user?.id) {
-    if (savedToken) {
-      if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', savedToken);
-      if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
-      if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
-      const _savedCurr = localStorage.getItem('ads_currency_persist');
-      if (_savedCurr && !sessionStorage.getItem('ads_currency')) sessionStorage.setItem('ads_currency', _savedCurr);
-      updateAdsUI(true, savedEmail);
-      if (savedAccount) {
-        try {
-          adsActiveAccount = JSON.parse(savedAccount);
-          if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
-          if (adsActiveAccount && adsActiveAccount.currency && !sessionStorage.getItem('ads_currency')) {
-            sessionStorage.setItem('ads_currency', adsActiveAccount.currency);
-          }
-          renderActiveAccount();
-        } catch {}
-      }
-    }
-    // Auto-refresh silencioso en background: garantiza que el token no expire
-    async function silentRefreshGoogleToken() {
-      const uid = clerkInstance?.user?.id || (() => { try { return JSON.parse(atob((clerkInstance?.session?.id||'').split('.')[1]||'{}')).sub; } catch { return ''; } })();
-      if (!uid) return;
+  // Restaurar sesión guardada
+  const savedToken   = sessionStorage.getItem('ads_access_token');
+  const savedEmail   = sessionStorage.getItem('ads_email');
+  const savedAccount = sessionStorage.getItem('ads_active_account');
+  if (savedToken) {
+    updateAdsUI(true, savedEmail);
+    if (savedAccount) {
       try {
-        const r = await fetch('/api/refresh-google-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: uid }),
-        });
-        const data = await r.json();
-        if (data.access_token && !data.error) {
-          // Token fresco → actualizar storage y UI
-          sessionStorage.setItem('ads_access_token', data.access_token);
-          localStorage.setItem('ads_access_token_persist', data.access_token);
-          if (!savedToken) {
-            // Primera carga sin token local → actualizar UI como conectado
-            const emailFromStorage = sessionStorage.getItem('ads_email') || localStorage.getItem('ads_email_persist') || '';
-            updateAdsUI(true, emailFromStorage);
-            if (savedAccount) {
-              try { adsActiveAccount = JSON.parse(savedAccount); renderActiveAccount(); } catch {}
-            }
-          }
-          return true;
-        } else if (data.needsReconnect) {
-          // Solo mostrar "reconectar" si no hubo refresh exitoso — el refresh_token puede ser inválido
-          if (savedToken) updateAdsUI(false);
-          return false;
-        }
-      } catch {} // Silencioso — no interrumpir la carga de la app
-      return false;
+        adsActiveAccount = JSON.parse(savedAccount);
+        renderActiveAccount();
+      } catch {}
     }
-    silentRefreshGoogleToken();
-    // Refrescar el token cada 45 minutos mientras la app está abierta
-    setInterval(silentRefreshGoogleToken, 45 * 60 * 1000);
-  }
-})();
-
-// Deep-link desde emails de reporte: ?agent=google_ads&report=weekly|monthly
-(function checkReportDeepLink() {
-  const params  = new URLSearchParams(window.location.search);
-  const agentParam  = params.get('agent');   // 'google_ads' | 'meta_ads'
-  const reportParam = params.get('report');  // 'weekly' | 'monthly'
-  if (!agentParam || !reportParam) return;
-
-  window.history.replaceState({}, '', window.location.pathname);
-
-  // Mapear platform key → agent key (con guiones)
-  const agentKeyMap = {
-    google_ads: 'google-ads',
-    meta_ads:   'meta-ads',
-    tiktok_ads: 'tiktok-ads',
-    linkedin_ads: 'linkedin-ads',
-  };
-  const agentKey = agentKeyMap[agentParam] || 'google-ads';
-
-  const reportLabels = {
-    weekly:  'semanal',
-    monthly: 'mensual',
-  };
-  const platformLabels = {
-    google_ads: 'Google Ads',
-    meta_ads:   'Meta Ads',
-  };
-
-  const reportLabel   = reportLabels[reportParam]   || reportParam;
-  const platformLabel = platformLabels[agentParam]  || agentParam;
-
-  // Esperar a que la app esté lista (Clerk + DOM) y luego abrir el agente
-  async function doOpen() {
-    // Esperar usuario de Clerk
-    if (!clerkInstance?.user?.id) {
-      await new Promise(res => {
-        const iv = setInterval(() => {
-          if (clerkInstance?.user?.id) { clearInterval(iv); res(); }
-        }, 150);
-        setTimeout(() => { clearInterval(iv); res(); }, 8000);
-      });
-    }
-
-    await openAgent(agentKey);
-
-    // Esperar a que el agente termine el saludo inicial (loading pasa a false)
-    await new Promise(res => setTimeout(res, 800));
-    let waitAttempts = 0;
-    while (typeof loading !== 'undefined' && loading && waitAttempts < 40) {
-      await new Promise(res => setTimeout(res, 250));
-      waitAttempts++;
-    }
-
-    // Inyectar mensaje de contexto del reporte y enviarlo automáticamente
-    const contextMsg = `Vengo del reporte ${reportLabel} de ${platformLabel}. Analiza el rendimiento de la semana y dame recomendaciones concretas para mejorar los resultados.`;
-    if (typeof qSend === 'function') {
-      qSend(contextMsg);
-    }
-  }
-
-  // Esperar a que el DOM base esté listo
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(doOpen, 1200));
-  } else {
-    setTimeout(doOpen, 1200);
   }
 })();
 
 function connectGoogleAds() {
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/google-ads-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+  window.location.href = '/api/google-ads-auth';
 }
 
 function disconnectGoogleAds() {
@@ -14287,25 +6658,15 @@ function disconnectGoogleAds() {
   sessionStorage.removeItem('ads_refresh_token');
   sessionStorage.removeItem('ads_email');
   sessionStorage.removeItem('ads_active_account');
-  sessionStorage.removeItem('ads_customer_id');
-  localStorage.removeItem('ads_access_token_persist');
-  localStorage.removeItem('ads_refresh_token_persist');
-  localStorage.removeItem('ads_email_persist');
-  localStorage.removeItem('ads_active_account_persist');
-  localStorage.removeItem('ads_customer_id_persist');
   adsAccounts = [];
   adsActiveAccount = null;
   updateAdsUI(false);
-  hidePlatformDashboard();
-  const uid = clerkInstance?.user?.id;
-  if (uid) fetch('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'google_ads' }) }).catch(() => {});
 }
 
 // Carga las cuentas desde la API y muestra el selector
 async function loadAdsAccounts() {
-  const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+  const accessToken = sessionStorage.getItem('ads_access_token');
   if (!accessToken) return;
-  if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', accessToken);
 
   // Mostrar loading
   document.getElementById('adsAccountsLoading').style.display = 'block';
@@ -14323,11 +6684,7 @@ async function loadAdsAccounts() {
     document.getElementById('adsAccountsLoading').style.display = 'none';
 
     if (data.error || !data.accounts?.length) {
-      const detail = data.googleError || data.details || data.error || '';
-      const msg = detail
-        ? `Error Google Ads: ${detail}`
-        : 'No se pudieron cargar las cuentas. Puede ser que el developer token esté en modo prueba.';
-      showAdsError(msg);
+      showAdsError('No se pudieron cargar las cuentas. Puede ser que la API aún esté en revisión por Google.');
       return;
     }
 
@@ -14342,28 +6699,35 @@ async function loadAdsAccounts() {
 
 function renderAccountSelector() {
   const container = document.getElementById('adsAccountsContainer');
+  const isAgency  = userPlan === 'agency';
   const nonManager = adsAccounts.filter(a => !a.isManager);
-  const toShow     = nonManager.length > 0 ? nonManager : adsAccounts;
+  const toShow    = nonManager.length > 0 ? nonManager : adsAccounts;
 
-  // Ocultar siempre el mensaje de plan — todas las cuentas son seleccionables
+  // Gate de plan: individual solo puede ver/activar 1 cuenta
   const gateMsg = document.getElementById('adsPlanGateMsg');
-  if (gateMsg) gateMsg.style.display = 'none';
+  if (!isAgency && toShow.length > 1) {
+    gateMsg.style.display = 'block';
+  } else {
+    gateMsg.style.display = 'none';
+  }
 
-  container.innerHTML = toShow.map((acc) => {
+  container.innerHTML = toShow.map((acc, idx) => {
+    const isLocked = !isAgency && idx > 0; // solo la primera disponible en plan individual
     const isActive = adsActiveAccount?.id === acc.id;
     return `
-    <div onclick="selectAdsAccount('${acc.id}')"
-      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;
+    <div onclick="${isLocked ? 'showUpgradeHint()' : `selectAdsAccount('${acc.id}')`}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:${isLocked ? 'default' : 'pointer'};
       border:1.5px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
-      background:${isActive ? 'var(--blue-lt)' : 'var(--bg)'};
-      transition:all .15s"
-      onmouseover="this.style.borderColor='var(--blue-md)';this.style.background='var(--blue-lt)'"
-      onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}';this.style.background='${isActive ? 'var(--blue-lt)' : 'var(--bg)'}'">
+      background:${isActive ? 'var(--blue-lt)' : isLocked ? 'var(--sidebar2)' : 'var(--bg)'};
+      opacity:${isLocked ? '.5' : '1'};transition:all .15s"
+      onmouseover="if(!${isLocked})this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--blue-md)'}'"
+      onmouseout="this.style.borderColor='${isActive ? 'var(--blue)' : 'var(--border)'}'">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:1px">ID: ${acc.id} · ${acc.currency}${acc.isTest ? ' · cuenta de prueba' : ''}</div>
       </div>
       ${isActive ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+      ${isLocked ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--muted2)" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"/></svg>' : ''}
     </div>`;
   }).join('');
 
@@ -14379,15 +6743,9 @@ async function selectAdsAccount(accountId) {
 
   adsActiveAccount = acc;
   sessionStorage.setItem('ads_active_account', JSON.stringify(acc));
-  localStorage.setItem('ads_active_account_persist', JSON.stringify(acc));
 
-  // Guardar también el customerId y currency para queryGoogleAds y contexto del agente
+  // Guardar también el customerId para queryGoogleAds
   sessionStorage.setItem('ads_customer_id', acc.id);
-  localStorage.setItem('ads_customer_id_persist', acc.id);
-  if (acc.currency) {
-    sessionStorage.setItem('ads_currency', acc.currency);
-    localStorage.setItem('ads_currency_persist', acc.currency);
-  }
 
   renderActiveAccount();
   renderAccountSelector(); // re-render para marcar el activo
@@ -14467,14 +6825,6 @@ async function finishObWithAccountSave() {
 
   addAgent(resumen);
 
-  // Mostrar cards de acción según el agente
-  if (currentAgentCtx === 'google-ads')   { setTimeout(showGoogleAdsActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'meta-ads')     { setTimeout(showMetaActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'tiktok-ads')  { setTimeout(showTikTokActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'linkedin-ads') { setTimeout(showLinkedInActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'seo')          { setTimeout(showSeoActionCards, 400); setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-  if (currentAgentCtx === 'social')       { setTimeout(function(){ loadRecentConversations(); }, 700); return; }
-
   // Para el consultor: generar Plan de 30 días automáticamente, luego mostrar cards
   if (currentAgentCtx === 'consultor') {
     // Inyectar el prompt del plan en hist sin mostrarlo al usuario
@@ -14534,15 +6884,12 @@ function renderActiveAccount() {
   const nameEl = document.getElementById('adsActiveName');
   const idEl   = document.getElementById('adsActiveId');
   if (nameEl) nameEl.textContent = adsActiveAccount.name;
-  if (idEl)   idEl.textContent   = `ID: ${adsActiveAccount.id}` + (adsActiveAccount.currency ? ` · ${adsActiveAccount.currency}` : '');
+  if (idEl)   idEl.textContent   = `ID: ${adsActiveAccount.id} · ${adsActiveAccount.currency}`;
   if (el)     el.style.display   = 'block';
 }
 
 function showAccountSelector() {
-  const activeEl = document.getElementById('adsActiveAccount');
-  if (activeEl) activeEl.style.display = 'none';
-  const listEl = document.getElementById('adsAccountsList');
-  if (listEl) listEl.style.display = 'block';
+  document.getElementById('adsActiveAccount').style.display = 'none';
   if (adsAccounts.length > 0) {
     renderAccountSelector();
   } else {
@@ -14555,20 +6902,7 @@ function showAdsError(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 }
 
-function adsAccountClick(accountId, idx) {
-  // Re-evalúa permisos en runtime (no depende del render inicial)
-  if (idx === 0 || adsCanSelectMultiple()) {
-    selectAdsAccount(accountId);
-  } else {
-    showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
-  }
-}
-
-function showUpgradeHint(accountId) {
-  if (adsCanSelectMultiple()) {
-    if (accountId) selectAdsAccount(accountId);
-    return;
-  }
+function showUpgradeHint() {
   showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
 }
 
@@ -14594,25 +6928,17 @@ function updateAdsUI(connected, email) {
 }
 
 async function queryGoogleAds(gaqlQuery) {
-  const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
-  const customerId  = sessionStorage.getItem('ads_customer_id')  || localStorage.getItem('ads_customer_id_persist');
-  const userId      = clerkInstance?.user?.id || '';
-  if (!accessToken && !userId) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
+  const accessToken = sessionStorage.getItem('ads_access_token');
+  const customerId  = sessionStorage.getItem('ads_customer_id');
+  if (!accessToken) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
   if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {
     const res = await fetch('/api/google-ads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customerId, query: gaqlQuery, accessToken: accessToken || '', userId }),
+      body: JSON.stringify({ customerId, query: gaqlQuery, accessToken }),
     });
-    const data = await res.json();
-    // Si el backend renovó el token automáticamente, actualizar sessionStorage y localStorage
-    if (data._refreshedToken) {
-      sessionStorage.setItem('ads_access_token', data._refreshedToken);
-      localStorage.setItem('ads_access_token_persist', data._refreshedToken);
-      delete data._refreshedToken; // limpiar antes de devolver
-    }
-    return data;
+    return await res.json();
   } catch (err) {
     return { error: err.message };
   }
@@ -14667,1374 +6993,916 @@ function closeComingSoon() {
   document.getElementById('coming-soon-modal').style.display = 'none';
   document.body.style.overflow = '';
 }
-// =============================================
-// SISTEMA DE REFERIDOS
-// =============================================
 
-let referralCode = null;
+// ── MÓDULO LEADS / CRM ────────────────────────────────────────────────────────
+let crmStages = [];
+let crmLeads = [];
+let crmView = 'kanban'; // 'kanban' | 'list'
+let crmEditingId = null;
+let crmDetailLead = null;
+let crmInited = false;
 
-// Cargar datos de referidos al abrir el tab
-async function loadReferralData() {
-  const userId = clerkInstance?.user?.id;
-  if (!userId) return;
+async function crmInit() {
+  if (crmInited) { crmRender(); return; }
+  crmInited = true;
+  await crmLoadStages();
+  await crmLoadLeads();
+  crmUpdateSidebarCount();
+}
 
-  // Obtener o crear código
+async function crmLoadStages() {
   try {
-    const r = await fetch('/api/referral?action=my-code&userId=' + encodeURIComponent(userId));
-    const d = await r.json();
-    if (d.code) {
-      referralCode = d.code;
-      const link = 'https://app.acuarius.app/?ref=' + d.code;
-      const box = document.getElementById('ref-link-box');
-      if (box) box.textContent = link;
-    }
-  } catch(e) { console.warn('Referral code error:', e); }
-
-  // Cargar estadísticas
-  try {
-    const r = await fetch('/api/referral?action=stats&userId=' + encodeURIComponent(userId));
-    const d = await r.json();
-
-    const el = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
-    el('ref-stat-total',   d.total  || 0);
-    el('ref-stat-active',  d.active || 0);
-    el('ref-stat-earned',  '$' + (parseFloat(d.earned || 0).toFixed(2)));
-    el('ref-stat-pending', '$' + (parseFloat(d.pending || 0).toFixed(2)));
-
-    const tbody = document.getElementById('ref-table-body');
-    if (!tbody) return;
-
-    if (!d.referrals || d.referrals.length === 0) {
-      tbody.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted2);font-size:12px">Aún no tienes referidos. ¡Comparte tu link!</div>';
-      return;
-    }
-
-    const rows = d.referrals.map(ref => {
-      const statusColor = ref.status === 'active' ? '#22c55e' : ref.status === 'registered' ? '#f59e0b' : '#94a3b8';
-      const statusLabel = ref.status === 'active' ? 'Activo' : ref.status === 'registered' ? 'Registrado' : ref.status;
-      const earned = parseFloat(ref.total_earned || 0).toFixed(2);
-      const date = ref.created_at ? new Date(ref.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
-      const email = ref.referred_email || '—';
-      const emailMasked = email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.min(b.length, 4)) + c);
-      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px">
-        <div>
-          <div style="font-weight:500;color:var(--text)">${emailMasked}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:1px">${date}</div>
-        </div>
-        <div style="text-align:center">
-          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;background:${statusColor}20;color:${statusColor}">${statusLabel}</span>
-        </div>
-        <div style="text-align:right;font-weight:600;color:var(--text)">$${earned}</div>
-      </div>`;
-    }).join('');
-
-    tbody.innerHTML = rows;
-  } catch(e) { console.warn('Referral stats error:', e); }
-}
-
-// Copiar link al clipboard
-function copyReferralLink() {
-  if (!referralCode) return;
-  const link = 'https://app.acuarius.app/?ref=' + referralCode;
-  const flashBtn = (btnId) => {
-    const btn = document.getElementById(btnId);
-    if (!btn) return;
-    const orig = btn.innerHTML;
-    btn.innerHTML = '¡Copiado!';
-    btn.style.background = '#22c55e';
-    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
-  };
-  navigator.clipboard.writeText(link).then(() => {
-    flashBtn('ref-copy-btn');
-    flashBtn('ref-modal-copy-btn');
-  }).catch(() => {
-    // Fallback para iOS
-    const el = document.createElement('textarea');
-    el.value = link;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    flashBtn('ref-copy-btn');
-    flashBtn('ref-modal-copy-btn');
-  });
-}
-
-// Abrir/cerrar modal de referidos
-function openUpgradeFlow() {
-  // Para usuarios free: mostrar selector de plan
-  const existing = document.getElementById('upgrade-flow-modal');
-  if (existing) { existing.remove(); }
-  const modal = document.createElement('div');
-  modal.id = 'upgrade-flow-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-  modal.innerHTML = `
-    <div style="background:var(--bg);border-radius:18px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <div style="font-size:16px;font-weight:700;color:var(--text)">Elige tu plan</div>
-        <button onclick="document.getElementById('upgrade-flow-modal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:18px;line-height:1;padding:2px 6px">&times;</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div style="border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:.15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="window.open('https://pay.hotmart.com/G105202218G','_blank');document.getElementById('upgrade-flow-modal').remove()">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:14px;font-weight:700;color:var(--text)">Plan Individual</div>
-            <div style="font-size:15px;font-weight:800;color:var(--blue)">$19<span style="font-size:11px;font-weight:500;color:var(--text-3)">/mes</span></div>
-          </div>
-          <div style="font-size:12px;color:var(--text-3);line-height:1.6">Todos los agentes de IA · 1 negocio · Mensajes ilimitados · Imágenes incluidas</div>
-        </div>
-        <div style="border:2px solid var(--blue);border-radius:12px;padding:18px;cursor:pointer;background:var(--blue-fade, #f0f4ff);position:relative;transition:.15s" onmouseover="this.style.borderColor='var(--blue-mid)'" onmouseout="this.style.borderColor='var(--blue)'" onclick="window.open('https://pay.hotmart.com/L105202723X','_blank');document.getElementById('upgrade-flow-modal').remove()">
-          <div style="position:absolute;top:-10px;right:14px;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;letter-spacing:.3px">MÁS POPULAR</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:14px;font-weight:700;color:var(--text)">Plan Agencia</div>
-            <div style="font-size:15px;font-weight:800;color:var(--blue)">$49<span style="font-size:11px;font-weight:500;color:var(--text-3)">/mes</span></div>
-          </div>
-          <div style="font-size:12px;color:var(--text-3);line-height:1.6">Todos los agentes · Hasta 20 clientes · Panel de agencia · Reportes · Imágenes ilimitadas</div>
-        </div>
-      </div>
-      <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:14px">Pago seguro a través de Hotmart · Cancela cuando quieras</div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
-function openReferralModal() {
-  const modal = document.getElementById('referral-modal');
-  if (!modal) return;
-  modal.style.display = 'flex';
-  // Cargar link de referido en el modal
-  const userId = clerkInstance?.user?.id;
-  if (!userId) return;
-  fetch('/api/referral?action=my-code&userId=' + encodeURIComponent(userId))
-    .then(r => r.json())
-    .then(d => {
-      if (d.code) {
-        referralCode = d.code;
-        const link = 'https://app.acuarius.app/?ref=' + d.code;
-        const urlEl = document.getElementById('ref-modal-url');
-        if (urlEl) urlEl.textContent = link;
-      }
-    }).catch(() => {});
-  // Cargar estadísticas en el modal
-  fetch('/api/referral?action=stats&userId=' + encodeURIComponent(userId))
-    .then(r => r.json())
-    .then(d => {
-      const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-      set('ref-modal-count', d.active || 0);
-      set('ref-modal-earned', '$' + parseFloat(d.earned || 0).toFixed(2));
-      set('ref-modal-pending', '$' + parseFloat(d.pending || 0).toFixed(2));
-    }).catch(() => {});
-}
-
-function closeReferralModal() {
-  const modal = document.getElementById('referral-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function shareReferralWhatsApp() {
-  if (!referralCode) return;
-  const link = 'https://app.acuarius.app/?ref=' + referralCode;
-  const msg = encodeURIComponent('Te invito a probar Acuarius, el SaaS de marketing con IA para agencias. Usa mi enlace: ' + link);
-  window.open('https://wa.me/?text=' + msg, '_blank');
-}
-
-function shareReferralEmail() {
-  if (!referralCode) return;
-  const link = 'https://app.acuarius.app/?ref=' + referralCode;
-  const subject = encodeURIComponent('Te invito a Acuarius — Marketing con IA');
-  const body = encodeURIComponent('Hola,\n\nTe comparto mi enlace de referido para que pruebes Acuarius, la plataforma de marketing con IA para agencias y empresas en LatAm:\n\n' + link + '\n\nSaludos');
-  window.open('mailto:?subject=' + subject + '&body=' + body);
-}
-
-function shareReferralLinkedIn() {
-  if (!referralCode) return;
-  const link = encodeURIComponent('https://app.acuarius.app/?ref=' + referralCode);
-  window.open('https://www.linkedin.com/sharing/share-offsite/?url=' + link, '_blank');
-}
-
-// Capturar ?ref=CODE al cargar la página y guardarlo en localStorage
-(function captureReferralCode() {
-  const params = new URLSearchParams(window.location.search);
-  const ref = params.get('ref');
-  if (ref && ref.length >= 4) {
-    localStorage.setItem('pending_ref_code', ref.toUpperCase());
-    // Limpiar URL sin recargar
-    const clean = window.location.pathname + (window.location.search.replace(/[?&]ref=[^&]*/g, '').replace(/^&/, '?') || '');
-    window.history.replaceState({}, '', clean);
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/pipeline-stages${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    crmStages = data.stages || [];
+    crmPopulateStageSelects();
+  } catch(e) {
+    console.error('crmLoadStages', e);
   }
-})();
+}
 
-// Registrar referido al iniciar sesión (llamar desde initAuth o tras autenticación)
-async function registerPendingReferral() {
-  const refCode = localStorage.getItem('pending_ref_code');
-  if (!refCode) return;
-
-  const userId = clerkInstance?.user?.id;
-  const email  = clerkInstance?.user?.primaryEmailAddress?.emailAddress;
-  if (!userId || !email) return;
-
+async function crmLoadLeads() {
   try {
-    const r = await fetch('/api/referral?action=register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'register', refCode, referredEmail: email, referredUserId: userId }),
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/leads${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    crmLeads = data.leads || [];
+    crmRender();
+  } catch(e) {
+    console.error('crmLoadLeads', e);
+  }
+}
+
+function crmPopulateStageSelects() {
+  ['crm-f-stage', 'crm-d-stage'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = crmStages.map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
+  });
+}
+
+function crmSetView(v) {
+  crmView = v;
+  document.getElementById('crm-btn-kanban').classList.toggle('active', v === 'kanban');
+  document.getElementById('crm-btn-list').classList.toggle('active', v === 'list');
+  document.getElementById('crm-kanban').style.display = v === 'kanban' ? 'flex' : 'none';
+  document.getElementById('crm-list-view').style.display = v === 'list' ? 'block' : 'none';
+  crmRender();
+}
+
+function crmRender() {
+  if (crmView === 'kanban') crmRenderKanban();
+  else crmRenderList();
+  crmUpdateClientTag();
+  crmUpdateSidebarCount();
+}
+
+function crmRenderKanban() {
+  const container = document.getElementById('crm-kanban');
+  if (!container) return;
+  container.innerHTML = '';
+  crmStages.forEach(stage => {
+    const leads = crmLeads.filter(l => l.stage === stage.key);
+    const col = document.createElement('div');
+    col.className = 'crm-col';
+    col.innerHTML = `
+      <div class="crm-col-head">
+        <div class="crm-col-dot" style="background:${esc(stage.color)}"></div>
+        <div class="crm-col-label">${esc(stage.label)}</div>
+        <div class="crm-col-count">${leads.length}</div>
+      </div>
+      <div class="crm-col-body" id="crm-col-${esc(stage.key)}" data-stage="${esc(stage.key)}">
+        ${leads.length === 0 ? `<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>` : leads.map(l => crmCardHTML(l)).join('')}
+        <button class="crm-add-card" onclick="crmOpenModal('${esc(stage.key)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Agregar
+        </button>
+      </div>`;
+    container.appendChild(col);
+    crmSetupDrop(col.querySelector('.crm-col-body'), stage.key);
+  });
+  container.querySelectorAll('.crm-card').forEach(card => {
+    card.draggable = true;
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      card.classList.add('dragging');
     });
-    const d = await r.json();
-    if (d.ok) localStorage.removeItem('pending_ref_code');
-  } catch(e) { console.warn('Register referral error:', e); }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// HTML DESIGN SYSTEM — Layouts profesionales para anuncios
-// ══════════════════════════════════════════════════════════════════
-
-let hdwVariations = 3;
-let hdwFormat = 'feed';
-let hdwCategory = 'general';
-
-const HDW_CATEGORIES = [
-  { id:'general',     label:'General',      icon:'✨', desc:'Auto-detecta el estilo' },
-  { id:'yoga',        label:'Yoga / Bienestar', icon:'🧘', desc:'Sereno, natural, mindfulness' },
-  { id:'fitness',     label:'Fitness',      icon:'💪', desc:'Energético, motivacional' },
-  { id:'ecommerce',   label:'E-commerce',   icon:'🛍️', desc:'Producto, tienda online' },
-  { id:'restaurante', label:'Restaurante',  icon:'🍽️', desc:'Gastronomía, cafés, comida' },
-  { id:'belleza',     label:'Belleza / Spa',icon:'💅', desc:'Estética, lujo, cuidado' },
-  { id:'educacion',   label:'Educación',    icon:'📚', desc:'Cursos, academias, tutorías' },
-  { id:'tecnologia',  label:'Tecnología',   icon:'💻', desc:'Apps, SaaS, startups' },
-  { id:'turismo',     label:'Turismo',      icon:'✈️', desc:'Viajes, hoteles, destinos' },
-  { id:'moda',        label:'Moda',         icon:'👗', desc:'Ropa, accesorios, lifestyle' },
-];
-
-// Template pools by category and format
-const HDW_CATEGORY_TEMPLATES = {
-  general:     { feed:[9,14,10,4,5,6],   story:[19,1,7,0],    square:[10,11,12,13,9,3] },
-  yoga:        { feed:[16,16,14,6,13,4], story:[17,18,19,17,18], square:[15,15,13,11,10,12] },
-  fitness:     { feed:[5,14,9,4,6,10],   story:[19,1,7,0],    square:[3,12,10,11,13,9] },
-  ecommerce:   { feed:[9,4,14,5,6,10],   story:[19,1,0,7],    square:[9,10,11,3,12,13] },
-  restaurante: { feed:[4,6,14,9,5,10],   story:[19,1,7,0],    square:[11,13,10,12,9,3] },
-  belleza:     { feed:[6,4,9,14,10,5],   story:[19,7,1,0],    square:[11,10,13,12,3,9] },
-  educacion:   { feed:[10,9,4,14,6,5],   story:[19,0,7,1],    square:[10,11,3,12,13,9] },
-  tecnologia:  { feed:[14,5,9,4,10,6],   story:[19,0,1,7],    square:[3,10,12,11,9,13] },
-  turismo:     { feed:[4,14,6,9,5,10],   story:[19,1,7,0],    square:[11,13,10,9,12,3] },
-  moda:        { feed:[6,14,4,9,10,5],   story:[19,7,1,0],    square:[11,10,13,9,12,3] },
-};
-
-function showHtmlDesignWizard() {
-  loadImageUsage();
-  if (!canGenerateImage()) { showImageLimitReached(); return; }
-
-  const isAdmin = isAdminUser();
-  const remaining = (!isAdmin && userPlan !== 'pro') ? Math.max(0, imageUsage.limit - imageUsage.generated) : '∞';
-
-  const logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg>';
-
-  // Pre-fill with active client brief if available
-  const client = agencyActiveClientId ? agencyClients.find(c => c.id === agencyActiveClientId) : null;
-  const prePrompt = client
-    ? (client.name || '') + (client.descripcion ? ' — ' + client.descripcion : '') + (client.industria ? '. Industria: ' + client.industria : '')
-    : '';
-
-  const el = document.createElement('div');
-  el.className = 'msg';
-  el.id = 'html-design-wizard';
-  el.innerHTML =
-    '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-    '<div style="max-width:480px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:14px;padding:20px">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-          '<div style="font-size:15px;font-weight:700;color:var(--text)">🎨 Diseño estructurado</div>' +
-          (remaining !== '∞' ? '<div style="margin-left:auto;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">' + remaining + ' restantes</div>' : '') +
-        '</div>' +
-        '<div style="font-size:11px;color:var(--muted2);margin-bottom:14px">Describe tu negocio y campaña — la IA genera el copy, colores y diseño automáticamente.</div>' +
-
-        '<textarea id="hdw-prompt" rows="3" placeholder="Ej: Gimnasio CrossFit en Bogotá, primer mes gratis para nuevos socios, ambiente energético y motivacional&#10;&#10;O: Tienda de ropa femenina, colección primavera con 30% de descuento, estilo moderno y casual" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.45;color:var(--text);background:white">' + prePrompt + '</textarea>' +
-
-        '<div style="margin-top:14px">' +
-          '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Categoría / Industria</div>' +
-          '<div style="display:flex;gap:6px;flex-wrap:wrap" id="hdw-cat-btns">' +
-            HDW_CATEGORIES.map((c,i) =>
-              '<button onclick="hdwSetCat(this,\'' + c.id + '\')" class="hdw-cat-btn" title="' + c.desc + '" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border:1.5px solid ' + (i===0?'var(--blue)':'var(--border)') + ';border-radius:7px;font-size:11px;font-weight:600;background:' + (i===0?'var(--blue-lt)':'white') + ';color:' + (i===0?'var(--blue)':'var(--muted)') + ';cursor:pointer;font-family:var(--font)">' +
-                '<span>' + c.icon + '</span><span>' + c.label + '</span>' +
-              '</button>'
-            ).join('') +
-          '</div>' +
-        '</div>' +
-
-        '<div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">' +
-          '<div>' +
-            '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Variaciones</div>' +
-            '<div style="display:flex;gap:6px" id="hdw-var-btns">' +
-              '<button onclick="hdwSetVar(this,3)" class="hdw-sel-btn hdw-active" style="padding:6px 14px;border:1.5px solid var(--blue);border-radius:7px;font-size:12px;font-weight:700;background:var(--blue-lt);color:var(--blue);cursor:pointer;font-family:var(--font)">3</button>' +
-              '<button onclick="hdwSetVar(this,5)" class="hdw-sel-btn" style="padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">5</button>' +
-              '<button onclick="hdwSetVar(this,10)" class="hdw-sel-btn" style="padding:6px 14px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">10</button>' +
-            '</div>' +
-          '</div>' +
-          '<div>' +
-            '<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Formato</div>' +
-            '<div style="display:flex;gap:6px;flex-wrap:wrap" id="hdw-fmt-btns">' +
-              '<button onclick="hdwSetFmt(this,\'feed\')" class="hdw-fmt-btn hdw-active" style="padding:6px 12px;border:1.5px solid var(--blue);border-radius:7px;font-size:11px;font-weight:700;background:var(--blue-lt);color:var(--blue);cursor:pointer;font-family:var(--font)">📱 Feed</button>' +
-              '<button onclick="hdwSetFmt(this,\'story\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">📲 Story</button>' +
-              '<button onclick="hdwSetFmt(this,\'square\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">⬛ Square</button>' +
-              '<button onclick="hdwSetFmt(this,\'all\')" class="hdw-fmt-btn" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;background:white;color:var(--muted);cursor:pointer;font-family:var(--font)">🎲 Todos</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">' +
-          '<div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Personalizar (opcional)</div>' +
-          '<div style="display:flex;gap:10px;margin-bottom:8px">' +
-            '<label style="flex:1;cursor:pointer">' +
-              '<input type="file" id="hdw-bg-file" accept="image/*" style="display:none" onchange="hdwPreviewFile(this,\'hdw-bg-lbl\')">' +
-              '<div id="hdw-bg-lbl" style="border:1.5px dashed var(--border);border-radius:10px;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\'" onmouseout="this.style.borderColor=\'var(--border)\'">🖼️ Subir fondo / producto</div>' +
-            '</label>' +
-            '<label style="flex:1;cursor:pointer">' +
-              '<input type="file" id="hdw-logo-file" accept="image/*" style="display:none" onchange="hdwPreviewFile(this,\'hdw-logo-lbl\')">' +
-              '<div id="hdw-logo-lbl" style="border:1.5px dashed var(--border);border-radius:10px;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue-md)\'" onmouseout="this.style.borderColor=\'var(--border)\'">🏷️ Subir logo</div>' +
-            '</label>' +
-          '</div>' +
-        '</div>' +
-        '<button onclick="runHtmlDesign()" style="width:100%;margin-top:16px;padding:13px;background:var(--blue);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:background .15s" onmouseover="this.style.background=\'var(--blue-h)\'" onmouseout="this.style.background=\'var(--blue)\'">✨ Crear diseños</button>' +
-      '</div>' +
-    '</div>';
-
-  document.getElementById('chat-area').appendChild(el);
-  scrollB();
-  setTimeout(() => document.getElementById('hdw-prompt')?.focus(), 100);
-}
-
-function hdwSetCat(btn, cat) {
-  hdwCategory = cat;
-  document.querySelectorAll('.hdw-cat-btn').forEach(b => {
-    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('click', () => crmOpenDetail(card.dataset.id));
   });
-  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
 }
 
-function hdwSetVar(btn, n) {
-  hdwVariations = n;
-  document.querySelectorAll('.hdw-sel-btn').forEach(b => {
-    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
+function crmCardHTML(lead) {
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  return `<div class="crm-card" data-id="${esc(lead.id)}">
+    <div class="crm-card-name">${esc(lead.name)}</div>
+    <div class="crm-card-meta">
+      ${lead.company ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>${esc(lead.company)}</div>` : ''}
+      ${lead.email ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(lead.email)}</div>` : ''}
+      ${lead.phone ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>${esc(lead.phone)}</div>` : ''}
+    </div>
+    <div class="crm-card-source">${esc(sourceLabels[lead.source] || lead.source || 'Manual')}</div>
+    ${lead.value ? `<div class="crm-card-value">$${Number(lead.value).toLocaleString()}</div>` : ''}
+  </div>`;
+}
+
+function crmSetupDrop(el, stageKey) {
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', async e => {
+    e.preventDefault();
+    el.classList.remove('drag-over');
+    const leadId = e.dataTransfer.getData('text/plain');
+    if (!leadId) return;
+    const lead = crmLeads.find(l => l.id === leadId);
+    if (!lead || lead.stage === stageKey) return;
+    const oldStage = lead.stage;
+    lead.stage = stageKey;
+    crmRenderKanban();
+    try {
+      await fetch(`/api/leads`, {
+        method: 'PUT',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: leadId, stage: stageKey }),
+      });
+      // log stage change activity
+      await fetch('/api/lead-activities', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Movido de ${oldStage} a ${stageKey}`, metadata: { from: oldStage, to: stageKey } }),
+      });
+    } catch(e) { console.error('crmDrop', e); }
   });
-  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
 }
 
-function hdwSetFmt(btn, fmt) {
-  hdwFormat = fmt;
-  document.querySelectorAll('.hdw-fmt-btn').forEach(b => {
-    b.style.borderColor = 'var(--border)'; b.style.background = 'white'; b.style.color = 'var(--muted)';
-  });
-  btn.style.borderColor = 'var(--blue)'; btn.style.background = 'var(--blue-lt)'; btn.style.color = 'var(--blue)';
-}
-
-async function runHtmlDesign() {
-  const prompt = document.getElementById('hdw-prompt')?.value?.trim();
-  if (!prompt) {
-    document.getElementById('hdw-prompt').style.borderColor = '#ef4444';
+function crmRenderList() {
+  const tbody = document.getElementById('crm-list-body');
+  if (!tbody) return;
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  if (crmLeads.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Sin leads aún. Crea el primero.</td></tr>`;
     return;
   }
+  tbody.innerHTML = crmLeads.map(l => {
+    const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: '#6B7280' };
+    return `<tr onclick="crmOpenDetail('${esc(l.id)}')">
+      <td style="font-weight:600">${esc(l.name)}</td>
+      <td>${esc(l.company || '—')}</td>
+      <td style="color:var(--muted)">${esc(l.email || '—')}</td>
+      <td><span class="crm-stage-pill" style="background:${esc(stage.color)}20;color:${esc(stage.color)}">${esc(stage.label)}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${esc(sourceLabels[l.source] || l.source || 'Manual')}</td>
+      <td style="font-size:11px;color:var(--muted2)">${l.created_at ? new Date(l.created_at).toLocaleDateString('es-CO') : '—'}</td>
+    </tr>`;
+  }).join('');
+}
 
-  const count = hdwVariations;
-  const fmt = hdwFormat;
-  const cat = hdwCategory;
-
-  // Read file inputs BEFORE removing wizard from DOM
-  const bgFileInput = document.getElementById('hdw-bg-file');
-  const logoFileInput = document.getElementById('hdw-logo-file');
-  let customBgBase64 = null;
-  let logoBase64 = null;
-  if (bgFileInput && bgFileInput.files && bgFileInput.files[0]) {
-    customBgBase64 = await new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.readAsDataURL(bgFileInput.files[0]);
-    });
+function crmUpdateClientTag() {
+  const tag = document.getElementById('crm-client-tag');
+  const nameEl = document.getElementById('crm-client-tag-name');
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  if (tag && clientId) {
+    tag.style.display = 'flex';
+    if (nameEl) {
+      const clients = typeof agencyClients !== 'undefined' ? agencyClients : [];
+      const c = clients.find(x => x.id === clientId);
+      nameEl.textContent = c ? c.name : clientId;
+    }
+  } else if (tag) {
+    tag.style.display = 'none';
   }
-  if (logoFileInput && logoFileInput.files && logoFileInput.files[0]) {
-    logoBase64 = await new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.readAsDataURL(logoFileInput.files[0]);
-    });
+}
+
+function crmUpdateSidebarCount() {
+  const el = document.getElementById('sb-leads-count');
+  if (el) el.textContent = crmLeads.length;
+  const btn = document.getElementById('sb-leads-btn');
+  if (btn) btn.style.display = 'block';
+}
+
+// ── Modal crear/editar ────────────────────────────────────────────────────────
+function crmOpenModal(defaultStage) {
+  crmEditingId = null;
+  document.getElementById('crm-modal-title').textContent = 'Nuevo lead';
+  document.getElementById('crm-f-name').value = '';
+  document.getElementById('crm-f-email').value = '';
+  document.getElementById('crm-f-phone').value = '';
+  document.getElementById('crm-f-company').value = '';
+  document.getElementById('crm-f-notes').value = '';
+  document.getElementById('crm-f-source').value = 'manual';
+  crmPopulateStageSelects();
+  if (defaultStage) document.getElementById('crm-f-stage').value = defaultStage;
+  document.getElementById('crm-save-btn').disabled = false;
+  document.getElementById('crm-modal').classList.add('open');
+  setTimeout(() => document.getElementById('crm-f-name').focus(), 100);
+}
+
+function crmCloseModal() {
+  document.getElementById('crm-modal').classList.remove('open');
+  crmEditingId = null;
+}
+
+async function crmSaveLead() {
+  const name = document.getElementById('crm-f-name').value.trim();
+  if (!name) { document.getElementById('crm-f-name').focus(); return; }
+  const btn = document.getElementById('crm-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const payload = {
+    name,
+    email: document.getElementById('crm-f-email').value.trim() || null,
+    phone: document.getElementById('crm-f-phone').value.trim() || null,
+    company: document.getElementById('crm-f-company').value.trim() || null,
+    stage: document.getElementById('crm-f-stage').value,
+    source: document.getElementById('crm-f-source').value,
+    notes: document.getElementById('crm-f-notes').value.trim() || null,
+    client_id: clientId,
+  };
+  try {
+    if (crmEditingId) {
+      payload.id = crmEditingId;
+      const res = await fetch('/api/leads', {
+        method: 'PUT',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const idx = crmLeads.findIndex(l => l.id === crmEditingId);
+      if (idx >= 0) crmLeads[idx] = data.lead;
+    } else {
+      const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+      const res = await fetch(`/api/leads${qs}`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      crmLeads.unshift(data.lead);
+      // log creation activity
+      await fetch('/api/lead-activities', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: data.lead.id, type: 'creacion', content: 'Lead creado', metadata: {} }),
+      });
+    }
+    crmCloseModal();
+    crmRender();
+  } catch(e) {
+    console.error('crmSaveLead', e);
+    btn.textContent = 'Error — reintentar';
+    btn.disabled = false;
   }
+}
 
-  document.getElementById('html-design-wizard')?.remove();
+// ── Panel de detalle ──────────────────────────────────────────────────────────
+async function crmOpenDetail(leadId) {
+  const lead = crmLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  crmDetailLead = lead;
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  document.getElementById('crm-d-name').textContent = lead.name;
+  document.getElementById('crm-d-email').textContent = lead.email || '—';
+  document.getElementById('crm-d-phone').textContent = lead.phone || '—';
+  document.getElementById('crm-d-company').textContent = lead.company || '—';
+  document.getElementById('crm-d-source').textContent = sourceLabels[lead.source] || lead.source || 'Manual';
+  const notesSection = document.getElementById('crm-d-notes-section');
+  if (lead.notes) {
+    notesSection.style.display = 'flex';
+    document.getElementById('crm-d-notes').textContent = lead.notes;
+  } else {
+    notesSection.style.display = 'none';
+  }
+  crmPopulateStageSelects();
+  document.getElementById('crm-d-stage').value = lead.stage;
+  document.getElementById('crm-detail-overlay').classList.add('open');
+  document.getElementById('crm-detail-panel').classList.add('open');
+  document.getElementById('crm-activity-input').value = '';
+  await crmLoadActivities(leadId);
+}
 
-  const thinkId = addThinking();
+function crmCloseDetail() {
+  document.getElementById('crm-detail-overlay').classList.remove('open');
+  document.getElementById('crm-detail-panel').classList.remove('open');
+  crmDetailLead = null;
+}
 
-  const updateMsg = (txt) => {
-    const el = document.getElementById(thinkId);
-    if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>' + txt; }
+async function crmChangeStage(newStage) {
+  if (!crmDetailLead) return;
+  const leadId = crmDetailLead.id;
+  const oldStage = crmDetailLead.stage;
+  if (oldStage === newStage) return;
+  crmDetailLead.stage = newStage;
+  const lead = crmLeads.find(l => l.id === leadId);
+  if (lead) lead.stage = newStage;
+  crmRender();
+  try {
+    await fetch('/api/leads', {
+      method: 'PUT',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: leadId, stage: newStage }),
+    });
+    await fetch('/api/lead-activities', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Etapa cambiada de "${oldStage}" a "${newStage}"`, metadata: { from: oldStage, to: newStage } }),
+    });
+    await crmLoadActivities(leadId);
+  } catch(e) { console.error('crmChangeStage', e); }
+}
+
+async function crmLoadActivities(leadId) {
+  const list = document.getElementById('crm-activity-list');
+  if (!list) return;
+  try {
+    const res = await fetch(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const acts = data.activities || [];
+    if (acts.length === 0) {
+      list.innerHTML = `<div style="font-size:12px;color:var(--muted)">Sin actividad registrada.</div>`;
+      return;
+    }
+    const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Cambio de etapa', creacion: 'Creación' };
+    list.innerHTML = acts.map(a => `
+      <div class="crm-activity-item">
+        <div class="crm-activity-dot ${a.type === 'stage_change' ? 'stage' : a.type === 'creacion' ? 'creacion' : ''}"></div>
+        <div class="crm-activity-content">
+          <div class="crm-activity-text"><strong>${esc(typeLabels[a.type] || a.type)}:</strong> ${esc(a.content || '')}</div>
+          <div class="crm-activity-time">${new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</div>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('crmLoadActivities', e); }
+}
+
+async function crmAddActivity() {
+  if (!crmDetailLead) return;
+  const input = document.getElementById('crm-activity-input');
+  const content = input.value.trim();
+  if (!content) return;
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  try {
+    await fetch('/api/lead-activities', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: crmDetailLead.id, type: 'nota', content }),
+    });
+    input.value = '';
+    await crmLoadActivities(crmDetailLead.id);
+  } catch(e) { console.error('crmAddActivity', e); }
+  btn.disabled = false;
+}
+
+function crmEditCurrentLead() {
+  if (!crmDetailLead) return;
+  crmCloseDetail();
+  crmEditingId = crmDetailLead.id;
+  document.getElementById('crm-modal-title').textContent = 'Editar lead';
+  document.getElementById('crm-f-name').value = crmDetailLead.name || '';
+  document.getElementById('crm-f-email').value = crmDetailLead.email || '';
+  document.getElementById('crm-f-phone').value = crmDetailLead.phone || '';
+  document.getElementById('crm-f-company').value = crmDetailLead.company || '';
+  document.getElementById('crm-f-notes').value = crmDetailLead.notes || '';
+  document.getElementById('crm-f-source').value = crmDetailLead.source || 'manual';
+  crmPopulateStageSelects();
+  document.getElementById('crm-f-stage').value = crmDetailLead.stage;
+  document.getElementById('crm-save-btn').disabled = false;
+  document.getElementById('crm-save-btn').textContent = 'Guardar';
+  document.getElementById('crm-modal').classList.add('open');
+}
+
+async function crmDeleteCurrentLead() {
+  if (!crmDetailLead) return;
+  if (!confirm(`¿Eliminar el lead "${crmDetailLead.name}"? Esta acción no se puede deshacer.`)) return;
+  const leadId = crmDetailLead.id;
+  crmCloseDetail();
+  try {
+    await fetch(`/api/leads?id=${encodeURIComponent(leadId)}`, {
+      method: 'DELETE',
+      headers: await getAuthHeaders(),
+    });
+    crmLeads = crmLeads.filter(l => l.id !== leadId);
+    crmRender();
+  } catch(e) { console.error('crmDeleteCurrentLead', e); }
+}
+// ── AGENTES IA / INBOX ───────────────────────────────────────────────────────
+let crmAgents = [];
+let inboxConversations = [];
+let inboxActiveConvId = null;
+let inboxFilter = 'all';
+let agEditingId = null;
+let agFaqs = [];
+
+// ── Vista de Agentes ──────────────────────────────────────────────────────────
+async function crmLoadAgents() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/chat-agents${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    crmAgents = data.agents || [];
+    crmRenderAgents();
+  } catch(e) { console.error('crmLoadAgents', e); }
+}
+
+function crmRenderAgents() {
+  const list = document.getElementById('crm-agents-list');
+  if (!list) return;
+  if (crmAgents.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  const channelIcons = { messenger: '💬', instagram: '📷', whatsapp: '📱', tiktok: '🎵' };
+  list.innerHTML = crmAgents.map(ag => {
+    const connections = ag.channel_connections || [];
+    const activeConns = connections.filter(c => c.is_active);
+    return `<div class="crm-agent-card" onclick="crmOpenAgentModal('${esc(ag.id)}')">
+      <div class="crm-agent-avatar">${esc(ag.name.charAt(0).toUpperCase())}</div>
+      <div class="crm-agent-info">
+        <div class="crm-agent-name">${esc(ag.name)}</div>
+        <div class="crm-agent-desc">${esc((ag.business_ctx || 'Sin contexto de negocio').slice(0, 80))}${(ag.business_ctx || '').length > 80 ? '...' : ''}</div>
+        <div class="crm-agent-channels">
+          ${activeConns.length === 0 ? '<span class="crm-channel-badge inactive">Sin canales</span>' : activeConns.map(c => `<span class="crm-channel-badge ${c.channel}">${channelIcons[c.channel] || ''} ${esc(c.channel_name || c.channel)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="crm-agent-status ${ag.is_active ? 'active' : 'inactive'}"></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Modal Agente ──────────────────────────────────────────────────────────────
+function crmOpenAgentModal(agentId) {
+  agEditingId = agentId || null;
+  agFaqs = [];
+  const isEdit = !!agentId;
+  document.getElementById('crm-agent-modal-title').textContent = isEdit ? 'Editar agente' : 'Nuevo agente de IA';
+  document.getElementById('ag-save-btn').textContent = isEdit ? 'Guardar cambios' : 'Crear agente';
+
+  if (isEdit) {
+    const ag = crmAgents.find(a => a.id === agentId);
+    if (!ag) return;
+    document.getElementById('ag-f-name').value = ag.name || '';
+    document.getElementById('ag-f-persona').value = ag.persona || '';
+    document.getElementById('ag-f-business').value = ag.business_ctx || '';
+    document.getElementById('ag-f-escalate').value = ag.escalate_phrase || '';
+    document.getElementById('ag-f-tone').value = ag.tone || 'informal';
+    agFaqs = (ag.faqs || []).map(f => ({ ...f }));
+    // Show channels section
+    const chSect = document.getElementById('ag-channels-section');
+    if (chSect) { chSect.style.display = 'block'; agRenderChannels(ag); }
+  } else {
+    document.getElementById('ag-f-name').value = '';
+    document.getElementById('ag-f-persona').value = '';
+    document.getElementById('ag-f-business').value = '';
+    document.getElementById('ag-f-escalate').value = 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?';
+    document.getElementById('ag-f-tone').value = 'informal';
+    const chSect = document.getElementById('ag-channels-section');
+    if (chSect) chSect.style.display = 'none';
+  }
+  agRenderFaqs();
+  document.getElementById('crm-agent-modal').classList.add('open');
+  setTimeout(() => document.getElementById('ag-f-name').focus(), 100);
+}
+
+function crmCloseAgentModal() {
+  document.getElementById('crm-agent-modal').classList.remove('open');
+  agEditingId = null;
+  agFaqs = [];
+}
+
+function agRenderFaqs() {
+  const list = document.getElementById('ag-faqs-list');
+  if (!list) return;
+  if (agFaqs.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = agFaqs.map((f, i) => `
+    <div class="crm-faq-item">
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+        <input class="crm-faq-input" placeholder="Pregunta (ej: ¿Cuáles son los precios?)" value="${esc(f.q || '')}" oninput="agFaqs[${i}].q=this.value" />
+        <input class="crm-faq-input" placeholder="Respuesta" value="${esc(f.a || '')}" oninput="agFaqs[${i}].a=this.value" />
+      </div>
+      <button class="crm-faq-del" onclick="agRemoveFaq(${i})">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function agAddFaq() {
+  agFaqs.push({ q: '', a: '' });
+  agRenderFaqs();
+}
+
+function agRemoveFaq(i) {
+  agFaqs.splice(i, 1);
+  agRenderFaqs();
+}
+
+function agRenderChannels(agent) {
+  const list = document.getElementById('ag-channels-list');
+  if (!list) return;
+  const conns = agent.channel_connections || [];
+  const channels = [
+    { key: 'whatsapp', label: 'WhatsApp Business', icon: '📱', color: '#128C7E', desc: 'Conecta un número de WhatsApp Business' },
+    { key: 'messenger', label: 'Messenger', icon: '💬', color: '#1877F2', desc: 'Conecta una Página de Facebook' },
+    { key: 'instagram', label: 'Instagram DMs', icon: '📷', color: '#C13584', desc: 'Conecta una cuenta Instagram Business' },
+  ];
+  list.innerHTML = channels.map(ch => {
+    const conn = conns.find(c => c.channel === ch.key && c.is_active);
+    return `<div class="crm-channel-connect-row">
+      <div class="crm-channel-icon" style="background:${ch.color}20">${ch.icon}</div>
+      <div class="crm-channel-connect-info">
+        <div class="crm-channel-connect-name">${ch.label}</div>
+        <div class="crm-channel-connect-status">${conn ? `Conectado: ${esc(conn.channel_name || conn.external_id)}` : ch.desc}</div>
+      </div>
+      ${conn
+        ? `<button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Desconectar</button>`
+        : `<button class="crm-channel-btn connect" onclick="agConnectChannel('${esc(ch.key)}','${esc(agent.id)}')">Conectar</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+async function crmSaveAgent() {
+  const name = document.getElementById('ag-f-name').value.trim();
+  if (!name) { document.getElementById('ag-f-name').focus(); return; }
+  const btn = document.getElementById('ag-save-btn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+
+  const payload = {
+    name,
+    persona: document.getElementById('ag-f-persona').value.trim(),
+    business_ctx: document.getElementById('ag-f-business').value.trim(),
+    escalate_phrase: document.getElementById('ag-f-escalate').value.trim(),
+    tone: document.getElementById('ag-f-tone').value,
+    faqs: agFaqs.filter(f => f.q && f.a),
   };
 
   try {
-    updateMsg('Analizando tu negocio con IA...');
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-    // Step 1: Get design brief from Claude
-    const briefRes = await fetch('/api/design-brief', {
-      method: 'POST', headers,
-      body: JSON.stringify({ prompt, format: fmt, category: cat }),
-    });
-    const brief = await briefRes.json();
-    if (brief.error) throw new Error(brief.error);
-
-    // Step 2: Generate background photo with Flux (photo mode, no text) — skip if user uploaded custom bg
-    let bgBase64 = customBgBase64;
-    if (!customBgBase64) {
-      updateMsg('Generando foto de fondo...');
-      const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
-      const needsPeople = ['yoga','fitness','belleza','turismo','educacion','moda'].includes(cat);
-      const bgRes = await fetch('/api/generate-image', {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text' + (needsPeople ? ', natural lighting, authentic feeling' : ', no people') + ', vibrant colors',
-          format: fluxFormat,
-          variations: 1,
-          hasText: false,
-        }),
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    if (agEditingId) {
+      payload.id = agEditingId;
+      const res = await fetch('/api/chat-agents', {
+        method: 'PUT',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      const bgData = await bgRes.json();
-      bgBase64 = bgData.images?.[0] ? ('data:' + bgData.images[0].mediaType + ';base64,' + bgData.images[0].base64) : null;
+      if (!res.ok) throw new Error();
+    } else {
+      const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+      const res = await fetch(`/api/chat-agents${qs}`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
     }
-
-    rmThinking(thinkId);
-
-    // Step 3: Render N HTML template variations
-    await renderHtmlVariations(brief, customBgBase64 || bgBase64, count, fmt, logoBase64, cat);
-
-  } catch (err) {
-    rmThinking(thinkId);
-    console.error('[generate-image]', err.message);
-    addAgent('Tuvimos un error inesperado al generar los diseños. Por favor contacta a soporte si el problema persiste.');
+    crmCloseAgentModal();
+    await crmLoadAgents();
+  } catch(e) {
+    console.error('crmSaveAgent', e);
+    btn.textContent = 'Error — reintentar';
+    btn.disabled = false;
   }
 }
 
-// ── Template selection logic ───────────────────────────────────────────────
-// Templates by format:
-// story (0): Split left text / right photo
-// story (1): Full photo + dark overlay
-// square (2): Split left text / right photo rounded
-// square (3): Dark photo + white text + icons row
-// feed (4):   Full photo + gradient overlay (4:5)
+async function agConnectChannel(channel, agentId) {
+  if (channel === 'whatsapp') {
+    // WhatsApp: pedir datos manualmente
+    const phoneNumberId = prompt('Phone Number ID de WhatsApp Business (lo encuentras en Meta Business Suite → WhatsApp → Número):');
+    if (!phoneNumberId) return;
+    const token = prompt('Access Token con permiso whatsapp_business_messaging:');
+    if (!token) return;
+    const name = prompt('Nombre del número (ej: +57 300 123 4567):') || phoneNumberId;
 
-const HDW_TEMPLATES = [
-  { format:'story',  label:'Story · Split',        id:0 },
-  { format:'story',  label:'Story · Overlay',      id:1 },
-  { format:'story',  label:'Story · Half',         id:7 },
-  { format:'square', label:'Square · Split',       id:2 },
-  { format:'square', label:'Square · Dark',        id:3 },
-  { format:'square', label:'Square · Card',        id:8 },
-  { format:'feed',   label:'Feed · Overlay',       id:4 },
-  { format:'feed',   label:'Feed · Impact',        id:5 },
-  { format:'feed',   label:'Feed · Clean',         id:6 },
-  { format:'feed',   label:'Feed · E-commerce',    id:9 },
-  { format:'square', label:'Square · Profile',     id:10 },
-  { format:'square', label:'Square · Magazine',    id:11 },
-  { format:'square', label:'Square · Dark Event',  id:12 },
-  { format:'square', label:'Square · Lifestyle',   id:13 },
-  { format:'feed',   label:'Feed · Diagonal',      id:14 },
-  { format:'square', label:'Yoga · Serenity',      id:15 },
-  { format:'feed',   label:'Yoga · Zen Split',     id:16 },
-  { format:'story',  label:'Yoga · Story Flow',    id:17 },
-  { format:'story',  label:'Yoga · Minimal Light', id:18 },
-  { format:'story',  label:'Story · Hero Panel',   id:19 },
-];
+    // Verify the token works
+    const testRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}?access_token=${token}`);
+    const testData = await testRes.json();
+    if (testData.error) { alert('Token o Phone Number ID inválido: ' + testData.error.message); return; }
 
-function hdwGetTemplateList(fmt, count, category) {
-  const fmtMap = {0:'story',1:'story',2:'square',3:'square',4:'feed',5:'feed',6:'feed',7:'story',8:'square',9:'feed',10:'square',11:'square',12:'square',13:'square',14:'feed',15:'square',16:'feed',17:'story',18:'story',19:'story'};
+    const res = await fetch('/api/channel-connections', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, channel, external_id: phoneNumberId, access_token: token, channel_name: name }),
+    });
+    if (res.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
+    else alert('Error conectando WhatsApp. Verifica los datos.');
 
-  let pool = [];
-  const catKey = (category && HDW_CATEGORY_TEMPLATES[category]) ? category : 'general';
-  const catPools = HDW_CATEGORY_TEMPLATES[catKey];
-
-  if (fmt === 'all') {
-    // Mix of all formats from category
-    const p = catPools;
-    pool = [p.feed[0], p.story[0], p.square[0], p.feed[1], p.story[1], p.square[1], p.feed[2], p.story[2], p.square[2], p.feed[3]];
   } else {
-    pool = catPools[fmt] || catPools['feed'];
-  }
+    // Messenger / Instagram: usar token Meta existente
+    const metaToken = sessionStorage.getItem('metaToken') || localStorage.getItem('meta_access_token');
+    if (!metaToken) {
+      alert('Primero conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads');
+      return;
+    }
+    const res = await fetch(`/api/channel-connections?action=list_pages&token=${encodeURIComponent(metaToken)}`, { headers: await getAuthHeaders() });
+    if (!res.ok) { alert('Error listando páginas de Meta.'); return; }
+    const data = await res.json();
+    const pages = data.pages || [];
+    if (pages.length === 0) { alert('No se encontraron páginas de Facebook administradas por esta cuenta.'); return; }
 
-  // Cycle the pool if count > pool length
-  const extended = [];
-  for (let i = 0; i < count; i++) extended.push(pool[i % pool.length]);
-
-  return extended.slice(0, count).map((tplId, i) => ({
-    tplId,
-    palette: i % 2 === 0 ? 'primary' : 'alt',
-    label: HDW_TEMPLATES.find(t => t.id === tplId)?.label || 'Ad',
-    format: fmtMap[tplId] || 'feed',
-  }));
-}
-
-async function renderHtmlVariations(brief, bgBase64, count, fmt, logoBase64, category) {
-  const templates = hdwGetTemplateList(fmt, count, category);
-  const total = templates.length;
-
-  // Initialize shared grid (first call = index 1)
-  for (let i = 0; i < total; i++) {
-    const tpl = templates[i];
-    const thinkId = addThinking();
-    const el = document.getElementById(thinkId);
-    if (el) { const bbl = el.querySelector('.thinking-bbl'); if (bbl) bbl.innerHTML = '<div class="spinner"></div>renderizando diseño ' + (i+1) + ' de ' + total + '...'; }
-
-    try {
-      const imgData = await captureHtmlTemplate(brief, bgBase64, tpl.tplId, tpl.palette, logoBase64);
-      rmThinking(thinkId);
-      renderAdImage({ base64: imgData.base64, mediaType: 'image/png' }, i + 1, total, tpl.format, tpl.label, false);
-      if (i === 0) incrementImageUsage();
-    } catch(err) {
-      rmThinking(thinkId);
-      addAgent('Error en variación ' + (i+1) + ': ' + err.message);
+    let options = '';
+    if (channel === 'messenger') {
+      options = pages.map((p, i) => `${i + 1}. ${p.name} (ID: ${p.id})`).join('\n');
+      const choice = prompt(`Selecciona el número de la página para Messenger:\n\n${options}`);
+      const idx = parseInt(choice) - 1;
+      if (isNaN(idx) || !pages[idx]) return;
+      const page = pages[idx];
+      // Get page access token
+      const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
+      const ptData = await ptRes.json();
+      const pageToken = ptData.access_token;
+      const connRes = await fetch('/api/channel-connections', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, channel: 'messenger', external_id: page.id, access_token: pageToken, channel_name: page.name }),
+      });
+      if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
+    } else if (channel === 'instagram') {
+      const igPages = pages.filter(p => p.instagram_business_account);
+      if (igPages.length === 0) { alert('No se encontraron cuentas de Instagram Business conectadas a tus páginas.'); return; }
+      options = igPages.map((p, i) => `${i + 1}. ${p.instagram_business_account.name || p.name}`).join('\n');
+      const choice = prompt(`Selecciona la cuenta de Instagram:\n\n${options}`);
+      const idx = parseInt(choice) - 1;
+      if (isNaN(idx) || !igPages[idx]) return;
+      const page = igPages[idx];
+      const igAcct = page.instagram_business_account;
+      const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
+      const ptData = await ptRes.json();
+      const connRes = await fetch('/api/channel-connections', {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, channel: 'instagram', external_id: igAcct.id, access_token: ptData.access_token, channel_name: igAcct.name || page.name }),
+      });
+      if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
     }
   }
 }
 
-// ── HTML capture via html2canvas ──────────────────────────────────────────
-async function captureHtmlTemplate(brief, bgBase64, tplId, palette, logoBase64) {
-  const dims = { 0:{w:1080,h:1920}, 1:{w:1080,h:1920}, 7:{w:1080,h:1920}, 2:{w:1080,h:1080}, 3:{w:1080,h:1080}, 8:{w:1080,h:1080}, 4:{w:1080,h:1350}, 5:{w:1080,h:1350}, 6:{w:1080,h:1350}, 9:{w:1080,h:1350}, 10:{w:1080,h:1080}, 11:{w:1080,h:1080}, 12:{w:1080,h:1080}, 13:{w:1080,h:1080}, 14:{w:1080,h:1350} };
-  const d = dims[tplId] || dims[4];
+async function agDisconnectChannel(connId, agentId) {
+  if (!confirm('¿Desconectar este canal? El agente dejará de responder mensajes por este canal.')) return;
+  await fetch(`/api/channel-connections?id=${encodeURIComponent(connId)}`, {
+    method: 'DELETE', headers: await getAuthHeaders(),
+  });
+  await crmLoadAgents();
+  crmOpenAgentModal(agentId);
+}
 
-  // Container: off-screen, real size
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + d.w + 'px;height:' + d.h + 'px;overflow:hidden;z-index:-1';
-  container.innerHTML = hdwBuildTemplate(brief, bgBase64, tplId, palette, d.w, d.h, logoBase64);
-  document.body.appendChild(container);
+// ── Inbox ─────────────────────────────────────────────────────────────────────
+async function crmLoadInbox(filterStatus) {
+  if (filterStatus) inboxFilter = filterStatus;
+  try {
+    let qs = inboxFilter === 'all' ? '' : `&status=${inboxFilter}`;
+    const res = await fetch(`/api/chat-conversations?${qs}`, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    inboxConversations = data.conversations || [];
+    inboxRenderList();
+    inboxUpdateBadge();
+  } catch(e) { console.error('crmLoadInbox', e); }
+}
 
-  // Wait for fonts + images
-  await document.fonts.ready;
-  await new Promise(r => setTimeout(r, 300));
+function inboxRenderList() {
+  const list = document.getElementById('crm-inbox-conv-list');
+  if (!list) return;
+  const channelIcons = { messenger: '💬', instagram: '📷', whatsapp: '📱', tiktok: '🎵' };
+  if (inboxConversations.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted)">Sin conversaciones aún. Los mensajes de tus canales conectados aparecerán aquí.</div>';
+    return;
+  }
+  list.innerHTML = inboxConversations.map(conv => {
+    const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
+    const time = conv.last_message_at ? timeAgo(conv.last_message_at) : '';
+    return `<div class="crm-inbox-conv-item${inboxActiveConvId === conv.id ? ' active' : ''}" onclick="inboxOpenConv('${esc(conv.id)}')">
+      <div class="crm-inbox-conv-avatar">${name.charAt(0).toUpperCase()}</div>
+      <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+        <div class="crm-inbox-conv-info">
+          <div class="crm-inbox-conv-name">${esc(name)}</div>
+          <div class="crm-inbox-conv-preview">${esc((conv.last_message || '').slice(0, 50))}</div>
+        </div>
+      </div>
+      <div class="crm-inbox-conv-meta">
+        <div class="crm-inbox-conv-time">${time}</div>
+        ${conv.unread_count > 0 ? `<div class="crm-inbox-unread">${conv.unread_count}</div>` : ''}
+        <div class="crm-inbox-channel-dot ${conv.channel}" title="${conv.channel}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function inboxOpenConv(convId) {
+  inboxActiveConvId = convId;
+  inboxRenderList();
+  const conv = inboxConversations.find(c => c.id === convId);
+  if (!conv) return;
+
+  // Mark as read
+  if (conv.unread_count > 0) {
+    conv.unread_count = 0;
+    await fetch('/api/chat-conversations', {
+      method: 'PUT',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: convId, unread_count: 0 }),
+    });
+    inboxUpdateBadge();
+  }
+
+  // Load messages
+  const res = await fetch(`/api/chat-conversations?messages=${encodeURIComponent(convId)}`, { headers: await getAuthHeaders() });
+  if (!res.ok) return;
+  const data = await res.json();
+  const messages = data.messages || [];
+
+  const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
+  const channelLabels = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok' };
+  const statusLabels = { bot: 'Bot activo', human: 'Escalado', resolved: 'Resuelto' };
+
+  const chat = document.getElementById('crm-inbox-chat');
+  chat.innerHTML = `
+    <div class="crm-inbox-chat-head">
+      <div style="display:flex;flex-direction:column">
+        <div class="crm-inbox-chat-name">${esc(name)}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(channelLabels[conv.channel] || conv.channel)}${conv.lead_id ? ` · <button class="crm-lead-link-btn" onclick="crmOpenDetail('${esc(conv.lead_id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Ver lead</button>` : ''}</div>
+      </div>
+      <button class="crm-inbox-status-btn ${conv.status}" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
+    </div>
+    <div class="crm-inbox-messages" id="inbox-msgs">
+      ${messages.map(m => `
+        <div class="crm-inbox-bubble-wrap ${m.role}">
+          <div class="crm-inbox-bubble ${m.role}">${esc(m.content.replace(/\[CAPTURA:.*?\]/gs, '').replace(/\[ESCALAR\]/g, '').trim())}</div>
+          <div class="crm-inbox-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+        </div>`).join('')}
+    </div>
+    <div class="crm-inbox-reply">
+      <textarea class="crm-inbox-reply-input" id="inbox-reply-input" placeholder="Escribe un mensaje manual..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inboxSendManual('${esc(convId)}')}" rows="1"></textarea>
+      <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
+    </div>`;
+
+  // Scroll to bottom
+  setTimeout(() => {
+    const msgs = document.getElementById('inbox-msgs');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }, 50);
+}
+
+async function inboxSendManual(convId) {
+  const input = document.getElementById('inbox-reply-input');
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+  const btn = input.nextElementSibling;
+  if (btn) btn.disabled = true;
+  try {
+    await fetch('/api/chat-conversations', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: convId, content }),
+    });
+    await inboxOpenConv(convId);
+  } catch(e) { console.error('inboxSendManual', e); }
+  if (btn) btn.disabled = false;
+}
+
+async function inboxCycleStatus(convId, current) {
+  const next = current === 'bot' ? 'human' : current === 'human' ? 'resolved' : 'bot';
+  await fetch('/api/chat-conversations', {
+    method: 'PUT',
+    headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: convId, status: next }),
+  });
+  const conv = inboxConversations.find(c => c.id === convId);
+  if (conv) conv.status = next;
+  await inboxOpenConv(convId);
+}
+
+function inboxUpdateBadge() {
+  const total = inboxConversations.reduce((s, c) => s + (c.unread_count || 0), 0);
+  const badge = document.getElementById('crm-inbox-unread-badge');
+  if (badge) { badge.style.display = total > 0 ? 'inline-flex' : 'none'; badge.textContent = total; }
+}
+
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'ahora';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function inboxSetFilter(status, btn) {
+  document.querySelectorAll('.crm-inbox-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  crmLoadInbox(status);
+}
+
+// ── Copiloto IA en panel de detalle ───────────────────────────────────────────
+let copilotActiveAction = 'analyze';
+let copilotLoading = false;
+
+function crmCopilotToggle() {
+  const panel = document.getElementById('crm-copilot-panel');
+  const overlay = document.getElementById('crm-copilot-overlay');
+  if (!panel || !crmDetailLead) return;
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    overlay.style.display = 'block';
+  } else {
+    crmCopilotClose();
+  }
+}
+
+function crmCopilotClose() {
+  const panel = document.getElementById('crm-copilot-panel');
+  const overlay = document.getElementById('crm-copilot-overlay');
+  if (panel) panel.style.display = 'none';
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function crmCopilotAction(action, btn) {
+  if (copilotLoading || !crmDetailLead) return;
+  copilotActiveAction = action;
+  document.querySelectorAll('.crm-copilot-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  copilotLoading = true;
+  const content = document.getElementById('crm-copilot-content');
+  content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px">Analizando con IA...</div>';
 
   try {
-    const canvas = await html2canvas(container.firstChild, {
-      scale: 1,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: null,
-      logging: false,
-      width: d.w,
-      height: d.h,
+    const res = await fetch('/api/lead-copilot', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: crmDetailLead.id, action }),
     });
-    const base64 = canvas.toDataURL('image/jpeg', 0.92).replace('data:image/jpeg;base64,', '');
-    return { base64, mediaType: 'image/jpeg' };
-  } finally {
-    document.body.removeChild(container);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    if (action === 'score' && data.score) {
+      const s = data.score;
+      content.innerHTML = `
+        <div class="crm-copilot-panel">
+          <div class="crm-copilot-score">
+            <div class="crm-score-num">${s.score}</div>
+            <div style="flex:1">
+              <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:5px">Prob. de cierre: ${esc(s.label || '')}</div>
+              <div class="crm-score-bar-wrap"><div class="crm-score-bar" style="width:${s.score * 10}%"></div></div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text);line-height:1.5">${esc(s.reason || '')}</div>
+          ${s.days_estimate ? `<div style="font-size:11px;color:var(--muted)">Estimado de cierre: ~${s.days_estimate} días</div>` : ''}
+        </div>`;
+    } else if (action === 'draft_message' && data.result) {
+      content.innerHTML = `
+        <div class="crm-copilot-panel">
+          <div class="crm-copilot-result">${esc(data.result)}</div>
+          <button class="crm-copy-msg-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(data.result)}).then(()=>{this.textContent='✓ Copiado'})">Copiar mensaje</button>
+        </div>`;
+    } else if (data.result) {
+      content.innerHTML = `<div class="crm-copilot-panel"><div class="crm-copilot-result">${data.result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div></div>`;
+    }
+  } catch(e) {
+    content.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:10px 0">Error al consultar la IA. Intenta de nuevo.</div>';
   }
+  copilotLoading = false;
 }
 
-// ── Color utilities ────────────────────────────────────────────────────────
-function hdwLighten(hex, amount) {
-  const r = parseInt(hex.slice(1,3)||'33',16);
-  const g = parseInt(hex.slice(3,5)||'33',16);
-  const b = parseInt(hex.slice(5,7)||'33',16);
-  return 'rgb('+Math.round(r+(255-r)*amount)+','+Math.round(g+(255-g)*amount)+','+Math.round(b+(255-b)*amount)+')';
+// Extiende crmInit para cargar también agentes e inbox count
+const _crmInitOrig = crmInit;
+async function crmInit() {
+  if (crmInited) { crmRender(); return; }
+  crmInited = true;
+  await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents()]);
+  crmLoadInbox(); // carga silenciosa para el badge
+  crmUpdateSidebarCount();
 }
 
-function hdwHex2Rgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3)||'0',16);
-  const g = parseInt(hex.slice(3,5)||'0',16);
-  const b = parseInt(hex.slice(5,7)||'0',16);
-  return 'rgba('+r+','+g+','+b+','+alpha+')';
+// Extiende crmSetView para los nuevos tabs
+const _crmSetViewOrig = crmSetView;
+function crmSetView(v) {
+  crmView = v;
+  ['kanban','list','agents','inbox'].forEach(id => {
+    const btn = document.getElementById(`crm-btn-${id}`);
+    if (btn) btn.classList.toggle('active', v === id);
+  });
+  document.getElementById('crm-kanban').style.display = v === 'kanban' ? 'flex' : 'none';
+  document.getElementById('crm-list-view').style.display = v === 'list' ? 'block' : 'none';
+  document.getElementById('crm-agents-view').style.display = v === 'agents' ? 'flex' : 'none';
+  document.getElementById('crm-inbox-view').style.display = v === 'inbox' ? 'flex' : 'none';
+  const addBtn = document.getElementById('crm-add-btn');
+  if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
+  if (v === 'kanban' || v === 'list') crmRender();
+  if (v === 'agents') crmRenderAgents();
+  if (v === 'inbox') crmLoadInbox();
 }
+// ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 
-function hdwPreviewFile(input, labelId) {
-  const file = input.files[0];
-  if (!file) return;
-  const name = file.name.length > 22 ? file.name.slice(0,20)+'…' : file.name;
-  const el = document.getElementById(labelId);
-  if (el) {
-    const isLogo = labelId.includes('logo');
-    el.innerHTML = (isLogo ? '🏷️ ' : '🖼️ ') + name;
-    el.style.borderColor = 'var(--blue)';
-    el.style.color = 'var(--blue)';
-    el.style.background = 'var(--blue-lt)';
-  }
-}
-
-function hdwGetColors(brief, palette) {
-  return palette === 'alt'
-    ? { primary: brief.alt_primary||'#2d1a3d', bg: brief.alt_bg||'#f5f0ff', accent: brief.accent_color||'#a78bfa' }
-    : { primary: brief.primary_color||'#1a3d1a', bg: brief.bg_color||'#f5f0e8', accent: brief.accent_color||'#4ade80' };
-}
-
-// ── Icon SVG by keyword ────────────────────────────────────────────────────
-function hdwIcon(feat, color) {
-  const f = (feat||'').toLowerCase();
-  const s = color||'#333';
-  const base = (path) => '<svg viewBox="0 0 24 24" fill="none" stroke="'+s+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%">'+path+'</svg>';
-  if (f.match(/montaña|volcan|senderismo|trekking|hiking|mount/)) return base('<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>');
-  if (f.match(/playa|beach|mar|ocean|surf/)) return base('<path d="M17 17H7l-5-5s4-3 10-3 10 3 10 3l-5 5z"/><path d="M12 9V4"/><path d="M4.22 10.22 6 12"/><path d="M19.78 10.22 18 12"/>');
-  if (f.match(/cultura|museo|historia|tradicion|heritage/)) return base('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>');
-  if (f.match(/grupo|familia|personas|people|team|comunidad/)) return base('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
-  if (f.match(/natural|naturaleza|salvaje|wild|flora|plant/)) return base('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>');
-  if (f.match(/agua|water|lago|river|nadar|swim|cristal/)) return base('<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>');
-  if (f.match(/gym|fitness|fuerza|muscle|entrena|workout/)) return base('<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>');
-  if (f.match(/comida|food|restaurante|chef|cocina|gourmet/)) return base('<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>');
-  if (f.match(/precio|oferta|descuento|promo|sale|gratis/)) return base('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>');
-  if (f.match(/rapido|rápido|entrega|delivery|ship|envio/)) return base('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><polygon points="9 22 21 22 21 12 13 12 13 18 9 18 9 22"/><path d="M16 12V9a3 3 0 0 0-3-3"/>');
-  // default: star
-  return base('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>');
-}
-
-// ── TEMPLATE BUILDER ──────────────────────────────────────────────────────
-function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
-  const c = hdwGetColors(brief, palette);
-  const iconBg = hdwLighten(c.primary, 0.8);
-  const feats = (brief.features || ['Característica 1','Característica 2','Característica 3','Característica 4']).slice(0,4);
-  const fonts = '@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap");';
-  // Logo variants — use the right one per template background type
-  // logoDark: pill with glass blur, for dark/photo backgrounds
-  const logoDark = logoBase64
-    ? '<div style="position:absolute;top:28px;right:28px;background:rgba(255,255,255,.18);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.35);border-radius:50px;padding:8px 18px;display:flex;align-items:center;max-width:160px;height:54px;z-index:10"><img src="'+logoBase64+'" style="max-width:130px;max-height:40px;object-fit:contain;filter:brightness(0) invert(1)"></div>'
-    : '';
-  // logoLight: no container, just drop shadow, for cream/white backgrounds
-  const logoLight = logoBase64
-    ? '<div style="position:absolute;top:28px;right:28px;max-width:120px;max-height:56px;z-index:10;filter:drop-shadow(0 2px 6px rgba(0,0,0,.12))"><img src="'+logoBase64+'" style="max-width:120px;max-height:56px;object-fit:contain"></div>'
-    : '';
-  // logoPanel: bottom-right inside a white panel, original colors
-  const logoPanel = logoBase64
-    ? '<div style="position:absolute;bottom:40px;right:60px;max-width:110px;max-height:52px;z-index:10"><img src="'+logoBase64+'" style="max-width:110px;max-height:52px;object-fit:contain"></div>'
-    : '';
-  // logoEl: default (kept for backward compat with older templates)
-  const logoEl = logoDark;
-
-  // ── Template 0: Story Split ────────────────────────────────────
-  if (tplId === 0) {
-    const iconSize = 80; const labelSize = 24; const iconPad = 20;
-    const featItems = feats.map(f =>
-      '<div style="display:flex;align-items:center;gap:24px;margin-bottom:18px">' +
-        '<div style="width:'+iconSize+'px;height:'+iconSize+'px;border-radius:50%;background:'+iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:'+iconPad+'px">'+hdwIcon(f,c.primary)+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:'+labelSize+'px;color:'+c.primary+';text-transform:uppercase;letter-spacing:.05em;line-height:1.2">'+f.toUpperCase()+'</div>' +
-      '</div>'
-    ).join('');
-
-    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Photo panel right
-      (bgBase64 ? '<div style="position:absolute;right:0;top:0;width:48%;height:100%;background:url(\''+bgBase64+'\') center/cover no-repeat;border-radius:120px 0 0 120px"></div>' : '<div style="position:absolute;right:0;top:0;width:48%;height:100%;background:linear-gradient(135deg,'+c.primary+','+hdwLighten(c.primary,0.3)+');border-radius:120px 0 0 120px"></div>') +
-      // Text area
-      '<div style="position:absolute;left:0;top:0;width:56%;height:100%;padding:80px 60px;display:flex;flex-direction:column;box-sizing:border-box">' +
-        // Category badge
-        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.primary+';color:#fff;padding:14px 26px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;width:fit-content;margin-bottom:50px;font-family:Montserrat,sans-serif">' +
-          '<svg viewBox="0 0 24 24" style="width:28px;height:28px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
-          (brief.category||'CATEGORÍA') +
-        '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.9;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:16px">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:80px;line-height:1.1;color:'+c.primary+';margin-bottom:32px">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:32px">' +
-          '<div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div>' +
-          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'NOMBRE')+'</div>' +
-          '<div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div>' +
-        '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:26px;line-height:1.5;color:#444;margin-bottom:40px">'+(brief.description||'')+'</div>' +
-        '<div style="flex:1">' + featItems + '</div>' +
-      '</div>' +
-      // CTA bar
-      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:36px 60px;display:flex;align-items:center;gap:28px">' +
-        '<div style="width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
-        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:28px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'RECIBE TU ITINERARIO')+'</div><div style="font-family:Montserrat,sans-serif;font-size:20px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'+ INFORMACIÓN EXCLUSIVA')+'</div></div>' +
-        '<div style="width:76px;height:76px;background:'+c.accent+';border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:38px;height:38px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 1: Story Overlay ──────────────────────────────────
-  if (tplId === 1) {
-    const featItems = feats.map(f =>
-      '<div style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);padding:14px 22px;border-radius:50px;border:1px solid rgba(255,255,255,.2);margin-bottom:12px">' +
-        '<div style="width:32px;height:32px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:24px;color:#fff;letter-spacing:.04em">'+(f)+'</div>' +
-      '</div>'
-    ).join('');
-
-    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Background photo
-      (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c.primary+' 0%,'+hdwLighten(c.primary,0.2)+' 100%)"></div>') +
-      '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.88) 50%, rgba(0,0,0,.15) 100%)"></div>' +
-      // Top badge
-      '<div style="position:absolute;top:70px;left:70px;display:inline-flex;align-items:center;gap:14px;background:'+c.primary+';color:#fff;padding:16px 30px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">' +
-        '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
-        (brief.category||'CATEGORÍA') +
-      '</div>' +
-      // Content
-      '<div style="position:absolute;bottom:160px;left:70px;right:70px">' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:rgba(255,255,255,.7);letter-spacing:.15em;text-transform:uppercase;margin-bottom:14px">'+(brief.divider||'NOMBRE')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:130px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:82px;color:#fff;opacity:.9;margin-bottom:36px">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:36px">'+(brief.description||'')+'</div>' +
-        featItems +
-      '</div>' +
-      // CTA
-      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:34px 70px;display:flex;align-items:center;gap:28px">' +
-        '<div style="width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
-        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:19px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
-        '<div style="width:72px;height:72px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:36px;height:36px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 2: Square Split ───────────────────────────────────
-  if (tplId === 2) {
-    const featGrid = feats.slice(0,4).map(f =>
-      '<div style="display:flex;align-items:center;gap:12px">' +
-        '<div style="width:54px;height:54px;border-radius:50%;background:'+iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:14px">'+hdwIcon(f,c.primary)+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:17px;color:'+c.primary+';text-transform:uppercase;letter-spacing:.04em;line-height:1.2">'+f.toUpperCase()+'</div>' +
-      '</div>'
-    ).join('');
-
-    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Photo right
-      (bgBase64 ? '<div style="position:absolute;right:0;top:0;width:50%;height:100%;background:url(\''+bgBase64+'\') center/cover no-repeat;border-radius:80px 0 0 80px"></div>' : '<div style="position:absolute;right:0;top:0;width:50%;height:100%;background:'+c.primary+';border-radius:80px 0 0 80px"></div>') +
-      // Text left
-      '<div style="position:absolute;left:0;top:0;width:56%;height:100%;padding:60px 56px 200px;display:flex;flex-direction:column;box-sizing:border-box">' +
-        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.primary+';color:#fff;padding:12px 22px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;width:fit-content;margin-bottom:36px;font-family:Montserrat,sans-serif">' +
-          '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
-          (brief.category||'CATEGORÍA') +
-        '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:96px;line-height:.88;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:64px;color:'+c.primary+';margin-bottom:22px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:22px"><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'')+'</div><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div></div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;line-height:1.5;color:#555;margin-bottom:28px">'+(brief.description||'')+'</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:auto">' + featGrid + '</div>' +
-      '</div>' +
-      // CTA
-      '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:30px 56px;display:flex;align-items:center;gap:22px">' +
-        '<div style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:30px;height:30px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
-        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
-        '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 3: Square Dark ────────────────────────────────────
-  if (tplId === 3) {
-    const iconRow = feats.slice(0,4).map(f =>
-      '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;flex:1">' +
-        '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;padding:18px">'+hdwIcon(f,'#fff')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:15px;color:#fff;text-transform:uppercase;letter-spacing:.04em;text-align:center;line-height:1.2">'+f.toUpperCase()+'</div>' +
-      '</div>'
-    ).join('');
-
-    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
-      '<div style="position:absolute;inset:0;background:linear-gradient(135deg, '+hdwHex2Rgba(c.primary,.85)+' 0%, rgba(0,0,0,.6) 100%)"></div>' +
-      // Content
-      '<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:80px">' +
-        '<div style="display:inline-flex;align-items:center;gap:10px;background:'+c.accent+';color:'+c.primary+';padding:12px 24px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;width:fit-content;margin-bottom:40px;font-family:Montserrat,sans-serif">' +
-          (brief.category||'CATEGORÍA') +
-        '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:110px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:72px;color:'+c.accent+';margin-bottom:30px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:50px">'+(brief.description||'')+'</div>' +
-        // Icon row
-        '<div style="display:flex;gap:20px;margin-bottom:50px">' + iconRow + '</div>' +
-        // CTA
-        '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);border-radius:20px;padding:26px 32px">' +
-          '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
-          '<div style="width:64px;height:64px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-        '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 5: Feed Impact — bold color top + photo bottom ───
-  if (tplId === 5) {
-    const topH = 476; const ctaH = 126; const photoH = H - topH - ctaH;
-    const featRow = feats.slice(0,4).map(f =>
-      '<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(0,0,0,.38);backdrop-filter:blur(8px);padding:11px 20px;border-radius:40px;border:1px solid rgba(255,255,255,.22);margin:0 8px 8px 0">' +
-        '<div style="width:20px;height:20px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:19px;color:#fff;white-space:nowrap;letter-spacing:.02em">'+f+'</div>' +
-      '</div>'
-    ).join('');
-    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Top color block
-      '<div style="position:absolute;top:0;left:0;right:0;height:'+topH+'px;background:'+c.primary+';padding:56px 72px;box-sizing:border-box">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:26px">' +
-          '<div style="background:'+c.accent+';color:'+c.primary+';padding:11px 26px;border-radius:40px;font-size:18px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
-          '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;letter-spacing:.16em;color:rgba(255,255,255,.38);text-transform:uppercase">'+(brief.divider||'')+'</div>' +
-        '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:110px;line-height:.83;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:18px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:54px;color:'+c.accent+';line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
-      '</div>' +
-      // Photo section
-      '<div style="position:absolute;top:'+topH+'px;left:0;right:0;height:'+photoH+'px;overflow:hidden">' +
-        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+hdwLighten(c.primary,0.2)+','+hdwLighten(c.primary,0.5)+')"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 65%)"></div>' +
-        '<div style="position:absolute;bottom:26px;left:60px;right:60px;display:flex;flex-wrap:wrap">' + featRow + '</div>' +
-      '</div>' +
-      // CTA bar
-      '<div style="position:absolute;bottom:0;left:0;right:0;height:'+ctaH+'px;background:'+c.primary+';padding:0 64px;display:flex;align-items:center;gap:22px">' +
-        '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
-        '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 6: Feed Clean — editorial light background ────────
-  if (tplId === 6) {
-    const photoH = 640; const pad = 50; const photoW = W - pad * 2;
-    const featChips = feats.slice(0,4).map(f =>
-      '<div style="display:inline-flex;align-items:center;gap:8px;background:'+c.primary+';color:#fff;padding:9px 18px;border-radius:30px;font-size:17px;font-weight:700;font-family:Montserrat,sans-serif;margin:0 8px 8px 0">' +
-        '<div style="width:16px;height:16px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' + f +
-      '</div>'
-    ).join('');
-    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Decorative accent bar top-left
-      '<div style="position:absolute;top:0;left:0;width:8px;height:'+photoH+'px;background:'+c.accent+'"></div>' +
-      // Photo card
-      '<div style="position:absolute;top:'+pad+'px;left:'+pad+'px;width:'+photoW+'px;height:'+photoH+'px;border-radius:28px;overflow:hidden">' +
-        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
-        '<div style="position:absolute;top:28px;left:28px;background:'+c.primary+';color:#fff;padding:10px 22px;border-radius:40px;font-size:17px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
-      '</div>' +
-      // Text area
-      '<div style="position:absolute;top:'+(photoH+pad+28)+'px;left:'+pad+'px;right:'+pad+'px">' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:88px;line-height:.87;color:'+c.primary+';letter-spacing:-.02em;text-transform:uppercase;margin-bottom:10px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:54px;color:'+c.primary+';margin-bottom:14px;line-height:1.1;opacity:.75;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">' +
-          '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
-          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:15px;color:'+c.primary+';letter-spacing:.14em;text-transform:uppercase;opacity:.5">'+(brief.divider||'')+'</div>' +
-          '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
-        '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#555;line-height:1.5;margin-bottom:18px">'+(brief.description||'')+'</div>' +
-        '<div style="margin-bottom:22px">' + featChips + '</div>' +
-        '<div style="background:'+c.primary+';color:#fff;padding:24px 40px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:14px">' +
-          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
-          '<svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
-        '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 7: Story Half — photo top + color panel bottom ───
-  if (tplId === 7) {
-    const splitY = Math.round(H * 0.48);
-    const iconRow = feats.slice(0,4).map(f =>
-      '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;flex:1">' +
-        '<div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;padding:20px">'+hdwIcon(f,'#fff')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:17px;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.03em;text-align:center;line-height:1.2">'+f.toUpperCase()+'</div>' +
-      '</div>'
-    ).join('');
-    return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Photo top half
-      '<div style="position:absolute;top:0;left:0;right:0;height:'+splitY+'px">' +
-        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+hdwLighten(c.primary,0.3)+','+hdwLighten(c.primary,0.6)+')"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.18) 0%, rgba(0,0,0,.35) 100%)"></div>' +
-        // Category badge on photo
-        '<div style="position:absolute;top:60px;left:60px;background:'+c.accent+';color:'+c.primary+';padding:14px 28px;border-radius:50px;font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'CATEGORÍA')+'</div>' +
-      '</div>' +
-      // Color bottom half
-      '<div style="position:absolute;top:'+splitY+'px;left:0;right:0;bottom:0;background:'+c.primary+';padding:60px 70px;display:flex;flex-direction:column;box-sizing:border-box">' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,.45);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px">'+(brief.divider||'')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.85;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:14px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:76px;color:'+c.accent+';margin-bottom:36px;line-height:1;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:44px">'+(brief.description||'')+'</div>' +
-        '<div style="display:flex;gap:16px;margin-bottom:auto">' + iconRow + '</div>' +
-        // CTA
-        '<div style="display:flex;align-items:center;gap:20px;background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.22);border-radius:18px;padding:26px 32px;margin-top:44px">' +
-          '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.65);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
-          '<div style="width:66px;height:66px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:32px;height:32px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-        '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 8: Square Card — clean light card with photo center ─
-  if (tplId === 8) {
-    const photoSize = 680; const cardPad = 50; const photoRadius = 24;
-    const chipRow = feats.slice(0,3).map(f =>
-      '<div style="display:inline-flex;align-items:center;gap:8px;background:'+hdwLighten(c.primary,0.88)+';color:'+c.primary+';padding:8px 16px;border-radius:30px;font-size:15px;font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;margin-right:8px">' +
-        '<div style="width:14px;height:14px">'+hdwIcon(f,c.primary)+'</div>' + f +
-      '</div>'
-    ).join('');
-    return '<div style="width:'+W+'px;height:'+H+'px;background:'+c.bg+';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>'+fonts+'</style>' +
-      // Photo centered top area
-      '<div style="position:absolute;top:'+cardPad+'px;left:'+cardPad+'px;width:'+(W-cardPad*2)+'px;height:'+photoSize+'px;border-radius:'+photoRadius+'px;overflow:hidden">' +
-        (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:'+c.primary+'"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.05) 50%, rgba(0,0,0,.45) 100%)"></div>' +
-        // Accent badge top-right
-        '<div style="position:absolute;top:24px;right:24px;background:'+c.accent+';color:'+c.primary+';padding:10px 20px;border-radius:40px;font-size:16px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">'+(brief.category||'')+'</div>' +
-        // Brand bottom-left
-        '<div style="position:absolute;bottom:22px;left:28px;font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:rgba(255,255,255,.6);letter-spacing:.12em;text-transform:uppercase">'+(brief.divider||'')+'</div>' +
-      '</div>' +
-      // Text below photo
-      '<div style="position:absolute;top:'+(cardPad+photoSize+22)+'px;left:'+cardPad+'px;right:'+cardPad+'px">' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:78px;line-height:.87;color:'+c.primary+';letter-spacing:-.02em;text-transform:uppercase;margin-bottom:8px;word-break:break-word">'+(brief.headline||'TITULAR')+'</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:46px;color:'+c.primary+';opacity:.7;margin-bottom:16px;word-break:break-word">'+(brief.subheadline||'subtitulo')+'</div>' +
-        '<div style="margin-bottom:18px">' + chipRow + '</div>' +
-        '<div style="background:'+c.primary+';color:#fff;padding:20px 32px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:12px">' +
-          '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
-          '<svg viewBox="0 0 24 24" style="width:22px;height:22px" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
-        '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 9: E-commerce Product (Feed 1080×1350) ──────────
-  if (tplId === 9) {
-    const iconEmojis = ['✈','📦','⭐','🔒'];
-    const discountText = (feats[0] || 'OFERTA').split(' ')[0].toUpperCase();
-    const iconRow = feats.slice(0,4).map((f, i) =>
-      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">' +
-        '<div style="font-size:32px;line-height:1">' + iconEmojis[i] + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:#444;text-align:center;letter-spacing:.02em">' + f + '</div>' +
-      '</div>'
-    ).join('');
-    const topBarH = Math.round(H * 0.07);
-    const photoH  = Math.round(H * 0.50);
-    const iconRowH = Math.round(H * 0.09);
-    const btmBarH  = Math.round(H * 0.07);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
-      '<style>' + fonts + '</style>' +
-      // Top bar
-      '<div style="height:' + topBarH + 'px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:' + c.primary + '">' + (brief.category || 'CATEGORÍA') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.08em;color:#888">' + (brief.divider || '') + '</div>' +
-      '</div>' +
-      // Photo area
-      '<div style="height:' + photoH + 'px;position:relative;flex-shrink:0;overflow:hidden">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + c.primary + '"></div>') +
-        '<div style="position:absolute;top:20px;right:20px;width:120px;height:120px;border-radius:50%;background:' + c.primary + ';display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.25)">' +
-          '<div style="font-family:Montserrat,sans-serif;font-size:38px;font-weight:900;color:#fff;line-height:1">' + discountText + '</div>' +
-          '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:rgba(255,255,255,.8);letter-spacing:.06em">OFF</div>' +
-        '</div>' +
-      '</div>' +
-      // Content area
-      '<div style="flex:1;padding:24px 40px 0;overflow:hidden">' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:72px;color:' + c.primary + ';line-height:1.05;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:34px;color:' + c.accent + ';margin-top:8px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:12px;line-height:1.4;overflow:hidden">' + (brief.description || '') + '</div>' +
-      '</div>' +
-      // Icon row
-      '<div style="height:' + iconRowH + 'px;display:flex;align-items:center;border-top:1px solid #eee;flex-shrink:0;padding:0 20px">' +
-        iconRow +
-      '</div>' +
-      // Bottom bar
-      '<div style="height:' + btmBarH + 'px;background:' + c.primary + ';display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:#fff;letter-spacing:.04em;text-transform:uppercase">' + (brief.cta_title || 'COMPRAR AHORA') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:600;color:rgba(255,255,255,.75)">' + (brief.cta_sub || '') + '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 10: Professional Profile Split (Square 1080×1080) ─
-  if (tplId === 10) {
-    const leftW = Math.round(W * 0.48);
-    const rightW = W - leftW;
-    return '<div style="width:' + W + 'px;height:' + H + 'px;display:flex;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Left panel
-      '<div style="width:' + leftW + 'px;height:' + H + 'px;background:' + c.primary + ';padding:50px 40px;display:flex;flex-direction:column;box-sizing:border-box;flex-shrink:0">' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + c.accent + '">' + (brief.category || '') + '</div>' +
-        '<div style="width:40px;height:3px;background:' + c.accent + ';margin:20px 0"></div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:68px;color:' + c.accent + ';line-height:1.05;letter-spacing:-.02em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + (brief.headline || 'TITULAR') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:28px;font-weight:700;color:#fff;margin-top:16px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:22px;color:rgba(255,255,255,.75);margin-top:16px;line-height:1.5;flex:1;overflow:hidden">' + (brief.description || '') + '</div>' +
-        '<div style="border:2px solid ' + c.accent + ';color:' + c.accent + ';padding:14px 32px;border-radius:6px;font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;letter-spacing:.05em;width:fit-content">' + (brief.cta_title || 'CONTACTAR') + '</div>' +
-        '<div style="margin-top:24px">' +
-          '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.7);margin-bottom:6px">&#128222; ' + (feats[0] || '') + '</div>' +
-          '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.7)">&#9993; ' + (feats[1] || '') + '</div>' +
-        '</div>' +
-      '</div>' +
-      // Right panel
-      '<div style="width:' + rightW + 'px;height:' + H + 'px;position:relative;flex-shrink:0">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.3) + '"></div>') +
-        logoEl +
-      '</div>' +
-    '</div>';
-  }
-
-  // ── Template 11: Magazine Grid (Square 1080×1080) ─────────────
-  if (tplId === 11) {
-    const leftW  = Math.round(W * 0.32);
-    const rightW = W - leftW;
-    const topTileH   = Math.round(H * 0.52);
-    const btmTileH   = H - topTileH - 6;
-    const btmTileW   = Math.round(rightW / 2) - 3;
-    const bgUrl = bgBase64 ? 'url(\'' + bgBase64 + '\') center/cover no-repeat' : c.primary;
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Left strip
-      '<div style="width:' + leftW + 'px;height:' + H + 'px;position:relative;flex-shrink:0;box-sizing:border-box">' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:28px;color:' + c.accent + ';position:absolute;top:40px;left:40px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:' + c.primary + ';position:absolute;top:' + (40 + 28 + 10) + 'px;left:40px">' + (brief.category || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:' + Math.min(Math.round(W * 0.11), 115) + 'px;color:' + c.primary + ';line-height:.92;position:absolute;bottom:20px;left:40px;right:10px;word-break:break-word">' + (brief.headline || 'TIT') + '</div>' +
-        '<div style="position:absolute;bottom:' + Math.round(H * 0.13) + 'px;left:40px">' + logoEl + '</div>' +
-      '</div>' +
-      // Right grid
-      '<div style="width:' + rightW + 'px;height:' + H + 'px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">' +
-        '<div style="height:' + topTileH + 'px;background:' + bgUrl + ';flex-shrink:0"></div>' +
-        '<div style="display:flex;gap:6px;height:' + btmTileH + 'px;flex-shrink:0">' +
-          '<div style="width:' + btmTileW + 'px;background:' + bgUrl + '"></div>' +
-          '<div style="flex:1;background:' + bgUrl + '"></div>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  // ── Template 12: Dark Event / Course (Square 1080×1080) ───────
-  if (tplId === 12) {
-    const darkBg = '#0d1117';
-    const leftW  = Math.round(W * 0.55);
-    const rightW = W - leftW;
-    const priceText = (feats[0] || 'GRATIS');
-    const dateText  = (feats[1] || '');
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + darkBg + ';position:relative;overflow:hidden;display:flex;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Left content
-      '<div style="width:' + leftW + 'px;height:' + H + 'px;padding:60px 40px;box-sizing:border-box;display:flex;flex-direction:column;position:relative;z-index:2;flex-shrink:0">' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:' + c.accent + '">' + (brief.category || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:64px;color:#fff;line-height:1.05;margin-top:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">' + (brief.headline || 'TITULAR') + '</div>' +
-        '<div style="display:flex;flex-direction:column;align-items:center;width:100px;height:100px;border:2px solid ' + c.accent + ';border-radius:50%;justify-content:center;margin-top:24px">' +
-          '<div style="font-family:Montserrat,sans-serif;font-size:32px;font-weight:700;color:#fff;line-height:1">' + priceText + '</div>' +
-        '</div>' +
-        (dateText ? '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#fff;margin-top:8px">' + dateText + '</div>' : '') +
-        '<div style="background:' + c.accent + ';padding:8px 20px;border-radius:4px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;color:#000;margin-top:20px;width:fit-content">' + (brief.divider || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;color:rgba(255,255,255,.6);margin-top:8px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="flex:1"></div>' +
-        '<div style="background:' + c.accent + ';color:#000;padding:14px 32px;border-radius:6px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;width:fit-content">' + (brief.cta_title || 'INSCRIBIRSE') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:16px;color:rgba(255,255,255,.5);margin-top:8px">' + (brief.cta_sub || '') + '</div>' +
-      '</div>' +
-      // Right photo
-      '<div style="width:' + rightW + 'px;height:' + H + 'px;position:relative;flex-shrink:0">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.1) + '"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to right, ' + darkBg + ' 0%, transparent 40%)"></div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 13: Minimal Lifestyle (Square 1080×1080) ─────────
-  if (tplId === 13) {
-    const photoTop  = Math.round(H * 0.04);
-    const photoLeft = Math.round(W * 0.05);
-    const photoW    = W - photoLeft * 2;
-    const photoH    = Math.round(H * 0.72);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + c.bg + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Decorative dots
-      '<div style="position:absolute;top:30px;left:30px;display:grid;grid-template-columns:1fr 1fr;gap:8px;z-index:2">' +
-        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
-        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
-        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
-        '<div style="width:12px;height:12px;border-radius:50%;background:' + c.accent + ';opacity:.4"></div>' +
-      '</div>' +
-      // Main photo
-      '<div style="position:absolute;top:' + photoTop + 'px;left:' + photoLeft + 'px;width:' + photoW + 'px;height:' + photoH + 'px;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15)">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + c.primary + '"></div>') +
-      '</div>' +
-      // Bottom text
-      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + Math.round(H * 0.26) + 'px;padding:0 50px;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:36px;box-sizing:border-box">' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:52px;color:' + c.primary + ';transform:translateY(-20px);line-height:1.1">' + (brief.headline || 'Titular') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:26px;color:' + c.accent + ';opacity:.85">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;letter-spacing:.15em;text-transform:uppercase;color:' + c.primary + ';opacity:.5;margin-top:8px">' + (brief.divider || '') + '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 14: Bold Stripe (Feed 1080×1350) ────────────────
-  if (tplId === 14) {
-    const photoSectionH = Math.round(H * 0.42);
-    const stripH        = Math.round(H * 0.06);
-    const accentIsLight = (c.accent === '#fff' || c.accent === '#ffffff' || c.accent === '#FFF');
-    const accentTextCol = accentIsLight ? '#000' : '#fff';
-    return '<div style="width:' + W + 'px;height:' + H + 'px;overflow:hidden;position:relative;font-family:Montserrat,sans-serif;display:flex;flex-direction:column">' +
-      '<style>' + fonts + '</style>' +
-      // Photo section
-      '<div style="height:' + photoSectionH + 'px;flex-shrink:0;position:relative;overflow:hidden">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:' + hdwLighten(c.primary, 0.2) + '"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 50%, rgba(0,0,0,.35) 100%)"></div>' +
-        '<div style="position:absolute;bottom:20px;left:40px;background:' + c.accent + ';color:' + accentTextCol + ';padding:8px 22px;border-radius:30px;font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">' + (brief.category || '') + '</div>' +
-      '</div>' +
-      // Accent strip
-      '<div style="height:' + stripH + 'px;flex-shrink:0;background:' + c.accent + ';display:flex;align-items:center;padding:0 40px;justify-content:space-between">' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:22px;font-weight:800;color:' + accentTextCol + ';letter-spacing:.04em;text-transform:uppercase">' + (brief.divider || '') + '</div>' +
-        '<div style="color:' + accentTextCol + ';font-size:18px;letter-spacing:8px">&#9679;&#9679;&#9679;&#9679;</div>' +
-      '</div>' +
-      // Bottom content
-      '<div style="flex:1;background:' + c.primary + ';padding:48px 48px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden">' +
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:82px;color:#fff;line-height:.95;letter-spacing:-.02em;margin-bottom:20px;overflow:hidden">' + (brief.headline || 'TITULAR') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:rgba(255,255,255,.75);margin-bottom:24px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.65);line-height:1.5;overflow:hidden;max-height:' + Math.round(H * 0.12) + 'px">' + (brief.description || '') + '</div>' +
-        '<div style="flex:1"></div>' +
-        '<div style="background:#fff;color:' + c.primary + ';padding:16px 48px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;letter-spacing:.04em;width:fit-content;margin-top:auto">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
-      '</div>' +
-      logoEl +
-    '</div>';
-  }
-
-  // ── Template 15: Yoga · Serenity (Square 1080×1080) ──────────
-  if (tplId === 15) {
-    const Y_GOLD   = '#d39c50';
-    const Y_DARK   = '#1c1208';
-    const Y_CREAM  = '#f6f1ed';
-    const Y_TERRA  = '#8a5f49';
-    const photoH   = Math.round(H * 0.62);
-    const feats15  = feats.slice(0, 3);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + Y_CREAM + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Top photo with gold border frame
-      '<div style="position:absolute;top:0;left:0;right:0;height:' + photoH + 'px;overflow:hidden">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:linear-gradient(135deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,' + Y_CREAM + ' 100%)"></div>' +
-        // Gold top bar
-        '<div style="position:absolute;top:0;left:0;right:0;height:5px;background:' + Y_GOLD + '"></div>' +
-        // Category badge
-        '<div style="position:absolute;top:28px;left:40px;background:rgba(0,0,0,.35);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.25);color:#fff;padding:8px 20px;border-radius:30px;font-size:18px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
-      '</div>' +
-      // Bottom content
-      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + Math.round(H * 0.42) + 'px;padding:0 48px 36px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end">' +
-        // Gold divider line
-        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">' +
-          '<div style="flex:1;height:1px;background:' + Y_GOLD + ';opacity:.6"></div>' +
-          '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
-          '<div style="flex:1;height:1px;background:' + Y_GOLD + ';opacity:.6"></div>' +
-        '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(W * 0.072) + 'px;font-weight:700;color:' + Y_DARK + ';line-height:1.1;margin-bottom:10px">' + (brief.headline || 'Encuentra tu equilibrio') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.038) + 'px;color:' + Y_TERRA + ';margin-bottom:16px">' + (brief.subheadline || '') + '</div>' +
-        // Feature dots
-        '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px">' +
-          feats15.map(f => '<div style="display:flex;align-items:center;gap:7px"><div style="width:7px;height:7px;border-radius:50%;background:' + Y_GOLD + ';flex-shrink:0"></div><div style="font-size:17px;color:' + Y_DARK + ';font-weight:600;opacity:.8">' + f + '</div></div>').join('') +
-        '</div>' +
-        // CTA
-        '<div style="display:inline-flex;align-items:center;gap:12px;background:' + Y_DARK + ';color:#fff;padding:14px 30px;border-radius:6px;font-size:19px;font-weight:700;letter-spacing:.06em;width:fit-content">' +
-          '<div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div>' + (brief.cta_title || 'DESCUBRIR') +
-        '</div>' +
-      '</div>' +
-      logoLight +
-    '</div>';
-  }
-
-  // ── Template 16: Yoga · Zen Split (Feed 1080×1350) ────────────
-  if (tplId === 16) {
-    const Y_GOLD  = '#d39c50';
-    const Y_DARK  = '#1c1208';
-    const Y_CREAM = '#ebeae5';
-    const Y_TERRA = '#8a5f49';
-    const leftW   = Math.round(W * 0.5);
-    const feats16 = feats.slice(0, 4);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;display:flex;overflow:hidden;font-family:Montserrat,sans-serif;position:relative">' +
-      '<style>' + fonts + '</style>' +
-      // Left: text panel
-      '<div style="width:' + leftW + 'px;height:' + H + 'px;background:' + Y_CREAM + ';display:flex;flex-direction:column;justify-content:center;padding:60px 44px;box-sizing:border-box;flex-shrink:0">' +
-        // Top accent
-        '<div style="width:40px;height:3px;background:' + Y_GOLD + ';margin-bottom:28px"></div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;color:' + Y_TERRA + ';letter-spacing:.18em;text-transform:uppercase;margin-bottom:16px">' + (brief.category || 'BIENESTAR') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(leftW * 0.115) + 'px;font-weight:700;color:' + Y_DARK + ';line-height:1.05;margin-bottom:14px">' + (brief.headline || 'Calma y concentración') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(leftW * 0.055) + 'px;color:' + Y_TERRA + ';margin-bottom:28px;line-height:1.4">' + (brief.subheadline || '') + '</div>' +
-        // Features list
-        '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:36px">' +
-          feats16.map(f => '<div style="display:flex;align-items:center;gap:12px">' +
-            '<div style="width:22px;height:22px;border-radius:50%;border:2px solid ' + Y_GOLD + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
-              '<div style="width:7px;height:7px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
-            '</div>' +
-            '<div style="font-size:19px;color:' + Y_DARK + ';font-weight:600;line-height:1.3">' + f + '</div>' +
-          '</div>').join('') +
-        '</div>' +
-        // CTA
-        '<div style="background:' + Y_TERRA + ';color:#fff;padding:16px 24px;border-radius:4px;font-size:18px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;width:fit-content">' + (brief.cta_title || 'COMENZAR') + '</div>' +
-        // Logo at bottom of cream panel (no white box — bg is already cream)
-        (logoBase64 ? '<div style="margin-top:24px"><img src="' + logoBase64 + '" style="max-width:100px;max-height:44px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.1))"></div>' : '<div style="width:40px;height:3px;background:' + Y_GOLD + ';margin-top:32px"></div>') +
-      '</div>' +
-      // Right: photo
-      '<div style="flex:1;height:' + H + 'px;overflow:hidden;position:relative">' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block">' : '<div style="width:100%;height:100%;background:linear-gradient(160deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
-        '<div style="position:absolute;inset:0;background:linear-gradient(to right, rgba(0,0,0,.15) 0%, transparent 30%)"></div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  // ── Template 17: Yoga · Story Flow (Story 1080×1920) ──────────
-  if (tplId === 17) {
-    const Y_GOLD  = '#d39c50';
-    const Y_DARK  = '#1c1208';
-    const Y_CREAM = '#f6f1ed';
-    const feats17 = feats.slice(0, 4);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Full photo
-      (bgBase64 ? '<img src="' + bgBase64 + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block">' : '<div style="position:absolute;inset:0;background:linear-gradient(160deg,#2d1f0e,' + Y_DARK + ')"></div>') +
-      // Dark gradient overlay bottom 70%
-      '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(20,12,4,.92) 50%, rgba(0,0,0,.25) 75%, transparent 100%)"></div>' +
-      // Top badge
-      '<div style="position:absolute;top:60px;left:60px;right:60px;display:flex;align-items:center;justify-content:space-between">' +
-        '<div style="border:1px solid rgba(255,255,255,.35);color:#fff;padding:12px 28px;border-radius:30px;font-size:20px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
-        '<div style="width:40px;height:40px;border-radius:50%;border:1px solid ' + Y_GOLD + ';display:flex;align-items:center;justify-content:center">' +
-          '<div style="width:12px;height:12px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
-        '</div>' +
-      '</div>' +
-      // Bottom content
-      '<div style="position:absolute;bottom:0;left:0;right:0;padding:0 72px 80px;box-sizing:border-box">' +
-        // Gold accent line
-        '<div style="width:60px;height:3px;background:' + Y_GOLD + ';margin-bottom:28px"></div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(W * 0.112) + 'px;font-weight:700;color:#fff;line-height:1.0;margin-bottom:16px">' + (brief.headline || 'Transforma tu vida') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.055) + 'px;color:' + Y_GOLD + ';margin-bottom:36px;line-height:1.4">' + (brief.subheadline || '') + '</div>' +
-        // Features
-        '<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:48px">' +
-          feats17.map(f => '<div style="display:flex;align-items:center;gap:16px">' +
-            '<div style="width:28px;height:1px;background:' + Y_GOLD + ';flex-shrink:0"></div>' +
-            '<div style="font-size:22px;color:rgba(255,255,255,.9);font-weight:600">' + f + '</div>' +
-          '</div>').join('') +
-        '</div>' +
-        // CTA + logo row
-        '<div style="display:flex;align-items:center;gap:24px">' +
-          '<div style="background:' + Y_GOLD + ';color:' + Y_DARK + ';padding:22px 48px;border-radius:6px;font-size:22px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">' + (brief.cta_title || 'COMENZAR AHORA') + '</div>' +
-          (logoBase64 ? '<div style="background:rgba(255,255,255,.12);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:8px 14px;display:flex;align-items:center"><img src="' + logoBase64 + '" style="max-width:90px;max-height:38px;object-fit:contain;filter:brightness(0) invert(1)"></div>' : '') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  // ── Template 18: Yoga · Minimal Light (Story 1080×1920) ──────
-  if (tplId === 18) {
-    const Y_GOLD  = '#d39c50';
-    const Y_DARK  = '#1c1208';
-    const Y_CREAM = '#f6f1ed';
-    const Y_TERRA = '#8a5f49';
-    const photoSize = Math.round(W * 0.72);
-    const feats18 = feats.slice(0, 3);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;background:' + Y_CREAM + ';position:relative;overflow:hidden;font-family:Montserrat,sans-serif;display:flex;flex-direction:column;align-items:center">' +
-      '<style>' + fonts + '</style>' +
-      // Top header — logo on right, category on left
-      '<div style="width:100%;padding:64px 72px 32px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between">' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:' + Y_TERRA + ';letter-spacing:.2em;text-transform:uppercase">' + (brief.category || 'YOGA') + '</div>' +
-        (logoBase64
-          ? '<img src="' + logoBase64 + '" style="max-width:110px;max-height:48px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.12))">'
-          : '<div style="display:flex;gap:8px;align-items:center"><div style="width:32px;height:1px;background:' + Y_GOLD + '"></div><div style="width:8px;height:8px;border-radius:50%;background:' + Y_GOLD + '"></div><div style="width:16px;height:1px;background:' + Y_GOLD + '"></div></div>') +
-      '</div>' +
-      // Framed photo
-      '<div style="position:relative;width:' + photoSize + 'px;height:' + photoSize + 'px;flex-shrink:0">' +
-        // Gold outer frame
-        '<div style="position:absolute;inset:-8px;border:2px solid ' + Y_GOLD + ';border-radius:4px;opacity:.7"></div>' +
-        (bgBase64 ? '<img src="' + bgBase64 + '" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:2px">' : '<div style="width:100%;height:100%;background:linear-gradient(135deg,' + Y_TERRA + ',' + Y_DARK + ')"></div>') +
-        // Bottom cream fade
-        '<div style="position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,' + Y_CREAM + ',transparent)"></div>' +
-      '</div>' +
-      // Content below photo
-      '<div style="flex:1;width:100%;padding:32px 72px 64px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
-        '<div>' +
-          '<div style="font-family:\'Playfair Display\',serif;font-size:' + Math.round(W * 0.1) + 'px;font-weight:700;color:' + Y_DARK + ';line-height:1.0;margin-bottom:12px">' + (brief.headline || 'Transforma tu bienestar') + '</div>' +
-          '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.048) + 'px;color:' + Y_TERRA + ';margin-bottom:28px;line-height:1.35">' + (brief.subheadline || '') + '</div>' +
-          '<div style="display:flex;flex-direction:column;gap:14px">' +
-            feats18.map(f => '<div style="display:flex;align-items:center;gap:14px">' +
-              '<div style="width:24px;height:24px;border-radius:50%;background:' + Y_GOLD + ';opacity:.25;flex-shrink:0"></div>' +
-              '<div style="position:relative"><div style="position:absolute;left:-17px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:' + Y_GOLD + '"></div>' +
-              '<div style="font-size:20px;color:' + Y_DARK + ';font-weight:600">' + f + '</div></div>' +
-            '</div>').join('') +
-          '</div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between">' +
-          '<div style="background:' + Y_DARK + ';color:' + Y_CREAM + ';padding:18px 36px;border-radius:4px;font-size:20px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">' + (brief.cta_title || 'COMENZAR') + '</div>' +
-          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
-            '<div style="width:48px;height:2px;background:' + Y_GOLD + '"></div>' +
-            '<div style="width:32px;height:2px;background:' + Y_TERRA + '"></div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  // ── Template 19: Story · Hero Panel (Andiamo-style) ──────────
-  if (tplId === 19) {
-    const panelH  = Math.round(H * 0.48);
-    const feats19 = feats.slice(0, 5);
-    return '<div style="width:' + W + 'px;height:' + H + 'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-      '<style>' + fonts + '</style>' +
-      // Full photo background
-      (bgBase64 ? '<img src="' + bgBase64 + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block">' : '<div style="position:absolute;inset:0;background:linear-gradient(160deg,' + c.primary + ',' + hdwLighten(c.primary, 0.35) + ')"></div>') +
-      // Top gradient for text readability
-      '<div style="position:absolute;top:0;left:0;right:0;height:' + Math.round(H * 0.65) + 'px;background:linear-gradient(to bottom,rgba(0,0,0,.65) 0%,rgba(0,0,0,.2) 55%,transparent 100%)"></div>' +
-      // Brand name top left
-      '<div style="position:absolute;top:68px;left:72px;right:72px">' +
-        '<div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:.18em;text-transform:uppercase;text-shadow:0 2px 10px rgba(0,0,0,.5);margin-bottom:18px">' + (brief.brand || '') + '</div>' +
-        // Category badge pill
-        '<div style="display:inline-flex;align-items:center;gap:10px;background:' + c.primary + ';color:#fff;padding:11px 24px;border-radius:50px;font-size:19px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 4px 16px rgba(0,0,0,.25);margin-bottom:0">' +
-          '<div style="width:22px;height:22px;flex-shrink:0">' + hdwIcon(brief.category || feats[0] || '', '#fff') + '</div>' +
-          (brief.category || brief.industria || 'DESTACADO') +
-        '</div>' +
-      '</div>' +
-      // Hero headline block (mid-photo)
-      '<div style="position:absolute;top:' + Math.round(H * 0.3) + 'px;left:72px;right:72px">' +
-        '<div style="font-size:' + Math.round(W * 0.14) + 'px;font-weight:900;color:#fff;line-height:.88;text-transform:uppercase;letter-spacing:-.02em;text-shadow:0 4px 20px rgba(0,0,0,.35);margin-bottom:10px">' + (brief.headline || '') + '</div>' +
-        '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.072) + 'px;color:' + hdwLighten(c.primary, 0.5) + ';text-shadow:0 2px 10px rgba(0,0,0,.4);line-height:1.2">' + (brief.subheadline || '') + '</div>' +
-      '</div>' +
-      // White panel at bottom
-      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + panelH + 'px;background:#fff;border-radius:44px 44px 0 0;padding:44px 72px 60px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
-        // Optional description line
-        (brief.description ? '<div style="font-size:20px;color:#666;line-height:1.45;margin-bottom:4px">' + brief.description + '</div>' : '') +
-        // Feature list with icon circles
-        '<div style="display:flex;flex-direction:column;gap:18px">' +
-          feats19.map(f => '<div style="display:flex;align-items:center;gap:18px">' +
-            '<div style="width:48px;height:48px;border-radius:50%;background:' + c.primary + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">' +
-              '<div style="width:24px;height:24px">' + hdwIcon(f, '#fff') + '</div>' +
-            '</div>' +
-            '<div style="font-size:21px;color:#222;font-weight:600;line-height:1.25">' + f + '</div>' +
-          '</div>').join('') +
-        '</div>' +
-        // CTA + logo row inside white panel
-        '<div style="display:flex;align-items:center;gap:16px;margin-top:4px">' +
-          '<div style="flex:1;display:flex;align-items:center;justify-content:space-between;background:' + c.primary + ';color:#fff;padding:24px 36px;border-radius:18px;font-size:23px;font-weight:800;text-transform:uppercase;letter-spacing:.04em">' +
-            '<span>' + (brief.cta_title || 'DESCUBRE MÁS') + '</span>' +
-            '<div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="width:22px;height:22px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
-            '</div>' +
-          '</div>' +
-          // Logo to the right of CTA, inside the white panel (no white box needed)
-          (logoBase64 ? '<div style="flex-shrink:0;display:flex;align-items:center"><img src="' + logoBase64 + '" style="max-width:88px;max-height:60px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.12))"></div>' : '') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  // ── Template 4: Feed Overlay (4:5) ────────────────────────────
-  const featItems4 = feats.slice(0,4).map(f =>
-    '<div style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(6px);padding:12px 20px;border-radius:50px;border:1px solid rgba(255,255,255,.18);margin-bottom:10px">' +
-      '<div style="width:28px;height:28px;flex-shrink:0">'+hdwIcon(f,'#fff')+'</div>' +
-      '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:#fff;letter-spacing:.03em">'+f+'</div>' +
-    '</div>'
-  ).join('');
-
-  return '<div style="width:'+W+'px;height:'+H+'px;position:relative;overflow:hidden;font-family:Montserrat,sans-serif">' +
-    '<style>'+fonts+'</style>' +
-    (bgBase64 ? '<div style="position:absolute;inset:0;background:url(\''+bgBase64+'\') center/cover no-repeat"></div>' : '<div style="position:absolute;inset:0;background:linear-gradient(135deg,'+c.primary+','+hdwLighten(c.primary,0.2)+')"></div>') +
-    '<div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.85) 55%, rgba(0,0,0,.1) 100%)"></div>' +
-    // Top badge
-    '<div style="position:absolute;top:60px;left:60px;display:inline-flex;align-items:center;gap:12px;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);color:#fff;padding:14px 28px;border-radius:50px;font-size:22px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-family:Montserrat,sans-serif">' +
-      '<svg viewBox="0 0 24 24" style="width:24px;height:24px" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>' +
-      (brief.category||'CATEGORÍA') +
-    '</div>' +
-    // Bottom content
-    '<div style="position:absolute;bottom:140px;left:60px;right:60px">' +
-      '<div style="font-family:Montserrat,sans-serif;font-weight:700;font-size:22px;color:rgba(255,255,255,.65);letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px">'+(brief.divider||'')+'</div>' +
-      '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:120px;line-height:.88;color:#fff;letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
-      '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:76px;color:#fff;opacity:.9;margin-bottom:30px">'+(brief.subheadline||'subtitulo')+'</div>' +
-      '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:28px">'+(brief.description||'')+'</div>' +
-      featItems4 +
-    '</div>' +
-    // CTA bar
-    '<div style="position:absolute;bottom:0;left:0;right:0;background:'+c.primary+';padding:32px 60px;display:flex;align-items:center;gap:24px">' +
-      '<div style="width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:30px;height:30px" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>' +
-      '<div style="flex:1"><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:24px;color:#fff;text-transform:uppercase;letter-spacing:.04em">'+(brief.cta_title||'')+'</div><div style="font-family:Montserrat,sans-serif;font-size:17px;color:rgba(255,255,255,.7);font-weight:600">'+(brief.cta_sub||'')+'</div></div>' +
-      '<div style="width:68px;height:68px;background:'+c.accent+';border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:34px;height:34px" fill="none" stroke="'+c.primary+'" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>' +
-    '</div>' +
-    logoEl +
-  '</div>';
-}
+// ── FIN MÓDULO LEADS ──────────────────────────────────────────────────────────
