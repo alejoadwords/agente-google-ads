@@ -3246,6 +3246,9 @@ window.onload = async () => {
   // Inicializar panel de agencia si aplica
   setTimeout(function(){ agencyInit().then(function(){ if(document.getElementById('view-agency').classList.contains('active')) agencyRender(); }); }, 400);
 
+  // Mostrar botón Leads (disponible para todos los usuarios autenticados)
+  setTimeout(function(){ const b = document.getElementById('sb-leads-btn'); if(b) b.style.display = 'block'; }, 500);
+
   // Inicializar botón de referidos
   setTimeout(initReferralButton, 600);
 
