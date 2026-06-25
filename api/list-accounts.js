@@ -168,13 +168,49 @@ export default async function handler(req, res) {
     const accountDetails = await Promise.all(
       customerIds.map(async (id) => {
         try {
-          // Try with login-customer-id set to the account itself first,
-          // then fallback to MCC id, then no header
-          const loginIds = [id];
+          // Strategy 1: GET /customers/{id} — simple REST endpoint, no GAQL needed
+          // Try with different login-customer-id values
+          const loginIds = [];
           if (mccId && mccId !== id) loginIds.push(mccId);
+          loginIds.push(id);
           loginIds.push(null);
 
           for (const loginId of loginIds) {
+            const headers = {
+              'Authorization':   `Bearer ${accessToken}`,
+              'developer-token': developerToken,
+            };
+            if (loginId) headers['login-customer-id'] = loginId;
+
+            const getRes = await fetch(
+              `https://googleads.googleapis.com/v19/customers/${id}`,
+              { headers }
+            );
+
+            const getRaw = await getRes.text();
+            let getData = {};
+            try { getData = JSON.parse(getRaw); } catch {
+              customerErrors.push(`GET ${id}(login:${loginId}): non-JSON [${getRes.status}] ${getRaw.slice(0, 80)}`);
+              continue;
+            }
+            if (!getRes.ok) {
+              const errMsg = getData?.error?.message || JSON.stringify(getData).slice(0, 200);
+              customerErrors.push(`GET ${id}(login:${loginId}): ${getRes.status} ${errMsg}`);
+              continue;
+            }
+            // Success — getData is a Customer resource
+            return {
+              id:        getData.id || id,
+              name:      getData.descriptiveName || `Cuenta ${id}`,
+              currency:  getData.currencyCode || 'USD',
+              timezone:  getData.timeZone || '',
+              isManager: getData.manager || false,
+              isTest:    getData.testAccount || false,
+            };
+          }
+
+          // Strategy 2: fallback to googleAds:search if GET failed for all loginIds
+          for (const loginId of [mccId || null, null]) {
             const headers = {
               'Authorization':   `Bearer ${accessToken}`,
               'developer-token': developerToken,
@@ -196,18 +232,17 @@ export default async function handler(req, res) {
             const qRaw = await queryRes.text();
             let qData = {};
             try { qData = JSON.parse(qRaw); } catch {
-              customerErrors.push(`${id}(login:${loginId}): non-JSON response [${queryRes.status}] ${qRaw.slice(0, 120)}`);
+              customerErrors.push(`SEARCH ${id}(login:${loginId}): non-JSON [${queryRes.status}] ${qRaw.slice(0, 80)}`);
               continue;
             }
             if (!queryRes.ok) {
               const errMsg = qData?.error?.message || JSON.stringify(qData).slice(0, 200);
-              console.log(`Customer ${id} (login:${loginId}) query error:`, queryRes.status, errMsg);
-              customerErrors.push(`${id}(login:${loginId}): ${queryRes.status} ${errMsg}`);
+              customerErrors.push(`SEARCH ${id}(login:${loginId}): ${queryRes.status} ${errMsg}`);
               continue;
             }
             const row = qData.results?.[0]?.customer;
             if (!row) {
-              customerErrors.push(`${id}(login:${loginId}): ok but no results in response: ${JSON.stringify(qData).slice(0, 150)}`);
+              customerErrors.push(`SEARCH ${id}(login:${loginId}): ok but no results`);
               continue;
             }
             return {
@@ -219,6 +254,7 @@ export default async function handler(req, res) {
               isTest:    row.testAccount || false,
             };
           }
+
           return null;
         } catch (e) {
           customerErrors.push(`${id}: exception ${e.message}`);
