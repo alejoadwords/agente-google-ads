@@ -255,13 +255,15 @@ export default async function handler(req, res) {
             };
           }
 
-          // Fallback: can't get details but account is accessible — use ID as name
-          console.log(`Customer ${id}: all detail queries failed, using fallback entry. Errors: ${customerErrors.slice(-4).join(' | ')}`);
-          return { id, name: `Cuenta ${id}`, currency: 'USD', timezone: '', isManager: false, isTest: false, _fallback: true };
+          // Fallback: can't get details but account is accessible — use ID as name.
+          // Mark as MCC if this ID matches the configured MCC env var.
+          const isMccAccount = mccId && id === mccId;
+          console.log(`Customer ${id}: all detail queries failed, using fallback entry. isMCC=${isMccAccount}. Errors: ${customerErrors.slice(-4).join(' | ')}`);
+          return { id, name: `Cuenta ${id}`, currency: 'USD', timezone: '', isManager: isMccAccount, isTest: false, _fallback: true };
         } catch (e) {
           customerErrors.push(`${id}: exception ${e.message}`);
-          // Still return a fallback entry so the account is usable
-          return { id, name: `Cuenta ${id}`, currency: 'USD', timezone: '', isManager: false, isTest: false, _fallback: true };
+          const isMccAccount = mccId && id === mccId;
+          return { id, name: `Cuenta ${id}`, currency: 'USD', timezone: '', isManager: isMccAccount, isTest: false, _fallback: true };
         }
       })
     );
@@ -273,6 +275,7 @@ export default async function handler(req, res) {
     const nonMccAccounts = accounts.filter(a => !a.isManager);
 
     // Para cada MCC, consultar sus sub-cuentas (level = 1)
+    const subAccountErrors = [];
     const subAccountsArrays = await Promise.all(
       mccAccounts.map(async (mcc) => {
         try {
@@ -293,9 +296,17 @@ export default async function handler(req, res) {
           );
           const qRaw = await queryRes.text();
           let qData = {};
-          try { qData = JSON.parse(qRaw); } catch { return []; }
+          try { qData = JSON.parse(qRaw); } catch {
+            const msg = `MCC ${mcc.id} sub-accounts: non-JSON [${queryRes.status}] ${qRaw.slice(0, 120)}`;
+            console.log(msg);
+            subAccountErrors.push(msg);
+            return [];
+          }
           if (!queryRes.ok) {
-            console.log(`MCC ${mcc.id} customer_client query error:`, queryRes.status, JSON.stringify(qData).slice(0, 200));
+            const errMsg = qData?.error?.message || JSON.stringify(qData).slice(0, 200);
+            const msg = `MCC ${mcc.id} sub-accounts: [${queryRes.status}] ${errMsg}`;
+            console.log(msg);
+            subAccountErrors.push(msg);
             return [];
           }
           return (qData.results || []).map(row => {
@@ -311,7 +322,9 @@ export default async function handler(req, res) {
             };
           }).filter(Boolean);
         } catch (e) {
-          console.log(`MCC ${mcc.id} sub-accounts error:`, e.message);
+          const msg = `MCC ${mcc.id} sub-accounts exception: ${e.message}`;
+          console.log(msg);
+          subAccountErrors.push(msg);
           return [];
         }
       })
@@ -326,7 +339,12 @@ export default async function handler(req, res) {
     const finalAccounts = combined.length > 0 ? combined : mccAccounts;
     const hasManager = mccAccounts.length > 0;
 
-    return res.status(200).json({ accounts: finalAccounts, isMCC: hasManager, total: finalAccounts.length });
+    const response = { accounts: finalAccounts, isMCC: hasManager, total: finalAccounts.length };
+    // Include sub-account errors so the UI can show a diagnostic if sub-accounts are missing
+    if (subAccountErrors.length > 0 && combined.length === 0) {
+      response.googleError = `Se encontró MCC ${mccAccounts.map(m => m.id).join(', ')} pero no se pudieron cargar sus sub-cuentas. Error: ${subAccountErrors.join(' | ')}`;
+    }
+    return res.status(200).json(response);
 
   } catch (err) {
     console.error('list-accounts error:', err);
