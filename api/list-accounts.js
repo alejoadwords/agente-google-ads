@@ -63,12 +63,38 @@ export default async function handler(req, res) {
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
   const mccId = (process.env.GOOGLE_ADS_MCC_ID || '').replace(/-/g, '');
 
+  const API_VERSIONS = [22, 21, 20, 19, 18];
+
   // Intentar con versiones en orden descendente hasta encontrar una que responda
   async function tryListAccessible(version) {
     return fetch(
       `https://googleads.googleapis.com/v${version}/customers:listAccessibleCustomers`,
       { headers: { 'Authorization': `Bearer ${accessToken}`, 'developer-token': developerToken } }
     );
+  }
+
+  // Probar versiones para googleAds:search — HTML 404 o UNSUPPORTED_VERSION significa "prueba siguiente"
+  async function detectSearchVersion(customerId, loginCustomerId) {
+    for (const ver of API_VERSIONS) {
+      const headers = {
+        'Authorization':   `Bearer ${accessToken}`,
+        'developer-token': developerToken,
+        'Content-Type':    'application/json',
+      };
+      if (loginCustomerId) headers['login-customer-id'] = String(loginCustomerId);
+      const r = await fetch(
+        `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,
+        { method: 'POST', headers, body: JSON.stringify({ query: 'SELECT customer.id FROM customer LIMIT 1' }) }
+      );
+      const raw = await r.text();
+      if (r.status === 404) continue;
+      if (raw.startsWith('<!')) continue; // HTML response = version not found
+      if (r.status === 400) {
+        if (raw.includes('UNSUPPORTED_VERSION')) continue;
+      }
+      return ver; // Found a working version
+    }
+    return null;
   }
 
   // Auto-refresh si hay 401: obtener refresh_token de Supabase y renovar
@@ -160,9 +186,14 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. Para cada resource name, obtener detalles
+    // 2. Detect working API version for googleAds:search before querying details
     const resourceNames = listData.resourceNames;
     const customerIds = resourceNames.map(r => r.replace('customers/', ''));
+
+    // Use the first accessible customer with MCC login to detect the working search version
+    const firstId = customerIds[0];
+    const searchVersion = await detectSearchVersion(firstId, mccId || firstId);
+    console.log('Detected working googleAds:search version:', searchVersion, 'for customer', firstId);
 
     const customerErrors = [];
     const accountDetails = await Promise.all(
@@ -182,8 +213,9 @@ export default async function handler(req, res) {
             };
             if (loginId) headers['login-customer-id'] = loginId;
 
+            const getVer = searchVersion || 19;
             const getRes = await fetch(
-              `https://googleads.googleapis.com/v19/customers/${id}`,
+              `https://googleads.googleapis.com/v${getVer}/customers/${id}`,
               { headers }
             );
 
@@ -210,6 +242,7 @@ export default async function handler(req, res) {
           }
 
           // Strategy 2: fallback to googleAds:search if GET failed for all loginIds
+          if (!searchVersion) return null; // No working version found — skip GAQL
           for (const loginId of [mccId || null, null]) {
             const headers = {
               'Authorization':   `Bearer ${accessToken}`,
@@ -219,7 +252,7 @@ export default async function handler(req, res) {
             if (loginId) headers['login-customer-id'] = loginId;
 
             const queryRes = await fetch(
-              `https://googleads.googleapis.com/v19/customers/${id}/googleAds:search`,
+              `https://googleads.googleapis.com/v${searchVersion}/customers/${id}/googleAds:search`,
               {
                 method: 'POST',
                 headers,
@@ -279,7 +312,11 @@ export default async function handler(req, res) {
     const subAccountsArrays = await Promise.all(
       mccAccounts.map(async (mcc) => {
         try {
-          const searchUrl = `https://googleads.googleapis.com/v19/customers/${mcc.id}/googleAds:search`;
+          if (!searchVersion) {
+            subAccountErrors.push(`MCC ${mcc.id}: no working API version found for googleAds:search`);
+            return [];
+          }
+          const searchUrl = `https://googleads.googleapis.com/v${searchVersion}/customers/${mcc.id}/googleAds:search`;
           const searchHeaders = {
             'Authorization':    `Bearer ${accessToken}`,
             'developer-token':  developerToken,
@@ -289,14 +326,6 @@ export default async function handler(req, res) {
           const searchBody = JSON.stringify({
             query: 'SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.test_account, customer_client.level FROM customer_client WHERE customer_client.level = 1 ORDER BY customer_client.id',
           });
-
-          // Check for redirects first — HTML 404 often means a silent redirect to a Google error page
-          const redirectCheck = await fetch(searchUrl, { method: 'POST', headers: searchHeaders, body: searchBody, redirect: 'manual' });
-          if (redirectCheck.status >= 300 && redirectCheck.status < 400) {
-            const location = redirectCheck.headers.get('location') || 'unknown';
-            subAccountErrors.push(`MCC ${mcc.id} redirect [${redirectCheck.status}] → ${location}`);
-            return [];
-          }
 
           const queryRes = await fetch(searchUrl, { method: 'POST', headers: searchHeaders, body: searchBody });
           const qRaw = await queryRes.text();
