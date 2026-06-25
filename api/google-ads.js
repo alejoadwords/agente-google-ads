@@ -53,6 +53,32 @@ async function updateStoredToken(userId, accessToken, expiresIn) {
   );
 }
 
+// ── Detected API version cache (per process lifetime) ────────
+let _detectedApiVersion = null;
+
+async function getApiVersion(customerId, accessToken) {
+  if (_detectedApiVersion) return _detectedApiVersion;
+  const mccId = (MCC_ID || '').replace(/-/g, '');
+  const loginId = mccId || customerId;
+  for (const ver of [22, 21, 20, 19, 18]) {
+    const h = { 'Authorization': `Bearer ${accessToken}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
+    if (loginId) h['login-customer-id'] = loginId;
+    try {
+      const r = await fetch(
+        `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,
+        { method: 'POST', headers: h, body: JSON.stringify({ query: 'SELECT customer.id FROM customer LIMIT 1' }) }
+      );
+      const raw = await r.text();
+      if (r.status === 404 || raw.startsWith('<!')) continue;
+      if (r.status === 400 && raw.includes('UNSUPPORTED_VERSION')) continue;
+      _detectedApiVersion = ver;
+      console.log('google-ads.js: detected API version', ver, 'for customer', customerId);
+      return ver;
+    } catch { continue; }
+  }
+  return 19; // fallback
+}
+
 // ── Google Ads API request con auto-refresh ──────────────────
 async function gaqlRequest(customerId, query, accessToken, userId) {
   const makeHeaders = (token) => {
@@ -65,8 +91,9 @@ async function gaqlRequest(customerId, query, accessToken, userId) {
     return h;
   };
 
+  const ver = await getApiVersion(customerId, accessToken);
   const doRequest = (token) =>
-    fetch(`https://googleads.googleapis.com/v19/customers/${customerId}/googleAds:search`, {
+    fetch(`https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`, {
       method: 'POST',
       headers: makeHeaders(token),
       body: JSON.stringify({ query }),
@@ -118,8 +145,9 @@ export default async function handler(req, res) {
       if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
       return h;
     };
+    const legacyVer = await getApiVersion(cleanCid, rawToken || '');
     const doReq = (tok) => fetch(
-      `https://googleads.googleapis.com/v19/customers/${cleanCid}/googleAds:search`,
+      `https://googleads.googleapis.com/v${legacyVer}/customers/${cleanCid}/googleAds:search`,
       { method: 'POST', headers: makeH(tok), body: JSON.stringify({ query }) }
     );
 
@@ -356,7 +384,7 @@ export default async function handler(req, res) {
       }
 
       const mutateRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${customerId}/campaigns:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${customerId}/campaigns:mutate`,
         {
           method: 'POST',
           headers: {
@@ -402,7 +430,7 @@ export default async function handler(req, res) {
       const oldBudget = formatCost(budgetData.results?.[0]?.campaignBudget?.amountMicros || 0);
 
       const mutateRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${customerId}/campaignBudgets:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${customerId}/campaignBudgets:mutate`,
         {
           method: 'POST',
           headers: {
@@ -453,7 +481,7 @@ export default async function handler(req, res) {
       const oldBid = formatCost(kwRow.cpcBidMicros || 0);
 
       const mutateRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${customerId}/adGroupCriteria:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${customerId}/adGroupCriteria:mutate`,
         {
           method: 'POST',
           headers: {
@@ -493,7 +521,7 @@ export default async function handler(req, res) {
       }
 
       const mutateRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${customerId}/adGroups:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${customerId}/adGroups:mutate`,
         {
           method: 'POST',
           headers: {
@@ -628,7 +656,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       // 1. Crear presupuesto
       const budgetMicros = String(Math.round(parseFloat(dailyBudget) * 1_000_000));
       const budgetRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${cid}/campaignBudgets:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/campaignBudgets:mutate`,
         { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
           operations: [{ create: { name: `Presupuesto — ${name}`, amountMicros: budgetMicros, deliveryMethod: 'STANDARD' } }]
         })}
@@ -640,7 +668,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
 
       // 2. Crear campaña
       const campaignRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${cid}/campaigns:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/campaigns:mutate`,
         { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
           operations: [{ create: {
             name,
@@ -668,13 +696,13 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
         { create: { campaign: campaignResource, location: { geoTargetConstant: `geoTargetConstants/${countryGeoId}` } } },
         { create: { campaign: campaignResource, language: { languageConstant: `languageConstants/${languageId}` } } },
       ];
-      await fetch(`https://googleads.googleapis.com/v19/customers/${cid}/campaignCriteria:mutate`,
+      await fetch(`https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/campaignCriteria:mutate`,
         { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: criteriaOps }) }
       ).catch(() => {}); // non-fatal
 
       // 4. Crear grupo de anuncios
       const agRes = await fetch(
-        `https://googleads.googleapis.com/v19/customers/${cid}/adGroups:mutate`,
+        `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/adGroups:mutate`,
         { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
           operations: [{ create: {
             name: `Grupo 1 — ${name}`,
@@ -699,7 +727,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
           }
         }));
         if (kwOps.length) {
-          await fetch(`https://googleads.googleapis.com/v19/customers/${cid}/adGroupCriteria:mutate`,
+          await fetch(`https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/adGroupCriteria:mutate`,
             { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: kwOps }) }
           ).catch(() => {});
         }
@@ -715,7 +743,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
           }
         }));
         if (negOps.length) {
-          await fetch(`https://googleads.googleapis.com/v19/customers/${cid}/campaignCriteria:mutate`,
+          await fetch(`https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/campaignCriteria:mutate`,
             { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({ operations: negOps }) }
           ).catch(() => {});
         }
@@ -727,7 +755,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       const validD = descriptions.filter(d => d && d.trim().length >= 1 && d.length <= 90).slice(0,4).map(d => ({ text: d.trim() }));
       if (validH.length >= 3 && validD.length >= 2 && finalUrl && agResource) {
         const adRes = await fetch(
-          `https://googleads.googleapis.com/v19/customers/${cid}/adGroupAds:mutate`,
+          `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/adGroupAds:mutate`,
           { method: 'POST', headers: makeHeaders(token), body: JSON.stringify({
             operations: [{ create: {
               adGroup: agResource,
@@ -772,8 +800,9 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
         campaignResources = [`customers/${cid}/campaigns/${campaignId}`];
       } else {
         // Traer todas las campañas ENABLED usando googleAds:search (no searchStream)
+        const negVer = await getApiVersion(cid, token);
         const gaqlResp = await fetch(
-          `https://googleads.googleapis.com/v19/customers/${cid}/googleAds:search`,
+          `https://googleads.googleapis.com/v${negVer}/customers/${cid}/googleAds:search`,
           {
             method: 'POST',
             headers: negHeaders(),
@@ -803,7 +832,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
         }));
         try {
           const mutateResp = await fetch(
-            `https://googleads.googleapis.com/v19/customers/${cid}/campaignCriteria:mutate`,
+            `https://googleads.googleapis.com/v${_detectedApiVersion || 19}/customers/${cid}/campaignCriteria:mutate`,
             { method: 'POST', headers: negHeaders(), body: JSON.stringify({ operations: ops }) }
           );
           const mutateData = await mutateResp.json();
