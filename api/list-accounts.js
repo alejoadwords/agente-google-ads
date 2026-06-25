@@ -279,21 +279,26 @@ export default async function handler(req, res) {
     const subAccountsArrays = await Promise.all(
       mccAccounts.map(async (mcc) => {
         try {
-          const queryRes = await fetch(
-            `https://googleads.googleapis.com/v19/customers/${mcc.id}/googleAds:search`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization':    `Bearer ${accessToken}`,
-                'developer-token':  developerToken,
-                'login-customer-id': String(mcc.id),
-                'Content-Type':     'application/json',
-              },
-              body: JSON.stringify({
-                query: 'SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.test_account, customer_client.level FROM customer_client WHERE customer_client.level = 1 ORDER BY customer_client.id',
-              }),
-            }
-          );
+          const searchUrl = `https://googleads.googleapis.com/v19/customers/${mcc.id}/googleAds:search`;
+          const searchHeaders = {
+            'Authorization':    `Bearer ${accessToken}`,
+            'developer-token':  developerToken,
+            'login-customer-id': String(mcc.id),
+            'Content-Type':     'application/json',
+          };
+          const searchBody = JSON.stringify({
+            query: 'SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.test_account, customer_client.level FROM customer_client WHERE customer_client.level = 1 ORDER BY customer_client.id',
+          });
+
+          // Check for redirects first — HTML 404 often means a silent redirect to a Google error page
+          const redirectCheck = await fetch(searchUrl, { method: 'POST', headers: searchHeaders, body: searchBody, redirect: 'manual' });
+          if (redirectCheck.status >= 300 && redirectCheck.status < 400) {
+            const location = redirectCheck.headers.get('location') || 'unknown';
+            subAccountErrors.push(`MCC ${mcc.id} redirect [${redirectCheck.status}] → ${location}`);
+            return [];
+          }
+
+          const queryRes = await fetch(searchUrl, { method: 'POST', headers: searchHeaders, body: searchBody });
           const qRaw = await queryRes.text();
           let qData = {};
           try { qData = JSON.parse(qRaw); } catch {
