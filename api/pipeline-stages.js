@@ -71,7 +71,7 @@ export default async function handler(req) {
     let rows = await res.json();
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      // Seed defaults
+      // Seed defaults — upsert to avoid duplicates on concurrent requests
       const seeds = DEFAULT_STAGES.map(s => ({
         user_id: userId,
         key: s.key,
@@ -79,15 +79,37 @@ export default async function handler(req) {
         color: s.color,
         position: s.position,
       }));
+      const seedHeaders = {
+        ...sbHeaders(),
+        'Prefer': 'return=representation,resolution=ignore-duplicates',
+      };
       const seedRes = await fetch(`${SUPABASE_URL}/rest/v1/pipeline_stages`, {
         method: 'POST',
-        headers: sbHeaders(),
+        headers: seedHeaders,
         body: JSON.stringify(seeds),
       });
-      if (seedRes.ok) rows = await seedRes.json();
+      if (seedRes.ok) {
+        rows = await seedRes.json();
+        // If upsert returned nothing (all were duplicates), re-fetch
+        if (!Array.isArray(rows) || rows.length === 0) {
+          const refetch = await fetch(
+            `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}&select=*&order=position.asc`,
+            { headers: sbHeaders() }
+          );
+          rows = await refetch.json();
+        }
+      }
     }
 
-    return jsonResp({ stages: Array.isArray(rows) ? rows : [] });
+    // De-duplicate by key in case the table has dirty data
+    const seen = new Set();
+    const deduped = Array.isArray(rows) ? rows.filter(r => {
+      if (seen.has(r.key)) return false;
+      seen.add(r.key);
+      return true;
+    }) : [];
+
+    return jsonResp({ stages: deduped });
   }
 
   const url = new URL(req.url);
