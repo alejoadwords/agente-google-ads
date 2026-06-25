@@ -16196,7 +16196,15 @@ function crmRenderKanban() {
     const stageValue = leads.reduce((s, l) => s + (Number(l.value) || 0), 0);
     const col = document.createElement('div');
     col.className = 'crm-col';
-    col.innerHTML = '<div class="crm-col-head"><div class="crm-col-dot" style="background:' + esc(stage.color) + '"></div><div class="crm-col-label">' + esc(stage.label) + '</div><div class="crm-col-count">' + leads.length + '</div>' + (stageValue > 0 ? '<div class="crm-col-value">$' + stageValue.toLocaleString('es-CO') + '</div>' : '') + '</div><div class="crm-col-body" id="crm-col-' + esc(stage.key) + '" data-stage="' + esc(stage.key) + '">' + (leads.length === 0 ? '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>' : leads.map(l => crmCardHTML(l, now)).join('')) + '<button class="crm-add-card" onclick="crmOpenModal(\'' + esc(stage.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button></div>';
+    col.innerHTML = '<div class="crm-col-head" style="border-left-color:' + esc(stage.color) + '">' +
+      '<div class="crm-col-label">' + esc(stage.label) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+      (stageValue > 0 ? '<div class="crm-col-value">$' + stageValue.toLocaleString('es-CO') + '</div>' : '') +
+      '<div class="crm-col-count">' + leads.length + '</div>' +
+      '</div></div>' +
+      '<div class="crm-col-body" id="crm-col-' + esc(stage.key) + '" data-stage="' + esc(stage.key) + '">' +
+      (leads.length === 0 ? '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>' : leads.map(l => crmCardHTML(l, now)).join('')) +
+      '<button class="crm-add-card" onclick="crmOpenModal(\'' + esc(stage.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button></div>';
     container.appendChild(col);
     crmSetupDrop(col.querySelector('.crm-col-body'), stage.key);
   });
@@ -16221,7 +16229,39 @@ function crmCardHTML(lead, now) {
   const score = lead.custom_fields && lead.custom_fields.score ? Number(lead.custom_fields.score) : null;
   let scoreColor = '#6B7280';
   if (score !== null) { if (score >= 8) scoreColor = '#10B981'; else if (score >= 5) scoreColor = '#F59E0B'; else scoreColor = '#EF4444'; }
-  return '<div class="crm-card" data-id="' + esc(lead.id) + '"><div class="crm-card-name">' + esc(lead.name) + '</div><div class="crm-card-meta">' + (lead.company ? '<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>' + esc(lead.company) + '</div>' : '') + (lead.phone ? '<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') + '</div><div style="display:flex;align-items:center;gap:6px;margin-top:4px"><div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') + '</div>' + (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') + '</div>' + (score !== null ? '<div class="crm-card-score" style="background:' + scoreColor + '20;color:' + scoreColor + '">Score ' + score + '/10</div>' : '') + (showInactive ? '<div class="crm-card-inactive"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + daysSince + ' días sin actividad</div>' : '') + '</div>';
+  // Stage color accent
+  const stageObj = (typeof crmStages !== 'undefined') ? crmStages.find(function(s){ return s.key === lead.stage; }) : null;
+  const stageColor = stageObj ? stageObj.color : '#6B7280';
+  // Avatar initials
+  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#14B8A6','#EF4444'];
+  const avatarBg = avatarPalette[(lead.name || 'A').charCodeAt(0) % avatarPalette.length];
+  const nameParts = (lead.name || '?').split(' ').filter(Boolean);
+  const initials = nameParts.slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
+  // Quick action buttons
+  const phoneNum = (lead.phone || '').replace(/\s/g,'');
+  const phoneBtn = lead.phone ? '<button class="crm-card-act-btn" onclick="event.stopPropagation();window.location.href=\'tel:' + phoneNum + '\'" title="Llamar"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</button>' : '';
+  const waBtn = lead.phone ? '<button class="crm-card-act-btn wa-btn" onclick="event.stopPropagation();window.open(\'https://wa.me/' + phoneNum.replace(/\D/g,'') + '\',\'_blank\')" title="WhatsApp"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</button>' : '';
+  const emailBtn = lead.email ? '<button class="crm-card-act-btn em-btn" onclick="event.stopPropagation();window.location.href=\'mailto:' + esc(lead.email) + '\'" title="Email"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</button>' : '';
+  const hasActions = lead.phone || lead.email;
+  return '<div class="crm-card" data-id="' + esc(lead.id) + '" style="border-left-color:' + stageColor + '">' +
+    '<div class="crm-card-inner">' +
+    '<div class="crm-card-top">' +
+    '<div class="crm-card-name">' + esc(lead.name) + '</div>' +
+    '<div class="crm-card-avatar" style="background:' + avatarBg + '">' + initials + '</div>' +
+    '</div>' +
+    (lead.company ? '<div class="crm-card-company"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>' + esc(lead.company) + '</div>' : '') +
+    (lead.phone ? '<div class="crm-card-phone"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') +
+    '<div class="crm-card-footer">' +
+    '<div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') + '</div>' +
+    (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
+    '</div>' +
+    ((score !== null || showInactive) ? '<div class="crm-card-badges">' +
+    (score !== null ? '<div class="crm-card-score" style="background:' + scoreColor + '20;color:' + scoreColor + '">Score ' + score + '/10</div>' : '') +
+    (showInactive ? '<div class="crm-card-inactive"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + daysSince + ' días sin actividad</div>' : '') +
+    '</div>' : '') +
+    '</div>' +
+    (hasActions ? '<div class="crm-card-actions">' + phoneBtn + waBtn + emailBtn + '</div>' : '') +
+    '</div>';
 }
 
 function crmSetupDrop(el, stageKey) {
@@ -16382,6 +16422,21 @@ async function crmOpenDetail(leadId) {
   crmDetailLead = lead;
   const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
   document.getElementById('crm-d-name').textContent = lead.name;
+  // Avatar
+  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#14B8A6','#EF4444'];
+  const avatarBg = avatarPalette[(lead.name || 'A').charCodeAt(0) % avatarPalette.length];
+  const avatarInitials = (lead.name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
+  const avatarEl = document.getElementById('crm-d-avatar');
+  if (avatarEl) { avatarEl.textContent = avatarInitials; avatarEl.style.background = avatarBg; }
+  // Quick action buttons
+  const qaPhone = (lead.phone || '').replace(/\s/g,'');
+  const qaEl = document.getElementById('crm-d-quick-actions');
+  if (qaEl) {
+    qaEl.innerHTML =
+      (lead.phone ? '<a class="crm-qa-btn" href="tel:' + qaPhone + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</a>' : '') +
+      (lead.phone ? '<a class="crm-qa-btn wa" href="https://wa.me/' + qaPhone.replace(/\D/g,'') + '" target="_blank"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</a>' : '') +
+      (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '');
+  }
   document.getElementById('crm-d-email').textContent = lead.email || '—';
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
   document.getElementById('crm-d-company').textContent = lead.company || '—';
