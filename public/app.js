@@ -16640,28 +16640,65 @@ async function crmSaveAgent() {
   }
 }
 
-async function agConnectChannel(channel, agentId) {
-  if (channel === 'whatsapp') {
-    // WhatsApp: pedir datos manualmente
-    const phoneNumberId = prompt('Phone Number ID de WhatsApp Business (lo encuentras en Meta Business Suite → WhatsApp → Número):');
-    if (!phoneNumberId) return;
-    const token = prompt('Access Token con permiso whatsapp_business_messaging:');
-    if (!token) return;
-    const name = prompt('Nombre del número (ej: +57 300 123 4567):') || phoneNumberId;
+let _waConnectAgentId = null;
 
-    // Verify the token works
+function waConnectOpen(agentId) {
+  _waConnectAgentId = agentId;
+  document.getElementById('wa-f-phone-id').value = '';
+  document.getElementById('wa-f-token').value = '';
+  document.getElementById('wa-f-name').value = '';
+  const err = document.getElementById('wa-connect-error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+  const btn = document.getElementById('wa-connect-btn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Conectar'; }
+  document.getElementById('wa-connect-modal').classList.add('open');
+  setTimeout(() => document.getElementById('wa-f-phone-id').focus(), 100);
+}
+
+function waConnectClose() {
+  document.getElementById('wa-connect-modal').classList.remove('open');
+  _waConnectAgentId = null;
+}
+
+async function waConnectSave() {
+  const phoneNumberId = document.getElementById('wa-f-phone-id').value.trim();
+  const token = document.getElementById('wa-f-token').value.trim();
+  const name = document.getElementById('wa-f-name').value.trim() || phoneNumberId;
+  const errEl = document.getElementById('wa-connect-error');
+  const btn = document.getElementById('wa-connect-btn');
+
+  const showErr = (msg) => { errEl.textContent = msg; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Conectar'; };
+
+  if (!phoneNumberId) { showErr('El Phone Number ID es obligatorio.'); document.getElementById('wa-f-phone-id').focus(); return; }
+  if (!token) { showErr('El Access Token es obligatorio.'); document.getElementById('wa-f-token').focus(); return; }
+
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  errEl.style.display = 'none';
+
+  try {
     const testRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}?access_token=${token}`);
     const testData = await testRes.json();
-    if (testData.error) { alert('Token o Phone Number ID inválido: ' + testData.error.message); return; }
+    if (testData.error) { showErr('Token o Phone Number ID inválido: ' + testData.error.message); return; }
 
+    btn.textContent = 'Conectando...';
     const res = await fetch('/api/channel-connections', {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_id: agentId, channel, external_id: phoneNumberId, access_token: token, channel_name: name }),
+      body: JSON.stringify({ agent_id: _waConnectAgentId, channel: 'whatsapp', external_id: phoneNumberId, access_token: token, channel_name: name }),
     });
-    if (res.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
-    else alert('Error conectando WhatsApp. Verifica los datos.');
+    if (!res.ok) { showErr('Error guardando la conexión. Verifica los datos e intenta de nuevo.'); return; }
+    waConnectClose();
+    await crmLoadAgents();
+    crmOpenAgentModal(_waConnectAgentId);
+  } catch(e) {
+    showErr('Error de red. Verifica tu conexión e intenta de nuevo.');
+  }
+}
 
+async function agConnectChannel(channel, agentId) {
+  if (channel === 'whatsapp') {
+    waConnectOpen(agentId);
+    return;
   } else {
     // Messenger / Instagram: usar token Meta existente
     const metaToken = sessionStorage.getItem('metaToken') || localStorage.getItem('meta_access_token');

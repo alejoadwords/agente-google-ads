@@ -3523,6 +3523,46 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   </div>
 </div>
 
+<!-- MODAL CONEXIÓN WHATSAPP BUSINESS -->
+<div class="crm-modal-overlay" id="wa-connect-modal">
+  <div class="crm-modal-box" style="max-width:520px">
+    <div class="crm-modal-head">
+      <div class="crm-modal-title">Conectar WhatsApp Business</div>
+      <button class="crm-modal-close" onclick="waConnectClose()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="crm-modal-body">
+      <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#1E40AF;line-height:1.6">
+        <strong>¿Dónde encontrar estos datos?</strong><br>
+        Ve a <strong>Meta Business Suite → Configuración → Cuentas de WhatsApp → tu número</strong>.<br>
+        El <strong>Phone Number ID</strong> aparece en los detalles del número.<br>
+        El <strong>Token</strong> lo generas en <strong>Meta for Developers → tu App → WhatsApp → API Setup</strong> (usa un token permanente de Sistema).
+      </div>
+      <div class="crm-field">
+        <label>Phone Number ID *</label>
+        <input type="text" id="wa-f-phone-id" placeholder="ej: 123456789012345" />
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Número de 15 dígitos — no es el número de teléfono</div>
+      </div>
+      <div class="crm-field">
+        <label>Access Token *</label>
+        <input type="text" id="wa-f-token" placeholder="EAAxxxxx..." />
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Token con permiso <code style="background:var(--sidebar);padding:1px 4px;border-radius:3px">whatsapp_business_messaging</code></div>
+      </div>
+      <div class="crm-field">
+        <label>Nombre del número</label>
+        <input type="text" id="wa-f-name" placeholder="ej: +57 300 123 4567 — Ventas" />
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Nombre descriptivo para identificar este canal</div>
+      </div>
+      <div id="wa-connect-error" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 12px;font-size:12px;color:#991B1B;margin-top:8px"></div>
+    </div>
+    <div class="crm-modal-foot">
+      <button class="crm-btn-cancel" onclick="waConnectClose()">Cancelar</button>
+      <button class="crm-btn-save" id="wa-connect-btn" onclick="waConnectSave()">Conectar</button>
+    </div>
+  </div>
+</div>
+
 
 
 
