@@ -255,24 +255,18 @@ export default async function handler(req, res) {
             };
           }
 
-          return null;
+          // Fallback: can't get details but account is accessible — use ID as name
+          console.log(`Customer ${id}: all detail queries failed, using fallback entry. Errors: ${customerErrors.slice(-4).join(' | ')}`);
+          return { id, name: `Cuenta ${id}`, currency: 'USD', timezone: '', isManager: false, isTest: false, _fallback: true };
         } catch (e) {
           customerErrors.push(`${id}: exception ${e.message}`);
-          return null;
+          // Still return a fallback entry so the account is usable
+          return { id, name: `Cuenta ${id}`, currency: 'USD', timezone: '', isManager: false, isTest: false, _fallback: true };
         }
       })
     );
 
     const accounts = accountDetails.filter(Boolean);
-
-    // Si no se pudo obtener detalle de ninguna cuenta, incluir errores reales
-    if (accounts.length === 0) {
-      return res.status(200).json({
-        accounts: [], isMCC: false,
-        googleError: `Se encontraron ${customerIds.length} cuentas (${customerIds.join(', ')}) pero no se pudo consultar su detalle. Errores: ${customerErrors.join(' | ') || 'sin detalle'}`,
-        debug: { step: 'customerQuery', customerIds, customerErrors },
-      });
-    }
 
     // Separar MCCs de cuentas normales
     const mccAccounts = accounts.filter(a => a.isManager);
