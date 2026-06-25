@@ -129,9 +129,16 @@ export default async function handler(req, res) {
       const googleError = listData?.error?.message
         || listData?.error?.status
         || JSON.stringify(listData).slice(0, 300);
+      // Include details array for better debugging (e.g. fieldViolations)
+      const details = listData?.error?.details
+        ? JSON.stringify(listData.error.details).slice(0, 400)
+        : null;
+      const fullMsg = details
+        ? `[HTTP ${statusCode}] ${googleError} | details: ${details}`
+        : `[HTTP ${statusCode}] ${googleError}`;
       return res.status(200).json({
         accounts: [], isMCC: false,
-        googleError: `[HTTP ${statusCode}] ${googleError}`,
+        googleError: fullMsg,
         debug: { step: 'listAccessibleCustomers', status: statusCode, body: listData },
       });
     }
