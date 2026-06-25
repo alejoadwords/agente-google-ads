@@ -195,15 +195,21 @@ export default async function handler(req, res) {
 
             const qRaw = await queryRes.text();
             let qData = {};
-            try { qData = JSON.parse(qRaw); } catch { continue; }
+            try { qData = JSON.parse(qRaw); } catch {
+              customerErrors.push(`${id}(login:${loginId}): non-JSON response [${queryRes.status}] ${qRaw.slice(0, 120)}`);
+              continue;
+            }
             if (!queryRes.ok) {
-              const errMsg = qData?.error?.message || JSON.stringify(qData).slice(0, 150);
+              const errMsg = qData?.error?.message || JSON.stringify(qData).slice(0, 200);
               console.log(`Customer ${id} (login:${loginId}) query error:`, queryRes.status, errMsg);
               customerErrors.push(`${id}(login:${loginId}): ${queryRes.status} ${errMsg}`);
               continue;
             }
             const row = qData.results?.[0]?.customer;
-            if (!row) continue;
+            if (!row) {
+              customerErrors.push(`${id}(login:${loginId}): ok but no results in response: ${JSON.stringify(qData).slice(0, 150)}`);
+              continue;
+            }
             return {
               id:        row.id,
               name:      row.descriptiveName || `Cuenta ${row.id}`,
