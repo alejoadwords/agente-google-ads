@@ -16517,27 +16517,27 @@ function crmOpenAgentModal(agentId) {
   if (isEdit) {
     const ag = crmAgents.find(a => a.id === agentId);
     if (!ag) return;
-    document.getElementById('ag-f-name').value = ag.name || '';
-    document.getElementById('ag-f-persona').value = ag.persona || '';
-    document.getElementById('ag-f-business').value = ag.business_ctx || '';
-    document.getElementById('ag-f-escalate').value = ag.escalate_phrase || '';
-    document.getElementById('ag-f-tone').value = ag.tone || 'informal';
+    document.getElementById('cag-f-name').value = ag.name || '';
+    document.getElementById('cag-f-persona').value = ag.persona || '';
+    document.getElementById('cag-f-business').value = ag.business_ctx || '';
+    document.getElementById('cag-f-escalate').value = ag.escalate_phrase || '';
+    document.getElementById('cag-f-tone').value = ag.tone || 'informal';
     agFaqs = (ag.faqs || []).map(f => ({ ...f }));
     // Show channels section
     const chSect = document.getElementById('ag-channels-section');
     if (chSect) { chSect.style.display = 'block'; agRenderChannels(ag); }
   } else {
-    document.getElementById('ag-f-name').value = '';
-    document.getElementById('ag-f-persona').value = '';
-    document.getElementById('ag-f-business').value = '';
-    document.getElementById('ag-f-escalate').value = 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?';
-    document.getElementById('ag-f-tone').value = 'informal';
+    document.getElementById('cag-f-name').value = '';
+    document.getElementById('cag-f-persona').value = '';
+    document.getElementById('cag-f-business').value = '';
+    document.getElementById('cag-f-escalate').value = 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?';
+    document.getElementById('cag-f-tone').value = 'informal';
     const chSect = document.getElementById('ag-channels-section');
     if (chSect) chSect.style.display = 'none';
   }
   agRenderFaqs();
   document.getElementById('crm-agent-modal').classList.add('open');
-  setTimeout(() => document.getElementById('ag-f-name').focus(), 100);
+  setTimeout(() => document.getElementById('cag-f-name').focus(), 100);
 }
 
 function crmCloseAgentModal() {
@@ -16598,17 +16598,17 @@ function agRenderChannels(agent) {
 }
 
 async function crmSaveAgent() {
-  const name = document.getElementById('ag-f-name').value.trim();
-  if (!name) { document.getElementById('ag-f-name').focus(); return; }
+  const name = document.getElementById('cag-f-name').value.trim();
+  if (!name) { document.getElementById('cag-f-name').focus(); return; }
   const btn = document.getElementById('ag-save-btn');
   btn.disabled = true; btn.textContent = 'Guardando...';
 
   const payload = {
     name,
-    persona: document.getElementById('ag-f-persona').value.trim(),
-    business_ctx: document.getElementById('ag-f-business').value.trim(),
-    escalate_phrase: document.getElementById('ag-f-escalate').value.trim(),
-    tone: document.getElementById('ag-f-tone').value,
+    persona: document.getElementById('cag-f-persona').value.trim(),
+    business_ctx: document.getElementById('cag-f-business').value.trim(),
+    escalate_phrase: document.getElementById('cag-f-escalate').value.trim(),
+    tone: document.getElementById('cag-f-tone').value,
     faqs: agFaqs.filter(f => f.q && f.a),
   };
 
