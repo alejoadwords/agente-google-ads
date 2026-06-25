@@ -16070,6 +16070,9 @@ let crmView = 'kanban'; // 'kanban' | 'list'
 let crmEditingId = null;
 let crmDetailLead = null;
 let crmInited = false;
+let crmSearchQuery = '';
+let crmFilterSource = '';
+let crmActivityType = 'nota';
 
 async function crmInit() {
   if (crmInited) { crmRender(); return; }
@@ -16130,27 +16133,70 @@ function crmRender() {
   crmUpdateSidebarCount();
 }
 
+function crmGetFilteredLeads() {
+  let leads = [...crmLeads];
+  if (crmSearchQuery) {
+    const q = crmSearchQuery.toLowerCase();
+    leads = leads.filter(l =>
+      (l.name || '').toLowerCase().includes(q) ||
+      (l.company || '').toLowerCase().includes(q) ||
+      (l.email || '').toLowerCase().includes(q) ||
+      (l.phone || '').includes(q)
+    );
+  }
+  if (crmFilterSource) leads = leads.filter(l => l.source === crmFilterSource);
+  return leads;
+}
+
+function crmSetSearch(q) {
+  crmSearchQuery = q;
+  crmRender();
+  crmUpdateLeadsStats();
+}
+
+function crmSetFilter(key, val) {
+  if (key === 'source') crmFilterSource = val;
+  crmRender();
+  crmUpdateLeadsStats();
+}
+
+function crmUpdateLeadsStats() {
+  const el = document.getElementById('crm-leads-stats');
+  if (!el) return;
+  const filtered = crmGetFilteredLeads();
+  const total = crmLeads.length;
+  if (filtered.length === total) {
+    el.textContent = total + ' leads';
+  } else {
+    el.textContent = filtered.length + ' de ' + total;
+  }
+}
+
 function crmRenderKanban() {
   const container = document.getElementById('crm-kanban');
   if (!container) return;
+  const filtered = crmGetFilteredLeads();
+
+  // Pipeline total
+  const totalValue = filtered.reduce((s, l) => s + (Number(l.value) || 0), 0);
+  let totalEl = document.getElementById('crm-pipeline-total');
+  if (!totalEl) {
+    totalEl = document.createElement('div');
+    totalEl.id = 'crm-pipeline-total';
+    totalEl.className = 'crm-pipeline-total';
+    container.parentNode.insertBefore(totalEl, container);
+  }
+  totalEl.style.display = totalValue > 0 ? 'flex' : 'none';
+  if (totalValue > 0) totalEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> Pipeline total: $' + totalValue.toLocaleString('es-CO');
+
   container.innerHTML = '';
+  const now = Date.now();
   crmStages.forEach(stage => {
-    const leads = crmLeads.filter(l => l.stage === stage.key);
+    const leads = filtered.filter(l => l.stage === stage.key);
+    const stageValue = leads.reduce((s, l) => s + (Number(l.value) || 0), 0);
     const col = document.createElement('div');
     col.className = 'crm-col';
-    col.innerHTML = `
-      <div class="crm-col-head">
-        <div class="crm-col-dot" style="background:${esc(stage.color)}"></div>
-        <div class="crm-col-label">${esc(stage.label)}</div>
-        <div class="crm-col-count">${leads.length}</div>
-      </div>
-      <div class="crm-col-body" id="crm-col-${esc(stage.key)}" data-stage="${esc(stage.key)}">
-        ${leads.length === 0 ? `<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>` : leads.map(l => crmCardHTML(l)).join('')}
-        <button class="crm-add-card" onclick="crmOpenModal('${esc(stage.key)}')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Agregar
-        </button>
-      </div>`;
+    col.innerHTML = '<div class="crm-col-head"><div class="crm-col-dot" style="background:' + esc(stage.color) + '"></div><div class="crm-col-label">' + esc(stage.label) + '</div><div class="crm-col-count">' + leads.length + '</div>' + (stageValue > 0 ? '<div class="crm-col-value">$' + stageValue.toLocaleString('es-CO') + '</div>' : '') + '</div><div class="crm-col-body" id="crm-col-' + esc(stage.key) + '" data-stage="' + esc(stage.key) + '">' + (leads.length === 0 ? '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>' : leads.map(l => crmCardHTML(l, now)).join('')) + '<button class="crm-add-card" onclick="crmOpenModal(\'' + esc(stage.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button></div>';
     container.appendChild(col);
     crmSetupDrop(col.querySelector('.crm-col-body'), stage.key);
   });
@@ -16163,20 +16209,19 @@ function crmRenderKanban() {
     card.addEventListener('dragend', () => card.classList.remove('dragging'));
     card.addEventListener('click', () => crmOpenDetail(card.dataset.id));
   });
+  crmUpdateLeadsStats();
 }
 
-function crmCardHTML(lead) {
+function crmCardHTML(lead, now) {
   const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
-  return `<div class="crm-card" data-id="${esc(lead.id)}">
-    <div class="crm-card-name">${esc(lead.name)}</div>
-    <div class="crm-card-meta">
-      ${lead.company ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>${esc(lead.company)}</div>` : ''}
-      ${lead.email ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(lead.email)}</div>` : ''}
-      ${lead.phone ? `<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>${esc(lead.phone)}</div>` : ''}
-    </div>
-    <div class="crm-card-source">${esc(sourceLabels[lead.source] || lead.source || 'Manual')}</div>
-    ${lead.value ? `<div class="crm-card-value">$${Number(lead.value).toLocaleString()}</div>` : ''}
-  </div>`;
+  const ts = now || Date.now();
+  const lastActive = lead.updated_at ? new Date(lead.updated_at).getTime() : new Date(lead.created_at || 0).getTime();
+  const daysSince = Math.floor((ts - lastActive) / 86400000);
+  const showInactive = daysSince >= 7 && lead.stage !== 'ganado' && lead.stage !== 'perdido';
+  const score = lead.custom_fields && lead.custom_fields.score ? Number(lead.custom_fields.score) : null;
+  let scoreColor = '#6B7280';
+  if (score !== null) { if (score >= 8) scoreColor = '#10B981'; else if (score >= 5) scoreColor = '#F59E0B'; else scoreColor = '#EF4444'; }
+  return '<div class="crm-card" data-id="' + esc(lead.id) + '"><div class="crm-card-name">' + esc(lead.name) + '</div><div class="crm-card-meta">' + (lead.company ? '<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>' + esc(lead.company) + '</div>' : '') + (lead.phone ? '<div class="crm-card-meta-row"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') + '</div><div style="display:flex;align-items:center;gap:6px;margin-top:4px"><div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') + '</div>' + (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') + '</div>' + (score !== null ? '<div class="crm-card-score" style="background:' + scoreColor + '20;color:' + scoreColor + '">Score ' + score + '/10</div>' : '') + (showInactive ? '<div class="crm-card-inactive"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + daysSince + ' días sin actividad</div>' : '') + '</div>';
 }
 
 function crmSetupDrop(el, stageKey) {
@@ -16212,21 +16257,16 @@ function crmRenderList() {
   const tbody = document.getElementById('crm-list-body');
   if (!tbody) return;
   const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
-  if (crmLeads.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Sin leads aún. Crea el primero.</td></tr>`;
+  const filtered = crmGetFilteredLeads();
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Sin leads' + (crmSearchQuery || crmFilterSource ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
     return;
   }
-  tbody.innerHTML = crmLeads.map(l => {
+  tbody.innerHTML = filtered.map(l => {
     const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: '#6B7280' };
-    return `<tr onclick="crmOpenDetail('${esc(l.id)}')">
-      <td style="font-weight:600">${esc(l.name)}</td>
-      <td>${esc(l.company || '—')}</td>
-      <td style="color:var(--muted)">${esc(l.email || '—')}</td>
-      <td><span class="crm-stage-pill" style="background:${esc(stage.color)}20;color:${esc(stage.color)}">${esc(stage.label)}</span></td>
-      <td style="font-size:11px;color:var(--muted)">${esc(sourceLabels[l.source] || l.source || 'Manual')}</td>
-      <td style="font-size:11px;color:var(--muted2)">${l.created_at ? new Date(l.created_at).toLocaleDateString('es-CO') : '—'}</td>
-    </tr>`;
+    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(sourceLabels[l.source] || l.source || 'Manual') + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
   }).join('');
+  crmUpdateLeadsStats();
 }
 
 function crmUpdateClientTag() {
@@ -16262,6 +16302,10 @@ function crmOpenModal(defaultStage) {
   document.getElementById('crm-f-company').value = '';
   document.getElementById('crm-f-notes').value = '';
   document.getElementById('crm-f-source').value = 'manual';
+  const valModalEl = document.getElementById('crm-f-value');
+  if (valModalEl) valModalEl.value = '';
+  const tagsModalEl = document.getElementById('crm-f-tags');
+  if (tagsModalEl) tagsModalEl.value = '';
   crmPopulateStageSelects();
   if (defaultStage) document.getElementById('crm-f-stage').value = defaultStage;
   document.getElementById('crm-save-btn').disabled = false;
@@ -16290,6 +16334,8 @@ async function crmSaveLead() {
     source: document.getElementById('crm-f-source').value,
     notes: document.getElementById('crm-f-notes').value.trim() || null,
     client_id: clientId,
+    value: parseFloat(document.getElementById('crm-f-value').value) || null,
+    tags: document.getElementById('crm-f-tags') && document.getElementById('crm-f-tags').value.trim() ? document.getElementById('crm-f-tags').value.split(',').map(t => t.trim()).filter(Boolean) : null,
   };
   try {
     if (crmEditingId) {
@@ -16340,6 +16386,10 @@ async function crmOpenDetail(leadId) {
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
   document.getElementById('crm-d-company').textContent = lead.company || '—';
   document.getElementById('crm-d-source').textContent = sourceLabels[lead.source] || lead.source || 'Manual';
+  const valueRow = document.getElementById('crm-d-value-row');
+  if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
+  const tagsRow = document.getElementById('crm-d-tags-row');
+  if (tagsRow) { tagsRow.style.display = lead.tags && lead.tags.length > 0 ? 'flex' : 'none'; const tagsEl = document.getElementById('crm-d-tags'); if (tagsEl) tagsEl.textContent = lead.tags ? lead.tags.join(', ') : ''; }
   const notesSection = document.getElementById('crm-d-notes-section');
   if (lead.notes) {
     notesSection.style.display = 'flex';
@@ -16397,16 +16447,24 @@ async function crmLoadActivities(leadId) {
       list.innerHTML = `<div style="font-size:12px;color:var(--muted)">Sin actividad registrada.</div>`;
       return;
     }
-    const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Cambio de etapa', creacion: 'Creación' };
-    list.innerHTML = acts.map(a => `
-      <div class="crm-activity-item">
-        <div class="crm-activity-dot ${a.type === 'stage_change' ? 'stage' : a.type === 'creacion' ? 'creacion' : ''}"></div>
-        <div class="crm-activity-content">
-          <div class="crm-activity-text"><strong>${esc(typeLabels[a.type] || a.type)}:</strong> ${esc(a.content || '')}</div>
-          <div class="crm-activity-time">${new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</div>
-        </div>
-      </div>`).join('');
+    const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Etapa', creacion: 'Creado' };
+    const typeColors = { nota: 'var(--blue)', llamada: '#10B981', email: '#6366F1', reunion: '#F59E0B', tarea: '#EF4444', stage_change: '#10B981', creacion: 'var(--muted2)' };
+    list.innerHTML = acts.map(a => {
+      const dueDate = a.metadata && a.metadata.due_date ? '<div style="font-size:10px;color:#D97706;margin-top:2px">Fecha límite: ' + new Date(a.metadata.due_date).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div>' : '';
+      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (typeColors[a.type] || 'var(--blue)') + '"></div><div class="crm-activity-content"><div class="crm-activity-text"><strong>' + esc(typeLabels[a.type] || a.type) + ':</strong> ' + esc(a.content || '') + '</div>' + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div></div>';
+    }).join('');
   } catch(e) { console.error('crmLoadActivities', e); }
+}
+
+function crmSetActType(type, btn) {
+  crmActivityType = type;
+  document.querySelectorAll('.crm-act-type-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const dueWrap = document.getElementById('crm-act-due-wrap');
+  if (dueWrap) dueWrap.style.display = type === 'tarea' ? 'block' : 'none';
+  const placeholders = { nota: 'Escribe una nota sobre este lead...', llamada: 'Resultado de la llamada...', email: 'Resumen del email enviado o recibido...', reunion: 'Puntos clave de la reunión...', tarea: 'Describe la tarea pendiente...' };
+  const input = document.getElementById('crm-activity-input');
+  if (input) input.placeholder = placeholders[type] || '';
 }
 
 async function crmAddActivity() {
@@ -16414,18 +16472,25 @@ async function crmAddActivity() {
   const input = document.getElementById('crm-activity-input');
   const content = input.value.trim();
   if (!content) return;
-  const btn = input.nextElementSibling;
-  btn.disabled = true;
+  const btn = document.querySelector('.crm-activity-btn');
+  if (btn) btn.disabled = true;
+  const metadata = {};
+  if (crmActivityType === 'tarea') {
+    const dueInput = document.getElementById('crm-act-due');
+    if (dueInput && dueInput.value) metadata.due_date = dueInput.value;
+  }
   try {
     await fetch('/api/lead-activities', {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lead_id: crmDetailLead.id, type: 'nota', content }),
+      body: JSON.stringify({ lead_id: crmDetailLead.id, type: crmActivityType, content, metadata }),
     });
     input.value = '';
+    const dueInput = document.getElementById('crm-act-due');
+    if (dueInput) dueInput.value = '';
     await crmLoadActivities(crmDetailLead.id);
   } catch(e) { console.error('crmAddActivity', e); }
-  btn.disabled = false;
+  if (btn) btn.disabled = false;
 }
 
 function crmEditCurrentLead() {
@@ -16439,6 +16504,10 @@ function crmEditCurrentLead() {
   document.getElementById('crm-f-company').value = crmDetailLead.company || '';
   document.getElementById('crm-f-notes').value = crmDetailLead.notes || '';
   document.getElementById('crm-f-source').value = crmDetailLead.source || 'manual';
+  const valEditEl = document.getElementById('crm-f-value');
+  if (valEditEl) valEditEl.value = crmDetailLead.value || '';
+  const tagsEditEl = document.getElementById('crm-f-tags');
+  if (tagsEditEl) tagsEditEl.value = (crmDetailLead.tags || []).join(', ');
   crmPopulateStageSelects();
   document.getElementById('crm-f-stage').value = crmDetailLead.stage;
   document.getElementById('crm-save-btn').disabled = false;
@@ -16835,7 +16904,10 @@ async function inboxOpenConv(convId) {
         <div class="crm-inbox-chat-name">${esc(name)}</div>
         <div style="font-size:11px;color:var(--muted)">${esc(channelLabels[conv.channel] || conv.channel)}${conv.lead_id ? ` · <button class="crm-lead-link-btn" onclick="crmOpenDetail('${esc(conv.lead_id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Ver lead</button>` : ''}</div>
       </div>
-      <button class="crm-inbox-status-btn ${conv.status}" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${!conv.lead_id ? `<button class="crm-conv-link-btn" style="width:auto;padding:5px 10px;border-style:solid" onclick="crmCreateLeadFromConversation(inboxConversations.find(c=>c.id==='${esc(conv.id)}'))"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Crear lead</button>` : ''}
+        <button class="crm-inbox-status-btn ${conv.status}" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
+      </div>
     </div>
     <div class="crm-inbox-messages" id="inbox-msgs">
       ${messages.map(m => `
@@ -16907,6 +16979,55 @@ function inboxSetFilter(status, btn) {
   document.querySelectorAll('.crm-inbox-filter-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   crmLoadInbox(status);
+}
+
+function crmRenderAnalytics() {
+  const container = document.getElementById('crm-analytics-view');
+  if (!container) return;
+  const now = Date.now();
+  const active = crmLeads.filter(l => l.stage !== 'ganado' && l.stage !== 'perdido');
+  const won = crmLeads.filter(l => l.stage === 'ganado');
+  const total = crmLeads.length;
+  const pipelineValue = active.reduce((s, l) => s + (Number(l.value) || 0), 0);
+  const wonValue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
+  const avgValue = total > 0 ? Math.round(pipelineValue / Math.max(active.length, 1)) : 0;
+  const convRate = total > 0 ? Math.round((won.length / total) * 100) : 0;
+  const maxCount = Math.max(...crmStages.map(s => crmLeads.filter(l => l.stage === s.key).length), 1);
+  const stageFunnel = crmStages.map(s => {
+    const cnt = crmLeads.filter(l => l.stage === s.key).length;
+    const val = crmLeads.filter(l => l.stage === s.key).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+    return { label: s.label, color: s.color, key: s.key, count: cnt, value: val, pct: Math.round((cnt / maxCount) * 100) };
+  });
+  const sourceCounts = {};
+  crmLeads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
+  const maxSrc = Math.max(...Object.values(sourceCounts), 1);
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Organico', referido: 'Referido', web: 'Web' };
+  const needsAttention = crmLeads.filter(l => {
+    if (l.stage === 'ganado' || l.stage === 'perdido') return false;
+    const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
+    return Math.floor((now - lastActive) / 86400000) >= 7;
+  }).sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)).slice(0, 8);
+  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(sourceLabels[src] || src) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: '#6B7280' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
+}
+
+function crmCreateLeadFromConversation(conv) {
+  if (!conv) return;
+  crmEditingId = null;
+  document.getElementById('crm-modal-title').textContent = 'Lead desde conversacion';
+  document.getElementById('crm-f-name').value = conv.contact_name || '';
+  document.getElementById('crm-f-phone').value = conv.contact_phone || '';
+  document.getElementById('crm-f-email').value = '';
+  document.getElementById('crm-f-company').value = '';
+  document.getElementById('crm-f-notes').value = 'Lead capturado desde ' + (conv.channel || 'chat') + '.';
+  document.getElementById('crm-f-source').value = conv.channel === 'whatsapp' ? 'web' : (conv.channel === 'meta_ads' ? 'meta_ads' : 'web');
+  const valCLEl = document.getElementById('crm-f-value');
+  if (valCLEl) valCLEl.value = '';
+  const tagsCLEl = document.getElementById('crm-f-tags');
+  if (tagsCLEl) tagsCLEl.value = '';
+  crmPopulateStageSelects();
+  document.getElementById('crm-f-stage').value = 'nuevo';
+  document.getElementById('crm-save-btn').disabled = false;
+  document.getElementById('crm-modal').classList.add('open');
 }
 
 // ── Copiloto IA en panel de detalle ───────────────────────────────────────────
@@ -16994,19 +17115,24 @@ async function crmInit() {
 const _crmSetViewOrig = crmSetView;
 function crmSetView(v) {
   crmView = v;
-  ['kanban','list','agents','inbox'].forEach(id => {
-    const btn = document.getElementById(`crm-btn-${id}`);
+  ['kanban','list','agents','inbox','analytics'].forEach(id => {
+    const btn = document.getElementById('crm-btn-' + id);
     if (btn) btn.classList.toggle('active', v === id);
   });
   document.getElementById('crm-kanban').style.display = v === 'kanban' ? 'flex' : 'none';
   document.getElementById('crm-list-view').style.display = v === 'list' ? 'block' : 'none';
   document.getElementById('crm-agents-view').style.display = v === 'agents' ? 'flex' : 'none';
   document.getElementById('crm-inbox-view').style.display = v === 'inbox' ? 'flex' : 'none';
+  const analyticsView = document.getElementById('crm-analytics-view');
+  if (analyticsView) analyticsView.style.display = v === 'analytics' ? 'flex' : 'none';
+  const searchBar = document.getElementById('crm-search-bar');
+  if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
   if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   if (v === 'kanban' || v === 'list') crmRender();
   if (v === 'agents') crmRenderAgents();
   if (v === 'inbox') crmLoadInbox();
+  if (v === 'analytics') crmRenderAnalytics();
 }
 // ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 

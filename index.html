@@ -1505,6 +1505,65 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .crm-lead-link-btn{font-size:11px;font-weight:600;color:var(--blue);background:none;border:none;cursor:pointer;font-family:var(--font);padding:0;display:flex;align-items:center;gap:3px}
 .crm-lead-link-btn:hover{text-decoration:underline}
 /* ── FIN MÓDULO LEADS ─────────────────────────────────────────────────────── */
+/* Layer 1 — Search bar */
+.crm-search-bar{display:flex;align-items:center;gap:8px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.crm-search-wrap{flex:1;min-width:160px;display:flex;align-items:center;gap:7px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);padding:6px 10px}
+.crm-search-wrap:focus-within{border-color:var(--blue)}
+.crm-search-input{flex:1;border:none;outline:none;font-size:13px;background:transparent;color:var(--text);font-family:var(--font)}
+.crm-search-input::placeholder{color:var(--muted2)}
+.crm-filter-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;cursor:pointer;max-width:160px}
+.crm-filter-select:focus{border-color:var(--blue)}
+.crm-leads-stats{font-size:11px;color:var(--muted);white-space:nowrap}
+/* Activity types */
+.crm-act-type-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.crm-act-type-btn{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:6px;border:1.5px solid var(--border);background:var(--bg);font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s}
+.crm-act-type-btn:hover{border-color:var(--blue);color:var(--blue)}
+.crm-act-type-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.crm-act-due-input{width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;margin-bottom:4px}
+.crm-act-due-input:focus{border-color:var(--blue)}
+/* Card enhancements */
+.crm-card-score{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:4px}
+.crm-card-inactive{display:flex;align-items:center;gap:3px;font-size:10px;color:#D97706;font-weight:600;margin-top:3px}
+.crm-col-value{font-size:10px;color:var(--muted);margin-left:auto;font-weight:600}
+.crm-pipeline-total{font-size:12px;font-weight:600;color:var(--blue);padding:4px 20px 0;display:flex;align-items:center;gap:6px}
+/* Analytics view */
+.crm-analytics-wrap{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.crm-analytics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.crm-analytics-card{background:var(--sidebar);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.crm-analytics-card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);margin-bottom:8px}
+.crm-analytics-stat{font-size:26px;font-weight:800;letter-spacing:-.5px;color:var(--text);line-height:1}
+.crm-analytics-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.crm-analytics-section{background:var(--sidebar);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.crm-analytics-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:10px}
+.crm-analytics-stage-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.crm-analytics-stage-row:last-child{border-bottom:none}
+.crm-analytics-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.crm-analytics-stage-name{flex:1;color:var(--text)}
+.crm-analytics-stage-count{font-weight:700;color:var(--text);width:28px;text-align:right}
+.crm-analytics-bar-wrap{width:80px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.crm-analytics-bar{height:100%;border-radius:3px;transition:width .4s}
+.crm-analytics-stage-val{font-size:10px;color:var(--muted);width:70px;text-align:right}
+.crm-attention-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;color:var(--text)}
+.crm-attention-item:last-child{border-bottom:none}
+.crm-attention-item:hover{color:var(--blue)}
+.crm-attention-days{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:#FEF3C7;color:#D97706;flex-shrink:0}
+.crm-attention-stage{font-size:10px;padding:2px 6px;border-radius:4px;flex-shrink:0}
+/* Source bar chart */
+.crm-source-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.crm-source-label{width:90px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crm-source-bar-wrap{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.crm-source-bar{height:100%;border-radius:3px;background:var(--blue)}
+.crm-source-count{font-weight:700;color:var(--text);width:24px;text-align:right;font-size:11px}
+/* Value field */
+.crm-f-value{padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);width:100%;box-sizing:border-box;outline:none}
+.crm-f-value:focus{border-color:var(--blue)}
+/* Tags field */
+.crm-f-tags{padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);width:100%;box-sizing:border-box;outline:none}
+.crm-f-tags:focus{border-color:var(--blue)}
+/* Conversation link */
+.crm-conv-link-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1.5px dashed var(--border);border-radius:var(--r);background:none;font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--font);width:100%;justify-content:center;transition:all .15s}
+.crm-conv-link-btn:hover{border-color:var(--blue);color:var(--blue)}
+.crm-conv-linked{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--sidebar);font-size:12px}
 </style>
 </head>
 <body>
@@ -3267,11 +3326,31 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
           Inbox
           <span id="crm-inbox-unread-badge" style="display:none;background:#EF4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px">0</span>
         </button>
+        <button class="crm-view-btn" id="crm-btn-analytics" onclick="crmSetView('analytics')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Analisis
+        </button>
       </div>
       <button class="crm-btn-add" id="crm-add-btn" onclick="crmOpenModal()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Nuevo lead
       </button>
+    </div>
+    <div id="crm-search-bar" class="crm-search-bar">
+      <div class="crm-search-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--muted2)"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" class="crm-search-input" id="crm-search" placeholder="Buscar leads..." oninput="crmSetSearch(this.value)">
+      </div>
+      <select class="crm-filter-select" id="crm-filter-source" onchange="crmSetFilter('source',this.value)">
+        <option value="">Todas las fuentes</option>
+        <option value="manual">Manual</option>
+        <option value="meta_ads">Meta Ads</option>
+        <option value="google_ads">Google Ads</option>
+        <option value="organico">Organico</option>
+        <option value="referido">Referido</option>
+        <option value="web">Web</option>
+      </select>
+      <div id="crm-leads-stats" class="crm-leads-stats"></div>
     </div>
     <!-- Kanban view -->
     <div id="crm-kanban" class="crm-kanban"></div>
@@ -3285,7 +3364,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
             <th>Email</th>
             <th>Etapa</th>
             <th>Fuente</th>
-            <th>Fecha</th>
+            <th>Valor</th>
           </tr>
         </thead>
         <tbody id="crm-list-body"></tbody>
@@ -3318,6 +3397,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         </div>
       </div>
     </div>
+    <!-- Analytics view -->
+    <div id="crm-analytics-view" style="display:none" class="crm-analytics-wrap"></div>
   </div>
   </div>
 
@@ -3384,6 +3465,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <label>Notas</label>
         <textarea id="crm-f-notes" placeholder="Notas sobre este lead..."></textarea>
       </div>
+      <div class="crm-field">
+        <label>Valor del deal</label>
+        <input type="number" id="crm-f-value" class="crm-f-value" placeholder="0" min="0" step="1000" />
+      </div>
+      <div class="crm-field">
+        <label>Tags (separados por coma)</label>
+        <input type="text" id="crm-f-tags" class="crm-f-tags" placeholder="ej: urgente, vip, seguimiento" />
+      </div>
     </div>
     <div class="crm-modal-foot">
       <button class="crm-btn-cancel" onclick="crmCloseModal()">Cancelar</button>
@@ -3409,6 +3498,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <div class="crm-detail-row"><span class="crm-detail-row-label">Teléfono</span><span class="crm-detail-row-val" id="crm-d-phone">—</span></div>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Empresa</span><span class="crm-detail-row-val" id="crm-d-company">—</span></div>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Fuente</span><span class="crm-detail-row-val" id="crm-d-source">—</span></div>
+      <div class="crm-detail-row" id="crm-d-value-row" style="display:none"><span class="crm-detail-row-label">Valor</span><span class="crm-detail-row-val" id="crm-d-value">—</span></div>
+      <div class="crm-detail-row" id="crm-d-tags-row" style="display:none"><span class="crm-detail-row-label">Tags</span><span class="crm-detail-row-val" id="crm-d-tags">—</span></div>
     </div>
     <!-- Etapa -->
     <div class="crm-detail-section">
@@ -3422,10 +3513,36 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     </div>
     <!-- Nueva actividad -->
     <div class="crm-detail-section">
-      <div class="crm-detail-section-title">Agregar nota</div>
+      <div class="crm-detail-section-title">Registrar actividad</div>
+      <div class="crm-act-type-row" id="crm-act-type-row">
+        <button class="crm-act-type-btn active" data-type="nota" onclick="crmSetActType('nota',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Nota
+        </button>
+        <button class="crm-act-type-btn" data-type="llamada" onclick="crmSetActType('llamada',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>
+          Llamada
+        </button>
+        <button class="crm-act-type-btn" data-type="email" onclick="crmSetActType('email',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Email
+        </button>
+        <button class="crm-act-type-btn" data-type="reunion" onclick="crmSetActType('reunion',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Reunion
+        </button>
+        <button class="crm-act-type-btn" data-type="tarea" onclick="crmSetActType('tarea',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Tarea
+        </button>
+      </div>
       <div class="crm-activity-input-wrap">
-        <textarea class="crm-activity-input" id="crm-activity-input" placeholder="Escribe una nota, resultado de llamada, etc..."></textarea>
-        <button class="crm-activity-btn" onclick="crmAddActivity()">Guardar nota</button>
+        <textarea class="crm-activity-input" id="crm-activity-input" placeholder="Escribe una nota sobre este lead..."></textarea>
+        <div id="crm-act-due-wrap" style="display:none;margin-top:-4px">
+          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Fecha limite</label>
+          <input type="datetime-local" id="crm-act-due" class="crm-act-due-input">
+        </div>
+        <button class="crm-activity-btn" onclick="crmAddActivity()">Guardar</button>
       </div>
     </div>
     <!-- Actividad -->
