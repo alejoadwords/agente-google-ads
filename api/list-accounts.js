@@ -164,47 +164,58 @@ export default async function handler(req, res) {
     const resourceNames = listData.resourceNames;
     const customerIds = resourceNames.map(r => r.replace('customers/', ''));
 
+    const customerErrors = [];
     const accountDetails = await Promise.all(
       customerIds.map(async (id) => {
         try {
-          // Usar login-customer-id del MCC solo para queries a sub-cuentas
-          const headers = {
-            'Authorization':   `Bearer ${accessToken}`,
-            'developer-token': developerToken,
-            'Content-Type':    'application/json',
-          };
-          if (mccId && mccId !== id) headers['login-customer-id'] = mccId;
+          // Try with login-customer-id set to the account itself first,
+          // then fallback to MCC id, then no header
+          const loginIds = [id];
+          if (mccId && mccId !== id) loginIds.push(mccId);
+          loginIds.push(null);
 
-          const queryRes = await fetch(
-            `https://googleads.googleapis.com/v19/customers/${id}/googleAds:search`,
-            {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                query: `SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account FROM customer LIMIT 1`
-              }),
+          for (const loginId of loginIds) {
+            const headers = {
+              'Authorization':   `Bearer ${accessToken}`,
+              'developer-token': developerToken,
+              'Content-Type':    'application/json',
+            };
+            if (loginId) headers['login-customer-id'] = loginId;
+
+            const queryRes = await fetch(
+              `https://googleads.googleapis.com/v19/customers/${id}/googleAds:search`,
+              {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  query: `SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account FROM customer LIMIT 1`
+                }),
+              }
+            );
+
+            const qRaw = await queryRes.text();
+            let qData = {};
+            try { qData = JSON.parse(qRaw); } catch { continue; }
+            if (!queryRes.ok) {
+              const errMsg = qData?.error?.message || JSON.stringify(qData).slice(0, 150);
+              console.log(`Customer ${id} (login:${loginId}) query error:`, queryRes.status, errMsg);
+              customerErrors.push(`${id}(login:${loginId}): ${queryRes.status} ${errMsg}`);
+              continue;
             }
-          );
-
-          const qRaw = await queryRes.text();
-          let qData = {};
-          try { qData = JSON.parse(qRaw); } catch { return null; }
-          if (!queryRes.ok) {
-            console.log(`Customer ${id} query error:`, queryRes.status, JSON.stringify(qData).slice(0, 200));
-            return null;
+            const row = qData.results?.[0]?.customer;
+            if (!row) continue;
+            return {
+              id:        row.id,
+              name:      row.descriptiveName || `Cuenta ${row.id}`,
+              currency:  row.currencyCode || 'USD',
+              timezone:  row.timeZone || '',
+              isManager: row.manager || false,
+              isTest:    row.testAccount || false,
+            };
           }
-          const row = qData.results?.[0]?.customer;
-          if (!row) return null;
-
-          return {
-            id:        row.id,
-            name:      row.descriptiveName || `Cuenta ${row.id}`,
-            currency:  row.currencyCode || 'USD',
-            timezone:  row.timeZone || '',
-            isManager: row.manager || false,
-            isTest:    row.testAccount || false,
-          };
-        } catch {
+          return null;
+        } catch (e) {
+          customerErrors.push(`${id}: exception ${e.message}`);
           return null;
         }
       })
@@ -212,12 +223,12 @@ export default async function handler(req, res) {
 
     const accounts = accountDetails.filter(Boolean);
 
-    // Si no se pudo obtener detalle de ninguna cuenta, explicar
+    // Si no se pudo obtener detalle de ninguna cuenta, incluir errores reales
     if (accounts.length === 0) {
       return res.status(200).json({
         accounts: [], isMCC: false,
-        googleError: `Se encontraron ${customerIds.length} cuentas (${customerIds.join(', ')}) pero no se pudo consultar su detalle. El developer token puede estar en modo prueba (test), que solo permite acceder a cuentas de prueba.`,
-        debug: { step: 'customerQuery', customerIds },
+        googleError: `Se encontraron ${customerIds.length} cuentas (${customerIds.join(', ')}) pero no se pudo consultar su detalle. Errores: ${customerErrors.join(' | ') || 'sin detalle'}`,
+        debug: { step: 'customerQuery', customerIds, customerErrors },
       });
     }
 
