@@ -84,14 +84,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. listAccessibleCustomers — probar v20, v19, v18 en ese orden
+    // 1. listAccessibleCustomers — probar versiones en orden descendente
+    // Tratar tanto 404 como UNSUPPORTED_VERSION como "prueba la siguiente versión"
     let listRes;
-    for (const ver of [20, 19, 18]) {
+    for (const ver of [22, 21, 20, 19, 18]) {
       const r = await tryListAccessible(ver);
-      if (r.status !== 404) { listRes = r; break; }
+      if (r.status === 404) continue;
+      // Check for deprecated/unsupported version (400 with UNSUPPORTED_VERSION)
+      if (r.status === 400) {
+        const body = await r.clone().json().catch(() => ({}));
+        const isUnsupported = JSON.stringify(body).includes('UNSUPPORTED_VERSION');
+        if (isUnsupported) continue;
+      }
+      listRes = r; break;
     }
     if (!listRes) {
-      return res.status(200).json({ accounts: [], isMCC: false, googleError: 'API de Google Ads no disponible (todas las versiones devuelven 404). Verifica el developer token.' });
+      return res.status(200).json({ accounts: [], isMCC: false, googleError: 'API de Google Ads no disponible (todas las versiones están deprecadas o no responden). Verifica el developer token.' });
     }
 
     // Si el token expiró (401), intentar refresh y repetir
@@ -168,7 +176,7 @@ export default async function handler(req, res) {
           if (mccId && mccId !== id) headers['login-customer-id'] = mccId;
 
           const queryRes = await fetch(
-            `https://googleads.googleapis.com/v20/customers/${id}/googleAds:search`,
+            `https://googleads.googleapis.com/v19/customers/${id}/googleAds:search`,
             {
               method: 'POST',
               headers,
@@ -222,7 +230,7 @@ export default async function handler(req, res) {
       mccAccounts.map(async (mcc) => {
         try {
           const queryRes = await fetch(
-            `https://googleads.googleapis.com/v20/customers/${mcc.id}/googleAds:search`,
+            `https://googleads.googleapis.com/v19/customers/${mcc.id}/googleAds:search`,
             {
               method: 'POST',
               headers: {
