@@ -599,11 +599,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .agency-stat{background:var(--sidebar);border-radius:var(--r);padding:12px 14px}
 .agency-stat-val{font-size:22px;font-weight:700;color:var(--text);line-height:1}
 .agency-stat-lbl{font-size:11px;color:var(--muted);margin-top:4px}
-.agency-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.agency-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rlg);padding:16px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden}
-.agency-card:hover{border-color:var(--blue-md);box-shadow:0 4px 16px rgba(30,43,204,.08);transform:translateY(-1px)}
-.agency-card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
-.agency-card-avatar{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;background-size:cover;background-position:center}
+.agency-grid{display:flex;flex-direction:column;border:1.5px solid var(--border);border-radius:var(--rlg);overflow:hidden}
+.agency-list-header{display:grid;grid-template-columns:36px 1fr 112px 236px 60px 28px;gap:14px;align-items:center;padding:8px 16px;background:var(--sidebar);border-bottom:1.5px solid var(--border);font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em}
+.agency-card{display:grid;grid-template-columns:36px 1fr 112px 236px 60px 28px;gap:14px;align-items:center;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border2);cursor:default;transition:background .15s;position:relative}
+.agency-card:last-child{border-bottom:none}
+.agency-card:hover{background:var(--sidebar)}
+.agency-card-avatar{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;overflow:hidden;background-size:cover;background-position:center}
 .agency-logo-upload{display:flex;align-items:center;gap:12px;margin-bottom:4px}
 .agency-logo-preview{width:56px;height:56px;border-radius:12px;background:var(--blue-lt);border:2px dashed var(--blue-md);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;cursor:pointer;transition:all .15s;position:relative}
 .agency-logo-preview:hover{border-color:var(--blue);background:#E8EAFD}
@@ -632,9 +633,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .agency-card-dd-item:hover{background:var(--sidebar);color:var(--text)}
 .agency-card-dd-item.danger{color:var(--danger)}
 .agency-card-dd-item.danger:hover{background:#FEF2F2}
-.agency-card-name{font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.agency-card-business{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:10px}
-.agency-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border2)}
+.agency-card-name{font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3}
+.agency-card-business{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.agency-card-footer{display:flex;align-items:center;gap:8px}
 .agency-health{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;cursor:pointer}
 .agency-health.verde{background:#ECFDF5;color:#065F46}
 .agency-health.amarillo{background:#FFFBEB;color:#92400E}
@@ -646,9 +647,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .agency-health.rojo .agency-health-dot{background:#DC2626}
 .agency-health.gris .agency-health-dot{background:var(--muted2)}
 .agency-card-date{font-size:10px;color:var(--muted2)}
-.agency-card-agents{display:flex;align-items:center;gap:5px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border2)}
-.agency-agent-btn{width:32px;height:32px;border-radius:8px;border:1.5px solid;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;background:transparent}
-.agency-agent-btn:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.13)}
+.agency-card-agents{display:flex;align-items:center;gap:4px}
+.agency-agent-btn{width:28px;height:28px;border-radius:7px;border:1.5px solid;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;background:transparent}
+.agency-agent-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.13)}
 .agency-agent-btn.gads{border-color:#d0e4ff;background:#EFF6FF}
 .agency-agent-btn.gads:hover{background:#f0f7ff;border-color:#4285F4}
 .agency-agent-btn.meta{color:#1877F2;border-color:#d0e4ff;background:#EFF6FF}
@@ -741,7 +742,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @media(max-width:768px){
   .agency-wrap{padding:20px 16px}
   .agency-stats{grid-template-columns:repeat(3,1fr);gap:6px}
-  .agency-grid{grid-template-columns:1fr}
+  .agency-list-header{display:none}
+  .agency-card{grid-template-columns:36px 1fr 100px;gap:10px}
+  .agency-card-agents,.agency-card-footer{display:none}
 }
 /* ── REPORTE WHATSAPP ──────────────────────────────────────────────────────── */
 .war-overlay{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
@@ -1999,8 +2002,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         </div>
       </div>
 
-      <!-- Grid de clientes -->
+      <!-- Lista de clientes -->
       <div class="agency-grid" id="agency-grid">
+        <div class="agency-list-header" id="agency-list-header" style="display:none">
+          <div></div>
+          <div>Cliente</div>
+          <div>Estado</div>
+          <div>Acceso rápido</div>
+          <div></div>
+          <div></div>
+        </div>
         <div class="agency-empty" id="agency-empty">
           <div class="agency-empty-icon">🏢</div>
           <div class="agency-empty-title">Sin clientes aún</div>
