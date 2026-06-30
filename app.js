@@ -16073,6 +16073,7 @@ let crmInited = false;
 let crmSearchQuery = '';
 let crmFilterSource = '';
 let crmActivityType = 'nota';
+let crmQuickFilter = '';
 
 async function crmInit() {
   if (crmInited) { crmRender(); return; }
@@ -16145,7 +16146,53 @@ function crmGetFilteredLeads() {
     );
   }
   if (crmFilterSource) leads = leads.filter(l => l.source === crmFilterSource);
+  if (crmQuickFilter === 'inactive') {
+    const now = Date.now();
+    leads = leads.filter(l => {
+      if (l.stage === 'ganado' || l.stage === 'perdido') return false;
+      const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
+      return Math.floor((now - lastActive) / 86400000) >= 7;
+    });
+  } else if (crmQuickFilter === 'score') {
+    leads = leads.filter(l => l.custom_fields && Number(l.custom_fields.score) >= 7);
+  } else if (crmQuickFilter === 'value') {
+    leads = leads.filter(l => Number(l.value) > 0);
+  }
   return leads;
+}
+
+function crmToggleQuickFilter(type) {
+  crmQuickFilter = crmQuickFilter === type ? '' : type;
+  document.querySelectorAll('.crm-qf-pill').forEach(p => p.classList.remove('active'));
+  if (crmQuickFilter) {
+    const btn = document.getElementById('crm-qf-' + crmQuickFilter);
+    if (btn) btn.classList.add('active');
+  }
+  crmRender();
+  crmUpdateLeadsStats();
+}
+
+function crmExportCSV() {
+  if (!crmLeads.length) { alert('No hay leads para exportar.'); return; }
+  const headers = ['Nombre','Email','Teléfono','Empresa','Etapa','Fuente','Valor','Tags','Notas','Fecha creación'];
+  const rows = crmGetFilteredLeads().map(l => [
+    l.name || '',
+    l.email || '',
+    l.phone || '',
+    l.company || '',
+    l.stage || '',
+    l.source || '',
+    l.value || '',
+    (l.tags || []).join('; '),
+    (l.notes || '').replace(/\n/g,' '),
+    l.created_at ? new Date(l.created_at).toLocaleDateString('es-CO') : '',
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'leads_acuarius_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
 }
 
 function crmSetSearch(q) {
@@ -16457,13 +16504,94 @@ async function crmOpenDetail(leadId) {
   document.getElementById('crm-detail-overlay').classList.add('open');
   document.getElementById('crm-detail-panel').classList.add('open');
   document.getElementById('crm-activity-input').value = '';
-  await crmLoadActivities(leadId);
+  // Reset suggest result
+  const suggestResult = document.getElementById('crm-d-suggest-result');
+  if (suggestResult) suggestResult.style.display = 'none';
+  await Promise.all([crmLoadActivities(leadId), crmLoadLinkedConversations(leadId)]);
 }
 
 function crmCloseDetail() {
   document.getElementById('crm-detail-overlay').classList.remove('open');
   document.getElementById('crm-detail-panel').classList.remove('open');
   crmDetailLead = null;
+}
+
+async function crmLoadLinkedConversations(leadId) {
+  const section = document.getElementById('crm-d-convs-section');
+  const list = document.getElementById('crm-d-convs-list');
+  if (!section || !list) return;
+  try {
+    const res = await fetch('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId), { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const convs = data.conversations || [];
+    if (convs.length === 0) { section.style.display = 'none'; return; }
+    const channelIcons = { whatsapp: '💬', messenger: '💙', instagram: '📸' };
+    const channelColors = { whatsapp: '#DCFCE7', messenger: '#DBEAFE', instagram: '#FCE7F3' };
+    list.innerHTML = convs.map(c => {
+      const icon = channelIcons[c.channel] || '💬';
+      const bg = channelColors[c.channel] || '#F3F4F6';
+      const name = c.contact_name || c.contact_id || 'Contacto';
+      const preview = c.last_message ? c.last_message.slice(0, 60) + (c.last_message.length > 60 ? '…' : '') : 'Sin mensajes';
+      const time = c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+      return '<div class="crm-linked-conv" onclick="crmOpenConvFromDetail(\'' + esc(c.id) + '\',\'' + esc(c.channel) + '\')">' +
+        '<div class="crm-linked-conv-icon" style="background:' + bg + '">' + icon + '</div>' +
+        '<div class="crm-linked-conv-info">' +
+        '<div class="crm-linked-conv-name">' + esc(name) + '</div>' +
+        '<div class="crm-linked-conv-preview">' + esc(preview) + '</div>' +
+        '</div>' +
+        '<div class="crm-linked-conv-time">' + esc(time) + '</div>' +
+        '</div>';
+    }).join('');
+    section.style.display = 'flex';
+  } catch(e) { section.style.display = 'none'; }
+}
+
+function crmOpenConvFromDetail(convId, channel) {
+  crmCloseDetail();
+  crmSetView('inbox');
+  setTimeout(function() {
+    const btn = document.querySelector('[data-conv-id="' + convId + '"]');
+    if (btn) btn.click();
+  }, 300);
+}
+
+async function crmSuggestNextAction() {
+  if (!crmDetailLead) return;
+  const btn = document.getElementById('crm-suggest-btn');
+  const resultEl = document.getElementById('crm-d-suggest-result');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Analizando...'; }
+  try {
+    const lead = crmDetailLead;
+    const stage = (crmStages.find(function(s){ return s.key === lead.stage; }) || { label: lead.stage }).label;
+    const lastActive = lead.updated_at ? new Date(lead.updated_at).getTime() : new Date(lead.created_at || 0).getTime();
+    const daysSince = Math.floor((Date.now() - lastActive) / 86400000);
+    // Fetch recent activities for context
+    let actContext = '';
+    try {
+      const ar = await fetch('/api/lead-activities?lead_id=' + encodeURIComponent(lead.id), { headers: await getAuthHeaders() });
+      const ad = await ar.json();
+      const acts = (ad.activities || []).slice(0, 5);
+      const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Cambio etapa', creacion: 'Creación' };
+      actContext = acts.map(function(a){ return typeLabels[a.type] + ': ' + (a.content || '').slice(0, 80); }).join('\n');
+    } catch(e) {}
+    const prompt = 'Eres un experto en ventas y CRM. Analiza este lead y sugiere la próxima acción concreta.\n\nLead: ' + lead.name + (lead.company ? ' (' + lead.company + ')' : '') + '\nEtapa: ' + stage + '\nDías sin actividad: ' + daysSince + '\nFuente: ' + (lead.source || 'Manual') + '\nValor del deal: ' + (lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : 'No definido') + '\nNotas: ' + (lead.notes || 'Sin notas') + '\n\nÚltimas actividades:\n' + (actContext || 'Sin actividades registradas') + '\n\nResponde en 2-3 oraciones máximo con una acción específica, concreta y con urgencia apropiada. Empieza directamente con la recomendación (no digas "te recomiendo" ni "sugiero"). Sé directo.';
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: prompt, agent: 'consultor', noPersist: true }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const suggestion = data.reply || data.content || '';
+    if (resultEl && suggestion) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<div class="crm-suggest-result"><div class="crm-suggest-result-title">Próxima acción sugerida</div>' + esc(suggestion) + '</div>';
+    }
+  } catch(e) {
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No se pudo generar la sugerencia.</div>'; }
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Sugerir próxima acción'; }
 }
 
 async function crmChangeStage(newStage) {

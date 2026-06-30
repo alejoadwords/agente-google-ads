@@ -47,10 +47,12 @@ export default async function handler(req) {
     const status = url.searchParams.get('status');
     const channel = url.searchParams.get('channel');
     const agentId = url.searchParams.get('agent_id');
+    const leadId = url.searchParams.get('lead_id');
     let query = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}&select=*&order=last_message_at.desc&limit=50`;
     if (status) query += `&status=eq.${encodeURIComponent(status)}`;
     if (channel) query += `&channel=eq.${encodeURIComponent(channel)}`;
     if (agentId) query += `&agent_id=eq.${encodeURIComponent(agentId)}`;
+    if (leadId) query += `&lead_id=eq.${encodeURIComponent(leadId)}`;
     const res = await fetch(query, { headers: sbHeaders() });
     const rows = await res.json();
     return jsonResp({ conversations: rows || [] });

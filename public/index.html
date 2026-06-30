@@ -1582,6 +1582,29 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .crm-conv-link-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1.5px dashed var(--border);border-radius:var(--r);background:none;font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--font);width:100%;justify-content:center;transition:all .15s}
 .crm-conv-link-btn:hover{border-color:var(--blue);color:var(--blue)}
 .crm-conv-linked{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--sidebar);font-size:12px}
+/* Linked conversation in detail panel */
+.crm-linked-conv{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--sidebar);cursor:pointer;transition:all .12s;text-decoration:none}
+.crm-linked-conv:hover{border-color:var(--blue);background:var(--blue-lt)}
+.crm-linked-conv-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.crm-linked-conv-info{flex:1;min-width:0}
+.crm-linked-conv-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crm-linked-conv-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.crm-linked-conv-time{font-size:10px;color:var(--muted2);flex-shrink:0}
+/* Suggest next action button */
+.crm-suggest-btn{display:flex;align-items:center;gap:6px;width:100%;padding:9px 14px;background:linear-gradient(135deg,#F5F3FF,#EEF2FF);border:1.5px solid #C4B5FD;border-radius:10px;font-size:12px;font-weight:600;color:#7C3AED;cursor:pointer;font-family:var(--font);transition:all .15s;justify-content:center}
+.crm-suggest-btn:hover{background:linear-gradient(135deg,#EDE9FE,#E0E7FF);border-color:#A78BFA}
+.crm-suggest-btn:disabled{opacity:.5;cursor:not-allowed}
+.crm-suggest-result{background:linear-gradient(135deg,#F5F3FF,#EEF2FF);border:1.5px solid #C4B5FD;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text);line-height:1.55;margin-bottom:8px}
+.crm-suggest-result-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7C3AED;margin-bottom:6px}
+/* Quick filter pills */
+.crm-quick-filters{display:flex;gap:6px;flex-wrap:wrap}
+.crm-qf-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s}
+.crm-qf-pill:hover{border-color:var(--blue);color:var(--blue)}
+.crm-qf-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.crm-qf-pill.warn.active{background:#D97706;border-color:#D97706;color:#fff}
+/* Export button */
+.crm-export-btn{display:flex;align-items:center;gap:5px;padding:6px 11px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg);font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s;flex-shrink:0}
+.crm-export-btn:hover{border-color:var(--blue);color:var(--blue)}
 </style>
 </head>
 <body>
@@ -3368,7 +3391,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         <option value="referido">Referido</option>
         <option value="web">Web</option>
       </select>
+      <div class="crm-quick-filters" id="crm-quick-filters">
+        <button class="crm-qf-pill warn" id="crm-qf-inactive" onclick="crmToggleQuickFilter('inactive')">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Sin actividad
+        </button>
+        <button class="crm-qf-pill" id="crm-qf-score" onclick="crmToggleQuickFilter('score')">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Score alto
+        </button>
+        <button class="crm-qf-pill" id="crm-qf-value" onclick="crmToggleQuickFilter('value')">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Con valor
+        </button>
+      </div>
       <div id="crm-leads-stats" class="crm-leads-stats"></div>
+      <button class="crm-export-btn" onclick="crmExportCSV()" title="Exportar CSV">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
     </div>
     <!-- Kanban view -->
     <div id="crm-kanban" class="crm-kanban"></div>
@@ -3532,6 +3573,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     <div class="crm-detail-section" id="crm-d-notes-section" style="display:none">
       <div class="crm-detail-section-title">Notas</div>
       <div style="font-size:13px;color:var(--text);line-height:1.5" id="crm-d-notes"></div>
+    </div>
+    <!-- Conversaciones vinculadas -->
+    <div class="crm-detail-section" id="crm-d-convs-section" style="display:none">
+      <div class="crm-detail-section-title">Conversaciones</div>
+      <div id="crm-d-convs-list"></div>
+    </div>
+    <!-- Sugerir próxima acción IA -->
+    <div class="crm-detail-section" id="crm-d-suggest-section">
+      <div id="crm-d-suggest-result" style="display:none"></div>
+      <button class="crm-suggest-btn" id="crm-suggest-btn" onclick="crmSuggestNextAction()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Sugerir próxima acción
+      </button>
     </div>
     <!-- Nueva actividad -->
     <div class="crm-detail-section">
