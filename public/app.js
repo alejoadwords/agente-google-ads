@@ -13835,7 +13835,7 @@ function openSettings() {
         upgradeBtn.onclick = () => window.open('https://pay.hotmart.com/L105202723X', '_blank');
       } else {
         upgradeBtn.textContent = 'Ver planes';
-        upgradeBtn.onclick = openUpgradeFlow;
+        upgradeBtn.onclick = () => openUpgradeFlow();
       }
     }
     // Populate name/email rows
