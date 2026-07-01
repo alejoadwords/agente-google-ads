@@ -89,6 +89,31 @@ export default async function handler(req) {
     const { name, email, phone, company, stage, notes, source, tags, custom_fields } = body;
     if (!name) return jsonResp({ error: 'El nombre es requerido' }, 400);
 
+    // Plan-based lead limit check
+    let userPlan = 'free';
+    let leadsExtra = 0;
+    try {
+      const authHeader = req.headers.get('Authorization') || '';
+      const token = authHeader.replace('Bearer ', '');
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        userPlan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
+        leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
+      }
+    } catch {}
+    const PLAN_LIMITS = { free: 10, pro: 1000, agency: 5000 };
+    const planLimit = (PLAN_LIMITS[userPlan] || 10) + (leadsExtra * 1000);
+    const countRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`,
+      { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } }
+    );
+    const rawRange = countRes.headers.get('content-range') || '*/0';
+    const currentCount = parseInt(rawRange.split('/')[1] || '0') || 0;
+    if (currentCount >= planLimit) {
+      return jsonResp({ error: 'Límite de leads alcanzado para tu plan.', limit_reached: true, current: currentCount, limit: planLimit }, 403);
+    }
+
     // Get max position in target stage for ordering
     const posRes = await fetch(
       `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&${clientId ? `client_id=eq.${clientId}` : 'client_id=is.null'}&deleted_at=is.null&stage=eq.${encodeURIComponent(stage || 'nuevo')}&select=stage_position&order=stage_position.desc&limit=1`,

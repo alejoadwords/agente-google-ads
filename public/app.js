@@ -28,31 +28,45 @@ function isAdminUser() {
 
 // Funciones de límites
 function loadImageUsage() {
-  if (userPlan === 'pro' || isAdminUser()) {
-    imageUsage = { generated: 0, limit: 999 }; // Ilimitado para Pro y Admin
+  if (userPlan === 'agency' || isAdminUser()) {
+    imageUsage = { generated: 0, limit: 9999 }; // Ilimitado para Agency y Admin
     return;
   }
+  if (userPlan === 'pro') {
+    // Pro: 60/mes — reset mensual
+    try {
+      const saved = localStorage.getItem('acuarius_image_usage');
+      if (saved) {
+        const data = JSON.parse(saved);
+        const now = Date.now();
+        const oneMonth = 30 * 24 * 60 * 60 * 1000;
+        if (now - (data.timestamp || 0) > oneMonth) {
+          imageUsage = { generated: 0, limit: 60, timestamp: now };
+          saveImageUsage();
+        } else {
+          imageUsage = { generated: data.generated || 0, limit: 60, timestamp: data.timestamp };
+        }
+      } else {
+        imageUsage = { generated: 0, limit: 60, timestamp: Date.now() };
+        saveImageUsage();
+      }
+    } catch (e) {
+      imageUsage = { generated: 0, limit: 60, timestamp: Date.now() };
+    }
+    return;
+  }
+  // Free: 2 imágenes
   try {
     const saved = localStorage.getItem('acuarius_image_usage');
     if (saved) {
       const data = JSON.parse(saved);
-      // Verificar si han pasado 7 días (reset del trial)
-      const now = Date.now();
-      const sevenDays = 7 * 24 * 60 * 60 * 1000;
-      if (now - data.timestamp > sevenDays) {
-        // Reset después de 7 días
-        imageUsage = { generated: 0, limit: 2, timestamp: now };
-        saveImageUsage();
-      } else {
-        imageUsage = { generated: data.generated || 0, limit: 2, timestamp: data.timestamp };
-      }
+      imageUsage = { generated: data.generated || 0, limit: 2 };
     } else {
-      // Primera vez
-      imageUsage = { generated: 0, limit: 2, timestamp: Date.now() };
+      imageUsage = { generated: 0, limit: 2 };
       saveImageUsage();
     }
   } catch (e) {
-    imageUsage = { generated: 0, limit: 2, timestamp: Date.now() };
+    imageUsage = { generated: 0, limit: 2 };
   }
 }
 
@@ -64,11 +78,11 @@ function saveImageUsage() {
 
 function canGenerateImage() {
   loadImageUsage();
-  return userPlan === 'pro' || isAdminUser() || imageUsage.generated < imageUsage.limit;
+  return isAdminUser() || imageUsage.generated < imageUsage.limit;
 }
 
 function incrementImageUsage() {
-  if (userPlan !== 'pro' && !isAdminUser()) {
+  if (!isAdminUser() && userPlan !== 'agency') {
     imageUsage.generated++;
     saveImageUsage();
   }
@@ -85,15 +99,17 @@ function showImageLimitReached() {
     '<div style="max-width:400px">' +
       '<div style="background:linear-gradient(135deg,#EF4444,#DC2626);border-radius:14px;padding:20px;color:white;margin-bottom:12px">' +
         '<div style="font-size:16px;font-weight:700;margin-bottom:6px">🔒 Límite de imágenes alcanzado</div>' +
-        '<div style="font-size:13px;margin-bottom:14px;opacity:0.9">Usaste tus ' + imageUsage.limit + ' imágenes gratuitas del período de prueba.</div>' +
+        '<div style="font-size:13px;margin-bottom:14px;opacity:0.9">Usaste tus ' + imageUsage.limit + ' imágenes del plan ' + (userPlan === 'pro' ? 'Pro (60/mes)' : 'Free') + '.</div>' +
         '<div style="font-size:12px;background:rgba(255,255,255,0.15);padding:12px;border-radius:8px;margin-bottom:14px">' +
-          '<strong>Plan Pro - $19/mes:</strong><br>' +
-          '✓ Imágenes ilimitadas<br>' +
-          '✓ Diseño profesional con cuestionario<br>' +
-          '✓ Formatos feed + stories automático<br>' +
-          '✓ 5 variaciones por pedido' +
+          '<strong>Plan Pro - $39/mes:</strong><br>' +
+          '&#10003; 60 imágenes IA por mes<br>' +
+          '&#10003; Diseño profesional con cuestionario<br>' +
+          '&#10003; Formatos feed + stories automático<br>' +
+          '&#10003; 5 variaciones por pedido<br>' +
+          '<strong>Plan Agency - $99/mes:</strong><br>' +
+          '&#10003; Imágenes IA ilimitadas' +
         '</div>' +
-        '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="width:100%;padding:12px;background:white;color:#DC2626;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🚀 Actualizar a Pro</button>' +
+        '<button onclick="openUpgradeFlow()" style="width:100%;padding:12px;background:white;color:#DC2626;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Actualizar plan</button>' +
       '</div>' +
       '<button onclick="showProPreview()" style="padding:8px 16px;background:var(--border);color:var(--muted);border:none;border-radius:8px;font-size:12px;cursor:pointer">Ver ejemplo de calidad Pro →</button>' +
     '</div>';
@@ -250,7 +266,7 @@ function updateUserUI(u){
   const badge=document.getElementById('plan-badge');
   if(badge){
     if(isAdminUser()) badge.textContent='admin';
-    else badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free · 7 días';
+    else badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free';
   }
   const greeting=document.getElementById('home-greeting');
   if(greeting){const h=new Date().getHours();const t=h<12?'buenos días':h<18?'buenas tardes':'buenas noches';greeting.textContent=`${t}, ${name} 👋`;}
@@ -6865,7 +6881,7 @@ function renderSocialOptions() {
   area.scrollTop = area.scrollHeight;
 }
 
-function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($19/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
+function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($39/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 function exportToPDF(txt, filename) {
   function stripEmoji(s) {
@@ -13802,24 +13818,23 @@ function openSettings() {
     document.getElementById('cfg-name').textContent = name;
     document.getElementById('cfg-email').textContent = email;
     const isAgencyPlan = userPlan === 'agency' || userPlan === 'agencia' || isAdminUser();
-    const isIndividualPlan = userPlan === 'individual';
-    const isProPlan = userPlan === 'pro';
-    const isPaidPlan = isAgencyPlan || isIndividualPlan || isProPlan;
-    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Plan Agencia' : isIndividualPlan ? 'Plan Individual' : isProPlan ? 'Plan Pro' : 'Free';
+    const isProPlan = userPlan === 'pro' || userPlan === 'individual';
+    const isPaidPlan = isAgencyPlan || isProPlan;
+    document.getElementById('cfg-plan').textContent = isAgencyPlan ? 'Agency' : isProPlan ? 'Pro' : 'Free';
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
-    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agencia · Activo' : isIndividualPlan ? 'Plan Individual · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = isAgencyPlan ? 'Hasta 20 clientes · Todos los agentes · Imágenes incluidas' : isProPlan ? 'Acceso a todos los agentes · Imágenes ilimitadas' : isIndividualPlan ? 'Todos los agentes · Imágenes incluidas' : 'Acceso limitado · 7 días de prueba';
+    if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agency · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · CRM 5.000 leads · Imágenes ilimitadas · $99/mes' : isProPlan ? 'CRM 1.000 leads · Inbox · 60 imágenes/mes · $39/mes' : 'Acceso limitado · 30 mensajes/mes · 10 leads';
     const upgradeBtn = document.getElementById('cfg-upgrade-btn');
     if (upgradeBtn) {
       if (isAgencyPlan) {
         upgradeBtn.textContent = 'Gestionar en Hotmart';
         upgradeBtn.onclick = () => window.open('https://app.hotmart.com/products', '_blank');
-      } else if (isIndividualPlan || isProPlan) {
-        upgradeBtn.textContent = 'Mejorar a Agencia';
+      } else if (isProPlan) {
+        upgradeBtn.textContent = 'Mejorar a Agency ($99/mes)';
         upgradeBtn.onclick = () => window.open('https://pay.hotmart.com/L105202723X', '_blank');
       } else {
-        upgradeBtn.textContent = 'Mejorar plan';
+        upgradeBtn.textContent = 'Ver planes';
         upgradeBtn.onclick = openUpgradeFlow;
       }
     }
@@ -14583,7 +14598,7 @@ function adsAccountClick(accountId, idx) {
   if (idx === 0 || adsCanSelectMultiple()) {
     selectAdsAccount(accountId);
   } else {
-    showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
+    showAdsError('Para conectar múltiples cuentas necesitas el Plan Agency. Próximamente disponible.');
   }
 }
 
@@ -14592,7 +14607,7 @@ function showUpgradeHint(accountId) {
     if (accountId) selectAdsAccount(accountId);
     return;
   }
-  showAdsError('Para conectar múltiples cuentas necesitas el Plan Agencia. Próximamente disponible.');
+  showAdsError('Para conectar múltiples cuentas necesitas el Plan Agency. Próximamente disponible.');
 }
 
 function updateAdsUI(connected, email) {
@@ -14784,39 +14799,76 @@ function copyReferralLink() {
 }
 
 // Abrir/cerrar modal de referidos
-function openUpgradeFlow() {
-  // Para usuarios free: mostrar selector de plan
+function openUpgradeFlow(reason) {
   const existing = document.getElementById('upgrade-flow-modal');
   if (existing) { existing.remove(); }
   const modal = document.createElement('div');
   modal.id = 'upgrade-flow-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-  modal.innerHTML = `
-    <div style="background:var(--bg);border-radius:18px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <div style="font-size:16px;font-weight:700;color:var(--text)">Elige tu plan</div>
-        <button onclick="document.getElementById('upgrade-flow-modal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:18px;line-height:1;padding:2px 6px">&times;</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div style="border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:.15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="window.open('https://pay.hotmart.com/G105202218G','_blank');document.getElementById('upgrade-flow-modal').remove()">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:14px;font-weight:700;color:var(--text)">Plan Individual</div>
-            <div style="font-size:15px;font-weight:800;color:var(--blue)">$19<span style="font-size:11px;font-weight:500;color:var(--text-3)">/mes</span></div>
-          </div>
-          <div style="font-size:12px;color:var(--text-3);line-height:1.6">Todos los agentes de IA · 1 negocio · Mensajes ilimitados · Imágenes incluidas</div>
-        </div>
-        <div style="border:2px solid var(--blue);border-radius:12px;padding:18px;cursor:pointer;background:var(--blue-fade, #f0f4ff);position:relative;transition:.15s" onmouseover="this.style.borderColor='var(--blue-mid)'" onmouseout="this.style.borderColor='var(--blue)'" onclick="window.open('https://pay.hotmart.com/L105202723X','_blank');document.getElementById('upgrade-flow-modal').remove()">
-          <div style="position:absolute;top:-10px;right:14px;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;letter-spacing:.3px">MÁS POPULAR</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:14px;font-weight:700;color:var(--text)">Plan Agencia</div>
-            <div style="font-size:15px;font-weight:800;color:var(--blue)">$49<span style="font-size:11px;font-weight:500;color:var(--text-3)">/mes</span></div>
-          </div>
-          <div style="font-size:12px;color:var(--text-3);line-height:1.6">Todos los agentes · Hasta 20 clientes · Panel de agencia · Reportes · Imágenes ilimitadas</div>
-        </div>
-      </div>
-      <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:14px">Pago seguro a través de Hotmart · Cancela cuando quieras</div>
-    </div>`;
+  const reasonHtml = reason
+    ? '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#dc2626;margin-bottom:16px">' + reason + '</div>'
+    : '';
+  modal.innerHTML =
+    '<div style="background:var(--bg);border-radius:20px;padding:28px;width:100%;max-width:500px;box-shadow:0 24px 64px rgba(0,0,0,.25)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<div style="font-size:17px;font-weight:800;color:var(--text)">Actualiza tu plan</div>' +
+        '<button onclick="document.getElementById(\'upgrade-flow-modal\').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;line-height:1;padding:2px 8px">&times;</button>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--text-3);margin-bottom:18px">Todo el stack de marketing digital con IA · Sin límites por función</div>' +
+      reasonHtml +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+        // Plan Pro
+        '<div style="border:2px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:.15s" onmouseover="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--sidebar)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'\'" onclick="window.open(\'https://pay.hotmart.com/G105202218G\',\'_blank\');document.getElementById(\'upgrade-flow-modal\').remove()">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">' +
+            '<div>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--text)">Pro</div>' +
+              '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Para freelancers, emprendedores y pymes</div>' +
+            '</div>' +
+            '<div style="text-align:right">' +
+              '<span style="font-size:22px;font-weight:800;color:var(--blue)">$39</span>' +
+              '<span style="font-size:11px;color:var(--text-3)">/mes</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;color:var(--text-3);line-height:1.7">' +
+            '<span>&#10003; Todos los agentes IA</span>' +
+            '<span>&#10003; Todas las conexiones API</span>' +
+            '<span>&#10003; CRM · 1.000 leads incluidos</span>' +
+            '<span>&#10003; Inbox (WhatsApp, Meta, IG)</span>' +
+            '<span>&#10003; 60 imágenes IA/mes</span>' +
+            '<span>&#10003; Reportes y exportes PDF/CSV</span>' +
+          '</div>' +
+          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Leads adicionales: <strong style="color:var(--blue)">$4 por 1.000 contactos</strong></div>' +
+        '</div>' +
+        // Plan Agency
+        '<div style="border:2px solid var(--blue);border-radius:14px;padding:18px;cursor:pointer;background:var(--sidebar);position:relative;transition:.15s" onmouseover="this.style.background=\'var(--sidebar2)\'" onmouseout="this.style.background=\'var(--sidebar)\'" onclick="window.open(\'https://pay.hotmart.com/L105202723X\',\'_blank\');document.getElementById(\'upgrade-flow-modal\').remove()">' +
+          '<div style="position:absolute;top:-11px;right:14px;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:3px 12px;border-radius:20px;letter-spacing:.3px">MÁS POPULAR</div>' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">' +
+            '<div>' +
+              '<div style="font-size:14px;font-weight:700;color:var(--text)">Agency</div>' +
+              '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Para agencias y equipos de marketing</div>' +
+            '</div>' +
+            '<div style="text-align:right">' +
+              '<span style="font-size:22px;font-weight:800;color:var(--blue)">$99</span>' +
+              '<span style="font-size:11px;color:var(--text-3)">/mes</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;color:var(--text-3);line-height:1.7">' +
+            '<span>&#10003; Todo lo del plan Pro</span>' +
+            '<span>&#10003; 10 perfiles de cliente/marca</span>' +
+            '<span>&#10003; CRM · 5.000 leads incluidos</span>' +
+            '<span>&#10003; Imágenes IA ilimitadas</span>' +
+            '<span>&#10003; Dashboard salud por cliente</span>' +
+            '<span>&#10003; Leads extra a precio preferente</span>' +
+          '</div>' +
+          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Leads adicionales: <strong style="color:var(--blue)">$3 por 1.000 contactos</strong></div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">' +
+        '<div style="font-size:10px;color:var(--text-3)">Pago seguro vía Hotmart · Cancela cuando quieras</div>' +
+        '<div style="font-size:10px;color:var(--blue);font-weight:600">Plan anual con 25% dto. — próximamente</div>' +
+      '</div>' +
+    '</div>';
   document.body.appendChild(modal);
 }
 
@@ -16443,7 +16495,18 @@ async function crmSaveLead() {
         headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 403 && errData.limit_reached) {
+          btn.textContent = 'Guardar';
+          btn.disabled = false;
+          crmCloseModal();
+          const planLabel = userPlan === 'pro' ? 'Pro (1.000 leads)' : userPlan === 'agency' ? 'Agency (5.000 leads)' : 'Free (10 leads)';
+          openUpgradeFlow('Alcanzaste el límite de leads de tu plan ' + planLabel + '. Actualiza para agregar más contactos.');
+          return;
+        }
+        throw new Error();
+      }
       const data = await res.json();
       crmLeads.unshift(data.lead);
       // log creation activity
