@@ -9252,6 +9252,14 @@ function showToast(msg, type = 'success') {
 }
 
 // CONNECTION SUCCESS MODAL — large centered overlay with blur
+// Prompts de auditoría inicial por plataforma (usados por showConnectionModal
+// y launchInitialAudit — deben declararse antes de los IIFE de callback OAuth)
+const AUDIT_PROMPTS = {
+  google_ads: 'Acabo de conectar mi cuenta de Google Ads. Haz una auditoría inicial completa: revisa mis campañas activas, presupuesto y rendimiento (CPC, CPA, conversiones), detecta gasto desperdiciado en términos de búsqueda y dame los 3 hallazgos más importantes con acciones concretas para mejorar.',
+  meta_ads: 'Acabo de conectar mi cuenta de Meta Ads. Haz una auditoría inicial completa: revisa mis campañas activas, presupuesto y rendimiento (CPM, CTR, CPA), detecta audiencias o creativos con bajo rendimiento y dame los 3 hallazgos más importantes con acciones concretas para mejorar.',
+};
+const AUDIT_AGENT_KEY = { google_ads: 'google-ads', meta_ads: 'meta-ads' };
+
 function showConnectionModal(platform, accountName) {
   const existing = document.getElementById('acuarius-conn-modal');
   if (existing) existing.remove();
@@ -9284,7 +9292,8 @@ function showConnectionModal(platform, accountName) {
       <h2 style="font-size:22px;font-weight:700;color:#111;margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
       <p style="font-size:15px;color:#555;margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
       <p style="font-size:13px;color:#888;margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
-      <button id="conn-modal-settings-btn" style="width:100%;padding:14px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
+      ${AUDIT_AGENT_KEY[platform] ? `<button id="conn-modal-audit-btn" style="width:100%;padding:14px;background:var(--blue,#1E2BCC);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">✨ Auditar mi cuenta con IA ahora</button>` : ''}
+      <button id="conn-modal-settings-btn" style="width:100%;padding:${AUDIT_AGENT_KEY[platform] ? '12px' : '14px'};background:${AUDIT_AGENT_KEY[platform] ? 'transparent' : 'var(--accent,#6366f1)'};color:${AUDIT_AGENT_KEY[platform] ? '#555' : '#fff'};border:${AUDIT_AGENT_KEY[platform] ? '1px solid #e5e7eb' : 'none'};border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
       <button id="conn-modal-close-btn" style="width:100%;padding:12px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);transition:background .2s">Cerrar</button>
     </div>
   `;
@@ -9312,6 +9321,11 @@ function showConnectionModal(platform, accountName) {
   document.getElementById('conn-modal-settings-btn').addEventListener('click', () => {
     close();
     setTimeout(() => openSettings(), 280);
+  });
+  const auditBtn = document.getElementById('conn-modal-audit-btn');
+  if (auditBtn) auditBtn.addEventListener('click', () => {
+    close();
+    setTimeout(() => launchInitialAudit(platform), 280);
   });
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
@@ -17433,3 +17447,161 @@ function crmSetView(v) {
 // ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 
 // ── FIN MÓDULO LEADS ──────────────────────────────────────────────────────────
+
+// ── PALETA DE COMANDOS (⌘K) ───────────────────────────────────────────────────
+let cmdkSel = 0;
+let cmdkResults = [];
+
+function cmdkNorm(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function cmdkCommands() {
+  const cmds = [
+    // Agentes
+    { group: 'Agentes', icon: '🎯', label: 'Agente Google Ads',            kw: 'google ads campanas sem',       run: () => openAgent('google-ads') },
+    { group: 'Agentes', icon: '📘', label: 'Agente Meta Ads',              kw: 'meta facebook instagram fb ig', run: () => openAgent('meta-ads') },
+    { group: 'Agentes', icon: '🎵', label: 'Agente TikTok Ads',            kw: 'tiktok videos',                 run: () => openAgent('tiktok-ads') },
+    { group: 'Agentes', icon: '💼', label: 'Agente LinkedIn Ads',          kw: 'linkedin b2b',                  run: () => openAgent('linkedin-ads') },
+    { group: 'Agentes', icon: '🔍', label: 'Agente SEO',                   kw: 'seo posicionamiento organico',  run: () => openAgent('seo') },
+    { group: 'Agentes', icon: '✨', label: 'Contenido para Redes',         kw: 'social contenido parrilla posts', run: () => openAgent('social') },
+    { group: 'Agentes', icon: '🧭', label: 'Consultor de Marketing',       kw: 'consultor estrategia plan',     run: () => openAgent('consultor') },
+    // Ir a
+    { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
+    { group: 'Ir a', icon: '📋', label: 'CRM de leads',                    kw: 'crm leads pipeline kanban clientes', run: () => showView('crm') },
+    { group: 'Ir a', icon: '💬', label: 'Inbox (WhatsApp y Meta)',         kw: 'inbox whatsapp mensajes chat',  run: () => { showView('crm'); setTimeout(() => crmSetView('inbox'), 100); } },
+    { group: 'Ir a', icon: '🎨', label: 'Social Media Studio',             kw: 'studio imagenes parrilla calendario', run: () => showView('social-studio') },
+    { group: 'Ir a', icon: '🎓', label: 'Academia Acuarius',               kw: 'academia cursos videos tutoriales', run: () => openAcademia() },
+    { group: 'Ir a', icon: '🗺️', label: 'Roadmap',                         kw: 'roadmap progreso etapas',       run: () => showView('roadmap') },
+    { group: 'Ir a', icon: '🏢', label: 'Panel de agencia',                kw: 'agencia clientes panel',        run: () => showView('agency') },
+    // Acciones
+    { group: 'Acciones', icon: '💭', label: 'Nueva conversación',          kw: 'nuevo chat conversacion limpiar', run: () => openAgent(currentAgentCtx) },
+    { group: 'Acciones', icon: '➕', label: 'Crear lead',                  kw: 'nuevo lead contacto crear agregar', run: () => { showView('crm'); setTimeout(() => crmOpenModal(), 150); } },
+    { group: 'Acciones', icon: '⚙️', label: 'Configuración',               kw: 'settings ajustes perfil cuenta', run: () => openSettings() },
+    { group: 'Acciones', icon: '🔗', label: 'Conectar Google Ads',         kw: 'conectar google api vincular',  run: () => connectGoogleAds() },
+    { group: 'Acciones', icon: '🔗', label: 'Conectar Meta Ads',           kw: 'conectar meta facebook api vincular', run: () => connectMetaAds() },
+    { group: 'Acciones', icon: '⭐', label: 'Actualizar plan',             kw: 'upgrade plan pro agency precio pagar', run: () => openUpgradeFlow() },
+  ];
+  // Clientes de agencia (dinámico)
+  try {
+    if (Array.isArray(agencyClients)) {
+      agencyClients.forEach(c => {
+        const name = c.client_name || c.name || '';
+        if (!name) return;
+        cmds.push({ group: 'Clientes', icon: '👤', label: name, sub: c.client_industry || c.industria || '', kw: 'cliente ' + name, run: () => agencyOpenClient(c.id) });
+      });
+    }
+  } catch {}
+  return cmds;
+}
+
+function openCmdK() {
+  let ov = document.getElementById('cmdk-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'cmdk-overlay';
+    ov.className = 'cmdk-overlay';
+    ov.innerHTML =
+      '<div class="cmdk-box" role="dialog" aria-label="Paleta de comandos">' +
+        '<div class="cmdk-input-row">' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+          '<input class="cmdk-input" id="cmdk-input" type="text" placeholder="Buscar agentes, secciones, clientes, acciones..." autocomplete="off">' +
+          '<span class="cmdk-esc">esc</span>' +
+        '</div>' +
+        '<div class="cmdk-list" id="cmdk-list"></div>' +
+      '</div>';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) closeCmdK(); });
+    document.body.appendChild(ov);
+    const input = ov.querySelector('#cmdk-input');
+    input.addEventListener('input', () => { cmdkSel = 0; cmdkRender(input.value); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); cmdkSel = Math.min(cmdkSel + 1, cmdkResults.length - 1); cmdkPaint(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); cmdkSel = Math.max(cmdkSel - 1, 0); cmdkPaint(); }
+      else if (e.key === 'Enter') { e.preventDefault(); cmdkRun(cmdkSel); }
+      else if (e.key === 'Escape') { closeCmdK(); }
+    });
+  }
+  ov.classList.add('open');
+  const input = document.getElementById('cmdk-input');
+  input.value = '';
+  cmdkSel = 0;
+  cmdkRender('');
+  setTimeout(() => input.focus(), 40);
+}
+
+function closeCmdK() {
+  const ov = document.getElementById('cmdk-overlay');
+  if (ov) ov.classList.remove('open');
+}
+
+function cmdkRender(query) {
+  const q = cmdkNorm(query).trim();
+  const all = cmdkCommands();
+  cmdkResults = !q ? all : all.filter(c => {
+    const hay = cmdkNorm(c.label + ' ' + (c.kw || '') + ' ' + (c.sub || ''));
+    return q.split(/\s+/).every(w => hay.includes(w));
+  });
+  cmdkPaint();
+}
+
+function cmdkPaint() {
+  const list = document.getElementById('cmdk-list');
+  if (!list) return;
+  if (!cmdkResults.length) {
+    list.innerHTML = '<div class="cmdk-empty">Sin resultados. Prueba con "google", "lead" o "studio".</div>';
+    return;
+  }
+  let html = '';
+  let lastGroup = '';
+  cmdkResults.forEach((c, i) => {
+    if (c.group !== lastGroup) { html += '<div class="cmdk-group">' + c.group + '</div>'; lastGroup = c.group; }
+    html += '<div class="cmdk-item' + (i === cmdkSel ? ' sel' : '') + '" data-i="' + i + '" onmouseenter="cmdkSel=' + i + ';cmdkPaint()" onclick="cmdkRun(' + i + ')">' +
+      '<span class="cmdk-ico">' + c.icon + '</span><span>' + esc(c.label) + '</span>' +
+      (c.sub ? '<span class="cmdk-sub">' + esc(c.sub) + '</span>' : '') +
+    '</div>';
+  });
+  list.innerHTML = html;
+  const sel = list.querySelector('.cmdk-item.sel');
+  if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+
+function cmdkRun(i) {
+  const cmd = cmdkResults[i];
+  if (!cmd) return;
+  closeCmdK();
+  setTimeout(() => { try { cmd.run(); } catch (e) { console.warn('cmdk run error:', e); } }, 60);
+}
+
+window.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    const ov = document.getElementById('cmdk-overlay');
+    if (ov && ov.classList.contains('open')) closeCmdK(); else openCmdK();
+  }
+});
+
+// ── AUDITORÍA INICIAL AUTOMÁTICA ──────────────────────────────────────────────
+// Al conectar una cuenta por primera vez, ofrece una auditoría con hallazgos
+// reales antes de que el usuario escriba un solo mensaje.
+// (AUDIT_PROMPTS y AUDIT_AGENT_KEY declarados antes de showConnectionModal)
+
+async function launchInitialAudit(platform) {
+  const agentKey = AUDIT_AGENT_KEY[platform];
+  const prompt = AUDIT_PROMPTS[platform];
+  if (!agentKey || !prompt) return;
+  try { localStorage.setItem('acuarius_audit_done_' + platform, '1'); } catch {}
+  // Cerrar overlays que puedan estar abiertos
+  try { closeSettings(); } catch {}
+  const connModal = document.getElementById('acuarius-conn-modal');
+  if (connModal) connModal.remove();
+
+  await openAgent(agentKey);
+  // Esperar a que el agente termine su saludo inicial
+  await new Promise(res => setTimeout(res, 800));
+  let attempts = 0;
+  while (typeof loading !== 'undefined' && loading && attempts < 40) {
+    await new Promise(res => setTimeout(res, 250));
+    attempts++;
+  }
+  qSend(prompt);
+}
