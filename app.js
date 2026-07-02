@@ -2820,6 +2820,8 @@ function tourEnd() {
     localStorage.setItem('acuarius_tour_done', '1');
     sessionStorage.setItem('acuarius_tour_done', '1');
   } catch(e) {}
+  // Al terminar el tour, invitar a conectar la primera cuenta (primer wow)
+  setTimeout(function(){ if (typeof showWelcomeConnect === 'function') showWelcomeConnect(); }, 700);
 }
 
 function tourShouldShow() {
@@ -2827,6 +2829,9 @@ function tourShouldShow() {
     // Check both localStorage and sessionStorage
     if (localStorage.getItem('acuarius_tour_done')) return false;
     if (sessionStorage.getItem('acuarius_tour_done')) return false;
+    // No superponer con el modal de conexión (llegada desde OAuth callback):
+    // posponer sin marcar como visto — se mostrará en la próxima visita
+    if (document.getElementById('acuarius-conn-modal')) return false;
     return true;
   } catch(e) { return false; }
 }
@@ -4341,6 +4346,9 @@ window.onload = async () => {
   setTimeout(function(){ loadRecentConversations(); }, 1000);
   // Mostrar tour si es la primera vez
   setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
+  // Usuarios que ya hicieron el tour pero nunca conectaron una plataforma:
+  // invitar a la primera conexión (después de restaurar conexiones de Supabase)
+  setTimeout(function(){ if (!tourShouldShow()) showWelcomeConnect(); }, 4500);
   // Actualizar badge de historial
   setTimeout(function(){ updateHistorialBadge(); }, 2000);
   // Restaurar conexiones desde Supabase si no hay token en sessionStorage
@@ -17584,6 +17592,49 @@ window.addEventListener('keydown', e => {
 // Al conectar una cuenta por primera vez, ofrece una auditoría con hallazgos
 // reales antes de que el usuario escriba un solo mensaje.
 // (AUDIT_PROMPTS y AUDIT_AGENT_KEY declarados antes de showConnectionModal)
+
+// ── BIENVENIDA "PRIMER WOW EN 3 MINUTOS" ──────────────────────────────────────
+// Invita al usuario nuevo a conectar su cuenta de ads para recibir una
+// auditoría automática. Se muestra una sola vez: al terminar el tour, o al
+// entrar si ya hizo el tour pero nunca conectó una plataforma.
+function welcomeConnectShouldShow() {
+  try {
+    if (localStorage.getItem('acuarius_welcome_connect_shown')) return false;
+    if (!clerkInstance?.user?.id) return false;
+    if (typeof tourActive !== 'undefined' && tourActive) return false;
+    if (document.getElementById('acuarius-conn-modal')) return false;
+    const hasGoogle = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+    const hasMeta = sessionStorage.getItem('meta_access_token');
+    if (hasGoogle || hasMeta) return false;
+    return true;
+  } catch { return false; }
+}
+
+function showWelcomeConnect() {
+  if (!welcomeConnectShouldShow()) return;
+  try { localStorage.setItem('acuarius_welcome_connect_shown', '1'); } catch {}
+
+  const overlay = document.createElement('div');
+  overlay.id = 'welcome-connect-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;background:rgba(10,12,40,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:fadeInOverlay .3s ease;padding:20px';
+  overlay.innerHTML =
+    '<div style="background:var(--bg,#fff);border-radius:20px;padding:36px 34px 30px;max-width:460px;width:100%;box-shadow:0 32px 90px rgba(10,12,40,.4);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
+      '<div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1E2BCC,#00B8CE);display:flex;align-items:center;justify-content:center;margin-bottom:18px">' +
+        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+      '</div>' +
+      '<h2 style="font-size:21px;font-weight:800;color:var(--text,#111);margin:0 0 8px;font-family:var(--font);letter-spacing:-.3px">Tu primera auditoría con IA, en 3 minutos</h2>' +
+      '<p style="font-size:13.5px;color:var(--text-2,#555);margin:0 0 22px;font-family:var(--font);line-height:1.6">Conecta tu cuenta de anuncios y el agente la revisará al instante: campañas, presupuesto, gasto desperdiciado y los 3 hallazgos más importantes con acciones concretas. Sin costo, incluido en tu plan Free.</p>' +
+      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectGoogleAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,#e5e7eb);border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,#e5e7eb)\';this.style.background=\'transparent\'">' +
+        '<span style="font-size:18px">🎯</span><span style="flex:1">Conectar Google Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
+      '</button>' +
+      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectMetaAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,#e5e7eb);border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:16px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,#e5e7eb)\';this.style.background=\'transparent\'">' +
+        '<span style="font-size:18px">📘</span><span style="flex:1">Conectar Meta Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
+      '</button>' +
+      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted2,#888);border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font)">Explorar la plataforma primero</button>' +
+    '</div>';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
 
 async function launchInitialAudit(platform) {
   const agentKey = AUDIT_AGENT_KEY[platform];
