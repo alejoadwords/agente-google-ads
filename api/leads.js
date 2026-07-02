@@ -102,7 +102,7 @@ export default async function handler(req) {
         leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
       }
     } catch {}
-    const PLAN_LIMITS = { free: 10, pro: 1000, agency: 5000 };
+    const PLAN_LIMITS = { free: 50, pro: 1000, agency: 5000 };
     const planLimit = (PLAN_LIMITS[userPlan] || 10) + (leadsExtra * 1000);
     const countRes = await fetch(
       `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`,

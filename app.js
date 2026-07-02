@@ -55,18 +55,18 @@ function loadImageUsage() {
     }
     return;
   }
-  // Free: 2 imágenes
+  // Free: 3 imágenes
   try {
     const saved = localStorage.getItem('acuarius_image_usage');
     if (saved) {
       const data = JSON.parse(saved);
-      imageUsage = { generated: data.generated || 0, limit: 2 };
+      imageUsage = { generated: data.generated || 0, limit: 3 };
     } else {
-      imageUsage = { generated: 0, limit: 2 };
+      imageUsage = { generated: 0, limit: 3 };
       saveImageUsage();
     }
   } catch (e) {
-    imageUsage = { generated: 0, limit: 2 };
+    imageUsage = { generated: 0, limit: 3 };
   }
 }
 
@@ -86,6 +86,32 @@ function incrementImageUsage() {
     imageUsage.generated++;
     saveImageUsage();
   }
+}
+
+// Contador mensual de mensajes para plan Free (50/mes)
+function getMsgUsage() {
+  if (userPlan !== 'free' || isAdminUser()) return { count: 0, limit: 9999 };
+  try {
+    const data = JSON.parse(localStorage.getItem('acuarius_msg_usage') || '{}');
+    const monthKey = new Date().toISOString().slice(0, 7);
+    if (data.month !== monthKey) return { count: 0, limit: 50, month: monthKey };
+    return { count: data.count || 0, limit: 50, month: data.month };
+  } catch { return { count: 0, limit: 50, month: '' }; }
+}
+
+function canSendFreeMsg() {
+  if (userPlan !== 'free' || isAdminUser()) return true;
+  const { count, limit } = getMsgUsage();
+  return count < limit;
+}
+
+function incrementMsgUsage() {
+  if (userPlan !== 'free' || isAdminUser()) return;
+  try {
+    const usage = getMsgUsage();
+    const monthKey = new Date().toISOString().slice(0, 7);
+    localStorage.setItem('acuarius_msg_usage', JSON.stringify({ count: (usage.count || 0) + 1, month: monthKey }));
+  } catch {}
 }
 
 function showImageLimitReached() {
@@ -4499,8 +4525,16 @@ async function sendMsg(){
   const el=document.getElementById('cin');
   const txt=el.value.trim();
   if(!txt && !pendingImg)return;
+
+  // Límite mensual de mensajes para plan Free
+  if (!canSendFreeMsg()) {
+    const { limit } = getMsgUsage();
+    openUpgradeFlow('Usaste tus ' + limit + ' mensajes gratuitos de este mes. Actualiza para continuar sin límites.');
+    return;
+  }
+
   el.value='';autoR(el);
-  
+
   // Interceptar intent de gasto desperdiciado ANTES de addUser/hist para evitar duplicados
   // runWastedSpendFlow() maneja su propio addUser() y hist.push()
   if (!pendingImg && currentAgentCtx === 'google-ads' && isWastedSpendIntent(txt)) {
@@ -4524,6 +4558,7 @@ async function sendMsg(){
   }
 
   hist.push({role:'user',content:msgContent});
+  incrementMsgUsage();
   // Ocultar tarjetas de acción rápida del agente social al primer envío
   if(currentAgentCtx==='social'){
     const socialBar=document.getElementById('social-action-bar');
@@ -13631,6 +13666,13 @@ let metaActiveAccount = null;
 })();
 
 function connectMetaAds() {
+  if (userPlan === 'free' && !isAdminUser()) {
+    const hasGoogleConnected = !!sessionStorage.getItem('ads_access_token');
+    if (hasGoogleConnected) {
+      openUpgradeFlow('El plan Free incluye 1 conexión API. Ya tienes Google Ads conectado. Actualiza a Pro para conectar múltiples plataformas.');
+      return;
+    }
+  }
   const uid = clerkInstance?.user?.id || '';
   window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
 }
@@ -14316,6 +14358,13 @@ let adsAccounts = [];       // todas las cuentas accesibles
 })();
 
 function connectGoogleAds() {
+  if (userPlan === 'free' && !isAdminUser()) {
+    const hasMetaConnected = !!sessionStorage.getItem('meta_access_token');
+    if (hasMetaConnected) {
+      openUpgradeFlow('El plan Free incluye 1 conexión API. Ya tienes Meta Ads conectado. Actualiza a Pro para conectar múltiples plataformas.');
+      return;
+    }
+  }
   const uid = clerkInstance?.user?.id || '';
   window.location.href = '/api/google-ads-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
 }
@@ -14815,7 +14864,8 @@ function openUpgradeFlow(reason) {
         '<div style="font-size:17px;font-weight:800;color:var(--text)">Actualiza tu plan</div>' +
         '<button onclick="document.getElementById(\'upgrade-flow-modal\').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;line-height:1;padding:2px 8px">&times;</button>' +
       '</div>' +
-      '<div style="font-size:12px;color:var(--text-3);margin-bottom:18px">Todo el stack de marketing digital con IA · Sin límites por función</div>' +
+      '<div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Todo el stack de marketing digital con IA · Sin límites por función</div>' +
+      '<div style="font-size:11px;color:var(--text-3);background:var(--sidebar);border-radius:8px;padding:8px 12px;margin-bottom:14px">Plan Free actual: <strong>50 msgs/mes · 50 leads · 3 imágenes · 1 conexión API</strong> — Sin Inbox/WhatsApp</div>' +
       reasonHtml +
       '<div style="display:flex;flex-direction:column;gap:10px">' +
         // Plan Pro
