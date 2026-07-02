@@ -2156,6 +2156,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
         </div>
       </div>
 
+      <!-- Pulso de cartera — brief diario de la agencia -->
+      <div class="pulso" id="pulso-agency-section" style="display:none;max-width:none;margin:16px 0 6px">
+        <div class="pulso-head">
+          <div class="pulso-title"><span class="pulso-dot"></span><span id="pulso-agency-title-text">Pulso de tu cartera</span></div>
+          <button class="pulso-refresh" onclick="renderPulsoAgency(true)" title="Actualizar Pulso">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
+        </div>
+        <div class="pulso-grid" id="pulso-agency-grid"></div>
+      </div>
+
       <!-- Stats -->
       <div class="agency-stats">
         <div class="agency-stat">

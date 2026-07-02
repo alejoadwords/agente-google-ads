@@ -4335,6 +4335,7 @@ window.onload = async () => {
         if (agencyClients.length > 0) {
           agencyRender();
           agencyUpdateSidebarCount();
+          renderPulsoAgency(true);
         }
       }
     }, 3000);
@@ -9420,7 +9421,7 @@ function showView(id){
   var el=document.getElementById('view-'+id);
   if(el)el.classList.add('active');
   if(id==='roadmap')updateProgress();
-  if(id==='agency')agencyRender();
+  if(id==='agency'){agencyRender();setTimeout(function(){renderPulsoAgency();},80);}
   if(id==='social-studio')setTimeout(renderStudio, 50);
   if(id==='home')setTimeout(function(){renderPulso();},80);
 }
@@ -17856,11 +17857,124 @@ async function renderPulso(force) {
     ? 'Pulso de hoy — ' + warns + (warns === 1 ? ' cosa necesita tu atención' : ' cosas necesitan tu atención')
     : 'Pulso de hoy';
 
-  grid.innerHTML = cards.map((c, i) =>
+  grid.innerHTML = pulsoCardsHtml(cards, 'pulsoRun');
+}
+
+// HTML compartido de tarjetas (home y agencia usan registros de acción distintos)
+function pulsoCardsHtml(cards, runFn) {
+  return cards.map((c, i) =>
     '<div class="pulso-card" data-tone="' + c.tone + '">' +
       '<div class="pulso-card-title">' + esc(c.title) + '</div>' +
       '<div class="pulso-card-body">' + esc(c.body) + '</div>' +
-      (c.actLabel ? '<button class="pulso-act" onclick="pulsoRun(' + i + ')">' + esc(c.actLabel) + '</button>' : '') +
+      (c.actLabel ? '<button class="pulso-act" onclick="' + runFn + '(' + i + ')">' + esc(c.actLabel) + '</button>' : '') +
     '</div>'
   ).join('');
+}
+
+// ── PULSO DE CARTERA (cuentas de agencia) ─────────────────────────────────────
+// Las agencias entran directo al panel de clientes, no al home: su Pulso vive
+// ahí y agrega los datos de toda la cartera.
+let _pulsoAgencyLastFetch = 0;
+let _pulsoAgencyActions = [];
+
+function pulsoAgencyRun(i) {
+  const fn = _pulsoAgencyActions[i];
+  if (fn) { try { fn(); } catch (e) { console.warn('pulso agency action error:', e); } }
+}
+
+// Abre el agente en el contexto de un cliente y envía un mensaje automáticamente
+async function pulsoOpenClientAgent(clientId, agentKey, prompt) {
+  const c = (agencyClients || []).find(x => x.id === clientId);
+  if (!c) return;
+  openAgentForClient(agentKey, c);
+  await new Promise(res => setTimeout(res, 900));
+  let attempts = 0;
+  while (typeof loading !== 'undefined' && loading && attempts < 40) {
+    await new Promise(res => setTimeout(res, 250));
+    attempts++;
+  }
+  qSend(prompt);
+}
+
+async function pulsoAgencyAdsCards() {
+  const uid = clerkInstance?.user?.id || '';
+  if (!uid) return [];
+  const connected = (agencyClients || []).filter(c => c.googleCustomerId).slice(0, 10);
+  if (!connected.length) return [];
+  const results = await Promise.allSettled(connected.map(async c => {
+    const custId = String(c.googleCustomerId).replace(/-/g, '');
+    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + custId + '&dateRange=LAST_7_DAYS');
+    return { c, d: await r.json() };
+  }));
+  const cards = [];
+  let totSpend = 0, totConv = 0, okCount = 0;
+  results.forEach(res => {
+    if (res.status !== 'fulfilled') return;
+    const { c, d } = res.value;
+    if (!d || d.error) return;
+    const cost = parseFloat(d.totalCost) || 0;
+    const conv = parseFloat(d.conversions) || 0;
+    if (cost > 0) { okCount++; totSpend += cost; totConv += conv; }
+    if (cost > 0 && conv === 0) {
+      cards.push({
+        tone: 'warn',
+        title: (c.name || 'Cliente') + ' · sin conversiones',
+        body: 'Invirtió ' + pulsoMoney(cost) + ' en Google Ads en los últimos 7 días sin conversiones registradas.',
+        actLabel: 'Investigar →',
+        act: () => pulsoOpenClientAgent(c.id, 'google-ads', 'En los últimos 7 días este cliente invirtió ' + pulsoMoney(cost) + ' en Google Ads sin conversiones registradas. Revisa la cuenta, encuentra las causas más probables y dime qué corregir primero.'),
+      });
+    }
+  });
+  if (okCount > 0) {
+    cards.push({
+      tone: 'info',
+      title: 'Cartera · últimos 7 días',
+      body: 'Inversión total ' + pulsoMoney(totSpend) + ' · ' + totConv + ' conversiones en ' + okCount + (okCount === 1 ? ' cliente conectado' : ' clientes conectados') + '.',
+      actLabel: 'Reportes en Vivo →',
+      act: () => dashboardOpen(),
+    });
+  }
+  return cards;
+}
+
+async function renderPulsoAgency(force) {
+  const sec = document.getElementById('pulso-agency-section');
+  const grid = document.getElementById('pulso-agency-grid');
+  if (!sec || !grid) return;
+  if (!Array.isArray(agencyClients) || !agencyClients.length) { sec.style.display = 'none'; return; }
+  const now = Date.now();
+  if (!force && now - _pulsoAgencyLastFetch < 10 * 60 * 1000) return;
+  _pulsoAgencyLastFetch = now;
+
+  sec.style.display = 'block';
+  grid.innerHTML = '<div class="pulso-skel"></div><div class="pulso-skel"></div><div class="pulso-skel"></div>';
+
+  if (!clerkInstance?.user?.id) {
+    await new Promise(res => {
+      const iv = setInterval(() => { if (clerkInstance?.user?.id) { clearInterval(iv); res(); } }, 150);
+      setTimeout(() => { clearInterval(iv); res(); }, 4000);
+    });
+  }
+
+  const results = await Promise.allSettled([pulsoAgencyAdsCards(), pulsoCrmCards()]);
+  let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+
+  if (!cards.length) {
+    const anyConnected = (agencyClients || []).some(c => c.googleCustomerId);
+    cards = anyConnected
+      ? [{ tone: 'good', title: 'Cartera en orden', body: 'Tus agentes no detectaron nada urgente en tus clientes hoy.', actLabel: 'Reportes en Vivo →', act: () => dashboardOpen() }]
+      : [{ tone: 'info', title: 'Activa el Pulso de tu cartera', body: 'Vincula la cuenta de Google Ads de cada cliente (editar cliente → cuenta publicitaria) para ver aquí alertas diarias de toda tu cartera.' }];
+  }
+
+  const toneOrder = { warn: 0, good: 1, info: 2 };
+  cards.sort((a, b) => (toneOrder[a.tone] ?? 3) - (toneOrder[b.tone] ?? 3));
+  _pulsoAgencyActions = cards.map(c => c.act);
+
+  const warns = cards.filter(c => c.tone === 'warn').length;
+  const titleEl = document.getElementById('pulso-agency-title-text');
+  if (titleEl) titleEl.textContent = warns > 0
+    ? 'Pulso de tu cartera — ' + warns + (warns === 1 ? ' cliente necesita atención' : ' clientes necesitan atención')
+    : 'Pulso de tu cartera';
+
+  grid.innerHTML = pulsoCardsHtml(cards, 'pulsoAgencyRun');
 }
