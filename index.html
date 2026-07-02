@@ -77,6 +77,27 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @keyframes cmdkFade{from{opacity:0}to{opacity:1}}
 @keyframes cmdkPop{from{opacity:0;transform:scale(.97) translateY(-8px)}to{opacity:1;transform:none}}
 
+/* ── Pulso — brief diario proactivo ── */
+.pulso{width:100%;max-width:740px;margin:0 0 20px;text-align:left}
+.pulso-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.pulso-title{font-size:12.5px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;letter-spacing:-.1px}
+.pulso-dot{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#00B8CE);animation:pulsoBeat 2.4s ease infinite;flex-shrink:0}
+.pulso-refresh{width:26px;height:26px;border-radius:7px;background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted2);transition:all .15s var(--ease)}
+.pulso-refresh:hover{background:var(--bg-subtle);color:var(--text)}
+.pulso-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px}
+.pulso-card{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 19px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;align-items:flex-start}
+.pulso-card::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:3px;border-radius:3px;background:#00B8CE}
+.pulso-card[data-tone="warn"]::before{background:#F59E0B}
+.pulso-card[data-tone="good"]::before{background:#10B981}
+.pulso-card-title{font-size:12px;font-weight:700;color:var(--text);letter-spacing:-.1px}
+.pulso-card-body{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:3px;font-variant-numeric:tabular-nums}
+.pulso-act{margin-top:auto;padding:5px 11px;margin-top:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px;font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;font-family:var(--font);transition:all .15s var(--ease)}
+.pulso-act:hover{background:var(--blue-md);transform:translateY(-1px)}
+.pulso-skel{height:88px;border-radius:12px;background:linear-gradient(90deg,var(--bg-subtle) 25%,var(--bg-muted) 50%,var(--bg-subtle) 75%);background-size:200% 100%;animation:pulsoShimmer 1.2s linear infinite}
+@keyframes pulsoBeat{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pulsoShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.pulso-dot,.pulso-skel{animation:none}}
+
 /* ── Micro-animaciones globales ── */
 .msg{animation:msgIn .28s ease both}
 @keyframes msgIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
@@ -2026,6 +2047,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
     <div class="home-wrap">
       <div class="home-greeting" id="home-greeting">hola 👋</div>
       <p class="home-sub">Elige un agente o escribe directamente lo que necesitas</p>
+
+      <!-- Pulso — brief diario proactivo -->
+      <div class="pulso" id="pulso-section" style="display:none">
+        <div class="pulso-head">
+          <div class="pulso-title"><span class="pulso-dot"></span><span id="pulso-title-text">Pulso de hoy</span></div>
+          <button class="pulso-refresh" onclick="renderPulso(true)" title="Actualizar Pulso">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
+        </div>
+        <div class="pulso-grid" id="pulso-grid"></div>
+      </div>
 
       <!-- Hero Consultor -->
       <div id="home-consultor-hero" onclick="openAgent('consultor')" style="width:100%;max-width:740px;margin-bottom:16px;background:linear-gradient(135deg,#EDE9FE 0%,#F5F3FF 60%,#EEF2FF 100%);border:1.5px solid #C4B5FD;border-radius:var(--rlg);padding:18px 20px;cursor:pointer;transition:all .22s var(--ease);display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-sm)" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,.13)'" onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-sm)'">

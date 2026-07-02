@@ -4353,6 +4353,8 @@ window.onload = async () => {
   setTimeout(function(){ updateHistorialBadge(); }, 2000);
   // Restaurar conexiones desde Supabase si no hay token en sessionStorage
   setTimeout(function(){ restoreConnectionsFromSupabase(); }, 2500);
+  // Refrescar el Pulso una vez restauradas las conexiones (fuerza re-fetch)
+  setTimeout(function(){ if (document.getElementById('view-home')?.classList.contains('active')) renderPulso(true); }, 5500);
   // Mostrar botón Leads (disponible para todos los usuarios autenticados)
   setTimeout(function(){ const b = document.getElementById('sb-leads-btn'); if(b) b.style.display = 'block'; }, 500);
   // Inicializar alertas
@@ -9420,6 +9422,7 @@ function showView(id){
   if(id==='roadmap')updateProgress();
   if(id==='agency')agencyRender();
   if(id==='social-studio')setTimeout(renderStudio, 50);
+  if(id==='home')setTimeout(function(){renderPulso();},80);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 
@@ -17636,16 +17639,9 @@ function showWelcomeConnect() {
   document.body.appendChild(overlay);
 }
 
-async function launchInitialAudit(platform) {
-  const agentKey = AUDIT_AGENT_KEY[platform];
-  const prompt = AUDIT_PROMPTS[platform];
-  if (!agentKey || !prompt) return;
-  try { localStorage.setItem('acuarius_audit_done_' + platform, '1'); } catch {}
-  // Cerrar overlays que puedan estar abiertos
-  try { closeSettings(); } catch {}
-  const connModal = document.getElementById('acuarius-conn-modal');
-  if (connModal) connModal.remove();
-
+// Abre un agente, espera su saludo inicial y envía un mensaje automáticamente.
+// Reutilizado por la auditoría inicial, el Pulso y los deep-links.
+async function openAgentAndAsk(agentKey, prompt) {
   await openAgent(agentKey);
   // Esperar a que el agente termine su saludo inicial
   await new Promise(res => setTimeout(res, 800));
@@ -17655,4 +17651,216 @@ async function launchInitialAudit(platform) {
     attempts++;
   }
   qSend(prompt);
+}
+
+async function launchInitialAudit(platform) {
+  const agentKey = AUDIT_AGENT_KEY[platform];
+  const prompt = AUDIT_PROMPTS[platform];
+  if (!agentKey || !prompt) return;
+  try { localStorage.setItem('acuarius_audit_done_' + platform, '1'); } catch {}
+  // Cerrar overlays que puedan estar abiertos
+  try { closeSettings(); } catch {}
+  const connModal = document.getElementById('acuarius-conn-modal');
+  if (connModal) connModal.remove();
+  await openAgentAndAsk(agentKey, prompt);
+}
+// ── PULSO — BRIEF DIARIO PROACTIVO ────────────────────────────────────────────
+// La pantalla de inicio deja de estar vacía: al abrir la app, los datos de
+// Google Ads, Meta y el CRM se revisan y se convierten en tarjetas accionables.
+let _pulsoLastFetch = 0;
+let _pulsoActions = [];
+
+function pulsoRun(i) {
+  const fn = _pulsoActions[i];
+  if (fn) { try { fn(); } catch (e) { console.warn('pulso action error:', e); } }
+}
+
+function pulsoMoney(n) {
+  const v = Number(n);
+  return isNaN(v) ? String(n) : '$' + v.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+}
+
+async function pulsoGoogleCards() {
+  const uid = clerkInstance?.user?.id || '';
+  const customerId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '';
+  const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
+  if (!uid || !customerId || !token) return [];
+  try {
+    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=LAST_7_DAYS');
+    const d = await r.json();
+    if (!d || d.error) return [];
+    const cost = parseFloat(d.totalCost) || 0;
+    const conv = parseFloat(d.conversions) || 0;
+    if (cost > 0 && conv === 0) {
+      return [{
+        tone: 'warn',
+        title: 'Google Ads · sin conversiones',
+        body: 'Invertiste ' + pulsoMoney(cost) + ' en los últimos 7 días sin conversiones registradas.',
+        actLabel: 'Investigar con el agente →',
+        act: () => openAgentAndAsk('google-ads', 'En los últimos 7 días invertí ' + pulsoMoney(cost) + ' en Google Ads sin conversiones registradas. Revisa mi cuenta, encuentra las causas más probables y dime qué corregir primero.'),
+      }];
+    }
+    if (cost > 0) {
+      return [{
+        tone: 'info',
+        title: 'Google Ads · últimos 7 días',
+        body: 'Inversión ' + pulsoMoney(cost) + ' · ' + conv + ' conversiones' + (d.cpa ? ' · CPA ' + pulsoMoney(d.cpa) : ''),
+        actLabel: 'Analizar con el agente →',
+        act: () => openAgentAndAsk('google-ads', 'Analiza el rendimiento de mi cuenta de Google Ads de los últimos 7 días y dame las 3 recomendaciones más importantes para mejorar resultados.'),
+      }];
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function pulsoMetaCards() {
+  const uid = clerkInstance?.user?.id || '';
+  const adAccountId = sessionStorage.getItem('meta_ad_account_id') || '';
+  const token = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
+  if (!uid || !adAccountId || !token) return [];
+  try {
+    const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=last_7d&accessToken=' + encodeURIComponent(token));
+    const d = await r.json();
+    if (!d || d.error) return [];
+    const spend = parseFloat(d.spend) || 0;
+    const conv = parseFloat(d.conversions) || 0;
+    if (spend > 0 && conv === 0) {
+      return [{
+        tone: 'warn',
+        title: 'Meta Ads · sin resultados',
+        body: 'Invertiste ' + pulsoMoney(spend) + ' en los últimos 7 días sin conversiones registradas.',
+        actLabel: 'Investigar con el agente →',
+        act: () => openAgentAndAsk('meta-ads', 'En los últimos 7 días invertí ' + pulsoMoney(spend) + ' en Meta Ads sin conversiones registradas. Revisa mi cuenta, encuentra las causas más probables y dime qué corregir primero.'),
+      }];
+    }
+    if (spend > 0) {
+      return [{
+        tone: 'info',
+        title: 'Meta Ads · últimos 7 días',
+        body: 'Inversión ' + pulsoMoney(spend) + ' · ' + conv + ' resultados' + (d.ctr ? ' · CTR ' + d.ctr + '%' : ''),
+        actLabel: 'Analizar con el agente →',
+        act: () => openAgentAndAsk('meta-ads', 'Analiza el rendimiento de mi cuenta de Meta Ads de los últimos 7 días y dame las 3 recomendaciones más importantes para mejorar resultados.'),
+      }];
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function pulsoCrmCards() {
+  try {
+    if (!clerkInstance?.user?.id) return [];
+    const res = await fetch('/api/leads', { headers: await getAuthHeaders() });
+    if (!res.ok) return [];
+    const leads = (await res.json()).leads || [];
+    if (!leads.length) return [];
+    const now = Date.now();
+    const DAY = 864e5;
+    const closed = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+    const cards = [];
+
+    const stale = leads.filter(l =>
+      !closed.includes((l.stage || '').toLowerCase()) &&
+      (now - new Date(l.updated_at || l.created_at).getTime()) > 3 * DAY
+    );
+    if (stale.length) {
+      const top = stale[0];
+      cards.push({
+        tone: 'warn',
+        title: 'CRM · ' + stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
+        body: 'Sin contacto hace más de 3 días. Incluye a "' + (top.name || '—') + '"' + (top.stage ? ' (etapa ' + top.stage + ')' : '') + '.',
+        actLabel: 'Ver en el CRM →',
+        act: () => showView('crm'),
+      });
+    }
+
+    const fresh = leads.filter(l => (now - new Date(l.created_at).getTime()) < DAY);
+    if (fresh.length) {
+      cards.push({
+        tone: 'good',
+        title: 'CRM · ' + fresh.length + (fresh.length === 1 ? ' lead nuevo' : ' leads nuevos') + ' hoy',
+        body: fresh.slice(0, 2).map(l => l.name).filter(Boolean).join(', ') + (fresh.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
+        actLabel: 'Ver leads →',
+        act: () => showView('crm'),
+      });
+    }
+    return cards;
+  } catch { return []; }
+}
+
+function pulsoStudioCards() {
+  try {
+    const posts = loadStudioPosts();
+    if (!posts.length) return [];
+    return [{
+      tone: 'info',
+      title: 'Social · parrilla activa',
+      body: posts.length + (posts.length === 1 ? ' post' : ' posts') + ' en tu calendario. Revisa qué falta por publicar esta semana.',
+      actLabel: 'Abrir Studio →',
+      act: () => showView('social-studio'),
+    }];
+  } catch { return []; }
+}
+
+async function renderPulso(force) {
+  const sec = document.getElementById('pulso-section');
+  const grid = document.getElementById('pulso-grid');
+  if (!sec || !grid) return;
+  const now = Date.now();
+  if (!force && now - _pulsoLastFetch < 10 * 60 * 1000) return; // fresco: no repetir fetch
+  _pulsoLastFetch = now;
+
+  sec.style.display = 'block';
+  grid.innerHTML = '<div class="pulso-skel"></div><div class="pulso-skel"></div><div class="pulso-skel"></div>';
+
+  // Esperar sesión de Clerk (máx 4s) — necesaria para las APIs
+  if (!clerkInstance?.user?.id) {
+    await new Promise(res => {
+      const iv = setInterval(() => { if (clerkInstance?.user?.id) { clearInterval(iv); res(); } }, 150);
+      setTimeout(() => { clearInterval(iv); res(); }, 4000);
+    });
+  }
+
+  const results = await Promise.allSettled([pulsoGoogleCards(), pulsoMetaCards(), pulsoCrmCards()]);
+  let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+  cards = cards.concat(pulsoStudioCards());
+
+  const hasConn = !!(sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || sessionStorage.getItem('meta_access_token'));
+  if (!cards.length) {
+    if (hasConn) {
+      cards = [{
+        tone: 'good',
+        title: 'Todo en orden',
+        body: 'Tus agentes no detectaron nada urgente hoy. Vuelve mañana o pregunta lo que necesites.',
+        actLabel: 'Hablar con el consultor →',
+        act: () => openAgent('consultor'),
+      }];
+    } else {
+      cards = [{
+        tone: 'info',
+        title: 'Activa tu Pulso diario',
+        body: 'Conecta Google Ads o Meta para que tus agentes vigilen tus campañas y te muestren aquí lo importante cada día.',
+        actLabel: 'Conectar ahora →',
+        act: () => { try { localStorage.removeItem('acuarius_welcome_connect_shown'); } catch {} showWelcomeConnect(); },
+      }];
+    }
+  }
+
+  // Orden: alertas primero, luego oportunidades, luego contexto
+  const toneOrder = { warn: 0, good: 1, info: 2 };
+  cards.sort((a, b) => (toneOrder[a.tone] ?? 3) - (toneOrder[b.tone] ?? 3));
+  _pulsoActions = cards.map(c => c.act);
+
+  const warns = cards.filter(c => c.tone === 'warn').length;
+  const titleEl = document.getElementById('pulso-title-text');
+  if (titleEl) titleEl.textContent = warns > 0
+    ? 'Pulso de hoy — ' + warns + (warns === 1 ? ' cosa necesita tu atención' : ' cosas necesitan tu atención')
+    : 'Pulso de hoy';
+
+  grid.innerHTML = cards.map((c, i) =>
+    '<div class="pulso-card" data-tone="' + c.tone + '">' +
+      '<div class="pulso-card-title">' + esc(c.title) + '</div>' +
+      '<div class="pulso-card-body">' + esc(c.body) + '</div>' +
+      (c.actLabel ? '<button class="pulso-act" onclick="pulsoRun(' + i + ')">' + esc(c.actLabel) + '</button>' : '') +
+    '</div>'
+  ).join('');
 }
