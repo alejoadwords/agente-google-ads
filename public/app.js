@@ -17732,21 +17732,22 @@ function pulsoDayVsAvg(days) {
 }
 
 // Textos de la alerta día-vs-promedio (título, cuerpo y prompt para el agente)
-function pulsoDailyAlertText(anom) {
+function pulsoDailyAlertText(anom, platform) {
+  const plat = platform || 'Google Ads';
   if (anom.kind === 'cpa') return {
     title: 'CPA subió +' + anom.pct + '% ayer',
     body: 'CPA de ayer ' + pulsoMoney(anom.a) + ' vs ' + pulsoMoney(anom.b) + ' de promedio en los 7 días previos.',
-    prompt: 'Ayer mi CPA en Google Ads fue ' + pulsoMoney(anom.a) + ', un ' + anom.pct + '% más alto que el promedio de los 7 días previos (' + pulsoMoney(anom.b) + '). Investiga en mi cuenta qué lo causó (campañas, términos, pujas, presupuesto) y dime qué corregir hoy.',
+    prompt: 'Ayer mi CPA en ' + plat + ' fue ' + pulsoMoney(anom.a) + ', un ' + anom.pct + '% más alto que el promedio de los 7 días previos (' + pulsoMoney(anom.b) + '). Investiga en mi cuenta qué lo causó (campañas, audiencias, pujas, presupuesto) y dime qué corregir hoy.',
   };
   if (anom.kind === 'convDrop') return {
     title: 'Conversiones cayeron −' + anom.pct + '% ayer',
     body: 'Ayer ' + Math.round(anom.a) + ' conversiones vs ' + anom.b.toFixed(1) + ' de promedio diario, con inversión similar.',
-    prompt: 'Ayer mis conversiones en Google Ads cayeron un ' + anom.pct + '% frente al promedio de los 7 días previos, con inversión similar. Investiga en mi cuenta qué pasó y dime qué revisar primero.',
+    prompt: 'Ayer mis conversiones en ' + plat + ' cayeron un ' + anom.pct + '% frente al promedio de los 7 días previos, con inversión similar. Investiga en mi cuenta qué pasó y dime qué revisar primero.',
   };
   return {
     title: 'Inversión disparada +' + anom.pct + '% ayer',
     body: 'Ayer gastó ' + pulsoMoney(anom.a) + ' vs ' + pulsoMoney(anom.b) + ' de promedio diario.',
-    prompt: 'Ayer mi inversión en Google Ads fue ' + pulsoMoney(anom.a) + ', un ' + anom.pct + '% sobre el promedio diario de la última semana (' + pulsoMoney(anom.b) + '). Revisa mi cuenta y dime qué campaña o cambio lo explica, y si debo intervenir.',
+    prompt: 'Ayer mi inversión en ' + plat + ' fue ' + pulsoMoney(anom.a) + ', un ' + anom.pct + '% sobre el promedio diario de la última semana (' + pulsoMoney(anom.b) + '). Revisa mi cuenta y dime qué campaña o cambio lo explica, y si debo intervenir.',
   };
 }
 
@@ -17804,30 +17805,45 @@ async function pulsoMetaCards() {
   const token = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
   if (!uid || !adAccountId || !token) return [];
   try {
-    const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=last_7d&accessToken=' + encodeURIComponent(token));
-    const d = await r.json();
+    const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&accessToken=' + encodeURIComponent(token);
+    const [d, series] = await Promise.all([
+      fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
+      fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
+    ]);
     if (!d || d.error) return [];
+    const cards = [];
+    // Alerta día-vs-promedio (ayer vs 7 días previos)
+    const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
+    if (anom) {
+      const t = pulsoDailyAlertText(anom, 'Meta Ads');
+      cards.push({
+        tone: 'warn',
+        title: 'Meta Ads · ' + t.title,
+        body: t.body,
+        actLabel: 'Investigar con el agente →',
+        act: () => openAgentAndAsk('meta-ads', t.prompt),
+      });
+    }
     const spend = parseFloat(d.spend) || 0;
     const conv = parseFloat(d.conversions) || 0;
     if (spend > 0 && conv === 0) {
-      return [{
+      cards.push({
         tone: 'warn',
         title: 'Meta Ads · sin resultados',
         body: 'Invertiste ' + pulsoMoney(spend) + ' en los últimos 7 días sin conversiones registradas.',
         actLabel: 'Investigar con el agente →',
         act: () => openAgentAndAsk('meta-ads', 'En los últimos 7 días invertí ' + pulsoMoney(spend) + ' en Meta Ads sin conversiones registradas. Revisa mi cuenta, encuentra las causas más probables y dime qué corregir primero.'),
-      }];
-    }
-    if (spend > 0) {
-      return [{
+      });
+    } else if (spend > 0 && !anom) {
+      cards.push({
         tone: 'info',
         title: 'Meta Ads · últimos 7 días',
         body: 'Inversión ' + pulsoMoney(spend) + ' · ' + conv + ' resultados' + (d.ctr ? ' · CTR ' + d.ctr + '%' : ''),
         actLabel: 'Analizar con el agente →',
         act: () => openAgentAndAsk('meta-ads', 'Analiza el rendimiento de mi cuenta de Meta Ads de los últimos 7 días y dame las 3 recomendaciones más importantes para mejorar resultados.'),
-      }];
+      });
     }
-    return [];
+    return cards;
   } catch { return []; }
 }
 
@@ -17964,6 +17980,14 @@ let _pulsoAgencyActions = [];
 let _pulsoHealthMap = {};    // clientId → 'verde'|'amarillo'|'rojo' según datos de ads
 let _pulsoLeadsCache = [];   // leads del último fetch del Pulso (para salud por cliente)
 
+// Los collectors (Google y Meta) corren en paralelo: fusionar quedándose
+// siempre con el estado más grave para no pisarse entre plataformas
+function pulsoMergeHealth(clientId, health) {
+  const rank = { rojo: 3, amarillo: 2, verde: 1 };
+  const cur = _pulsoHealthMap[clientId];
+  if (!cur || (rank[health] || 0) > (rank[cur] || 0)) _pulsoHealthMap[clientId] = health;
+}
+
 // Semáforo automático del panel: la salud de cada cliente se deriva de los
 // datos reales del Pulso en vez de asignarse a mano.
 function pulsoApplyHealth() {
@@ -18033,7 +18057,6 @@ async function pulsoAgencyAdsCards() {
   }));
   const cards = [];
   let totSpend = 0, totConv = 0, okCount = 0;
-  _pulsoHealthMap = {};
   results.forEach(res => {
     if (res.status !== 'fulfilled') return;
     const { c, d, series } = res.value;
@@ -18042,13 +18065,13 @@ async function pulsoAgencyAdsCards() {
     const conv = parseFloat(d.conversions) || 0;
     // Semáforo automático: rojo = gasta sin convertir, verde = convierte,
     // amarillo = cuenta conectada sin inversión activa
-    _pulsoHealthMap[c.id] = (cost > 0 && conv === 0) ? 'rojo' : (cost > 0 ? 'verde' : 'amarillo');
+    pulsoMergeHealth(c.id, (cost > 0 && conv === 0) ? 'rojo' : (cost > 0 ? 'verde' : 'amarillo'));
     if (cost > 0) { okCount++; totSpend += cost; totConv += conv; }
     // Alerta día-vs-promedio del cliente (ayer vs 7 días previos)
     const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
     if (anom) {
       const t = pulsoDailyAlertText(anom);
-      if (_pulsoHealthMap[c.id] === 'verde') _pulsoHealthMap[c.id] = 'amarillo';
+      pulsoMergeHealth(c.id, 'amarillo');
       cards.push({
         tone: 'warn',
         title: (c.name || 'Cliente') + ' · ' + t.title,
@@ -18079,6 +18102,55 @@ async function pulsoAgencyAdsCards() {
   return cards;
 }
 
+async function pulsoAgencyMetaCards() {
+  const uid = clerkInstance?.user?.id || '';
+  if (!uid) return [];
+  const connected = (agencyClients || []).filter(c => c.metaAdAccountId).slice(0, 10);
+  if (!connected.length) return [];
+  const mToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
+  if (!mToken) return [];
+  const results = await Promise.allSettled(connected.map(async c => {
+    const acctId = String(c.metaAdAccountId).startsWith('act_') ? c.metaAdAccountId : 'act_' + c.metaAdAccountId;
+    const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(acctId) + '&accessToken=' + encodeURIComponent(mToken);
+    const [d, series] = await Promise.all([
+      fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
+      fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
+    ]);
+    return { c, d, series };
+  }));
+  const cards = [];
+  results.forEach(res => {
+    if (res.status !== 'fulfilled') return;
+    const { c, d, series } = res.value;
+    if (!d || d.error) return;
+    const spend = parseFloat(d.spend) || 0;
+    const conv = parseFloat(d.conversions) || 0;
+    pulsoMergeHealth(c.id, (spend > 0 && conv === 0) ? 'rojo' : (spend > 0 ? 'verde' : 'amarillo'));
+    const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
+    if (anom) {
+      const t = pulsoDailyAlertText(anom, 'Meta Ads');
+      pulsoMergeHealth(c.id, 'amarillo');
+      cards.push({
+        tone: 'warn',
+        title: (c.name || 'Cliente') + ' · Meta · ' + t.title,
+        body: t.body,
+        actLabel: 'Investigar →',
+        act: () => pulsoOpenClientAgent(c.id, 'meta-ads', 'Sobre la cuenta de Meta Ads de este cliente: ' + t.prompt),
+      });
+    }
+    if (spend > 0 && conv === 0) {
+      cards.push({
+        tone: 'warn',
+        title: (c.name || 'Cliente') + ' · Meta · sin resultados',
+        body: 'Invirtió ' + pulsoMoney(spend) + ' en Meta Ads en los últimos 7 días sin conversiones registradas.',
+        actLabel: 'Investigar →',
+        act: () => pulsoOpenClientAgent(c.id, 'meta-ads', 'En los últimos 7 días este cliente invirtió ' + pulsoMoney(spend) + ' en Meta Ads sin conversiones registradas. Revisa la cuenta, encuentra las causas más probables y dime qué corregir primero.'),
+      });
+    }
+  });
+  return cards;
+}
+
 async function renderPulsoAgency(force) {
   const sec = document.getElementById('pulso-agency-section');
   const grid = document.getElementById('pulso-agency-grid');
@@ -18098,17 +18170,18 @@ async function renderPulsoAgency(force) {
     });
   }
 
-  const results = await Promise.allSettled([pulsoAgencyAdsCards(), pulsoCrmCards()]);
+  _pulsoHealthMap = {}; // se reconstruye con lo que reporten los collectors
+  const results = await Promise.allSettled([pulsoAgencyAdsCards(), pulsoAgencyMetaCards(), pulsoCrmCards()]);
   let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
 
   // Actualizar el semáforo de salud del panel con los datos recién obtenidos
   pulsoApplyHealth();
 
   if (!cards.length) {
-    const anyConnected = (agencyClients || []).some(c => c.googleCustomerId);
+    const anyConnected = (agencyClients || []).some(c => c.googleCustomerId || c.metaAdAccountId);
     cards = anyConnected
       ? [{ tone: 'good', title: 'Cartera en orden', body: 'Tus agentes no detectaron nada urgente en tus clientes hoy.', actLabel: 'Reportes en Vivo →', act: () => dashboardOpen() }]
-      : [{ tone: 'info', title: 'Activa el Pulso de tu cartera', body: 'Vincula la cuenta de Google Ads de cada cliente (editar cliente → cuenta publicitaria) para ver aquí alertas diarias de toda tu cartera.' }];
+      : [{ tone: 'info', title: 'Activa el Pulso de tu cartera', body: 'Vincula la cuenta de Google Ads o Meta de cada cliente (editar cliente → cuenta publicitaria) para ver aquí alertas diarias de toda tu cartera.' }];
   }
 
   const toneOrder = { warn: 0, good: 1, info: 2 };

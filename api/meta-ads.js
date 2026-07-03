@@ -209,6 +209,28 @@ export default async function handler(req, res) {
       });
     }
 
+    // ── get-daily-series ─────────────────────────────────────
+    // Métricas por día (para alertas día-vs-promedio del Pulso)
+    if (action === 'get-daily-series') {
+      const data = await metaGet(`${adAccountId}/insights`, {
+        fields: 'spend,actions,clicks,impressions',
+        date_preset: datePreset,
+        level: 'account',
+        time_increment: 1,
+      }, token);
+      const days = (data.data || []).map(d => {
+        const conversions = parseActions(d.actions, 'lead') || parseActions(d.actions, 'purchase') || parseActions(d.actions, 'offsite_conversion.fb_pixel_purchase');
+        return {
+          date:        d.date_start,
+          cost:        parseFloat(d.spend || 0),
+          conversions: Math.round(conversions * 10) / 10,
+          clicks:      parseInt(d.clicks || 0),
+          impressions: parseInt(d.impressions || 0),
+        };
+      }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      return res.json({ days });
+    }
+
     // ── get-campaigns ────────────────────────────────────────
     if (action === 'get-campaigns') {
       const data = await metaGet(`${adAccountId}/campaigns`, {
