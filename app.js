@@ -17770,6 +17770,7 @@ async function pulsoCrmCards() {
     const res = await fetch('/api/leads', { headers: await getAuthHeaders() });
     if (!res.ok) return [];
     const leads = (await res.json()).leads || [];
+    _pulsoLeadsCache = leads; // usado por pulsoApplyHealth (leads fríos por cliente)
     if (!leads.length) return [];
     const now = Date.now();
     const DAY = 864e5;
@@ -17893,6 +17894,39 @@ function pulsoCardsHtml(cards, runFn) {
 // ahí y agrega los datos de toda la cartera.
 let _pulsoAgencyLastFetch = 0;
 let _pulsoAgencyActions = [];
+let _pulsoHealthMap = {};    // clientId → 'verde'|'amarillo'|'rojo' según datos de ads
+let _pulsoLeadsCache = [];   // leads del último fetch del Pulso (para salud por cliente)
+
+// Semáforo automático del panel: la salud de cada cliente se deriva de los
+// datos reales del Pulso en vez de asignarse a mano.
+function pulsoApplyHealth() {
+  if (!Array.isArray(agencyClients) || !agencyClients.length) return;
+  const now = Date.now();
+  const closed = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+  let changed = false;
+  agencyClients.forEach(c => {
+    let health = _pulsoHealthMap[c.id] || null;
+    // Leads fríos del cliente → al menos amarillo (rojo se mantiene)
+    if (health !== 'rojo') {
+      const hasStale = _pulsoLeadsCache.some(l =>
+        l.client_id === c.id &&
+        !closed.includes((l.stage || '').toLowerCase()) &&
+        (now - new Date(l.updated_at || l.created_at).getTime()) > 3 * 864e5
+      );
+      if (hasStale) health = 'amarillo';
+    }
+    // Sin datos de este cliente → no tocar su valor manual
+    if (health && c.health !== health) {
+      c.health = health;
+      c.updatedAt = new Date().toISOString();
+      changed = true;
+    }
+  });
+  if (changed) {
+    try { agencyPersist(); } catch {}
+    try { agencyRender(); } catch {}
+  }
+}
 
 function pulsoAgencyRun(i) {
   const fn = _pulsoAgencyActions[i];
@@ -17928,12 +17962,16 @@ async function pulsoAgencyAdsCards() {
   }));
   const cards = [];
   let totSpend = 0, totConv = 0, okCount = 0;
+  _pulsoHealthMap = {};
   results.forEach(res => {
     if (res.status !== 'fulfilled') return;
     const { c, d } = res.value;
     if (!d || d.error) return;
     const cost = parseFloat(d.totalCost) || 0;
     const conv = parseFloat(d.conversions) || 0;
+    // Semáforo automático: rojo = gasta sin convertir, verde = convierte,
+    // amarillo = cuenta conectada sin inversión activa
+    _pulsoHealthMap[c.id] = (cost > 0 && conv === 0) ? 'rojo' : (cost > 0 ? 'verde' : 'amarillo');
     if (cost > 0) { okCount++; totSpend += cost; totConv += conv; }
     if (cost > 0 && conv === 0) {
       cards.push({
@@ -17978,6 +18016,9 @@ async function renderPulsoAgency(force) {
 
   const results = await Promise.allSettled([pulsoAgencyAdsCards(), pulsoCrmCards()]);
   let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+
+  // Actualizar el semáforo de salud del panel con los datos recién obtenidos
+  pulsoApplyHealth();
 
   if (!cards.length) {
     const anyConnected = (agencyClients || []).some(c => c.googleCustomerId);
