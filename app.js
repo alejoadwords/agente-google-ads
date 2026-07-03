@@ -4354,8 +4354,13 @@ window.onload = async () => {
   setTimeout(function(){ updateHistorialBadge(); }, 2000);
   // Restaurar conexiones desde Supabase si no hay token en sessionStorage
   setTimeout(function(){ restoreConnectionsFromSupabase(); }, 2500);
+  // Renovar tokens automáticamente (Google 1h / Meta 60 días) — conexión estable
+  setTimeout(function(){ ensureFreshTokens(); }, 3200);
   // Refrescar el Pulso una vez restauradas las conexiones (fuerza re-fetch)
-  setTimeout(function(){ if (document.getElementById('view-home')?.classList.contains('active')) renderPulso(true); }, 5500);
+  setTimeout(function(){
+    if (document.getElementById('view-home')?.classList.contains('active')) renderPulso(true);
+    if (document.getElementById('view-agency')?.classList.contains('active')) renderPulsoAgency(true);
+  }, 5500);
   // Mostrar botón Leads (disponible para todos los usuarios autenticados)
   setTimeout(function(){ const b = document.getElementById('sb-leads-btn'); if(b) b.style.display = 'block'; }, 500);
   // Inicializar alertas
@@ -18297,3 +18302,34 @@ function toggleTheme() {
     if (localStorage.getItem('acuarius_theme') === 'dark') applyTheme('dark');
   } catch {}
 })();
+
+// ── CONEXIONES ESTABLES — renovación automática de tokens ─────────────────────
+// El usuario conecta UNA vez; a partir de ahí los tokens se renuevan solos:
+// - Google: access_token dura 1h → se refresca con el refresh_token de Supabase
+//   en cada visita (y el backend también auto-refresca en 401 durante el uso).
+// - Meta: long-lived token dura 60 días → se re-intercambia cuando quedan <45,
+//   reiniciando el reloj. Con una visita cada 2 meses, nunca expira.
+async function ensureFreshTokens() {
+  const uid = clerkInstance?.user?.id;
+  if (!uid) return;
+  // Google Ads
+  try {
+    const g = await fetch('/api/refresh-google-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: uid }),
+    }).then(r => r.json());
+    if (g && g.access_token) {
+      sessionStorage.setItem('ads_access_token', g.access_token);
+      localStorage.setItem('ads_access_token_persist', g.access_token);
+    }
+  } catch {}
+  // Meta Ads
+  try {
+    const m = await fetch('/api/refresh-meta-token?userId=' + encodeURIComponent(uid)).then(r => r.json());
+    if (m && m.access_token) {
+      sessionStorage.setItem('meta_access_token', m.access_token);
+      localStorage.setItem('meta_access_token_persist', m.access_token);
+    }
+  } catch {}
+}
