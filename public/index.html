@@ -117,6 +117,52 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @keyframes pulsoShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.pulso-dot,.pulso-skel{animation:none}}
 
+/* ── Proyecto SEO ── */
+#view-seo-project{overflow-y:auto}
+.seop-wrap{max-width:1100px;margin:0 auto;padding:26px 28px 40px;width:100%}
+.seop-setup-card{max-width:540px;margin:36px auto;background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:var(--shadow-md)}
+.seop-field{margin-bottom:14px}
+.seop-label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;display:block}
+.seop-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:var(--font);background:var(--bg);color:var(--text);box-sizing:border-box}
+.seop-input:focus{outline:none;border-color:var(--blue-md)}
+textarea.seop-input{resize:vertical;min-height:70px}
+.seop-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.seop-title{font-size:20px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
+.seop-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.seop-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid var(--border);background:var(--bg);color:var(--text-2);transition:all .15s var(--ease)}
+.seop-btn:hover{background:var(--bg-subtle)}
+.seop-btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.seop-btn.primary:hover{background:var(--blue-h)}
+.seop-btn:disabled{opacity:.55;cursor:default}
+.seop-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.seop-stat{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px 16px}
+.seop-stat-val{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}
+.seop-stat-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.seop-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
+.seop-tab{padding:9px 15px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;font-family:var(--font);background:none;white-space:nowrap}
+.seop-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.seop-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.seop-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+.seop-table th{text-align:left;padding:10px 14px;background:var(--bg-subtle);font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border)}
+.seop-table td{padding:10px 14px;border-bottom:1px solid var(--border2);font-variant-numeric:tabular-nums;color:var(--text-2)}
+.seop-table tr:last-child td{border-bottom:none}
+.seop-table td:first-child{font-weight:600;color:var(--text)}
+.seop-pos{font-weight:800;color:var(--text)}
+.seop-delta{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:12px;white-space:nowrap}
+.seop-delta.up{background:#E7F7F0;color:#047857}
+.seop-delta.down{background:#FDECEC;color:#DC2626}
+.seop-delta.same{background:var(--bg-muted);color:var(--muted)}
+.seop-empty{padding:38px 20px;text-align:center;color:var(--muted);font-size:13px}
+.seop-row-btn{background:none;border:none;cursor:pointer;font-size:13px;padding:3px 6px;border-radius:6px;color:var(--muted2)}
+.seop-row-btn:hover{background:var(--bg-muted);color:var(--text)}
+.seop-check{display:flex;align-items:flex-start;gap:10px;padding:10px 13px;border:1px solid var(--border);border-radius:10px;margin-bottom:7px;background:var(--bg);font-size:13px}
+.seop-check input{margin-top:2px;cursor:pointer}
+.seop-check.done .seop-check-text{text-decoration:line-through;color:var(--muted2)}
+.seop-addbar{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.seop-addbar .seop-input{flex:1;min-width:220px}
+[data-theme="dark"] .seop-delta.up{background:rgba(16,185,129,.15)}
+[data-theme="dark"] .seop-delta.down{background:rgba(239,68,68,.15)}
+
 /* ── Lienzo — workspace dividido chat + resultado ── */
 .lienzo-panel{position:fixed;top:0;right:0;width:620px;max-width:100vw;height:100vh;background:var(--bg);border-left:1px solid var(--border);z-index:180;transform:translateX(100%);transition:transform .3s var(--ease);display:flex;flex-direction:column}
 .lienzo-panel.open{transform:translateX(0);box-shadow:-12px 0 40px rgba(13,15,28,.10)}
@@ -3469,6 +3515,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
   </div>
 
   <!-- CRM / LEADS VIEW -->
+  <!-- SEO PROJECT VIEW -->
+  <div class="view" id="view-seo-project">
+    <div class="seop-wrap">
+      <div id="seop-setup" style="display:none"></div>
+      <div id="seop-main" style="display:none"></div>
+    </div>
+  </div>
+
   <div class="view" id="view-crm">
   <div class="crm-wrap">
     <div class="crm-toolbar">

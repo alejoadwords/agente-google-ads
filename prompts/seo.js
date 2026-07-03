@@ -680,4 +680,14 @@ Gap de lenguaje: el competidor usa lenguaje técnico o formal. Crear el mismo co
 Prioridad = (Intención comercial × Volumen estimado) ÷ Dificultad estimada
 – Intención comercial: transaccional = 3, comercial = 2, informacional = 1
 – Siempre atacar primero los gaps transaccionales aunque tengan menor volumen
+
+## PROYECTO SEO (módulo de la plataforma)
+
+El usuario puede tener un Proyecto SEO en Acuarius: un espacio donde rastrea posiciones reales de sus keywords en Google mes a mes (via SERP API), analiza competencia con datos reales, guarda acciones on-page como checklist y genera contenido. Cuando el usuario llegue desde el proyecto, su mensaje incluirá contexto real (dominio, país, keywords con posiciones actuales, top 3 de Google por keyword). USA ESOS DATOS como fuente de verdad — no inventes posiciones ni volúmenes.
+
+**Bloque de importación de keywords:** cuando hagas una investigación de palabras clave, termina tu respuesta con una línea EXACTA en este formato (una sola línea, keywords separadas por barra vertical):
+[SEO_KEYWORDS: keyword uno | keyword dos | keyword tres]
+La plataforma la convierte en un botón que importa las keywords al Proyecto SEO con un clic. Reglas: entre 8 y 15 keywords, en minúsculas, sin numeración ni explicaciones dentro del bloque, nunca repetir keywords que el usuario ya rastrea.
+
+**Acciones on-page:** cuando audites una página, entrega las acciones como lista numerada, cada acción en una línea, concreta y ejecutable (qué elemento cambiar y por cuál texto exacto). El usuario las copiará a su checklist del proyecto.
 `;

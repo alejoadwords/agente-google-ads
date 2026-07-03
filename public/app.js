@@ -3510,7 +3510,12 @@ function showSeoActionCards() {
     { icon: '🤖', titulo: 'Optimización para IAs (AEO)', desc: 'Cómo aparecer cuando alguien le pregunta a ChatGPT o Gemini sobre tu industria.', prompt: 'Explícame cómo optimizar mi sitio para que aparezca en las respuestas de IAs como ChatGPT, Claude y Gemini' },
     { icon: '🔎', titulo: 'Analizar competencia', desc: 'Quién aparece antes que tú y qué mensajes están usando.', prompt: 'Haz un análisis de competencia para mi negocio en los resultados de búsqueda' },
   ];
-  var cards = pasos.map(function(p) {
+  var seoProjectCard = '<div class="next-step-card" style="border-color:var(--blue-md);background:var(--blue-lt)" onclick="openSeoProject()">' +
+    '<div class="next-step-icon">📈</div>' +
+    '<div class="next-step-title">Proyecto SEO</div>' +
+    '<div class="next-step-desc">Posiciones reales mes a mes, competencia, acciones on-page y contenido.</div>' +
+  '</div>';
+  var cards = seoProjectCard + pasos.map(function(p) {
     return '<div class="next-step-card" onclick="this.closest(\'.msg\').style.display=\'none\';qSend(\'' + p.prompt.replace(/'/g,"\\'") + '\')">' +
       '<div class="next-step-icon">' + p.icon + '</div>' +
       '<div class="next-step-title">' + p.titulo + '</div>' +
@@ -10050,6 +10055,18 @@ function addAgent(txt){
   const el=document.createElement('div');
   el.className='msg';
   const msgId='msg_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  // Interceptar bloque [SEO_KEYWORDS: kw1 | kw2] → botón de importación al Proyecto SEO
+  let seoKwBtn='';
+  const seoKwMatch=txt.match(/\[SEO_KEYWORDS:\s*([^\]]+)\]/);
+  if(seoKwMatch){
+    const kwList=seoKwMatch[1].split('|').map(s=>s.trim()).filter(Boolean);
+    if(kwList.length){
+      txt=txt.replace(seoKwMatch[0],'').trim();
+      window._seoKwImports=window._seoKwImports||{};
+      window._seoKwImports[msgId]=kwList;
+      seoKwBtn='<br><button class="lienzo-open-chip" onclick="seoImportKeywords(\''+msgId+'\')">➕ Añadir '+kwList.length+' keywords al Proyecto SEO</button>';
+    }
+  }
   const isLong=txt.length>400;
   // ¿El contenido merece abrirse en el lienzo? ('table' = auto-abre, 'doc' = botón)
   const lienzoKind=(typeof lienzoWorthy==='function')?lienzoWorthy(txt):null;
@@ -10062,9 +10079,9 @@ function addAgent(txt){
   if(compactToLienzo){
     const firstTableIdx=txt.search(/^\|.*\|$/m);
     const preview=(firstTableIdx>0?txt.slice(0,firstTableIdx):'').trim();
-    bubbleHtml=(preview?fmt(preview):'<span style="color:var(--muted)">He preparado el resultado.</span>')+lienzoChip;
+    bubbleHtml=(preview?fmt(preview):'<span style="color:var(--muted)">He preparado el resultado.</span>')+lienzoChip+seoKwBtn;
   } else {
-    bubbleHtml=fmt(txt)+lienzoChip+pdfBtn;
+    bubbleHtml=fmt(txt)+lienzoChip+seoKwBtn+pdfBtn;
   }
   el.innerHTML=`<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="bubble ag-bubble">${bubbleHtml}</div>`;
   if(isLong||lienzoKind){window._agentMsgs=window._agentMsgs||{};window._agentMsgs[msgId]=txt;}
@@ -17504,6 +17521,7 @@ function cmdkCommands() {
     { group: 'Ir a', icon: '📋', label: 'CRM de leads',                    kw: 'crm leads pipeline kanban clientes', run: () => showView('crm') },
     { group: 'Ir a', icon: '💬', label: 'Inbox (WhatsApp y Meta)',         kw: 'inbox whatsapp mensajes chat',  run: () => { showView('crm'); setTimeout(() => crmSetView('inbox'), 100); } },
     { group: 'Ir a', icon: '🎨', label: 'Social Media Studio',             kw: 'studio imagenes parrilla calendario', run: () => showView('social-studio') },
+    { group: 'Ir a', icon: '📈', label: 'Proyecto SEO',                    kw: 'seo proyecto keywords posiciones ranking', run: () => openSeoProject() },
     { group: 'Ir a', icon: '🎓', label: 'Academia Acuarius',               kw: 'academia cursos videos tutoriales', run: () => openAcademia() },
     { group: 'Ir a', icon: '🗺️', label: 'Roadmap',                         kw: 'roadmap progreso etapas',       run: () => showView('roadmap') },
     { group: 'Ir a', icon: '🏢', label: 'Panel de agencia',                kw: 'agencia clientes panel',        run: () => showView('agency') },
@@ -18332,4 +18350,403 @@ async function ensureFreshTokens() {
       localStorage.setItem('meta_access_token_persist', m.access_token);
     }
   } catch {}
+}
+
+// ── PROYECTO SEO ──────────────────────────────────────────────────────────────
+// Proyecto persistente por cliente: seguimiento mensual de posiciones (SERP API),
+// investigación de keywords, competencia, on-page con acciones y contenido.
+let seoProject = null;
+let seoProjectScope = undefined; // clientId con el que se cargó (invalidar al cambiar)
+let seoTab = 'keywords';
+const SEO_COUNTRIES = [['co','Colombia'],['mx','México'],['ar','Argentina'],['cl','Chile'],['pe','Perú'],['ec','Ecuador'],['us','Estados Unidos'],['es','España']];
+
+function seoMonthKey(d) { const x = d || new Date(); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); }
+function seoPrevMonthKey() { const d = new Date(); d.setMonth(d.getMonth() - 1); return seoMonthKey(d); }
+function seoCountryName(code) { const c = SEO_COUNTRIES.find(x => x[0] === code); return c ? c[1] : code; }
+
+async function openSeoProject() {
+  showView('seo-project');
+  const scope = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  if (seoProjectScope !== scope) { seoProject = null; seoProjectScope = scope; }
+  if (!seoProject) {
+    const p = await dbLoadProfile('seo-project');
+    if (p && p.domain) seoProject = p;
+  }
+  seoRenderProject();
+  // Chequeo mensual automático: si el mes cambió desde la última consulta, actualizar
+  if (seoProject && seoProject.keywords?.length) {
+    const lastMonth = seoProject.lastCheck ? seoMonthKey(new Date(seoProject.lastCheck)) : null;
+    if (lastMonth && lastMonth !== seoMonthKey()) seoUpdatePositions(true);
+  }
+}
+
+async function seoSaveProject() {
+  if (!seoProject) return;
+  seoProject.updatedAt = Date.now();
+  try { await dbSaveProfile('seo-project', seoProject); } catch (e) { console.warn('seoSaveProject:', e); }
+}
+
+// ── Setup ──
+function seoRenderSetup(editing) {
+  const setup = document.getElementById('seop-setup');
+  const main = document.getElementById('seop-main');
+  if (!setup) return;
+  main.style.display = 'none';
+  setup.style.display = 'block';
+  const p = editing && seoProject ? seoProject : { domain: '', country: 'co', competitors: [], keywords: [] };
+  setup.innerHTML =
+    '<div class="seop-setup-card">' +
+      '<div style="width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#059669,#00B8CE);display:flex;align-items:center;justify-content:center;margin-bottom:16px">' +
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+      '</div>' +
+      '<h2 style="font-size:19px;font-weight:800;margin:0 0 6px">' + (editing ? 'Editar proyecto SEO' : 'Crea tu proyecto SEO') + '</h2>' +
+      '<p style="font-size:13px;color:var(--muted);margin:0 0 20px;line-height:1.55">Seguimiento mensual de posiciones reales en Google, competencia, acciones on-page y contenido — todo con tu agente SEO.</p>' +
+      '<div class="seop-field"><label class="seop-label">Dominio del sitio</label><input class="seop-input" id="seop-f-domain" type="text" placeholder="ejemplo.com" value="' + esc(p.domain || '') + '"></div>' +
+      '<div class="seop-field"><label class="seop-label">País / mercado</label><select class="seop-input" id="seop-f-country">' +
+        SEO_COUNTRIES.map(c => '<option value="' + c[0] + '"' + (p.country === c[0] ? ' selected' : '') + '>' + c[1] + '</option>').join('') +
+      '</select></div>' +
+      '<div class="seop-field"><label class="seop-label">Competidores (dominios, uno por línea — opcional)</label><textarea class="seop-input" id="seop-f-competitors" placeholder="competidor1.com&#10;competidor2.com">' + esc((p.competitors || []).join('\n')) + '</textarea></div>' +
+      (!editing ? '<div class="seop-field"><label class="seop-label">Keywords iniciales (una por línea — opcional)</label><textarea class="seop-input" id="seop-f-keywords" placeholder="agencia de marketing bogotá&#10;marketing digital para pymes"></textarea></div>' : '') +
+      '<button class="seop-btn primary" style="width:100%;justify-content:center;padding:12px" onclick="seoCreateProject(' + (editing ? 'true' : 'false') + ')">' + (editing ? 'Guardar cambios' : 'Crear proyecto →') + '</button>' +
+      (editing ? '<button class="seop-btn" style="width:100%;justify-content:center;margin-top:8px" onclick="seoRenderProject()">Cancelar</button>' : '') +
+    '</div>';
+}
+
+async function seoCreateProject(editing) {
+  const domain = (document.getElementById('seop-f-domain')?.value || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+  if (!domain || !domain.includes('.')) { alert('Ingresa un dominio válido, ej: ejemplo.com'); return; }
+  const country = document.getElementById('seop-f-country')?.value || 'co';
+  const competitors = (document.getElementById('seop-f-competitors')?.value || '').split('\n').map(s => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]).filter(s => s.includes('.')).slice(0, 5);
+  if (editing && seoProject) {
+    seoProject.domain = domain; seoProject.country = country; seoProject.competitors = competitors;
+  } else {
+    const kwText = document.getElementById('seop-f-keywords')?.value || '';
+    const kws = kwText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 50);
+    seoProject = {
+      domain, country, competitors,
+      keywords: kws.map(kw => ({ kw, addedAt: Date.now(), history: {} })),
+      actions: [], createdAt: Date.now(),
+    };
+  }
+  await seoSaveProject();
+  seoRenderProject();
+  if (!editing && seoProject.keywords.length) seoUpdatePositions();
+}
+
+// ── Render principal ──
+function seoRenderProject() {
+  const setup = document.getElementById('seop-setup');
+  const main = document.getElementById('seop-main');
+  if (!main) return;
+  if (!seoProject) { seoRenderSetup(false); return; }
+  setup.style.display = 'none';
+  main.style.display = 'block';
+
+  const m = seoMonthKey(), pm = seoPrevMonthKey();
+  const kws = seoProject.keywords || [];
+  const withPos = kws.filter(k => k.history?.[m]?.pos);
+  const avgPos = withPos.length ? (withPos.reduce((s, k) => s + k.history[m].pos, 0) / withPos.length) : null;
+  const top10 = withPos.filter(k => k.history[m].pos <= 10).length;
+  let ups = 0, downs = 0;
+  kws.forEach(k => {
+    const cur = k.history?.[m]?.pos, prev = k.history?.[pm]?.pos;
+    if (cur && prev) { if (cur < prev) ups++; else if (cur > prev) downs++; }
+  });
+  const lastCheckStr = seoProject.lastCheck ? new Date(seoProject.lastCheck).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : 'nunca';
+
+  main.innerHTML =
+    '<div class="seop-topbar">' +
+      '<div>' +
+        '<div class="seop-title">📈 ' + esc(seoProject.domain) + '</div>' +
+        '<div class="seop-sub">SEO en ' + esc(seoCountryName(seoProject.country)) + ' · ' + kws.length + ' keywords · última consulta: ' + lastCheckStr + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="seop-btn" onclick="seoRenderSetup(true)">⚙ Editar</button>' +
+        '<button class="seop-btn" onclick="openAgent(\'seo\')">💬 Hablar con el agente</button>' +
+        '<button class="seop-btn primary" id="seop-refresh-btn" onclick="seoUpdatePositions()">🔄 Actualizar posiciones</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="seop-stats">' +
+      '<div class="seop-stat"><div class="seop-stat-val">' + kws.length + '</div><div class="seop-stat-lbl">keywords rastreadas</div></div>' +
+      '<div class="seop-stat"><div class="seop-stat-val">' + (avgPos ? avgPos.toFixed(1) : '—') + '</div><div class="seop-stat-lbl">posición promedio</div></div>' +
+      '<div class="seop-stat"><div class="seop-stat-val">' + top10 + '</div><div class="seop-stat-lbl">en top 10</div></div>' +
+      '<div class="seop-stat"><div class="seop-stat-val" style="color:#047857">↑ ' + ups + '</div><div class="seop-stat-lbl">subieron este mes</div></div>' +
+      '<div class="seop-stat"><div class="seop-stat-val" style="color:#DC2626">↓ ' + downs + '</div><div class="seop-stat-lbl">bajaron este mes</div></div>' +
+    '</div>' +
+    '<div class="seop-tabs">' +
+      ['keywords|Keywords', 'competencia|Competencia', 'onpage|On-page y acciones', 'contenido|Contenido'].map(t => {
+        const [key, label] = t.split('|');
+        return '<button class="seop-tab' + (seoTab === key ? ' active' : '') + '" onclick="seoTab=\'' + key + '\';seoRenderProject()">' + label + '</button>';
+      }).join('') +
+    '</div>' +
+    '<div id="seop-tab-content"></div>';
+
+  const content = document.getElementById('seop-tab-content');
+  if (seoTab === 'keywords') content.innerHTML = seoRenderKeywordsTab();
+  else if (seoTab === 'competencia') content.innerHTML = seoRenderCompetenciaTab();
+  else if (seoTab === 'onpage') content.innerHTML = seoRenderOnpageTab();
+  else content.innerHTML = seoRenderContenidoTab();
+}
+
+// ── Tab: Keywords ──
+function seoRenderKeywordsTab() {
+  const m = seoMonthKey(), pm = seoPrevMonthKey();
+  const kws = seoProject.keywords || [];
+  const addbar =
+    '<div class="seop-addbar">' +
+      '<input class="seop-input" id="seop-add-kw" type="text" placeholder="Añadir keywords (separadas por coma)" onkeydown="if(event.key===\'Enter\')seoAddKeywords()">' +
+      '<button class="seop-btn" onclick="seoAddKeywords()">+ Añadir</button>' +
+      '<button class="seop-btn" onclick="seoResearchKeywords()">🔍 Investigar con el agente</button>' +
+    '</div>';
+  if (!kws.length) return addbar + '<div class="seop-empty">Sin keywords todavía. Añádelas a mano o pide al agente una investigación para tu mercado.</div>';
+
+  const rows = kws.map((k, i) => {
+    const cur = k.history?.[m]?.pos || null;
+    const prev = k.history?.[pm]?.pos || null;
+    const best = Object.values(k.history || {}).reduce((b, h) => (h.pos && (!b || h.pos < b)) ? h.pos : b, null);
+    let delta = '<span class="seop-delta same">—</span>';
+    if (cur && prev) {
+      const d = prev - cur;
+      if (d > 0) delta = '<span class="seop-delta up">↑ ' + d + '</span>';
+      else if (d < 0) delta = '<span class="seop-delta down">↓ ' + (-d) + '</span>';
+      else delta = '<span class="seop-delta same">= </span>';
+    } else if (cur && !prev) delta = '<span class="seop-delta up">nuevo</span>';
+    const url = k.history?.[m]?.url || '';
+    return '<tr>' +
+      '<td>' + esc(k.kw) + '</td>' +
+      '<td class="seop-pos">' + (cur ? '#' + cur : '<span style="color:var(--muted2)">100+</span>') + '</td>' +
+      '<td>' + (prev ? '#' + prev : '—') + '</td>' +
+      '<td>' + (best ? '#' + best : '—') + '</td>' +
+      '<td>' + delta + '</td>' +
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">' + (url ? esc(url.replace(/^https?:\/\/(www\.)?/, '')) : '—') + '</td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="seop-row-btn" title="Generar contenido para esta keyword" onclick="seoGenerateContent(' + i + ')">📝</button>' +
+        '<button class="seop-row-btn" title="Eliminar" onclick="seoDeleteKeyword(' + i + ')">✕</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  return addbar +
+    '<div class="seop-scroll"><table class="seop-table">' +
+      '<tr><th>Keyword</th><th>Posición</th><th>Mes anterior</th><th>Mejor</th><th>Cambio</th><th>URL que posiciona</th><th></th></tr>' +
+      rows +
+    '</table></div>';
+}
+
+async function seoAddKeywords(listArg) {
+  const input = document.getElementById('seop-add-kw');
+  const raw = listArg || (input ? input.value : '');
+  const list = String(raw).split(/[,\n|]/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!list.length) return;
+  const existing = new Set((seoProject.keywords || []).map(k => k.kw.toLowerCase()));
+  let added = 0;
+  list.forEach(kw => {
+    if (!existing.has(kw) && (seoProject.keywords.length + 1) <= 100) {
+      seoProject.keywords.push({ kw, addedAt: Date.now(), history: {} });
+      existing.add(kw); added++;
+    }
+  });
+  if (input) input.value = '';
+  await seoSaveProject();
+  seoRenderProject();
+  if (added) showToast('✅ ' + added + (added === 1 ? ' keyword añadida' : ' keywords añadidas') + ' al proyecto', 'success');
+}
+
+async function seoDeleteKeyword(i) {
+  if (!confirm('¿Eliminar esta keyword y su historial?')) return;
+  seoProject.keywords.splice(i, 1);
+  await seoSaveProject();
+  seoRenderProject();
+}
+
+// ── Actualización de posiciones (SERP API) ──
+async function seoUpdatePositions(quiet) {
+  if (!seoProject || !seoProject.keywords?.length) return;
+  const btn = document.getElementById('seop-refresh-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Consultando Google...'; }
+  const m = seoMonthKey();
+  try {
+    const all = seoProject.keywords.map(k => k.kw);
+    for (let i = 0; i < all.length; i += 30) {
+      const chunk = all.slice(i, i + 30);
+      const r = await fetch('/api/seo-rank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: chunk, domain: seoProject.domain, gl: seoProject.country, hl: 'es' }),
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      (data.results || []).forEach(res => {
+        const k = seoProject.keywords.find(x => x.kw === res.keyword);
+        if (!k || res.error) return;
+        k.history = k.history || {};
+        k.history[m] = { pos: res.position, url: res.url, checkedAt: Date.now() };
+        k.top = res.topResults || [];
+      });
+    }
+    seoProject.lastCheck = Date.now();
+    await seoSaveProject();
+    seoRenderProject();
+    if (!quiet) showToast('✅ Posiciones actualizadas (' + seoProject.keywords.length + ' keywords)', 'success');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar posiciones'; }
+    if (!quiet) alert('Error consultando posiciones: ' + (e.message || e));
+  }
+}
+
+// ── Tab: Competencia ──
+function seoRenderCompetenciaTab() {
+  const kws = seoProject.keywords || [];
+  const m = seoMonthKey();
+  // Agregar dominios que aparecen en el top 5 de tus keywords
+  const domCount = {};
+  kws.forEach(k => (k.top || []).forEach(t => {
+    if (t.domain === seoProject.domain) return;
+    domCount[t.domain] = domCount[t.domain] || { count: 0, beats: 0 };
+    domCount[t.domain].count++;
+    const myPos = k.history?.[m]?.pos;
+    if (!myPos || (t.position && t.position < myPos)) domCount[t.domain].beats++;
+  }));
+  const sorted = Object.entries(domCount).sort((a, b) => b[1].count - a[1].count).slice(0, 12);
+  const declared = new Set(seoProject.competitors || []);
+  const header =
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
+      '<div style="font-size:12.5px;color:var(--muted)">Dominios que aparecen en el top 5 de Google para tus keywords' + (declared.size ? ' · declarados: ' + esc([...declared].join(', ')) : '') + '</div>' +
+      '<button class="seop-btn primary" onclick="seoAnalyzeCompetition()">🧠 Analizar con el agente</button>' +
+    '</div>';
+  if (!sorted.length) return header + '<div class="seop-empty">Actualiza las posiciones primero — la tabla de competencia se construye con los resultados reales de Google.</div>';
+  const rows = sorted.map(([dom, s]) =>
+    '<tr><td>' + esc(dom) + (declared.has(dom) ? ' <span class="seop-delta down" style="margin-left:6px">competidor</span>' : '') + '</td>' +
+    '<td class="seop-pos">' + s.count + '</td><td>' + s.beats + '</td></tr>'
+  ).join('');
+  return header +
+    '<div class="seop-scroll"><table class="seop-table" style="min-width:480px">' +
+      '<tr><th>Dominio</th><th>Apariciones en tu top 5</th><th>Keywords donde te supera</th></tr>' + rows +
+    '</table></div>';
+}
+
+function seoAnalyzeCompetition() {
+  const kws = seoProject.keywords || [];
+  const m = seoMonthKey();
+  const lines = kws.slice(0, 20).map(k => {
+    const myPos = k.history?.[m]?.pos;
+    const top3 = (k.top || []).slice(0, 3).map(t => t.domain + ' (#' + t.position + ')').join(', ');
+    return '- "' + k.kw + '": mi posición ' + (myPos ? '#' + myPos : 'fuera del top 100') + '. Top 3: ' + (top3 || 'sin datos');
+  }).join('\n');
+  openAgentAndAsk('seo', 'Análisis de competencia para mi proyecto SEO del dominio ' + seoProject.domain + ' (' + seoCountryName(seoProject.country) + ').' +
+    (seoProject.competitors?.length ? ' Competidores declarados: ' + seoProject.competitors.join(', ') + '.' : '') +
+    '\n\nPosiciones reales actuales (de Google):\n' + lines +
+    '\n\nDime: 1) quiénes son mis competidores SEO reales y su estrategia aparente, 2) en qué keywords tengo mejor oportunidad de superarlos y por qué, 3) las 5 acciones concretas para ganarles posiciones.');
+}
+
+// ── Tab: On-page y acciones ──
+function seoRenderOnpageTab() {
+  const actions = seoProject.actions || [];
+  const auditBar =
+    '<div class="seop-addbar">' +
+      '<input class="seop-input" id="seop-audit-url" type="text" placeholder="URL a auditar, ej: https://' + esc(seoProject.domain) + '/servicios">' +
+      '<button class="seop-btn primary" onclick="seoAuditPage()">🏥 Auditar con el agente</button>' +
+    '</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:18px">El agente audita la página (title, metas, encabezados, contenido, enlazado, velocidad percibida) y te entrega acciones específicas — guárdalas aquí como checklist.</div>';
+  const addAction =
+    '<div class="seop-addbar">' +
+      '<input class="seop-input" id="seop-add-action" type="text" placeholder="Añadir acción, ej: Reescribir el title de /servicios con la keyword principal" onkeydown="if(event.key===\'Enter\')seoAddAction()">' +
+      '<button class="seop-btn" onclick="seoAddAction()">+ Añadir acción</button>' +
+    '</div>';
+  const pending = actions.filter(a => !a.done).length;
+  const list = actions.length
+    ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">' + pending + ' pendientes · ' + (actions.length - pending) + ' completadas</div>' +
+      actions.map((a, i) =>
+        '<div class="seop-check' + (a.done ? ' done' : '') + '">' +
+          '<input type="checkbox"' + (a.done ? ' checked' : '') + ' onchange="seoToggleAction(' + i + ')">' +
+          '<div class="seop-check-text" style="flex:1">' + esc(a.text) + '</div>' +
+          '<button class="seop-row-btn" onclick="seoDeleteAction(' + i + ')">✕</button>' +
+        '</div>'
+      ).join('')
+    : '<div class="seop-empty">Sin acciones todavía. Audita una página o añádelas a mano.</div>';
+  return auditBar + addAction + list;
+}
+
+function seoAuditPage() {
+  const url = (document.getElementById('seop-audit-url')?.value || '').trim() || ('https://' + seoProject.domain);
+  const kwList = (seoProject.keywords || []).slice(0, 10).map(k => k.kw).join(', ');
+  openAgentAndAsk('seo', 'Audita el SEO on-page de esta página: ' + url +
+    (kwList ? '\nKeywords objetivo del proyecto: ' + kwList : '') +
+    '\n\nRevisa: title y meta description, estructura de encabezados (H1-H3), uso de keywords, contenido (calidad, extensión, intención de búsqueda), enlazado interno, imágenes (alt), datos estructurados y señales E-E-A-T. Entrégame una lista numerada de ACCIONES ESPECÍFICAS ordenadas por impacto — cada una en una línea, concreta y ejecutable (qué cambiar y por cuál texto).');
+}
+
+async function seoAddAction(text) {
+  const input = document.getElementById('seop-add-action');
+  const t = (text || (input ? input.value : '')).trim();
+  if (!t) return;
+  seoProject.actions = seoProject.actions || [];
+  seoProject.actions.push({ text: t, done: false, createdAt: Date.now() });
+  if (input) input.value = '';
+  await seoSaveProject();
+  seoRenderProject();
+}
+
+async function seoToggleAction(i) {
+  const a = (seoProject.actions || [])[i];
+  if (!a) return;
+  a.done = !a.done;
+  await seoSaveProject();
+  seoRenderProject();
+}
+
+async function seoDeleteAction(i) {
+  (seoProject.actions || []).splice(i, 1);
+  await seoSaveProject();
+  seoRenderProject();
+}
+
+// ── Tab: Contenido ──
+function seoRenderContenidoTab() {
+  const m = seoMonthKey();
+  const kws = (seoProject.keywords || []).slice().sort((a, b) => {
+    const pa = a.history?.[m]?.pos || 999, pb = b.history?.[m]?.pos || 999;
+    return pb - pa; // peor posicionadas primero = mayor oportunidad de contenido
+  }).slice(0, 15);
+  const header =
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
+      '<div style="font-size:12.5px;color:var(--muted)">Oportunidades de contenido — tus keywords con más recorrido, priorizadas</div>' +
+      '<button class="seop-btn primary" onclick="seoContentPlan()">📅 Plan de contenido con el agente</button>' +
+    '</div>';
+  if (!kws.length) return header + '<div class="seop-empty">Añade keywords al proyecto para ver oportunidades de contenido.</div>';
+  const rows = kws.map(k => {
+    const pos = k.history?.[m]?.pos;
+    const idx = seoProject.keywords.indexOf(k);
+    return '<tr><td>' + esc(k.kw) + '</td><td class="seop-pos">' + (pos ? '#' + pos : '100+') + '</td>' +
+      '<td><button class="seop-btn" style="padding:5px 11px;font-size:11px" onclick="seoGenerateContent(' + idx + ')">📝 Generar artículo →</button></td></tr>';
+  }).join('');
+  return header + '<div class="seop-scroll"><table class="seop-table" style="min-width:480px"><tr><th>Keyword</th><th>Posición</th><th></th></tr>' + rows + '</table></div>';
+}
+
+function seoGenerateContent(i) {
+  const k = (seoProject.keywords || [])[i];
+  if (!k) return;
+  openAgentAndAsk('seo', 'Escribe un artículo SEO completo para el sitio ' + seoProject.domain + ' optimizado para la keyword "' + k.kw + '" (mercado: ' + seoCountryName(seoProject.country) + ').\n\nIncluye: meta title (máx 60 caracteres), meta description (máx 155), H1, estructura de H2/H3, el artículo completo (mínimo 1.200 palabras, tono experto pero cercano, con datos y ejemplos del mercado local), y 3 sugerencias de enlazado interno. El contenido debe responder la intención de búsqueda real de esa keyword.');
+}
+
+function seoContentPlan() {
+  const m = seoMonthKey();
+  const lines = (seoProject.keywords || []).slice(0, 25).map(k => '- ' + k.kw + (k.history?.[m]?.pos ? ' (posición actual #' + k.history[m].pos + ')' : ' (fuera del top 100)')).join('\n');
+  openAgentAndAsk('seo', 'Crea un plan de contenido SEO mensual para ' + seoProject.domain + ' (' + seoCountryName(seoProject.country) + ') basado en mis keywords rastreadas y sus posiciones reales:\n' + lines + '\n\nEntrega un calendario de 8 piezas para el próximo mes: para cada una — keyword objetivo, título propuesto, tipo de contenido (artículo/guía/comparativa/landing), intención de búsqueda y prioridad.');
+}
+
+// ── Investigación de keywords con el agente ──
+function seoResearchKeywords() {
+  openAgentAndAsk('seo', 'Haz una investigación de palabras clave para mi proyecto SEO del dominio ' + seoProject.domain + ' en ' + seoCountryName(seoProject.country) + '.' +
+    (seoProject.keywords?.length ? ' Ya rastreo estas: ' + seoProject.keywords.slice(0, 15).map(k => k.kw).join(', ') + ' — no las repitas.' : '') +
+    ' Propón entre 10 y 15 keywords nuevas con alto potencial (mezcla de intención comercial e informacional, incluye long-tail locales). Explica brevemente por qué cada grupo.' +
+    ' IMPORTANTE: termina tu respuesta con una línea exacta en este formato para poder importarlas a mi proyecto: [SEO_KEYWORDS: keyword uno | keyword dos | keyword tres]');
+}
+
+function seoImportKeywords(msgId) {
+  const list = (window._seoKwImports || {})[msgId];
+  if (!list || !seoProject) {
+    if (!seoProject) alert('Primero crea tu proyecto SEO (agente SEO → Proyecto SEO).');
+    return;
+  }
+  seoAddKeywords(list.join('|'));
+  openSeoProject();
 }
