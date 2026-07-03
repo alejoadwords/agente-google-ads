@@ -119,6 +119,21 @@ async function gaqlRequest(customerId, query, accessToken, userId) {
 // ── Helpers ──────────────────────────────────────────────────
 function formatCost(micros) { return parseFloat((Number(micros || 0) / 1000000).toFixed(2)); }
 
+// Si la respuesta GAQL trae un error (ej. token expirado sin refresh_token
+// disponible), propagarlo en vez de degradar a métricas en cero — los ceros
+// silenciosos corrompen el Pulso y el semáforo de salud.
+function gaqlAuthError(data) {
+  if (!data || !data.error) return null;
+  const s = JSON.stringify(data.error);
+  const isAuth = s.includes('UNAUTHENTICATED') || s.includes('"code":401') || data.error.code === 401;
+  return {
+    status: isAuth ? 401 : 502,
+    body: isAuth
+      ? { error: 'Token de Google Ads expirado. Reconecta tu cuenta.', needsConnect: true }
+      : { error: data.error.message || 'Error de Google Ads API' },
+  };
+}
+
 function isTestAccessError(data) {
   const s = JSON.stringify(data);
   return s.includes('DEVELOPER_TOKEN_NOT_APPROVED') || s.includes('TEST_ACCOUNT_CANNOT') || s.includes('test account');
@@ -248,6 +263,8 @@ export default async function handler(req, res) {
       `;
       const data = await gaqlRequest(customerId, query, token, userId);
       if (isTestAccessError(data)) return res.json({ testAccess: true });
+      const authErr = gaqlAuthError(data);
+      if (authErr) return res.status(authErr.status).json(authErr.body);
 
       const rows = data.results || [];
       const totals = rows.reduce((acc, r) => {
@@ -284,6 +301,8 @@ export default async function handler(req, res) {
       `;
       const data = await gaqlRequest(customerId, query, token, userId);
       if (isTestAccessError(data)) return res.json({ testAccess: true, days: [] });
+      const authErr = gaqlAuthError(data);
+      if (authErr) return res.status(authErr.status).json(authErr.body);
 
       // Agregar por fecha (la query devuelve una fila por campaña y día)
       const byDate = {};

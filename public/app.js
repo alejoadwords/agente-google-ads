@@ -17698,6 +17698,18 @@ function pulsoMoney(n) {
   return isNaN(v) ? String(n) : '$' + v.toLocaleString('es-CO', { maximumFractionDigits: 0 });
 }
 
+// Tarjeta de reconexión cuando el token de una plataforma expiró — mejor
+// avisar que mostrar datos en cero o desaparecer en silencio
+function pulsoReconnectCard(platform) {
+  return {
+    tone: 'warn',
+    title: platform + ' · conexión expirada',
+    body: 'El token expiró y los agentes no pueden leer las campañas. Reconectar toma 30 segundos desde Configuración.',
+    actLabel: 'Reconectar →',
+    act: () => openSettings(),
+  };
+}
+
 // Compara ayer vs el promedio de los 7 días previos. Devuelve la anomalía
 // más grave o null. days = [{date,cost,conversions,...}] orden ascendente.
 function pulsoDayVsAvg(days) {
@@ -17762,7 +17774,7 @@ async function pulsoGoogleCards() {
       fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
       fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
     ]);
-    if (!d || d.error) return [];
+    if (!d || d.error) return (d && d.needsConnect) ? [pulsoReconnectCard('Google Ads')] : [];
     const cards = [];
     // Alerta día-vs-promedio (ayer vs 7 días previos)
     const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
@@ -17810,7 +17822,7 @@ async function pulsoMetaCards() {
       fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
       fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
     ]);
-    if (!d || d.error) return [];
+    if (!d || d.error) return (d && d.needsConnect) ? [pulsoReconnectCard('Meta Ads')] : [];
     const cards = [];
     // Alerta día-vs-promedio (ayer vs 7 días previos)
     const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
@@ -18056,11 +18068,11 @@ async function pulsoAgencyAdsCards() {
     return { c, d, series };
   }));
   const cards = [];
-  let totSpend = 0, totConv = 0, okCount = 0;
+  let totSpend = 0, totConv = 0, okCount = 0, needsReconnect = false;
   results.forEach(res => {
     if (res.status !== 'fulfilled') return;
     const { c, d, series } = res.value;
-    if (!d || d.error) return;
+    if (!d || d.error) { if (d && d.needsConnect) needsReconnect = true; return; }
     const cost = parseFloat(d.totalCost) || 0;
     const conv = parseFloat(d.conversions) || 0;
     // Semáforo automático: rojo = gasta sin convertir, verde = convierte,
@@ -18099,6 +18111,7 @@ async function pulsoAgencyAdsCards() {
       act: () => dashboardOpen(),
     });
   }
+  if (needsReconnect) cards.unshift(pulsoReconnectCard('Google Ads'));
   return cards;
 }
 
@@ -18119,10 +18132,11 @@ async function pulsoAgencyMetaCards() {
     return { c, d, series };
   }));
   const cards = [];
+  let needsReconnect = false;
   results.forEach(res => {
     if (res.status !== 'fulfilled') return;
     const { c, d, series } = res.value;
-    if (!d || d.error) return;
+    if (!d || d.error) { if (d && d.needsConnect) needsReconnect = true; return; }
     const spend = parseFloat(d.spend) || 0;
     const conv = parseFloat(d.conversions) || 0;
     pulsoMergeHealth(c.id, (spend > 0 && conv === 0) ? 'rojo' : (spend > 0 ? 'verde' : 'amarillo'));
@@ -18148,6 +18162,7 @@ async function pulsoAgencyMetaCards() {
       });
     }
   });
+  if (needsReconnect) cards.unshift(pulsoReconnectCard('Meta Ads'));
   return cards;
 }
 
