@@ -17973,7 +17973,7 @@ async function renderPulsoAgency(force) {
   const warns = cards.filter(c => c.tone === 'warn').length;
   const titleEl = document.getElementById('pulso-agency-title-text');
   if (titleEl) titleEl.textContent = warns > 0
-    ? 'Pulso de tu cartera — ' + warns + (warns === 1 ? ' cliente necesita atención' : ' clientes necesitan atención')
+    ? 'Pulso de tu cartera — ' + warns + (warns === 1 ? ' alerta hoy' : ' alertas hoy')
     : 'Pulso de tu cartera';
 
   grid.innerHTML = pulsoCardsHtml(cards, 'pulsoAgencyRun');
