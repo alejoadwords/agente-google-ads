@@ -17687,7 +17687,7 @@ async function pulsoGoogleCards() {
   const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
   if (!uid || !customerId || !token) return [];
   try {
-    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=LAST_7_DAYS');
+    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=LAST_7_DAYS&accessToken=' + encodeURIComponent(token));
     const d = await r.json();
     if (!d || d.error) return [];
     const cost = parseFloat(d.totalCost) || 0;
@@ -17901,9 +17901,12 @@ async function pulsoAgencyAdsCards() {
   if (!uid) return [];
   const connected = (agencyClients || []).filter(c => c.googleCustomerId).slice(0, 10);
   if (!connected.length) return [];
+  // El endpoint acepta token por query (la conexión puede ser solo de sesión,
+  // sin registro en Supabase) — sin él responde 401
+  const gToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
   const results = await Promise.allSettled(connected.map(async c => {
     const custId = String(c.googleCustomerId).replace(/-/g, '');
-    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + custId + '&dateRange=LAST_7_DAYS');
+    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + custId + '&dateRange=LAST_7_DAYS' + (gToken ? '&accessToken=' + encodeURIComponent(gToken) : ''));
     return { c, d: await r.json() };
   }));
   const cards = [];
