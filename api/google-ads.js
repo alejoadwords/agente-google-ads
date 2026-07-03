@@ -272,6 +272,40 @@ export default async function handler(req, res) {
       });
     }
 
+    // ── get-daily-series ──────────────────────────────────────
+    // Métricas por día (para alertas día-vs-promedio del Pulso)
+    if (action === 'get-daily-series') {
+      const query = `
+        SELECT segments.date, metrics.cost_micros, metrics.conversions,
+          metrics.clicks, metrics.impressions
+        FROM campaign
+        WHERE segments.date DURING ${dateRange}
+        ORDER BY segments.date ASC
+      `;
+      const data = await gaqlRequest(customerId, query, token, userId);
+      if (isTestAccessError(data)) return res.json({ testAccess: true, days: [] });
+
+      // Agregar por fecha (la query devuelve una fila por campaña y día)
+      const byDate = {};
+      (data.results || []).forEach(r => {
+        const d = r.segments?.date;
+        if (!d) return;
+        if (!byDate[d]) byDate[d] = { costMicros: 0, conversions: 0, clicks: 0, impressions: 0 };
+        byDate[d].costMicros  += parseInt(r.metrics?.costMicros || 0);
+        byDate[d].conversions += parseFloat(r.metrics?.conversions || 0);
+        byDate[d].clicks      += parseInt(r.metrics?.clicks || 0);
+        byDate[d].impressions += parseInt(r.metrics?.impressions || 0);
+      });
+      const days = Object.keys(byDate).sort().map(d => ({
+        date:        d,
+        cost:        formatCost(byDate[d].costMicros),
+        conversions: parseFloat(byDate[d].conversions.toFixed(1)),
+        clicks:      byDate[d].clicks,
+        impressions: byDate[d].impressions,
+      }));
+      return res.json({ days });
+    }
+
     // ── get-campaigns ─────────────────────────────────────────
     if (action === 'get-campaigns') {
       const query = `

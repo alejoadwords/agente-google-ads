@@ -17698,36 +17698,103 @@ function pulsoMoney(n) {
   return isNaN(v) ? String(n) : '$' + v.toLocaleString('es-CO', { maximumFractionDigits: 0 });
 }
 
+// Compara ayer vs el promedio de los 7 días previos. Devuelve la anomalía
+// más grave o null. days = [{date,cost,conversions,...}] orden ascendente.
+function pulsoDayVsAvg(days) {
+  if (!Array.isArray(days) || days.length < 5) return null;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const complete = days.filter(d => d.date !== todayStr); // excluir hoy (parcial)
+  if (complete.length < 5) return null;
+  const yday = complete[complete.length - 1];
+  const prev = complete.slice(0, -1).slice(-7);
+  const avg = k => prev.reduce((s, d) => s + (Number(d[k]) || 0), 0) / prev.length;
+  const avgCost = avg('cost');
+  const avgConv = avg('conversions');
+  const found = [];
+  // CPA disparado (ambos períodos con conversiones)
+  if (yday.conversions > 0 && avgConv > 0.5 && avgCost > 0) {
+    const cpaY = yday.cost / yday.conversions;
+    const cpaAvg = avgCost / avgConv;
+    const delta = (cpaY - cpaAvg) / cpaAvg;
+    if (delta >= 0.3) found.push({ kind: 'cpa', pct: Math.round(delta * 100), a: cpaY, b: cpaAvg });
+  }
+  // Conversiones cayeron con inversión similar
+  if (avgConv >= 1 && yday.conversions <= avgConv * 0.4 && yday.cost >= avgCost * 0.6) {
+    found.push({ kind: 'convDrop', pct: Math.round((1 - yday.conversions / avgConv) * 100), a: yday.conversions, b: avgConv });
+  }
+  // Gasto disparado
+  if (avgCost > 0 && yday.cost >= avgCost * 1.5) {
+    found.push({ kind: 'spend', pct: Math.round((yday.cost / avgCost - 1) * 100), a: yday.cost, b: avgCost });
+  }
+  const order = { cpa: 0, convDrop: 1, spend: 2 };
+  found.sort((x, y) => order[x.kind] - order[y.kind]);
+  return found[0] || null;
+}
+
+// Textos de la alerta día-vs-promedio (título, cuerpo y prompt para el agente)
+function pulsoDailyAlertText(anom) {
+  if (anom.kind === 'cpa') return {
+    title: 'CPA subió +' + anom.pct + '% ayer',
+    body: 'CPA de ayer ' + pulsoMoney(anom.a) + ' vs ' + pulsoMoney(anom.b) + ' de promedio en los 7 días previos.',
+    prompt: 'Ayer mi CPA en Google Ads fue ' + pulsoMoney(anom.a) + ', un ' + anom.pct + '% más alto que el promedio de los 7 días previos (' + pulsoMoney(anom.b) + '). Investiga en mi cuenta qué lo causó (campañas, términos, pujas, presupuesto) y dime qué corregir hoy.',
+  };
+  if (anom.kind === 'convDrop') return {
+    title: 'Conversiones cayeron −' + anom.pct + '% ayer',
+    body: 'Ayer ' + Math.round(anom.a) + ' conversiones vs ' + anom.b.toFixed(1) + ' de promedio diario, con inversión similar.',
+    prompt: 'Ayer mis conversiones en Google Ads cayeron un ' + anom.pct + '% frente al promedio de los 7 días previos, con inversión similar. Investiga en mi cuenta qué pasó y dime qué revisar primero.',
+  };
+  return {
+    title: 'Inversión disparada +' + anom.pct + '% ayer',
+    body: 'Ayer gastó ' + pulsoMoney(anom.a) + ' vs ' + pulsoMoney(anom.b) + ' de promedio diario.',
+    prompt: 'Ayer mi inversión en Google Ads fue ' + pulsoMoney(anom.a) + ', un ' + anom.pct + '% sobre el promedio diario de la última semana (' + pulsoMoney(anom.b) + '). Revisa mi cuenta y dime qué campaña o cambio lo explica, y si debo intervenir.',
+  };
+}
+
 async function pulsoGoogleCards() {
   const uid = clerkInstance?.user?.id || '';
   const customerId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '';
   const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
   if (!uid || !customerId || !token) return [];
   try {
-    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=LAST_7_DAYS&accessToken=' + encodeURIComponent(token));
-    const d = await r.json();
+    const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&accessToken=' + encodeURIComponent(token);
+    const [d, series] = await Promise.all([
+      fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
+      fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
+    ]);
     if (!d || d.error) return [];
+    const cards = [];
+    // Alerta día-vs-promedio (ayer vs 7 días previos)
+    const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
+    if (anom) {
+      const t = pulsoDailyAlertText(anom);
+      cards.push({
+        tone: 'warn',
+        title: 'Google Ads · ' + t.title,
+        body: t.body,
+        actLabel: 'Investigar con el agente →',
+        act: () => openAgentAndAsk('google-ads', t.prompt),
+      });
+    }
     const cost = parseFloat(d.totalCost) || 0;
     const conv = parseFloat(d.conversions) || 0;
     if (cost > 0 && conv === 0) {
-      return [{
+      cards.push({
         tone: 'warn',
         title: 'Google Ads · sin conversiones',
         body: 'Invertiste ' + pulsoMoney(cost) + ' en los últimos 7 días sin conversiones registradas.',
         actLabel: 'Investigar con el agente →',
         act: () => openAgentAndAsk('google-ads', 'En los últimos 7 días invertí ' + pulsoMoney(cost) + ' en Google Ads sin conversiones registradas. Revisa mi cuenta, encuentra las causas más probables y dime qué corregir primero.'),
-      }];
-    }
-    if (cost > 0) {
-      return [{
+      });
+    } else if (cost > 0 && !anom) {
+      cards.push({
         tone: 'info',
         title: 'Google Ads · últimos 7 días',
         body: 'Inversión ' + pulsoMoney(cost) + ' · ' + conv + ' conversiones' + (d.cpa ? ' · CPA ' + pulsoMoney(d.cpa) : ''),
         actLabel: 'Analizar con el agente →',
         act: () => openAgentAndAsk('google-ads', 'Analiza el rendimiento de mi cuenta de Google Ads de los últimos 7 días y dame las 3 recomendaciones más importantes para mejorar resultados.'),
-      }];
+      });
     }
-    return [];
+    return cards;
   } catch { return []; }
 }
 
@@ -17957,15 +18024,19 @@ async function pulsoAgencyAdsCards() {
   const gToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
   const results = await Promise.allSettled(connected.map(async c => {
     const custId = String(c.googleCustomerId).replace(/-/g, '');
-    const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + custId + '&dateRange=LAST_7_DAYS' + (gToken ? '&accessToken=' + encodeURIComponent(gToken) : ''));
-    return { c, d: await r.json() };
+    const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + custId + (gToken ? '&accessToken=' + encodeURIComponent(gToken) : '');
+    const [d, series] = await Promise.all([
+      fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
+      fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
+    ]);
+    return { c, d, series };
   }));
   const cards = [];
   let totSpend = 0, totConv = 0, okCount = 0;
   _pulsoHealthMap = {};
   results.forEach(res => {
     if (res.status !== 'fulfilled') return;
-    const { c, d } = res.value;
+    const { c, d, series } = res.value;
     if (!d || d.error) return;
     const cost = parseFloat(d.totalCost) || 0;
     const conv = parseFloat(d.conversions) || 0;
@@ -17973,6 +18044,19 @@ async function pulsoAgencyAdsCards() {
     // amarillo = cuenta conectada sin inversión activa
     _pulsoHealthMap[c.id] = (cost > 0 && conv === 0) ? 'rojo' : (cost > 0 ? 'verde' : 'amarillo');
     if (cost > 0) { okCount++; totSpend += cost; totConv += conv; }
+    // Alerta día-vs-promedio del cliente (ayer vs 7 días previos)
+    const anom = series && !series.error ? pulsoDayVsAvg(series.days) : null;
+    if (anom) {
+      const t = pulsoDailyAlertText(anom);
+      if (_pulsoHealthMap[c.id] === 'verde') _pulsoHealthMap[c.id] = 'amarillo';
+      cards.push({
+        tone: 'warn',
+        title: (c.name || 'Cliente') + ' · ' + t.title,
+        body: t.body,
+        actLabel: 'Investigar →',
+        act: () => pulsoOpenClientAgent(c.id, 'google-ads', 'Sobre la cuenta de Google Ads de este cliente: ' + t.prompt),
+      });
+    }
     if (cost > 0 && conv === 0) {
       cards.push({
         tone: 'warn',
