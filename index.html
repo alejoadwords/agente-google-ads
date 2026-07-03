@@ -37,6 +37,25 @@
   --shadow-blue:0 4px 16px rgba(30,43,204,.18);
   --sb-w:244px;
 }
+
+/* ── Modo oscuro (beta) — overrides de tokens ── */
+[data-theme="dark"]{
+  color-scheme:dark;
+  --blue:#5B6CFF;--blue-h:#7C89FF;--blue-mid:#6E7DFF;
+  --blue-lt:#1B2040;--blue-md:#37407A;--blue-dim:rgba(91,108,255,.12);
+  --blue-glow:rgba(91,108,255,.25);--blue-ring:rgba(91,108,255,.3);
+  --text:#E8EAF6;--text-2:#A7ACC8;--text-3:#6E7494;
+  --muted:#A7ACC8;--muted2:#6E7494;
+  --border:#262B47;--border2:#1D2138;--border-h:#37407A;
+  --bg:#0E1120;--bg-subtle:#151930;--bg-muted:#1D2138;--bg-card:#151930;
+  --sidebar:#12152A;--sidebar2:#1D2138;
+  --success:#34D399;--warning:#FBBF24;--danger:#F87171;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 4px 12px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4);
+  --shadow-blue:0 4px 16px rgba(91,108,255,.3);
+}
+[data-theme="dark"] .hdr{background:rgba(14,17,32,.92)}
+
 body{font-family:var(--font);background:var(--bg);color:var(--text);height:100svh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
 
 /* ── HEADER ── */
@@ -97,6 +116,30 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @keyframes pulsoBeat{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes pulsoShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.pulso-dot,.pulso-skel{animation:none}}
+
+/* ── Lienzo — workspace dividido chat + resultado ── */
+.lienzo-panel{position:fixed;top:0;right:0;width:620px;max-width:100vw;height:100vh;background:var(--bg);border-left:1px solid var(--border);z-index:180;transform:translateX(100%);transition:transform .3s var(--ease);display:flex;flex-direction:column}
+.lienzo-panel.open{transform:translateX(0);box-shadow:-12px 0 40px rgba(13,15,28,.10)}
+.lienzo-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-subtle)}
+.lienzo-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:9px;min-width:0;color:var(--text)}
+.lienzo-title-ico{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--blue),#00B8CE);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lienzo-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lienzo-actions{display:flex;gap:6px;flex-shrink:0}
+.lienzo-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;font-family:var(--font);transition:all .15s var(--ease)}
+.lienzo-btn:hover{background:var(--bg-muted);color:var(--text)}
+.lienzo-body{flex:1;overflow-y:auto;padding:20px 24px;font-size:13.5px;line-height:1.65;color:var(--text)}
+.lienzo-body::-webkit-scrollbar{width:4px}
+.lienzo-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.lienzo-body table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12.5px}
+.lienzo-body th{background:var(--bg-subtle);text-align:left;padding:8px 10px;border:1px solid var(--border);font-weight:700}
+.lienzo-body td{padding:7px 10px;border:1px solid var(--border)}
+.lienzo-open-chip{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:7px 14px;background:var(--blue-lt);border:1.5px solid var(--blue-md);border-radius:10px;font-size:12px;font-weight:700;color:var(--blue);cursor:pointer;font-family:var(--font);transition:all .15s var(--ease)}
+.lienzo-open-chip:hover{background:var(--blue-md);transform:translateY(-1px)}
+@media(min-width:1100px){
+  body.lienzo-open #view-chat{margin-right:620px;transition:margin-right .3s var(--ease)}
+  #view-chat{transition:margin-right .3s var(--ease)}
+}
+@media(max-width:1099px){.lienzo-panel{width:100vw}}
 
 /* ── Micro-animaciones globales ── */
 .msg{animation:msgIn .28s ease both}
@@ -1688,6 +1731,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span>Buscar</span>
       <kbd>⌘K</kbd>
+    </button>
+    <button class="hdr-icon-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Cambiar tema claro/oscuro" style="width:30px;height:30px">
+      <svg id="theme-icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <svg id="theme-icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     </button>
     <button onclick="openAcademia()" style="position:relative;background:none;border:none;cursor:pointer;padding:5px 7px;border-radius:8px;color:var(--muted2);display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;font-family:var(--font);transition:all .18s" onmouseover="this.style.background='var(--blue-lt)';this.style.color='var(--blue)'" onmouseout="this.style.background='none';this.style.color='var(--muted2)'" title="Academia Acuarius">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
@@ -3554,6 +3601,29 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 <script src="/prompts/social.js"></script>
 <script src="/prompts/consultor.js"></script>
 <script src="/prompts/linkedin-ads.js"></script>
+<!-- LIENZO — panel de resultados del workspace -->
+<div class="lienzo-panel" id="lienzo-panel">
+  <div class="lienzo-header">
+    <div class="lienzo-title">
+      <div class="lienzo-title-ico">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </div>
+      <span id="lienzo-title-text">Resultado del agente</span>
+    </div>
+    <div class="lienzo-actions">
+      <button class="lienzo-btn" onclick="lienzoExportPDF()" title="Exportar a PDF">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        PDF
+      </button>
+      <button class="lienzo-btn" onclick="closeLienzo()" title="Cerrar lienzo">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Cerrar
+      </button>
+    </div>
+  </div>
+  <div class="lienzo-body" id="lienzo-body"></div>
+</div>
+
 <script src="/app.js"></script>
 
 <!-- CRM MODAL: crear / editar lead -->

@@ -10046,10 +10046,25 @@ function addAgent(txt){
   el.className='msg';
   const msgId='msg_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
   const isLong=txt.length>400;
+  // ¿El contenido merece abrirse en el lienzo? ('table' = auto-abre, 'doc' = botón)
+  const lienzoKind=(typeof lienzoWorthy==='function')?lienzoWorthy(txt):null;
   const pdfBtn=isLong?`<button onclick="exportToPDF(window._agentMsgs&&window._agentMsgs['${msgId}']||'','acuarius-estrategia.pdf')" style="display:inline-flex;align-items:center;gap:5px;margin-top:10px;padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:7px;font-size:11px;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .15s" onmouseover="this.style.background='var(--sidebar)'" onmouseout="this.style.background='transparent'"><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/></svg>Exportar PDF</button>`:'';
-  el.innerHTML=`<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="bubble ag-bubble">${fmt(txt)}${pdfBtn}</div>`;
-  if(isLong){window._agentMsgs=window._agentMsgs||{};window._agentMsgs[msgId]=txt;}
-  document.getElementById('chat-area').appendChild(el);scrollB()
+  // Contenido de la burbuja: si es una tabla grande (fuera del Studio), mostrar
+  // solo el texto previo + chip — el resultado completo vive en el lienzo
+  const compactToLienzo=lienzoKind==='table'&&currentAgentCtx!=='social'&&!window._studioGenerating;
+  const lienzoChip=lienzoKind?`<br><button class="lienzo-open-chip" onclick="openLienzoFromMsg('${msgId}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>${compactToLienzo?'Ver resultado completo en el lienzo':'Abrir en el lienzo'}</button>`:'';
+  let bubbleHtml;
+  if(compactToLienzo){
+    const firstTableIdx=txt.search(/^\|.*\|$/m);
+    const preview=(firstTableIdx>0?txt.slice(0,firstTableIdx):'').trim();
+    bubbleHtml=(preview?fmt(preview):'<span style="color:var(--muted)">He preparado el resultado.</span>')+lienzoChip;
+  } else {
+    bubbleHtml=fmt(txt)+lienzoChip+pdfBtn;
+  }
+  el.innerHTML=`<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75"><rect width="75" height="75" fill="#1E2BCC" rx="8"/><path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/></svg></div><div class="bubble ag-bubble">${bubbleHtml}</div>`;
+  if(isLong||lienzoKind){window._agentMsgs=window._agentMsgs||{};window._agentMsgs[msgId]=txt;}
+  document.getElementById('chat-area').appendChild(el);scrollB();
+  if(compactToLienzo)setTimeout(function(){openLienzoFromMsg(msgId);},250);
 }
 function addUser(txt,img){
   const el=document.createElement('div');
@@ -16621,7 +16636,8 @@ async function crmOpenDetail(leadId) {
     qaEl.innerHTML =
       (lead.phone ? '<a class="crm-qa-btn" href="tel:' + qaPhone + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</a>' : '') +
       (lead.phone ? '<a class="crm-qa-btn wa" href="https://wa.me/' + qaPhone.replace(/\D/g,'') + '" target="_blank"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</a>' : '') +
-      (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '');
+      (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '') +
+      '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>';
   }
   document.getElementById('crm-d-email').textContent = lead.email || '—';
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
@@ -17493,6 +17509,7 @@ function cmdkCommands() {
     { group: 'Acciones', icon: '🔗', label: 'Conectar Google Ads',         kw: 'conectar google api vincular',  run: () => connectGoogleAds() },
     { group: 'Acciones', icon: '🔗', label: 'Conectar Meta Ads',           kw: 'conectar meta facebook api vincular', run: () => connectMetaAds() },
     { group: 'Acciones', icon: '⭐', label: 'Actualizar plan',             kw: 'upgrade plan pro agency precio pagar', run: () => openUpgradeFlow() },
+    { group: 'Acciones', icon: '🌙', label: 'Cambiar tema (claro/oscuro)', kw: 'dark mode modo oscuro tema claro noche', run: () => toggleTheme() },
   ];
   // Clientes de agencia (dinámico)
   try {
@@ -17981,3 +17998,89 @@ async function renderPulsoAgency(force) {
 
   grid.innerHTML = pulsoCardsHtml(cards, 'pulsoAgencyRun');
 }
+
+// ── LIENZO — WORKSPACE DIVIDIDO ───────────────────────────────────────────────
+// Los resultados grandes (tablas, reportes, documentos) se abren en un panel
+// derecho persistente en vez de enterrarse en el hilo del chat.
+let _lienzoRaw = '';
+
+function lienzoWorthy(txt) {
+  if (!txt || typeof txt !== 'string') return null;
+  const tableLines = (txt.match(/^\|.*\|$/gm) || []).length;
+  if (tableLines >= 5) return 'table';
+  if (txt.length > 1500 && (txt.match(/^##+\s/gm) || []).length >= 2) return 'doc';
+  return null;
+}
+
+function lienzoTitleFrom(txt) {
+  const h = (txt || '').match(/^##+\s*(.+)$/m);
+  return h ? h[1].replace(/[*#]+/g, '').trim().slice(0, 70) : 'Resultado del agente';
+}
+
+function openLienzo(title, rawText) {
+  const p = document.getElementById('lienzo-panel');
+  if (!p) return;
+  _lienzoRaw = rawText || '';
+  const t = document.getElementById('lienzo-title-text');
+  if (t) t.textContent = title || 'Resultado del agente';
+  const body = document.getElementById('lienzo-body');
+  if (body) body.innerHTML = fmt(_lienzoRaw);
+  p.classList.add('open');
+  document.body.classList.add('lienzo-open');
+}
+
+function openLienzoFromMsg(msgId) {
+  const raw = (window._agentMsgs || {})[msgId];
+  if (!raw) return;
+  openLienzo(lienzoTitleFrom(raw), raw);
+}
+
+function closeLienzo() {
+  const p = document.getElementById('lienzo-panel');
+  if (p) p.classList.remove('open');
+  document.body.classList.remove('lienzo-open');
+}
+
+function lienzoExportPDF() {
+  if (_lienzoRaw && typeof exportToPDF === 'function') exportToPDF(_lienzoRaw, 'acuarius-resultado.pdf');
+}
+
+// ── ENVIAR LEAD AL CONSULTOR (CRM → agente) ───────────────────────────────────
+function crmSendLeadToConsultor() {
+  const l = crmDetailLead;
+  if (!l) return;
+  crmCloseDetail();
+  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
+  const parts = [
+    'Ayúdame con este lead de mi CRM:',
+    'Nombre: ' + (l.name || '—'),
+    l.company ? 'Empresa: ' + l.company : '',
+    'Etapa: ' + (l.stage || '—'),
+    l.value ? 'Valor estimado: $' + Number(l.value).toLocaleString('es-CO') : '',
+    l.source ? 'Fuente: ' + (sourceLabels[l.source] || l.source) : '',
+    l.notes ? 'Notas: ' + l.notes : '',
+  ].filter(Boolean).join('\n');
+  openAgentAndAsk('consultor', parts + '\n\nDame: 1) un diagnóstico rápido del lead, 2) la estrategia de seguimiento con próximos pasos concretos, y 3) un borrador de mensaje de seguimiento listo para enviar por WhatsApp.');
+}
+
+// ── TEMA CLARO / OSCURO ───────────────────────────────────────────────────────
+function applyTheme(theme) {
+  const dark = theme === 'dark';
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  try { localStorage.setItem('acuarius_theme', dark ? 'dark' : 'light'); } catch {}
+  const moon = document.getElementById('theme-icon-moon');
+  const sun = document.getElementById('theme-icon-sun');
+  if (moon) moon.style.display = dark ? 'none' : '';
+  if (sun) sun.style.display = dark ? '' : 'none';
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  applyTheme(isDark ? 'light' : 'dark');
+}
+
+(function initTheme() {
+  try {
+    if (localStorage.getItem('acuarius_theme') === 'dark') applyTheme('dark');
+  } catch {}
+})();
