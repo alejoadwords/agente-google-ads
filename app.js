@@ -18605,10 +18605,16 @@ async function seoUpdatePositions(quiet) {
       const chunk = all.slice(i, i + 30);
       const r = await fetch('/api/seo-rank', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ keywords: chunk, domain: seoProject.domain, gl: seoProject.country, hl: 'es' }),
       });
       const data = await r.json();
+      if (data.upgrade) {
+        const b = document.getElementById('seop-refresh-btn');
+        if (b) { b.disabled = false; b.textContent = '🔄 Actualizar posiciones'; }
+        openUpgradeFlow('El seguimiento mensual de posiciones reales en Google es parte del plan Pro.');
+        return;
+      }
       if (data.error) throw new Error(data.error);
       (data.results || []).forEach(res => {
         const k = seoProject.keywords.find(x => x.kw === res.keyword);
@@ -18916,7 +18922,7 @@ async function seoGeoUpdate() {
   try {
     const r = await fetch('/api/geo-rank', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         queries,
         domain: seoProject.domain,
@@ -18926,6 +18932,11 @@ async function seoGeoUpdate() {
       }),
     });
     const data = await r.json();
+    if (data.upgrade) {
+      if (btn) { btn.disabled = false; btn.textContent = '🤖 Consultar IAs ahora'; }
+      openUpgradeFlow('El reporte GEO (posicionamiento en ChatGPT, Claude, Gemini y Perplexity) es parte del plan Pro.');
+      return;
+    }
     if (data.error) throw new Error(data.error);
     seoProject.geoHistory = seoProject.geoHistory || {};
     seoProject.geoHistory[seoMonthKey()] = { checkedAt: Date.now(), engines: data.engines, results: data.results };
