@@ -13940,7 +13940,7 @@ function openSettings() {
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
     if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agency · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · CRM 5.000 leads · Imágenes ilimitadas · $99/mes' : isProPlan ? 'CRM 1.000 leads · Inbox · 60 imágenes/mes · $39/mes' : 'Acceso limitado · 30 mensajes/mes · 10 leads';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · CRM 5.000 leads · Imágenes ilimitadas · Proyectos SEO+GEO · $99/mes' : isProPlan ? 'CRM 1.000 leads · Inbox · Proyecto SEO+GEO · 60 imágenes/mes · $39/mes' : 'Plan gratuito · 50 mensajes/mes · 50 leads · 3 imágenes · 1 conexión API';
     const upgradeBtn = document.getElementById('cfg-upgrade-btn');
     if (upgradeBtn) {
       if (isAgencyPlan) {

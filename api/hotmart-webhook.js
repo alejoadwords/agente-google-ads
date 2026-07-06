@@ -4,6 +4,26 @@
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
 const HOTMART_SECRET = process.env.HOTMART_WEBHOOK_SECRET;
+const CLERK_SECRET  = process.env.CLERK_SECRET_KEY;
+
+// ── Clerk: la app lee el plan de publicMetadata.plan — actualizarlo es lo que
+// realmente activa/desactiva el plan para el usuario ─────────────────────────
+async function clerkFindUserByEmail(email) {
+  const r = await fetch('https://api.clerk.com/v1/users?email_address=' + encodeURIComponent(email) + '&limit=1', {
+    headers: { Authorization: `Bearer ${CLERK_SECRET}` },
+  });
+  const users = await r.json();
+  return Array.isArray(users) && users.length ? users[0] : null;
+}
+
+async function clerkSetPlan(clerkUserId, plan) {
+  const r = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}/metadata`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${CLERK_SECRET}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public_metadata: { plan } }),
+  });
+  return r.ok;
+}
 
 // ── Helper REST Supabase (igual que referral.js) ──────────────────────────────
 async function sb(path, method = 'GET', body = null, prefer = 'return=representation') {
@@ -80,15 +100,14 @@ export default async function handler(req, res) {
 
   if (!email) return res.status(400).json({ error: 'Missing email' });
 
-  // Buscar usuario en Supabase
+  // Buscar usuario en Supabase (best-effort: billing y referidos; la activación
+  // real del plan pasa por Clerk más abajo y no depende de esta tabla)
   const { data: users } = await sb(`/users?email=eq.${encodeURIComponent(email)}&select=id,video_credits_extra&limit=1`);
-  if (!users || users.length === 0) {
-    return res.status(200).json({ received: true, action: 'user_not_found', email });
-  }
-  const usuario = users[0];
+  const usuario = (users && users.length) ? users[0] : null;
 
   // ── Compra de créditos de video ──────────────────────────────────────────
   if (productName.includes('video')) {
+    if (!usuario) return res.status(200).json({ received: true, action: 'user_not_found', email });
     if (eventosCancelacion.includes(eventType)) {
       return res.status(200).json({ received: true, action: 'video_credits_no_refund' });
     }
@@ -111,45 +130,62 @@ export default async function handler(req, res) {
   }
 
   // ── Suscripción / plan ──────────────────────────────────────────────────
-  const plan = productName.includes('agencia') ? 'agencia' : 'individual';
+  // Modelo actual: Pro $39 / Agency $99. 'agenc' cubre "Agency" y "Agencia".
+  const plan = productName.includes('agenc') ? 'agency' : 'pro';
 
-  // Precios y comisiones por plan
+  // Precios y comisiones de referido por plan
   const PLAN_CONFIG = {
-    agencia:    { amount: 49, commission: 10 },
-    individual: { amount: 19, commission: 5  },
+    agency: { amount: 99, commission: 10 },
+    pro:    { amount: 39, commission: 5  },
   };
   const { amount: planAmount, commission: planCommission } = PLAN_CONFIG[plan];
 
+  // ── Cancelación: desactivar en Clerk (fuente de verdad de la app) ────────
   if (eventosCancelacion.includes(eventType)) {
-    await sb(`/billing?user_id=eq.${encodeURIComponent(usuario.id)}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
-    return res.status(200).json({ received: true, action: 'cancelled' });
+    let clerkOk = false;
+    try {
+      const clerkUser = await clerkFindUserByEmail(email);
+      if (clerkUser) clerkOk = await clerkSetPlan(clerkUser.id, 'free');
+    } catch (e) { console.error('[hotmart-webhook] Clerk cancel error:', e.message); }
+    if (usuario) await sb(`/billing?user_id=eq.${encodeURIComponent(usuario.id)}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
+    return res.status(200).json({ received: true, action: 'cancelled', clerkUpdated: clerkOk });
   }
+
+  // ── Activación: Clerk publicMetadata.plan es lo que la app lee ───────────
+  let clerkOk = false;
+  try {
+    const clerkUser = await clerkFindUserByEmail(email);
+    if (clerkUser) clerkOk = await clerkSetPlan(clerkUser.id, plan);
+    else console.error('[hotmart-webhook] Usuario no encontrado en Clerk:', email);
+  } catch (e) { console.error('[hotmart-webhook] Clerk activate error:', e.message); }
 
   const ahora      = new Date();
   const vencimiento = new Date(ahora);
   vencimiento.setMonth(vencimiento.getMonth() + 1);
 
-  // Resetear créditos mensuales de video al renovar
-  await sb(
-    `/users?id=eq.${encodeURIComponent(usuario.id)}`,
-    'PATCH',
-    { video_credits_used: 0, video_credits_reset_at: ahora.toISOString() },
-    'return=minimal'
-  );
+  if (usuario) {
+    // Resetear créditos mensuales de video al renovar
+    await sb(
+      `/users?id=eq.${encodeURIComponent(usuario.id)}`,
+      'PATCH',
+      { video_credits_used: 0, video_credits_reset_at: ahora.toISOString() },
+      'return=minimal'
+    );
 
-  // Upsert billing
-  await sb('/billing', 'POST', {
-    user_id:                  usuario.id,
-    plan,
-    status:                   'active',
-    amount:                   planAmount,
-    currency:                 'USD',
-    period_start:             ahora.toISOString(),
-    period_end:               vencimiento.toISOString(),
-    hotmart_transaction:      transactionId,
-    hotmart_subscription_id:  subscriptionId,
-    notes:                    `Activado via Hotmart - ${eventType}`,
-  }, 'resolution=merge-duplicates,return=minimal');
+    // Upsert billing (histórico de facturación y sistema de referidos)
+    await sb('/billing', 'POST', {
+      user_id:                  usuario.id,
+      plan,
+      status:                   'active',
+      amount:                   planAmount,
+      currency:                 'USD',
+      period_start:             ahora.toISOString(),
+      period_end:               vencimiento.toISOString(),
+      hotmart_transaction:      transactionId,
+      hotmart_subscription_id:  subscriptionId,
+      notes:                    `Activado via Hotmart - ${eventType}`,
+    }, 'resolution=merge-duplicates,return=minimal');
+  }
 
   // ── Rastreo de referidos ────────────────────────────────────────────────
   try {
@@ -165,7 +201,7 @@ export default async function handler(req, res) {
           'PATCH',
           {
             status:           'active',
-            referred_user_id: usuario.id,
+            referred_user_id: usuario ? usuario.id : null,
             activated_at:     ahora.toISOString(),
             months_paid:      1,
             total_earned:     planCommission,
@@ -190,5 +226,5 @@ export default async function handler(req, res) {
     console.warn('[hotmart-webhook] Referral tracking error:', refErr.message);
   }
 
-  return res.status(200).json({ received: true, action: 'activated', plan, amount: planAmount, commission: planCommission, email });
+  return res.status(200).json({ received: true, action: 'activated', plan, amount: planAmount, commission: planCommission, clerkUpdated: clerkOk, email });
 }
