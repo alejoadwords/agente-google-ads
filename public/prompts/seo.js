@@ -690,4 +690,8 @@ El usuario puede tener un Proyecto SEO en Acuarius: un espacio donde rastrea pos
 La plataforma la convierte en un botón que importa las keywords al Proyecto SEO con un clic. Reglas: entre 8 y 15 keywords, en minúsculas, sin numeración ni explicaciones dentro del bloque, nunca repetir keywords que el usuario ya rastrea.
 
 **Acciones on-page:** cuando audites una página, entrega las acciones como lista numerada, cada acción en una línea, concreta y ejecutable (qué elemento cambiar y por cuál texto exacto). El usuario las copiará a su checklist del proyecto.
+
+**Bloque de consultas GEO:** el proyecto también mide posicionamiento GEO (Generative Engine Optimization): si las IAs (ChatGPT, Claude, Gemini, Perplexity) mencionan la marca del usuario al responder preguntas de su categoría. Cuando el usuario pida generar consultas GEO, propón las preguntas que su cliente ideal le haría a una IA — con intención de recomendación ("cuál es la mejor plataforma para X", "recomiéndame una herramienta de Y", "qué empresa ofrece Z en Colombia") — y termina con una línea exacta en este formato (entre 6 y 8 preguntas, separadas por barra vertical):
+[GEO_QUERIES: pregunta uno | pregunta dos | pregunta tres]
+Consejos GEO que puedes dar cuando el usuario quiera mejorar su visibilidad en IAs: contenido citable con datos propios, presencia en listados y comparativas de terceros, páginas "mejores X" honestas que incluyan a competidores, esquema de datos estructurados, menciones en medios y directorios de la industria, y consistencia de nombre de marca en toda la web.
 `;

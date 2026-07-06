@@ -10067,6 +10067,17 @@ function addAgent(txt){
       seoKwBtn='<br><button class="lienzo-open-chip" onclick="seoImportKeywords(\''+msgId+'\')">➕ Añadir '+kwList.length+' keywords al Proyecto SEO</button>';
     }
   }
+  // Interceptar bloque [GEO_QUERIES: q1 | q2] → botón de importación de consultas GEO
+  const geoQMatch=txt.match(/\[GEO_QUERIES:\s*([^\]]+)\]/);
+  if(geoQMatch){
+    const qList=geoQMatch[1].split('|').map(s=>s.trim()).filter(Boolean);
+    if(qList.length){
+      txt=txt.replace(geoQMatch[0],'').trim();
+      window._geoQImports=window._geoQImports||{};
+      window._geoQImports[msgId]=qList;
+      seoKwBtn+='<br><button class="lienzo-open-chip" onclick="seoImportGeoQueries(\''+msgId+'\')">🤖 Añadir '+qList.length+' consultas al reporte GEO</button>';
+    }
+  }
   const isLong=txt.length>400;
   // ¿El contenido merece abrirse en el lienzo? ('table' = auto-abre, 'doc' = botón)
   const lienzoKind=(typeof lienzoWorthy==='function')?lienzoWorthy(txt):null;
@@ -18420,6 +18431,7 @@ function seoRenderSetup(editing) {
       '<h2 style="font-size:19px;font-weight:800;margin:0 0 6px">' + (editing ? 'Editar proyecto SEO' : 'Crea tu proyecto SEO') + '</h2>' +
       '<p style="font-size:13px;color:var(--muted);margin:0 0 20px;line-height:1.55">Seguimiento mensual de posiciones reales en Google, competencia, acciones on-page y contenido — todo con tu agente SEO.</p>' +
       '<div class="seop-field"><label class="seop-label">Dominio del sitio</label><input class="seop-input" id="seop-f-domain" type="text" placeholder="ejemplo.com" value="' + esc(p.domain || '') + '"></div>' +
+      '<div class="seop-field"><label class="seop-label">Nombre de marca (para detectar menciones en IAs)</label><input class="seop-input" id="seop-f-brand" type="text" placeholder="ej: Acuarius" value="' + esc(p.brand || '') + '"></div>' +
       '<div class="seop-field"><label class="seop-label">País / mercado</label><select class="seop-input" id="seop-f-country">' +
         SEO_COUNTRIES.map(c => '<option value="' + c[0] + '"' + (p.country === c[0] ? ' selected' : '') + '>' + c[1] + '</option>').join('') +
       '</select></div>' +
@@ -18434,15 +18446,17 @@ async function seoCreateProject(editing) {
   const domain = (document.getElementById('seop-f-domain')?.value || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
   if (!domain || !domain.includes('.')) { alert('Ingresa un dominio válido, ej: ejemplo.com'); return; }
   const country = document.getElementById('seop-f-country')?.value || 'co';
+  const brand = (document.getElementById('seop-f-brand')?.value || '').trim();
   const competitors = (document.getElementById('seop-f-competitors')?.value || '').split('\n').map(s => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]).filter(s => s.includes('.')).slice(0, 5);
   if (editing && seoProject) {
-    seoProject.domain = domain; seoProject.country = country; seoProject.competitors = competitors;
+    seoProject.domain = domain; seoProject.country = country; seoProject.competitors = competitors; seoProject.brand = brand;
   } else {
     const kwText = document.getElementById('seop-f-keywords')?.value || '';
     const kws = kwText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 50);
     seoProject = {
-      domain, country, competitors,
+      domain, country, competitors, brand,
       keywords: kws.map(kw => ({ kw, addedAt: Date.now(), history: {} })),
+      geoQueries: [], geoHistory: {},
       actions: [], createdAt: Date.now(),
     };
   }
@@ -18492,7 +18506,7 @@ function seoRenderProject() {
       '<div class="seop-stat"><div class="seop-stat-val" style="color:#DC2626">↓ ' + downs + '</div><div class="seop-stat-lbl">bajaron este mes</div></div>' +
     '</div>' +
     '<div class="seop-tabs">' +
-      ['keywords|Keywords', 'competencia|Competencia', 'onpage|On-page y acciones', 'contenido|Contenido'].map(t => {
+      ['keywords|Keywords', 'geo|GEO · IAs', 'competencia|Competencia', 'onpage|On-page y acciones', 'contenido|Contenido'].map(t => {
         const [key, label] = t.split('|');
         return '<button class="seop-tab' + (seoTab === key ? ' active' : '') + '" onclick="seoTab=\'' + key + '\';seoRenderProject()">' + label + '</button>';
       }).join('') +
@@ -18501,6 +18515,7 @@ function seoRenderProject() {
 
   const content = document.getElementById('seop-tab-content');
   if (seoTab === 'keywords') content.innerHTML = seoRenderKeywordsTab();
+  else if (seoTab === 'geo') content.innerHTML = seoRenderGeoTab();
   else if (seoTab === 'competencia') content.innerHTML = seoRenderCompetenciaTab();
   else if (seoTab === 'onpage') content.innerHTML = seoRenderOnpageTab();
   else content.innerHTML = seoRenderContenidoTab();
@@ -18767,4 +18782,217 @@ function seoImportKeywords(msgId) {
   }
   seoAddKeywords(list.join('|'));
   openSeoProject();
+}
+
+// ── GEO — POSICIONAMIENTO EN IAs (Generative Engine Optimization) ─────────────
+// Además de la posición en Google, mide si la marca aparece cuando un usuario
+// le pregunta a las principales IAs por su categoría.
+const GEO_ENGINE_META = {
+  claude:     { label: 'Claude',     icon: '🟠' },
+  gemini:     { label: 'Gemini',     icon: '🔵' },
+  chatgpt:    { label: 'ChatGPT',    icon: '🟢' },
+  perplexity: { label: 'Perplexity', icon: '🟣' },
+};
+
+function seoRenderGeoTab() {
+  const m = seoMonthKey(), pm = seoPrevMonthKey();
+  const queries = seoProject.geoQueries || [];
+  const hist = (seoProject.geoHistory || {})[m] || null;
+  const prevHist = (seoProject.geoHistory || {})[pm] || null;
+  const engines = hist?.engines || { claude: { label: 'Claude', active: true } };
+  const activeEngines = Object.keys(engines).filter(k => engines[k].active);
+
+  // Chips de motores
+  const chips = Object.keys(GEO_ENGINE_META).map(k => {
+    const active = engines[k] ? engines[k].active : (k === 'claude');
+    return '<span class="seop-delta ' + (active ? 'up' : 'same') + '" style="margin-right:5px" title="' + (active ? 'Motor activo' : 'Agrega la API key en Vercel para activarlo') + '">' +
+      GEO_ENGINE_META[k].icon + ' ' + GEO_ENGINE_META[k].label + (active ? '' : ' · no configurado') + '</span>';
+  }).join('');
+
+  const header =
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">' +
+      '<div style="font-size:12.5px;color:var(--muted)">¿Te mencionan las IAs cuando alguien pregunta por tu categoría?</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        (hist ? '<button class="seop-btn" onclick="seoGeoExportReport()">📄 Exportar reporte</button>' : '') +
+        '<button class="seop-btn primary" id="seop-geo-btn" onclick="seoGeoUpdate()">🤖 Consultar IAs ahora</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:14px">' + chips + '</div>' +
+    '<div class="seop-addbar">' +
+      '<input class="seop-input" id="seop-geo-add" type="text" placeholder="Añadir consulta, ej: ¿cuál es la mejor plataforma de reservas VIP para hoteles?" onkeydown="if(event.key===\'Enter\')seoGeoAddQuery()">' +
+      '<button class="seop-btn" onclick="seoGeoAddQuery()">+ Añadir</button>' +
+      '<button class="seop-btn" onclick="seoGeoGenerateQueries()">🔍 Generar con el agente</button>' +
+    '</div>';
+
+  if (!queries.length) {
+    return header + '<div class="seop-empty">Sin consultas GEO todavía. Añade las preguntas que haría tu cliente ideal a una IA ("¿cuál es el mejor…?", "recomiéndame…") o pide al agente que las genere. Máximo 10 — cada consulta se hace en vivo a los motores activos.</div>';
+  }
+
+  // Share of voice por motor (mes actual y anterior)
+  const sov = (h, engine) => {
+    if (!h) return null;
+    const rs = (h.results || []).filter(r => r.engine === engine && !r.error);
+    if (!rs.length) return null;
+    return Math.round((rs.filter(r => r.mentioned).length / rs.length) * 100);
+  };
+  const statCards = activeEngines.map(k => {
+    const cur = sov(hist, k), prev = sov(prevHist, k);
+    const delta = (cur !== null && prev !== null) ? cur - prev : null;
+    return '<div class="seop-stat"><div class="seop-stat-val">' + (cur !== null ? cur + '%' : '—') +
+      (delta !== null && delta !== 0 ? ' <span style="font-size:12px;color:' + (delta > 0 ? '#047857' : '#DC2626') + '">' + (delta > 0 ? '↑' : '↓') + Math.abs(delta) + '</span>' : '') +
+      '</div><div class="seop-stat-lbl">visibilidad en ' + (GEO_ENGINE_META[k]?.label || k) + '</div></div>';
+  }).join('');
+  const statsRow = hist ? '<div class="seop-stats" style="margin-top:4px">' + statCards + '</div>' : '';
+
+  // Tabla: consulta × motores
+  let table = '';
+  if (hist) {
+    const byQuery = {};
+    (hist.results || []).forEach(r => { byQuery[r.query] = byQuery[r.query] || {}; byQuery[r.query][r.engine] = r; });
+    const engineCols = activeEngines.map(k => '<th>' + (GEO_ENGINE_META[k]?.label || k) + '</th>').join('');
+    const rows = queries.map(q => {
+      const cells = activeEngines.map(k => {
+        const r = (byQuery[q.q] || {})[k];
+        if (!r) return '<td>—</td>';
+        if (r.error) return '<td title="' + esc(r.error) + '">⚠️</td>';
+        if (!r.mentioned) return '<td><span class="seop-delta down">✗ no aparece</span></td>';
+        return '<td title="' + esc(r.snippet || '') + '"><span class="seop-delta up">✓ mención' + (r.rank ? ' #' + r.rank : '') + '</span></td>';
+      }).join('');
+      return '<tr><td style="max-width:320px;white-space:normal">' + esc(q.q) + '</td>' + cells +
+        '<td><button class="seop-row-btn" title="Eliminar consulta" onclick="seoGeoDeleteQuery(\'' + esc(q.q).replace(/'/g, "\\'") + '\')">✕</button></td></tr>';
+    }).join('');
+    table = '<div class="seop-scroll" style="margin-top:4px"><table class="seop-table"><tr><th>Consulta</th>' + engineCols + '<th></th></tr>' + rows + '</table></div>';
+
+    // Quién domina las respuestas: competidores más mencionados por las IAs
+    const compCount = {};
+    (hist.results || []).forEach(r => (r.competitorsFound || []).forEach(c => { compCount[c] = (compCount[c] || 0) + 1; }));
+    const compSorted = Object.entries(compCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (compSorted.length) {
+      table += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px">Competidores que las IAs mencionan en tus consultas</div>' +
+        '<div>' + compSorted.map(([c, n]) => '<span class="seop-delta down" style="margin:0 6px 6px 0;display:inline-block">' + esc(c) + ' · ' + n + (n === 1 ? ' mención' : ' menciones') + '</span>').join('') + '</div>';
+    }
+  } else {
+    table = '<div class="seop-empty">Tienes ' + queries.length + (queries.length === 1 ? ' consulta lista' : ' consultas listas') + '. Presiona "Consultar IAs ahora" para generar tu primer reporte GEO.</div>';
+  }
+
+  const lastCheck = hist?.checkedAt ? '<div style="font-size:11px;color:var(--muted2);margin-top:12px">Última consulta: ' + new Date(hist.checkedAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · las respuestas de las IAs varían — el reporte captura una muestra mensual</div>' : '';
+
+  return header + statsRow + table + lastCheck;
+}
+
+async function seoGeoAddQuery(text) {
+  const input = document.getElementById('seop-geo-add');
+  const raw = (text || (input ? input.value : '')).trim();
+  if (!raw) return;
+  seoProject.geoQueries = seoProject.geoQueries || [];
+  const existing = new Set(seoProject.geoQueries.map(x => x.q.toLowerCase()));
+  const list = raw.split(/[|\n]/).map(s => s.trim()).filter(Boolean);
+  let added = 0;
+  list.forEach(q => {
+    if (!existing.has(q.toLowerCase()) && seoProject.geoQueries.length < 10) {
+      seoProject.geoQueries.push({ q, addedAt: Date.now() });
+      existing.add(q.toLowerCase()); added++;
+    }
+  });
+  if (input) input.value = '';
+  await seoSaveProject();
+  seoRenderProject();
+  if (added) showToast('✅ ' + added + (added === 1 ? ' consulta añadida' : ' consultas añadidas') + ' (máx 10)', 'success');
+}
+
+async function seoGeoDeleteQuery(q) {
+  seoProject.geoQueries = (seoProject.geoQueries || []).filter(x => x.q !== q);
+  await seoSaveProject();
+  seoRenderProject();
+}
+
+async function seoGeoUpdate() {
+  const queries = (seoProject.geoQueries || []).map(x => x.q);
+  if (!queries.length) { alert('Añade al menos una consulta GEO primero.'); return; }
+  const btn = document.getElementById('seop-geo-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Consultando IAs...'; }
+  try {
+    const r = await fetch('/api/geo-rank', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        queries,
+        domain: seoProject.domain,
+        brand: seoProject.brand || '',
+        competitors: seoProject.competitors || [],
+        country: seoCountryName(seoProject.country),
+      }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    seoProject.geoHistory = seoProject.geoHistory || {};
+    seoProject.geoHistory[seoMonthKey()] = { checkedAt: Date.now(), engines: data.engines, results: data.results };
+    await seoSaveProject();
+    seoRenderProject();
+    showToast('✅ Reporte GEO actualizado', 'success');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 Consultar IAs ahora'; }
+    alert('Error consultando las IAs: ' + (e.message || e));
+  }
+}
+
+function seoGeoGenerateQueries() {
+  openAgentAndAsk('seo', 'Para mi proyecto SEO del dominio ' + seoProject.domain + (seoProject.brand ? ' (marca: ' + seoProject.brand + ')' : '') + ' en ' + seoCountryName(seoProject.country) +
+    (seoProject.keywords?.length ? ', con keywords como: ' + seoProject.keywords.slice(0, 8).map(k => k.kw).join(', ') : '') +
+    '.\n\nGenera las preguntas que mi cliente ideal le haría a una IA (ChatGPT, Claude, Gemini) cuando busca una solución como la mía — del tipo "¿cuál es la mejor…?", "recomiéndame…", "qué plataforma sirve para…". Son para medir mi posicionamiento GEO (si las IAs me mencionan al responder).' +
+    ' IMPORTANTE: termina tu respuesta con una línea exacta en este formato: [GEO_QUERIES: pregunta uno | pregunta dos | pregunta tres] — entre 6 y 8 preguntas.');
+}
+
+function seoImportGeoQueries(msgId) {
+  const list = (window._geoQImports || {})[msgId];
+  if (!list || !seoProject) {
+    if (!seoProject) alert('Primero crea tu proyecto SEO (agente SEO → Proyecto SEO).');
+    return;
+  }
+  seoGeoAddQuery(list.join('|'));
+  seoTab = 'geo';
+  openSeoProject();
+}
+
+function seoGeoExportReport() {
+  const m = seoMonthKey();
+  const hist = (seoProject.geoHistory || {})[m];
+  if (!hist) return;
+  const active = Object.keys(hist.engines || {}).filter(k => hist.engines[k].active);
+  const lines = [];
+  lines.push('# Reporte GEO — ' + seoProject.domain);
+  lines.push('Posicionamiento en IAs generativas · ' + seoCountryName(seoProject.country) + ' · ' + new Date(hist.checkedAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' }));
+  lines.push('');
+  lines.push('## Visibilidad por motor');
+  active.forEach(k => {
+    const rs = (hist.results || []).filter(r => r.engine === k && !r.error);
+    const pct = rs.length ? Math.round((rs.filter(r => r.mentioned).length / rs.length) * 100) : 0;
+    lines.push('- **' + (GEO_ENGINE_META[k]?.label || k) + ':** aparece en ' + pct + '% de las consultas (' + rs.filter(r => r.mentioned).length + ' de ' + rs.length + ')');
+  });
+  lines.push('');
+  lines.push('## Detalle por consulta');
+  lines.push('|Consulta|' + active.map(k => GEO_ENGINE_META[k]?.label || k).join('|') + '|');
+  lines.push('|---|' + active.map(() => '---').join('|') + '|');
+  const byQuery = {};
+  (hist.results || []).forEach(r => { byQuery[r.query] = byQuery[r.query] || {}; byQuery[r.query][r.engine] = r; });
+  Object.keys(byQuery).forEach(q => {
+    const cells = active.map(k => {
+      const r = byQuery[q][k];
+      if (!r || r.error) return '—';
+      return r.mentioned ? ('Sí' + (r.rank ? ' (#' + r.rank + ')' : '')) : 'No';
+    });
+    lines.push('|' + q + '|' + cells.join('|') + '|');
+  });
+  const compCount = {};
+  (hist.results || []).forEach(r => (r.competitorsFound || []).forEach(c => { compCount[c] = (compCount[c] || 0) + 1; }));
+  const compSorted = Object.entries(compCount).sort((a, b) => b[1] - a[1]);
+  if (compSorted.length) {
+    lines.push('');
+    lines.push('## Competidores mencionados por las IAs');
+    compSorted.forEach(([c, n]) => lines.push('- ' + c + ': ' + n + (n === 1 ? ' mención' : ' menciones')));
+  }
+  lines.push('');
+  lines.push('---');
+  lines.push('Generado por Acuarius · Proyecto SEO');
+  exportToPDF(lines.join('\n'), 'reporte-geo-' + seoProject.domain + '.pdf');
 }
