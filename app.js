@@ -14243,6 +14243,24 @@ let adsAccounts = [];       // todas las cuentas accesibles
       localStorage.setItem('ads_refresh_token_persist', refresh || '');
       localStorage.setItem('ads_email_persist', email || '');
 
+      // Red de seguridad: reenviar el guardado a Supabase desde el frontend.
+      // El callback OAuth ya lo intenta server-side, pero si falla (fallo que
+      // era silencioso), la conexión quedaba solo en el navegador y el token
+      // moría en 1h sin posibilidad de renovación.
+      (async function ensureConnSaved() {
+        for (let i = 0; i < 20 && !clerkInstance?.user?.id; i++) await new Promise(r => setTimeout(r, 400));
+        const uid = clerkInstance?.user?.id || urlUid;
+        if (!uid) return;
+        try {
+          const sr = await fetch('/api/admin?action=save-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: uid, platform: 'google_ads', access_token: token, refresh_token: refresh || '', account_name: email || '', expires_in: 3600 }),
+          }).then(r => r.json());
+          if (sr && sr.error) console.error('ensureConnSaved:', sr);
+        } catch (e) { console.error('ensureConnSaved:', e); }
+      })();
+
       if (platform === 'google_ads') {
         // Flujo con userId: mostrar modal grande y abrir configuración
         showConnectionModal('google_ads', email || 'Google Ads');

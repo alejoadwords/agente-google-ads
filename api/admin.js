@@ -812,6 +812,42 @@ async function handleLogApiAction(req, res) {
   return res.json({ id: result?.[0]?.id, ok: true });
 }
 
+// ── SAVE CONNECTION (upsert con on_conflict) ──────────────
+// Red de seguridad del OAuth callback y reparación de conexiones legacy.
+// Devuelve el error de Supabase si falla — nada de fallos silenciosos.
+async function handleSaveConnection(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { userId, platform, access_token, refresh_token, account_name, expires_in } = req.body || {};
+  if (!userId || !platform || !access_token) return res.status(400).json({ error: 'userId, platform y access_token requeridos' });
+  if (!['google_ads', 'meta_ads', 'linkedin_ads'].includes(platform)) return res.status(400).json({ error: 'platform inválida' });
+  const expiresAt = new Date(Date.now() + (parseInt(expires_in) || 3600) * 1000).toISOString();
+  const payload = {
+    user_id:          userId,
+    platform,
+    access_token,
+    ...(refresh_token ? { refresh_token } : {}),
+    token_expires_at: expiresAt,
+    ...(account_name ? { account_name } : {}),
+    updated_at:       new Date().toISOString(),
+  };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?on_conflict=user_id,platform`, {
+    method: 'POST',
+    headers: {
+      'apikey':        SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type':  'application/json',
+      'Prefer':        'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const errText = await r.text().catch(() => '');
+    console.error('handleSaveConnection error:', r.status, errText.slice(0, 300));
+    return res.status(500).json({ error: 'Supabase rechazó el guardado', detail: errText.slice(0, 300), status: r.status });
+  }
+  return res.json({ ok: true });
+}
+
 // ── ASSIGN CONNECTION TO CLIENT ───────────────────────────
 
 async function handleAssignConnection(req, res) {
@@ -927,6 +963,7 @@ export default async function handler(req, res) {
     if (action === 'archive-client')        return await handleArchiveClient(req, res);
     // Sprint 3
     if (action === 'log-api-action')        return await handleLogApiAction(req, res);
+    if (action === 'save-connection')       return await handleSaveConnection(req, res);
     if (action === 'assign-connection')     return await handleAssignConnection(req, res);
     if (action === 'competitive-search')    return await handleCompetitiveSearch(req, res);
     if (action === 'update-preferences')    return await handleUpdatePreferences(req, res);

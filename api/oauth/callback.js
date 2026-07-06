@@ -9,7 +9,9 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
   if (!userId || !SUPABASE_URL) return false;
   const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections`, {
+    // on_conflict es OBLIGATORIO: sin él, el upsert resuelve contra la PK (id)
+    // y el índice único (user_id, platform) hace fallar el insert en silencio
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?on_conflict=user_id,platform`, {
       method: 'POST',
       headers: {
         'apikey':        SUPABASE_SERVICE_KEY,
@@ -30,6 +32,10 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
         updated_at:       new Date().toISOString(),
       }),
     });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => '');
+      console.error('saveGoogleConnection Supabase error:', r.status, errText.slice(0, 300));
+    }
     return r.ok;
   } catch (e) {
     console.error('saveGoogleConnection error:', e.message);
