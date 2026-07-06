@@ -14977,7 +14977,9 @@ function openUpgradeFlow(reason) {
             '<span>&#10003; Todas las conexiones API</span>' +
             '<span>&#10003; CRM · 1.000 leads incluidos</span>' +
             '<span>&#10003; Inbox (WhatsApp, Meta, IG)</span>' +
-            '<span>&#10003; 60 imágenes IA/mes</span>' +
+            '<span>&#10003; 60 imágenes + 5 videos IA/mes</span>' +
+            '<span>&#10003; Proyecto SEO + reporte GEO</span>' +
+            '<span>&#10003; Posiciones reales en Google</span>' +
             '<span>&#10003; Reportes y exportes PDF/CSV</span>' +
           '</div>' +
           '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Leads adicionales: <strong style="color:var(--blue)">$4 por 1.000 contactos</strong></div>' +
