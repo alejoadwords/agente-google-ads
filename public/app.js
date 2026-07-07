@@ -3326,7 +3326,7 @@ function showPlanningQuestionnaire() {
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
     '<div style="max-width:500px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:20px">' +
+      '<div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:12px;padding:20px">' +
         '<h4 style="margin:0 0 16px 0;font-size:15px;font-weight:700;color:var(--text)">📋 Planificación de Campaña</h4>' +
         '<div style="font-size:12px;color:var(--muted);margin-bottom:18px">Completemos los datos para crear tu estrategia de Google Ads</div>' +
         
@@ -3334,19 +3334,19 @@ function showPlanningQuestionnaire() {
         '<div id="planning-step-1" class="planning-step">' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">1. ¿Cuál es tu objetivo principal?</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="objetivo" value="leads" onchange="selectObjective(this)" style="margin:0">' +
               '<span>🎯 <strong>Generar leads</strong> - Formularios, llamadas, cotizaciones</span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="objetivo" value="ventas" onchange="selectObjective(this)" style="margin:0">' +
               '<span>🛒 <strong>Generar ventas</strong> - E-commerce, compras online</span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="objetivo" value="trafico" onchange="selectObjective(this)" style="margin:0">' +
               '<span>📈 <strong>Aumentar tráfico</strong> - Visitas al sitio web</span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="objetivo" value="local" onchange="selectObjective(this)" style="margin:0">' +
               '<span>📍 <strong>Negocio local</strong> - Visitas a tienda física</span>' +
             '</label>' +
@@ -3357,15 +3357,15 @@ function showPlanningQuestionnaire() {
         '<div id="planning-step-2" class="planning-step" style="display:none">' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">2. ¿Cuál es tu presupuesto mensual?</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="presupuesto" value="100-300" onchange="selectBudget(this)" style="margin:0">' +
               '<span>💰 <strong>$100 - $300 USD</strong> - Presupuesto inicial</span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="presupuesto" value="300-1000" onchange="selectBudget(this)" style="margin:0">' +
               '<span>💰 <strong>$300 - $1,000 USD</strong> - Presupuesto medio</span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="presupuesto" value="1000+" onchange="selectBudget(this)" style="margin:0">' +
               '<span>💰 <strong>$1,000+ USD</strong> - Presupuesto alto</span>' +
             '</label>' +
@@ -3376,19 +3376,19 @@ function showPlanningQuestionnaire() {
         '<div id="planning-step-3" class="planning-step" style="display:none">' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">3. ¿En qué mercado quieres anunciar?</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="mercado" value="colombia" onchange="selectMarket(this)" style="margin:0">' +
               '<span>🇨🇴 <strong>Colombia</strong></span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="mercado" value="mexico" onchange="selectMarket(this)" style="margin:0">' +
               '<span>🇲🇽 <strong>México</strong></span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="mercado" value="argentina" onchange="selectMarket(this)" style="margin:0">' +
               '<span>🇦🇷 <strong>Argentina</strong></span>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid #E0E0E0;border-radius:6px;font-size:12px" onmouseover="this.style.background=\'#F3F4F6\'" onmouseout="this.style.background=\'white\'">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onmouseover="this.style.background=\'var(--bg-muted)\'" onmouseout="this.style.background=\'white\'">' +
               '<input type="radio" name="mercado" value="otro" onchange="selectMarket(this)" style="margin:0">' +
               '<span>🌎 <strong>Otro país</strong></span>' +
             '</label>' +
@@ -3408,7 +3408,7 @@ function selectObjective(input) {
   planningData.objetivo = input.value;
   // Highlight selected
   document.querySelectorAll('input[name="objetivo"]').forEach(radio => {
-    radio.parentElement.style.borderColor = radio.checked ? 'var(--blue)' : '#E0E0E0';
+    radio.parentElement.style.borderColor = radio.checked ? 'var(--blue)' : 'var(--border)';
     radio.parentElement.style.background = radio.checked ? 'var(--blue-lt)' : 'white';
   });
   setTimeout(() => {
@@ -3420,7 +3420,7 @@ function selectObjective(input) {
 function selectBudget(input) {
   planningData.presupuesto = input.value;
   document.querySelectorAll('input[name="presupuesto"]').forEach(radio => {
-    radio.parentElement.style.borderColor = radio.checked ? 'var(--blue)' : '#E0E0E0';
+    radio.parentElement.style.borderColor = radio.checked ? 'var(--blue)' : 'var(--border)';
     radio.parentElement.style.background = radio.checked ? 'var(--blue-lt)' : 'white';
   });
   setTimeout(() => {
@@ -3432,7 +3432,7 @@ function selectBudget(input) {
 function selectMarket(input) {
   planningData.mercado = input.value;
   document.querySelectorAll('input[name="mercado"]').forEach(radio => {
-    radio.parentElement.style.borderColor = radio.checked ? 'var(--blue)' : '#E0E0E0';
+    radio.parentElement.style.borderColor = radio.checked ? 'var(--blue)' : 'var(--border)';
     radio.parentElement.style.background = radio.checked ? 'var(--blue-lt)' : 'white';
   });
   document.getElementById('generate-planning-btn').disabled = false;
@@ -3729,7 +3729,7 @@ function showDiagnosticInput(agent) {
     html += '<div style="font-size:12px;color:#047857;margin-top:2px">' + adsActiveAccount.name + ' · El agente accede a tus datos directamente</div>';
     html += '</div></div>';
 
-    html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:20px">';
+    html += '<div style="background:var(--bg-subtle);border:1.5px solid var(--border);border-radius:12px;padding:20px">';
     html += '<div style="font-size:13px;color:var(--text);margin-bottom:6px;font-weight:600">¿Qué quieres analizar?</div>';
     html += '<div style="font-size:12px;color:var(--muted2);margin-bottom:18px">El agente consultará tu cuenta en tiempo real: campañas, métricas, keywords, anuncios y más.</div>';
     html += '<div style="display:flex;gap:8px;">';
@@ -3746,11 +3746,11 @@ function showDiagnosticInput(agent) {
       html += '<div style="flex:1">';
       html += '<div style="font-size:12px;font-weight:600;color:#92400E">Conecta tu cuenta para diagnóstico automático</div>';
       html += '<div style="font-size:11px;color:#B45309;margin-top:2px;margin-bottom:8px">Sin conexión, puedes subir capturas manualmente. Con tu cuenta conectada, el agente accede a los datos directamente.</div>';
-      html += '<button onclick="connectGoogleAds()" style="padding:6px 12px;background:#F97316;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar cuenta de Google Ads →</button>';
+      html += '<button onclick="connectGoogleAds()" style="padding:6px 12px;background:var(--blue);color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Conectar cuenta de Google Ads →</button>';
       html += '</div></div>';
     }
 
-    html += '<div style="background:#F9FAFB;border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
+    html += '<div style="background:var(--bg-subtle);border:1.5px solid var(--border);border-radius:12px;padding:18px 20px">';
 
     // Sección capturas — multi-imagen
     html += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📷 Capturas de pantalla <span style="font-weight:400;color:var(--muted2)">(hasta 4 — campañas, grupos, anuncios, keywords...)</span></div>';
@@ -3827,7 +3827,7 @@ function diagRenderGrid() {
   grid.innerHTML = '';
   diagImages.forEach(function(img, i) {
     var cell = document.createElement('div');
-    cell.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);aspect-ratio:16/9;background:#F3F4F6';
+    cell.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);aspect-ratio:16/9;background:var(--bg-muted)';
     cell.innerHTML = '<img src="' + img.dataUrl + '" style="width:100%;height:100%;object-fit:cover">' +
       '<button onclick="diagRemoveImage(' + i + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);border:none;border-radius:5px;color:white;font-size:10px;padding:2px 7px;cursor:pointer">✕</button>' +
       '<div style="position:absolute;bottom:4px;left:6px;font-size:10px;color:white;background:rgba(0,0,0,.4);padding:1px 5px;border-radius:4px;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + img.name + '</div>';
@@ -4638,13 +4638,13 @@ function showImgChip(name, dataUrl, b64len){
   const sizeLabel=kb>1024?Math.round(kb/1024)+'MB':kb+'KB';
   const bar=document.createElement('div');
   bar.id='img-chip-bar';
-  bar.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 10px 5px 5px;max-width:200px;margin:6px 0 2px">
-    <img src="${dataUrl}" style="width:32px;height:32px;min-width:32px;border-radius:6px;object-fit:cover;border:1px solid #E5E7EB;display:block" alt="preview">
+  bar.innerHTML=`<div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:5px 10px 5px 5px;max-width:200px;margin:6px 0 2px">
+    <img src="${dataUrl}" style="width:32px;height:32px;min-width:32px;border-radius:6px;object-fit:cover;border:1px solid var(--border);display:block" alt="preview">
     <div style="display:flex;flex-direction:column;gap:1px;min-width:0;flex:1">
-      <span style="font-size:12px;font-weight:500;color:#0A0A0A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;display:block">${esc(name)}</span>
-      <span style="font-size:11px;color:#6B7280">${sizeLabel}</span>
+      <span style="font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;display:block">${esc(name)}</span>
+      <span style="font-size:11px;color:var(--muted)">${sizeLabel}</span>
     </div>
-    <button onclick="clearImg()" title="quitar" style="background:none;border:none;cursor:pointer;color:#9CA3AF;padding:2px;border-radius:4px;display:flex;align-items:center;flex-shrink:0">
+    <button onclick="clearImg()" title="quitar" style="background:none;border:none;cursor:pointer;color:var(--muted2);padding:2px;border-radius:4px;display:flex;align-items:center;flex-shrink:0">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
@@ -5263,10 +5263,10 @@ async function reloadHistorialContent() {
     const agentNames = {'google-ads':'Google Ads','meta-ads':'Meta Ads','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','consultor':'Consultor','social':'Social'};
     body.innerHTML = data.map(r => {
       const ago = timeAgo(r.created_at);
-      const color = agentColors[r.agent] || '#6B7280';
+      const color = agentColors[r.agent] || 'var(--muted)';
       const name = agentNames[r.agent] || r.agent;
       const preview = r.content.length > 120 ? r.content.slice(0,120)+'...' : r.content;
-      const statusIcon = r.status === 'applied' ? '<span style="color:#16a34a;font-weight:600">✓ Aplicada</span>' : r.status === 'dismissed' ? '<span style="color:#9CA3AF;text-decoration:line-through">Descartada</span>' : `<button onclick="applyRec('${r.id}',this)" style="padding:3px 10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:6px;font-size:11px;color:var(--blue);cursor:pointer;font-weight:600" onmouseover="this.style.background='#dde0fc'" onmouseout="this.style.background='var(--blue-lt)'">Aplicar</button> <button onclick="dismissRec('${r.id}',this)" style="padding:3px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='var(--bg)'">Descartar</button>`;
+      const statusIcon = r.status === 'applied' ? '<span style="color:#16a34a;font-weight:600">✓ Aplicada</span>' : r.status === 'dismissed' ? '<span style="color:var(--muted2);text-decoration:line-through">Descartada</span>' : `<button onclick="applyRec('${r.id}',this)" style="padding:3px 10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:6px;font-size:11px;color:var(--blue);cursor:pointer;font-weight:600" onmouseover="this.style.background='#dde0fc'" onmouseout="this.style.background='var(--blue-lt)'">Aplicar</button> <button onclick="dismissRec('${r.id}',this)" style="padding:3px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='var(--bg)'">Descartar</button>`;
       return `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:10px;${r.status==='dismissed'?'opacity:.5':''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <span style="font-size:10px;font-weight:700;background:${color}20;color:${color};padding:2px 8px;border-radius:10px">${name}</span>
@@ -5310,7 +5310,7 @@ function dismissRec(id, btn) {
   const card = btn.closest('div[style]');
   card.style.opacity = '.5';
   const actionsDiv = btn.parentElement;
-  actionsDiv.innerHTML = '<span style="color:#9CA3AF;text-decoration:line-through">Descartada</span>';
+  actionsDiv.innerHTML = '<span style="color:var(--muted2);text-decoration:line-through">Descartada</span>';
   updateHistorialBadge();
 }
 
@@ -5766,7 +5766,7 @@ function renderActionConfirmCard(actionData) {
     detailsHtml += '<div class="action-confirm-detail"><span class="label">Concordancia:</span><span class="value">[' + matchLabel + ']</span></div>';
     detailsHtml += '<div class="action-confirm-detail"><span class="label">Se agrega a:</span><span class="value">' + scopeLabel + '</span></div>';
     detailsHtml += '<div class="action-confirm-detail"><span class="label">Cantidad:</span><span class="value">' + params.keywords.length + ' palabras negativas</span></div>';
-    detailsHtml += '<div style="margin-top:10px;padding:10px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;max-height:180px;overflow-y:auto">';
+    detailsHtml += '<div style="margin-top:10px;padding:10px 12px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;max-height:180px;overflow-y:auto">';
     params.keywords.forEach(kw => {
       const matchTxt = params.matchType === 'EXACT' ? 'exacta' : params.matchType === 'BROAD' ? 'amplia' : 'frase';
       detailsHtml += '<div style="font-size:12px;color:#374151;padding:3px 0;font-family:monospace">[' + matchTxt + '] ' + kw + '</div>';
@@ -5949,7 +5949,7 @@ async function showVideoAdForm() {
     const url5  = 'https://pay.hotmart.com/R105597226A?off=2muq4ex2';
     const url10 = 'https://pay.hotmart.com/R105597226A?off=mfjz53b5';
     el.innerHTML =
-      '<div style="background:var(--bg);border:2px solid #E5E7EB;border-radius:16px;padding:20px;max-width:480px;width:100%">' +
+      '<div style="background:var(--bg);border:2px solid var(--border);border-radius:16px;padding:20px;max-width:480px;width:100%">' +
         '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
           '<span style="font-size:22px">🎬</span>' +
           '<div>' +
@@ -7187,7 +7187,7 @@ const STUDIO_NETWORKS = {
   tiktok:    { label:'TikTok',    color:'#000000', bg:'#F0F0F0' },
   facebook:  { label:'Facebook',  color:'#1877F2', bg:'#EBF3FF' },
   linkedin:  { label:'LinkedIn',  color:'#0A66C2', bg:'#E8F1FF' },
-  x:         { label:'X',         color:'#374151', bg:'#F3F4F6' },
+  x:         { label:'X',         color:'#374151', bg:'var(--bg-muted)' },
   youtube:   { label:'YouTube',   color:'#FF0000', bg:'#FFF0F0' }
 };
 const STUDIO_FORMATS = {
@@ -7199,7 +7199,7 @@ const STUDIO_FORMATS = {
   post:     { label:'Post',    icon:'📝', falFormat:'square' }
 };
 const STATUS_CFG = {
-  borrador:  { bg:'#F3F4F6', color:'#6B7280' },
+  borrador:  { bg:'var(--bg-muted)', color:'var(--muted)' },
   listo:     { bg:'#ECFDF5', color:'#059669' },
   publicado: { bg:'#EFF6FF', color:'#2563EB' }
 };
@@ -7722,14 +7722,14 @@ function showPublishSuccessModal(results, post) {
 
   const okRows  = ok.map(r =>
     '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#F0FDF4;border-radius:8px;margin-bottom:6px">' +
-    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
+    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:var(--text)">' + netLabel[r.network] + '</span>' +
     '<span style="margin-left:auto;font-size:12px;color:#059669;font-weight:700">✓ Publicado</span></div>'
   ).join('');
 
   const failRows = fail.map(r =>
     '<div style="padding:9px 12px;background:#FEF2F2;border-radius:8px;margin-bottom:6px">' +
       '<div style="display:flex;align-items:center;gap:10px">' +
-        netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:#111">' + netLabel[r.network] + '</span>' +
+        netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:var(--text)">' + netLabel[r.network] + '</span>' +
         '<span style="margin-left:auto;font-size:12px;color:#DC2626;font-weight:600">✗ Error</span>' +
       '</div>' +
       (r.error ? '<p style="margin:5px 0 0 28px;font-size:11px;color:#B91C1C;line-height:1.4;word-break:break-word">' + r.error.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : '') +
@@ -7747,17 +7747,17 @@ function showPublishSuccessModal(results, post) {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease';
 
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:20px;padding:40px 36px 32px;max-width:420px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
+    '<div style="background:var(--bg);border-radius:20px;padding:40px 36px 32px;max-width:420px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
       '<div style="width:56px;height:56px;border-radius:50%;background:' + (allOk ? '#D1FAE5' : '#FEF3C7') + ';display:flex;align-items:center;justify-content:center;margin:0 auto 16px">' +
         (allOk
           ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>'
           : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>'
         ) +
       '</div>' +
-      '<h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 4px;font-family:var(--font)">' + title + '</h2>' +
+      '<h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0 0 4px;font-family:var(--font)">' + title + '</h2>' +
       '<p style="font-size:13px;color:#666;margin:0 0 20px;font-family:var(--font)">' + subtitle + '</p>' +
       '<div style="text-align:left;margin-bottom:22px">' + okRows + failRows + '</div>' +
-      '<button id="psm-close-btn" style="width:100%;padding:13px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
+      '<button id="psm-close-btn" style="width:100%;padding:13px;background:var(--accent,var(--blue));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
     '</div>';
 
   if (!document.getElementById('conn-modal-styles')) {
@@ -8650,11 +8650,11 @@ function openPostModal(postId) {
               Object.entries(STUDIO_FORMATS).map(([k,v]) => '<option value="' + k + '"' + (post.format === k ? ' selected' : '') + '>' + v.label.toUpperCase() + '</option>').join('') +
             '</select>' +
             // Week select
-            '<select onchange="updatePostMeta(\'' + postId + '\',\'week\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--muted);background:#fff">' +
+            '<select onchange="updatePostMeta(\'' + postId + '\',\'week\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--muted);background:var(--bg)">' +
               [1,2,3,4].map(w => '<option value="' + w + '"' + (post.week == w ? ' selected' : '') + '>Sem. ' + w + '</option>').join('') +
             '</select>' +
             // Day select
-            '<select onchange="updatePostMeta(\'' + postId + '\',\'day\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--muted);background:#fff">' +
+            '<select onchange="updatePostMeta(\'' + postId + '\',\'day\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--muted);background:var(--bg)">' +
               ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map(d => '<option' + (post.day === d ? ' selected' : '') + '>' + d + '</option>').join('') +
             '</select>' +
             '<span class="post-status" style="background:' + sc.bg + ';color:' + sc.color + '">' + post.status + '</span>' +
@@ -9305,17 +9305,17 @@ function showConnectionModal(platform, accountName) {
   overlay.style.cssText = `position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease`;
 
   overlay.innerHTML = `
-    <div style="background:#fff;border-radius:20px;padding:48px 44px 40px;max-width:420px;width:90%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.25);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">
+    <div style="background:var(--bg);border-radius:20px;padding:48px 44px 40px;max-width:420px;width:90%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.25);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">
       <div style="font-size:56px;margin-bottom:16px;line-height:1">${icon}</div>
       <div style="width:56px;height:56px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
-      <h2 style="font-size:22px;font-weight:700;color:#111;margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
-      <p style="font-size:15px;color:#555;margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
-      <p style="font-size:13px;color:#888;margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
+      <h2 style="font-size:22px;font-weight:700;color:var(--text);margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
+      <p style="font-size:15px;color:var(--text-2);margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
+      <p style="font-size:13px;color:var(--muted2);margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
       ${AUDIT_AGENT_KEY[platform] ? `<button id="conn-modal-audit-btn" style="width:100%;padding:14px;background:var(--blue,#1E2BCC);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">✨ Auditar mi cuenta con IA ahora</button>` : ''}
-      <button id="conn-modal-settings-btn" style="width:100%;padding:${AUDIT_AGENT_KEY[platform] ? '12px' : '14px'};background:${AUDIT_AGENT_KEY[platform] ? 'transparent' : 'var(--accent,#6366f1)'};color:${AUDIT_AGENT_KEY[platform] ? '#555' : '#fff'};border:${AUDIT_AGENT_KEY[platform] ? '1px solid #e5e7eb' : 'none'};border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
-      <button id="conn-modal-close-btn" style="width:100%;padding:12px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);transition:background .2s">Cerrar</button>
+      <button id="conn-modal-settings-btn" style="width:100%;padding:${AUDIT_AGENT_KEY[platform] ? '12px' : '14px'};background:${AUDIT_AGENT_KEY[platform] ? 'transparent' : 'var(--accent,var(--blue))'};color:${AUDIT_AGENT_KEY[platform] ? '#555' : '#fff'};border:${AUDIT_AGENT_KEY[platform] ? '1px solid var(--border)' : 'none'};border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
+      <button id="conn-modal-close-btn" style="width:100%;padding:12px;background:transparent;color:var(--muted2);border:1px solid var(--border);border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);transition:background .2s">Cerrar</button>
     </div>
   `;
 
@@ -9384,18 +9384,18 @@ function showSocialConnectionModal(igAccts, fbAccts) {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadeInOverlay .3s ease';
 
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:20px;padding:44px 40px 36px;max-width:440px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
+    '<div style="background:var(--bg);border-radius:20px;padding:44px 40px 36px;max-width:440px;width:92%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.22);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
       // Checkmark circle
       '<div style="width:60px;height:60px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">' +
         '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
       '</div>' +
-      '<h2 style="font-size:21px;font-weight:700;color:#111;margin:0 0 6px;font-family:var(--font)">¡' + title + '!</h2>' +
+      '<h2 style="font-size:21px;font-weight:700;color:var(--text);margin:0 0 6px;font-family:var(--font)">¡' + title + '!</h2>' +
       '<p style="font-size:14px;color:#666;margin:0 0 22px;font-family:var(--font)">Tus cuentas ya están listas para publicar desde el Studio</p>' +
       // Lista de cuentas
       '<div style="text-align:left;margin-bottom:24px">' + igLines + fbLines + '</div>' +
       // Botones
-      '<button id="scm-studio-btn" style="width:100%;padding:13px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:8px;transition:opacity .2s">Ir al Social Studio</button>' +
-      '<button id="scm-close-btn" style="width:100%;padding:11px;background:transparent;color:#888;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
+      '<button id="scm-studio-btn" style="width:100%;padding:13px;background:var(--accent,var(--blue));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:8px;transition:opacity .2s">Ir al Social Studio</button>' +
+      '<button id="scm-close-btn" style="width:100%;padding:11px;background:transparent;color:var(--muted2);border:1px solid var(--border);border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
     '</div>';
 
   // Inyectar keyframes si no existen
@@ -10104,7 +10104,7 @@ function addUser(txt,img){
   el.className='msg user';
   let imgHtml='';
   if(img){
-    imgHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 10px 5px 5px;max-width:200px"><img src="${img.dataUrl||'data:'+img.mediaType+';base64,'+img.base64}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #E5E7EB"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:12px;font-weight:500;color:#0A0A0A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(img.name||'imagen')}</span><span style="font-size:11px;color:#6B7280">imagen</span></div></div></div>`;
+    imgHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:5px 10px 5px 5px;max-width:200px"><img src="${img.dataUrl||'data:'+img.mediaType+';base64,'+img.base64}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--border)"><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(img.name||'imagen')}</span><span style="font-size:11px;color:var(--muted)">imagen</span></div></div></div>`;
   }
   const textHtml=txt&&txt!=='[Imagen adjunta]'?`<div class="bubble usr-bubble">${esc(txt)}</div>`:'';
   el.innerHTML=`<div class="av usr" style="font-size:10px;font-weight:600">tú</div>${imgHtml}${textHtml}`;
@@ -10961,7 +10961,7 @@ function renderCampaignWizard() {
        ['OUTCOME_ENGAGEMENT','💬 Interacción','Más likes, comentarios y reacciones en tu publicación'],
        ['OUTCOME_MESSAGES','📱 Mensajes','Lleva personas a que te escriban por WhatsApp, Messenger o Instagram DM']
       ].map(function(o){
-        var sel = campaignWizardData.objective === o[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
+        var sel = campaignWizardData.objective === o[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid var(--border);background:var(--bg)';
         return '<div onclick="cwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px">'+
           '<div style="font-size:20px">'+o[1].split(' ')[0]+'</div>'+
           '<div><div style="font-weight:600;font-size:13px">'+o[1].split(' ').slice(1).join(' ')+'</div><div style="font-size:11px;color:#666">'+o[2]+'</div></div></div>';
@@ -10972,7 +10972,7 @@ function renderCampaignWizard() {
         '<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:#1877F2">¿Por qué app recibirás los mensajes?</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
         [['whatsapp','💬 WhatsApp'],['messenger','📨 Messenger'],['instagram','📸 Instagram DM']].map(function(a){
-          var sel2 = (campaignWizardData.messagingApp||'whatsapp') === a[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#333;border-color:#ddd';
+          var sel2 = (campaignWizardData.messagingApp||'whatsapp') === a[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:var(--bg);color:#333;border-color:#ddd';
           return '<button onclick="cwSelectMessagingApp(\''+a[0]+'\')" style="'+sel2+';border:1px solid;border-radius:20px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)">'+a[1]+'</button>';
         }).join('') +
         '</div></div>'
@@ -10983,13 +10983,13 @@ function renderCampaignWizard() {
     var cwMinBudget = cwCurrency === 'COP' ? '20.000' : cwCurrency === 'MXN' ? '100' : cwCurrency === 'ARS' ? '1.000' : '5';
     var cwSugBudget = cwCurrency === 'COP' ? '50.000–200.000' : cwCurrency === 'MXN' ? '200–800' : cwCurrency === 'ARS' ? '5.000–20.000' : '5–20';
     body = '<div style="margin-bottom:16px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario ('+cwCurrency+')</label>'+
-      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px;color:#555">$</span>'+
+      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px;color:var(--text-2)">$</span>'+
       '<input id="cw-budget" type="number" min="1" placeholder="'+cwMinBudget+'" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700" value="'+(campaignWizardData.budget||'')+'">'+
       '<span style="color:#777;font-size:13px">'+cwCurrency+'/día</span></div>'+
-      '<div style="margin-top:8px;font-size:12px;color:#888">Mínimo $'+cwMinBudget+' '+cwCurrency+'/día. Para leads recomendamos $'+cwSugBudget+' '+cwCurrency+'/día.</div></div>'+
+      '<div style="margin-top:8px;font-size:12px;color:var(--muted2)">Mínimo $'+cwMinBudget+' '+cwCurrency+'/día. Para leads recomendamos $'+cwSugBudget+' '+cwCurrency+'/día.</div></div>'+
       '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px">Duración</label>'+
       [['7','7 días'],['14','14 días'],['30','30 días'],['0','Sin fecha de fin']].map(function(d){
-        var sel = String(campaignWizardData.durationDays) === d[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid #e5e7eb;background:#fff';
+        var sel = String(campaignWizardData.durationDays) === d[0] ? 'border:2px solid #1877F2;background:#e8f0fe' : 'border:1px solid var(--border);background:var(--bg)';
         return '<div onclick="cwSelectDuration('+d[0]+')" style="'+sel+';border-radius:8px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:13px;font-weight:500">'+d[1]+'</div>';
       }).join('') + '</div>';
   } else if (campaignWizardStep === 3) {
@@ -11005,7 +11005,7 @@ function renderCampaignWizard() {
       '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Género</label>'+
       '<div style="display:flex;gap:8px">'+
       [['0','Todos'],['2','Mujeres'],['1','Hombres']].map(function(g){
-        var sel = String(campaignWizardData.gender) === g[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#333;border-color:#ddd';
+        var sel = String(campaignWizardData.gender) === g[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:var(--bg);color:#333;border-color:#ddd';
         return '<button onclick="cwSelectGender('+g[0]+')" style="'+sel+';border:1px solid;border-radius:20px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:500">'+g[1]+'</button>';
       }).join('')+'</div></div>';
   } else if (campaignWizardStep === 4) {
@@ -11014,7 +11014,7 @@ function renderCampaignWizard() {
     // ── Selector de formato ────────────────────────────────
     var fmtSel = '<div style="display:flex;gap:6px;margin-bottom:16px">'+
       [['image','📷 Imagen'],['carousel','🎠 Carrusel'],['video','🎬 Video']].map(function(f){
-        var a = fmt===f[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:#fff;color:#555;border-color:#ddd';
+        var a = fmt===f[0] ? 'background:#1877F2;color:#fff;border-color:#1877F2' : 'background:var(--bg);color:var(--text-2);border-color:#ddd';
         return '<button onclick="cwSetFormat(\''+f[0]+'\')" style="'+a+';border:1px solid;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)">'+f[1]+'</button>';
       }).join('')+'</div>';
 
@@ -11029,10 +11029,10 @@ function renderCampaignWizard() {
           if (fmt==='carousel') {
             var idxs = campaignWizardData.carouselIndexes||[];
             var pos = idxs.indexOf(i);
-            sel = pos>=0 ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
+            sel = pos>=0 ? 'border:3px solid #1877F2;' : 'border:2px solid var(--border);';
             badge = pos>=0 ? '<div style="position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">'+(pos+1)+'</div>' : '';
           } else {
-            sel = campaignWizardData.adImageIndex===i ? 'border:3px solid #1877F2;' : 'border:2px solid #e5e7eb;';
+            sel = campaignWizardData.adImageIndex===i ? 'border:3px solid #1877F2;' : 'border:2px solid var(--border);';
             badge = campaignWizardData.adImageIndex===i ? '<div style="position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:10px;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">✓</div>' : '';
           }
           return '<div class="cw-img-thumb" data-idx="'+i+'" onclick="cwSelectImage('+i+')" style="'+sel+'border-radius:8px;overflow:hidden;cursor:pointer;width:80px;height:80px;flex-shrink:0;position:relative">'+
@@ -11044,17 +11044,17 @@ function renderCampaignWizard() {
     var copySection =
       '<div style="margin-bottom:12px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-          '<label style="font-weight:600;font-size:13px">Texto del anuncio <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+          '<label style="font-weight:600;font-size:13px">Texto del anuncio <span style="font-weight:400;color:var(--muted2);font-size:12px">(opcional)</span></label>'+
           '<button id="cw-gen-btn" onclick="cwGenerateCopy()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1877F2;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
         '</div>'+
         '<textarea id="cw-ad-body" rows="3" placeholder="Ej: ¿Buscas crecer tu negocio? 🚀 Llegamos a más clientes para ti. ¡Escríbenos hoy!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(campaignWizardData.adBody||'')+'</textarea>'+
       '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 125 caracteres</div>'+
       '</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
-        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Título <span style="font-weight:400;color:var(--muted2);font-size:12px">(opcional)</span></label>'+
           '<input id="cw-ad-title" placeholder="Ej: ¡Empieza gratis hoy!" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adTitle||'')+'">'+
           '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 40 caracteres</div></div>'+
-        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descripción <span style="font-weight:400;color:#888;font-size:12px">(opcional)</span></label>'+
+        '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descripción <span style="font-weight:400;color:var(--muted2);font-size:12px">(opcional)</span></label>'+
           '<input id="cw-ad-description" placeholder="Ej: Envío gratis · Sin contrato" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(campaignWizardData.adDescription||'')+'">'+
           '<div style="font-size:11px;color:#999;text-align:right;margin-top:2px">Máx. 30 caracteres</div></div>'+
       '</div>';
@@ -11072,7 +11072,7 @@ function renderCampaignWizard() {
     if (fmt === 'video') {
       // ── Formato Video ──────────────────────────────────
       body = fmtSel+
-        '<div style="background:#fff8e6;border:1px solid #ffd970;border-radius:8px;padding:12px;font-size:12px;color:#7a5700;margin-bottom:14px">'+
+        '<div style="background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:12px;font-size:12px;color:var(--warning);margin-bottom:14px">'+
           '🎬 <strong>Subir video desde Acuarius</strong> — Selecciona un MP4 o MOV. Los videos se suben directamente a Meta y pueden tardar 1-2 min en procesar antes de publicarse.</div>'+
         '<div style="margin-bottom:14px">'+
           '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Archivo de video</label>'+
@@ -11141,20 +11141,20 @@ function renderCampaignWizard() {
       ].map(function(r){
         return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px"><span style="color:#666">'+r[0]+'</span><span style="font-weight:600">'+r[1]+'</span></div>';
       }).join('')+'</div>'+
-      '<div style="background:#fff3cd;border-radius:8px;padding:12px;font-size:12px;color:#856404;margin-bottom:8px">'+
+      '<div style="background:var(--warning-bg);border-radius:8px;padding:12px;font-size:12px;color:var(--warning);margin-bottom:8px">'+
       '⚠️ La campaña se creará en estado <strong>PAUSADA</strong> para que puedas revisarla antes de activarla en Meta Ads Manager.</div>'+
       '<div id="cw-launch-msg" style="display:none"></div>';
   }
 
   var html = '<div id="cw-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center">'+
-    '<div style="background:#fff;border-radius:16px;padding:28px;width:min(500px,92vw);max-height:90vh;overflow-y:auto;position:relative;z-index:9999">'+
+    '<div style="background:var(--bg);border-radius:16px;padding:28px;width:min(500px,92vw);max-height:90vh;overflow-y:auto;position:relative;z-index:9999">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'+
     '<h3 style="margin:0;font-size:18px">🚀 Crear campaña en Meta</h3>'+
-    '<button onclick="closeCampaignWizard()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button></div>'+
+    '<button onclick="closeCampaignWizard()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted2);line-height:1">×</button></div>'+
     '<div style="display:flex;gap:6px;margin-bottom:20px">'+pills+'</div>'+
     '<div id="cw-body">'+body+'</div>'+
     '<div style="display:flex;gap:10px;margin-top:20px">'+
-    (campaignWizardStep > 1 ? '<button onclick="cwPrev()" style="flex:1;padding:12px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px">← Atrás</button>' : '')+
+    (campaignWizardStep > 1 ? '<button onclick="cwPrev()" style="flex:1;padding:12px;border:1px solid #ddd;background:var(--bg);border-radius:8px;cursor:pointer;font-size:14px">← Atrás</button>' : '')+
     (campaignWizardStep < 5
       ? '<button onclick="cwNext()" style="flex:2;padding:12px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">Continuar →</button>'
       : '<button id="cw-launch-btn" onclick="cwLaunch()" style="flex:2;padding:12px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🚀 Crear campaña</button>')+
@@ -11286,7 +11286,7 @@ function cwSelectImage(idx) {
     document.querySelectorAll('.cw-img-thumb').forEach(function(el) {
       var i = parseInt(el.dataset.idx);
       var p = idxs.indexOf(i);
-      el.style.border = p>=0 ? '3px solid #1877F2' : '2px solid #e5e7eb';
+      el.style.border = p>=0 ? '3px solid #1877F2' : '2px solid var(--border)';
       var badge = el.querySelector('div');
       if (p>=0) {
         if (!badge) { badge=document.createElement('div'); badge.style.cssText='position:absolute;top:3px;right:3px;background:#1877F2;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center'; el.appendChild(badge); }
@@ -11299,7 +11299,7 @@ function cwSelectImage(idx) {
     campaignWizardData.adImage        = { base64: img.base64, mediaType: img.mediaType };
     campaignWizardData.adImagePreview = 'data:' + img.mediaType + ';base64,' + img.base64;
     document.querySelectorAll('.cw-img-thumb').forEach(function(el, i) {
-      el.style.border = i === idx ? '3px solid #1877F2' : '2px solid #e5e7eb';
+      el.style.border = i === idx ? '3px solid #1877F2' : '2px solid var(--border)';
     });
   }
 }
@@ -11513,21 +11513,21 @@ async function cwLaunch() {
       overlay.querySelector('div').innerHTML =
         '<div style="text-align:center;padding:32px 24px">' +
         '<div style="font-size:48px;margin-bottom:12px">✅</div>' +
-        '<h3 style="margin:0 0 8px;font-size:18px;color:#111">Campaña creada</h3>' +
-        '<p style="color:#555;font-size:14px;margin:0 0 4px"><strong>' + campaignWizardData.name + '</strong></p>' +
-        '<p style="color:#888;font-size:12px;margin:0 0 24px">Estado actual: <strong style="color:#f59e0b">PAUSADA</strong> — no está gastando presupuesto</p>' +
+        '<h3 style="margin:0 0 8px;font-size:18px;color:var(--text)">Campaña creada</h3>' +
+        '<p style="color:var(--text-2);font-size:14px;margin:0 0 4px"><strong>' + campaignWizardData.name + '</strong></p>' +
+        '<p style="color:var(--muted2);font-size:12px;margin:0 0 24px">Estado actual: <strong style="color:#f59e0b">PAUSADA</strong> — no está gastando presupuesto</p>' +
         '<div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left;font-size:12px;color:#666">' +
-        '<div style="margin-bottom:4px">Campaign ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.campaignId + '</code></div>' +
-        '<div style="margin-bottom:4px">Ad Set ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adsetId + '</code></div>' +
-        (data.adId ? '<div>Ad ID: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">' + data.adId + '</code></div>' : '') +
+        '<div style="margin-bottom:4px">Campaign ID: <code style="background:var(--border);padding:1px 5px;border-radius:4px">' + data.campaignId + '</code></div>' +
+        '<div style="margin-bottom:4px">Ad Set ID: <code style="background:var(--border);padding:1px 5px;border-radius:4px">' + data.adsetId + '</code></div>' +
+        (data.adId ? '<div>Ad ID: <code style="background:var(--border);padding:1px 5px;border-radius:4px">' + data.adId + '</code></div>' : '') +
         '</div>' +
         (data.adWarning === 'whatsapp_manual'
           ? '<div style="background:#e8f5e9;border-radius:8px;padding:12px;font-size:12px;color:#2e7d32;margin-bottom:16px;text-align:left">'+
             '💬 <strong>Campaña de WhatsApp creada.</strong> Para agregar el anuncio ve a <strong>Meta Ads Manager → ' + campaignWizardData.name + ' → Agregar anuncio</strong> y selecciona tu número de WhatsApp Business como destino.</div>'
           : data.adWarning
-            ? '<div style="background:#fff3cd;border-radius:8px;padding:10px;font-size:12px;color:#856404;margin-bottom:16px;text-align:left">⚠️ ' + data.adWarning + '</div>'
+            ? '<div style="background:var(--warning-bg);border-radius:8px;padding:10px;font-size:12px;color:var(--warning);margin-bottom:16px;text-align:left">⚠️ ' + data.adWarning + '</div>'
             : '') +
-        '<p style="font-size:12px;color:#888;margin-bottom:20px">¿Quieres activarla ahora? Confirma que los creativos y el targeting están listos antes de gastar presupuesto.</p>' +
+        '<p style="font-size:12px;color:var(--muted2);margin-bottom:20px">¿Quieres activarla ahora? Confirma que los creativos y el targeting están listos antes de gastar presupuesto.</p>' +
         '<div style="display:flex;flex-direction:column;gap:10px">' +
         '<button id="cw-activate-btn" onclick="activateCreatedCampaign()" style="width:100%;padding:13px;background:#1877F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">▶ Activar campaña ahora</button>' +
         '<button onclick="closeCampaignWizard()" style="width:100%;padding:12px;background:#f3f4f6;color:#333;border:none;border-radius:8px;cursor:pointer;font-size:13px">Dejar pausada · activar luego en Meta Ads Manager</button>' +
@@ -11739,7 +11739,7 @@ function renderGoogleCampaignWizard() {
     return '<div style="display:flex;align-items:center;gap:5px">' +
       '<div style="width:22px;height:22px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;'+dotSt+'">'+(done?'✓':(i+1))+'</div>'+
       '<span style="'+lblSt+'">'+s+'</span></div>' +
-      (i < steps.length - 1 ? '<div style="flex:1;height:1px;background:#e5e7eb;margin:0 2px"></div>' : '');
+      (i < steps.length - 1 ? '<div style="flex:1;height:1px;background:var(--border);margin:0 2px"></div>' : '');
   }).join('');
 
   var body = '';
@@ -11758,11 +11758,11 @@ function renderGoogleCampaignWizard() {
       '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Objetivo de campaña</label>'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
           objectives.map(function(o){
-            var sel = googleWizardData.objective === o[0] ? 'border:2px solid #1E2BCC;background:#e8eafc' : 'border:1px solid #e5e7eb;background:#fff';
+            var sel = googleWizardData.objective === o[0] ? 'border:2px solid #1E2BCC;background:#e8eafc' : 'border:1px solid var(--border);background:var(--bg)';
             return '<div onclick="gcwSelectObj(\''+o[0]+'\')" style="'+sel+';border-radius:10px;padding:12px;cursor:pointer;transition:all .1s">'+
               '<div style="font-size:18px;margin-bottom:4px">'+o[1]+'</div>'+
               '<div style="font-size:12px;font-weight:600;color:#1E2BCC">'+o[2]+'</div>'+
-              '<div style="font-size:11px;color:#888;margin-top:2px">'+o[3]+'</div></div>';
+              '<div style="font-size:11px;color:var(--muted2);margin-top:2px">'+o[3]+'</div></div>';
           }).join('')+
         '</div></div>'+
       '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Presupuesto diario ('+googleWizardData.currency+')</label>'+
@@ -11779,13 +11779,13 @@ function renderGoogleCampaignWizard() {
     var selGeoId = googleWizardData.countryGeoId || '2170';
     body =
       '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">País de segmentación</label>'+
-        '<select id="gcw-country" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff">'+
+        '<select id="gcw-country" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;background:var(--bg)">'+
           countries.map(function(c){ return '<option value="'+c[1]+'"'+(selGeoId===c[1]?' selected':'')+'>'+c[0]+'</option>'; }).join('')+
         '</select></div>'+
       '<div style="margin-bottom:14px"><label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Idioma del anuncio</label>'+
         '<div style="display:flex;gap:8px">'+
           [['1003','Español'],['1000','English'],['1014','Português']].map(function(l){
-            var sel = (googleWizardData.languageId||'1003') === l[0] ? 'background:#1E2BCC;color:#fff;border-color:#1E2BCC' : 'background:#fff;color:#333;border-color:#ddd';
+            var sel = (googleWizardData.languageId||'1003') === l[0] ? 'background:#1E2BCC;color:#fff;border-color:#1E2BCC' : 'background:var(--bg);color:#333;border-color:#ddd';
             return '<button onclick="gcwSelectLang(\''+l[0]+'\')" style="padding:8px 16px;border:1px solid;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font);'+sel+'">'+l[1]+'</button>';
           }).join('')+
         '</div></div>'+
@@ -11796,13 +11796,13 @@ function renderGoogleCampaignWizard() {
     body =
       '<div style="margin-bottom:12px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-          '<label style="font-weight:600;font-size:13px">Palabras clave <span style="font-weight:400;color:#888;font-size:12px">(una por línea)</span></label>'+
+          '<label style="font-weight:600;font-size:13px">Palabras clave <span style="font-weight:400;color:var(--muted2);font-size:12px">(una por línea)</span></label>'+
           '<button id="gcw-gen-btn" onclick="gcwGenerateContent()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1E2BCC;border:1px solid #c7d7ff;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Generar con IA</button>'+
         '</div>'+
-        '<div style="font-size:11px;color:#888;margin-bottom:6px">Usa [corchetes] para exacta, "comillas" para frase, sin símbolo para amplia.</div>'+
+        '<div style="font-size:11px;color:var(--muted2);margin-bottom:6px">Usa [corchetes] para exacta, "comillas" para frase, sin símbolo para amplia.</div>'+
         '<textarea id="gcw-keywords" rows="6" placeholder="servicios contables bogota\ncontador publico colombia\n[outsourcing contable]" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(googleWizardData.keywordsText||'')+'</textarea>'+
       '</div>'+
-      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Keywords negativas <span style="font-weight:400;color:#888;font-size:12px">(opcional, una por línea)</span></label>'+
+      '<div><label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Keywords negativas <span style="font-weight:400;color:var(--muted2);font-size:12px">(opcional, una por línea)</span></label>'+
         '<textarea id="gcw-negative-keywords" rows="3" placeholder="gratis\ncomo hacer\ncurso" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;resize:vertical">'+(googleWizardData.negativeKeywordsText||'')+'</textarea></div>'+
       '<div id="gcw-gen-error" style="color:#dc2626;font-size:12px;margin-top:6px"></div>';
 
@@ -11814,7 +11814,7 @@ function renderGoogleCampaignWizard() {
         '<input id="gcw-final-url" type="url" placeholder="https://tusitio.com/landing" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" value="'+(googleWizardData.finalUrl||'')+'"></div>'+
       '<div style="margin-bottom:12px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-          '<label style="font-weight:600;font-size:13px">Headlines RSA <span style="font-weight:400;color:#888;font-size:12px">(máx 30c c/u — al menos 3)</span></label>'+
+          '<label style="font-weight:600;font-size:13px">Headlines RSA <span style="font-weight:400;color:var(--muted2);font-size:12px">(máx 30c c/u — al menos 3)</span></label>'+
           '<button onclick="gcwGenerateContent()" style="display:inline-flex;align-items:center;gap:5px;background:#f0f4ff;color:#1E2BCC;border:1px solid #c7d7ff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✨ Regenerar IA</button>'+
         '</div>'+
         defaultH.map(function(h, i){
@@ -11826,7 +11826,7 @@ function renderGoogleCampaignWizard() {
         }).join('')+
       '</div>'+
       '<div>'+
-        '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descriptions RSA <span style="font-weight:400;color:#888;font-size:12px">(máx 90c c/u — al menos 2)</span></label>'+
+        '<label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Descriptions RSA <span style="font-weight:400;color:var(--muted2);font-size:12px">(máx 90c c/u — al menos 2)</span></label>'+
         defaultD.map(function(d, i){
           return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
             '<span style="font-size:11px;color:#aaa;width:14px;text-align:right">'+(i+1)+'</span>'+
@@ -11842,7 +11842,7 @@ function renderGoogleCampaignWizard() {
   if (!overlay) { overlay = document.createElement('div'); overlay.id = 'gcw-overlay'; document.body.appendChild(overlay); }
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;font-family:var(--font)">'+
+    '<div style="background:var(--bg);border-radius:16px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;font-family:var(--font)">'+
       '<div style="background:#1E2BCC;border-radius:16px 16px 0 0;padding:18px 20px;display:flex;justify-content:space-between;align-items:center">'+
         '<div>'+
           (googleWizardData.accountName ? '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:2px">'+googleWizardData.accountName+'</div>' : '')+
@@ -11855,7 +11855,7 @@ function renderGoogleCampaignWizard() {
         body+
       '</div>'+
       '<div style="padding:12px 20px 18px;display:flex;gap:10px;border-top:1px solid #eee">'+
-        (googleWizardStep > 1 ? '<button onclick="gcwPrev()" style="flex:1;padding:12px;background:#f3f4f6;color:#555;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font)">← Atrás</button>' : '')+
+        (googleWizardStep > 1 ? '<button onclick="gcwPrev()" style="flex:1;padding:12px;background:#f3f4f6;color:var(--text-2);border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font)">← Atrás</button>' : '')+
         (isLastStep
           ? '<button id="gcw-launch-btn" onclick="gcwLaunch()" style="flex:2;padding:12px;background:#1E2BCC;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:var(--font)">🚀 Crear campaña</button>'
           : '<button onclick="gcwNext()" style="flex:2;padding:12px;background:#1E2BCC;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:var(--font)">Siguiente →</button>')+
@@ -11919,17 +11919,17 @@ async function gcwLaunch() {
         '<div style="padding:24px 20px">'+
           '<div style="background:#f0f4ff;border-radius:12px;padding:16px;margin-bottom:16px">'+
             '<div style="font-size:13px;font-weight:700;color:#1E2BCC;margin-bottom:8px">'+googleWizardData.name+'</div>'+
-            '<div style="font-size:12px;color:#555;line-height:1.7">'+
+            '<div style="font-size:12px;color:var(--text-2);line-height:1.7">'+
               '📋 Campaign ID: <strong>'+data.campaignId+'</strong><br>'+
               '📦 Ad Group ID: <strong>'+data.adGroupId+'</strong>'+
               (data.adId ? '<br>📢 Ad RSA ID: <strong>'+data.adId+'</strong>' : '')+
             '</div>'+
           '</div>'+
-          '<div style="background:#fff8e6;border:1px solid #ffd970;border-radius:8px;padding:12px;font-size:12px;color:#7a5700;margin-bottom:16px">'+
+          '<div style="background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:12px;font-size:12px;color:var(--warning);margin-bottom:16px">'+
             '⏸️ La campaña está <strong>Pausada</strong>. Revísala en Google Ads Manager y actívala cuando estés listo.'+
           '</div>'+
           '<a href="https://ads.google.com" target="_blank" style="display:block;text-align:center;padding:11px;background:#1E2BCC;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;margin-bottom:8px">Abrir Google Ads →</a>'+
-          '<button onclick="closeGoogleCampaignWizard()" style="width:100%;padding:10px;background:#f3f4f6;color:#555;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--font)">Cerrar</button>'+
+          '<button onclick="closeGoogleCampaignWizard()" style="width:100%;padding:10px;background:#f3f4f6;color:var(--text-2);border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--font)">Cerrar</button>'+
         '</div>';
     }
     addAgent('✅ **Campaña creada en Google Ads**\n\n**'+googleWizardData.name+'** está lista (Pausada).\n\n'+(data.adId?'Se creó el anuncio RSA con '+((googleWizardData.headlines||[]).filter(function(h){return h&&h.trim();}).length)+' headlines y '+((googleWizardData.descriptions||[]).filter(function(d){return d&&d.trim();}).length)+' descriptions.\n\n':'')+'Actívala en Google Ads Manager cuando quieras. ¿Necesitas ajustar pujas, agregar más keywords o revisar la estructura antes de activarla?');
@@ -11961,7 +11961,7 @@ function showAdVariationAB() {
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
     '<div style="max-width:480px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+      '<div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
         '<h4 style="margin:0 0 4px;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
         '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Sube tu anuncio actual. Claude genera <strong>variaciones donde el producto sigue siendo el protagonista</strong> — mismo mensaje de campaña, diferente tratamiento visual.</div>' +
 
@@ -12178,7 +12178,7 @@ function renderVariationsGrid(images, concepts, format, adDesc, campaignMsg) {
       '</div>' +
       '<div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3">' + concept + '</div>' +
       (b64
-        ? '<div style="cursor:zoom-in;border-radius:9px;overflow:hidden;aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:#F3F4F6" onclick="' + lbOnClick + '">' +
+        ? '<div style="cursor:zoom-in;border-radius:9px;overflow:hidden;aspect-ratio:' + ratio + ';max-height:' + maxH + ';background:var(--bg-muted)" onclick="' + lbOnClick + '">' +
             '<img src="data:' + mt + ';base64,' + b64 + '" style="width:100%;height:100%;object-fit:cover" alt="Variacion ' + label + '">' +
           '</div>'
         : '<div style="border-radius:9px;background:#FEF2F2;border:1px solid #FCA5A5;aspect-ratio:' + ratio + ';max-height:' + maxH + ';display:flex;align-items:center;justify-content:center;font-size:11px;color:#EF4444;text-align:center;padding:12px">Error al generar</div>'
@@ -12244,7 +12244,7 @@ function showVariationUploader() {
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
     '<div style="max-width:460px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+      '<div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
           '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔄 Variaciones de tu anuncio</h4>' +
           '<div style="background:var(--blue-lt);color:var(--blue);padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700">IA generativa</div>' +
@@ -12496,13 +12496,13 @@ function showVariationAxisCard(design, format, count) {
   el.id = 'variation-axis-card';
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
-    '<div style="max-width:500px;width:100%"><div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+    '<div style="max-width:500px;width:100%"><div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
       '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px">✅ Anuncio analizado</div>' +
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">El diseño tipográfico quedará <strong>idéntico al original</strong>. Solo elige qué elemento visual variar.</div>' +
       detectedHtml +
       '<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Qué quieres variar?</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' + axisHtml + '</div>' +
-      '<button id="axis-generate-btn" onclick="launchAxisVariations(\'' + designEncoded + '\',\'' + format + '\',' + count + ')" disabled style="width:100%;padding:11px;background:#9CA3AF;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:var(--font)">Selecciona qué variar ↑</button>' +
+      '<button id="axis-generate-btn" onclick="launchAxisVariations(\'' + designEncoded + '\',\'' + format + '\',' + count + ')" disabled style="width:100%;padding:11px;background:var(--muted2);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:var(--font)">Selecciona qué variar ↑</button>' +
     '</div></div>';
 
   document.getElementById('chat-area').appendChild(el);
@@ -12998,7 +12998,7 @@ function showDesignQuestionnaire() {
     el.innerHTML =
       '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
       '<div style="max-width:420px">' +
-        '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+        '<div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
             '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🔒 Diseño básico</h4>' +
             '<div style="background:#FEE2E2;color:#DC2626;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600">Restantes: ' + remaining + '</div>' +
@@ -13029,14 +13029,14 @@ function showDesignQuestionnaire() {
     ? '' // Si hay cliente, saltamos el paso de nombre — ya está en designQData.brand
     : '<div id="dq-step-brand" class="dq-step">' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">¿Cuál es el nombre de tu marca?</div>' +
-        '<input type="text" id="dq-brand" placeholder="Ej: Iluminata, Clínica Sorelle" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font);box-sizing:border-box">' +
+        '<input type="text" id="dq-brand" placeholder="Ej: Iluminata, Clínica Sorelle" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);box-sizing:border-box">' +
         '<button onclick="dqStepBrandNext()" style="margin-top:10px;padding:8px 18px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Siguiente →</button>' +
       '</div>';
 
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0">' + logoSvg + '</div>' +
     '<div style="max-width:460px">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
+      '<div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:12px;padding:18px 20px">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
           '<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">🎬 Director Creativo IA' + (isAdmin ? ' <span style=\'font-size:10px;background:#10B981;color:white;padding:2px 7px;border-radius:10px\'>ADMIN</span>' : '') + '</h4>' +
         '</div>' +
@@ -13046,7 +13046,7 @@ function showDesignQuestionnaire() {
         '<div id="dq-step-offer" class="dq-step"' + (activeClient ? '' : ' style="display:none"') + '>' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">¿Qué quieres promocionar?</div>' +
           '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Sé específico: oferta, producto, ocasión, descuento, lanzamiento...</div>' +
-          '<textarea id="dq-offer" rows="2" placeholder="Ej: 20% de descuento en velas aromáticas este fin de semana · Lanzamiento set regalo navideño · Envío gratis en pedidos +$50" style="width:100%;padding:10px;border:1px solid #E0E0E0;border-radius:8px;font-size:13px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.4"></textarea>' +
+          '<textarea id="dq-offer" rows="2" placeholder="Ej: 20% de descuento en velas aromáticas este fin de semana · Lanzamiento set regalo navideño · Envío gratis en pedidos +$50" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);resize:none;box-sizing:border-box;line-height:1.4"></textarea>' +
 
           '<div style="margin-top:12px">' +
             '<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Formato</div>' +
@@ -15158,7 +15158,7 @@ function showHtmlDesignWizard() {
   el.innerHTML =
     '<div class="av ag" style="background:transparent;border:none;overflow:hidden;padding:0;flex-shrink:0">' + logoSvg + '</div>' +
     '<div style="max-width:480px;width:100%">' +
-      '<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:14px;padding:20px">' +
+      '<div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:14px;padding:20px">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
           '<div style="font-size:15px;font-weight:700;color:var(--text)">🎨 Diseño estructurado</div>' +
           (remaining !== '∞' ? '<div style="margin-left:auto;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">' + remaining + ' restantes</div>' : '') +
@@ -15618,7 +15618,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:96px;line-height:.88;color:'+c.primary+';letter-spacing:-.03em;text-transform:uppercase;margin-bottom:12px">'+(brief.headline||'TITULAR')+'</div>' +
         '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:64px;color:'+c.primary+';margin-bottom:22px;line-height:1.1">'+(brief.subheadline||'subtitulo')+'</div>' +
         '<div style="display:flex;align-items:center;gap:12px;margin-bottom:22px"><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div><div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:'+c.primary+';letter-spacing:.1em;text-transform:uppercase">'+(brief.divider||'')+'</div><div style="flex:1;height:2px;background:'+c.primary+';opacity:.2"></div></div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;line-height:1.5;color:#555;margin-bottom:28px">'+(brief.description||'')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;line-height:1.5;color:var(--text-2);margin-bottom:28px">'+(brief.description||'')+'</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:auto">' + featGrid + '</div>' +
       '</div>' +
       // CTA
@@ -15726,7 +15726,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
           '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:15px;color:'+c.primary+';letter-spacing:.14em;text-transform:uppercase;opacity:.5">'+(brief.divider||'')+'</div>' +
           '<div style="flex:1;height:1.5px;background:'+c.primary+';opacity:.18"></div>' +
         '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:#555;line-height:1.5;margin-bottom:18px">'+(brief.description||'')+'</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:20px;color:var(--text-2);line-height:1.5;margin-bottom:18px">'+(brief.description||'')+'</div>' +
         '<div style="margin-bottom:22px">' + featChips + '</div>' +
         '<div style="background:'+c.primary+';color:#fff;padding:24px 40px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:14px">' +
           '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;text-transform:uppercase;letter-spacing:.06em">'+(brief.cta_title||'')+'</div>' +
@@ -15824,7 +15824,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
       // Top bar
       '<div style="height:' + topBarH + 'px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;flex-shrink:0">' +
         '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:' + c.primary + '">' + (brief.category || 'CATEGORÍA') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.08em;color:#888">' + (brief.divider || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;letter-spacing:.08em;color:var(--muted2)">' + (brief.divider || '') + '</div>' +
       '</div>' +
       // Photo area
       '<div style="height:' + photoH + 'px;position:relative;flex-shrink:0;overflow:hidden">' +
@@ -15838,7 +15838,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
       '<div style="flex:1;padding:24px 40px 0;overflow:hidden">' +
         '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:72px;color:' + c.primary + ';line-height:1.05;letter-spacing:-.02em">' + (brief.headline || 'TITULAR') + '</div>' +
         '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-weight:700;font-size:34px;color:' + c.accent + ';margin-top:8px">' + (brief.subheadline || '') + '</div>' +
-        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:#555;margin-top:12px;line-height:1.4;overflow:hidden">' + (brief.description || '') + '</div>' +
+        '<div style="font-family:Montserrat,sans-serif;font-size:26px;color:var(--text-2);margin-top:12px;line-height:1.4;overflow:hidden">' + (brief.description || '') + '</div>' +
       '</div>' +
       // Icon row
       '<div style="height:' + iconRowH + 'px;display:flex;align-items:center;border-top:1px solid #eee;flex-shrink:0;padding:0 20px">' +
@@ -15994,7 +15994,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:32px;color:rgba(255,255,255,.75);margin-bottom:24px">' + (brief.subheadline || '') + '</div>' +
         '<div style="font-family:Montserrat,sans-serif;font-size:24px;color:rgba(255,255,255,.65);line-height:1.5;overflow:hidden;max-height:' + Math.round(H * 0.12) + 'px">' + (brief.description || '') + '</div>' +
         '<div style="flex:1"></div>' +
-        '<div style="background:#fff;color:' + c.primary + ';padding:16px 48px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;letter-spacing:.04em;width:fit-content;margin-top:auto">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
+        '<div style="background:var(--bg);color:' + c.primary + ';padding:16px 48px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:24px;font-weight:800;letter-spacing:.04em;width:fit-content;margin-top:auto">' + (brief.cta_title || 'SABER MÁS') + '</div>' +
       '</div>' +
       logoEl +
     '</div>';
@@ -16196,7 +16196,7 @@ function hdwBuildTemplate(brief, bgBase64, tplId, palette, W, H, logoBase64) {
         '<div style="font-family:\'Playfair Display\',serif;font-style:italic;font-size:' + Math.round(W * 0.072) + 'px;color:' + hdwLighten(c.primary, 0.5) + ';text-shadow:0 2px 10px rgba(0,0,0,.4);line-height:1.2">' + (brief.subheadline || '') + '</div>' +
       '</div>' +
       // White panel at bottom
-      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + panelH + 'px;background:#fff;border-radius:44px 44px 0 0;padding:44px 72px 60px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
+      '<div style="position:absolute;bottom:0;left:0;right:0;height:' + panelH + 'px;background:var(--bg);border-radius:44px 44px 0 0;padding:44px 72px 60px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
         // Optional description line
         (brief.description ? '<div style="font-size:20px;color:#666;line-height:1.45;margin-bottom:4px">' + brief.description + '</div>' : '') +
         // Feature list with icon circles
@@ -16470,13 +16470,13 @@ function crmCardHTML(lead, now) {
   const daysSince = Math.floor((ts - lastActive) / 86400000);
   const showInactive = daysSince >= 7 && lead.stage !== 'ganado' && lead.stage !== 'perdido';
   const score = lead.custom_fields && lead.custom_fields.score ? Number(lead.custom_fields.score) : null;
-  let scoreColor = '#6B7280';
+  let scoreColor = 'var(--muted)';
   if (score !== null) { if (score >= 8) scoreColor = '#10B981'; else if (score >= 5) scoreColor = '#F59E0B'; else scoreColor = '#EF4444'; }
   // Stage color accent
   const stageObj = (typeof crmStages !== 'undefined') ? crmStages.find(function(s){ return s.key === lead.stage; }) : null;
-  const stageColor = stageObj ? stageObj.color : '#6B7280';
+  const stageColor = stageObj ? stageObj.color : 'var(--muted)';
   // Avatar initials
-  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#14B8A6','#EF4444'];
+  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
   const avatarBg = avatarPalette[(lead.name || 'A').charCodeAt(0) % avatarPalette.length];
   const nameParts = (lead.name || '?').split(' ').filter(Boolean);
   const initials = nameParts.slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
@@ -16546,7 +16546,7 @@ function crmRenderList() {
     return;
   }
   tbody.innerHTML = filtered.map(l => {
-    const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: '#6B7280' };
+    const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' };
     return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(sourceLabels[l.source] || l.source || 'Manual') + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
   }).join('');
   crmUpdateLeadsStats();
@@ -16677,7 +16677,7 @@ async function crmOpenDetail(leadId) {
   const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
   document.getElementById('crm-d-name').textContent = lead.name;
   // Avatar
-  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#14B8A6','#EF4444'];
+  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
   const avatarBg = avatarPalette[(lead.name || 'A').charCodeAt(0) % avatarPalette.length];
   const avatarInitials = (lead.name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
   const avatarEl = document.getElementById('crm-d-avatar');
@@ -16738,7 +16738,7 @@ async function crmLoadLinkedConversations(leadId) {
     const channelColors = { whatsapp: '#DCFCE7', messenger: '#DBEAFE', instagram: '#FCE7F3' };
     list.innerHTML = convs.map(c => {
       const icon = channelIcons[c.channel] || '💬';
-      const bg = channelColors[c.channel] || '#F3F4F6';
+      const bg = channelColors[c.channel] || 'var(--bg-muted)';
       const name = c.contact_name || c.contact_id || 'Contacto';
       const preview = c.last_message ? c.last_message.slice(0, 60) + (c.last_message.length > 60 ? '…' : '') : 'Sin mensajes';
       const time = c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
@@ -17398,7 +17398,7 @@ function crmRenderAnalytics() {
     const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
     return Math.floor((now - lastActive) / 86400000) >= 7;
   }).sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)).slice(0, 8);
-  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(sourceLabels[src] || src) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: '#6B7280' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
+  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(sourceLabels[src] || src) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
 }
 
 function crmCreateLeadFromConversation(conv) {
@@ -17699,10 +17699,10 @@ function showWelcomeConnect() {
       '</div>' +
       '<h2 style="font-size:21px;font-weight:800;color:var(--text,#111);margin:0 0 8px;font-family:var(--font);letter-spacing:-.3px">Tu primera auditoría con IA, en 3 minutos</h2>' +
       '<p style="font-size:13.5px;color:var(--text-2,#555);margin:0 0 22px;font-family:var(--font);line-height:1.6">Conecta tu cuenta de anuncios y el agente la revisará al instante: campañas, presupuesto, gasto desperdiciado y los 3 hallazgos más importantes con acciones concretas. Sin costo, incluido en tu plan Free.</p>' +
-      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectGoogleAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,#e5e7eb);border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,#e5e7eb)\';this.style.background=\'transparent\'">' +
+      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectGoogleAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,var(--border));border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,var(--border))\';this.style.background=\'transparent\'">' +
         '<span style="font-size:18px">🎯</span><span style="flex:1">Conectar Google Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
       '</button>' +
-      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectMetaAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,#e5e7eb);border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:16px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,#e5e7eb)\';this.style.background=\'transparent\'">' +
+      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectMetaAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,var(--border));border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:16px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,var(--border))\';this.style.background=\'transparent\'">' +
         '<span style="font-size:18px">📘</span><span style="flex:1">Conectar Meta Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
       '</button>' +
       '<button onclick="document.getElementById(\'welcome-connect-modal\').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted2,#888);border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font)">Explorar la plataforma primero</button>' +
