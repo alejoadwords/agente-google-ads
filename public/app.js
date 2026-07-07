@@ -9313,9 +9313,9 @@ function showConnectionModal(platform, accountName) {
       <h2 style="font-size:22px;font-weight:700;color:var(--text);margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
       <p style="font-size:15px;color:var(--text-2);margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
       <p style="font-size:13px;color:var(--muted2);margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
-      ${AUDIT_AGENT_KEY[platform] ? `<button id="conn-modal-audit-btn" style="width:100%;padding:14px;background:var(--blue,#1E2BCC);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">✨ Auditar mi cuenta con IA ahora</button>` : ''}
-      <button id="conn-modal-settings-btn" style="width:100%;padding:${AUDIT_AGENT_KEY[platform] ? '12px' : '14px'};background:${AUDIT_AGENT_KEY[platform] ? 'transparent' : 'var(--accent,var(--blue))'};color:${AUDIT_AGENT_KEY[platform] ? '#555' : '#fff'};border:${AUDIT_AGENT_KEY[platform] ? '1px solid var(--border)' : 'none'};border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:opacity .2s">Ver configuración</button>
-      <button id="conn-modal-close-btn" style="width:100%;padding:12px;background:transparent;color:var(--muted2);border:1px solid var(--border);border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);transition:background .2s">Cerrar</button>
+      ${AUDIT_AGENT_KEY[platform] ? `<button id="conn-modal-audit-btn" class="btn-pri lg" style="margin-bottom:10px">✨ Auditar mi cuenta con IA ahora</button>` : ''}
+      <button id="conn-modal-settings-btn" class="${AUDIT_AGENT_KEY[platform] ? 'btn-sec lg' : 'btn-pri lg'}" style="margin-bottom:10px">Ver configuración</button>
+      <button id="conn-modal-close-btn" class="btn-ghost lg">Cerrar</button>
     </div>
   `;
 
@@ -17705,7 +17705,7 @@ function showWelcomeConnect() {
       '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectMetaAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,var(--border));border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:16px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,var(--border))\';this.style.background=\'transparent\'">' +
         '<span style="font-size:18px">📘</span><span style="flex:1">Conectar Meta Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
       '</button>' +
-      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted2,#888);border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font)">Explorar la plataforma primero</button>' +
+      '<button class="btn-ghost lg" onclick="document.getElementById(\'welcome-connect-modal\').remove()">Explorar la plataforma primero</button>' +
     '</div>';
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
