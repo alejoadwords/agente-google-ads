@@ -131,6 +131,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 @keyframes pulsoShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.pulso-dot,.pulso-skel{animation:none}}
 
+/* ── Estados vacíos con firma "agua" ── */
+.empty-agua{text-align:center;padding:30px 16px;display:flex;flex-direction:column;align-items:center;animation:msgIn var(--dur-base) var(--ease)}
+.empty-agua-art{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--blue-lt),var(--aqua-lt));display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;color:var(--blue);margin-bottom:12px}
+.empty-agua-art::after{content:"";position:absolute;inset:auto -20% -45% -20%;height:60%;background:radial-gradient(ellipse at 50% 100%,rgba(0,184,206,.35),transparent 70%)}
+.empty-agua-title{font-size:var(--fs-md);font-weight:700;color:var(--text);letter-spacing:-.01em}
+.empty-agua-sub{font-size:var(--fs-sm);color:var(--muted);margin-top:4px;max-width:46ch;line-height:1.55}
+.empty-agua-cta{margin-top:14px}
+
 /* ── Sistema de botones unificado (4 variantes × 2 tamaños) ── */
 .btn-pri,.btn-sec,.btn-ghost,.btn-dgr{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font);font-size:var(--fs-sm);font-weight:700;border-radius:9px;padding:9px 16px;cursor:pointer;border:1px solid transparent;transition:all var(--dur-fast) var(--ease);line-height:1.2;white-space:nowrap}
 .btn-pri{background:var(--blue);color:#fff;box-shadow:var(--shadow-blue)}

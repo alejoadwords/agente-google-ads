@@ -18560,7 +18560,7 @@ function seoRenderKeywordsTab() {
       '<button class="seop-btn" onclick="seoAddKeywords()">+ Añadir</button>' +
       '<button class="seop-btn" onclick="seoResearchKeywords()">' + icn('search', 12) + ' Investigar con el agente</button>' +
     '</div>';
-  if (!kws.length) return addbar + '<div class="seop-empty">Sin keywords todavía. Añádelas a mano o pide al agente una investigación para tu mercado.</div>';
+  if (!kws.length) return addbar + emptyAgua('search', 'Tu proyecto empieza con una keyword', 'Añádelas a mano o deja que el agente investigue tu mercado y las importe con un clic.');
 
   const rows = kws.map((k, i) => {
     const cur = k.history?.[m]?.pos || null;
@@ -18681,7 +18681,7 @@ function seoRenderCompetenciaTab() {
       '<div style="font-size:12.5px;color:var(--muted)">Dominios que aparecen en el top 5 de Google para tus keywords' + (declared.size ? ' · declarados: ' + esc([...declared].join(', ')) : '') + '</div>' +
       '<button class="seop-btn primary" onclick="seoAnalyzeCompetition()">' + icn('bot', 12) + ' Analizar con el agente</button>' +
     '</div>';
-  if (!sorted.length) return header + '<div class="seop-empty">Actualiza las posiciones primero — la tabla de competencia se construye con los resultados reales de Google.</div>';
+  if (!sorted.length) return header + emptyAgua('users', 'La competencia se revela con datos', 'Actualiza las posiciones primero — esta tabla se construye con los resultados reales de Google para tus keywords.');
   const rows = sorted.map(([dom, s]) =>
     '<tr><td>' + esc(dom) + (declared.has(dom) ? ' <span class="seop-delta down" style="margin-left:6px">competidor</span>' : '') + '</td>' +
     '<td class="seop-pos">' + s.count + '</td><td>' + s.beats + '</td></tr>'
@@ -18730,7 +18730,7 @@ function seoRenderOnpageTab() {
           '<button class="seop-row-btn" onclick="seoDeleteAction(' + i + ')">✕</button>' +
         '</div>'
       ).join('')
-    : '<div class="seop-empty">Sin acciones todavía. Audita una página o añádelas a mano.</div>';
+    : emptyAgua('check', 'Tu checklist on-page vive aquí', 'Audita una página con el agente y guarda sus acciones, o añádelas a mano.');
   return auditBar + addAction + list;
 }
 
@@ -18779,7 +18779,7 @@ function seoRenderContenidoTab() {
       '<div style="font-size:12.5px;color:var(--muted)">Oportunidades de contenido — tus keywords con más recorrido, priorizadas</div>' +
       '<button class="seop-btn primary" onclick="seoContentPlan()">' + icn('file', 12) + ' Plan de contenido con el agente</button>' +
     '</div>';
-  if (!kws.length) return header + '<div class="seop-empty">Añade keywords al proyecto para ver oportunidades de contenido.</div>';
+  if (!kws.length) return header + emptyAgua('edit', 'Contenido que posiciona', 'Añade keywords al proyecto para ver las oportunidades de contenido priorizadas por recorrido.');
   const rows = kws.map(k => {
     const pos = k.history?.[m]?.pos;
     const idx = seoProject.keywords.indexOf(k);
@@ -18863,7 +18863,7 @@ function seoRenderGeoTab() {
     '</div>';
 
   if (!queries.length) {
-    return header + '<div class="seop-empty">Sin consultas GEO todavía. Añade las preguntas que haría tu cliente ideal a una IA ("¿cuál es el mejor…?", "recomiéndame…") o pide al agente que las genere. Máximo 10 — cada consulta se hace en vivo a los motores activos.</div>';
+    return header + emptyAgua('bot', '¿Te mencionan las IAs?', 'Añade las preguntas que haría tu cliente ideal ("¿cuál es la mejor…?", "recomiéndame…") o pide al agente que las genere. Máximo 10 por reporte.');
   }
 
   // Share of voice por motor (mes actual y anterior)
@@ -18910,7 +18910,7 @@ function seoRenderGeoTab() {
         '<div>' + compSorted.map(([c, n]) => '<span class="seop-delta down" style="margin:0 6px 6px 0;display:inline-block">' + esc(c) + ' · ' + n + (n === 1 ? ' mención' : ' menciones') + '</span>').join('') + '</div>';
     }
   } else {
-    table = '<div class="seop-empty">Tienes ' + queries.length + (queries.length === 1 ? ' consulta lista' : ' consultas listas') + '. Presiona "Consultar IAs ahora" para generar tu primer reporte GEO.</div>';
+    table = emptyAgua('bot', queries.length + (queries.length === 1 ? ' consulta lista' : ' consultas listas'), 'Presiona "Consultar IAs ahora" para generar tu primer reporte GEO con los motores activos.');
   }
 
   const lastCheck = hist?.checkedAt ? '<div style="font-size:11px;color:var(--muted2);margin-top:12px">Última consulta: ' + new Date(hist.checkedAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · las respuestas de las IAs varían — el reporte captura una muestra mensual</div>' : '';
@@ -19059,6 +19059,17 @@ const ICN_PATHS = {
   users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
   arrow:    '<path d="M5 12h14M12 5l7 7-7 7"/>',
 };
+
+
+// Estado vacío con firma "agua" (gradiente azul→aqua de marca)
+function emptyAgua(iconName, title, sub, ctaHtml) {
+  return '<div class="empty-agua">' +
+    '<div class="empty-agua-art">' + icn(iconName, 26) + '</div>' +
+    '<div class="empty-agua-title">' + title + '</div>' +
+    '<div class="empty-agua-sub">' + sub + '</div>' +
+    (ctaHtml ? '<div class="empty-agua-cta">' + ctaHtml + '</div>' : '') +
+  '</div>';
+}
 
 function icn(name, size, extra) {
   const p = ICN_PATHS[name] || ICN_PATHS.chart;
