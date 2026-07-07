@@ -9286,10 +9286,10 @@ function showConnectionModal(platform, accountName) {
   if (existing) existing.remove();
 
   const icons = {
-    google_ads: '🎯',
-    meta_ads:   '📘',
-    tiktok_ads: '🎵',
-    linkedin:   '💼',
+    google_ads: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>',
+    meta_ads:   '<svg width="44" height="44" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+    tiktok_ads: '<svg width="44" height="44" viewBox="0 0 24 24" fill="#EE1D52"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.78a4.85 4.85 0 01-1.01-.09z"/></svg>',
+    linkedin:   '<svg width="44" height="44" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 110-4.12 2.06 2.06 0 010 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>',
   };
   const labels = {
     google_ads: 'Google Ads',
@@ -9306,7 +9306,7 @@ function showConnectionModal(platform, accountName) {
 
   overlay.innerHTML = `
     <div style="background:var(--bg);border-radius:20px;padding:48px 44px 40px;max-width:420px;width:90%;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.25);position:relative;animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">
-      <div style="font-size:56px;margin-bottom:16px;line-height:1">${icon}</div>
+      <div style="margin-bottom:16px;line-height:1;display:flex;justify-content:center">${icon}</div>
       <div style="width:56px;height:56px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
@@ -18029,11 +18029,15 @@ async function renderPulso(force) {
 
 // HTML compartido de tarjetas (home y agencia usan registros de acción distintos)
 function pulsoCardsHtml(cards, runFn) {
+  const toneIcon = { warn: 'alert', good: 'check', info: 'chart' };
   return cards.map((c, i) =>
     '<div class="pulso-card" data-tone="' + c.tone + '">' +
-      '<div class="pulso-card-title">' + esc(c.title) + '</div>' +
-      '<div class="pulso-card-body">' + esc(c.body) + '</div>' +
-      (c.actLabel ? '<button class="pulso-act" onclick="' + runFn + '(' + i + ')">' + esc(c.actLabel) + '</button>' : '') +
+      '<div class="pulso-card-top">' +
+        '<span class="pulso-ico">' + icn(toneIcon[c.tone] || 'chart', 13) + '</span>' +
+        '<div class="pulso-card-title">' + esc(c.title) + '</div>' +
+      '</div>' +
+      '<div class="pulso-card-body">' + esc(c.body).replace(/(\$[\d.,]+|[+−-]?\d+(?:\.\d+)?%)/g, '<b>$1</b>') + '</div>' +
+      (c.actLabel ? '<button class="pulso-act" onclick="' + runFn + '(' + i + ')">' + esc(c.actLabel.replace(/\s*→\s*$/, '')) + icn('arrow', 10) + '</button>' : '') +
     '</div>'
   ).join('');
 }
@@ -18514,13 +18518,13 @@ function seoRenderProject() {
   main.innerHTML =
     '<div class="seop-topbar">' +
       '<div>' +
-        '<div class="seop-title">📈 ' + esc(seoProject.domain) + '</div>' +
+        '<div class="seop-title"><span style="width:30px;height:30px;border-radius:9px;background:var(--agua-grad);display:inline-flex;align-items:center;justify-content:center;color:#fff">' + icn('trend', 15) + '</span>' + esc(seoProject.domain) + '</div>' +
         '<div class="seop-sub">SEO en ' + esc(seoCountryName(seoProject.country)) + ' · ' + kws.length + ' keywords · última consulta: ' + lastCheckStr + '</div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="seop-btn" onclick="seoRenderSetup(true)">⚙ Editar</button>' +
-        '<button class="seop-btn" onclick="openAgent(\'seo\')">💬 Hablar con el agente</button>' +
-        '<button class="seop-btn primary" id="seop-refresh-btn" onclick="seoUpdatePositions()">🔄 Actualizar posiciones</button>' +
+        '<button class="seop-btn" onclick="seoRenderSetup(true)">' + icn('gear', 12) + ' Editar</button>' +
+        '<button class="seop-btn" onclick="openAgent(\'seo\')">' + icn('chat', 12) + ' Hablar con el agente</button>' +
+        '<button class="seop-btn primary" id="seop-refresh-btn" onclick="seoUpdatePositions()">' + icn('refresh', 12) + ' Actualizar posiciones</button>' +
       '</div>' +
     '</div>' +
     '<div class="seop-stats">' +
@@ -18554,7 +18558,7 @@ function seoRenderKeywordsTab() {
     '<div class="seop-addbar">' +
       '<input class="seop-input" id="seop-add-kw" type="text" placeholder="Añadir keywords (separadas por coma)" onkeydown="if(event.key===\'Enter\')seoAddKeywords()">' +
       '<button class="seop-btn" onclick="seoAddKeywords()">+ Añadir</button>' +
-      '<button class="seop-btn" onclick="seoResearchKeywords()">🔍 Investigar con el agente</button>' +
+      '<button class="seop-btn" onclick="seoResearchKeywords()">' + icn('search', 12) + ' Investigar con el agente</button>' +
     '</div>';
   if (!kws.length) return addbar + '<div class="seop-empty">Sin keywords todavía. Añádelas a mano o pide al agente una investigación para tu mercado.</div>';
 
@@ -18578,7 +18582,7 @@ function seoRenderKeywordsTab() {
       '<td>' + delta + '</td>' +
       '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">' + (url ? esc(url.replace(/^https?:\/\/(www\.)?/, '')) : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
-        '<button class="seop-row-btn" title="Generar contenido para esta keyword" onclick="seoGenerateContent(' + i + ')">📝</button>' +
+        '<button class="seop-row-btn" title="Generar contenido para esta keyword" onclick="seoGenerateContent(' + i + ')">' + icn('edit', 12) + '</button>' +
         '<button class="seop-row-btn" title="Eliminar" onclick="seoDeleteKeyword(' + i + ')">✕</button>' +
       '</td>' +
     '</tr>';
@@ -18675,7 +18679,7 @@ function seoRenderCompetenciaTab() {
   const header =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
       '<div style="font-size:12.5px;color:var(--muted)">Dominios que aparecen en el top 5 de Google para tus keywords' + (declared.size ? ' · declarados: ' + esc([...declared].join(', ')) : '') + '</div>' +
-      '<button class="seop-btn primary" onclick="seoAnalyzeCompetition()">🧠 Analizar con el agente</button>' +
+      '<button class="seop-btn primary" onclick="seoAnalyzeCompetition()">' + icn('bot', 12) + ' Analizar con el agente</button>' +
     '</div>';
   if (!sorted.length) return header + '<div class="seop-empty">Actualiza las posiciones primero — la tabla de competencia se construye con los resultados reales de Google.</div>';
   const rows = sorted.map(([dom, s]) =>
@@ -18708,7 +18712,7 @@ function seoRenderOnpageTab() {
   const auditBar =
     '<div class="seop-addbar">' +
       '<input class="seop-input" id="seop-audit-url" type="text" placeholder="URL a auditar, ej: https://' + esc(seoProject.domain) + '/servicios">' +
-      '<button class="seop-btn primary" onclick="seoAuditPage()">🏥 Auditar con el agente</button>' +
+      '<button class="seop-btn primary" onclick="seoAuditPage()">' + icn('search', 12) + ' Auditar con el agente</button>' +
     '</div>' +
     '<div style="font-size:11.5px;color:var(--muted);margin-bottom:18px">El agente audita la página (title, metas, encabezados, contenido, enlazado, velocidad percibida) y te entrega acciones específicas — guárdalas aquí como checklist.</div>';
   const addAction =
@@ -18773,14 +18777,14 @@ function seoRenderContenidoTab() {
   const header =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
       '<div style="font-size:12.5px;color:var(--muted)">Oportunidades de contenido — tus keywords con más recorrido, priorizadas</div>' +
-      '<button class="seop-btn primary" onclick="seoContentPlan()">📅 Plan de contenido con el agente</button>' +
+      '<button class="seop-btn primary" onclick="seoContentPlan()">' + icn('file', 12) + ' Plan de contenido con el agente</button>' +
     '</div>';
   if (!kws.length) return header + '<div class="seop-empty">Añade keywords al proyecto para ver oportunidades de contenido.</div>';
   const rows = kws.map(k => {
     const pos = k.history?.[m]?.pos;
     const idx = seoProject.keywords.indexOf(k);
     return '<tr><td>' + esc(k.kw) + '</td><td class="seop-pos">' + (pos ? '#' + pos : '100+') + '</td>' +
-      '<td><button class="seop-btn" style="padding:5px 11px;font-size:11px" onclick="seoGenerateContent(' + idx + ')">📝 Generar artículo →</button></td></tr>';
+      '<td><button class="seop-btn" style="padding:5px 11px;font-size:11px" onclick="seoGenerateContent(' + idx + ')">' + icn('edit', 11) + ' Generar artículo</button></td></tr>';
   }).join('');
   return header + '<div class="seop-scroll"><table class="seop-table" style="min-width:480px"><tr><th>Keyword</th><th>Posición</th><th></th></tr>' + rows + '</table></div>';
 }
@@ -18819,11 +18823,14 @@ function seoImportKeywords(msgId) {
 // Además de la posición en Google, mide si la marca aparece cuando un usuario
 // le pregunta a las principales IAs por su categoría.
 const GEO_ENGINE_META = {
-  claude:     { label: 'Claude',     icon: '🟠' },
-  gemini:     { label: 'Gemini',     icon: '🔵' },
-  chatgpt:    { label: 'ChatGPT',    icon: '🟢' },
-  perplexity: { label: 'Perplexity', icon: '🟣' },
+  claude:     { label: 'Claude',     color: '#D97757' },
+  gemini:     { label: 'Gemini',     color: '#4285F4' },
+  chatgpt:    { label: 'ChatGPT',    color: '#10A37F' },
+  perplexity: { label: 'Perplexity', color: '#20808D' },
 };
+function geoEngineDot(k) {
+  return '<span style="width:7px;height:7px;border-radius:50%;background:' + (GEO_ENGINE_META[k]?.color || 'var(--muted2)') + ';display:inline-block;margin-right:3px;vertical-align:middle"></span>';
+}
 
 function seoRenderGeoTab() {
   const m = seoMonthKey(), pm = seoPrevMonthKey();
@@ -18837,22 +18844,22 @@ function seoRenderGeoTab() {
   const chips = Object.keys(GEO_ENGINE_META).map(k => {
     const active = engines[k] ? engines[k].active : (k === 'claude');
     return '<span class="seop-delta ' + (active ? 'up' : 'same') + '" style="margin-right:5px" title="' + (active ? 'Motor activo' : 'Agrega la API key en Vercel para activarlo') + '">' +
-      GEO_ENGINE_META[k].icon + ' ' + GEO_ENGINE_META[k].label + (active ? '' : ' · no configurado') + '</span>';
+      geoEngineDot(k) + GEO_ENGINE_META[k].label + (active ? '' : ' · no configurado') + '</span>';
   }).join('');
 
   const header =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">' +
       '<div style="font-size:12.5px;color:var(--muted)">¿Te mencionan las IAs cuando alguien pregunta por tu categoría?</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        (hist ? '<button class="seop-btn" onclick="seoGeoExportReport()">📄 Exportar reporte</button>' : '') +
-        '<button class="seop-btn primary" id="seop-geo-btn" onclick="seoGeoUpdate()">🤖 Consultar IAs ahora</button>' +
+        (hist ? '<button class="seop-btn" onclick="seoGeoExportReport()">' + icn('file', 12) + ' Exportar reporte</button>' : '') +
+        '<button class="seop-btn primary" id="seop-geo-btn" onclick="seoGeoUpdate()">' + icn('bot', 12) + ' Consultar IAs ahora</button>' +
       '</div>' +
     '</div>' +
     '<div style="margin-bottom:14px">' + chips + '</div>' +
     '<div class="seop-addbar">' +
       '<input class="seop-input" id="seop-geo-add" type="text" placeholder="Añadir consulta, ej: ¿cuál es la mejor plataforma de reservas VIP para hoteles?" onkeydown="if(event.key===\'Enter\')seoGeoAddQuery()">' +
       '<button class="seop-btn" onclick="seoGeoAddQuery()">+ Añadir</button>' +
-      '<button class="seop-btn" onclick="seoGeoGenerateQueries()">🔍 Generar con el agente</button>' +
+      '<button class="seop-btn" onclick="seoGeoGenerateQueries()">' + icn('search', 12) + ' Generar con el agente</button>' +
     '</div>';
 
   if (!queries.length) {
@@ -19031,4 +19038,29 @@ function seoGeoExportReport() {
   lines.push('---');
   lines.push('Generado por Acuarius · Proyecto SEO');
   exportToPDF(lines.join('\n'), 'reporte-geo-' + seoProject.domain + '.pdf');
+}
+
+// ── SET DE ÍCONOS SVG (un solo lenguaje: stroke 2, esquinas redondas) ─────────
+// Reemplaza los emojis funcionales de la UI. Uso: icn('alert', 14)
+const ICN_PATHS = {
+  alert:    '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  check:    '<path d="M22 11.1V12a10 10 0 11-5.9-9.1"/><path d="M22 4L12 14l-3-3"/>',
+  chart:    '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  trend:    '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  search:   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  refresh:  '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
+  sparkles: '<path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/>',
+  edit:     '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/>',
+  chat:     '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>',
+  gear:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  file:     '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  bot:      '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4M8 4h8"/><circle cx="8.5" cy="13.5" r=".5" fill="currentColor"/><circle cx="15.5" cy="13.5" r=".5" fill="currentColor"/><path d="M9 17h6"/>',
+  users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
+  arrow:    '<path d="M5 12h14M12 5l7 7-7 7"/>',
+};
+
+function icn(name, size, extra) {
+  const p = ICN_PATHS[name] || ICN_PATHS.chart;
+  return '<svg width="' + (size || 14) + '" height="' + (size || 14) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' + (extra ? ' ' + extra : '') + '>' + p + '</svg>';
 }
