@@ -18420,6 +18420,25 @@ const SEO_COUNTRIES = [['co','Colombia'],['mx','México'],['ar','Argentina'],['c
 
 function seoMonthKey(d) { const x = d || new Date(); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); }
 function seoPrevMonthKey() { const d = new Date(); d.setMonth(d.getMonth() - 1); return seoMonthKey(d); }
+// Mini-gráfica de la evolución mensual de posición (menor = mejor = arriba)
+function seoSparkline(history) {
+  const months = Object.keys(history || {}).sort();
+  if (months.length < 2) return '<span style="color:var(--muted2)">—</span>';
+  const vals = months.map(m => history[m].pos || 100);
+  const W = 64, H = 18, P = 3;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = (max - min) || 1;
+  const step = (W - 2 * P) / (vals.length - 1);
+  const y = v => (P + ((v - min) / span) * (H - 2 * P)).toFixed(1);
+  const points = vals.map((v, i) => (P + i * step).toFixed(1) + ',' + y(v)).join(' ');
+  const improving = vals[vals.length - 1] <= vals[0];
+  const color = improving ? 'var(--success)' : 'var(--danger)';
+  return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block">' +
+    '<polyline fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="' + points + '"/>' +
+    '<circle cx="' + (P + (vals.length - 1) * step).toFixed(1) + '" cy="' + y(vals[vals.length - 1]) + '" r="2" fill="' + color + '"/>' +
+  '</svg>';
+}
+
 function seoCountryName(code) { const c = SEO_COUNTRIES.find(x => x[0] === code); return c ? c[1] : code; }
 
 async function openSeoProject() {
@@ -18580,6 +18599,7 @@ function seoRenderKeywordsTab() {
       '<td>' + (prev ? '#' + prev : '—') + '</td>' +
       '<td>' + (best ? '#' + best : '—') + '</td>' +
       '<td>' + delta + '</td>' +
+      '<td>' + seoSparkline(k.history) + '</td>' +
       '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">' + (url ? esc(url.replace(/^https?:\/\/(www\.)?/, '')) : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
         '<button class="seop-row-btn" title="Generar contenido para esta keyword" onclick="seoGenerateContent(' + i + ')">' + icn('edit', 12) + '</button>' +
@@ -18589,7 +18609,7 @@ function seoRenderKeywordsTab() {
   }).join('');
   return addbar +
     '<div class="seop-scroll"><table class="seop-table">' +
-      '<tr><th>Keyword</th><th>Posición</th><th>Mes anterior</th><th>Mejor</th><th>Cambio</th><th>URL que posiciona</th><th></th></tr>' +
+      '<tr><th>Keyword</th><th>Posición</th><th>Mes anterior</th><th>Mejor</th><th>Cambio</th><th>Tendencia</th><th>URL que posiciona</th><th></th></tr>' +
       rows +
     '</table></div>';
 }
