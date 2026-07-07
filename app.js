@@ -18312,6 +18312,29 @@ function lienzoExportPDF() {
   if (_lienzoRaw && typeof exportToPDF === 'function') exportToPDF(_lienzoRaw, 'acuarius-resultado.pdf');
 }
 
+// Copia el contenido completo del lienzo (markdown original del agente)
+function lienzoCopy() {
+  if (!_lienzoRaw) return;
+  const btn = document.getElementById('lienzo-copy-btn');
+  const flash = () => {
+    if (!btn) return;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ ¡Copiado!';
+    btn.style.color = '#047857';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+  };
+  navigator.clipboard.writeText(_lienzoRaw).then(flash).catch(() => {
+    // Fallback (iOS / contextos sin clipboard API)
+    const ta = document.createElement('textarea');
+    ta.value = _lienzoRaw;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    flash();
+  });
+}
+
 // ── ENVIAR LEAD AL CONSULTOR (CRM → agente) ───────────────────────────────────
 function crmSendLeadToConsultor() {
   const l = crmDetailLead;
