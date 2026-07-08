@@ -46,7 +46,7 @@ async function sendAlertEmail(userEmail, alerts) {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'alertas@acuarius.app',
+      from: 'Acuarius <alertas@app.acuarius.app>',
       to: userEmail,
       subject: `⚠️ ${criticalAlerts.length} alerta${criticalAlerts.length > 1 ? 's' : ''} crítica${criticalAlerts.length > 1 ? 's' : ''} en tus campañas — Acuarius`,
       html: `

@@ -61,7 +61,7 @@ async function actionSendEmail(step, lead) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Acuarius <alertas@acuarius.app>', to: [lead.email], subject, html }),
+    body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
