@@ -6940,244 +6940,44 @@ function renderSocialOptions() {
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($39/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 function exportToPDF(txt, filename) {
-  function stripEmoji(s) {
-    return (s || '')
-      .replace(/🩺/g, '')
-      .replace(/🔴/g, '[!] ')
-      .replace(/🟡/g, '[~] ')
-      .replace(/🟢/g, '[+] ')
-      .replace(/🔵/g, '[*] ')
-      .replace(/✅/g, '[ok] ')
-      .replace(/⚠️?/g, '[!] ')
-      .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '')
-      .trim();
-  }
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', putOnlyUsedFonts: true });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const marginL = 22, marginR = 22, marginT = 28, marginB = 22;
-  const maxW = pageW - marginL - marginR;
-  const blue = [30, 43, 204];
-  const blueLt = [238, 240, 253];
-  const dark = [15, 15, 15];
-  const muted = [120, 120, 130];
-  const border = [220, 221, 230];
-  let y = marginT;
-
-  // Detect Google Ads diagnostic before drawHeader so the closure captures it
-  var isGoogleAdsDiag = txt.includes('Diagnóstico de Google Ads') || txt.includes('DIAGNÓSTICO DE GOOGLE ADS');
-
-  function checkPage(needed) {
-    if (y + needed > pageH - marginB) {
-      doc.addPage();
-      y = isGoogleAdsDiag ? marginT : marginT;
-      drawHeader();
-    }
-  }
-  function drawHeader() {
-    // Franja azul top
-    doc.setFillColor(...blue);
-    doc.rect(0, 0, pageW, 12, 'F');
-    // Logo texto
-    doc.setFontSize(8);
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold');
-    doc.text('acuarius', marginL, 8);
-    // Fecha derecha
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(7.5);
-    doc.text(new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}), pageW - marginR, 8, {align:'right'});
-  }
-
-  // Header primera página
-  drawHeader();
-  y = 20;
-
-  // Branded sub-header for Google Ads diagnostic
-  var diagClientName = '';
-  if (isGoogleAdsDiag) {
-    var titleMatch = txt.match(/Diagnóstico de Google Ads\s*[—-]\s*(.+)/);
-    diagClientName = titleMatch ? titleMatch[1].trim() : '';
-    // Google Ads color bar
-    doc.setFillColor(66, 133, 244); // Google blue
-    doc.rect(0, 12, pageW, 18, 'F');
-    // Google Ads logo "G" circle (simplified)
-    doc.setFillColor(255, 255, 255);
-    doc.circle(marginL + 7, 21, 5.5, 'F');
-    doc.setFontSize(9);
-    doc.setTextColor(66, 133, 244);
-    doc.setFont('helvetica', 'bold');
-    doc.text('G', marginL + 7, 23.5, { align: 'center' });
-    // "Google Ads" text
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Google Ads', marginL + 16, 22.5);
-    // Report type
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Reporte de rendimiento — últimos 30 días', marginL + 16, 27.5);
-    // Client name on the right
-    if (diagClientName) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(diagClientName, pageW - marginR, 22.5, { align: 'right' });
-    }
-    // Date
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text(new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' }), pageW - marginR, 27.5, { align: 'right' });
-    y = 36;
-  }
-
-  // Parsear líneas con tipo
-  const rawLines = txt.split('\n');
-  const parsed = rawLines.map(line => {
-    const h1 = line.match(/^###\s+(.+)/);
-    const h2 = line.match(/^##\s+(.+)/);
-    const h3 = line.match(/^#\s+(.+)/);
-    const bold = line.match(/^\*\*(.+)\*\*$/);
-    const bullet = line.match(/^[-•*]\s+(.+)/);
-    const num = line.match(/^(\d+)\.\s+(.+)/);
-    const empty = line.trim() === '';
-    if (h1) return { type: 'h1', text: stripEmoji(h1[1].replace(/\*\*/g,'')) };
-    if (h2) return { type: 'h2', text: stripEmoji(h2[1].replace(/\*\*/g,'')) };
-    if (h3) return { type: 'h3', text: stripEmoji(h3[1].replace(/\*\*/g,'')) };
-    if (bold) return { type: 'bold', text: stripEmoji(bold[1]) };
-    if (bullet) return { type: 'bullet', text: stripEmoji(bullet[1].replace(/\*\*/g,'')) };
-    if (num) return { type: 'num', n: num[1], text: stripEmoji(num[2].replace(/\*\*/g,'')) };
-    if (empty) return { type: 'empty' };
-    return { type: 'body', text: stripEmoji(line.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1')) };
-  });
-
-  for (let i = 0; i < parsed.length; i++) {
-    const p = parsed[i];
-
-    if (p.type === 'empty') { y += 3; continue; }
-
-    if (p.type === 'h1') {
-      checkPage(16);
-      if (i > 0) y += 4;
-      // Bloque azul oscuro full width
-      doc.setFillColor(...blue);
-      doc.roundedRect(marginL, y, maxW, 11, 2, 2, 'F');
-      doc.setFontSize(12);
-      doc.setTextColor(255,255,255);
-      doc.setFont('helvetica','bold');
-      doc.text(p.text, marginL + 5, y + 7.5);
-      y += 16;
-      continue;
-    }
-
-    if (p.type === 'h2') {
-      checkPage(14);
-      if (i > 0) y += 3;
-      // Bloque azul claro
-      doc.setFillColor(...blueLt);
-      doc.roundedRect(marginL, y, maxW, 9, 1.5, 1.5, 'F');
-      doc.setDrawColor(...blue);
-      doc.setLineWidth(0.5);
-      doc.line(marginL, y + 9, marginL + maxW, y + 9);
-      doc.setFontSize(10.5);
-      doc.setTextColor(...blue);
-      doc.setFont('helvetica','bold');
-      doc.text(p.text, marginL + 4, y + 6.2);
-      y += 13;
-      continue;
-    }
-
-    if (p.type === 'h3') {
-      checkPage(10);
-      if (i > 0) y += 2;
-      doc.setFontSize(10);
-      doc.setTextColor(...dark);
-      doc.setFont('helvetica','bold');
-      // Línea azul izquierda
-      doc.setFillColor(...blue);
-      doc.rect(marginL, y - 3.5, 2.5, 7, 'F');
-      const wrapped = doc.splitTextToSize(p.text, maxW - 6);
-      doc.text(wrapped, marginL + 5, y);
-      y += wrapped.length * 5.5 + 3;
-      continue;
-    }
-
-    if (p.type === 'bold') {
-      checkPage(8);
-      y += 1;
-      doc.setFontSize(10);
-      doc.setTextColor(...dark);
-      doc.setFont('helvetica','bold');
-      const wrapped = doc.splitTextToSize(p.text, maxW);
-      for (const w of wrapped) { checkPage(6); doc.text(w, marginL, y); y += 5.5; }
-      continue;
-    }
-
-    if (p.type === 'bullet') {
-      checkPage(7);
-      doc.setFillColor(...blue);
-      doc.circle(marginL + 3, y - 1.5, 1, 'F');
-      doc.setFontSize(10);
-      doc.setTextColor(...dark);
-      doc.setFont('helvetica','normal');
-      const wrapped = doc.splitTextToSize(p.text, maxW - 8);
-      for (let wi = 0; wi < wrapped.length; wi++) {
-        checkPage(6);
-        doc.text(wrapped[wi], marginL + 7, y);
-        y += 5.5;
-      }
-      y += 0.5;
-      continue;
-    }
-
-    if (p.type === 'num') {
-      checkPage(7);
-      doc.setFillColor(...blueLt);
-      doc.circle(marginL + 3.5, y - 1.5, 3, 'F');
-      doc.setFontSize(7.5);
-      doc.setTextColor(...blue);
-      doc.setFont('helvetica','bold');
-      doc.text(p.n, marginL + 3.5, y - 0.5, {align:'center'});
-      doc.setFontSize(10);
-      doc.setTextColor(...dark);
-      doc.setFont('helvetica','normal');
-      const wrapped = doc.splitTextToSize(p.text, maxW - 10);
-      for (let wi = 0; wi < wrapped.length; wi++) {
-        checkPage(6);
-        doc.text(wrapped[wi], marginL + 9, y);
-        y += 5.5;
-      }
-      y += 0.5;
-      continue;
-    }
-
-    if (p.type === 'body') {
-      checkPage(7);
-      doc.setFontSize(10);
-      doc.setTextColor(...dark);
-      doc.setFont('helvetica','normal');
-      const wrapped = doc.splitTextToSize(p.text, maxW);
-      for (const w of wrapped) { checkPage(6); doc.text(w, marginL, y); y += 5.5; }
-      continue;
-    }
-  }
-
-  // Footer en cada página
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setDrawColor(...border);
-    doc.setLineWidth(0.3);
-    doc.line(marginL, pageH - marginB + 2, pageW - marginR, pageH - marginB + 2);
-    doc.setFontSize(7.5);
-    doc.setTextColor(...muted);
-    doc.setFont('helvetica','normal');
-    doc.text('acuarius.app', marginL, pageH - marginB + 7);
-    doc.text(`${i} / ${totalPages}`, pageW - marginR, pageH - marginB + 7, {align:'right'});
-  }
-
-  doc.save(filename || 'acuarius-estrategia.pdf');
+  // Exporta con la MISMA fidelidad visual del lienzo: renderiza fmt() en una
+  // ventana de impresión con estilos de marca y abre "Guardar como PDF".
+  const title = String(filename || 'acuarius-resultado.pdf').replace(/\.pdf$/i, '');
+  const fecha = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+  const contentHtml = fmt(txt);
+  const w = window.open('', '_blank');
+  if (!w) { alert('Permite las ventanas emergentes para exportar el PDF.'); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title.replace(/</g, '&lt;') + '</title><style>' +
+    '@page{margin:16mm 14mm 18mm}' +
+    '*{box-sizing:border-box}' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0F1C;font-size:12.5px;line-height:1.65;margin:0;padding:0}' +
+    '.pdf-head{display:flex;justify-content:space-between;align-items:center;background:#1E2BCC;color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:18px}' +
+    '.pdf-head b{font-size:15px;letter-spacing:-.02em}' +
+    '.pdf-head span{font-size:10.5px;opacity:.85}' +
+    'h1,h2,h3,h4{color:#0D0F1C;letter-spacing:-.01em;line-height:1.3;margin:20px 0 8px;page-break-after:avoid}' +
+    'h2{font-size:16px;background:#EEF0FD;border-left:4px solid #1E2BCC;padding:7px 12px;border-radius:0 6px 6px 0}' +
+    'h3{font-size:13.5px;color:#1E2BCC}' +
+    'p{margin:0 0 9px}' +
+    'strong{font-weight:700}' +
+    'ul,ol{margin:0 0 10px;padding-left:20px}' +
+    'li{margin-bottom:4px}' +
+    'table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:11px;page-break-inside:avoid}' +
+    'th{background:#EEF0FD;color:#0D0F1C;text-align:left;padding:6px 9px;border:1px solid #C5CAF8;font-weight:700}' +
+    'td{padding:5px 9px;border:1px solid #DFE2F0;vertical-align:top}' +
+    'tr:nth-child(even) td{background:#FAFBFF}' +
+    'hr{border:none;border-top:1px solid #E4E6F0;margin:16px 0}' +
+    'code{background:#F0F1F8;padding:1px 5px;border-radius:4px;font-size:11px}' +
+    'pre{background:#F7F8FC;border:1px solid #E4E6F0;border-radius:8px;padding:10px;font-size:10.5px;overflow-x:hidden;white-space:pre-wrap}' +
+    'a{color:#1E2BCC}' +
+    '.pdf-foot{margin-top:22px;padding-top:10px;border-top:1px solid #E4E6F0;font-size:9.5px;color:#9DA3BE;display:flex;justify-content:space-between}' +
+  '</style></head><body>' +
+    '<div class="pdf-head"><b>acuarius</b><span>' + fecha + '</span></div>' +
+    contentHtml +
+    '<div class="pdf-foot"><span>Generado con Acuarius — agentes de IA para marketing</span><span>app.acuarius.app</span></div>' +
+  '</body></html>');
+  w.document.close();
+  w.onafterprint = () => w.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch(e) {} }, 350);
 }
 
 // ── SOCIAL MEDIA STUDIO ─────────────────────────────────────────────────────
