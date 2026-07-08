@@ -6940,40 +6940,61 @@ function renderSocialOptions() {
 function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($39/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
 
 function exportToPDF(txt, filename) {
-  // Exporta con la MISMA fidelidad visual del lienzo: renderiza fmt() en una
-  // ventana de impresión con estilos de marca y abre "Guardar como PDF".
-  const title = String(filename || 'acuarius-resultado.pdf').replace(/\.pdf$/i, '');
+  // Exporta el contenido con diseño de DOCUMENTO (estilo reporte profesional):
+  // portada tipográfica, jerarquía editorial y tablas de reporte — mismo
+  // contenido que el lienzo, formato pensado para PDF.
   const fecha = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
-  const contentHtml = fmt(txt);
+  // Título del documento: primer encabezado del contenido (se retira del cuerpo)
+  let docTitle = String(filename || 'Resultado').replace(/\.pdf$/i, '').replace(/-/g, ' ');
+  let body = String(txt || '');
+  const hMatch = body.match(/^\s*#{1,3}\s+(.+)$/m);
+  if (hMatch && body.indexOf(hMatch[0]) < 80) {
+    docTitle = hMatch[1].replace(/[*#]+/g, '').trim();
+    body = body.replace(hMatch[0], '').trim();
+  }
+  const contentHtml = fmt(body);
   const w = window.open('', '_blank');
   if (!w) { alert('Permite las ventanas emergentes para exportar el PDF.'); return; }
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title.replace(/</g, '&lt;') + '</title><style>' +
-    '@page{margin:16mm 14mm 18mm}' +
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + docTitle.replace(/</g, '&lt;') + '</title><style>' +
+    '@page{margin:18mm 16mm 20mm}' +
     '*{box-sizing:border-box}' +
-    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0F1C;font-size:12.5px;line-height:1.65;margin:0;padding:0}' +
-    '.pdf-head{display:flex;justify-content:space-between;align-items:center;background:#1E2BCC;color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:18px}' +
-    '.pdf-head b{font-size:15px;letter-spacing:-.02em}' +
-    '.pdf-head span{font-size:10.5px;opacity:.85}' +
-    'h1,h2,h3,h4{color:#0D0F1C;letter-spacing:-.01em;line-height:1.3;margin:20px 0 8px;page-break-after:avoid}' +
-    'h2{font-size:16px;background:#EEF0FD;border-left:4px solid #1E2BCC;padding:7px 12px;border-radius:0 6px 6px 0}' +
-    'h3{font-size:13.5px;color:#1E2BCC}' +
+    'html,body{margin:0;padding:0}' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:#1A1D33;font-size:11.5px;line-height:1.7;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    /* ── Portada del documento ── */
+    '.doc-brand{display:flex;align-items:center;gap:7px;margin-bottom:26px}' +
+    '.doc-brand-dot{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#1E2BCC,#00B8CE)}' +
+    '.doc-brand-name{font-size:13px;font-weight:800;letter-spacing:-.02em;color:#1E2BCC}' +
+    '.doc-title{font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.15;color:#0D0F1C;max-width:88%;margin:0 0 10px}' +
+    '.doc-meta{font-size:10px;color:#8A90AB;letter-spacing:.02em;margin-bottom:8px}' +
+    '.doc-rule{height:3px;width:64px;border-radius:3px;background:linear-gradient(90deg,#1E2BCC,#00B8CE);margin:0 0 30px}' +
+    /* ── Tipografía editorial ── */
+    'h1,h2{font-size:15.5px;font-weight:800;letter-spacing:-.02em;color:#0D0F1C;margin:26px 0 10px;padding-bottom:6px;border-bottom:1.5px solid #E7EAF6;page-break-after:avoid}' +
+    'h3{font-size:12.5px;font-weight:800;color:#1E2BCC;margin:20px 0 7px;page-break-after:avoid}' +
+    'h4{font-size:11.5px;font-weight:700;color:#3A3F63;margin:14px 0 5px}' +
     'p{margin:0 0 9px}' +
-    'strong{font-weight:700}' +
-    'ul,ol{margin:0 0 10px;padding-left:20px}' +
+    'strong{font-weight:700;color:#0D0F1C}' +
+    'ul,ol{margin:0 0 11px;padding-left:18px}' +
     'li{margin-bottom:4px}' +
-    'table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:11px;page-break-inside:avoid}' +
-    'th{background:#EEF0FD;color:#0D0F1C;text-align:left;padding:6px 9px;border:1px solid #C5CAF8;font-weight:700}' +
-    'td{padding:5px 9px;border:1px solid #DFE2F0;vertical-align:top}' +
-    'tr:nth-child(even) td{background:#FAFBFF}' +
-    'hr{border:none;border-top:1px solid #E4E6F0;margin:16px 0}' +
-    'code{background:#F0F1F8;padding:1px 5px;border-radius:4px;font-size:11px}' +
-    'pre{background:#F7F8FC;border:1px solid #E4E6F0;border-radius:8px;padding:10px;font-size:10.5px;overflow-x:hidden;white-space:pre-wrap}' +
-    'a{color:#1E2BCC}' +
-    '.pdf-foot{margin-top:22px;padding-top:10px;border-top:1px solid #E4E6F0;font-size:9.5px;color:#9DA3BE;display:flex;justify-content:space-between}' +
+    'hr{border:none;height:1px;background:#EBEDF7;margin:20px 0}' +
+    'a{color:#1E2BCC;text-decoration:none}' +
+    'code{background:#F0F1F8;padding:1px 5px;border-radius:4px;font-size:10px;font-family:ui-monospace,Menlo,monospace}' +
+    'pre{background:#F8F9FE;border:1px solid #E7EAF6;border-radius:8px;padding:10px 12px;font-size:9.5px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}' +
+    /* ── Tablas de reporte (sin rejilla vertical) ── */
+    'table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:10px;page-break-inside:avoid}' +
+    'thead{display:table-header-group}' +
+    'th{text-align:left;padding:7px 9px;font-weight:800;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#5A607A;border-bottom:2px solid #1E2BCC;background:transparent}' +
+    'td{padding:6px 9px;border-bottom:1px solid #EEF0F8;vertical-align:top;font-variant-numeric:tabular-nums}' +
+    'tr:last-child td{border-bottom:1px solid #D9DDEF}' +
+    /* ── Pie repetido en cada página ── */
+    '.doc-foot{position:fixed;bottom:-12mm;left:0;right:0;display:flex;justify-content:space-between;font-size:8.5px;color:#A6ABC6;letter-spacing:.03em}' +
+    '.doc-foot b{color:#1E2BCC;font-weight:800}' +
   '</style></head><body>' +
-    '<div class="pdf-head"><b>acuarius</b><span>' + fecha + '</span></div>' +
+    '<div class="doc-foot"><span><b>acuarius</b> · agentes de IA para marketing</span><span>app.acuarius.app</span></div>' +
+    '<div class="doc-brand"><div class="doc-brand-dot"></div><div class="doc-brand-name">acuarius</div></div>' +
+    '<div class="doc-title">' + docTitle.replace(/</g, '&lt;') + '</div>' +
+    '<div class="doc-meta">' + fecha + ' · Generado con los agentes de Acuarius</div>' +
+    '<div class="doc-rule"></div>' +
     contentHtml +
-    '<div class="pdf-foot"><span>Generado con Acuarius — agentes de IA para marketing</span><span>app.acuarius.app</span></div>' +
   '</body></html>');
   w.document.close();
   w.onafterprint = () => w.close();
