@@ -17506,7 +17506,7 @@ async function crmInit() {
 const _crmSetViewOrig = crmSetView;
 function crmSetView(v) {
   crmView = v;
-  ['kanban','list','agents','inbox','analytics'].forEach(id => {
+  ['kanban','list','agents','inbox','analytics','autos'].forEach(id => {
     const btn = document.getElementById('crm-btn-' + id);
     if (btn) btn.classList.toggle('active', v === id);
   });
@@ -17516,6 +17516,8 @@ function crmSetView(v) {
   document.getElementById('crm-inbox-view').style.display = v === 'inbox' ? 'flex' : 'none';
   const analyticsView = document.getElementById('crm-analytics-view');
   if (analyticsView) analyticsView.style.display = v === 'analytics' ? 'flex' : 'none';
+  const autosView = document.getElementById('crm-autos-view');
+  if (autosView) autosView.style.display = v === 'autos' ? 'flex' : 'none';
   const searchBar = document.getElementById('crm-search-bar');
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
@@ -17524,6 +17526,7 @@ function crmSetView(v) {
   if (v === 'agents') crmRenderAgents();
   if (v === 'inbox') crmLoadInbox();
   if (v === 'analytics') crmRenderAnalytics();
+  if (v === 'autos') crmRenderAutos();
 }
 // ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 
@@ -19094,4 +19097,331 @@ function emptyAgua(iconName, title, sub, ctaHtml) {
 function icn(name, size, extra) {
   const p = ICN_PATHS[name] || ICN_PATHS.chart;
   return '<svg width="' + (size || 14) + '" height="' + (size || 14) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' + (extra ? ' ' + extra : '') + '>' + p + '</svg>';
+}
+
+// ── AUTOMATIZACIONES DEL CRM ──────────────────────────────────────────────────
+// Flujos con trigger + pasos que el motor server-side ejecuta (cron cada 10 min).
+let crmAutomations = [];
+let _autoDraft = null;
+let _autoEditingId = null;
+
+const AUTO_STEP_META = {
+  send_email:    { label: 'Enviar email',        icon: 'file' },
+  send_whatsapp: { label: 'Enviar WhatsApp',     icon: 'chat' },
+  wait:          { label: 'Esperar',             icon: 'refresh' },
+  condition:     { label: 'Condición',           icon: 'check' },
+  change_stage:  { label: 'Cambiar etapa',       icon: 'trend' },
+  add_note:      { label: 'Añadir nota',         icon: 'edit' },
+};
+
+const AUTO_TEMPLATES = [
+  {
+    name: 'Bienvenida a lead nuevo',
+    trigger: { type: 'lead_created' },
+    steps: [
+      { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
+      { type: 'send_email', subject: '¡Gracias por tu interés, {{nombre}}!', body: 'Hola {{nombre}},\n\nGracias por contactarnos. Recibimos tus datos y muy pronto uno de nuestros asesores te escribirá.\n\nMientras tanto, cuéntanos: ¿qué es lo más importante que quieres resolver?\n\nUn saludo.' },
+    ],
+  },
+  {
+    name: 'Seguimiento a los 3 días',
+    trigger: { type: 'lead_inactive', days: 3 },
+    steps: [
+      { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
+      { type: 'send_email', subject: '{{nombre}}, ¿seguimos en contacto?', body: 'Hola {{nombre}},\n\nHace unos días conversamos y no hemos vuelto a saber de ti. ¿Sigues interesado?\n\nSi tienes alguna duda, respóndeme este correo y te ayudo personalmente.' },
+      { type: 'add_note', text: 'Email de seguimiento por inactividad enviado' },
+    ],
+  },
+  {
+    name: 'Lead ganado → felicitación',
+    trigger: { type: 'stage_changed', stage: 'ganado' },
+    steps: [
+      { type: 'send_email', subject: '¡Bienvenido a bordo, {{nombre}}! 🎉', body: 'Hola {{nombre}},\n\n¡Estamos felices de trabajar contigo! En las próximas horas recibirás los detalles para comenzar.\n\nGracias por confiar en nosotros.' },
+      { type: 'add_note', text: 'Email de bienvenida de cliente enviado' },
+    ],
+  },
+];
+
+async function crmLoadAutomations() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const res = await fetch(`/api/automations${qs}`, { headers: await getAuthHeaders() });
+    const data = await res.json();
+    crmAutomations = data.automations || [];
+  } catch (e) { console.error('crmLoadAutomations', e); crmAutomations = []; }
+}
+
+function autoTriggerLabel(a) {
+  const t = a.trigger || {};
+  if (t.type === 'lead_created') return 'Cuando se crea un lead';
+  if (t.type === 'stage_changed') return t.stage ? 'Cuando pasa a etapa "' + t.stage + '"' : 'Cuando cambia de etapa';
+  if (t.type === 'lead_inactive') return 'Cuando lleva ' + (t.days || 3) + '+ días sin actividad';
+  return t.type;
+}
+
+async function crmRenderAutos() {
+  const view = document.getElementById('crm-autos-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  await crmLoadAutomations();
+  if (typeof crmStages === 'undefined' || !crmStages.length) { try { await crmLoadStages(); } catch {} }
+
+  const header =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;max-width:760px">' +
+      '<div>' +
+        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Automatizaciones</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Flujos que trabajan solos: emails, mensajes y acciones sobre tus leads · corren cada 10 min</div>' +
+      '</div>' +
+      '<button class="btn-pri" onclick="autoBuilderOpen()">' + icn('plus', 13) + ' Nueva automatización</button>' +
+    '</div>';
+
+  if (!crmAutomations.length) {
+    const templates = AUTO_TEMPLATES.map((t, i) =>
+      '<button class="btn-sec sm" onclick="autoBuilderOpen(null,' + i + ')">' + icn('sparkles', 11) + ' ' + esc(t.name) + '</button>'
+    ).join(' ');
+    view.innerHTML = header +
+      emptyAgua('sparkles', 'Tu primer flujo automático', 'Crea una automatización desde cero o arranca con una plantilla — el motor la ejecuta aunque no tengas la app abierta.',
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">' + templates + '</div>');
+    return;
+  }
+
+  const cards = crmAutomations.map(a => {
+    const chips = (a.steps || []).map(s => {
+      const m = AUTO_STEP_META[s.type] || { label: s.type, icon: 'check' };
+      let extra = '';
+      if (s.type === 'wait') extra = ' ' + (s.hours >= 24 ? (s.hours / 24) + 'd' : s.hours + 'h');
+      return '<span class="auto-step-chip">' + icn(m.icon, 9) + ' ' + m.label + extra + '</span>';
+    }).join('');
+    return '<div class="auto-card' + (a.active ? '' : ' paused') + '" style="max-width:760px">' +
+      '<div class="auto-ico">' + icn('sparkles', 16) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="auto-name">' + esc(a.name) + '</div>' +
+        '<div class="auto-trigger">⚡ ' + autoTriggerLabel(a) + '</div>' +
+        '<div class="auto-steps-row">' + chips + '</div>' +
+      '</div>' +
+      '<div class="auto-actions">' +
+        '<button class="auto-toggle' + (a.active ? ' on' : '') + '" title="' + (a.active ? 'Pausar' : 'Activar') + '" onclick="autoToggle(\'' + a.id + '\',' + (!a.active) + ')"></button>' +
+        '<button class="btn-ghost sm" onclick="autoShowLogs(\'' + a.id + '\')" title="Historial">' + icn('file', 12) + '</button>' +
+        '<button class="btn-ghost sm" onclick="autoBuilderOpen(\'' + a.id + '\')" title="Editar">' + icn('edit', 12) + '</button>' +
+        '<button class="btn-ghost sm" onclick="autoDelete(\'' + a.id + '\')" title="Eliminar">✕</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  view.innerHTML = header + '<div>' + cards + '</div>';
+}
+
+async function autoToggle(id, active) {
+  try {
+    await fetch('/api/automations', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, active }) });
+    crmRenderAutos();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function autoDelete(id) {
+  if (!confirm('¿Eliminar esta automatización? Los flujos en curso se cancelan.')) return;
+  try {
+    await fetch('/api/automations?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+    crmRenderAutos();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+// ── Builder ──────────────────────────────────────────────────────────────────
+function autoBuilderOpen(id, templateIdx) {
+  _autoEditingId = id || null;
+  if (id) {
+    const a = crmAutomations.find(x => x.id === id);
+    if (!a) return;
+    _autoDraft = JSON.parse(JSON.stringify({ name: a.name, trigger: a.trigger, steps: a.steps }));
+  } else if (templateIdx !== undefined && AUTO_TEMPLATES[templateIdx]) {
+    _autoDraft = JSON.parse(JSON.stringify(AUTO_TEMPLATES[templateIdx]));
+  } else {
+    _autoDraft = { name: '', trigger: { type: 'lead_created' }, steps: [] };
+  }
+  autoBuilderRender();
+}
+
+function autoBuilderClose() {
+  document.getElementById('auto-builder-overlay')?.remove();
+  _autoDraft = null; _autoEditingId = null;
+}
+
+function autoStageOptions(selected) {
+  const stages = (typeof crmStages !== 'undefined' && crmStages.length) ? crmStages : [{ key: 'nuevo', label: 'Nuevo' }, { key: 'contactado', label: 'Contactado' }, { key: 'calificado', label: 'Calificado' }, { key: 'propuesta', label: 'Propuesta' }, { key: 'ganado', label: 'Ganado' }, { key: 'perdido', label: 'Perdido' }];
+  return stages.map(st => '<option value="' + esc(st.key) + '"' + (selected === st.key ? ' selected' : '') + '>' + esc(st.label || st.key) + '</option>').join('');
+}
+
+function autoStepFields(s, i) {
+  const U = 'autoStepUpdate(' + i + ',';
+  if (s.type === 'send_email') {
+    return '<input class="auto-input" placeholder="Asunto" value="' + esc(s.subject || '') + '" oninput="' + U + '\'subject\',this.value)" style="margin-bottom:7px">' +
+      '<textarea class="auto-input" placeholder="Cuerpo del mensaje" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
+      '<div class="auto-vars-hint">Variables: {{nombre}} {{empresa}} {{email}} {{etapa}} {{valor}}</div>';
+  }
+  if (s.type === 'send_whatsapp') {
+    return '<textarea class="auto-input" placeholder="Mensaje de WhatsApp" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
+      '<div class="auto-vars-hint">Se envía por la conversación del Inbox del lead (requiere chat iniciado) · Variables: {{nombre}} {{empresa}}</div>';
+  }
+  if (s.type === 'wait') {
+    const opts = [[1,'1 hora'],[4,'4 horas'],[24,'1 día'],[48,'2 días'],[72,'3 días'],[168,'7 días']];
+    return '<select class="auto-input" onchange="' + U + '\'hours\',parseFloat(this.value))">' +
+      opts.map(o => '<option value="' + o[0] + '"' + (parseFloat(s.hours) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
+  }
+  if (s.type === 'condition') {
+    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono']];
+    const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
+    return '<div style="display:flex;gap:7px;flex-wrap:wrap">' +
+      '<select class="auto-input" style="flex:1;min-width:120px" onchange="' + U + '\'field\',this.value)">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select>' +
+      '<select class="auto-input" style="width:90px" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
+      '<input class="auto-input" style="flex:1;min-width:100px" placeholder="valor" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)">' +
+    '</div><div class="auto-vars-hint">Si no se cumple, el flujo se detiene para ese lead</div>';
+  }
+  if (s.type === 'change_stage') {
+    return '<select class="auto-input" onchange="' + U + '\'stage\',this.value)">' + autoStageOptions(s.stage) + '</select>';
+  }
+  if (s.type === 'add_note') {
+    return '<input class="auto-input" placeholder="Texto de la nota" value="' + esc(s.text || '') + '" oninput="' + U + '\'text\',this.value)">';
+  }
+  return '';
+}
+
+function autoBuilderRender() {
+  document.getElementById('auto-builder-overlay')?.remove();
+  const d = _autoDraft;
+  const t = d.trigger;
+
+  const stepsHtml = d.steps.map((s, i) => {
+    const m = AUTO_STEP_META[s.type] || { label: s.type };
+    return '<div class="auto-step">' +
+      '<div class="auto-step-head">' +
+        '<span class="auto-step-num">' + (i + 1) + '</span>' +
+        '<span class="auto-step-type">' + m.label + '</span>' +
+        '<div class="auto-step-btns">' +
+          (i > 0 ? '<button class="auto-step-mini" onclick="autoStepMove(' + i + ',-1)" title="Subir">↑</button>' : '') +
+          (i < d.steps.length - 1 ? '<button class="auto-step-mini" onclick="autoStepMove(' + i + ',1)" title="Bajar">↓</button>' : '') +
+          '<button class="auto-step-mini" onclick="autoStepRemove(' + i + ')" title="Eliminar">✕</button>' +
+        '</div>' +
+      '</div>' +
+      autoStepFields(s, i) +
+    '</div>';
+  }).join('');
+
+  const addBtns = Object.keys(AUTO_STEP_META).map(k =>
+    '<button class="btn-sec sm" onclick="autoStepAdd(\'' + k + '\')">' + icn(AUTO_STEP_META[k].icon, 10) + ' ' + AUTO_STEP_META[k].label + '</button>'
+  ).join('');
+
+  const ov = document.createElement('div');
+  ov.id = 'auto-builder-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) autoBuilderClose(); });
+  ov.innerHTML =
+    '<div class="auto-modal">' +
+      '<div class="auto-modal-head">' +
+        '<div style="font-size:var(--fs-md);font-weight:800">' + (_autoEditingId ? 'Editar automatización' : 'Nueva automatización') + '</div>' +
+        '<button class="btn-ghost sm" onclick="autoBuilderClose()">✕</button>' +
+      '</div>' +
+      '<div class="auto-modal-body">' +
+        '<div class="auto-field"><label class="auto-label">Nombre</label>' +
+          '<input class="auto-input" id="auto-f-name" placeholder="ej: Bienvenida a leads nuevos" value="' + esc(d.name || '') + '" oninput="_autoDraft.name=this.value"></div>' +
+        '<div class="auto-field"><label class="auto-label">⚡ Cuándo se dispara</label>' +
+          '<select class="auto-input" onchange="autoTriggerChange(this.value)">' +
+            '<option value="lead_created"' + (t.type === 'lead_created' ? ' selected' : '') + '>Cuando se crea un lead</option>' +
+            '<option value="stage_changed"' + (t.type === 'stage_changed' ? ' selected' : '') + '>Cuando cambia de etapa</option>' +
+            '<option value="lead_inactive"' + (t.type === 'lead_inactive' ? ' selected' : '') + '>Cuando lleva días sin actividad</option>' +
+          '</select>' +
+          (t.type === 'stage_changed' ? '<div style="margin-top:7px"><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
+          (t.type === 'lead_inactive' ? '<div style="margin-top:7px"><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value)">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días sin actividad</option>').join('') + '</select></div>' : '') +
+        '</div>' +
+        '<div class="auto-field"><label class="auto-label">Pasos del flujo</label>' +
+          (stepsHtml || '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:8px 0">Añade el primer paso ↓</div>') +
+          '<div class="auto-add-step">' + addBtns + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
+        '<button class="btn-pri" style="flex:1" onclick="autoBuilderSave()">' + (_autoEditingId ? 'Guardar cambios' : 'Crear automatización') + '</button>' +
+        '<button class="btn-ghost" onclick="autoBuilderClose()">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+function autoTriggerChange(type) {
+  _autoDraft.trigger = { type };
+  if (type === 'lead_inactive') _autoDraft.trigger.days = 3;
+  autoBuilderRender();
+}
+
+function autoStepAdd(type) {
+  const defaults = {
+    send_email: { type, subject: '', body: '' },
+    send_whatsapp: { type, body: '' },
+    wait: { type, hours: 24 },
+    condition: { type, field: 'has_email', op: 'eq', value: 'true' },
+    change_stage: { type, stage: 'contactado' },
+    add_note: { type, text: '' },
+  };
+  _autoDraft.steps.push(defaults[type] || { type });
+  autoBuilderRender();
+}
+
+function autoStepUpdate(i, key, val) {
+  if (_autoDraft?.steps[i]) _autoDraft.steps[i][key] = val;
+}
+
+function autoStepRemove(i) {
+  _autoDraft.steps.splice(i, 1);
+  autoBuilderRender();
+}
+
+function autoStepMove(i, dir) {
+  const arr = _autoDraft.steps;
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  autoBuilderRender();
+}
+
+async function autoBuilderSave() {
+  const d = _autoDraft;
+  if (!d.name || !d.name.trim()) { alert('Ponle un nombre a la automatización.'); return; }
+  if (!d.steps.length) { alert('Añade al menos un paso.'); return; }
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const method = _autoEditingId ? 'PUT' : 'POST';
+    const body = _autoEditingId ? { id: _autoEditingId, ...d } : d;
+    const res = await fetch(`/api/automations${qs}`, { method, headers: await getAuthHeaders(), body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    autoBuilderClose();
+    crmRenderAutos();
+    showToast('✅ Automatización ' + (_autoEditingId ? 'actualizada' : 'creada'), 'success');
+  } catch (e) { alert('Error guardando: ' + e.message); }
+}
+
+// ── Historial de ejecuciones ─────────────────────────────────────────────────
+async function autoShowLogs(id) {
+  const a = crmAutomations.find(x => x.id === id);
+  let logs = [];
+  try {
+    const res = await fetch('/api/automations?logs=1&automation_id=' + encodeURIComponent(id), { headers: await getAuthHeaders() });
+    logs = (await res.json()).logs || [];
+  } catch {}
+  const badge = r => r === 'sent' || r === 'done' || r === 'passed' || r === 'enqueued' ? 'ok' : (r === 'failed' ? 'bad' : 'mid');
+  const rows = logs.length ? logs.map(l =>
+    '<div class="auto-log-row">' +
+      '<span class="auto-log-time">' + new Date(l.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</span>' +
+      '<span class="auto-log-badge ' + badge(l.result) + '">' + esc(l.result) + '</span>' +
+      '<span style="color:var(--text-2)">' + esc((AUTO_STEP_META[l.action]?.label || l.action) + (l.detail ? ' — ' + l.detail : '')) + '</span>' +
+    '</div>'
+  ).join('') : emptyAgua('file', 'Sin ejecuciones todavía', 'Cuando el trigger se dispare verás aquí cada paso ejecutado.');
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:560px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Historial · ' + esc(a?.name || '') + '</div>' +
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">✕</button></div>' +
+    '<div class="auto-modal-body">' + rows + '</div></div>';
+  document.body.appendChild(ov);
 }

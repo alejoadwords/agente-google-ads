@@ -46,6 +46,33 @@ function jsonResp(data, status = 200) {
   });
 }
 
+// Encola las automatizaciones que coincidan con el trigger (lead_created /
+// stage_changed). El motor las ejecuta en api/cron-automations.js.
+async function enqueueAutomations(userId, lead, triggerType, newStage) {
+  try {
+    const scope = lead.client_id ? `&client_id=eq.${lead.client_id}` : '&client_id=is.null';
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/automations?user_id=eq.${userId}${scope}&active=eq.true&select=id,trigger`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) return;
+    const autos = await r.json();
+    const matching = (autos || []).filter(a =>
+      a.trigger?.type === triggerType &&
+      (triggerType !== 'stage_changed' || !a.trigger.stage || a.trigger.stage === newStage)
+    );
+    if (!matching.length) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/automation_jobs`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+      body: JSON.stringify(matching.map(a => ({
+        automation_id: a.id, user_id: userId, lead_id: lead.id,
+        step_index: 0, status: 'pending', run_at: new Date().toISOString(),
+      }))),
+    });
+  } catch (e) { console.error('enqueueAutomations:', e.message); }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
@@ -143,6 +170,8 @@ export default async function handler(req) {
     });
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
+    // Trigger de automatizaciones: lead creado
+    if (rows[0]) await enqueueAutomations(userId, rows[0], 'lead_created');
     return jsonResp({ lead: rows[0] }, 201);
   }
 
@@ -161,12 +190,25 @@ export default async function handler(req) {
     }
     update.updated_at = new Date().toISOString();
 
+    // Si cambia la etapa, capturar la anterior para el trigger stage_changed
+    let prevStage = null;
+    if (update.stage !== undefined) {
+      try {
+        const pre = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=stage`, { headers: sbHeaders() });
+        prevStage = (await pre.json())?.[0]?.stage ?? null;
+      } catch {}
+    }
+
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}`,
       { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) }
     );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
+    // Trigger de automatizaciones: cambio de etapa real
+    if (rows[0] && update.stage !== undefined && prevStage !== null && prevStage !== update.stage) {
+      await enqueueAutomations(userId, rows[0], 'stage_changed', update.stage);
+    }
     return jsonResp({ lead: rows[0] });
   }
 
