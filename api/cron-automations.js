@@ -327,6 +327,7 @@ async function processJobs() {
           const note = renderVars(step.text, lead);
           const newNotes = (lead.notes ? lead.notes + '\n' : '') + '⚡ [Automatización] ' + note;
           await sb(`/leads?id=eq.${lead.id}`, 'PATCH', { notes: newNotes }, 'return=minimal');
+          lead.notes = newNotes; // mantener el lead en memoria al día — si no, la siguiente nota del flujo pisa esta
           await log(auto.id, job.user_id, lead.id, i, 'add_note', 'done', note.slice(0, 100));
           i++; continue;
         }
