@@ -438,7 +438,7 @@ async function handlePost(req) {
 
   // Update existing dashboard settings
   if (action === 'update' && dashboardId) {
-    const allowed = ['client_name', 'agency_name', 'agency_color', 'period', 'date_from', 'date_to', 'platforms', 'manual_data', 'is_active'];
+    const allowed = ['client_name', 'agency_name', 'agency_color', 'period', 'date_from', 'date_to', 'platforms', 'manual_data', 'is_active', 'google_ads_account', 'meta_ads_account'];
     const patch = {};
     for (const k of allowed) { if (body[k] !== undefined) patch[k] = body[k]; }
     patch.updated_at = new Date().toISOString();
