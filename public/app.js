@@ -16535,7 +16535,8 @@ async function crmOpenDetail(leadId) {
       (lead.phone ? '<a class="crm-qa-btn" href="tel:' + qaPhone + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</a>' : '') +
       (lead.phone ? '<a class="crm-qa-btn wa" href="https://wa.me/' + qaPhone.replace(/\D/g,'') + '" target="_blank"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</a>' : '') +
       (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '') +
-      '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>';
+      '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>' +
+      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font)" onclick="agnScheduleForLead()" title="Crear tarea o reunión con este lead (sincroniza con Google Calendar)">📅 Agendar</button>';
   }
   document.getElementById('crm-d-email').textContent = lead.email || '—';
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
@@ -17351,7 +17352,7 @@ async function crmInit() {
 const _crmSetViewOrig = crmSetView;
 function crmSetView(v) {
   crmView = v;
-  ['kanban','list','agents','inbox','analytics','autos'].forEach(id => {
+  ['kanban','list','agents','inbox','analytics','autos','agenda'].forEach(id => {
     const btn = document.getElementById('crm-btn-' + id);
     if (btn) btn.classList.toggle('active', v === id);
   });
@@ -17363,6 +17364,8 @@ function crmSetView(v) {
   if (analyticsView) analyticsView.style.display = v === 'analytics' ? 'flex' : 'none';
   const autosView = document.getElementById('crm-autos-view');
   if (autosView) autosView.style.display = v === 'autos' ? 'flex' : 'none';
+  const agendaView = document.getElementById('crm-agenda-view');
+  if (agendaView) agendaView.style.display = v === 'agenda' ? 'flex' : 'none';
   const searchBar = document.getElementById('crm-search-bar');
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
@@ -17372,6 +17375,7 @@ function crmSetView(v) {
   if (v === 'inbox') crmLoadInbox();
   if (v === 'analytics') crmRenderAnalytics();
   if (v === 'autos') crmRenderAutos();
+  if (v === 'agenda') agnRender();
 }
 // ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 
@@ -19378,4 +19382,246 @@ async function autoShowLogs(id) {
     '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">✕</button></div>' +
     '<div class="auto-modal-body">' + rows + '</div></div>';
   document.body.appendChild(ov);
+}
+
+// ── AGENDA DEL CRM (calendario + Google Calendar) ─────────────────────────────
+let agnCursor = new Date();      // mes visible
+let agnActivities = [];          // actividades del mes cargado
+let agnSelDay = null;            // 'YYYY-MM-DD' seleccionado
+let agnGcal = { connected: false, email: null, checked: false };
+
+function agnDayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function agnKeyOf(iso) { const d = new Date(iso); return agnDayKey(d); }
+
+async function agnLoad() {
+  const y = agnCursor.getFullYear(), m = agnCursor.getMonth();
+  const from = new Date(y, m, -7).toISOString();
+  const to = new Date(y, m + 1, 8).toISOString();
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const cq = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
+    const res = await fetch('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq, { headers: await getAuthHeaders() });
+    agnActivities = (await res.json()).activities || [];
+  } catch { agnActivities = []; }
+  if (!agnGcal.checked) {
+    try {
+      const st = await fetch('/api/agenda?gcal_status=1', { headers: await getAuthHeaders() }).then(r => r.json());
+      agnGcal = { connected: !!st.connected, email: st.email, checked: true };
+    } catch { agnGcal.checked = true; }
+  }
+}
+
+function connectGoogleCalendar() {
+  const uid = clerkInstance?.user?.id || '';
+  window.location.href = '/api/gcal-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+}
+
+// Callback del OAuth de Google Calendar
+(function checkGcalCallback() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('gcal_connected')) {
+    const email = params.get('gcal_email') || '';
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => {
+      showToast('✅ Google Calendar conectado' + (email ? ' (' + email + ')' : ''), 'success');
+      agnGcal = { connected: true, email, checked: true };
+      showView('crm');
+      setTimeout(() => crmSetView('agenda'), 300);
+    }, 1500);
+  }
+  if (params.get('gcal_error')) {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => showToast('❌ No se pudo conectar Google Calendar', 'error'), 1500);
+  }
+})();
+
+async function agnRender() {
+  const view = document.getElementById('crm-agenda-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  await agnLoad();
+  if (typeof crmLeads === 'undefined' || !crmLeads.length) { try { await crmLoadLeads(); } catch {} }
+
+  const y = agnCursor.getFullYear(), m = agnCursor.getMonth();
+  const monthName = agnCursor.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  const todayKey = agnDayKey(new Date());
+  if (!agnSelDay) agnSelDay = todayKey;
+
+  // Agrupar actividades por día
+  const byDay = {};
+  agnActivities.forEach(a => { const k = agnKeyOf(a.due_at); (byDay[k] = byDay[k] || []).push(a); });
+
+  // Grid del mes (lunes primero)
+  const first = new Date(y, m, 1);
+  const offset = (first.getDay() + 6) % 7;
+  let cells = '';
+  const dows = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+  cells += dows.map(d => '<div class="agn-dow">' + d + '</div>').join('');
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(y, m, 1 - offset + i);
+    const k = agnDayKey(d);
+    const other = d.getMonth() !== m;
+    const acts = byDay[k] || [];
+    const chips = acts.slice(0, 2).map(a =>
+      '<div class="agn-chip ' + a.type + (a.done ? ' done' : '') + '">' + (a.type === 'meeting' ? '◷ ' : '') + esc(a.title) + '</div>'
+    ).join('') + (acts.length > 2 ? '<div class="agn-more">+' + (acts.length - 2) + ' más</div>' : '');
+    cells += '<div class="agn-cell' + (other ? ' other' : '') + (k === todayKey ? ' today' : '') + (k === agnSelDay ? ' sel' : '') + '" onclick="agnSelDay=\'' + k + '\';agnRender()">' +
+      '<div class="agn-day">' + d.getDate() + '</div>' + chips + '</div>';
+  }
+
+  // Panel lateral: actividades del día seleccionado + próximas
+  const selActs = (byDay[agnSelDay] || []).sort((a, b) => new Date(a.due_at) - new Date(b.due_at));
+  const selDate = new Date(agnSelDay + 'T12:00:00');
+  const itemHtml = a => {
+    const hora = new Date(a.due_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    const lead = a.lead_id ? (crmLeads || []).find(l => l.id === a.lead_id) : null;
+    return '<div class="agn-item' + (a.done ? ' done' : '') + '">' +
+      '<span class="agn-item-ico ' + a.type + '">' + icn(a.type === 'meeting' ? 'users' : 'check', 12) + '</span>' +
+      '<div style="min-width:0;flex:1">' +
+        '<div class="agn-item-title">' + esc(a.title) + '</div>' +
+        '<div class="agn-item-meta">' + hora + (lead ? ' · ' + esc(lead.name) : '') + (a.gcal_event_id ? ' · 📅 en Google' : '') + '</div>' +
+      '</div>' +
+      '<div class="agn-item-acts">' +
+        '<button class="btn-ghost sm" title="' + (a.done ? 'Reabrir' : 'Completar') + '" onclick="agnToggleDone(\'' + a.id + '\',' + (!a.done) + ')">' + (a.done ? '↺' : '✓') + '</button>' +
+        '<button class="btn-ghost sm" title="Eliminar" onclick="agnDelete(\'' + a.id + '\')">✕</button>' +
+      '</div>' +
+    '</div>';
+  };
+  const sidePanel =
+    '<div class="agn-side-title">' + selDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) + '</div>' +
+    (selActs.length ? selActs.map(itemHtml).join('') :
+      '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:6px 2px">Sin actividades este día.</div>') +
+    '<button class="btn-sec" style="margin-top:4px" onclick="agnModalOpen(null,\'' + agnSelDay + '\')">' + icn('plus', 12) + ' Agregar en este día</button>';
+
+  const gcalBadge = agnGcal.connected
+    ? '<span class="agn-gcal on" title="' + esc(agnGcal.email || '') + '">' + icn('check', 11) + ' Google Calendar</span>'
+    : '<span class="agn-gcal off" onclick="connectGoogleCalendar()" title="Conectar para sincronizar reuniones">' + icn('alert', 11) + ' Conectar Google Calendar</span>';
+
+  view.innerHTML =
+    '<div class="agn-head">' +
+      '<div class="agn-title">' + monthName + '</div>' +
+      '<button class="btn-sec sm" onclick="agnCursor=new Date();agnSelDay=null;agnRender()">Hoy</button>' +
+      '<button class="btn-ghost sm" onclick="agnCursor=new Date(agnCursor.getFullYear(),agnCursor.getMonth()-1,1);agnRender()">←</button>' +
+      '<button class="btn-ghost sm" onclick="agnCursor=new Date(agnCursor.getFullYear(),agnCursor.getMonth()+1,1);agnRender()">→</button>' +
+      '<div style="flex:1"></div>' +
+      gcalBadge +
+      '<button class="btn-pri" onclick="agnModalOpen()">' + icn('plus', 13) + ' Agregar actividad</button>' +
+    '</div>' +
+    '<div class="agn-wrap">' +
+      '<div class="agn-cal"><div class="agn-grid">' + cells + '</div></div>' +
+      '<div class="agn-side">' + sidePanel + '</div>' +
+    '</div>';
+}
+
+async function agnToggleDone(id, done) {
+  try {
+    await fetch('/api/agenda', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, done }) });
+    agnRender();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function agnDelete(id) {
+  if (!confirm('¿Eliminar esta actividad? Si tiene evento en Google Calendar también se elimina.')) return;
+  try {
+    await fetch('/api/agenda?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+    agnRender();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+// ── Modal de actividad (tarea o reunión) ─────────────────────────────────────
+function agnModalOpen(leadId, dayKey) {
+  const day = dayKey || agnSelDay || agnDayKey(new Date());
+  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  const leadOpts = '<option value="">Sin lead vinculado</option>' +
+    leads.map(l => '<option value="' + l.id + '"' + (leadId === l.id ? ' selected' : '') + '>' + esc(l.name) + (l.company ? ' · ' + esc(l.company) : '') + '</option>').join('');
+
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'agn-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div class="auto-modal" style="max-width:480px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Nueva actividad</div>' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'agn-modal\').remove()">✕</button></div>' +
+      '<div class="auto-modal-body">' +
+        '<div class="auto-field"><label class="auto-label">Tipo</label>' +
+          '<div class="flow-estado" style="width:max-content"><button id="agn-t-task" class="on" onclick="agnSetType(\'task\')">Tarea</button><button id="agn-t-meeting" onclick="agnSetType(\'meeting\')">Reunión</button></div></div>' +
+        '<div class="auto-field"><label class="auto-label">Título</label><input class="auto-input" id="agn-f-title" placeholder="ej: Llamar para confirmar la propuesta"></div>' +
+        '<div class="auto-field"><label class="auto-label">Lead relacionado</label><select class="auto-input" id="agn-f-lead">' + leadOpts + '</select></div>' +
+        '<div class="auto-field" style="display:flex;gap:8px">' +
+          '<div style="flex:1"><label class="auto-label">Fecha</label><input class="auto-input" id="agn-f-date" type="date" value="' + day + '"></div>' +
+          '<div style="width:100px"><label class="auto-label">Hora</label><input class="auto-input" id="agn-f-time" type="time" value="09:00"></div>' +
+          '<div style="width:100px" id="agn-f-end-wrap" hidden><label class="auto-label">Hasta</label><input class="auto-input" id="agn-f-end" type="time" value="10:00"></div>' +
+        '</div>' +
+        '<div class="auto-field"><label class="auto-label">Descripción (opcional)</label><textarea class="auto-input" id="agn-f-desc" rows="3"></textarea></div>' +
+        '<div class="auto-field" id="agn-f-invite-wrap" hidden><label style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);color:var(--text-2);cursor:pointer"><input type="checkbox" id="agn-f-invite" checked> Enviar invitación de Google Calendar al lead (si tiene email)</label></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border)">' +
+        '<button class="btn-pri" style="flex:1" id="agn-save-btn" onclick="agnSave()">Guardar</button>' +
+        '<button class="btn-ghost" onclick="document.getElementById(\'agn-modal\').remove()">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  window._agnType = 'task';
+  setTimeout(() => document.getElementById('agn-f-title')?.focus(), 60);
+}
+
+function agnSetType(t) {
+  window._agnType = t;
+  document.getElementById('agn-t-task').className = t === 'task' ? 'on' : '';
+  document.getElementById('agn-t-meeting').className = t === 'meeting' ? 'on pub' : '';
+  document.getElementById('agn-f-end-wrap').hidden = t !== 'meeting';
+  document.getElementById('agn-f-invite-wrap').hidden = t !== 'meeting';
+}
+
+async function agnSave() {
+  const title = document.getElementById('agn-f-title').value.trim();
+  if (!title) { alert('Ponle un título a la actividad.'); return; }
+  const date = document.getElementById('agn-f-date').value;
+  const time = document.getElementById('agn-f-time').value || '09:00';
+  const type = window._agnType || 'task';
+  const due = new Date(date + 'T' + time + ':00');
+  let end = null;
+  if (type === 'meeting') {
+    const endTime = document.getElementById('agn-f-end').value || time;
+    end = new Date(date + 'T' + endTime + ':00');
+    if (end <= due) end = new Date(due.getTime() + 3600 * 1000);
+  }
+  const btn = document.getElementById('agn-save-btn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const cq = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const data = await fetch('/api/agenda' + cq, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({
+        type, title,
+        description: document.getElementById('agn-f-desc').value.trim() || null,
+        due_at: due.toISOString(),
+        end_at: end ? end.toISOString() : null,
+        lead_id: document.getElementById('agn-f-lead').value || null,
+        invite_lead: type === 'meeting' && document.getElementById('agn-f-invite').checked,
+      }),
+    }).then(r => r.json());
+    if (data.error) { alert(data.error); btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    document.getElementById('agn-modal').remove();
+    agnSelDay = date;
+    agnCursor = new Date(date + 'T12:00:00');
+    if (data.gcal_warning) showToast('⚠️ ' + data.gcal_warning, 'info');
+    else showToast(type === 'meeting' && data.gcal_synced ? '✅ Reunión creada y sincronizada con Google Calendar' : '✅ Actividad creada', 'success');
+    // Si estamos en la vista de agenda, refrescar
+    if (document.getElementById('crm-agenda-view')?.style.display !== 'none') agnRender();
+  } catch (e) {
+    alert('Error guardando: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+// Abrir el modal desde el detalle de un lead
+function agnScheduleForLead() {
+  const l = typeof crmDetailLead !== 'undefined' ? crmDetailLead : null;
+  if (!l) return;
+  crmCloseDetail();
+  agnModalOpen(l.id);
 }
