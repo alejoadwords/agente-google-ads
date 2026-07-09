@@ -1877,6 +1877,7 @@ async function dashLoadList() {
           <div class="dash-list-actions">
             <button class="dash-list-btn" onclick="navigator.clipboard.writeText('${url}').then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='Copiar'},1500)})" title="Copiar enlace">Copiar</button>
             <button class="dash-list-btn primary" onclick="window.open('${url}','_blank')" title="Abrir dashboard">Abrir ↗</button>
+            <button class="dash-list-btn danger" onclick="dashDelete('${d.id}','${esc(d.client_name).replace(/'/g,"\\'")}')" title="Eliminar dashboard">✕</button>
           </div>
         </div>
       `;
@@ -1884,6 +1885,20 @@ async function dashLoadList() {
   } catch (e) {
     loading.textContent = 'Error al cargar dashboards';
   }
+}
+
+async function dashDelete(id, name) {
+  if (!confirm('¿Eliminar el dashboard de "' + name + '"? El enlace compartido dejará de funcionar.')) return;
+  try {
+    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
+    await fetch('/api/dashboard', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', dashboardId: id }),
+    });
+    showToast('Dashboard eliminado', 'success');
+    dashLoadList();
+  } catch (e) { alert('Error eliminando: ' + e.message); }
 }
 
 async function dashCreate() {
