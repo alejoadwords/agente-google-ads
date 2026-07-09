@@ -175,6 +175,47 @@ textarea.auto-input{resize:vertical;min-height:64px}
 .auto-log-badge.bad{background:var(--danger-bg);color:var(--danger)}
 .auto-log-badge.mid{background:var(--warning-bg);color:var(--warning)}
 
+/* ── Flow builder visual de automatizaciones ── */
+.flow-wrap{display:flex;flex-direction:column;flex:1;min-height:0;margin:-18px -22px;height:calc(100% + 36px)}
+.flow-head{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:wrap}
+.flow-name{border:none;background:transparent;font-family:var(--font);font-size:var(--fs-md);font-weight:800;color:var(--text);min-width:200px;flex:1;outline:none;padding:6px 8px;border-radius:8px}
+.flow-name:hover,.flow-name:focus{background:var(--bg-subtle)}
+.flow-estado{display:flex;background:var(--bg-muted);border-radius:9px;padding:3px}
+.flow-estado button{border:none;background:transparent;font-family:var(--font);font-size:var(--fs-xs);font-weight:700;padding:6px 14px;border-radius:7px;cursor:pointer;color:var(--muted)}
+.flow-estado button.on{background:var(--bg);color:var(--text);box-shadow:var(--shadow-sm)}
+.flow-estado button.on.pub{color:var(--success)}
+.flow-body{display:flex;flex:1;min-height:0}
+.flow-palette{width:250px;border-right:1px solid var(--border);background:var(--bg);padding:14px;overflow-y:auto;flex-shrink:0}
+.flow-palette-title{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:12px 0 8px}
+.flow-block{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:8px;cursor:pointer;background:var(--bg);transition:all var(--dur-fast) var(--ease)}
+.flow-block:hover{border-color:var(--blue-md);background:var(--blue-lt);transform:translateY(-1px)}
+.flow-block-ico{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.flow-block-name{font-size:var(--fs-sm);font-weight:700;color:var(--text)}
+.flow-block-desc{font-size:10.5px;color:var(--muted2);line-height:1.4;margin-top:1px}
+.flow-canvas{flex:1;overflow:auto;position:relative;background-color:var(--bg-subtle);background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);background-size:22px 22px}
+.flow-chain{display:flex;align-items:center;padding:52px 60px;min-height:100%;width:max-content;transform-origin:0 0}
+.flow-node{background:var(--bg);border:1.5px solid var(--border);border-radius:13px;padding:12px 15px;min-width:190px;max-width:230px;cursor:pointer;box-shadow:var(--shadow-sm);position:relative;transition:border-color var(--dur-fast),box-shadow var(--dur-fast);flex-shrink:0}
+.flow-node:hover{border-color:var(--border-h);box-shadow:var(--shadow-md)}
+.flow-node.sel{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-ring),var(--shadow-md)}
+.flow-node-head{display:flex;align-items:center;gap:8px}
+.flow-node-ico{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.flow-node-name{font-size:var(--fs-sm);font-weight:700;color:var(--text)}
+.flow-node-sub{font-size:10.5px;color:var(--muted2);margin-top:5px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.flow-node-tools{position:absolute;top:-26px;right:2px;display:none;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:2px;box-shadow:var(--shadow-sm)}
+.flow-node:hover .flow-node-tools,.flow-node.sel .flow-node-tools{display:flex}
+.flow-node-tool{border:none;background:transparent;cursor:pointer;font-size:11px;color:var(--muted);padding:2px 6px;border-radius:5px;font-family:var(--font)}
+.flow-node-tool:hover{background:var(--bg-muted);color:var(--text)}
+.flow-link{flex-shrink:0;color:var(--blue-md)}
+.flow-add{width:38px;height:38px;border-radius:11px;border:1.5px dashed var(--blue-md);background:var(--blue-lt);color:var(--blue);font-size:18px;font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all var(--dur-fast) var(--ease)}
+.flow-add:hover{background:var(--blue-md);transform:scale(1.08)}
+.flow-config{width:330px;border-left:1px solid var(--border);background:var(--bg);overflow-y:auto;flex-shrink:0;padding:18px}
+.flow-config-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.flow-config-title{font-size:var(--fs-md);font-weight:800;color:var(--text)}
+.flow-zoom{position:absolute;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.flow-zoom button{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:15px;color:var(--text-2);box-shadow:var(--shadow-sm)}
+.flow-zoom button:hover{background:var(--bg-subtle)}
+@media(max-width:900px){.flow-palette{width:200px}.flow-config{width:280px}}
+
 /* ── Estados vacíos con firma "agua" ── */
 .empty-agua{text-align:center;padding:30px 16px;display:flex;flex-direction:column;align-items:center;animation:msgIn var(--dur-base) var(--ease)}
 .empty-agua-art{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--blue-lt),var(--aqua-lt));display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;color:var(--blue);margin-bottom:12px}

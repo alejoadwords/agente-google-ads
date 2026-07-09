@@ -19048,24 +19048,41 @@ async function autoDelete(id) {
   } catch (e) { alert('Error: ' + e.message); }
 }
 
-// ── Builder ──────────────────────────────────────────────────────────────────
+// ── Flow builder visual (canvas de nodos estilo workflow) ────────────────────
+let _autoSelNode = null; // 'trigger' | índice de paso | null
+let _autoZoom = 1;
+
+const FLOW_TYPE_STYLE = {
+  trigger:       { bg: 'var(--agua-grad)', fg: '#fff', icon: 'sparkles' },
+  send_email:    { bg: 'var(--blue-lt)', fg: 'var(--blue)', icon: 'file' },
+  send_whatsapp: { bg: 'var(--success-bg)', fg: 'var(--success)', icon: 'chat' },
+  wait:          { bg: 'var(--warning-bg)', fg: 'var(--warning)', icon: 'refresh' },
+  condition:     { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'check' },
+  change_stage:  { bg: 'var(--aqua-lt)', fg: 'var(--aqua)', icon: 'trend' },
+  add_note:      { bg: 'var(--bg-muted)', fg: 'var(--text-2)', icon: 'edit' },
+};
+
 function autoBuilderOpen(id, templateIdx) {
   _autoEditingId = id || null;
+  _autoSelNode = null;
+  _autoZoom = 1;
   if (id) {
     const a = crmAutomations.find(x => x.id === id);
     if (!a) return;
-    _autoDraft = JSON.parse(JSON.stringify({ name: a.name, trigger: a.trigger, steps: a.steps }));
+    _autoDraft = JSON.parse(JSON.stringify({ name: a.name, trigger: a.trigger, steps: a.steps, active: a.active !== false }));
   } else if (templateIdx !== undefined && AUTO_TEMPLATES[templateIdx]) {
     _autoDraft = JSON.parse(JSON.stringify(AUTO_TEMPLATES[templateIdx]));
+    _autoDraft.active = true;
   } else {
-    _autoDraft = { name: '', trigger: { type: 'lead_created' }, steps: [] };
+    _autoDraft = { name: '', trigger: { type: 'lead_created' }, steps: [], active: true };
+    _autoSelNode = 'trigger';
   }
   autoBuilderRender();
 }
 
 function autoBuilderClose() {
-  document.getElementById('auto-builder-overlay')?.remove();
-  _autoDraft = null; _autoEditingId = null;
+  _autoDraft = null; _autoEditingId = null; _autoSelNode = null;
+  crmRenderAutos();
 }
 
 function autoStageOptions(selected) {
@@ -19076,95 +19093,180 @@ function autoStageOptions(selected) {
 function autoStepFields(s, i) {
   const U = 'autoStepUpdate(' + i + ',';
   if (s.type === 'send_email') {
-    return '<input class="auto-input" placeholder="Asunto" value="' + esc(s.subject || '') + '" oninput="' + U + '\'subject\',this.value)" style="margin-bottom:7px">' +
-      '<textarea class="auto-input" placeholder="Cuerpo del mensaje" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
-      '<div class="auto-vars-hint">Variables: {{nombre}} {{empresa}} {{email}} {{etapa}} {{valor}}</div>';
+    return '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.subject || '') + '" oninput="' + U + '\'subject\',this.value)"></div>' +
+      '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="7" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
+      '<div class="auto-vars-hint">Variables: {{nombre}} {{empresa}} {{email}} {{etapa}} {{valor}}</div></div>';
   }
   if (s.type === 'send_whatsapp') {
-    return '<textarea class="auto-input" placeholder="Mensaje de WhatsApp" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
-      '<div class="auto-vars-hint">Se envía por la conversación del Inbox del lead (requiere chat iniciado) · Variables: {{nombre}} {{empresa}}</div>';
+    return '<div class="auto-field"><label class="auto-label">Mensaje de WhatsApp</label><textarea class="auto-input" rows="6" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
+      '<div class="auto-vars-hint">Se envía por la conversación del Inbox del lead (requiere chat iniciado) · Variables: {{nombre}} {{empresa}}</div></div>';
   }
   if (s.type === 'wait') {
     const opts = [[1,'1 hora'],[4,'4 horas'],[24,'1 día'],[48,'2 días'],[72,'3 días'],[168,'7 días']];
-    return '<select class="auto-input" onchange="' + U + '\'hours\',parseFloat(this.value))">' +
-      opts.map(o => '<option value="' + o[0] + '"' + (parseFloat(s.hours) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
+    return '<div class="auto-field"><label class="auto-label">Tiempo de espera</label><select class="auto-input" onchange="' + U + '\'hours\',parseFloat(this.value));autoRefreshNodes()">' +
+      opts.map(o => '<option value="' + o[0] + '"' + (parseFloat(s.hours) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
   }
   if (s.type === 'condition') {
     const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
-    return '<div style="display:flex;gap:7px;flex-wrap:wrap">' +
-      '<select class="auto-input" style="flex:1;min-width:120px" onchange="' + U + '\'field\',this.value)">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select>' +
-      '<select class="auto-input" style="width:90px" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
-      '<input class="auto-input" style="flex:1;min-width:100px" placeholder="valor" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)">' +
-    '</div><div class="auto-vars-hint">Si no se cumple, el flujo se detiene para ese lead</div>';
+    return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);autoRefreshNodes()">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Valor</label><input class="auto-input" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)">' +
+      '<div class="auto-vars-hint">Si no se cumple, el flujo se detiene para ese lead</div></div>';
   }
   if (s.type === 'change_stage') {
-    return '<select class="auto-input" onchange="' + U + '\'stage\',this.value)">' + autoStageOptions(s.stage) + '</select>';
+    return '<div class="auto-field"><label class="auto-label">Mover a la etapa</label><select class="auto-input" onchange="' + U + '\'stage\',this.value);autoRefreshNodes()">' + autoStageOptions(s.stage) + '</select></div>';
   }
   if (s.type === 'add_note') {
-    return '<input class="auto-input" placeholder="Texto de la nota" value="' + esc(s.text || '') + '" oninput="' + U + '\'text\',this.value)">';
+    return '<div class="auto-field"><label class="auto-label">Texto de la nota</label><input class="auto-input" value="' + esc(s.text || '') + '" oninput="' + U + '\'text\',this.value)"></div>';
   }
   return '';
 }
 
+// Resumen visible en cada nodo del canvas
+function autoNodeSummary(s) {
+  if (s.type === 'send_email') return s.subject || 'Sin asunto todavía';
+  if (s.type === 'send_whatsapp') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
+  if (s.type === 'wait') return (parseFloat(s.hours) >= 24 ? (s.hours / 24) + (s.hours >= 48 ? ' días' : ' día') : s.hours + 'h') + ' de espera';
+  if (s.type === 'condition') {
+    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono' }[s.field] || s.field;
+    return f + ' ' + ({ eq: 'es', neq: 'no es', contains: 'contiene', gte: '≥', lte: '≤' }[s.op] || s.op) + ' ' + (s.value || '');
+  }
+  if (s.type === 'change_stage') return '→ ' + (s.stage || '');
+  if (s.type === 'add_note') return s.text ? s.text.slice(0, 60) : 'Sin texto todavía';
+  return '';
+}
+
+function autoFlowConnector() {
+  return '<svg class="flow-link" width="46" height="24" viewBox="0 0 46 24">' +
+    '<circle cx="4" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+    '<path d="M8 12 H34" stroke="currentColor" stroke-width="1.5" fill="none"/>' +
+    '<path d="M34 7 L41 12 L34 17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+}
+
+function autoNodeHtml(kind, idx, title, summary, selected) {
+  const st = FLOW_TYPE_STYLE[kind] || FLOW_TYPE_STYLE.add_note;
+  const sel = selected ? ' sel' : '';
+  const clickArg = kind === 'trigger' ? "'trigger'" : idx;
+  const tools = kind === 'trigger' ? '' :
+    '<div class="flow-node-tools" onclick="event.stopPropagation()">' +
+      (idx > 0 ? '<button class="flow-node-tool" title="Mover antes" onclick="autoStepMove(' + idx + ',-1)">←</button>' : '') +
+      (idx < _autoDraft.steps.length - 1 ? '<button class="flow-node-tool" title="Mover después" onclick="autoStepMove(' + idx + ',1)">→</button>' : '') +
+      '<button class="flow-node-tool" title="Eliminar" onclick="autoStepRemove(' + idx + ')">✕</button>' +
+    '</div>';
+  return '<div class="flow-node' + sel + '" onclick="autoSelectNode(' + clickArg + ')">' + tools +
+    '<div class="flow-node-head">' +
+      '<span class="flow-node-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 13) + '</span>' +
+      '<span class="flow-node-name">' + title + '</span>' +
+    '</div>' +
+    '<div class="flow-node-sub">' + esc(summary || '') + '</div>' +
+  '</div>';
+}
+
 function autoBuilderRender() {
-  document.getElementById('auto-builder-overlay')?.remove();
+  const view = document.getElementById('crm-autos-view');
+  if (!view || !_autoDraft) return;
   const d = _autoDraft;
-  const t = d.trigger;
 
-  const stepsHtml = d.steps.map((s, i) => {
+  // Cadena de nodos: trigger → pasos → añadir
+  let chain = autoNodeHtml('trigger', null, 'Lanzador', autoTriggerLabel({ trigger: d.trigger }), _autoSelNode === 'trigger');
+  d.steps.forEach((s, i) => {
     const m = AUTO_STEP_META[s.type] || { label: s.type };
-    return '<div class="auto-step">' +
-      '<div class="auto-step-head">' +
-        '<span class="auto-step-num">' + (i + 1) + '</span>' +
-        '<span class="auto-step-type">' + m.label + '</span>' +
-        '<div class="auto-step-btns">' +
-          (i > 0 ? '<button class="auto-step-mini" onclick="autoStepMove(' + i + ',-1)" title="Subir">↑</button>' : '') +
-          (i < d.steps.length - 1 ? '<button class="auto-step-mini" onclick="autoStepMove(' + i + ',1)" title="Bajar">↓</button>' : '') +
-          '<button class="auto-step-mini" onclick="autoStepRemove(' + i + ')" title="Eliminar">✕</button>' +
-        '</div>' +
-      '</div>' +
-      autoStepFields(s, i) +
-    '</div>';
-  }).join('');
+    chain += autoFlowConnector() + autoNodeHtml(s.type, i, m.label, autoNodeSummary(s), _autoSelNode === i);
+  });
+  chain += autoFlowConnector() + '<button class="flow-add" title="Añade un bloque desde la paleta" onclick="autoSelectNode(null)">+</button>';
 
-  const addBtns = Object.keys(AUTO_STEP_META).map(k =>
-    '<button class="btn-sec sm" onclick="autoStepAdd(\'' + k + '\')">' + icn(AUTO_STEP_META[k].icon, 10) + ' ' + AUTO_STEP_META[k].label + '</button>'
-  ).join('');
+  // Paleta de bloques
+  const paletteBlock = (type) => {
+    const m = AUTO_STEP_META[type];
+    const st = FLOW_TYPE_STYLE[type];
+    const desc = {
+      send_email: 'Email al lead con variables', send_whatsapp: 'Mensaje por el Inbox del lead',
+      wait: 'Pausa el flujo horas o días', condition: 'Continúa solo si se cumple',
+      change_stage: 'Mueve el lead en el pipeline', add_note: 'Deja registro en el lead',
+    }[type];
+    return '<div class="flow-block" onclick="autoStepAdd(\'' + type + '\')">' +
+      '<span class="flow-block-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 14) + '</span>' +
+      '<div><div class="flow-block-name">' + m.label + '</div><div class="flow-block-desc">' + desc + '</div></div>' +
+    '</div>';
+  };
+  const palette =
+    '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
+    ['send_email', 'send_whatsapp', 'change_stage', 'add_note'].map(paletteBlock).join('') +
+    '<div class="flow-palette-title">Control del flujo</div>' +
+    ['wait', 'condition'].map(paletteBlock).join('') +
+    '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
 
-  const ov = document.createElement('div');
-  ov.id = 'auto-builder-overlay';
-  ov.className = 'auto-modal-overlay';
-  ov.addEventListener('mousedown', e => { if (e.target === ov) autoBuilderClose(); });
-  ov.innerHTML =
-    '<div class="auto-modal">' +
-      '<div class="auto-modal-head">' +
-        '<div style="font-size:var(--fs-md);font-weight:800">' + (_autoEditingId ? 'Editar automatización' : 'Nueva automatización') + '</div>' +
-        '<button class="btn-ghost sm" onclick="autoBuilderClose()">✕</button>' +
-      '</div>' +
-      '<div class="auto-modal-body">' +
-        '<div class="auto-field"><label class="auto-label">Nombre</label>' +
-          '<input class="auto-input" id="auto-f-name" placeholder="ej: Bienvenida a leads nuevos" value="' + esc(d.name || '') + '" oninput="_autoDraft.name=this.value"></div>' +
-        '<div class="auto-field"><label class="auto-label">⚡ Cuándo se dispara</label>' +
-          '<select class="auto-input" onchange="autoTriggerChange(this.value)">' +
-            '<option value="lead_created"' + (t.type === 'lead_created' ? ' selected' : '') + '>Cuando se crea un lead</option>' +
-            '<option value="stage_changed"' + (t.type === 'stage_changed' ? ' selected' : '') + '>Cuando cambia de etapa</option>' +
-            '<option value="lead_inactive"' + (t.type === 'lead_inactive' ? ' selected' : '') + '>Cuando lleva días sin actividad</option>' +
-          '</select>' +
-          (t.type === 'stage_changed' ? '<div style="margin-top:7px"><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
-          (t.type === 'lead_inactive' ? '<div style="margin-top:7px"><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value)">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días sin actividad</option>').join('') + '</select></div>' : '') +
+  // Panel de configuración del nodo seleccionado
+  let config = '';
+  if (_autoSelNode === 'trigger') {
+    const t = d.trigger;
+    config =
+      '<div class="flow-config-head"><div class="flow-config-title">⚡ Lanzador</div><button class="btn-ghost sm" onclick="autoSelectNode(undefined)">✕</button></div>' +
+      '<div class="auto-field"><label class="auto-label">Cuándo se dispara</label>' +
+        '<select class="auto-input" onchange="autoTriggerChange(this.value)">' +
+          '<option value="lead_created"' + (t.type === 'lead_created' ? ' selected' : '') + '>Cuando se crea un lead</option>' +
+          '<option value="stage_changed"' + (t.type === 'stage_changed' ? ' selected' : '') + '>Cuando cambia de etapa</option>' +
+          '<option value="lead_inactive"' + (t.type === 'lead_inactive' ? ' selected' : '') + '>Cuando lleva días sin actividad</option>' +
+        '</select></div>' +
+      (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
+      (t.type === 'lead_inactive' ? '<div class="auto-field"><label class="auto-label">Días sin actividad</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
+      '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>';
+  } else if (typeof _autoSelNode === 'number' && d.steps[_autoSelNode]) {
+    const s = d.steps[_autoSelNode];
+    const m = AUTO_STEP_META[s.type] || { label: s.type };
+    config =
+      '<div class="flow-config-head"><div class="flow-config-title">' + m.label + '</div><button class="btn-ghost sm" onclick="autoSelectNode(undefined)">✕</button></div>' +
+      autoStepFields(s, _autoSelNode) +
+      '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>' +
+      '<button class="btn-dgr sm" style="width:100%;margin-top:8px" onclick="autoStepRemove(' + _autoSelNode + ')">Eliminar este paso</button>';
+  }
+
+  view.innerHTML =
+    '<div class="flow-wrap">' +
+      '<div class="flow-head">' +
+        '<button class="btn-ghost sm" onclick="autoBuilderClose()" title="Volver a la lista">←</button>' +
+        '<input class="flow-name" placeholder="Nombre de la automatización..." value="' + esc(d.name || '') + '" oninput="_autoDraft.name=this.value">' +
+        '<div class="flow-estado">' +
+          '<button class="' + (!d.active ? 'on' : '') + '" onclick="_autoDraft.active=false;autoBuilderRender()">Borrador</button>' +
+          '<button class="' + (d.active ? 'on pub' : '') + '" onclick="_autoDraft.active=true;autoBuilderRender()">Activa</button>' +
         '</div>' +
-        '<div class="auto-field"><label class="auto-label">Pasos del flujo</label>' +
-          (stepsHtml || '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:8px 0">Añade el primer paso ↓</div>') +
-          '<div class="auto-add-step">' + addBtns + '</div>' +
-        '</div>' +
+        '<button class="btn-pri" onclick="autoBuilderSave()">' + (_autoEditingId ? 'Guardar cambios' : 'Crear automatización') + '</button>' +
       '</div>' +
-      '<div style="display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
-        '<button class="btn-pri" style="flex:1" onclick="autoBuilderSave()">' + (_autoEditingId ? 'Guardar cambios' : 'Crear automatización') + '</button>' +
-        '<button class="btn-ghost" onclick="autoBuilderClose()">Cancelar</button>' +
+      '<div class="flow-body">' +
+        '<div class="flow-palette">' + palette + '</div>' +
+        '<div class="flow-canvas">' +
+          '<div class="flow-chain" id="flow-chain" style="transform:scale(' + _autoZoom + ')">' + chain + '</div>' +
+          '<div class="flow-zoom">' +
+            '<button onclick="autoZoom(0.1)" title="Acercar">+</button>' +
+            '<button onclick="autoZoom(-0.1)" title="Alejar">−</button>' +
+          '</div>' +
+        '</div>' +
+        (config ? '<div class="flow-config">' + config + '</div>' : '') +
       '</div>' +
     '</div>';
-  document.body.appendChild(ov);
+}
+
+function autoSelectNode(node) {
+  _autoSelNode = node === undefined ? null : node;
+  autoBuilderRender();
+}
+
+function autoZoom(delta) {
+  _autoZoom = Math.min(1.3, Math.max(0.5, Math.round((_autoZoom + delta) * 10) / 10));
+  const chain = document.getElementById('flow-chain');
+  if (chain) chain.style.transform = 'scale(' + _autoZoom + ')';
+}
+
+// Refresca solo los resúmenes de los nodos (sin perder el foco de los inputs)
+function autoRefreshNodes() {
+  const chain = document.getElementById('flow-chain');
+  if (!chain || !_autoDraft) return;
+  const subs = chain.querySelectorAll('.flow-node .flow-node-sub');
+  if (!subs.length) return;
+  subs[0].textContent = autoTriggerLabel({ trigger: _autoDraft.trigger });
+  _autoDraft.steps.forEach((s, i) => { if (subs[i + 1]) subs[i + 1].textContent = autoNodeSummary(s); });
 }
 
 function autoTriggerChange(type) {
@@ -19183,15 +19285,20 @@ function autoStepAdd(type) {
     add_note: { type, text: '' },
   };
   _autoDraft.steps.push(defaults[type] || { type });
+  _autoSelNode = _autoDraft.steps.length - 1;
   autoBuilderRender();
+  // Llevar el nodo nuevo a la vista
+  setTimeout(() => { document.querySelector('.flow-node.sel')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }, 60);
 }
 
 function autoStepUpdate(i, key, val) {
-  if (_autoDraft?.steps[i]) _autoDraft.steps[i][key] = val;
+  if (_autoDraft?.steps[i]) { _autoDraft.steps[i][key] = val; autoRefreshNodes(); }
 }
 
 function autoStepRemove(i) {
   _autoDraft.steps.splice(i, 1);
+  if (_autoSelNode === i) _autoSelNode = null;
+  else if (typeof _autoSelNode === 'number' && _autoSelNode > i) _autoSelNode--;
   autoBuilderRender();
 }
 
@@ -19200,24 +19307,24 @@ function autoStepMove(i, dir) {
   const j = i + dir;
   if (j < 0 || j >= arr.length) return;
   [arr[i], arr[j]] = [arr[j], arr[i]];
+  if (_autoSelNode === i) _autoSelNode = j;
   autoBuilderRender();
 }
 
 async function autoBuilderSave() {
   const d = _autoDraft;
   if (!d.name || !d.name.trim()) { alert('Ponle un nombre a la automatización.'); return; }
-  if (!d.steps.length) { alert('Añade al menos un paso.'); return; }
+  if (!d.steps.length) { alert('Añade al menos un paso desde la paleta.'); return; }
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
     const method = _autoEditingId ? 'PUT' : 'POST';
-    const body = _autoEditingId ? { id: _autoEditingId, ...d } : d;
+    const body = _autoEditingId ? { id: _autoEditingId, name: d.name, trigger: d.trigger, steps: d.steps, active: d.active } : d;
     const res = await fetch(`/api/automations${qs}`, { method, headers: await getAuthHeaders(), body: JSON.stringify(body) });
     const data = await res.json();
     if (data.error) { alert(data.error); return; }
+    showToast('✅ Automatización ' + (_autoEditingId ? 'actualizada' : 'creada') + (d.active ? ' y activa' : ' (borrador)'), 'success');
     autoBuilderClose();
-    crmRenderAutos();
-    showToast('✅ Automatización ' + (_autoEditingId ? 'actualizada' : 'creada'), 'success');
   } catch (e) { alert('Error guardando: ' + e.message); }
 }
 
