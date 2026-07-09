@@ -79,7 +79,7 @@ function jsonResp(data, status = 200) {
 }
 
 const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive'];
-const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note'];
+const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner'];
 
 function validateAutomation(body) {
   if (!body.name || !String(body.name).trim()) return 'El nombre es requerido';
@@ -95,6 +95,8 @@ function validateAutomation(body) {
     if (s.type === 'condition' && (!s.field || !s.op)) return 'La condición requiere campo y operador';
     if (s.type === 'change_stage' && !s.stage) return 'El cambio de etapa requiere la etapa destino';
     if (s.type === 'add_note' && !s.text) return 'La nota requiere texto';
+    if (s.type === 'create_activity' && !s.title) return 'La tarea requiere un título';
+    if (s.type === 'notify_owner' && !s.body) return 'La notificación requiere el mensaje';
   }
   return null;
 }

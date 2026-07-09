@@ -18930,6 +18930,8 @@ const ICN_PATHS = {
   bot:      '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4M8 4h8"/><circle cx="8.5" cy="13.5" r=".5" fill="currentColor"/><circle cx="15.5" cy="13.5" r=".5" fill="currentColor"/><path d="M9 17h6"/>',
   users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
   arrow:    '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
 };
 
 
@@ -18961,6 +18963,8 @@ const AUTO_STEP_META = {
   condition:     { label: 'Condición',           icon: 'check' },
   change_stage:  { label: 'Cambiar etapa',       icon: 'trend' },
   add_note:      { label: 'Añadir nota',         icon: 'edit' },
+  create_activity: { label: 'Crear tarea',       icon: 'calendar' },
+  notify_owner:  { label: 'Notificarme',         icon: 'bell' },
 };
 
 const AUTO_TEMPLATES = [
@@ -18979,6 +18983,14 @@ const AUTO_TEMPLATES = [
       { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
       { type: 'send_email', subject: '{{nombre}}, ¿seguimos en contacto?', body: 'Hola {{nombre}},\n\nHace unos días conversamos y no hemos vuelto a saber de ti. ¿Sigues interesado?\n\nSi tienes alguna duda, respóndeme este correo y te ayudo personalmente.' },
       { type: 'add_note', text: 'Email de seguimiento por inactividad enviado' },
+    ],
+  },
+  {
+    name: 'Lead nuevo → tarea de llamada + avisarme',
+    trigger: { type: 'lead_created' },
+    steps: [
+      { type: 'notify_owner', subject: 'Nuevo lead: {{nombre}}', body: 'Entró un lead nuevo a tu CRM: {{nombre}} ({{empresa}}).\n\nRevisa sus datos y contáctalo pronto — los leads atendidos en la primera hora convierten mucho más.' },
+      { type: 'create_activity', title: 'Llamar a {{nombre}}', offset_days: 1, description: 'Primera llamada de contacto — lead de {{empresa}}' },
     ],
   },
   {
@@ -19053,6 +19065,7 @@ async function crmRenderAutos() {
         '<button class="auto-toggle' + (a.active ? ' on' : '') + '" title="' + (a.active ? 'Pausar' : 'Activar') + '" onclick="autoToggle(\'' + a.id + '\',' + (!a.active) + ')"></button>' +
         '<button class="btn-ghost sm" onclick="autoShowLogs(\'' + a.id + '\')" title="Historial">' + icn('file', 12) + '</button>' +
         '<button class="btn-ghost sm" onclick="autoBuilderOpen(\'' + a.id + '\')" title="Editar">' + icn('edit', 12) + '</button>' +
+        '<button class="btn-ghost sm" onclick="autoDuplicate(\'' + a.id + '\')" title="Duplicar">⧉</button>' +
         '<button class="btn-ghost sm" onclick="autoDelete(\'' + a.id + '\')" title="Eliminar">✕</button>' +
       '</div>' +
     '</div>';
@@ -19067,6 +19080,27 @@ async function autoToggle(id, active) {
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
     crmRenderAutos();
   } catch (e) { alert('Error: ' + e.message); }
+}
+
+// Duplica una automatización: copia con "(copia)" y en borrador para revisarla antes de activar
+async function autoDuplicate(id) {
+  const a = crmAutomations.find(x => x.id === id);
+  if (!a) return;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const body = {
+      name: a.name + ' (copia)',
+      trigger: JSON.parse(JSON.stringify(a.trigger)),
+      steps: JSON.parse(JSON.stringify(a.steps)),
+      active: false,
+    };
+    const data = await fetch(`/api/automations${qs}`, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify(body) }).then(r => r.json());
+    if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
+    if (data.error) { alert(data.error); return; }
+    showToast('⧉ Copia creada en borrador — edítala y actívala cuando esté lista', 'success');
+    crmRenderAutos();
+  } catch (e) { alert('Error duplicando: ' + e.message); }
 }
 
 async function autoDelete(id) {
@@ -19089,6 +19123,8 @@ const FLOW_TYPE_STYLE = {
   condition:     { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'check' },
   change_stage:  { bg: 'var(--aqua-lt)', fg: 'var(--aqua)', icon: 'trend' },
   add_note:      { bg: 'var(--bg-muted)', fg: 'var(--text-2)', icon: 'edit' },
+  create_activity: { bg: 'var(--blue-lt)', fg: 'var(--blue)', icon: 'calendar' },
+  notify_owner:  { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'bell' },
 };
 
 function autoBuilderOpen(id, templateIdx) {
@@ -19149,6 +19185,19 @@ function autoStepFields(s, i) {
   if (s.type === 'add_note') {
     return '<div class="auto-field"><label class="auto-label">Texto de la nota</label><input class="auto-input" value="' + esc(s.text || '') + '" oninput="' + U + '\'text\',this.value)"></div>';
   }
+  if (s.type === 'create_activity') {
+    const opts = [[0,'El mismo día'],[1,'Al día siguiente'],[2,'En 2 días'],[3,'En 3 días'],[7,'En 7 días']];
+    return '<div class="auto-field"><label class="auto-label">Título de la tarea</label><input class="auto-input" value="' + esc(s.title || '') + '" oninput="' + U + '\'title\',this.value)"></div>' +
+      '<div class="auto-field"><label class="auto-label">Fecha límite</label><select class="auto-input" onchange="' + U + '\'offset_days\',parseInt(this.value));autoRefreshNodes()">' +
+        opts.map(o => '<option value="' + o[0] + '"' + (parseInt(s.offset_days) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Descripción (opcional)</label><textarea class="auto-input" rows="3" oninput="' + U + '\'description\',this.value)">' + esc(s.description || '') + '</textarea>' +
+      '<div class="auto-vars-hint">La tarea aparece en la Agenda vinculada al lead · Variables: {{nombre}} {{empresa}} {{etapa}}</div></div>';
+  }
+  if (s.type === 'notify_owner') {
+    return '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.subject || '') + '" placeholder="Actividad de {{nombre}} en tu CRM" oninput="' + U + '\'subject\',this.value)"></div>' +
+      '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="5" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
+      '<div class="auto-vars-hint">Se envía a tu email (el dueño de la cuenta), no al lead · incluye los datos del lead al pie · Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}</div></div>';
+  }
   return '';
 }
 
@@ -19163,6 +19212,11 @@ function autoNodeSummary(s) {
   }
   if (s.type === 'change_stage') return '→ ' + (s.stage || '');
   if (s.type === 'add_note') return s.text ? s.text.slice(0, 60) : 'Sin texto todavía';
+  if (s.type === 'create_activity') {
+    const when = { 0: 'el mismo día', 1: 'al día siguiente' }[parseInt(s.offset_days)] || ('en ' + s.offset_days + ' días');
+    return s.title ? s.title.slice(0, 46) + ' · ' + when : 'Sin título todavía';
+  }
+  if (s.type === 'notify_owner') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
   return '';
 }
 
@@ -19214,6 +19268,7 @@ function autoBuilderRender() {
       send_email: 'Email al lead con variables', send_whatsapp: 'Mensaje por el Inbox del lead',
       wait: 'Pausa el flujo horas o días', condition: 'Continúa solo si se cumple',
       change_stage: 'Mueve el lead en el pipeline', add_note: 'Deja registro en el lead',
+      create_activity: 'Tarea en la Agenda vinculada al lead', notify_owner: 'Email a tu correo, no al lead',
     }[type];
     return '<div class="flow-block" onclick="autoStepAdd(\'' + type + '\')">' +
       '<span class="flow-block-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 14) + '</span>' +
@@ -19222,7 +19277,7 @@ function autoBuilderRender() {
   };
   const palette =
     '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
-    ['send_email', 'send_whatsapp', 'change_stage', 'add_note'].map(paletteBlock).join('') +
+    ['send_email', 'send_whatsapp', 'create_activity', 'notify_owner', 'change_stage', 'add_note'].map(paletteBlock).join('') +
     '<div class="flow-palette-title">Control del flujo</div>' +
     ['wait', 'condition'].map(paletteBlock).join('') +
     '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
@@ -19312,6 +19367,8 @@ function autoStepAdd(type) {
     condition: { type, field: 'has_email', op: 'eq', value: 'true' },
     change_stage: { type, stage: 'contactado' },
     add_note: { type, text: '' },
+    create_activity: { type, title: '', offset_days: 1, description: '' },
+    notify_owner: { type, subject: '', body: '' },
   };
   _autoDraft.steps.push(defaults[type] || { type });
   _autoSelNode = _autoDraft.steps.length - 1;

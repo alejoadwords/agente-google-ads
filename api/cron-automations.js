@@ -132,6 +132,55 @@ async function actionSendWhatsapp(step, lead) {
   }
 }
 
+// Crear tarea en la Agenda del CRM vinculada al lead (aparece en la pestaña Agenda)
+async function actionCreateActivity(step, lead, auto) {
+  const title = renderVars(step.title, lead);
+  const days = parseFloat(step.offset_days);
+  const dueAt = new Date(Date.now() + (isNaN(days) ? 0 : days) * 864e5);
+  dueAt.setHours(9, 0, 0, 0); // 9:00 am hora del server ≈ inicio de jornada
+  await sb('/activities', 'POST', {
+    user_id: auto.user_id, client_id: auto.client_id, lead_id: lead.id,
+    type: 'task', title, description: renderVars(step.description || '', lead) || null,
+    due_at: dueAt.toISOString(),
+  }, 'return=minimal');
+  return { result: 'done', detail: 'Tarea "' + title.slice(0, 60) + '" para el ' + dueAt.toISOString().slice(0, 10) };
+}
+
+// Email al dueño de la cuenta (no al lead) — el email se resuelve via Clerk
+const _ownerEmailCache = {};
+async function actionNotifyOwner(step, lead, auto) {
+  if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
+  if (!(auto.user_id in _ownerEmailCache)) {
+    try {
+      const r = await fetch('https://api.clerk.com/v1/users/' + auto.user_id, {
+        headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+      });
+      const u = await r.json();
+      _ownerEmailCache[auto.user_id] = u.email_addresses?.[0]?.email_address || null;
+    } catch { _ownerEmailCache[auto.user_id] = null; }
+  }
+  const ownerEmail = _ownerEmailCache[auto.user_id];
+  if (!ownerEmail) return { result: 'failed', detail: 'No se pudo resolver el email del dueño' };
+  const msg = renderVars(step.body || 'El lead {{nombre}} activó la automatización.', lead);
+  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
+    msg.split('\n').map(p => '<p style="margin:0 0 14px">' + p + '</p>').join('') +
+    '<p style="margin:18px 0 0;font-size:13px;color:#888">Lead: ' + (lead.name || '—') +
+    (lead.email ? ' · ' + lead.email : '') + (lead.phone ? ' · ' + lead.phone : '') +
+    ' · Etapa: ' + (lead.stage || '—') + '</p></div>';
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Acuarius <notificaciones@app.acuarius.app>', to: [ownerEmail],
+      subject: '⚡ ' + renderVars(step.subject || 'Actividad de {{nombre}} en tu CRM', lead),
+      html,
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
+  return { result: 'sent', detail: 'Notificación a ' + ownerEmail };
+}
+
 function evalCondition(step, lead) {
   const f = step.field;
   let actual;
@@ -220,6 +269,18 @@ async function processJobs() {
           await sb(`/leads?id=eq.${lead.id}`, 'PATCH', { stage: step.stage, updated_at: new Date().toISOString() }, 'return=minimal');
           lead.stage = step.stage;
           await log(auto.id, job.user_id, lead.id, i, 'change_stage', 'done', 'Etapa → ' + step.stage);
+          i++; continue;
+        }
+
+        if (step.type === 'create_activity') {
+          const r = await actionCreateActivity(step, lead, auto);
+          await log(auto.id, job.user_id, lead.id, i, 'create_activity', r.result, r.detail);
+          i++; continue;
+        }
+
+        if (step.type === 'notify_owner') {
+          const r = await actionNotifyOwner(step, lead, auto);
+          await log(auto.id, job.user_id, lead.id, i, 'notify_owner', r.result, r.detail);
           i++; continue;
         }
 
