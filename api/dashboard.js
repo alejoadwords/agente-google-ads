@@ -122,6 +122,30 @@ async function refreshGoogleToken(refreshToken) {
   return res.json();
 }
 
+// Sondeo de versión de la API (las versiones se deprecan — mismo patrón que api/google-ads.js)
+let _dashApiVersion = null;
+async function getApiVersion(customerId, accessToken) {
+  if (_dashApiVersion) return _dashApiVersion;
+  const mccId = (MCC_ID || '').replace(/-/g, '');
+  const loginId = mccId || customerId;
+  for (const ver of [22, 21, 20, 19, 18]) {
+    const h = { 'Authorization': `Bearer ${accessToken}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
+    if (loginId) h['login-customer-id'] = loginId;
+    try {
+      const r = await fetch(
+        `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,
+        { method: 'POST', headers: h, body: JSON.stringify({ query: 'SELECT customer.id FROM customer LIMIT 1' }) }
+      );
+      const raw = await r.text();
+      if (r.status === 404 || raw.startsWith('<!')) continue;
+      if (r.status === 400 && raw.includes('UNSUPPORTED_VERSION')) continue;
+      _dashApiVersion = ver;
+      return ver;
+    } catch { continue; }
+  }
+  return 19;
+}
+
 async function gaqlFetch(customerId, query, accessToken) {
   const h = {
     'Authorization': `Bearer ${accessToken}`,
@@ -129,11 +153,15 @@ async function gaqlFetch(customerId, query, accessToken) {
     'Content-Type': 'application/json',
   };
   if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+  const ver = await getApiVersion(customerId, accessToken);
   const res = await fetch(
-    `https://googleads.googleapis.com/v20/customers/${customerId}/googleAds:search`,
+    `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,
     { method: 'POST', headers: h, body: JSON.stringify({ query }) }
   );
-  if (!res.ok) throw new Error(`Google Ads ${res.status}`);
+  if (!res.ok) {
+    const errTxt = await res.text().catch(() => '');
+    throw new Error(`Google Ads ${res.status}: ${errTxt.slice(0, 200)}`);
+  }
   const data = await res.json();
   return data.results || [];
 }
@@ -200,11 +228,24 @@ async function fetchGoogleAdsData(userId, customerId, dateFrom, dateTo) {
     LIMIT 10
   `;
 
-  const [overviewRows, dailyRows, campaignRows] = await Promise.all([
-    gaqlFetch(cid, overviewQuery, token).catch(() => []),
-    gaqlFetch(cid, dailyQuery, token).catch(() => []),
-    gaqlFetch(cid, campaignQuery, token).catch(() => []),
-  ]);
+  // Si el token guardado ya no sirve (401), refrescar una vez y reintentar
+  const safeFetch = async (q) => {
+    try { return await gaqlFetch(cid, q, token); }
+    catch (e) {
+      if (String(e.message).includes('401') && conn.refresh_token) {
+        const fresh = await refreshGoogleToken(conn.refresh_token);
+        if (fresh.access_token) {
+          token = fresh.access_token;
+          try { return await gaqlFetch(cid, q, token); }
+          catch (e2) { console.error('[dashboard] gaql retry error:', e2.message); return []; }
+        }
+      }
+      console.error('[dashboard] gaql error:', e.message);
+      return [];
+    }
+  };
+  const overviewRows = await safeFetch(overviewQuery);
+  const [dailyRows, campaignRows] = await Promise.all([safeFetch(dailyQuery), safeFetch(campaignQuery)]);
 
   const ov = overviewRows[0]?.metrics || {};
   const spend = (ov.costMicros || 0) / 1e6;
