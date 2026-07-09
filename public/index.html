@@ -243,6 +243,13 @@ textarea.auto-input{resize:vertical;min-height:64px}
 .flow-link{flex-shrink:0;color:var(--blue-md)}
 .flow-add{width:38px;height:38px;border-radius:11px;border:1.5px dashed var(--blue-md);background:var(--blue-lt);color:var(--blue);font-size:18px;font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all var(--dur-fast) var(--ease)}
 .flow-add:hover{background:var(--blue-md);transform:scale(1.08)}
+.flow-add.sm{width:30px;height:30px;border-radius:9px;font-size:15px}
+.flow-add.active{background:var(--agua-grad);border-style:solid;border-color:transparent;color:#fff;box-shadow:var(--shadow-sm)}
+.flow-lanes{display:flex;flex-direction:column;gap:14px;padding:10px 0 10px 6px;border-left:2px dashed var(--blue-md);border-radius:2px;margin-left:-8px;flex-shrink:0}
+.flow-lane{display:flex;align-items:center;flex-shrink:0}
+.flow-lane-tag{flex-shrink:0;font-size:10px;font-weight:800;letter-spacing:.04em;padding:4px 9px;border-radius:20px;text-transform:uppercase}
+.flow-lane-tag.yes{background:var(--success-bg);color:var(--success)}
+.flow-lane-tag.no{background:var(--danger-bg);color:var(--danger)}
 .flow-config{width:330px;border-left:1px solid var(--border);background:var(--bg);overflow-y:auto;flex-shrink:0;padding:18px}
 .flow-config-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .flow-config-title{font-size:var(--fs-md);font-weight:800;color:var(--text)}

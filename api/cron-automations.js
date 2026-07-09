@@ -200,6 +200,36 @@ function evalCondition(step, lead) {
   }
 }
 
+// ── Compilación de ramas ─────────────────────────────────────────────────────
+// El paso 'branch' guarda sub-pasos en yes[]/no[]. Para que el step_index
+// entero de los jobs (y las esperas) siga funcionando, el árbol se compila a
+// una lista plana con saltos: _branch (salta a jumpFalse si no cumple) y
+// _goto (salto incondicional al final de la rama Sí). Los índices compilados
+// son estables mientras la automatización no se edite — misma garantía que
+// ya tenía el step_index lineal. Pasos después de la rama = punto de
+// reencuentro de ambos carriles.
+function compileSteps(steps) {
+  const out = [];
+  const walk = (arr) => {
+    for (const s of (arr || [])) {
+      if (s.type === 'branch') {
+        const node = { type: '_branch', field: s.field, op: s.op, value: s.value, jumpFalse: -1 };
+        out.push(node);
+        walk(s.yes);
+        const g = { type: '_goto', to: -1 };
+        out.push(g);
+        node.jumpFalse = out.length;
+        walk(s.no);
+        g.to = out.length;
+      } else {
+        out.push(s);
+      }
+    }
+  };
+  walk(steps);
+  return out;
+}
+
 // ── Procesador de jobs ───────────────────────────────────────────────────────
 async function processJobs() {
   const now = new Date().toISOString();
@@ -227,12 +257,21 @@ async function processJobs() {
         continue;
       }
 
-      const steps = auto.steps || [];
+      const steps = compileSteps(auto.steps || []);
       let i = job.step_index || 0;
       let jobDone = true;
 
       while (i < steps.length) {
         const step = steps[i];
+
+        if (step.type === '_goto') { i = step.to; continue; }
+
+        if (step.type === '_branch') {
+          const pass = evalCondition(step, lead);
+          await log(auto.id, job.user_id, lead.id, i, 'branch', pass ? 'yes' : 'no', step.field + ' ' + step.op + ' ' + (step.value || '') + ' → rama ' + (pass ? 'Sí' : 'No'));
+          if (!pass) { i = step.jumpFalse; continue; }
+          i++; continue;
+        }
 
         if (step.type === 'wait') {
           const runAt = new Date(Date.now() + (parseFloat(step.hours) || 1) * 3600 * 1000).toISOString();

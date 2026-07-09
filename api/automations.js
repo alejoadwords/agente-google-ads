@@ -79,25 +79,45 @@ function jsonResp(data, status = 200) {
 }
 
 const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive'];
-const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner'];
+const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch'];
+
+// Valida el árbol de pasos (las ramas yes/no anidan sub-pasos, un solo nivel).
+// Devuelve {error, count} — count suma todos los pasos incluidos los anidados.
+function validateSteps(steps, depth) {
+  let count = 0;
+  for (const s of (steps || [])) {
+    count++;
+    if (!VALID_STEPS.includes(s.type)) return { error: 'Paso inválido: ' + s.type, count };
+    if (s.type === 'send_email' && (!s.subject || !s.body)) return { error: 'El paso de email requiere asunto y cuerpo', count };
+    if (s.type === 'send_whatsapp' && !s.body) return { error: 'El paso de WhatsApp requiere el mensaje', count };
+    if (s.type === 'wait' && !(parseFloat(s.hours) > 0)) return { error: 'El paso de espera requiere horas > 0', count };
+    if (s.type === 'condition' && (!s.field || !s.op)) return { error: 'La condición requiere campo y operador', count };
+    if (s.type === 'change_stage' && !s.stage) return { error: 'El cambio de etapa requiere la etapa destino', count };
+    if (s.type === 'add_note' && !s.text) return { error: 'La nota requiere texto', count };
+    if (s.type === 'create_activity' && !s.title) return { error: 'La tarea requiere un título', count };
+    if (s.type === 'notify_owner' && !s.body) return { error: 'La notificación requiere el mensaje', count };
+    if (s.type === 'branch') {
+      if (depth > 0) return { error: 'Las ramas no pueden anidarse dentro de otra rama', count };
+      if (!s.field || !s.op) return { error: 'La rama requiere campo y operador', count };
+      if (!(s.yes || []).length && !(s.no || []).length) return { error: 'La rama necesita al menos un paso en Sí o en No', count };
+      for (const key of ['yes', 'no']) {
+        const sub = validateSteps(s[key], depth + 1);
+        count += sub.count;
+        if (sub.error) return { error: sub.error, count };
+      }
+    }
+  }
+  return { error: null, count };
+}
 
 function validateAutomation(body) {
   if (!body.name || !String(body.name).trim()) return 'El nombre es requerido';
   if (!body.trigger || !VALID_TRIGGERS.includes(body.trigger.type)) return 'Trigger inválido';
   if (body.trigger.type === 'lead_inactive' && !(parseInt(body.trigger.days) > 0)) return 'El trigger de inactividad requiere días > 0';
   if (!Array.isArray(body.steps) || !body.steps.length) return 'La automatización necesita al menos un paso';
-  if (body.steps.length > 20) return 'Máximo 20 pasos';
-  for (const s of body.steps) {
-    if (!VALID_STEPS.includes(s.type)) return 'Paso inválido: ' + s.type;
-    if (s.type === 'send_email' && (!s.subject || !s.body)) return 'El paso de email requiere asunto y cuerpo';
-    if (s.type === 'send_whatsapp' && !s.body) return 'El paso de WhatsApp requiere el mensaje';
-    if (s.type === 'wait' && !(parseFloat(s.hours) > 0)) return 'El paso de espera requiere horas > 0';
-    if (s.type === 'condition' && (!s.field || !s.op)) return 'La condición requiere campo y operador';
-    if (s.type === 'change_stage' && !s.stage) return 'El cambio de etapa requiere la etapa destino';
-    if (s.type === 'add_note' && !s.text) return 'La nota requiere texto';
-    if (s.type === 'create_activity' && !s.title) return 'La tarea requiere un título';
-    if (s.type === 'notify_owner' && !s.body) return 'La notificación requiere el mensaje';
-  }
+  const r = validateSteps(body.steps, 0);
+  if (r.error) return r.error;
+  if (r.count > 20) return 'Máximo 20 pasos en total (incluyendo los de las ramas)';
   return null;
 }
 

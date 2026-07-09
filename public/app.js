@@ -18932,6 +18932,7 @@ const ICN_PATHS = {
   arrow:    '<path d="M5 12h14M12 5l7 7-7 7"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+  split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
 };
 
 
@@ -18965,6 +18966,7 @@ const AUTO_STEP_META = {
   add_note:      { label: 'Añadir nota',         icon: 'edit' },
   create_activity: { label: 'Crear tarea',       icon: 'calendar' },
   notify_owner:  { label: 'Notificarme',         icon: 'bell' },
+  branch:        { label: 'Ramas Sí / No',       icon: 'split' },
 };
 
 const AUTO_TEMPLATES = [
@@ -18972,8 +18974,15 @@ const AUTO_TEMPLATES = [
     name: 'Bienvenida a lead nuevo',
     trigger: { type: 'lead_created' },
     steps: [
-      { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
-      { type: 'send_email', subject: '¡Gracias por tu interés, {{nombre}}!', body: 'Hola {{nombre}},\n\nGracias por contactarnos. Recibimos tus datos y muy pronto uno de nuestros asesores te escribirá.\n\nMientras tanto, cuéntanos: ¿qué es lo más importante que quieres resolver?\n\nUn saludo.' },
+      {
+        type: 'branch', field: 'has_email', op: 'eq', value: 'true',
+        yes: [
+          { type: 'send_email', subject: '¡Gracias por tu interés, {{nombre}}!', body: 'Hola {{nombre}},\n\nGracias por contactarnos. Recibimos tus datos y muy pronto uno de nuestros asesores te escribirá.\n\nMientras tanto, cuéntanos: ¿qué es lo más importante que quieres resolver?\n\nUn saludo.' },
+        ],
+        no: [
+          { type: 'create_activity', title: 'Conseguir el email de {{nombre}}', offset_days: 0, description: 'El lead llegó sin email — contactarlo por otro canal para completar sus datos' },
+        ],
+      },
     ],
   },
   {
@@ -19048,7 +19057,7 @@ async function crmRenderAutos() {
   }
 
   const cards = crmAutomations.map(a => {
-    const chips = (a.steps || []).map(s => {
+    const chips = autoFlatSteps(a.steps || [], []).map(s => {
       const m = AUTO_STEP_META[s.type] || { label: s.type, icon: 'check' };
       let extra = '';
       if (s.type === 'wait') extra = ' ' + (s.hours >= 24 ? (s.hours / 24) + 'd' : s.hours + 'h');
@@ -19125,11 +19134,38 @@ const FLOW_TYPE_STYLE = {
   add_note:      { bg: 'var(--bg-muted)', fg: 'var(--text-2)', icon: 'edit' },
   create_activity: { bg: 'var(--blue-lt)', fg: 'var(--blue)', icon: 'calendar' },
   notify_owner:  { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'bell' },
+  branch:        { bg: 'var(--agua-grad)', fg: '#fff', icon: 'split' },
 };
+
+// ── Rutas anidadas del canvas ────────────────────────────────────────────────
+// Un paso se identifica por su ruta: '2' (paso 2 del flujo principal) o
+// '2.yes.0' (primer paso del carril Sí de la rama en el paso 2).
+// Un carril se identifica por la ruta sin índice final: '' (principal), '2.yes'.
+let _autoAddLane = ''; // carril activo donde la paleta añade bloques
+
+function autoLaneArr(lane) {
+  let arr = _autoDraft.steps;
+  if (!lane) return arr;
+  const parts = lane.split('.');
+  for (let k = 0; k < parts.length; k += 2) arr = arr[parseInt(parts[k])][parts[k + 1]];
+  return arr;
+}
+
+function autoPathGet(path) {
+  const parts = String(path).split('.');
+  const idx = parseInt(parts.pop());
+  return { arr: autoLaneArr(parts.join('.')), idx };
+}
+
+function autoStepByPath(path) {
+  const { arr, idx } = autoPathGet(path);
+  return arr && arr[idx];
+}
 
 function autoBuilderOpen(id, templateIdx) {
   _autoEditingId = id || null;
   _autoSelNode = null;
+  _autoAddLane = '';
   _autoZoom = 1;
   if (id) {
     const a = crmAutomations.find(x => x.id === id);
@@ -19155,8 +19191,8 @@ function autoStageOptions(selected) {
   return stages.map(st => '<option value="' + esc(st.key) + '"' + (selected === st.key ? ' selected' : '') + '>' + esc(st.label || st.key) + '</option>').join('');
 }
 
-function autoStepFields(s, i) {
-  const U = 'autoStepUpdate(' + i + ',';
+function autoStepFields(s, path) {
+  const U = 'autoStepUpdate(\'' + path + '\',';
   if (s.type === 'send_email') {
     return '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.subject || '') + '" oninput="' + U + '\'subject\',this.value)"></div>' +
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="7" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
@@ -19198,6 +19234,14 @@ function autoStepFields(s, i) {
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="5" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
       '<div class="auto-vars-hint">Se envía a tu email (el dueño de la cuenta), no al lead · incluye los datos del lead al pie · Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}</div></div>';
   }
+  if (s.type === 'branch') {
+    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono']];
+    const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
+    return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);autoRefreshNodes()">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Valor</label><input class="auto-input" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)">' +
+      '<div class="auto-vars-hint">El flujo sigue por el carril Sí o No según el resultado. Si hay pasos después de la rama, ambos carriles continúan ahí.</div></div>';
+  }
   return '';
 }
 
@@ -19217,6 +19261,11 @@ function autoNodeSummary(s) {
     return s.title ? s.title.slice(0, 46) + ' · ' + when : 'Sin título todavía';
   }
   if (s.type === 'notify_owner') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
+  if (s.type === 'branch') {
+    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono' }[s.field] || s.field;
+    if (s.field === 'has_email' || s.field === 'has_phone') return '¿' + f + '?';
+    return '¿' + f + ' ' + ({ eq: 'es', neq: 'no es', contains: 'contiene', gte: '≥', lte: '≤' }[s.op] || s.op) + ' ' + (s.value || '') + '?';
+  }
   return '';
 }
 
@@ -19228,15 +19277,15 @@ function autoFlowConnector() {
   '</svg>';
 }
 
-function autoNodeHtml(kind, idx, title, summary, selected) {
+function autoNodeHtml(kind, path, title, summary, selected, idx, laneLen) {
   const st = FLOW_TYPE_STYLE[kind] || FLOW_TYPE_STYLE.add_note;
   const sel = selected ? ' sel' : '';
-  const clickArg = kind === 'trigger' ? "'trigger'" : idx;
+  const clickArg = kind === 'trigger' ? "'trigger'" : "'" + path + "'";
   const tools = kind === 'trigger' ? '' :
     '<div class="flow-node-tools" onclick="event.stopPropagation()">' +
-      (idx > 0 ? '<button class="flow-node-tool" title="Mover antes" onclick="autoStepMove(' + idx + ',-1)">←</button>' : '') +
-      (idx < _autoDraft.steps.length - 1 ? '<button class="flow-node-tool" title="Mover después" onclick="autoStepMove(' + idx + ',1)">→</button>' : '') +
-      '<button class="flow-node-tool" title="Eliminar" onclick="autoStepRemove(' + idx + ')">✕</button>' +
+      (idx > 0 ? '<button class="flow-node-tool" title="Mover antes" onclick="autoStepMove(\'' + path + '\',-1)">←</button>' : '') +
+      (idx < laneLen - 1 ? '<button class="flow-node-tool" title="Mover después" onclick="autoStepMove(\'' + path + '\',1)">→</button>' : '') +
+      '<button class="flow-node-tool" title="Eliminar" onclick="autoStepRemove(\'' + path + '\')">✕</button>' +
     '</div>';
   return '<div class="flow-node' + sel + '" onclick="autoSelectNode(' + clickArg + ')">' + tools +
     '<div class="flow-node-head">' +
@@ -19247,18 +19296,48 @@ function autoNodeHtml(kind, idx, title, summary, selected) {
   '</div>';
 }
 
+// Cadena de nodos de un carril (recursiva: las ramas anidan dos carriles)
+function autoChainHtml(steps, lane) {
+  let html = '';
+  steps.forEach((s, i) => {
+    const path = lane ? lane + '.' + i : String(i);
+    const m = AUTO_STEP_META[s.type] || { label: s.type };
+    html += autoFlowConnector() + autoNodeHtml(s.type, path, m.label, autoNodeSummary(s), _autoSelNode === path, i, steps.length);
+    if (s.type === 'branch') {
+      html += '<div class="flow-lanes">' +
+        autoLaneHtml(s, path, 'yes') +
+        autoLaneHtml(s, path, 'no') +
+      '</div>';
+    }
+  });
+  return html;
+}
+
+function autoLaneHtml(s, path, key) {
+  const lane = path + '.' + key;
+  return '<div class="flow-lane">' +
+    '<span class="flow-lane-tag ' + key + '">' + (key === 'yes' ? '✓ Sí' : '✕ No') + '</span>' +
+    autoChainHtml(s[key] || [], lane) +
+    autoFlowConnector() +
+    '<button class="flow-add sm' + (_autoAddLane === lane ? ' active' : '') + '" title="Añadir bloque a este carril" onclick="autoSetLane(\'' + lane + '\')">+</button>' +
+  '</div>';
+}
+
+function autoSetLane(lane) {
+  _autoAddLane = lane;
+  _autoSelNode = null;
+  autoBuilderRender();
+}
+
 function autoBuilderRender() {
   const view = document.getElementById('crm-autos-view');
   if (!view || !_autoDraft) return;
   const d = _autoDraft;
 
-  // Cadena de nodos: trigger → pasos → añadir
+  // Cadena de nodos: trigger → pasos (con carriles de ramas) → añadir
   let chain = autoNodeHtml('trigger', null, 'Lanzador', autoTriggerLabel({ trigger: d.trigger }), _autoSelNode === 'trigger');
-  d.steps.forEach((s, i) => {
-    const m = AUTO_STEP_META[s.type] || { label: s.type };
-    chain += autoFlowConnector() + autoNodeHtml(s.type, i, m.label, autoNodeSummary(s), _autoSelNode === i);
-  });
-  chain += autoFlowConnector() + '<button class="flow-add" title="Añade un bloque desde la paleta" onclick="autoSelectNode(null)">+</button>';
+  chain += autoChainHtml(d.steps, '');
+  chain += autoFlowConnector() + '<button class="flow-add' + (_autoAddLane === '' ? ' active' : '') + '" title="Añade un bloque desde la paleta" onclick="autoSetLane(\'\')">+</button>';
 
   // Paleta de bloques
   const paletteBlock = (type) => {
@@ -19269,6 +19348,7 @@ function autoBuilderRender() {
       wait: 'Pausa el flujo horas o días', condition: 'Continúa solo si se cumple',
       change_stage: 'Mueve el lead en el pipeline', add_note: 'Deja registro en el lead',
       create_activity: 'Tarea en la Agenda vinculada al lead', notify_owner: 'Email a tu correo, no al lead',
+      branch: 'Divide el flujo en carriles Sí / No',
     }[type];
     return '<div class="flow-block" onclick="autoStepAdd(\'' + type + '\')">' +
       '<span class="flow-block-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 14) + '</span>' +
@@ -19279,7 +19359,7 @@ function autoBuilderRender() {
     '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
     ['send_email', 'send_whatsapp', 'create_activity', 'notify_owner', 'change_stage', 'add_note'].map(paletteBlock).join('') +
     '<div class="flow-palette-title">Control del flujo</div>' +
-    ['wait', 'condition'].map(paletteBlock).join('') +
+    ['branch', 'wait', 'condition'].map(paletteBlock).join('') +
     '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
 
   // Panel de configuración del nodo seleccionado
@@ -19297,14 +19377,14 @@ function autoBuilderRender() {
       (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
       (t.type === 'lead_inactive' ? '<div class="auto-field"><label class="auto-label">Días sin actividad</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
       '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>';
-  } else if (typeof _autoSelNode === 'number' && d.steps[_autoSelNode]) {
-    const s = d.steps[_autoSelNode];
+  } else if (_autoSelNode !== null && _autoSelNode !== 'trigger' && autoStepByPath(_autoSelNode)) {
+    const s = autoStepByPath(_autoSelNode);
     const m = AUTO_STEP_META[s.type] || { label: s.type };
     config =
       '<div class="flow-config-head"><div class="flow-config-title">' + m.label + '</div><button class="btn-ghost sm" onclick="autoSelectNode(undefined)">✕</button></div>' +
       autoStepFields(s, _autoSelNode) +
       '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>' +
-      '<button class="btn-dgr sm" style="width:100%;margin-top:8px" onclick="autoStepRemove(' + _autoSelNode + ')">Eliminar este paso</button>';
+      '<button class="btn-dgr sm" style="width:100%;margin-top:8px" onclick="autoStepRemove(\'' + _autoSelNode + '\')">Eliminar este paso</button>';
   }
 
   view.innerHTML =
@@ -19343,14 +19423,23 @@ function autoZoom(delta) {
   if (chain) chain.style.transform = 'scale(' + _autoZoom + ')';
 }
 
-// Refresca solo los resúmenes de los nodos (sin perder el foco de los inputs)
+// Refresca solo los resúmenes de los nodos (sin perder el foco de los inputs).
+// El orden del DOM coincide con el recorrido: paso, luego carril Sí, luego No.
+function autoFlatSteps(steps, out) {
+  for (const s of (steps || [])) {
+    out.push(s);
+    if (s.type === 'branch') { autoFlatSteps(s.yes, out); autoFlatSteps(s.no, out); }
+  }
+  return out;
+}
+
 function autoRefreshNodes() {
   const chain = document.getElementById('flow-chain');
   if (!chain || !_autoDraft) return;
   const subs = chain.querySelectorAll('.flow-node .flow-node-sub');
   if (!subs.length) return;
   subs[0].textContent = autoTriggerLabel({ trigger: _autoDraft.trigger });
-  _autoDraft.steps.forEach((s, i) => { if (subs[i + 1]) subs[i + 1].textContent = autoNodeSummary(s); });
+  autoFlatSteps(_autoDraft.steps, []).forEach((s, i) => { if (subs[i + 1]) subs[i + 1].textContent = autoNodeSummary(s); });
 }
 
 function autoTriggerChange(type) {
@@ -19360,6 +19449,8 @@ function autoTriggerChange(type) {
 }
 
 function autoStepAdd(type) {
+  const lane = _autoAddLane || '';
+  if (type === 'branch' && lane) { showToast('Las ramas no pueden anidarse dentro de otra rama', 'error'); return; }
   const defaults = {
     send_email: { type, subject: '', body: '' },
     send_whatsapp: { type, body: '' },
@@ -19369,31 +19460,35 @@ function autoStepAdd(type) {
     add_note: { type, text: '' },
     create_activity: { type, title: '', offset_days: 1, description: '' },
     notify_owner: { type, subject: '', body: '' },
+    branch: { type, field: 'has_email', op: 'eq', value: 'true', yes: [], no: [] },
   };
-  _autoDraft.steps.push(defaults[type] || { type });
-  _autoSelNode = _autoDraft.steps.length - 1;
+  const arr = autoLaneArr(lane);
+  arr.push(defaults[type] || { type });
+  _autoSelNode = (lane ? lane + '.' : '') + (arr.length - 1);
   autoBuilderRender();
   // Llevar el nodo nuevo a la vista
   setTimeout(() => { document.querySelector('.flow-node.sel')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }, 60);
 }
 
-function autoStepUpdate(i, key, val) {
-  if (_autoDraft?.steps[i]) { _autoDraft.steps[i][key] = val; autoRefreshNodes(); }
+function autoStepUpdate(path, key, val) {
+  const s = autoStepByPath(path);
+  if (s) { s[key] = val; autoRefreshNodes(); }
 }
 
-function autoStepRemove(i) {
-  _autoDraft.steps.splice(i, 1);
-  if (_autoSelNode === i) _autoSelNode = null;
-  else if (typeof _autoSelNode === 'number' && _autoSelNode > i) _autoSelNode--;
+function autoStepRemove(path) {
+  const { arr, idx } = autoPathGet(path);
+  if (!arr) return;
+  arr.splice(idx, 1);
+  _autoSelNode = null;
   autoBuilderRender();
 }
 
-function autoStepMove(i, dir) {
-  const arr = _autoDraft.steps;
-  const j = i + dir;
-  if (j < 0 || j >= arr.length) return;
-  [arr[i], arr[j]] = [arr[j], arr[i]];
-  if (_autoSelNode === i) _autoSelNode = j;
+function autoStepMove(path, dir) {
+  const { arr, idx } = autoPathGet(path);
+  const j = idx + dir;
+  if (!arr || j < 0 || j >= arr.length) return;
+  [arr[idx], arr[j]] = [arr[j], arr[idx]];
+  if (_autoSelNode === path) _autoSelNode = path.replace(/\d+$/, j);
   autoBuilderRender();
 }
 
@@ -19423,7 +19518,7 @@ async function autoShowLogs(id) {
     const res = await fetch('/api/automations?logs=1&automation_id=' + encodeURIComponent(id), { headers: await getAuthHeaders() });
     logs = (await res.json()).logs || [];
   } catch {}
-  const badge = r => r === 'sent' || r === 'done' || r === 'passed' || r === 'enqueued' ? 'ok' : (r === 'failed' ? 'bad' : 'mid');
+  const badge = r => r === 'sent' || r === 'done' || r === 'passed' || r === 'enqueued' || r === 'yes' ? 'ok' : (r === 'failed' ? 'bad' : 'mid');
   const rows = logs.length ? logs.map(l =>
     '<div class="auto-log-row">' +
       '<span class="auto-log-time">' + new Date(l.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</span>' +
