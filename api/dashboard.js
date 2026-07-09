@@ -167,6 +167,7 @@ async function gaqlFetch(customerId, query, accessToken) {
 }
 
 async function fetchGoogleAdsData(userId, customerId, dateFrom, dateTo) {
+  if (!customerId) { console.error('[dashboard] google_ads sin cuenta configurada'); return null; }
   const conn = await getConnection(userId, 'google_ads');
   if (!conn) return null;
 
@@ -441,6 +442,7 @@ async function handlePost(req) {
     const patch = {};
     for (const k of allowed) { if (body[k] !== undefined) patch[k] = body[k]; }
     patch.updated_at = new Date().toISOString();
+    patch.cached_at = null; // configuración nueva → invalidar caché de datos
     const updated = await patchDashboard(dashboardId, userId, patch);
     if (!updated) return json({ error: 'No encontrado' }, 404);
     return json({ ok: true, id: dashboardId });

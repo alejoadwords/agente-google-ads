@@ -1894,14 +1894,23 @@ async function dashCreate() {
   const selectedPlats = Array.from(document.querySelectorAll('.dash-plat-check.selected'))
     .map(el => el.dataset.plat);
 
+  // Derivar plataformas y cuentas del cliente automáticamente — sin esto el
+  // dashboard nace vacío (platforms:[] y sin cuenta que consultar)
+  const plats = new Set(selectedPlats);
+  if (client?.googleCustomerId) plats.add('google_ads');
+  if (client?.metaAdAccountId) plats.add('meta_ads');
+
   const body = {
     client_name:   client?.name || client?.business || 'Cliente',
     agency_name:   document.getElementById('dash-agency-name').value.trim() || null,
     agency_color:  document.getElementById('dash-agency-color').value,
     period:        document.getElementById('dash-period').value,
-    platforms:     selectedPlats,
+    platforms:     [...plats],
+    google_ads_account: client?.googleCustomerId ? String(client.googleCustomerId).replace(/-/g, '') : null,
+    meta_ads_account:   client?.metaAdAccountId || null,
     manual_data:   dashManualData,
   };
+  if (!body.platforms.length) { alert('Este cliente no tiene cuentas publicitarias vinculadas (Google Ads o Meta). Vincúlalas en el editor del cliente primero.'); const b = document.getElementById('dash-create-btn'); if (b) { b.disabled = false; b.textContent = 'Crear dashboard'; } return; }
 
   const btn = document.getElementById('dash-create-btn');
   btn.disabled = true;
