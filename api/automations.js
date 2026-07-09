@@ -45,8 +45,30 @@ async function getUserId(req) {
     if (!valid) return null;
     const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    _lastPlan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
     return payload.sub || null;
   } catch { return null; }
+}
+
+// ── Gate por plan: crear/editar automatizaciones es feature Pro ──────────────
+let _lastPlan = 'free';
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
+
+async function isPaidOrAdmin(userId) {
+  if (PAID_PLANS.includes(_lastPlan)) return true;
+  // Bypass admin: verificar email real via Clerk (el JWT no siempre lo trae)
+  if (userId && process.env.CLERK_SECRET_KEY) {
+    try {
+      const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+        headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+      });
+      const u = await r.json();
+      const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
+      if (ADMIN_EMAILS.includes(email)) return true;
+    } catch {}
+  }
+  return false;
 }
 
 function jsonResp(data, status = 200) {
@@ -105,8 +127,11 @@ export default async function handler(req) {
     return jsonResp({ automations: (await res.json()) || [] });
   }
 
-  // POST — crear
+  // POST — crear (solo planes pagos)
   if (req.method === 'POST') {
+    if (!(await isPaidOrAdmin(userId))) {
+      return jsonResp({ error: 'Las automatizaciones son parte del plan Pro.', upgrade: true }, 403);
+    }
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const err = validateAutomation(body);
@@ -128,8 +153,11 @@ export default async function handler(req) {
     return jsonResp({ automation: rows[0] }, 201);
   }
 
-  // PUT — actualizar (incluye toggle active)
+  // PUT — actualizar (incluye toggle active; solo planes pagos)
   if (req.method === 'PUT') {
+    if (!(await isPaidOrAdmin(userId))) {
+      return jsonResp({ error: 'Las automatizaciones son parte del plan Pro.', upgrade: true }, 403);
+    }
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     if (!body.id) return jsonResp({ error: 'Falta id' }, 400);

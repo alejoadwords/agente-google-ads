@@ -10,6 +10,27 @@ const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
 
+// ── Gate por plan en ejecución: si el dueño ya no es Pro/Agency (downgrade),
+// sus automatizaciones no corren ────────────────────────────────────────────
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
+const _planCache = {};
+async function userIsPaid(userId) {
+  if (userId in _planCache) return _planCache[userId];
+  let ok = false;
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    const u = await r.json();
+    const plan = u.public_metadata?.plan || 'free';
+    const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
+    ok = PAID_PLANS.includes(plan) || ADMIN_EMAILS.includes(email);
+  } catch (e) { console.error('[automations] plan check error:', e.message); ok = true; } // ante duda, no bloquear
+  _planCache[userId] = ok;
+  return ok;
+}
+
 function sbHeaders(prefer) {
   return {
     'Content-Type': 'application/json',
@@ -144,6 +165,11 @@ async function processJobs() {
         await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
         continue;
       }
+      if (!(await userIsPaid(auto.user_id))) {
+        await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
+        await log(auto.id, job.user_id, job.lead_id, job.step_index, 'run', 'skipped', 'Plan Free — las automatizaciones requieren plan Pro');
+        continue;
+      }
       const leads = await sb(`/leads?id=eq.${job.lead_id}&deleted_at=is.null&select=*`);
       const lead = leads?.[0];
       if (!lead) {
@@ -229,6 +255,7 @@ async function processInactiveTriggers() {
 
   for (const auto of (autos || [])) {
     try {
+      if (!(await userIsPaid(auto.user_id))) continue;
       const days = parseInt(auto.trigger.days) || 3;
       const cutoff = new Date(Date.now() - days * 864e5).toISOString();
       const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';

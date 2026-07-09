@@ -19059,7 +19059,8 @@ async function crmRenderAutos() {
 
 async function autoToggle(id, active) {
   try {
-    await fetch('/api/automations', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, active }) });
+    const data = await fetch('/api/automations', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, active }) }).then(r => r.json());
+    if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
     crmRenderAutos();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -19346,6 +19347,7 @@ async function autoBuilderSave() {
     const body = _autoEditingId ? { id: _autoEditingId, name: d.name, trigger: d.trigger, steps: d.steps, active: d.active } : d;
     const res = await fetch(`/api/automations${qs}`, { method, headers: await getAuthHeaders(), body: JSON.stringify(body) });
     const data = await res.json();
+    if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads (flujos con email, WhatsApp y condiciones) son parte del plan Pro.'); return; }
     if (data.error) { alert(data.error); return; }
     showToast('✅ Automatización ' + (_autoEditingId ? 'actualizada' : 'creada') + (d.active ? ' y activa' : ' (borrador)'), 'success');
     autoBuilderClose();
