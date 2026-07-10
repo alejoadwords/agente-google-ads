@@ -18995,6 +18995,25 @@ const AUTO_TEMPLATES = [
     ],
   },
   {
+    name: 'Seguimiento si no abre el email',
+    trigger: { type: 'lead_created' },
+    steps: [
+      { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
+      { type: 'send_email', subject: '¡Gracias por tu interés, {{nombre}}!', body: 'Hola {{nombre}},\n\nGracias por contactarnos. Muy pronto uno de nuestros asesores te escribirá.\n\nUn saludo.' },
+      { type: 'wait', hours: 24 },
+      {
+        type: 'branch', field: 'email_opened', op: 'eq', value: 'true',
+        yes: [
+          { type: 'add_note', text: 'Abrió el email de bienvenida — lead interesado' },
+        ],
+        no: [
+          { type: 'send_email', subject: '{{nombre}}, ¿recibiste mi mensaje?', body: 'Hola {{nombre}},\n\nTe escribí ayer y quizás mi correo pasó desapercibido. ¿Tienes 5 minutos esta semana para conversar?\n\nUn saludo.' },
+          { type: 'create_activity', title: 'Llamar a {{nombre}} — no abre los emails', offset_days: 1, description: 'No abrió el email de bienvenida ni el reenvío. Intentar por teléfono u otro canal.' },
+        ],
+      },
+    ],
+  },
+  {
     name: 'Lead nuevo → tarea de llamada + avisarme',
     trigger: { type: 'lead_created' },
     steps: [
@@ -19208,7 +19227,7 @@ function autoStepFields(s, path) {
       opts.map(o => '<option value="' + o[0] + '"' + (parseFloat(s.hours) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
   }
   if (s.type === 'condition') {
-    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono']];
+    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
     return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);autoRefreshNodes()">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
       '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
@@ -19235,12 +19254,18 @@ function autoStepFields(s, path) {
       '<div class="auto-vars-hint">Se envía a tu email (el dueño de la cuenta), no al lead · incluye los datos del lead al pie · Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}</div></div>';
   }
   if (s.type === 'branch') {
-    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono']];
+    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
-    return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);autoRefreshNodes()">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
-      '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
-      '<div class="auto-field"><label class="auto-label">Valor</label><input class="auto-input" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)">' +
-      '<div class="auto-vars-hint">El flujo sigue por el carril Sí o No según el resultado. Si hay pasos después de la rama, ambos carriles continúan ahí.</div></div>';
+    const boolField = s.field === 'has_email' || s.field === 'has_phone' || s.field === 'email_opened';
+    return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);' + U + '\'op\',\'eq\');' + U + '\'value\',\'true\');autoSelectNode(\'' + path + '\')">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
+      (boolField ? '' :
+        '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+        '<div class="auto-field"><label class="auto-label">Valor</label><input class="auto-input" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)"></div>') +
+      '<div class="auto-field"><div class="auto-vars-hint">' +
+      (s.field === 'email_opened'
+        ? 'Revisa si el último email enviado por este flujo fue abierto. Ponle un paso de Esperar entre el email y esta rama para dar tiempo a que lo abran.'
+        : 'El flujo sigue por el carril Sí o No según el resultado. Si hay pasos después de la rama, ambos carriles continúan ahí.') +
+      '</div></div>';
   }
   return '';
 }
@@ -19251,7 +19276,8 @@ function autoNodeSummary(s) {
   if (s.type === 'send_whatsapp') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
   if (s.type === 'wait') return (parseFloat(s.hours) >= 24 ? (s.hours / 24) + (s.hours >= 48 ? ' días' : ' día') : s.hours + 'h') + ' de espera';
   if (s.type === 'condition') {
-    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono' }[s.field] || s.field;
+    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono', email_opened: 'Abrió el email' }[s.field] || s.field;
+    if (s.field === 'email_opened') return 'Solo si abrió el email';
     return f + ' ' + ({ eq: 'es', neq: 'no es', contains: 'contiene', gte: '≥', lte: '≤' }[s.op] || s.op) + ' ' + (s.value || '');
   }
   if (s.type === 'change_stage') return '→ ' + (s.stage || '');
@@ -19262,8 +19288,8 @@ function autoNodeSummary(s) {
   }
   if (s.type === 'notify_owner') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
   if (s.type === 'branch') {
-    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono' }[s.field] || s.field;
-    if (s.field === 'has_email' || s.field === 'has_phone') return '¿' + f + '?';
+    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono', email_opened: 'Abrió el email' }[s.field] || s.field;
+    if (s.field === 'has_email' || s.field === 'has_phone' || s.field === 'email_opened') return '¿' + f + '?';
     return '¿' + f + ' ' + ({ eq: 'es', neq: 'no es', contains: 'contiene', gte: '≥', lte: '≤' }[s.op] || s.op) + ' ' + (s.value || '') + '?';
   }
   return '';

@@ -71,7 +71,7 @@ function renderVars(text, lead) {
 }
 
 // ── Acciones ─────────────────────────────────────────────────────────────────
-async function actionSendEmail(step, lead) {
+async function actionSendEmail(step, lead, auto, job) {
   if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
   if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
   const subject = renderVars(step.subject, lead);
@@ -86,7 +86,22 @@ async function actionSendEmail(step, lead) {
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
+  // Registrar el envío — la rama "¿Abrió el email?" busca el último send del job
+  if (d.id && auto && job) {
+    await sb('/email_events', 'POST', {
+      resend_id: d.id, event: 'sent', user_id: auto.user_id,
+      lead_id: lead.id, automation_id: auto.id, job_id: job.id, to_email: lead.email,
+    }, 'return=minimal').catch(e => console.error('[automations] email_events sent:', e.message));
+  }
   return { result: 'sent', detail: 'Email a ' + lead.email + ' · "' + subject + '"' };
+}
+
+// ¿El último email enviado por ESTE job fue abierto (o clickeado)?
+async function emailWasOpened(job) {
+  const sent = await sb(`/email_events?job_id=eq.${job.id}&event=eq.sent&select=resend_id&order=created_at.desc&limit=1`);
+  if (!sent?.length || !sent[0].resend_id) return false;
+  const opened = await sb(`/email_events?resend_id=eq.${encodeURIComponent(sent[0].resend_id)}&event=in.(opened,clicked)&select=id&limit=1`);
+  return !!opened?.length;
 }
 
 async function actionSendWhatsapp(step, lead) {
@@ -267,7 +282,13 @@ async function processJobs() {
         if (step.type === '_goto') { i = step.to; continue; }
 
         if (step.type === '_branch') {
-          const pass = evalCondition(step, lead);
+          let pass;
+          if (step.field === 'email_opened') {
+            const expected = String(step.value).toLowerCase() !== 'false';
+            pass = (await emailWasOpened(job)) === expected;
+          } else {
+            pass = evalCondition(step, lead);
+          }
           await log(auto.id, job.user_id, lead.id, i, 'branch', pass ? 'yes' : 'no', step.field + ' ' + step.op + ' ' + (step.value || '') + ' → rama ' + (pass ? 'Sí' : 'No'));
           if (!pass) { i = step.jumpFalse; continue; }
           i++; continue;
@@ -282,7 +303,13 @@ async function processJobs() {
         }
 
         if (step.type === 'condition') {
-          const pass = evalCondition(step, lead);
+          let pass;
+          if (step.field === 'email_opened') {
+            const expected = String(step.value).toLowerCase() !== 'false';
+            pass = (await emailWasOpened(job)) === expected;
+          } else {
+            pass = evalCondition(step, lead);
+          }
           await log(auto.id, job.user_id, lead.id, i, 'condition', pass ? 'passed' : 'stopped', step.field + ' ' + step.op + ' ' + (step.value || ''));
           if (!pass) {
             await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
@@ -293,7 +320,7 @@ async function processJobs() {
         }
 
         if (step.type === 'send_email') {
-          const r = await actionSendEmail(step, lead);
+          const r = await actionSendEmail(step, lead, auto, job);
           await log(auto.id, job.user_id, lead.id, i, 'send_email', r.result, r.detail);
           i++; continue;
         }
