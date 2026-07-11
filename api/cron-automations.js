@@ -215,6 +215,29 @@ function evalCondition(step, lead) {
   }
 }
 
+// ── Ventana horaria de envío ─────────────────────────────────────────────────
+// trigger.window = {start, end} en horas locales (America/Bogota, UTC-5 sin
+// DST). Los pasos que le escriben al lead fuera de la ventana reprograman el
+// job para la próxima apertura; el resto de pasos corre a cualquier hora.
+const TZ_OFFSET = -5; // America/Bogota
+
+function inSendWindow(win) {
+  if (!win || win.start === undefined || win.end === undefined) return true;
+  const localH = (new Date().getUTCHours() + TZ_OFFSET + 24) % 24;
+  const s = parseInt(win.start), e = parseInt(win.end);
+  return s < e ? (localH >= s && localH < e) : (localH >= s || localH < e);
+}
+
+function nextWindowStart(win) {
+  const s = parseInt(win.start);
+  const now = new Date();
+  const d = new Date(now);
+  d.setUTCMinutes(0, 0, 0);
+  d.setUTCHours((s - TZ_OFFSET) % 24); // hora local de apertura → UTC
+  if (d <= now) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString();
+}
+
 // ── Compilación de ramas ─────────────────────────────────────────────────────
 // El paso 'branch' guarda sub-pasos en yes[]/no[]. Para que el step_index
 // entero de los jobs (y las esperas) siga funcionando, el árbol se compila a
@@ -278,6 +301,15 @@ async function processJobs() {
 
       while (i < steps.length) {
         const step = steps[i];
+
+        // Ventana horaria: los mensajes al lead esperan la próxima hora hábil
+        if ((step.type === 'send_email' || step.type === 'send_whatsapp') && !inSendWindow(auto.trigger?.window)) {
+          const runAt = nextWindowStart(auto.trigger.window);
+          await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
+          await log(auto.id, job.user_id, lead.id, i, 'window', 'scheduled', 'Fuera del horario de envío (' + auto.trigger.window.start + ':00–' + auto.trigger.window.end + ':00) — continúa a las ' + auto.trigger.window.start + ':00');
+          jobDone = false;
+          break;
+        }
 
         if (step.type === '_goto') { i = step.to; continue; }
 

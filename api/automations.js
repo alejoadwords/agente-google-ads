@@ -114,6 +114,11 @@ function validateAutomation(body) {
   if (!body.name || !String(body.name).trim()) return 'El nombre es requerido';
   if (!body.trigger || !VALID_TRIGGERS.includes(body.trigger.type)) return 'Trigger inválido';
   if (body.trigger.type === 'lead_inactive' && !(parseInt(body.trigger.days) > 0)) return 'El trigger de inactividad requiere días > 0';
+  if (body.trigger.window) {
+    const w = body.trigger.window;
+    const s = parseInt(w.start), e = parseInt(w.end);
+    if (isNaN(s) || isNaN(e) || s < 0 || s > 23 || e < 0 || e > 23 || s === e) return 'La ventana horaria requiere horas válidas (0–23) y distintas';
+  }
   if (!Array.isArray(body.steps) || !body.steps.length) return 'La automatización necesita al menos un paso';
   const r = validateSteps(body.steps, 0);
   if (r.error) return r.error;
@@ -160,7 +165,7 @@ export default async function handler(req) {
     if (err) return jsonResp({ error: err }, 400);
     // El trigger webhook recibe su token secreto aquí (nunca lo elige el cliente)
     if (body.trigger.type === 'webhook') {
-      body.trigger = { type: 'webhook', token: crypto.randomUUID().replace(/-/g, '') };
+      body.trigger = { type: 'webhook', token: crypto.randomUUID().replace(/-/g, ''), ...(body.trigger.window ? { window: body.trigger.window } : {}) };
     }
     const res = await fetch(`${SUPABASE_URL}/rest/v1/automations`, {
       method: 'POST',
@@ -199,7 +204,7 @@ export default async function handler(req) {
         const curRes = await fetch(`${SUPABASE_URL}/rest/v1/automations?id=eq.${body.id}&user_id=eq.${userId}&select=trigger`, { headers: sbHeaders() });
         const cur = (await curRes.json())?.[0];
         const existingToken = cur?.trigger?.type === 'webhook' ? cur.trigger.token : null;
-        body.trigger = { type: 'webhook', token: existingToken || crypto.randomUUID().replace(/-/g, '') };
+        body.trigger = { type: 'webhook', token: existingToken || crypto.randomUUID().replace(/-/g, ''), ...(body.trigger.window ? { window: body.trigger.window } : {}) };
       }
       update.trigger = body.trigger;
       update.steps = body.steps;

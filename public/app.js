@@ -19043,10 +19043,11 @@ async function crmLoadAutomations() {
 
 function autoTriggerLabel(a) {
   const t = a.trigger || {};
-  if (t.type === 'lead_created') return 'Cuando se crea un lead';
-  if (t.type === 'stage_changed') return t.stage ? 'Cuando pasa a etapa "' + t.stage + '"' : 'Cuando cambia de etapa';
-  if (t.type === 'lead_inactive') return 'Cuando lleva ' + (t.days || 3) + '+ días sin actividad';
-  if (t.type === 'webhook') return 'Cuando llega un webhook externo';
+  const win = t.window ? ' · envíos ' + t.window.start + '–' + t.window.end + 'h' : '';
+  if (t.type === 'lead_created') return 'Cuando se crea un lead' + win;
+  if (t.type === 'stage_changed') return (t.stage ? 'Cuando pasa a etapa "' + t.stage + '"' : 'Cuando cambia de etapa') + win;
+  if (t.type === 'lead_inactive') return 'Cuando lleva ' + (t.days || 3) + '+ días sin actividad' + win;
+  if (t.type === 'webhook') return 'Cuando llega un webhook externo' + win;
   return t.type;
 }
 
@@ -19412,6 +19413,15 @@ function autoBuilderRender() {
             '<div class="auto-vars-hint">Haz un POST con JSON: {"name":"...", "email":"...", "phone":"...", "company":"...", "value":"...", "note":"..."} — crea el lead (o usa el existente por email) y dispara este flujo. Compatible con formularios, Zapier y Make.</div></div>'
           : '<div class="auto-field"><div class="auto-vars-hint">La URL única y secreta de este webhook se genera al guardar la automatización. Guárdala y vuelve a abrir el lanzador para copiarla.</div></div>'
       ) : '') +
+      (() => {
+        const cur = t.window ? t.window.start + '-' + t.window.end : '';
+        const opts = [['', 'Cualquier hora'], ['8-18', 'Solo de 8:00 a 18:00'], ['9-17', 'Solo de 9:00 a 17:00'], ['7-20', 'Solo de 7:00 a 20:00']];
+        return '<div class="auto-field"><label class="auto-label">Horario de envío</label>' +
+          '<select class="auto-input" onchange="autoWindowChange(this.value)">' +
+          opts.map(o => '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+          '</select>' +
+          '<div class="auto-vars-hint">Los emails y WhatsApp fuera del horario esperan hasta la próxima hora hábil (hora de Colombia). Los demás pasos corren a cualquier hora.</div></div>';
+      })() +
       '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>';
   } else if (_autoSelNode !== null && _autoSelNode !== 'trigger' && autoStepByPath(_autoSelNode)) {
     const s = autoStepByPath(_autoSelNode);
@@ -19479,9 +19489,20 @@ function autoRefreshNodes() {
 }
 
 function autoTriggerChange(type) {
+  const win = _autoDraft.trigger?.window; // conservar la ventana al cambiar de trigger
   _autoDraft.trigger = { type };
   if (type === 'lead_inactive') _autoDraft.trigger.days = 3;
+  if (win) _autoDraft.trigger.window = win;
   autoBuilderRender();
+}
+
+function autoWindowChange(val) {
+  if (!val) delete _autoDraft.trigger.window;
+  else {
+    const [s, e] = val.split('-').map(Number);
+    _autoDraft.trigger.window = { start: s, end: e };
+  }
+  autoRefreshNodes();
 }
 
 function autoStepAdd(type) {
