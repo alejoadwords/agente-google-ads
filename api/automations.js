@@ -78,7 +78,7 @@ function jsonResp(data, status = 200) {
   });
 }
 
-const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive'];
+const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webhook'];
 const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch'];
 
 // Valida el árbol de pasos (las ramas yes/no anidan sub-pasos, un solo nivel).
@@ -158,6 +158,10 @@ export default async function handler(req) {
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const err = validateAutomation(body);
     if (err) return jsonResp({ error: err }, 400);
+    // El trigger webhook recibe su token secreto aquí (nunca lo elige el cliente)
+    if (body.trigger.type === 'webhook') {
+      body.trigger = { type: 'webhook', token: crypto.randomUUID().replace(/-/g, '') };
+    }
     const res = await fetch(`${SUPABASE_URL}/rest/v1/automations`, {
       method: 'POST',
       headers: sbHeaders(),
@@ -189,6 +193,14 @@ export default async function handler(req) {
     if (body.trigger !== undefined || body.steps !== undefined) {
       const err = validateAutomation({ name: body.name || 'x', trigger: body.trigger, steps: body.steps });
       if (err) return jsonResp({ error: err }, 400);
+      // El token del webhook lo controla el servidor: se conserva el existente
+      // o se genera uno nuevo si el trigger cambió a webhook
+      if (body.trigger.type === 'webhook') {
+        const curRes = await fetch(`${SUPABASE_URL}/rest/v1/automations?id=eq.${body.id}&user_id=eq.${userId}&select=trigger`, { headers: sbHeaders() });
+        const cur = (await curRes.json())?.[0];
+        const existingToken = cur?.trigger?.type === 'webhook' ? cur.trigger.token : null;
+        body.trigger = { type: 'webhook', token: existingToken || crypto.randomUUID().replace(/-/g, '') };
+      }
       update.trigger = body.trigger;
       update.steps = body.steps;
     }

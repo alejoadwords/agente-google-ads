@@ -19046,6 +19046,7 @@ function autoTriggerLabel(a) {
   if (t.type === 'lead_created') return 'Cuando se crea un lead';
   if (t.type === 'stage_changed') return t.stage ? 'Cuando pasa a etapa "' + t.stage + '"' : 'Cuando cambia de etapa';
   if (t.type === 'lead_inactive') return 'Cuando lleva ' + (t.days || 3) + '+ días sin actividad';
+  if (t.type === 'webhook') return 'Cuando llega un webhook externo';
   return t.type;
 }
 
@@ -19399,9 +19400,18 @@ function autoBuilderRender() {
           '<option value="lead_created"' + (t.type === 'lead_created' ? ' selected' : '') + '>Cuando se crea un lead</option>' +
           '<option value="stage_changed"' + (t.type === 'stage_changed' ? ' selected' : '') + '>Cuando cambia de etapa</option>' +
           '<option value="lead_inactive"' + (t.type === 'lead_inactive' ? ' selected' : '') + '>Cuando lleva días sin actividad</option>' +
+          '<option value="webhook"' + (t.type === 'webhook' ? ' selected' : '') + '>Webhook externo (formularios, Zapier...)</option>' +
         '</select></div>' +
       (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
       (t.type === 'lead_inactive' ? '<div class="auto-field"><label class="auto-label">Días sin actividad</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
+      (t.type === 'webhook' ? (
+        t.token
+          ? '<div class="auto-field"><label class="auto-label">URL del webhook</label>' +
+            '<input class="auto-input" readonly value="https://app.acuarius.app/api/hook/' + esc(t.token) + '" onclick="this.select()" style="font-size:11px">' +
+            '<button class="btn-sec sm" style="width:100%;margin-top:6px" onclick="navigator.clipboard.writeText(\'https://app.acuarius.app/api/hook/' + esc(t.token) + '\');showToast(\'📋 URL copiada\',\'success\')">Copiar URL</button>' +
+            '<div class="auto-vars-hint">Haz un POST con JSON: {"name":"...", "email":"...", "phone":"...", "company":"...", "value":"...", "note":"..."} — crea el lead (o usa el existente por email) y dispara este flujo. Compatible con formularios, Zapier y Make.</div></div>'
+          : '<div class="auto-field"><div class="auto-vars-hint">La URL única y secreta de este webhook se genera al guardar la automatización. Guárdala y vuelve a abrir el lanzador para copiarla.</div></div>'
+      ) : '') +
       '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>';
   } else if (_autoSelNode !== null && _autoSelNode !== 'trigger' && autoStepByPath(_autoSelNode)) {
     const s = autoStepByPath(_autoSelNode);
@@ -19532,6 +19542,15 @@ async function autoBuilderSave() {
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads (flujos con email, WhatsApp y condiciones) son parte del plan Pro.'); return; }
     if (data.error) { alert(data.error); return; }
     showToast('✅ Automatización ' + (_autoEditingId ? 'actualizada' : 'creada') + (d.active ? ' y activa' : ' (borrador)'), 'success');
+    // Trigger webhook recién creado: reabrir mostrando el lanzador para copiar la URL generada
+    if (!_autoEditingId && d.trigger?.type === 'webhook' && data.automation?.id) {
+      await crmLoadAutomations();
+      autoBuilderOpen(data.automation.id);
+      _autoSelNode = 'trigger';
+      autoBuilderRender();
+      showToast('🔗 URL del webhook generada — cópiala desde el panel del Lanzador', 'success');
+      return;
+    }
     autoBuilderClose();
   } catch (e) { alert('Error guardando: ' + e.message); }
 }
