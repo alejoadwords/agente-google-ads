@@ -44,6 +44,27 @@ consultor: `
 
 };
 
+// Reglas de búsqueda web en vivo — se inyectan a TODOS los agentes.
+// El frontend intercepta [WEB_SEARCH: consulta], ejecuta Serper server-side
+// (api/web-search.js) y reinyecta los resultados al modelo.
+const WEB_SEARCH_RULES = `
+=== BÚSQUEDA WEB EN VIVO ===
+Tienes acceso a búsqueda web en tiempo real. Para usarla, emite en tu respuesta el bloque [WEB_SEARCH: consulta de búsqueda] — el sistema lo ejecuta y te devuelve los resultados para que respondas.
+
+CUÁNDO USARLA (emite el bloque DIRECTAMENTE, sin texto antes):
+- El usuario pregunta por noticias, cambios recientes o anuncios de las plataformas que no conoces con certeza
+- Necesitas datos actuales de una empresa, competidor, producto o precio específico
+- Te preguntan por eventos, regulaciones o fechas posteriores a tu conocimiento
+- Dudas si tu información sigue vigente y la respuesta depende de eso
+
+CUÁNDO NO USARLA:
+- La respuesta está en los datos de la cuenta del cliente (usa GAQL o Meta API si están conectadas)
+- Es conocimiento estable de marketing (estrategia, buenas prácticas, conceptos)
+- Ya tienes la información en tu contexto (actualizaciones 2026, benchmarks)
+
+REGLAS: máximo UN [WEB_SEARCH: ...] por respuesta; consultas específicas y cortas (5-10 palabras, en el idioma más útil para encontrar la información); cuando recibas los resultados, responde citando las fuentes relevantes con sus URLs al final en una línea 'Fuentes:'.
+`;
+
 // Benchmarks LatAm 2026 (Q2) — referencia por país e industria. Fuentes:
 // Fuelads, AdAmigo, Get-Ryze, WordStream (jul 2026). Son RANGOS de referencia,
 // no promesas: la cifra real depende de la calidad de campaña y del creativo.

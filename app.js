@@ -4777,6 +4777,10 @@ if(typeof KNOWLEDGE_2026!=='undefined'){
 if(typeof BENCHMARKS_LATAM!=='undefined'&&['google-ads','meta-ads','tiktok-ads','linkedin-ads','consultor'].includes(currentAgentCtx)){
   sys+='\n\n'+BENCHMARKS_LATAM;
 }
+// Búsqueda web en vivo — disponible para todos los agentes
+if(typeof WEB_SEARCH_RULES!=='undefined'){
+  sys+='\n\n'+WEB_SEARCH_RULES;
+}
 // Inyectar contexto de cliente activo (Plan Agencia)
 if(activeClientContext){
   const clientCtx = 'CLIENTE ACTIVO: ' + activeClientContext.clientName +
@@ -4835,12 +4839,15 @@ while(!streamDone){
         }
         replyFinal+=evt.delta;
         const bbl=document.getElementById('stream-bubble-text');
-        // Si la respuesta incluye una query GAQL, no mostrar el texto previo — solo el indicador de consulta
+        // Si la respuesta incluye una query GAQL o búsqueda web, no mostrar el texto previo — solo el indicador
         const hasGaql = replyFinal.includes('[GAQL_QUERY:');
+        const hasWebSearch = replyFinal.includes('[WEB_SEARCH:');
         if(hasGaql){
           if(bbl)bbl.innerHTML='<span style="color:var(--muted);font-size:13px">Consultando tu cuenta de Google Ads…</span>';
+        } else if(hasWebSearch){
+          if(bbl)bbl.innerHTML='<span style="color:var(--muted);font-size:13px">🔍 Buscando en la web…</span>';
         } else {
-          const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
+          const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[WEB_SEARCH:[^\]]*\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
           if(bbl)bbl.innerHTML=fmt(cleanForBubble);
         }
         // Calendario en tiempo real (cuando se genera desde el Studio)
@@ -5007,6 +5014,38 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           }), 150);
         }
         return;
+      }
+    }
+    // Detectar bloque WEB_SEARCH (búsqueda web en vivo para cualquier agente)
+    else if(replyFinalProcessed.includes('[WEB_SEARCH:')){
+      const wsMatch = replyFinalProcessed.match(/\[WEB_SEARCH:\s*([^\]]+)\]/);
+      if(wsMatch){
+        const wsQuery = wsMatch[1].trim();
+        replyFinalProcessed = replyFinalProcessed.replace(/\[WEB_SEARCH:[^\]]*\]/g, '').trim();
+        // Anti-loop: máximo 2 búsquedas por turno de conversación
+        const _recentWs = hist.slice(-6).filter(m => typeof m.content === 'string' && m.content.includes('_web_search_result_')).length;
+        if(_recentWs >= 2){
+          if(replyFinalProcessed){ addAgent(replyFinalProcessed); hist.push({role:'assistant',content:replyFinalProcessed}); }
+          loading=false; document.getElementById('sbtn').disabled=false; return;
+        }
+        addAgent('🔍 Buscando en la web: "' + wsQuery + '"...');
+        // País del cliente activo para localizar la búsqueda (si el perfil lo tiene)
+        const _glMap = {'colombia':'co','méxico':'mx','mexico':'mx','argentina':'ar','chile':'cl','perú':'pe','peru':'pe','ecuador':'ec','españa':'es','espana':'es','estados unidos':'us'};
+        const _clientCountry = (typeof activeClientContext !== 'undefined' && activeClientContext && activeClientContext.country ? String(activeClientContext.country).toLowerCase() : '');
+        const _gl = _glMap[_clientCountry] || 'co';
+        let wsData = null;
+        try{
+          const wsRes = await fetch('/api/web-search', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ query: wsQuery, gl: _gl }) });
+          wsData = await wsRes.json();
+        }catch(e){ wsData = { error: String(e.message || e) }; }
+        hist.push({role:'assistant',content:replyFinalProcessed || '[WEB_SEARCH: ' + wsQuery + ']'});
+        if(wsData && !wsData.error){
+          const _today = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+          hist.push({role:'user',content:'_web_search_result_ Resultados de la búsqueda web para "' + wsQuery + '" (fecha actual: ' + _today + '):\n```json\n' + JSON.stringify(wsData, null, 2) + '\n```\nResponde a la pregunta original del usuario usando estos resultados. Cita las fuentes que uses con sus URLs al final en una línea que empiece con "Fuentes:". Si los resultados no responden la pregunta, dilo honestamente.'});
+        } else {
+          hist.push({role:'user',content:'_web_search_result_ La búsqueda web falló (' + (wsData?.error || 'error desconocido') + '). Responde con tu mejor conocimiento disponible y acláralo al usuario.'});
+        }
+        await callClaude(); return;
       }
     }
     // Detectar bloque META_API
