@@ -73,35 +73,66 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Missing url field' }), { status: 400, headers: CORS });
   }
 
-  // Fetch the website with a 5-second timeout
-  let siteText = '';
-  try {
+  // Fetch directo con headers de navegador real (muchos sitios devuelven 403
+  // a cualquier User-Agent que parezca bot). Si el firewall igual lo bloquea,
+  // fallback con el scraper de Serper (misma key del módulo SEO).
+  async function fetchDirect() {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const siteRes = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Acuarius-BrandExtractor/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
-    clearTimeout(timeoutId);
-
-    if (!siteRes.ok) {
-      return new Response(
-        JSON.stringify({ error: `El sitio respondió con error ${siteRes.status}` }),
-        { status: 200, headers: CORS }
-      );
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    try {
+      const siteRes = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          'Cache-Control': 'no-cache',
+        },
+      });
+      if (!siteRes.ok) return { error: siteRes.status };
+      const html = await siteRes.text();
+      return { text: stripHtml(html).slice(0, 3000) };
+    } catch (err) {
+      return { error: err.name === 'AbortError' ? 'timeout' : err.message };
+    } finally {
+      clearTimeout(timeoutId);
     }
+  }
 
-    const html = await siteRes.text();
-    siteText = stripHtml(html).slice(0, 3000);
-  } catch (err) {
-    const msg = err.name === 'AbortError'
-      ? 'El sitio tardó demasiado en responder (timeout 5s)'
-      : `No se pudo acceder al sitio: ${err.message}`;
-    return new Response(JSON.stringify({ error: msg }), { status: 200, headers: CORS });
+  async function fetchViaSerper() {
+    const key = process.env.SERPER_API_KEY;
+    if (!key) return null;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const r = await fetch('https://scrape.serper.dev', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      clearTimeout(timeoutId);
+      if (!r.ok) return null;
+      const d = await r.json();
+      const text = d.text || stripHtml(d.html || '') || '';
+      return text ? text.slice(0, 3000) : null;
+    } catch { return null; }
+  }
+
+  let siteText = '';
+  const direct = await fetchDirect();
+  if (direct.text) {
+    siteText = direct.text;
+  } else {
+    siteText = (await fetchViaSerper()) || '';
+    if (!siteText) {
+      const detail = direct.error === 'timeout'
+        ? 'El sitio tardó demasiado en responder'
+        : typeof direct.error === 'number'
+          ? `El sitio respondió con error ${direct.error} y también bloqueó el lector alternativo`
+          : `No se pudo acceder al sitio: ${direct.error}`;
+      return new Response(JSON.stringify({ error: detail + '. Puedes completar el brief manualmente.' }), { status: 200, headers: CORS });
+    }
   }
 
   if (!siteText) {
