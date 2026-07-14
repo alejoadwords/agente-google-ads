@@ -53,7 +53,7 @@ async function askClaude(query, country) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 700,
       system: SYSTEM_PROMPT(country),
       messages: [{ role: 'user', content: query }],

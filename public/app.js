@@ -4768,6 +4768,15 @@ if(currentAgentCtx==='meta-ads'){
     : 'CUENTA_GOOGLE_ADS_CONECTADA: NO\nREGLA: Pide al usuario que conecte su cuenta en Configuración → Conexiones antes de continuar con cualquier análisis.';
   sys = _connStatus + '\n\n' + sys;
 }
+// Knowledge packs 2026 + benchmarks LatAm — mantienen a los agentes al día
+// con los cambios de plataforma posteriores al corte de conocimiento del modelo
+if(typeof KNOWLEDGE_2026!=='undefined'){
+  const _pack={'google-ads':KNOWLEDGE_2026.google,'meta-ads':KNOWLEDGE_2026.meta,'tiktok-ads':KNOWLEDGE_2026.tiktok,'consultor':KNOWLEDGE_2026.consultor}[currentAgentCtx];
+  if(_pack)sys+='\n\n'+_pack;
+}
+if(typeof BENCHMARKS_LATAM!=='undefined'&&['google-ads','meta-ads','tiktok-ads','linkedin-ads','consultor'].includes(currentAgentCtx)){
+  sys+='\n\n'+BENCHMARKS_LATAM;
+}
 // Inyectar contexto de cliente activo (Plan Agencia)
 if(activeClientContext){
   const clientCtx = 'CLIENTE ACTIVO: ' + activeClientContext.clientName +
@@ -11923,7 +11932,7 @@ async function startABVariation() {
     var mediaType = _abImageData.split(';')[0].split(':')[1];
     var b64 = _abImageData.split(',')[1];
     var fullText = await fetchChatFull({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 150 + count * 200,
       system: 'Eres experto en edicion de imagenes publicitarias con IA. Generas instrucciones de edicion para Flux Kontext, un modelo que EDITA una imagen existente siguiendo instrucciones de texto precisas. Las instrucciones deben decir EXACTAMENTE que conservar y que cambiar. Responde SOLO con JSON valido, sin markdown, sin backticks.',
       messages: [{ role: 'user', content: [
@@ -12264,7 +12273,7 @@ async function startVariationGeneration() {
   var design = null;
   try {
     var fullText = await fetchChatFull({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       system: 'You are an expert at analyzing ad design and returning precise JSON. No markdown, no backticks, only valid JSON.',
       messages: [{ role: 'user', content: [
@@ -13142,7 +13151,7 @@ async function dqLaunchCreativeConcepts() {
   var concepts = null;
   try {
     var raw = await fetchChatFull({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 3500,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }]
