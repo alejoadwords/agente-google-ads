@@ -4795,7 +4795,11 @@ const histTruncated = hist.length > MAX_HIST_MESSAGES
   ? hist.slice(hist.length - MAX_HIST_MESSAGES)
   : hist;
 // Sanitizar el system prompt: eliminar caracteres de control que rompen JSON y truncar
-const MAX_SYS = 18000;
+// 150k chars (~38k tokens): los prompts completos de los agentes (el de Google Ads
+// mide 75k) + packs 2026 + benchmarks + reglas. El backend cachea el system con
+// prompt caching, así los turnos siguientes de la conversación cuestan ~10%.
+// OJO: el límite anterior (18k) amputaba silenciosamente el 75% del prompt.
+const MAX_SYS = 150000;
 const sysSanitized = (sys || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').slice(0, MAX_SYS);
 // Sanitizar historial: truncar mensajes muy largos individualmente
 const histSanitized = histTruncated.map(m => {

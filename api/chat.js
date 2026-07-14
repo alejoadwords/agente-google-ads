@@ -94,8 +94,9 @@ export default async function handler(req) {
     );
   }
 
-  // Truncar system prompt si es muy largo (seguridad adicional)
-  const MAX_SYSTEM_CHARS = 20000;
+  // Límite de seguridad del system (los prompts completos de los agentes miden
+  // hasta ~80k chars + packs). El costo se controla con prompt caching abajo.
+  const MAX_SYSTEM_CHARS = 150000;
   const sanitizedSystem = typeof system === 'string'
     ? system.slice(0, MAX_SYSTEM_CHARS)
     : '';
@@ -112,7 +113,11 @@ export default async function handler(req) {
         model: 'claude-sonnet-5',
         max_tokens: 4000,
         stream: true,
-        system: sanitizedSystem,
+        // Prompt caching: el system (grande y estable dentro de una conversación)
+        // se cachea 5 min — los turnos siguientes pagan ~10% del costo de input
+        system: sanitizedSystem
+          ? [{ type: 'text', text: sanitizedSystem, cache_control: { type: 'ephemeral' } }]
+          : undefined,
         messages,
       }),
     });
