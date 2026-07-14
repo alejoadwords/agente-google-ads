@@ -4,7 +4,10 @@
 // plataformas anuncien cambios relevantes (fuente: investigación jul 2026).
 // REGLA: nunca usar backticks dentro de los textos (rompen el template literal).
 
-const KNOWLEDGE_2026 = {
+// NOTA: estos valores son el FALLBACK — al iniciar, la app consulta
+// /api/knowledge-packs y sobreescribe con los packs publicados (que el cron
+// mensual de auto-actualización propone y el admin aprueba por email).
+let KNOWLEDGE_2026 = {
 
 google: `
 === ACTUALIZACIONES GOOGLE ADS 2026 (conocimiento verificado a julio 2026 — prevalece sobre cualquier dato anterior que tengas) ===
@@ -68,7 +71,7 @@ REGLAS: máximo UN [WEB_SEARCH: ...] por respuesta; consultas específicas y cor
 // Benchmarks LatAm 2026 (Q2) — referencia por país e industria. Fuentes:
 // Fuelads, AdAmigo, Get-Ryze, WordStream (jul 2026). Son RANGOS de referencia,
 // no promesas: la cifra real depende de la calidad de campaña y del creativo.
-const BENCHMARKS_LATAM = `
+let BENCHMARKS_LATAM = `
 === BENCHMARKS LATAM 2026 (Q2 — usa el país y la industria del cliente activo; presenta siempre como rangos de referencia, no como promesas) ===
 META ADS — CPM promedio por país (USD): Colombia ~2.0 | México ~3.9 | Argentina ~2.5 | Chile ~3.5 | Perú ~2.2 | LatAm es 4-8x más barato por impresión que USA.
 META ADS — CPL estimado por industria (USD, México / Colombia): Restaurantes ~7.6 / ~6.6 | Gimnasios y fitness ~10.4 / ~9.0 | E-commerce ~12-18 / ~10-15 | Educación y cursos ~14-20 / ~12-17 | Salud ~18-25 / ~15-22 | Inmobiliaria ~20-30 / ~17-26 | Servicios del hogar ~24.6 / ~21.4 | Legal ~36.6 / ~31.8.

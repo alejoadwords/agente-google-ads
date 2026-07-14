@@ -39,6 +39,10 @@
     {
       "path": "/api/cron-automations",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron-knowledge",
+      "schedule": "0 12 1 * *"
     }
   ]
 }

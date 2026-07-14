@@ -4781,6 +4781,17 @@ if(typeof BENCHMARKS_LATAM!=='undefined'&&['google-ads','meta-ads','tiktok-ads',
 if(typeof WEB_SEARCH_RULES!=='undefined'){
   sys+='\n\n'+WEB_SEARCH_RULES;
 }
+// Packs publicados por el cron de auto-actualización (una sola carga por sesión;
+// sobreescriben los estáticos — ver prompts/actualizaciones-2026.js)
+if(!window._kpLoaded){
+  window._kpLoaded = true;
+  fetch('/api/knowledge-packs').then(r=>r.json()).then(d=>{
+    (d.packs||[]).forEach(p=>{
+      if(p.agent==='benchmarks'){ if(typeof BENCHMARKS_LATAM!=='undefined') BENCHMARKS_LATAM=p.content; }
+      else if(typeof KNOWLEDGE_2026!=='undefined' && KNOWLEDGE_2026[p.agent]!==undefined) KNOWLEDGE_2026[p.agent]=p.content;
+    });
+  }).catch(()=>{});
+}
 // Inyectar contexto de cliente activo (Plan Agencia)
 if(activeClientContext){
   const clientCtx = 'CLIENTE ACTIVO: ' + activeClientContext.clientName +
