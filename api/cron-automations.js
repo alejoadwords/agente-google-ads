@@ -196,9 +196,52 @@ async function actionNotifyOwner(step, lead, auto) {
   return { result: 'sent', detail: 'Notificación a ' + ownerEmail };
 }
 
+// Normalización canónica de etiquetas (idéntica a api/lead-tags.js / leads.js)
+function normalizeTag(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30);
+}
+
+const TAG_PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#EF4444','#6366F1','#84CC16','#F97316'];
+function tagColorFor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return TAG_PALETTE[h % TAG_PALETTE.length];
+}
+
+// Añade o quita una etiqueta del lead (los flujos son la vía de etiquetado
+// automático por comportamiento). add: asegura catálogo con kind 'auto'.
+async function actionTag(step, lead, auto, remove) {
+  const tag = normalizeTag(step.tag);
+  if (tag.length < 2) return { result: 'skipped', detail: 'Etiqueta inválida' };
+  const current = lead.tags || [];
+  const newTags = remove ? current.filter(t => t !== tag) : [...new Set([...current, tag])].slice(0, 15);
+  if (newTags.length === current.length && !remove) {
+    return { result: 'skipped', detail: 'El lead ya tiene la etiqueta "' + tag + '"' };
+  }
+  if (remove && newTags.length === current.length) {
+    return { result: 'skipped', detail: 'El lead no tiene la etiqueta "' + tag + '"' };
+  }
+  await sb(`/leads?id=eq.${lead.id}`, 'PATCH', { tags: newTags, updated_at: new Date().toISOString() }, 'return=minimal');
+  lead.tags = newTags; // mantener el lead en memoria al día para pasos siguientes
+  if (!remove) {
+    try {
+      const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
+      const ex = await sb(`/lead_tags?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&name=eq.${encodeURIComponent(tag)}&select=id&limit=1`);
+      if (!ex?.length) {
+        await sb('/lead_tags', 'POST', { user_id: auto.user_id, client_id: auto.client_id, name: tag, color: tagColorFor(tag), kind: 'auto' }, 'return=minimal');
+      }
+    } catch {}
+  }
+  return { result: 'done', detail: (remove ? 'Quitada' : 'Añadida') + ' etiqueta "' + tag + '"' };
+}
+
 function evalCondition(step, lead) {
   const f = step.field;
   let actual;
+  if (f === 'has_tag') {
+    const has = (lead.tags || []).includes(normalizeTag(step.value));
+    return step.op === 'neq' ? !has : has;
+  }
   if (f === 'has_email') actual = !!lead.email;
   else if (f === 'has_phone') actual = !!lead.phone;
   else if (f === 'value') actual = parseFloat(lead.value) || 0;
@@ -379,6 +422,12 @@ async function processJobs() {
         if (step.type === 'notify_owner') {
           const r = await actionNotifyOwner(step, lead, auto);
           await log(auto.id, job.user_id, lead.id, i, 'notify_owner', r.result, r.detail);
+          i++; continue;
+        }
+
+        if (step.type === 'add_tag' || step.type === 'remove_tag') {
+          const r = await actionTag(step, lead, auto, step.type === 'remove_tag');
+          await log(auto.id, job.user_id, lead.id, i, step.type, r.result, r.detail);
           i++; continue;
         }
 

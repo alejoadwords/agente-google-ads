@@ -19137,6 +19137,7 @@ const ICN_PATHS = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
   split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
+  tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
 };
 
 
@@ -19171,6 +19172,8 @@ const AUTO_STEP_META = {
   create_activity: { label: 'Crear tarea',       icon: 'calendar' },
   notify_owner:  { label: 'Notificarme',         icon: 'bell' },
   branch:        { label: 'Ramas Sí / No',       icon: 'split' },
+  add_tag:       { label: 'Añadir etiqueta',     icon: 'tag' },
+  remove_tag:    { label: 'Quitar etiqueta',     icon: 'tag' },
 };
 
 const AUTO_TEMPLATES = [
@@ -19261,6 +19264,7 @@ async function crmRenderAutos() {
   view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
   await crmLoadAutomations();
   if (typeof crmStages === 'undefined' || !crmStages.length) { try { await crmLoadStages(); } catch {} }
+  if (typeof crmTags !== 'undefined' && !crmTags.length) { try { await crmLoadTags(); } catch {} }
 
   const header =
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;max-width:760px">' +
@@ -19360,6 +19364,8 @@ const FLOW_TYPE_STYLE = {
   create_activity: { bg: 'var(--blue-lt)', fg: 'var(--blue)', icon: 'calendar' },
   notify_owner:  { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'bell' },
   branch:        { bg: 'var(--agua-grad)', fg: '#fff', icon: 'split' },
+  add_tag:       { bg: 'var(--success-bg)', fg: 'var(--success)', icon: 'tag' },
+  remove_tag:    { bg: 'var(--bg-muted)', fg: 'var(--text-2)', icon: 'tag' },
 };
 
 // ── Rutas anidadas del canvas ────────────────────────────────────────────────
@@ -19433,7 +19439,7 @@ function autoStepFields(s, path) {
       opts.map(o => '<option value="' + o[0] + '"' + (parseFloat(s.hours) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
   }
   if (s.type === 'condition') {
-    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email']];
+    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email'],['has_tag','Tiene la etiqueta']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
     return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);autoRefreshNodes()">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
       '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
@@ -19459,12 +19465,26 @@ function autoStepFields(s, path) {
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="5" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
       '<div class="auto-vars-hint">Se envía a tu email (el dueño de la cuenta), no al lead · incluye los datos del lead al pie · Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}</div></div>';
   }
+  if (s.type === 'add_tag' || s.type === 'remove_tag') {
+    const tagOpts = (typeof crmTags !== 'undefined' ? crmTags : []).map(t => '<option value="' + esc(t.name) + '">').join('');
+    return '<div class="auto-field"><label class="auto-label">Etiqueta</label>' +
+      '<input class="auto-input" list="auto-tag-datalist" value="' + esc(s.tag || '') + '" placeholder="ej: caliente, vip, no-engagement" oninput="' + U + '\'tag\',this.value)">' +
+      '<datalist id="auto-tag-datalist">' + tagOpts + '</datalist>' +
+      '<div class="auto-vars-hint">' + (s.type === 'add_tag'
+        ? 'Se añade al lead (y al catálogo si es nueva, marcada como automática ⚡). Úsala luego para filtrar, en condiciones o en otras automatizaciones.'
+        : 'Se quita del lead si la tiene. El catálogo no se toca.') + '</div></div>';
+  }
   if (s.type === 'branch') {
-    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email']];
+    const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email'],['has_tag','Tiene la etiqueta']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
     const boolField = s.field === 'has_email' || s.field === 'has_phone' || s.field === 'email_opened';
-    return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);' + U + '\'op\',\'eq\');' + U + '\'value\',\'true\');autoSelectNode(\'' + path + '\')">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
-      (boolField ? '' :
+    const tagField = s.field === 'has_tag';
+    return '<div class="auto-field"><label class="auto-label">Campo</label><select class="auto-input" onchange="' + U + '\'field\',this.value);' + U + '\'op\',\'eq\');' + U + '\'value\',this.value===\'has_tag\'?\'\':\'true\');autoSelectNode(\'' + path + '\')">' + fields.map(f => '<option value="' + f[0] + '"' + (s.field === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select></div>' +
+      (tagField ?
+        '<div class="auto-field"><label class="auto-label">Etiqueta</label>' +
+        '<input class="auto-input" list="auto-tag-datalist" value="' + esc(s.value || '') + '" placeholder="ej: vip" oninput="' + U + '\'value\',this.value);autoRefreshNodes()">' +
+        '<datalist id="auto-tag-datalist">' + (typeof crmTags !== 'undefined' ? crmTags : []).map(t => '<option value="' + esc(t.name) + '">').join('') + '</datalist></div>'
+      : boolField ? '' :
         '<div class="auto-field"><label class="auto-label">Operador</label><select class="auto-input" onchange="' + U + '\'op\',this.value)">' + ops.map(o => '<option value="' + o[0] + '"' + (s.op === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
         '<div class="auto-field"><label class="auto-label">Valor</label><input class="auto-input" value="' + esc(s.value || '') + '" oninput="' + U + '\'value\',this.value)"></div>') +
       '<div class="auto-field"><div class="auto-vars-hint">' +
@@ -19482,8 +19502,9 @@ function autoNodeSummary(s) {
   if (s.type === 'send_whatsapp') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
   if (s.type === 'wait') return (parseFloat(s.hours) >= 24 ? (s.hours / 24) + (s.hours >= 48 ? ' días' : ' día') : s.hours + 'h') + ' de espera';
   if (s.type === 'condition') {
-    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono', email_opened: 'Abrió el email' }[s.field] || s.field;
+    const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono', email_opened: 'Abrió el email', has_tag: 'Etiqueta' }[s.field] || s.field;
     if (s.field === 'email_opened') return 'Solo si abrió el email';
+    if (s.field === 'has_tag') return (s.op === 'neq' ? 'Solo si NO tiene la etiqueta "' : 'Solo si tiene la etiqueta "') + (s.value || '?') + '"';
     return f + ' ' + ({ eq: 'es', neq: 'no es', contains: 'contiene', gte: '≥', lte: '≤' }[s.op] || s.op) + ' ' + (s.value || '');
   }
   if (s.type === 'change_stage') return '→ ' + (s.stage || '');
@@ -19495,9 +19516,12 @@ function autoNodeSummary(s) {
   if (s.type === 'notify_owner') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
   if (s.type === 'branch') {
     const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono', email_opened: 'Abrió el email' }[s.field] || s.field;
+    if (s.field === 'has_tag') return '¿Tiene la etiqueta "' + (s.value || '?') + '"?';
     if (s.field === 'has_email' || s.field === 'has_phone' || s.field === 'email_opened') return '¿' + f + '?';
     return '¿' + f + ' ' + ({ eq: 'es', neq: 'no es', contains: 'contiene', gte: '≥', lte: '≤' }[s.op] || s.op) + ' ' + (s.value || '') + '?';
   }
+  if (s.type === 'add_tag') return s.tag ? '+ "' + s.tag + '"' : 'Sin etiqueta todavía';
+  if (s.type === 'remove_tag') return s.tag ? '− "' + s.tag + '"' : 'Sin etiqueta todavía';
   return '';
 }
 
@@ -19581,6 +19605,7 @@ function autoBuilderRender() {
       change_stage: 'Mueve el lead en el pipeline', add_note: 'Deja registro en el lead',
       create_activity: 'Tarea en la Agenda vinculada al lead', notify_owner: 'Email a tu correo, no al lead',
       branch: 'Divide el flujo en carriles Sí / No',
+      add_tag: 'Etiqueta al lead por comportamiento', remove_tag: 'Quita una etiqueta del lead',
     }[type];
     return '<div class="flow-block" onclick="autoStepAdd(\'' + type + '\')">' +
       '<span class="flow-block-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 14) + '</span>' +
@@ -19589,7 +19614,7 @@ function autoBuilderRender() {
   };
   const palette =
     '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
-    ['send_email', 'send_whatsapp', 'create_activity', 'notify_owner', 'change_stage', 'add_note'].map(paletteBlock).join('') +
+    ['send_email', 'send_whatsapp', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
     '<div class="flow-palette-title">Control del flujo</div>' +
     ['branch', 'wait', 'condition'].map(paletteBlock).join('') +
     '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
@@ -19722,6 +19747,8 @@ function autoStepAdd(type) {
     create_activity: { type, title: '', offset_days: 1, description: '' },
     notify_owner: { type, subject: '', body: '' },
     branch: { type, field: 'has_email', op: 'eq', value: 'true', yes: [], no: [] },
+    add_tag: { type, tag: '' },
+    remove_tag: { type, tag: '' },
   };
   const arr = autoLaneArr(lane);
   arr.push(defaults[type] || { type });

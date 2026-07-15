@@ -79,7 +79,7 @@ function jsonResp(data, status = 200) {
 }
 
 const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webhook'];
-const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch'];
+const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch', 'add_tag', 'remove_tag'];
 
 // Valida el árbol de pasos (las ramas yes/no anidan sub-pasos, un solo nivel).
 // Devuelve {error, count} — count suma todos los pasos incluidos los anidados.
@@ -96,6 +96,7 @@ function validateSteps(steps, depth) {
     if (s.type === 'add_note' && !s.text) return { error: 'La nota requiere texto', count };
     if (s.type === 'create_activity' && !s.title) return { error: 'La tarea requiere un título', count };
     if (s.type === 'notify_owner' && !s.body) return { error: 'La notificación requiere el mensaje', count };
+    if ((s.type === 'add_tag' || s.type === 'remove_tag') && !String(s.tag || '').trim()) return { error: 'El paso de etiqueta requiere el nombre de la etiqueta', count };
     if (s.type === 'branch') {
       if (depth > 0) return { error: 'Las ramas no pueden anidarse dentro de otra rama', count };
       if (!s.field || !s.op) return { error: 'La rama requiere campo y operador', count };
