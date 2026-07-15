@@ -270,6 +270,14 @@ async function initAuth(){
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     updateUserUI(clerkInstance.user);
+    // Conversión: registro completado (usuario creado hace <10 min, una sola vez)
+    try {
+      const createdAt = clerkInstance.user.createdAt ? new Date(clerkInstance.user.createdAt).getTime() : 0;
+      if (createdAt && Date.now() - createdAt < 600000 && !localStorage.getItem('acuarius_signup_tracked')) {
+        localStorage.setItem('acuarius_signup_tracked', '1');
+        track('sign_up', { method: 'clerk' });
+      }
+    } catch(e){}
     // Registrar referido pendiente si llegó con ?ref=CODE
     setTimeout(() => { if (typeof registerPendingReferral === 'function') registerPendingReferral(); }, 1500);
     return true;
@@ -13590,6 +13598,7 @@ let metaActiveAccount = null;
 (function checkMetaCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('meta_connected') === 'true') {
+    track('account_connected', { platform: 'meta_ads' });
     const token    = params.get('meta_token');   // solo en fallback sin userId
     const name     = params.get('meta_name');
     const email    = params.get('meta_email');
@@ -14146,6 +14155,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('ads_connected') === 'true') {
+    track('account_connected', { platform: 'google_ads' });
     const token    = params.get('ads_token');
     const refresh  = params.get('ads_refresh');
     const email    = params.get('ads_email');
@@ -14849,6 +14859,7 @@ function copyReferralLink() {
 
 // Abrir/cerrar modal de referidos
 function openUpgradeFlow(reason) {
+  track('upgrade_flow_opened', { reason: String(reason || '').slice(0, 80) });
   const existing = document.getElementById('upgrade-flow-modal');
   if (existing) { existing.remove(); }
   const modal = document.createElement('div');
@@ -16646,6 +16657,7 @@ async function crmSaveLead() {
       }
       const data = await res.json();
       crmLeads.unshift(data.lead);
+      track('crm_lead_created', { source: data.lead.source || 'manual' });
       // log creation activity
       await fetch('/api/lead-activities', {
         method: 'POST',
@@ -19822,6 +19834,7 @@ async function autoBuilderSave() {
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads (flujos con email, WhatsApp y condiciones) son parte del plan Pro.'); return; }
     if (data.error) { alert(data.error); return; }
     showToast('✅ Automatización ' + (_autoEditingId ? 'actualizada' : 'creada') + (d.active ? ' y activa' : ' (borrador)'), 'success');
+    if (!_autoEditingId) track('automation_created', { trigger: d.trigger?.type || '' });
     // Trigger webhook recién creado: reabrir mostrando el lanzador para copiar la URL generada
     if (!_autoEditingId && d.trigger?.type === 'webhook' && data.automation?.id) {
       await crmLoadAutomations();
@@ -19897,6 +19910,7 @@ function connectGoogleCalendar() {
 (function checkGcalCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('gcal_connected')) {
+    track('account_connected', { platform: 'google_calendar' });
     const email = params.get('gcal_email') || '';
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(() => {
@@ -20195,3 +20209,14 @@ function agnScheduleForLead() {
     }, 200);
   }
 })();
+
+// ── Eventos de conversión → dataLayer (GTM los convierte en conversiones
+// de GA4/Meta sin tocar código). Eventos: sign_up, account_connected,
+// crm_lead_created, automation_created, upgrade_flow_opened (+ purchase
+// en success.html). function declaration → hoisted, usable en todo el archivo.
+function track(event, params) {
+  try {
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(Object.assign({ event: event }, params || {}));
+  } catch (e) {}
+}

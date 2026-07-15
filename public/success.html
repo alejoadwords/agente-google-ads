@@ -85,6 +85,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if (plan === 'agencia') {
       document.getElementById('plan-badge').textContent = 'Plan Agencia';
     }
+    // Conversión: compra completada → dataLayer (GTM la reenvía a GA4/Meta).
+    // Valor según plan ($99 agencia / $39 pro); dedupe por sesión del navegador.
+    try {
+      if (!sessionStorage.getItem('acuarius_purchase_tracked')) {
+        sessionStorage.setItem('acuarius_purchase_tracked', '1');
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: 'purchase',
+          plan: plan === 'agencia' ? 'agency' : 'pro',
+          value: plan === 'agencia' ? 99 : 39,
+          currency: 'USD',
+        });
+      }
+    } catch (e) {}
   </script>
 </body>
 </html>
