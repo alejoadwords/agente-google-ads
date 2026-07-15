@@ -20102,3 +20102,96 @@ function agnScheduleForLead() {
   crmCloseDetail();
   agnModalOpen(l.id);
 }
+
+// ══ ROUTER: URLs AMIGABLES ═════════════════════════════════════════════════
+// La URL refleja dónde está el usuario (medición interna + deep links).
+// Envuelve la navegación existente (showView / crmSetView / setAgentContext)
+// sin modificarla: cada navegación actualiza la URL con pushState, y una URL
+// profunda o el botón atrás re-dirigen la navegación. El servidor sirve
+// index.html para cualquier ruta (rewrite catch-all en vercel.json).
+(function () {
+  const AGENT_KEYS = ['google-ads', 'meta-ads', 'tiktok-ads', 'linkedin-ads', 'seo', 'social', 'consultor'];
+  const CRM_SUB = { kanban: '', list: '/contactos', agents: '/agentes-ia', inbox: '/inbox', analytics: '/analisis', autos: '/automatizaciones', agenda: '/agenda' };
+  const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
+  const TITLES = {
+    '/': 'Acuarius', '/clientes': 'Panel de clientes · Acuarius', '/studio': 'Social Studio · Acuarius',
+    '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
+  };
+  const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
+  const CRM_TITLES = { kanban: 'Leads', list: 'Contactos', agents: 'Agentes IA', inbox: 'Inbox', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda' };
+
+  let currentView = 'home';
+  let applying = false;   // evita pushState mientras una URL dirige la navegación
+  let firstSync = true;   // la primera sincronización reemplaza en vez de apilar
+
+  function currentPath() {
+    if (currentView === 'chat') return '/agente/' + (typeof currentAgentCtx !== 'undefined' ? currentAgentCtx : 'google-ads');
+    if (currentView === 'crm') return '/leads' + (CRM_SUB[typeof crmView !== 'undefined' ? crmView : 'kanban'] || '');
+    return VIEW_PATHS[currentView] || '/';
+  }
+
+  function currentTitle() {
+    if (currentView === 'chat') return 'Agente ' + (AGENT_TITLES[typeof currentAgentCtx !== 'undefined' ? currentAgentCtx : ''] || '') + ' · Acuarius';
+    if (currentView === 'crm') return (CRM_TITLES[typeof crmView !== 'undefined' ? crmView : 'kanban'] || 'Leads') + ' · Acuarius';
+    return TITLES[currentPath()] || 'Acuarius';
+  }
+
+  function sync() {
+    if (applying) return;
+    const path = currentPath();
+    document.title = currentTitle();
+    if (location.pathname === path) return;
+    if (firstSync) { history.replaceState({ path }, '', path); firstSync = false; }
+    else history.pushState({ path }, '', path);
+  }
+
+  function applyRoute(path) {
+    applying = true;
+    try {
+      const p = (path || '/').replace(/\/+$/, '') || '/';
+      const agentMatch = p.match(/^\/agente\/([a-z-]+)$/);
+      if (agentMatch && AGENT_KEYS.includes(agentMatch[1])) {
+        openAgent(agentMatch[1]);
+      } else if (p === '/leads' || p.startsWith('/leads/')) {
+        showView('crm');
+        if (typeof crmInit === 'function') crmInit();
+        const sub = Object.keys(CRM_SUB).find(k => CRM_SUB[k] === p.slice(6)) || 'kanban';
+        setTimeout(function () { crmSetView(sub); }, 60);
+      } else if (p === '/clientes') { showView('agency'); }
+      else if (p === '/studio') { showView('social-studio'); }
+      else if (p === '/academia') { if (typeof openAcademia === 'function') openAcademia(); else showView('academia'); }
+      else if (p === '/roadmap') { showView('roadmap'); }
+      else if (p === '/proyecto-seo') { showView('seo-project'); }
+      else { showView('home'); if (p !== '/') history.replaceState({ path: '/' }, '', '/'); }
+      document.title = currentTitle();
+    } catch (e) { console.error('[router]', e); }
+    setTimeout(function () { applying = false; }, 150);
+  }
+
+  // ── Instrumentar la navegación existente ──────────────────────────────────
+  const _showView = showView;
+  showView = function (id) { _showView(id); currentView = id; sync(); };
+
+  const _crmSetView2 = crmSetView;
+  crmSetView = function (v) { _crmSetView2(v); if (currentView === 'crm') sync(); };
+
+  const _setAgentContext = setAgentContext;
+  setAgentContext = function (ctx, showGuide) { _setAgentContext(ctx, showGuide); if (currentView === 'chat') sync(); };
+
+  // Atrás / adelante del navegador
+  window.addEventListener('popstate', function () { applyRoute(location.pathname); });
+
+  // Deep link inicial: aplicar la ruta cuando la app terminó de arrancar
+  // (loader oculto = Clerk listo y vista inicial renderizada)
+  const deepPath = location.pathname;
+  if (deepPath !== '/' && deepPath !== '/index.html') {
+    let tries = 0;
+    const iv = setInterval(function () {
+      tries++;
+      const loader = document.getElementById('app-loader');
+      const ready = !loader || loader.classList.contains('hidden') || loader.style.display === 'none';
+      if (ready) { clearInterval(iv); applyRoute(deepPath); }
+      else if (tries > 100) { clearInterval(iv); } // 20s máx
+    }, 200);
+  }
+})();
