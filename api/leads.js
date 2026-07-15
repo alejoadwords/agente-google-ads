@@ -46,6 +46,54 @@ function jsonResp(data, status = 200) {
   });
 }
 
+// ── Etiquetas ────────────────────────────────────────────────────────────────
+// Normalización canónica (misma regla que api/lead-tags.js): minúsculas,
+// espacios colapsados, máx 30 chars, máx 15 etiquetas por lead.
+function normalizeTag(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30);
+}
+
+const TAG_PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#EF4444','#6366F1','#84CC16','#F97316'];
+function tagColorFor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return TAG_PALETTE[h % TAG_PALETTE.length];
+}
+
+// Normaliza las etiquetas del lead, agrega la auto-etiqueta de fuente (si
+// aplica) y garantiza que todas existan en el catálogo lead_tags con color.
+async function prepareTags(userId, clientId, tags, source) {
+  const set = new Set((Array.isArray(tags) ? tags : []).map(normalizeTag).filter(t => t.length >= 2));
+  let autoTag = null;
+  if (source) {
+    autoTag = normalizeTag(String(source).replace(/_/g, ' '));
+    if (autoTag.length >= 2) set.add(autoTag);
+  }
+  const list = [...set].slice(0, 15);
+  if (!list.length) return [];
+  // Asegurar catálogo (fire-and-forget por etiqueta faltante)
+  try {
+    const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+    const exRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/lead_tags?user_id=eq.${encodeURIComponent(userId)}${scope}&select=name`,
+      { headers: sbHeaders() }
+    );
+    const existing = new Set(((await exRes.json()) || []).map(t => t.name));
+    const missing = list.filter(t => !existing.has(t));
+    if (missing.length) {
+      await fetch(`${SUPABASE_URL}/rest/v1/lead_tags`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify(missing.map(t => ({
+          user_id: userId, client_id: clientId, name: t, color: tagColorFor(t),
+          kind: t === autoTag ? 'auto' : 'manual',
+        }))),
+      });
+    }
+  } catch {} // el catálogo es best-effort — las etiquetas del lead no se bloquean
+  return list;
+}
+
 // Encola las automatizaciones que coincidan con el trigger (lead_created /
 // stage_changed). El motor las ejecuta en api/cron-automations.js.
 async function enqueueAutomations(userId, lead, triggerType, newStage) {
@@ -116,6 +164,9 @@ export default async function handler(req) {
     const { name, email, phone, company, stage, notes, source, tags, custom_fields } = body;
     if (!name) return jsonResp({ error: 'El nombre es requerido' }, 400);
 
+    // Etiquetas: normalizar + auto-tag por fuente + asegurar catálogo
+    const leadTags = await prepareTags(userId, clientId, tags, source || 'manual');
+
     // Plan-based lead limit check
     let userPlan = 'free';
     let leadsExtra = 0;
@@ -160,7 +211,7 @@ export default async function handler(req) {
       stage_position: maxPos + 1000,
       notes: notes?.trim() || null,
       source: source || 'manual',
-      tags: tags || [],
+      tags: leadTags,
       custom_fields: custom_fields || {},
     };
     const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
@@ -187,6 +238,10 @@ export default async function handler(req) {
     const update = {};
     for (const k of allowed) {
       if (fields[k] !== undefined) update[k] = fields[k];
+    }
+    // Etiquetas editadas: normalizar y asegurar catálogo (sin auto-tag de fuente)
+    if (update.tags !== undefined) {
+      update.tags = await prepareTags(userId, clientId, update.tags, null);
     }
     update.updated_at = new Date().toISOString();
 

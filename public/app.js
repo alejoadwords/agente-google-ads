@@ -16238,6 +16238,89 @@ function crmRender() {
   crmUpdateSidebarCount();
 }
 
+// ── Etiquetas del CRM ─────────────────────────────────────────────────────────
+// Catálogo en lead_tags (colores, tipo auto/manual); las etiquetas de cada lead
+// viven en leads.tags. Misma normalización y paleta que el backend, así el
+// color es idéntico aunque la etiqueta aún no esté en el catálogo.
+let crmTags = [];
+let crmFilterTags = [];
+const TAG_PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#EF4444','#6366F1','#84CC16','#F97316'];
+
+function normalizeTag(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30);
+}
+
+function tagColor(name) {
+  const cat = crmTags.find(t => t.name === name);
+  if (cat && cat.color) return cat.color;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return TAG_PALETTE[h % TAG_PALETTE.length];
+}
+
+function tagIsAuto(name) {
+  const cat = crmTags.find(t => t.name === name);
+  return cat ? cat.kind === 'auto' : false;
+}
+
+function tagChipHtml(name, removable) {
+  const c = tagColor(name);
+  return '<span class="tag-chip" style="background:' + c + '1A;color:' + c + '" title="' + (tagIsAuto(name) ? 'Etiqueta automática' : 'Etiqueta') + '">' +
+    (tagIsAuto(name) ? '⚡' : '') + esc(name) +
+    (removable ? '<button class="tag-chip-x" onclick="event.stopPropagation();crmDetailRemoveTag(\'' + esc(name) + '\')" title="Quitar">✕</button>' : '') +
+    '</span>';
+}
+
+async function crmLoadTags() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const res = await fetch('/api/lead-tags' + qs, { headers: await getAuthHeaders() });
+    crmTags = (await res.json()).tags || [];
+  } catch { crmTags = []; }
+  crmRenderTagFilter();
+}
+
+async function crmEnsureTag(name) {
+  const n = normalizeTag(name);
+  if (n.length < 2) return null;
+  if (crmTags.find(t => t.name === n)) return n;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const res = await fetch('/api/lead-tags' + qs, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ name: n }) });
+    const d = await res.json();
+    if (d.tag && !crmTags.find(t => t.name === d.tag.name)) crmTags.push(d.tag);
+  } catch {}
+  return n;
+}
+
+// Filtro por etiquetas: pills clicables junto a los quick filters (AND)
+function crmRenderTagFilter() {
+  const wrap = document.getElementById('crm-tag-filter');
+  if (!wrap) return;
+  // Etiquetas en uso (catálogo + las que existan en leads aunque falten en catálogo)
+  const inUse = new Set(crmTags.map(t => t.name));
+  (crmLeads || []).forEach(l => (l.tags || []).forEach(t => inUse.add(t)));
+  const names = [...inUse].sort();
+  if (!names.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = names.slice(0, 14).map(n => {
+    const c = tagColor(n);
+    const on = crmFilterTags.includes(n);
+    return '<button class="tag-chip tag-filter-chip' + (on ? ' on' : '') + '" style="' +
+      (on ? 'background:' + c + ';color:#fff' : 'background:' + c + '1A;color:' + c) +
+      '" onclick="crmToggleTagFilter(\'' + esc(n) + '\')">' + esc(n) + '</button>';
+  }).join('') + (crmFilterTags.length ? '<button class="tag-filter-clear" onclick="crmFilterTags=[];crmRenderTagFilter();crmRender();crmUpdateLeadsStats()">limpiar</button>' : '');
+}
+
+function crmToggleTagFilter(name) {
+  const i = crmFilterTags.indexOf(name);
+  if (i >= 0) crmFilterTags.splice(i, 1); else crmFilterTags.push(name);
+  crmRenderTagFilter();
+  crmRender();
+  crmUpdateLeadsStats();
+}
+
 function crmGetFilteredLeads() {
   let leads = [...crmLeads];
   if (crmSearchQuery) {
@@ -16250,6 +16333,7 @@ function crmGetFilteredLeads() {
     );
   }
   if (crmFilterSource) leads = leads.filter(l => l.source === crmFilterSource);
+  if (crmFilterTags.length) leads = leads.filter(l => crmFilterTags.every(t => (l.tags || []).includes(t)));
   if (crmQuickFilter === 'inactive') {
     const now = Date.now();
     leads = leads.filter(l => {
@@ -16402,6 +16486,7 @@ function crmCardHTML(lead, now) {
     '</div>' +
     (lead.company ? '<div class="crm-card-company"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>' + esc(lead.company) + '</div>' : '') +
     (lead.phone ? '<div class="crm-card-phone"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') +
+    ((lead.tags || []).length ? '<div class="crm-card-tags">' + lead.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (lead.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (lead.tags.length - 3) + '</span>' : '') + '</div>' : '') +
     '<div class="crm-card-footer">' +
     '<div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') + '</div>' +
     (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
@@ -16455,7 +16540,7 @@ function crmRenderList() {
   }
   tbody.innerHTML = filtered.map(l => {
     const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' };
-    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(sourceLabels[l.source] || l.source || 'Manual') + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
+    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + ((l.tags || []).length ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(sourceLabels[l.source] || l.source || 'Manual') + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
   }).join('');
   crmUpdateLeadsStats();
 }
@@ -16607,8 +16692,7 @@ async function crmOpenDetail(leadId) {
   document.getElementById('crm-d-source').textContent = sourceLabels[lead.source] || lead.source || 'Manual';
   const valueRow = document.getElementById('crm-d-value-row');
   if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
-  const tagsRow = document.getElementById('crm-d-tags-row');
-  if (tagsRow) { tagsRow.style.display = lead.tags && lead.tags.length > 0 ? 'flex' : 'none'; const tagsEl = document.getElementById('crm-d-tags'); if (tagsEl) tagsEl.textContent = lead.tags ? lead.tags.join(', ') : ''; }
+  crmRenderDetailTags();
   const notesSection = document.getElementById('crm-d-notes-section');
   if (lead.notes) {
     notesSection.style.display = 'flex';
@@ -16625,6 +16709,62 @@ async function crmOpenDetail(leadId) {
   const suggestResult = document.getElementById('crm-d-suggest-result');
   if (suggestResult) suggestResult.style.display = 'none';
   await Promise.all([crmLoadActivities(leadId), crmLoadLinkedConversations(leadId)]);
+}
+
+// Editor de etiquetas en el detalle: chips con ✕ + input con autocompletado
+function crmRenderDetailTags() {
+  const row = document.getElementById('crm-d-tags-row');
+  if (!row || !crmDetailLead) return;
+  row.style.display = 'flex';
+  const tags = crmDetailLead.tags || [];
+  const el = document.getElementById('crm-d-tags');
+  if (!el) return;
+  el.innerHTML = '<div class="crm-d-tags-wrap">' +
+    tags.map(t => tagChipHtml(t, true)).join('') +
+    '<input class="crm-d-tag-input" id="crm-d-tag-input" list="crm-tag-datalist" placeholder="+ etiqueta" ' +
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();crmDetailAddTag(this.value);this.value=\'\'}" ' +
+      'onchange="if(this.value){crmDetailAddTag(this.value);this.value=\'\'}">' +
+    '<datalist id="crm-tag-datalist">' + crmTags.filter(t => !tags.includes(t.name)).map(t => '<option value="' + esc(t.name) + '">').join('') + '</datalist>' +
+    '</div>';
+}
+
+async function crmDetailSaveTags(newTags) {
+  if (!crmDetailLead) return;
+  const lead = crmDetailLead;
+  const prev = lead.tags || [];
+  lead.tags = newTags;
+  crmRenderDetailTags();
+  crmRender();
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const res = await fetch('/api/leads' + qs, { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id: lead.id, tags: newTags }) });
+    const d = await res.json();
+    if (d.lead) { lead.tags = d.lead.tags || newTags; }
+    await crmLoadTags(); // refrescar catálogo (colores de etiquetas nuevas)
+    crmRenderDetailTags();
+    crmRender();
+  } catch (e) {
+    lead.tags = prev;
+    crmRenderDetailTags();
+    crmRender();
+    showToast('No se pudo guardar la etiqueta', 'error');
+  }
+}
+
+async function crmDetailAddTag(name) {
+  const n = normalizeTag(name);
+  if (n.length < 2 || !crmDetailLead) return;
+  const tags = crmDetailLead.tags || [];
+  if (tags.includes(n)) return;
+  if (tags.length >= 15) { showToast('Máximo 15 etiquetas por lead', 'error'); return; }
+  await crmEnsureTag(n);
+  crmDetailSaveTags([...tags, n]);
+}
+
+function crmDetailRemoveTag(name) {
+  if (!crmDetailLead) return;
+  crmDetailSaveTags((crmDetailLead.tags || []).filter(t => t !== name));
 }
 
 function crmCloseDetail() {
@@ -17405,8 +17545,9 @@ async function crmCopilotAction(action, btn) {
 async function crmInit() {
   if (crmInited) { crmRender(); return; }
   crmInited = true;
-  await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents()]);
+  await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags()]);
   crmRender(); // garantiza render con todos los datos cargados
+  crmRenderTagFilter();
   crmLoadInbox();
   crmUpdateSidebarCount();
 }

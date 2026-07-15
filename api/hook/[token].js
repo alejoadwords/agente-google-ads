@@ -63,6 +63,15 @@ export default async function handler(req, res) {
     const value = pick(body, 'value', 'valor', 'budget', 'presupuesto');
     const source = pick(body, 'source', 'fuente', 'utm_source') || 'webhook';
     const note = pick(body, 'note', 'nota', 'message', 'mensaje', 'comentario');
+    // Etiquetas: las del payload (array o string separado por comas) + auto por fuente
+    const normTag = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30);
+    const rawTags = Array.isArray(body.tags || body.etiquetas)
+      ? (body.tags || body.etiquetas)
+      : String(body.tags || body.etiquetas || '').split(',');
+    const tagSet = new Set(rawTags.map(normTag).filter(t => t.length >= 2));
+    const autoTag = normTag(source.replace(/_/g, ' '));
+    if (autoTag.length >= 2) tagSet.add(autoTag);
+    const leadTags = [...tagSet].slice(0, 15);
 
     // 3. Reutilizar lead existente por email (mismo usuario y scope de cliente)
     let lead = null;
@@ -81,12 +90,17 @@ export default async function handler(req, res) {
         value: value ? parseFloat(String(value).replace(/[^\d.]/g, '')) || null : null,
         stage: 'nuevo',
         source,
+        tags: leadTags,
         notes: note ? '📥 [Webhook] ' + note.slice(0, 500) : null,
       });
       lead = rows[0];
-    } else if (note) {
-      const newNotes = (lead.notes ? lead.notes + '\n' : '') + '📥 [Webhook] ' + note.slice(0, 500);
-      await sb(`/leads?id=eq.${lead.id}`, 'PATCH', { notes: newNotes, updated_at: new Date().toISOString() }, 'return=minimal');
+    } else {
+      // Lead existente: sumar nota y/o etiquetas nuevas sin duplicar
+      const patch = { updated_at: new Date().toISOString() };
+      if (note) patch.notes = (lead.notes ? lead.notes + '\n' : '') + '📥 [Webhook] ' + note.slice(0, 500);
+      const mergedTags = [...new Set([...(lead.tags || []), ...leadTags])].slice(0, 15);
+      if (mergedTags.length !== (lead.tags || []).length) patch.tags = mergedTags;
+      if (note || patch.tags) await sb(`/leads?id=eq.${lead.id}`, 'PATCH', patch, 'return=minimal');
     }
 
     // 5. Encolar el flujo (dedupe: si ya hay un job pendiente de esta automatización para este lead, no duplicar)
