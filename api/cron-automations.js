@@ -223,6 +223,25 @@ async function actionTag(step, lead, auto, remove) {
   }
   await sb(`/leads?id=eq.${lead.id}`, 'PATCH', { tags: newTags, updated_at: new Date().toISOString() }, 'return=minimal');
   lead.tags = newTags; // mantener el lead en memoria al día para pasos siguientes
+  // Encadenamiento: la etiqueta añadida puede disparar otras automatizaciones
+  // (trigger tag_added, una vez por lead — el dedupe corta cualquier bucle)
+  if (!remove) {
+    try {
+      const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
+      const autos = await sb(`/automations?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&active=eq.true&trigger->>type=eq.tag_added&select=id,trigger`);
+      for (const a of (autos || [])) {
+        if (a.id === auto.id) continue; // nunca re-disparar el flujo que está corriendo
+        if (a.trigger.tag && a.trigger.tag !== tag) continue;
+        const existing = await sb(`/automation_jobs?automation_id=eq.${a.id}&lead_id=eq.${lead.id}&select=id&limit=1`);
+        if (existing?.length) continue;
+        await sb('/automation_jobs', 'POST', {
+          automation_id: a.id, user_id: auto.user_id, lead_id: lead.id,
+          step_index: 0, status: 'pending', run_at: new Date().toISOString(),
+        }, 'return=minimal');
+        await log(a.id, auto.user_id, lead.id, 0, 'trigger', 'enqueued', 'Etiqueta "' + tag + '" añadida por la automatización "' + auto.name + '"');
+      }
+    } catch {}
+  }
   if (!remove) {
     try {
       const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';

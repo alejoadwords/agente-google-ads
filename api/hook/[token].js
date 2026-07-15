@@ -30,6 +30,25 @@ async function sb(path, method = 'GET', body = null, prefer) {
   return text ? JSON.parse(text) : null;
 }
 
+// Encola automatizaciones con trigger tag_added para etiquetas recién añadidas
+// (una sola vez por lead — dedupe con historial completo, evita bucles)
+async function enqueueTagAdded(userId, clientId, leadId, addedTags) {
+  if (!addedTags.length) return;
+  try {
+    const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
+    const autos = await sb(`/automations?user_id=eq.${encodeURIComponent(userId)}${scope}&active=eq.true&trigger->>type=eq.tag_added&select=id,trigger`);
+    const matching = (autos || []).filter(a => !a.trigger.tag || addedTags.includes(a.trigger.tag));
+    for (const a of matching) {
+      const existing = await sb(`/automation_jobs?automation_id=eq.${a.id}&lead_id=eq.${leadId}&select=id&limit=1`);
+      if (existing?.length) continue;
+      await sb('/automation_jobs', 'POST', {
+        automation_id: a.id, user_id: userId, lead_id: leadId,
+        step_index: 0, status: 'pending', run_at: new Date().toISOString(),
+      }, 'return=minimal');
+    }
+  } catch (e) { console.error('[hook] enqueueTagAdded:', e.message); }
+}
+
 // Campos aceptados con alias en español/inglés (formularios variados)
 function pick(body, ...keys) {
   for (const k of keys) {
@@ -111,13 +130,16 @@ export default async function handler(req, res) {
         notes: note ? '📥 [Webhook] ' + note.slice(0, 500) : null,
       });
       lead = rows[0];
+      if (leadTags.length) await enqueueTagAdded(auto.user_id, auto.client_id, lead.id, leadTags);
     } else {
       // Lead existente: sumar nota y/o etiquetas nuevas sin duplicar
       const patch = { updated_at: new Date().toISOString() };
       if (note) patch.notes = (lead.notes ? lead.notes + '\n' : '') + '📥 [Webhook] ' + note.slice(0, 500);
       const mergedTags = [...new Set([...(lead.tags || []), ...leadTags])].slice(0, 15);
-      if (mergedTags.length !== (lead.tags || []).length) patch.tags = mergedTags;
+      const addedToExisting = mergedTags.filter(t => !(lead.tags || []).includes(t));
+      if (addedToExisting.length) patch.tags = mergedTags;
       if (note || patch.tags) await sb(`/leads?id=eq.${lead.id}`, 'PATCH', patch, 'return=minimal');
+      if (addedToExisting.length) await enqueueTagAdded(auto.user_id, auto.client_id, lead.id, addedToExisting);
     }
 
     // 5. Encolar el flujo (dedupe: si ya hay un job pendiente de esta automatización para este lead, no duplicar)

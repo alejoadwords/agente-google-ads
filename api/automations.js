@@ -78,7 +78,7 @@ function jsonResp(data, status = 200) {
   });
 }
 
-const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webhook'];
+const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webhook', 'tag_added'];
 const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch', 'add_tag', 'remove_tag'];
 
 // Valida el árbol de pasos (las ramas yes/no anidan sub-pasos, un solo nivel).

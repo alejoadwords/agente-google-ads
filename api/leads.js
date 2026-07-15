@@ -95,8 +95,9 @@ async function prepareTags(userId, clientId, tags, source) {
 }
 
 // Encola las automatizaciones que coincidan con el trigger (lead_created /
-// stage_changed). El motor las ejecuta en api/cron-automations.js.
-async function enqueueAutomations(userId, lead, triggerType, newStage) {
+// stage_changed / tag_added). El motor las ejecuta en api/cron-automations.js.
+// extra: la etapa nueva (stage_changed) o el array de etiquetas añadidas (tag_added).
+async function enqueueAutomations(userId, lead, triggerType, extra) {
   try {
     const scope = lead.client_id ? `&client_id=eq.${lead.client_id}` : '&client_id=is.null';
     const r = await fetch(
@@ -105,10 +106,21 @@ async function enqueueAutomations(userId, lead, triggerType, newStage) {
     );
     if (!r.ok) return;
     const autos = await r.json();
-    const matching = (autos || []).filter(a =>
-      a.trigger?.type === triggerType &&
-      (triggerType !== 'stage_changed' || !a.trigger.stage || a.trigger.stage === newStage)
-    );
+    let matching = (autos || []).filter(a => {
+      if (a.trigger?.type !== triggerType) return false;
+      if (triggerType === 'stage_changed') return !a.trigger.stage || a.trigger.stage === extra;
+      if (triggerType === 'tag_added') return !a.trigger.tag || (extra || []).includes(a.trigger.tag);
+      return true;
+    });
+    // tag_added: se dispara UNA sola vez por lead (dedupe con historial completo)
+    // — evita bucles cuando una automatización etiqueta y otra reacciona a esa etiqueta
+    if (triggerType === 'tag_added' && matching.length) {
+      const checks = await Promise.all(matching.map(a =>
+        fetch(`${SUPABASE_URL}/rest/v1/automation_jobs?automation_id=eq.${a.id}&lead_id=eq.${lead.id}&select=id&limit=1`, { headers: sbHeaders() })
+          .then(res => res.json()).then(rows => ({ a, exists: !!rows?.length })).catch(() => ({ a, exists: true }))
+      ));
+      matching = checks.filter(c => !c.exists).map(c => c.a);
+    }
     if (!matching.length) return;
     await fetch(`${SUPABASE_URL}/rest/v1/automation_jobs`, {
       method: 'POST',
@@ -221,8 +233,11 @@ export default async function handler(req) {
     });
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
-    // Trigger de automatizaciones: lead creado
-    if (rows[0]) await enqueueAutomations(userId, rows[0], 'lead_created');
+    // Triggers de automatizaciones: lead creado + etiquetas iniciales
+    if (rows[0]) {
+      await enqueueAutomations(userId, rows[0], 'lead_created');
+      if (leadTags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadTags);
+    }
     return jsonResp({ lead: rows[0] }, 201);
   }
 
@@ -245,12 +260,15 @@ export default async function handler(req) {
     }
     update.updated_at = new Date().toISOString();
 
-    // Si cambia la etapa, capturar la anterior para el trigger stage_changed
+    // Si cambia la etapa o las etiquetas, capturar el estado anterior para los triggers
     let prevStage = null;
-    if (update.stage !== undefined) {
+    let prevTags = null;
+    if (update.stage !== undefined || update.tags !== undefined) {
       try {
-        const pre = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=stage`, { headers: sbHeaders() });
-        prevStage = (await pre.json())?.[0]?.stage ?? null;
+        const pre = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=stage,tags`, { headers: sbHeaders() });
+        const prev = (await pre.json())?.[0];
+        prevStage = prev?.stage ?? null;
+        prevTags = prev?.tags ?? [];
       } catch {}
     }
 
@@ -263,6 +281,11 @@ export default async function handler(req) {
     // Trigger de automatizaciones: cambio de etapa real
     if (rows[0] && update.stage !== undefined && prevStage !== null && prevStage !== update.stage) {
       await enqueueAutomations(userId, rows[0], 'stage_changed', update.stage);
+    }
+    // Trigger: etiquetas añadidas en esta edición
+    if (rows[0] && update.tags !== undefined && prevTags !== null) {
+      const added = (update.tags || []).filter(t => !prevTags.includes(t));
+      if (added.length) await enqueueAutomations(userId, rows[0], 'tag_added', added);
     }
     return jsonResp({ lead: rows[0] });
   }

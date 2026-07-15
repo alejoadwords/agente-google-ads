@@ -19255,6 +19255,7 @@ function autoTriggerLabel(a) {
   if (t.type === 'stage_changed') return (t.stage ? 'Cuando pasa a etapa "' + t.stage + '"' : 'Cuando cambia de etapa') + win;
   if (t.type === 'lead_inactive') return 'Cuando lleva ' + (t.days || 3) + '+ días sin actividad' + win;
   if (t.type === 'webhook') return 'Cuando llega un webhook externo' + win;
+  if (t.type === 'tag_added') return (t.tag ? 'Cuando recibe la etiqueta "' + t.tag + '"' : 'Cuando recibe cualquier etiqueta') + win;
   return t.type;
 }
 
@@ -19631,9 +19632,15 @@ function autoBuilderRender() {
           '<option value="stage_changed"' + (t.type === 'stage_changed' ? ' selected' : '') + '>Cuando cambia de etapa</option>' +
           '<option value="lead_inactive"' + (t.type === 'lead_inactive' ? ' selected' : '') + '>Cuando lleva días sin actividad</option>' +
           '<option value="webhook"' + (t.type === 'webhook' ? ' selected' : '') + '>Webhook externo (formularios, Zapier...)</option>' +
+          '<option value="tag_added"' + (t.type === 'tag_added' ? ' selected' : '') + '>Cuando se le añade una etiqueta</option>' +
         '</select></div>' +
       (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
       (t.type === 'lead_inactive' ? '<div class="auto-field"><label class="auto-label">Días sin actividad</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
+      (t.type === 'tag_added' ?
+        '<div class="auto-field"><label class="auto-label">Etiqueta</label>' +
+        '<input class="auto-input" list="auto-trigger-tag-datalist" value="' + esc(t.tag || '') + '" placeholder="vacío = cualquier etiqueta" oninput="_autoDraft.trigger.tag=this.value.trim().toLowerCase();autoRefreshNodes()">' +
+        '<datalist id="auto-trigger-tag-datalist">' + (typeof crmTags !== 'undefined' ? crmTags : []).map(x => '<option value="' + esc(x.name) + '">').join('') + '</datalist>' +
+        '<div class="auto-vars-hint">Se dispara cuando la etiqueta aparece en un lead — la ponga el editor, un formulario/webhook u otra automatización. Corre UNA sola vez por lead (así dos flujos que se etiquetan entre sí nunca entran en bucle).</div></div>' : '') +
       (t.type === 'webhook' ? (
         t.token
           ? '<div class="auto-field"><label class="auto-label">URL del webhook</label>' +
