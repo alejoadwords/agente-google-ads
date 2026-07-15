@@ -73,6 +73,23 @@ export default async function handler(req, res) {
     if (autoTag.length >= 2) tagSet.add(autoTag);
     const leadTags = [...tagSet].slice(0, 15);
 
+    // Asegurar catálogo (colores + autocompletado) — best effort
+    if (leadTags.length) {
+      try {
+        const PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#EF4444','#6366F1','#84CC16','#F97316'];
+        const colorFor = (n) => { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return PALETTE[h % PALETTE.length]; };
+        const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
+        const existing = new Set(((await sb(`/lead_tags?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&select=name`)) || []).map(t => t.name));
+        const missing = leadTags.filter(t => !existing.has(t));
+        if (missing.length) {
+          await sb('/lead_tags', 'POST', missing.map(t => ({
+            user_id: auto.user_id, client_id: auto.client_id, name: t, color: colorFor(t),
+            kind: t === autoTag ? 'auto' : 'manual',
+          })), 'return=minimal');
+        }
+      } catch {}
+    }
+
     // 3. Reutilizar lead existente por email (mismo usuario y scope de cliente)
     let lead = null;
     if (email) {
