@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-PX26PNPJ');</script>
+<!-- End Google Tag Manager -->
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>acuarius — acceder</title>
@@ -9,7 +17,7 @@
   async
   crossorigin="anonymous"
   data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA"
-  src="https://clerk.acuarius.app/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+  src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5.125.10/dist/clerk.browser.js"
   type="text/javascript"
 ></script>
 <style>
@@ -35,6 +43,8 @@ body{
 
 /* ══ PANEL IZQUIERDO ══ */
 .left{
+  grid-column:1;
+  grid-row:1;
   background: #0a0a0a;
   background-image: url('https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1200&q=80&fit=crop');
   background-size: cover;
@@ -45,6 +55,7 @@ body{
   padding:48px;
   position:relative;
   overflow:hidden;
+  min-height:100svh;
 }
 .left::before{
   content:'';
@@ -120,12 +131,15 @@ body{
 
 /* ══ PANEL DERECHO ══ */
 .right{
+  grid-column:2;
+  grid-row:1;
   display:flex;
   align-items:center;
   justify-content:center;
   padding:48px 56px;
   background:var(--bg);
   overflow-y:auto;
+  min-height:100svh;
 }
 .fw{width:100%;max-width:380px}
 
@@ -260,6 +274,8 @@ body{
 
   /* Panel izquierdo se convierte en banner compacto */
   .left{
+    grid-column:1;
+    grid-row:1;
     min-height:auto;
     padding:24px 20px;
     justify-content:flex-start;
@@ -287,6 +303,9 @@ body{
 
   /* Panel derecho ocupa toda la pantalla restante */
   .right{
+    grid-column:1;
+    grid-row:2;
+    min-height:auto;
     padding:28px 20px;
     align-items:flex-start;
     padding-bottom:max(28px, env(safe-area-inset-bottom));
@@ -314,6 +333,11 @@ body{
 </style>
 </head>
 <body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PX26PNPJ"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
 
 <!-- PANEL IZQUIERDO -->
 <div class="left">
