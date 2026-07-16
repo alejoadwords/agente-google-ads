@@ -20275,6 +20275,12 @@ function prpRenderModal() {
           '<select class="auto-input" id="prp-currency"><option>USD</option><option>COP</option><option>MXN</option><option>ARS</option><option>CLP</option><option>PEN</option></select>' +
         '</div>' +
         '<input class="auto-input" id="prp-paylink" placeholder="Link de pago (opcional — Wompi, MercadoPago, Stripe...)" style="width:100%;margin-bottom:8px">' +
+        '<select class="auto-input" id="prp-template" style="width:100%;margin-bottom:8px" title="Estilo de la propuesta que redacta la IA">' +
+          '<option value="consultiva">📊 Consultiva — diagnóstico + benchmarks + plan detallado (la más completa)</option>' +
+          '<option value="ejecutiva">⚡ Ejecutiva — 1 página directa, para leads calientes que ya te conocen</option>' +
+          '<option value="comercial">🎯 Comercial — persuasiva, costo de no actuar + oferta con urgencia</option>' +
+          '<option value="paquetes">💎 Paquetes — 3 opciones de precio (Esencial / Recomendado / Premium)</option>' +
+        '</select>' +
         '<input class="auto-input" id="prp-instructions" placeholder="Instrucciones para la IA (opcional — ej: enfatiza el paquete mensual)" style="width:100%;margin-bottom:8px">' +
         '<textarea class="auto-input" id="prp-content" rows="9" placeholder="Escribe la propuesta en markdown o pídesela a la IA con el botón de abajo..." style="width:100%;margin-bottom:10px;font-family:var(--font);font-size:12.5px"></textarea>' +
         '<div style="display:flex;gap:8px;justify-content:flex-end">' +
@@ -20327,6 +20333,7 @@ async function prpGenerate() {
       body: JSON.stringify({
         lead: { name: _prpLead.name, company: _prpLead.company, email: _prpLead.email, source: _prpLead.source, stage: _prpLead.stage, notes: (_prpLead.notes || '').slice(0, 600), tags: _prpLead.tags },
         business_context: prpBusinessContext(),
+        template: document.getElementById('prp-template')?.value || 'consultiva',
         amount: document.getElementById('prp-amount').value || null,
         currency: document.getElementById('prp-currency').value,
         instructions: document.getElementById('prp-instructions').value,

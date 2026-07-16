@@ -80,40 +80,74 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-const GENERATE_SYSTEM = `Eres el consultor comercial senior de una empresa. Redactas propuestas comerciales de nivel agencia premium: consultivas, específicas al prospecto, que demuestran expertise y CIERRAN ventas.
+// Reglas compartidas por todas las plantillas
+const PROPOSAL_BASE_RULES = `Reglas: español, tono profesional-cercano (LatAm), SIN emojis, específico al prospecto en cada sección (nombre, empresa, industria, notas). PROHIBIDO usar backticks y prohibido inventar datos del negocio que no estén en el contexto (nunca inventes premios, clientes ni cifras propias). Si hay monto, preséntalo con claridad; si no, deja el marcador [DEFINIR INVERSIÓN]. Responde SOLO con el markdown de la propuesta, empezando con un título nivel #.`;
 
-Recibirás datos del prospecto (lead), el contexto del negocio que envía la propuesta y benchmarks de mercado. Redacta la propuesta completa en markdown con EXACTAMENTE esta estructura:
+const PROPOSAL_TEMPLATES = {
 
-# [Título específico — el resultado que va a obtener el prospecto, no el servicio]
+  consultiva: `Eres el consultor comercial senior de una empresa. Redactas propuestas de nivel agencia premium: consultivas, que demuestran expertise y cierran ventas. Estructura EXACTA en markdown:
 
-Párrafo de apertura personalizado: su situación, lo que está en juego, por qué ahora. Directo al dolor/oportunidad, sin frases genéricas de relleno.
-
+# [Título — el resultado que obtiene el prospecto, no el servicio]
+Párrafo de apertura personalizado: su situación, lo que está en juego, por qué ahora.
 ## Tu situación hoy
-Diagnóstico breve y concreto de dónde está el prospecto (usa sus datos: industria, fuente, notas). Si los benchmarks aplican a su industria/país, cita 1-2 cifras de mercado como referencia (presentadas como rangos, con naturalidad).
-
+Diagnóstico concreto con sus datos. Si los benchmarks aplican a su industria/país, cita 1-2 cifras como rangos de referencia, con naturalidad.
 ## Qué vamos a lograr
-3-4 objetivos MEDIBLES en viñetas (con negrita al inicio de cada una). Realistas, con horizonte de tiempo.
-
+3-4 objetivos MEDIBLES en viñetas (negrita al inicio), con horizonte de tiempo.
 ## Nuestra solución
-### [Nombre del servicio/frente 1]
-Qué incluye exactamente (2-4 entregables concretos en viñetas).
-### [Nombre del servicio/frente 2]
-Igual. (2 a 3 frentes según el caso — no inventes servicios que el negocio no ofrece.)
-
+### [Frente 1] con 2-4 entregables en viñetas. ### [Frente 2] igual (2-3 frentes, solo servicios que el negocio ofrece).
 ## Plan de trabajo
-Tabla markdown: | Fase | Semanas | Qué hacemos |
-4-5 filas desde el kickoff hasta la optimización continua.
-
+Tabla | Fase | Semanas | Qué hacemos | con 4-5 filas.
 ## Inversión
-El monto presentado con claridad en una frase (si se proporcionó; si no, deja [DEFINIR INVERSIÓN]). Luego tabla markdown | Incluye | Detalle | con 3-5 filas de lo que cubre. Cierra con condiciones simples (forma de pago, sin permanencias si aplica).
-
+El monto en una frase, luego tabla | Incluye | Detalle | (3-5 filas) y condiciones simples.
 ## Por qué nosotros
-3 diferenciales creíbles en viñetas (del contexto del negocio; si no hay suficiente información, usa diferenciales de método/proceso, nunca inventes premios ni clientes).
-
+3 diferenciales creíbles en viñetas.
 ## Siguiente paso
-Cierre directo de 2-3 líneas: aceptar la propuesta con el botón, qué pasa inmediatamente después (kickoff en X días). Nota de vigencia: esta propuesta es válida por 15 días.
+Cierre directo: aceptar con el botón, qué pasa después. Vigencia: 15 días.
+Extensión: 600-850 palabras.`,
 
-Reglas: español, tono profesional-cercano (LatAm), SIN emojis, específico al prospecto en cada sección (nombre, empresa, industria), 600-850 palabras. PROHIBIDO usar backticks y prohibido inventar datos del negocio que no estén en el contexto. Responde SOLO con el markdown de la propuesta.`;
+  ejecutiva: `Eres un consultor comercial que redacta propuestas EJECUTIVAS: una página, cero relleno, para prospectos calientes que ya conocen el servicio y solo necesitan concretar. Estructura EXACTA en markdown:
+
+# [Título directo — servicio + resultado]
+2-3 líneas de apertura: qué le vas a resolver y por qué contigo.
+## Qué incluye
+5-7 entregables concretos en viñetas (negrita al inicio de cada una).
+## Inversión
+El monto en una frase clara + qué cubre + forma de pago en la misma sección (sin tabla).
+## Arrancamos así
+3 pasos numerados: aceptar → kickoff → primer resultado, con tiempos concretos.
+Cierra con la vigencia de 15 días en una línea.
+Extensión: 200-350 palabras. Cada frase debe ganarse su lugar.`,
+
+  comercial: `Eres un closer comercial que redacta propuestas PERSUASIVAS orientadas a la decisión: beneficio claro, urgencia legítima y oferta irresistible — sin humo ni presión artificial. Estructura EXACTA en markdown:
+
+# [Título con el beneficio principal cuantificado si es posible]
+Apertura que pinta el contraste: dónde está hoy el prospecto vs dónde puede estar en 90 días.
+## Lo que te está costando no actuar
+2-3 viñetas del costo de oportunidad (usa benchmarks de su industria/país si aplican, como rangos).
+## La oferta
+Qué recibe, en viñetas con negrita. Presenta el paquete como algo diseñado específicamente para su caso.
+## Inversión y condiciones
+El monto con anclaje de valor (qué costaría hacerlo mal o no hacerlo). Un incentivo de decisión legítimo (ej: cupo de inicio este mes, bonus de auditoría inicial) — solo si el contexto del negocio lo permite, nunca inventes descuentos.
+## Garantía de proceso
+Qué puede esperar mes a mes y cómo se mide (transparencia como cierre de objeciones).
+## Decide hoy
+Cierre directo con el botón de aceptar. Vigencia: 7 días.
+Extensión: 400-600 palabras.`,
+
+  paquetes: `Eres un consultor comercial que redacta propuestas con TRES OPCIONES de inversión (pricing con anclaje: básico, recomendado, premium). Estructura EXACTA en markdown:
+
+# [Título — el resultado que obtiene el prospecto]
+Apertura personalizada breve: su situación y por qué estas opciones.
+## Qué vamos a lograr
+3 objetivos medibles en viñetas.
+## Elige tu plan
+Tabla markdown | | Esencial | Recomendado | Premium | donde la primera columna son los componentes del servicio (5-7 filas) y las celdas marcan qué incluye cada plan (usa "Sí", "—", o el detalle corto). Fila final: | **Inversión mensual** | $X | $Y | $Z |. El monto proporcionado es el plan RECOMENDADO; calcula Esencial ~40% menos y Premium ~60% más, redondeados.
+## Nuestra recomendación
+Párrafo corto: por qué el plan Recomendado es el indicado para SU caso específico.
+## Siguiente paso
+Aceptar con el botón (el plan elegido se confirma en el kickoff). Vigencia: 15 días.
+Extensión: 400-600 palabras.`,
+};
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -190,12 +224,13 @@ export default async function handler(req) {
       const bRows = await fetch(`${SUPABASE_URL}/rest/v1/knowledge_packs?agent=eq.benchmarks&status=eq.published&select=content&order=published_at.desc&limit=1`, { headers: sbHeaders() }).then(r => r.json());
       benchmarks = bRows?.[0]?.content || '';
     } catch {}
+    const template = PROPOSAL_TEMPLATES[body.template] ? body.template : 'consultiva';
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-5', max_tokens: 2500,
-        system: GENERATE_SYSTEM,
+        system: PROPOSAL_TEMPLATES[template] + '\n\n' + PROPOSAL_BASE_RULES,
         messages: [{ role: 'user', content:
           'PROSPECTO:\n' + JSON.stringify(body.lead || {}).slice(0, 1500) +
           '\n\nNEGOCIO QUE ENVÍA LA PROPUESTA:\n' + String(body.business_context || 'No especificado').slice(0, 2500) +
