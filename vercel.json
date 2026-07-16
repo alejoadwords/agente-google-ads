@@ -51,6 +51,10 @@
     {
       "path": "/api/cron-knowledge",
       "schedule": "0 12 1 * *"
+    },
+    {
+      "path": "/api/cron-campaigns",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

@@ -17590,7 +17590,7 @@ async function crmInit() {
 const _crmSetViewOrig = crmSetView;
 function crmSetView(v) {
   crmView = v;
-  ['kanban','list','agents','inbox','analytics','autos','agenda'].forEach(id => {
+  ['kanban','list','agents','inbox','analytics','autos','agenda','campaigns'].forEach(id => {
     const btn = document.getElementById('crm-btn-' + id);
     if (btn) btn.classList.toggle('active', v === id);
   });
@@ -17604,6 +17604,8 @@ function crmSetView(v) {
   if (autosView) autosView.style.display = v === 'autos' ? 'flex' : 'none';
   const agendaView = document.getElementById('crm-agenda-view');
   if (agendaView) agendaView.style.display = v === 'agenda' ? 'flex' : 'none';
+  const campaignsView = document.getElementById('crm-campaigns-view');
+  if (campaignsView) campaignsView.style.display = v === 'campaigns' ? 'flex' : 'none';
   const searchBar = document.getElementById('crm-search-bar');
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
@@ -17614,6 +17616,7 @@ function crmSetView(v) {
   if (v === 'analytics') crmRenderAnalytics();
   if (v === 'autos') crmRenderAutos();
   if (v === 'agenda') agnRender();
+  if (v === 'campaigns') cmpRender();
 }
 // ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 
@@ -20126,14 +20129,14 @@ function agnScheduleForLead() {
 // index.html para cualquier ruta (rewrite catch-all en vercel.json).
 (function () {
   const AGENT_KEYS = ['google-ads', 'meta-ads', 'tiktok-ads', 'linkedin-ads', 'seo', 'social', 'consultor'];
-  const CRM_SUB = { kanban: '', list: '/contactos', agents: '/agentes-ia', inbox: '/inbox', analytics: '/analisis', autos: '/automatizaciones', agenda: '/agenda' };
+  const CRM_SUB = { kanban: '', list: '/contactos', agents: '/agentes-ia', inbox: '/inbox', analytics: '/analisis', autos: '/automatizaciones', agenda: '/agenda', campaigns: '/campanas' };
   const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
   const TITLES = {
     '/': 'Acuarius', '/clientes': 'Panel de clientes · Acuarius', '/studio': 'Social Studio · Acuarius',
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'Leads', list: 'Contactos', agents: 'Agentes IA', inbox: 'Inbox', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda' };
+  const CRM_TITLES = { kanban: 'Leads', list: 'Contactos', agents: 'Agentes IA', inbox: 'Inbox', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', campaigns: 'Campañas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -20403,4 +20406,231 @@ async function prpDelete(id) {
   if (!confirm('¿Eliminar esta propuesta? El link público dejará de funcionar.')) return;
   await fetch('/api/proposals?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
   await prpLoad();
+}
+
+// ══ CAMPAÑAS MASIVAS (email + WhatsApp) ═════════════════════════════════════
+// Audiencia por etiquetas/etapa/fuente, cupo mensual de emails por plan,
+// envío por lotes en api/cron-campaigns.js, baja automática (etiqueta no-email).
+let cmpList = [];
+let cmpQuota = null;
+let _cmpAudTags = [];
+
+const CMP_STATUS = {
+  draft:   { label: 'Borrador',  color: '#6b7280' },
+  queued:  { label: 'En cola',   color: '#F59E0B' },
+  sending: { label: 'Enviando…', color: '#3B82F6' },
+  sent:    { label: 'Enviada ✓', color: '#10B981' },
+};
+
+async function cmpLoad() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    cmpList = d.campaigns || [];
+    cmpQuota = d.quota || null;
+  } catch { cmpList = []; }
+}
+
+async function cmpRender() {
+  const view = document.getElementById('crm-campaigns-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  if (typeof crmTags !== 'undefined' && !crmTags.length) { try { await crmLoadTags(); } catch {} }
+  await cmpLoad();
+
+  const quotaHtml = cmpQuota && cmpQuota.limit > 0
+    ? '<div style="font-size:var(--fs-sm);color:var(--muted)">📧 ' + (cmpQuota.used || 0).toLocaleString('es-CO') + ' / ' + cmpQuota.limit.toLocaleString('es-CO') + ' emails este mes</div>'
+    : '';
+
+  const header =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;max-width:820px">' +
+      '<div>' +
+        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Campañas</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Envíos masivos de email y WhatsApp segmentados por etiquetas · con baja automática</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:14px">' + quotaHtml +
+        '<button class="btn-pri" onclick="cmpBuilderOpen()">' + icn('plus', 13) + ' Nueva campaña</button>' +
+      '</div>' +
+    '</div>';
+
+  if (!cmpList.length) {
+    view.innerHTML = header + emptyAgua('chat', 'Tu primera campaña masiva',
+      'Escribe una vez, llega a todo un segmento: los leads con la etiqueta que elijas reciben tu email o WhatsApp personalizado con su nombre.',
+      '<button class="btn-sec sm" onclick="cmpBuilderOpen()">Crear campaña</button>');
+    return;
+  }
+
+  const cards = cmpList.map(c => {
+    const st = CMP_STATUS[c.status] || CMP_STATUS.draft;
+    const s = c.stats || {};
+    const chan = c.channel === 'whatsapp' ? '💬 WhatsApp' : '📧 Email';
+    const statsTxt = c.status === 'draft' ? 'Sin enviar'
+      : (s.sent || 0) + ' enviados' + (s.skipped ? ' · ' + s.skipped + ' omitidos' : '') + (s.failed ? ' · ' + s.failed + ' fallidos' : '') + ' de ' + (s.total || 0);
+    return '<div class="auto-card" style="max-width:820px">' +
+      '<div class="auto-ico">' + (c.channel === 'whatsapp' ? '💬' : '📧') + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="auto-name">' + esc(c.name) + '</div>' +
+        '<div class="auto-trigger">' + chan + (c.subject ? ' · "' + esc(c.subject) + '"' : '') + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px" id="cmp-stats-' + c.id + '">' + statsTxt + '</div>' +
+      '</div>' +
+      '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
+      '<div class="auto-actions">' +
+        (c.status === 'draft' ? '<button class="btn-pri sm" onclick="cmpQueue(\'' + c.id + '\')">Enviar</button>' : '') +
+        (c.status === 'sent' && c.channel === 'email' ? '<button class="btn-ghost sm" title="Ver aperturas" onclick="cmpShowOpens(\'' + c.id + '\')">👀</button>' : '') +
+        '<button class="btn-ghost sm" title="Eliminar" onclick="cmpDelete(\'' + c.id + '\')">✕</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  view.innerHTML = header + '<div>' + cards + '</div>';
+}
+
+function cmpBuilderOpen() {
+  _cmpAudTags = [];
+  document.getElementById('cmp-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'cmp-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  const tagChips = (typeof crmTags !== 'undefined' ? crmTags : []).filter(t => t.name !== 'no-email').map(t =>
+    '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + tagColor(t.name) + '1A;color:' + tagColor(t.name) + '" onclick="cmpToggleTag(\'' + esc(t.name) + '\')">' + esc(t.name) + '</button>'
+  ).join('');
+  ov.innerHTML =
+    '<div style="background:var(--bg);border-radius:18px;width:min(640px,94vw);max-height:88vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg)" onmousedown="event.stopPropagation()">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800">Nueva campaña</div>' +
+        '<button class="btn-ghost sm" onclick="document.getElementById(\'cmp-overlay\').remove()">✕</button>' +
+      '</div>' +
+      '<div class="flow-estado" style="margin-bottom:12px">' +
+        '<button class="on pub" id="cmp-ch-email" onclick="cmpSetChannel(\'email\')">📧 Email</button>' +
+        '<button id="cmp-ch-whatsapp" onclick="cmpSetChannel(\'whatsapp\')">💬 WhatsApp</button>' +
+      '</div>' +
+      '<div id="cmp-wa-warn" style="display:none;font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 12px;margin-bottom:10px">WhatsApp solo llega a leads con conversación abierta en tu Inbox (limitación de Meta hasta habilitar plantillas). Los demás quedan como omitidos.</div>' +
+      '<input class="auto-input" id="cmp-name" placeholder="Nombre interno (ej: Reactivación julio)" style="width:100%;margin-bottom:8px">' +
+      '<div id="cmp-email-fields">' +
+        '<input class="auto-input" id="cmp-from" placeholder="Nombre del remitente (ej: Alejandro de Acuarius)" style="width:100%;margin-bottom:8px">' +
+        '<input class="auto-input" id="cmp-subject" placeholder="Asunto — usa {{nombre}} para personalizar" style="width:100%;margin-bottom:8px">' +
+      '</div>' +
+      '<textarea class="auto-input" id="cmp-body" rows="7" placeholder="Mensaje... Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" style="width:100%;margin-bottom:12px;font-family:var(--font);font-size:12.5px"></textarea>' +
+      '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Audiencia</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">' + (tagChips || '<span style="font-size:11.5px;color:var(--muted2)">Sin etiquetas aún — la campaña irá a todos los leads que cumplan los filtros</span>') + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
+        '<select class="auto-input" id="cmp-stage" onchange="cmpPreview()"><option value="">Cualquier etapa</option>' + autoStageOptions('') + '</select>' +
+        '<select class="auto-input" id="cmp-source" onchange="cmpPreview()"><option value="">Cualquier fuente</option><option value="manual">Manual</option><option value="webhook">Webhook</option><option value="landing_page">Landing</option><option value="meta_ads">Meta Ads</option><option value="google_ads">Google Ads</option><option value="referido">Referido</option></select>' +
+      '</div>' +
+      '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Calculando audiencia…</div>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button class="btn-pri" id="cmp-create-btn" onclick="cmpCreate()">Crear campaña (borrador)</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  cmpPreview();
+}
+
+let _cmpChannel = 'email';
+function cmpSetChannel(ch) {
+  _cmpChannel = ch;
+  document.getElementById('cmp-ch-email').className = ch === 'email' ? 'on pub' : '';
+  document.getElementById('cmp-ch-whatsapp').className = ch === 'whatsapp' ? 'on pub' : '';
+  document.getElementById('cmp-email-fields').style.display = ch === 'email' ? 'block' : 'none';
+  document.getElementById('cmp-wa-warn').style.display = ch === 'whatsapp' ? 'block' : 'none';
+  cmpPreview();
+}
+
+function cmpToggleTag(name) {
+  const i = _cmpAudTags.indexOf(name);
+  if (i >= 0) _cmpAudTags.splice(i, 1); else _cmpAudTags.push(name);
+  const btn = document.getElementById('cmp-tag-' + name);
+  if (btn) {
+    const c = tagColor(name);
+    const on = _cmpAudTags.includes(name);
+    btn.style.background = on ? c : c + '1A';
+    btn.style.color = on ? '#fff' : c;
+  }
+  cmpPreview();
+}
+
+function cmpAudience() {
+  return {
+    tags: _cmpAudTags,
+    stage: document.getElementById('cmp-stage')?.value || null,
+    source: document.getElementById('cmp-source')?.value || null,
+  };
+}
+
+let _cmpPreviewTimer = null;
+function cmpPreview() {
+  clearTimeout(_cmpPreviewTimer);
+  _cmpPreviewTimer = setTimeout(async () => {
+    const el = document.getElementById('cmp-count');
+    if (!el) return;
+    try {
+      const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+      const qs = '?preview=1&channel=' + _cmpChannel + '&audience=' + encodeURIComponent(JSON.stringify(cmpAudience())) + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
+      const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+      el.innerHTML = '🎯 <b>' + d.count + '</b> destinatarios' + (d.sample?.length ? ' · ej: ' + d.sample.slice(0, 3).map(esc).join(', ') : '') +
+        (_cmpChannel === 'email' && cmpQuota && cmpQuota.limit > 0 ? ' · cupo restante: ' + Math.max(0, cmpQuota.limit - (cmpQuota.used || 0)).toLocaleString('es-CO') : '');
+    } catch { el.textContent = 'No se pudo calcular la audiencia'; }
+  }, 350);
+}
+
+async function cmpCreate() {
+  const name = document.getElementById('cmp-name').value.trim();
+  const body = document.getElementById('cmp-body').value.trim();
+  const subject = document.getElementById('cmp-subject')?.value.trim();
+  if (!name || !body) { showToast('La campaña necesita nombre y mensaje', 'error'); return; }
+  if (_cmpChannel === 'email' && !subject) { showToast('El email necesita asunto', 'error'); return; }
+  const btn = document.getElementById('cmp-create-btn');
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetch('/api/campaigns' + qs, {
+      method: 'POST', headers: await getAuthHeaders(),
+      body: JSON.stringify({
+        name, channel: _cmpChannel, subject: subject || null, body,
+        from_name: document.getElementById('cmp-from')?.value.trim() || null,
+        audience: cmpAudience(),
+      }),
+    }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    document.getElementById('cmp-overlay').remove();
+    showToast('✅ Campaña creada como borrador — revísala y dale Enviar', 'success');
+    cmpRender();
+  } catch (e) { showToast('Error creando la campaña', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Crear campaña (borrador)'; }
+}
+
+async function cmpQueue(id) {
+  const c = cmpList.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm('¿Enviar "' + c.name + '" ahora? El envío arranca en el próximo ciclo (máx. 10 min) y no se puede deshacer.')) return;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = '?action=queue' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
+    const d = await fetch('/api/campaigns' + qs, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ id }) }).then(r => r.json());
+    if (d.upgrade) { openUpgradeFlow('Las campañas masivas son parte del plan Pro.'); return; }
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    track('campaign_sent', { channel: c.channel, total: d.total });
+    showToast('🚀 Campaña en cola: ' + d.total + ' destinatarios', 'success');
+    cmpRender();
+  } catch (e) { showToast('Error encolando', 'error'); }
+}
+
+async function cmpShowOpens(id) {
+  const el = document.getElementById('cmp-stats-' + id);
+  if (el) el.textContent = 'Calculando aperturas…';
+  try {
+    const d = await fetch('/api/campaigns?stats=1&id=' + encodeURIComponent(id), { headers: await getAuthHeaders() }).then(r => r.json());
+    const pct = d.sent ? Math.round((d.opened / d.sent) * 100) : 0;
+    if (el) el.innerHTML = d.sent + ' enviados · <b>' + d.opened + ' abiertos (' + pct + '%)</b>';
+  } catch { if (el) el.textContent = 'No se pudieron calcular las aperturas'; }
+}
+
+async function cmpDelete(id) {
+  const c = cmpList.find(x => x.id === id);
+  if (!confirm('¿Eliminar la campaña "' + (c?.name || '') + '"?' + (c?.status === 'sending' || c?.status === 'queued' ? ' Los envíos pendientes se cancelan.' : ''))) return;
+  await fetch('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  cmpRender();
 }
