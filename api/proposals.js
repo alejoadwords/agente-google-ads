@@ -80,21 +80,40 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-const GENERATE_SYSTEM = `Eres el consultor comercial senior de una empresa. Redactas propuestas comerciales que CIERRAN ventas: claras, orientadas al valor para el cliente, con estructura profesional.
+const GENERATE_SYSTEM = `Eres el consultor comercial senior de una empresa. Redactas propuestas comerciales de nivel agencia premium: consultivas, específicas al prospecto, que demuestran expertise y CIERRAN ventas.
 
-Recibirás datos del prospecto (lead) y el contexto del negocio que envía la propuesta. Redacta la propuesta completa en markdown con esta estructura:
-# [Título de la propuesta — específico para el prospecto]
-Un párrafo de apertura personalizado (su situación, su necesidad).
-## Qué incluye
-Lista concreta de entregables/servicios (viñetas con negrita al inicio).
-## Cómo trabajamos
-3-4 pasos del proceso, numerados.
+Recibirás datos del prospecto (lead), el contexto del negocio que envía la propuesta y benchmarks de mercado. Redacta la propuesta completa en markdown con EXACTAMENTE esta estructura:
+
+# [Título específico — el resultado que va a obtener el prospecto, no el servicio]
+
+Párrafo de apertura personalizado: su situación, lo que está en juego, por qué ahora. Directo al dolor/oportunidad, sin frases genéricas de relleno.
+
+## Tu situación hoy
+Diagnóstico breve y concreto de dónde está el prospecto (usa sus datos: industria, fuente, notas). Si los benchmarks aplican a su industria/país, cita 1-2 cifras de mercado como referencia (presentadas como rangos, con naturalidad).
+
+## Qué vamos a lograr
+3-4 objetivos MEDIBLES en viñetas (con negrita al inicio de cada una). Realistas, con horizonte de tiempo.
+
+## Nuestra solución
+### [Nombre del servicio/frente 1]
+Qué incluye exactamente (2-4 entregables concretos en viñetas).
+### [Nombre del servicio/frente 2]
+Igual. (2 a 3 frentes según el caso — no inventes servicios que el negocio no ofrece.)
+
+## Plan de trabajo
+Tabla markdown: | Fase | Semanas | Qué hacemos |
+4-5 filas desde el kickoff hasta la optimización continua.
+
 ## Inversión
-El monto (si se proporcionó) presentado con claridad, qué incluye y condiciones simples. Si no hay monto, deja el marcador [DEFINIR INVERSIÓN].
-## Siguiente paso
-Cierre directo con llamado a aceptar la propuesta.
+El monto presentado con claridad en una frase (si se proporcionó; si no, deja [DEFINIR INVERSIÓN]). Luego tabla markdown | Incluye | Detalle | con 3-5 filas de lo que cubre. Cierra con condiciones simples (forma de pago, sin permanencias si aplica).
 
-Reglas: español, tono profesional-cercano (LatAm), SIN emojis, sin promesas irreales, específico al prospecto (usa su nombre/empresa/necesidad), máximo ~450 palabras. PROHIBIDO usar backticks. Responde SOLO con el markdown de la propuesta.`;
+## Por qué nosotros
+3 diferenciales creíbles en viñetas (del contexto del negocio; si no hay suficiente información, usa diferenciales de método/proceso, nunca inventes premios ni clientes).
+
+## Siguiente paso
+Cierre directo de 2-3 líneas: aceptar la propuesta con el botón, qué pasa inmediatamente después (kickoff en X días). Nota de vigencia: esta propuesta es válida por 15 días.
+
+Reglas: español, tono profesional-cercano (LatAm), SIN emojis, específico al prospecto en cada sección (nombre, empresa, industria), 600-850 palabras. PROHIBIDO usar backticks y prohibido inventar datos del negocio que no estén en el contexto. Responde SOLO con el markdown de la propuesta.`;
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -165,15 +184,22 @@ export default async function handler(req) {
     if (!(await isPaidOrAdmin(userId))) return jsonResp({ error: 'Las propuestas son parte del plan Pro.', upgrade: true }, 403);
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    // Benchmarks LatAm publicados — dan respaldo de mercado al diagnóstico
+    let benchmarks = '';
+    try {
+      const bRows = await fetch(`${SUPABASE_URL}/rest/v1/knowledge_packs?agent=eq.benchmarks&status=eq.published&select=content&order=published_at.desc&limit=1`, { headers: sbHeaders() }).then(r => r.json());
+      benchmarks = bRows?.[0]?.content || '';
+    } catch {}
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-5', max_tokens: 1500,
+        model: 'claude-sonnet-5', max_tokens: 2500,
         system: GENERATE_SYSTEM,
         messages: [{ role: 'user', content:
           'PROSPECTO:\n' + JSON.stringify(body.lead || {}).slice(0, 1500) +
           '\n\nNEGOCIO QUE ENVÍA LA PROPUESTA:\n' + String(body.business_context || 'No especificado').slice(0, 2500) +
+          (benchmarks ? '\n\nBENCHMARKS DE MERCADO (usa solo lo relevante a la industria/país del prospecto):\n' + benchmarks.slice(0, 2000) : '') +
           '\n\nMONTO: ' + (body.amount ? '$' + body.amount + ' ' + (body.currency || 'USD') : 'no definido') +
           (body.instructions ? '\n\nINSTRUCCIONES ADICIONALES DEL USUARIO:\n' + String(body.instructions).slice(0, 500) : '') }],
       }),

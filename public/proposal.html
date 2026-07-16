@@ -25,10 +25,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .meta{font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:var(--muted);margin-bottom:26px}
   .rule{height:2.5px;background:linear-gradient(90deg,var(--blue),var(--aqua));border:none;border-radius:2px;margin:0 0 30px;width:64px}
   h2{font-family:Arial,Helvetica,sans-serif;font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin:34px 0 12px}
+  h3{font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:800;color:var(--text);margin:20px 0 8px}
   p{margin:0 0 15px;font-size:16.5px}
   ul,ol{margin:0 0 15px 22px;font-size:16.5px}
   li{margin-bottom:7px}
   strong{color:#000}
+  table{width:100%;border-collapse:collapse;margin:6px 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 12px;border-bottom:2.5px solid var(--blue)}
+  td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even){background:#fafbff}
+  blockquote{border-left:3px solid var(--aqua);background:#f0fdff;padding:12px 18px;margin:0 0 15px;border-radius:0 10px 10px 0;font-size:15.5px}
   .amount-box{background:linear-gradient(135deg,#eef0fd,#e6fbff);border-radius:14px;padding:20px 24px;margin:26px 0;font-family:Arial,Helvetica,sans-serif}
   .amount-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
   .amount-val{font-size:28px;font-weight:800;color:var(--blue)}
@@ -74,19 +81,38 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function md(src) {
     var lines = esc(src).split('\n');
-    var html = '', inUl = false, inOl = false;
+    var html = '', inUl = false, inOl = false, tableBuf = null;
     function closeLists() { if (inUl) { html += '</ul>'; inUl = false; } if (inOl) { html += '</ol>'; inOl = false; } }
+    function flushTable() {
+      if (!tableBuf || !tableBuf.length) { tableBuf = null; return; }
+      var rows = tableBuf.filter(function (r) { return !/^[\s|:-]+$/.test(r); });
+      function cellsOf(r) {
+        return r.split('|').map(function (c) { return c.trim(); })
+          .filter(function (c, i, a) { return !(i === 0 && c === '') && !(i === a.length - 1 && c === ''); })
+          .map(function (c) { return c.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); });
+      }
+      html += '<table><thead><tr>' + cellsOf(rows[0]).map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
+      rows.slice(1).forEach(function (r) {
+        html += '<tr>' + cellsOf(r).map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>';
+      });
+      html += '</tbody></table>';
+      tableBuf = null;
+    }
     for (var i = 0; i < lines.length; i++) {
-      var l = lines[i];
-      var t = l.trim();
+      var t = lines[i].trim();
+      if (/^\|.*\|$/.test(t)) { closeLists(); if (!tableBuf) tableBuf = []; tableBuf.push(t); continue; }
+      if (tableBuf) flushTable();
       if (!t) { closeLists(); continue; }
       var inline = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
       if (/^# /.test(t)) { closeLists(); continue; } // el H1 va aparte (título)
+      else if (/^### /.test(t)) { closeLists(); html += '<h3>' + inline.slice(4) + '</h3>'; }
       else if (/^## /.test(t)) { closeLists(); html += '<h2>' + inline.slice(3) + '</h2>'; }
+      else if (/^> /.test(t)) { closeLists(); html += '<blockquote>' + inline.slice(2) + '</blockquote>'; }
       else if (/^[-–•] /.test(t)) { if (!inUl) { closeLists(); html += '<ul>'; inUl = true; } html += '<li>' + inline.slice(2) + '</li>'; }
       else if (/^\d+[.)] /.test(t)) { if (!inOl) { closeLists(); html += '<ol>'; inOl = true; } html += '<li>' + inline.replace(/^\d+[.)] /, '') + '</li>'; }
       else { closeLists(); html += '<p>' + inline + '</p>'; }
     }
+    if (tableBuf) flushTable();
     closeLists();
     return html;
   }
