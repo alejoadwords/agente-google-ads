@@ -16696,7 +16696,8 @@ async function crmOpenDetail(leadId) {
       (lead.phone ? '<a class="crm-qa-btn wa" href="https://wa.me/' + qaPhone.replace(/\D/g,'') + '" target="_blank"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</a>' : '') +
       (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '') +
       '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>' +
-      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font)" onclick="agnScheduleForLead()" title="Crear tarea o reunión con este lead (sincroniza con Google Calendar)">📅 Agendar</button>';
+      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font)" onclick="agnScheduleForLead()" title="Crear tarea o reunión con este lead (sincroniza con Google Calendar)">📅 Agendar</button>' +
+      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font);border-color:#A7F3D0;background:#ECFDF5;color:#059669" onclick="prpOpenForLead()" title="Generar y enviar una propuesta comercial con link de pago">📄 Propuesta</button>';
   }
   document.getElementById('crm-d-email').textContent = lead.email || '—';
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
@@ -20219,4 +20220,180 @@ function track(event, params) {
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push(Object.assign({ event: event }, params || {}));
   } catch (e) {}
+}
+
+// ══ PROPUESTAS COMERCIALES ═════════════════════════════════════════════════
+// Generación con IA + página pública trackeada (/p/{token}) + link de pago
+// (BYO — el link es del usuario). Marcar pagada mueve el lead a Ganado.
+let _prpLead = null;
+let _prpList = [];
+
+const PRP_STATUS = {
+  draft:    { label: 'Borrador',  color: '#6b7280' },
+  sent:     { label: 'Enviada',   color: '#3B82F6' },
+  viewed:   { label: 'Vista 👀',  color: '#F59E0B' },
+  accepted: { label: 'Aceptada ✓', color: '#8B5CF6' },
+  paid:     { label: 'Pagada 💰', color: '#10B981' },
+};
+
+async function prpOpenForLead() {
+  const lead = typeof crmDetailLead !== 'undefined' ? crmDetailLead : null;
+  if (!lead) return;
+  _prpLead = lead;
+  crmCloseDetail();
+  prpRenderModal();
+  await prpLoad();
+}
+
+async function prpLoad() {
+  try {
+    const res = await fetch('/api/proposals?lead_id=' + encodeURIComponent(_prpLead.id), { headers: await getAuthHeaders() });
+    _prpList = (await res.json()).proposals || [];
+  } catch { _prpList = []; }
+  prpRenderList();
+}
+
+function prpRenderModal() {
+  document.getElementById('prp-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'prp-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div style="background:var(--bg);border-radius:18px;width:min(680px,94vw);max-height:88vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg)" onmousedown="event.stopPropagation()">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800">📄 Propuesta para ' + esc(_prpLead.name) + '</div>' +
+        '<button class="btn-ghost sm" onclick="document.getElementById(\'prp-overlay\').remove()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">La IA redacta con los datos del lead y tu negocio. El prospecto la ve en una página con botón de aceptar y pagar.</div>' +
+      '<div id="prp-list" style="margin-bottom:18px"></div>' +
+      '<div style="border-top:1px solid var(--border);padding-top:16px">' +
+        '<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Nueva propuesta</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 130px 90px;gap:8px;margin-bottom:8px">' +
+          '<input class="auto-input" id="prp-title" placeholder="Título (ej: Gestión de pauta digital)">' +
+          '<input class="auto-input" id="prp-amount" type="number" placeholder="Monto">' +
+          '<select class="auto-input" id="prp-currency"><option>USD</option><option>COP</option><option>MXN</option><option>ARS</option><option>CLP</option><option>PEN</option></select>' +
+        '</div>' +
+        '<input class="auto-input" id="prp-paylink" placeholder="Link de pago (opcional — Wompi, MercadoPago, Stripe...)" style="width:100%;margin-bottom:8px">' +
+        '<input class="auto-input" id="prp-instructions" placeholder="Instrucciones para la IA (opcional — ej: enfatiza el paquete mensual)" style="width:100%;margin-bottom:8px">' +
+        '<textarea class="auto-input" id="prp-content" rows="9" placeholder="Escribe la propuesta en markdown o pídesela a la IA con el botón de abajo..." style="width:100%;margin-bottom:10px;font-family:var(--font);font-size:12.5px"></textarea>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+          '<button class="btn-sec" id="prp-gen-btn" onclick="prpGenerate()">✨ Generar con IA</button>' +
+          '<button class="btn-pri" id="prp-create-btn" onclick="prpCreate()">Crear y copiar link</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+function prpRenderList() {
+  const el = document.getElementById('prp-list');
+  if (!el) return;
+  if (!_prpList.length) { el.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--muted2)">Este lead aún no tiene propuestas.</div>'; return; }
+  el.innerHTML = _prpList.map(p => {
+    const st = PRP_STATUS[p.status] || PRP_STATUS.sent;
+    const url = 'https://app.acuarius.app/p/' + p.public_token;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--bg-subtle)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:700;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(p.title) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + (p.amount ? '$' + Number(p.amount).toLocaleString('es-CO') + ' ' + (p.currency || '') + ' · ' : '') + new Date(p.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + '</div>' +
+      '</div>' +
+      '<span style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
+      '<button class="btn-ghost sm" title="Copiar link público" onclick="navigator.clipboard.writeText(\'' + url + '\');showToast(\'📋 Link copiado — envíaselo al lead\',\'success\')">🔗</button>' +
+      (p.status !== 'paid' ? '<button class="btn-ghost sm" title="Marcar como pagada (mueve el lead a Ganado)" onclick="prpMarkPaid(\'' + p.id + '\')">💰</button>' : '') +
+      '<button class="btn-ghost sm" title="Eliminar" onclick="prpDelete(\'' + p.id + '\')">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+// Contexto del negocio para la IA: perfil de agente + cliente activo (lo que exista)
+function prpBusinessContext() {
+  let ctx = '';
+  try { if (typeof mem !== 'undefined' && mem && Object.keys(mem).length) ctx += JSON.stringify(mem); } catch {}
+  try {
+    if (typeof activeClientContext !== 'undefined' && activeClientContext) {
+      ctx += '\nCliente/negocio: ' + activeClientContext.clientName + (activeClientContext.clientIndustry ? ' (' + activeClientContext.clientIndustry + ')' : '');
+    }
+  } catch {}
+  return ctx || 'Negocio de marketing digital';
+}
+
+async function prpGenerate() {
+  const btn = document.getElementById('prp-gen-btn');
+  btn.disabled = true; btn.textContent = '✨ Redactando…';
+  try {
+    const res = await fetch('/api/proposals?action=generate', {
+      method: 'POST', headers: await getAuthHeaders(),
+      body: JSON.stringify({
+        lead: { name: _prpLead.name, company: _prpLead.company, email: _prpLead.email, source: _prpLead.source, stage: _prpLead.stage, notes: (_prpLead.notes || '').slice(0, 600), tags: _prpLead.tags },
+        business_context: prpBusinessContext(),
+        amount: document.getElementById('prp-amount').value || null,
+        currency: document.getElementById('prp-currency').value,
+        instructions: document.getElementById('prp-instructions').value,
+      }),
+    });
+    const d = await res.json();
+    if (d.upgrade) { document.getElementById('prp-overlay')?.remove(); openUpgradeFlow('Las propuestas comerciales con IA son parte del plan Pro.'); return; }
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    document.getElementById('prp-content').value = d.content || '';
+    if (!document.getElementById('prp-title').value) {
+      const h1 = (d.content.match(/^#\s+(.+)$/m) || [])[1];
+      if (h1) document.getElementById('prp-title').value = h1.slice(0, 120);
+    }
+  } catch (e) { showToast('Error generando la propuesta', 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✨ Generar con IA'; }
+}
+
+async function prpCreate() {
+  const title = document.getElementById('prp-title').value.trim();
+  const content = document.getElementById('prp-content').value.trim();
+  if (!title || !content) { showToast('La propuesta necesita título y contenido', 'error'); return; }
+  const btn = document.getElementById('prp-create-btn');
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const res = await fetch('/api/proposals' + qs, {
+      method: 'POST', headers: await getAuthHeaders(),
+      body: JSON.stringify({
+        lead_id: _prpLead.id, lead_name: _prpLead.name,
+        business_name: (typeof activeClientContext !== 'undefined' && activeClientContext?.clientName) || (typeof mem !== 'undefined' && mem?.negocio ? String(mem.negocio).split('·')[0].trim() : ''),
+        title, content,
+        amount: document.getElementById('prp-amount').value || null,
+        currency: document.getElementById('prp-currency').value,
+        payment_link: document.getElementById('prp-paylink').value.trim() || null,
+      }),
+    });
+    const d = await res.json();
+    if (d.upgrade) { document.getElementById('prp-overlay')?.remove(); openUpgradeFlow('Las propuestas comerciales con IA son parte del plan Pro.'); return; }
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    track('proposal_created', { amount: d.proposal.amount || 0 });
+    const url = 'https://app.acuarius.app/p/' + d.proposal.public_token;
+    try { await navigator.clipboard.writeText(url); } catch {}
+    showToast('📄 Propuesta creada y link copiado — envíaselo al lead', 'success');
+    document.getElementById('prp-title').value = ''; document.getElementById('prp-content').value = '';
+    await prpLoad();
+  } catch (e) { showToast('Error creando la propuesta', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Crear y copiar link'; }
+}
+
+async function prpMarkPaid(id) {
+  if (!confirm('¿Marcar como pagada? El lead pasará a Ganado con el valor de la propuesta.')) return;
+  try {
+    const res = await fetch('/api/proposals', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, mark_paid: true }) });
+    const d = await res.json();
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    track('proposal_paid', { amount: d.proposal?.amount || 0 });
+    showToast('💰 Propuesta pagada — el lead pasó a Ganado', 'success');
+    const idx = crmLeads.findIndex(l => l.id === _prpLead.id);
+    if (idx >= 0) { crmLeads[idx].stage = 'ganado'; if (d.proposal?.amount) crmLeads[idx].value = d.proposal.amount; }
+    crmRender();
+    await prpLoad();
+  } catch (e) { showToast('Error', 'error'); }
+}
+
+async function prpDelete(id) {
+  if (!confirm('¿Eliminar esta propuesta? El link público dejará de funcionar.')) return;
+  await fetch('/api/proposals?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  await prpLoad();
 }

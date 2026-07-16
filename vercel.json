@@ -23,6 +23,10 @@
       "destination": "/sso-callback.html"
     },
     {
+      "source": "/p/:token",
+      "destination": "/proposal.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
