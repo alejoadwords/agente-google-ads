@@ -130,8 +130,15 @@ async function gcalRequest(token, method, path, body, sendUpdates) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  const userId = await getUserId(req);
+  let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
+  try {
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _tw = (await _twRes.json())?.[0];
+    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+  } catch {}
 
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;

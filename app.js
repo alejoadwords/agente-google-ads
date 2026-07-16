@@ -280,6 +280,8 @@ async function initAuth(){
     } catch(e){}
     // Registrar referido pendiente si llegó con ?ref=CODE
     setTimeout(() => { if (typeof registerPendingReferral === 'function') registerPendingReferral(); }, 1500);
+    // Equipo: canjear invitación pendiente y detectar membresía
+    setTimeout(() => { if (typeof teamInit === 'function') teamInit(); }, 800);
     return true;
   } catch(e) {
     console.error('Auth error:', e.message);
@@ -13901,7 +13903,7 @@ function closeSettings() {
 
 function switchSettingsTab(tab) {
   // All cfg-sec-* section IDs (redesigned settings panel)
-  const sections = ['perfil','plan','integraciones','notificaciones','seguridad','referral'];
+  const sections = ['perfil','plan','integraciones','notificaciones','seguridad','equipo','referral'];
   sections.forEach(t => {
     const sec = document.getElementById('cfg-sec-'+t);
     if (sec) sec.style.display = t === tab ? 'block' : 'none';
@@ -13918,6 +13920,7 @@ function switchSettingsTab(tab) {
   if (wrap) wrap.scrollTop = 0;
   // Load referral data when opening that tab
   if (tab === 'referral') loadReferralData();
+  if (tab === 'equipo') teamRenderSettings();
 }
 
 // =============================================
@@ -16356,6 +16359,9 @@ function crmGetFilteredLeads() {
     leads = leads.filter(l => l.custom_fields && Number(l.custom_fields.score) >= 7);
   } else if (crmQuickFilter === 'value') {
     leads = leads.filter(l => Number(l.value) > 0);
+  } else if (crmQuickFilter === 'mine') {
+    const myId = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
+    leads = leads.filter(l => l.assigned_to === myId);
   }
   return leads;
 }
@@ -16499,7 +16505,8 @@ function crmCardHTML(lead, now) {
     (lead.phone ? '<div class="crm-card-phone"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') +
     ((lead.tags || []).length ? '<div class="crm-card-tags">' + lead.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (lead.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (lead.tags.length - 3) + '</span>' : '') + '</div>' : '') +
     '<div class="crm-card-footer">' +
-    '<div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') + '</div>' +
+    '<div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') +
+    (lead.assigned_name ? ' <span title="Asignado a ' + esc(lead.assigned_name) + '" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--blue-lt);color:var(--blue);font-size:8.5px;font-weight:800;vertical-align:middle;margin-left:4px">' + esc(lead.assigned_name.slice(0, 2).toUpperCase()) + '</span>' : '') + '</div>' +
     (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
     '</div>' +
     ((score !== null || showInactive) ? '<div class="crm-card-badges">' +
@@ -16706,6 +16713,7 @@ async function crmOpenDetail(leadId) {
   const valueRow = document.getElementById('crm-d-value-row');
   if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
   crmRenderDetailTags();
+  teamEnsureLoaded().then(() => teamPopulateAssign(lead));
   const notesSection = document.getElementById('crm-d-notes-section');
   if (lead.notes) {
     notesSection.style.display = 'flex';
@@ -20633,4 +20641,150 @@ async function cmpDelete(id) {
   if (!confirm('¿Eliminar la campaña "' + (c?.name || '') + '"?' + (c?.status === 'sending' || c?.status === 'queued' ? ' Los envíos pendientes se cancelan.' : ''))) return;
   await fetch('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
   cmpRender();
+}
+
+// ══ EQUIPO Y ASIENTOS ═══════════════════════════════════════════════════════
+// El dueño invita miembros (asientos por plan: Pro 1, Agency 3); los miembros
+// trabajan sobre los leads/agenda/inbox del dueño (resolución server-side).
+// window._workspace = {ownerId, role, ownerName} cuando soy miembro; null si dueño.
+let crmTeam = [];
+let _teamSeats = null;
+
+// Capturar el token de invitación ANTES del redirect a login (persiste en localStorage)
+(function () {
+  try {
+    if (location.pathname === '/join') {
+      const t = new URLSearchParams(location.search).get('t');
+      if (t && /^[a-f0-9]{32}$/.test(t)) localStorage.setItem('acuarius_join_token', t);
+      history.replaceState({}, '', '/');
+    }
+  } catch (e) {}
+})();
+
+// Se llama tras la autenticación (init): canjea invitación pendiente y detecta membresía
+async function teamInit() {
+  try {
+    const pending = localStorage.getItem('acuarius_join_token');
+    if (pending) {
+      const d = await fetch('/api/team?action=redeem', {
+        method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ token: pending }),
+      }).then(r => r.json());
+      localStorage.removeItem('acuarius_join_token');
+      if (d.ok) showToast('🎉 Te uniste al equipo de ' + (d.owner_name || 'tu empresa'), 'success');
+      else if (d.error) showToast('⚠️ ' + d.error, 'error');
+    }
+    const me = await fetch('/api/team?me=1', { headers: await getAuthHeaders() }).then(r => r.json());
+    window._workspace = me.membership ? { ownerId: me.membership.owner_user_id, role: me.membership.role, ownerName: me.membership.owner_name } : null;
+    if (window._workspace) teamApplyMemberUI();
+  } catch (e) { window._workspace = null; }
+}
+
+// Miembros (vendedores): ocultar las herramientas de administración del dueño
+function teamApplyMemberUI() {
+  ['crm-btn-autos', 'crm-btn-campaigns'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.style.display = 'none';
+  });
+}
+
+// ── Sección Equipo en Configuración (solo dueño) ─────────────────────────────
+async function teamRenderSettings() {
+  const list = document.getElementById('cfg-team-list');
+  const seatsEl = document.getElementById('cfg-team-seats');
+  if (!list) return;
+  list.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Cargando…</div>';
+  try {
+    const d = await fetch('/api/team', { headers: await getAuthHeaders() }).then(r => r.json());
+    crmTeam = d.members || [];
+    _teamSeats = d.seats || null;
+    if (seatsEl && _teamSeats) {
+      seatsEl.innerHTML = '👥 <b>' + _teamSeats.used + ' de ' + (_teamSeats.total >= 99 ? '∞' : _teamSeats.total) + '</b> asientos usados' +
+        (_teamSeats.total < 99 && _teamSeats.used >= _teamSeats.total ? ' · <span style="color:var(--blue)">amplía con el plan Agency</span>' : '');
+    }
+    if (!crmTeam.length) {
+      list.innerHTML = '<div style="font-size:12.5px;color:var(--muted2)">Aún no has invitado a nadie. Tu equipo verá los mismos leads, agenda e inbox que tú.</div>';
+      return;
+    }
+    list.innerHTML = crmTeam.map(m => {
+      const st = m.status === 'active' ? '<span style="color:#059669;font-weight:700">Activo</span>' : '<span style="color:#D97706;font-weight:700">Invitado</span>';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;background:var(--bg-subtle)">' +
+        '<div style="width:30px;height:30px;border-radius:50%;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">' + esc((m.member_name || m.member_email || '?').slice(0, 2).toUpperCase()) + '</div>' +
+        '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">' + esc(m.member_name || m.member_email) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + ' · ' + esc(m.role) + '</div></div>' +
+        '<div style="font-size:11px">' + st + '</div>' +
+        '<button class="btn-ghost sm" title="Quitar del equipo" onclick="teamRemove(\'' + m.id + '\')">✕</button>' +
+      '</div>';
+    }).join('');
+  } catch (e) { list.innerHTML = '<div style="font-size:12px;color:var(--muted2)">No se pudo cargar el equipo.</div>'; }
+}
+
+async function teamInvite() {
+  const email = document.getElementById('cfg-team-email').value.trim();
+  const name = document.getElementById('cfg-team-name').value.trim();
+  if (!email) { showToast('Escribe el email del invitado', 'error'); return; }
+  const btn = document.getElementById('cfg-team-invite-btn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    const ownerName = (clerkInstance?.user?.firstName ? clerkInstance.user.firstName + (clerkInstance.user.lastName ? ' ' + clerkInstance.user.lastName : '') : null) || 'Tu equipo';
+    const d = await fetch('/api/team', {
+      method: 'POST', headers: await getAuthHeaders(),
+      body: JSON.stringify({ email, name, owner_name: ownerName }),
+    }).then(r => r.json());
+    if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios asientos son parte del plan Agency.'); return; }
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    track('team_invite_sent');
+    showToast('📨 Invitación enviada a ' + email, 'success');
+    document.getElementById('cfg-team-email').value = '';
+    document.getElementById('cfg-team-name').value = '';
+    teamRenderSettings();
+  } catch (e) { showToast('Error enviando la invitación', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Enviar invitación'; }
+}
+
+async function teamRemove(id) {
+  if (!confirm('¿Quitar a esta persona del equipo? Perderá el acceso a tus leads de inmediato.')) return;
+  await fetch('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  teamRenderSettings();
+}
+
+// ── Asignación de leads ───────────────────────────────────────────────────────
+function teamPopulateAssign(lead) {
+  const wrap = document.getElementById('crm-d-assigned-wrap');
+  if (!wrap) return;
+  const myId = clerkInstance?.user?.id || '';
+  const myName = clerkInstance?.user?.firstName || 'Yo';
+  // Opciones: sin asignar + yo + miembros activos (el dueño ve su equipo; un miembro se ve a sí mismo)
+  const opts = [{ id: '', name: 'Sin asignar' }, { id: myId, name: myName + ' (yo)' }];
+  if (!window._workspace) {
+    crmTeam.filter(m => m.status === 'active' && m.member_user_id !== myId).forEach(m => opts.push({ id: m.member_user_id, name: m.member_name || m.member_email }));
+  }
+  wrap.innerHTML = '<select class="auto-input" id="crm-d-assigned" style="padding:4px 10px;font-size:12px;width:auto" onchange="teamAssignLead(this)">' +
+    opts.map(o => '<option value="' + esc(o.id) + '"' + ((lead.assigned_to || '') === o.id ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('') +
+    '</select>' +
+    (lead.assigned_name && !opts.some(o => o.id === lead.assigned_to) ? ' <span style="font-size:11px;color:var(--muted)">(' + esc(lead.assigned_name) + ')</span>' : '');
+}
+
+async function teamAssignLead(sel) {
+  const lead = typeof crmDetailLead !== 'undefined' ? crmDetailLead : null;
+  if (!lead) return;
+  const id = sel.value;
+  const name = id ? sel.options[sel.selectedIndex].text.replace(' (yo)', '') : null;
+  lead.assigned_to = id || null;
+  lead.assigned_name = name;
+  crmRender();
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    await fetch('/api/leads' + qs, { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id: lead.id, assigned_to: lead.assigned_to, assigned_name: name }) });
+    showToast(id ? '👤 Lead asignado a ' + name : 'Lead sin asignar', 'success');
+  } catch (e) { showToast('No se pudo guardar la asignación', 'error'); }
+}
+
+// El dueño necesita el equipo cargado para el selector de asignación
+async function teamEnsureLoaded() {
+  if (window._workspace || crmTeam.length) return;
+  try {
+    const d = await fetch('/api/team', { headers: await getAuthHeaders() }).then(r => r.json());
+    crmTeam = d.members || [];
+  } catch {}
 }

@@ -3800,6 +3800,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           Score alto
         </button>
+        <button class="crm-qf-pill" id="crm-qf-mine" onclick="crmToggleQuickFilter('mine')">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Míos
+        </button>
         <button class="crm-qf-pill" id="crm-qf-value" onclick="crmToggleQuickFilter('value')">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
           Con valor
@@ -3995,6 +3999,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Fuente</span><span class="crm-detail-row-val" id="crm-d-source">—</span></div>
       <div class="crm-detail-row" id="crm-d-value-row" style="display:none"><span class="crm-detail-row-label">Valor</span><span class="crm-detail-row-val" id="crm-d-value">—</span></div>
       <div class="crm-detail-row" id="crm-d-tags-row" style="display:none"><span class="crm-detail-row-label">Etiquetas</span><span class="crm-detail-row-val" id="crm-d-tags">—</span></div>
+      <div class="crm-detail-row" id="crm-d-assigned-row"><span class="crm-detail-row-label">Asignado a</span><span class="crm-detail-row-val" id="crm-d-assigned-wrap">—</span></div>
     </div>
     <!-- Etapa -->
     <div class="crm-detail-section">
@@ -4229,6 +4234,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button type="button" class="cfg-nav-item" data-tab="seguridad" onclick="switchSettingsTab('seguridad')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           Seguridad
+        </button>
+        <button type="button" class="cfg-nav-item" data-tab="equipo" onclick="switchSettingsTab('equipo')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Equipo
         </button>
         <button type="button" class="cfg-nav-item" data-tab="referral" onclick="switchSettingsTab('referral')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -4542,6 +4551,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </div>
 
         <!-- ── REFERIDOS ── -->
+        <div id="cfg-sec-equipo" style="display:none">
+          <div style="font-size:16px;font-weight:800;margin-bottom:4px">Equipo</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Invita a tu equipo a trabajar los leads, la agenda y el inbox contigo. Las automatizaciones, campañas y configuración quedan solo en tu cuenta.</div>
+          <div id="cfg-team-seats" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+          <div id="cfg-team-list" style="margin-bottom:18px"></div>
+          <div style="border-top:1px solid var(--border);padding-top:16px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px">Invitar a alguien</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <input class="auto-input" id="cfg-team-name" placeholder="Nombre">
+              <input class="auto-input" id="cfg-team-email" type="email" placeholder="email@empresa.com">
+            </div>
+            <button class="btn-pri sm" id="cfg-team-invite-btn" onclick="teamInvite()">Enviar invitación</button>
+          </div>
+        </div>
         <div id="cfg-sec-referral" style="display:none">
           <!-- Link de referido -->
           <div class="cfg-section">
