@@ -17,10 +17,15 @@ async function clerkFindUserByEmail(email) {
 }
 
 async function clerkSetPlan(clerkUserId, plan) {
+  return clerkMergeMetadata(clerkUserId, { plan });
+}
+
+// El endpoint /metadata de Clerk hace MERGE — no pisa leads_extra/emails_extra/seats_extra
+async function clerkMergeMetadata(clerkUserId, obj) {
   const r = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}/metadata`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${CLERK_SECRET}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ public_metadata: { plan } }),
+    body: JSON.stringify({ public_metadata: obj }),
   });
   return r.ok;
 }
@@ -127,6 +132,36 @@ export default async function handler(req, res) {
       'return=minimal'
     );
     return res.status(200).json({ received: true, action: 'video_credits_added', credits: creditsToAdd, email });
+  }
+
+  // ── Paquetes de emails de campaña (suscripción mensual) ──────────────────
+  // Producto con 'email' en el nombre. Paquetes de 2.000 emails/mes: la
+  // oferta lleva el volumen en el nombre ('2k' → 1 paquete, '4k' → 2,
+  // '6k' → 3, '10k' → 5...). Fallback por precio (~$4 por paquete).
+  // emails_extra se FIJA con el total de paquetes de la oferta comprada —
+  // idempotente ante renovaciones. Cancelación → 0.
+  if (productName.includes('email')) {
+    let clerkOk = false;
+    try {
+      const clerkUser = await clerkFindUserByEmail(email);
+      if (!clerkUser) return res.status(200).json({ received: true, action: 'user_not_found', email });
+      if (eventosCancelacion.includes(eventType)) {
+        clerkOk = await clerkMergeMetadata(clerkUser.id, { emails_extra: 0 });
+        return res.status(200).json({ received: true, action: 'email_pack_cancelled', clerkUpdated: clerkOk });
+      }
+      const offerName = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
+      const price = data?.purchase?.price?.value || 0;
+      let packs = 1;
+      const kMatch = offerName.match(/(\d+)\s*k/); // '4k emails' → 4.000 → 2 paquetes
+      if (kMatch) packs = Math.max(1, Math.round(parseInt(kMatch[1]) / 2));
+      else if (price > 0) packs = Math.max(1, Math.round(price / 4));
+      packs = Math.min(packs, 50); // tope de cordura: 100.000 emails extra
+      clerkOk = await clerkMergeMetadata(clerkUser.id, { emails_extra: packs });
+      return res.status(200).json({ received: true, action: 'email_pack_set', packs, emails: packs * 2000, clerkUpdated: clerkOk });
+    } catch (e) {
+      console.error('[hotmart-webhook] email pack error:', e.message);
+      return res.status(200).json({ received: true, action: 'email_pack_error' });
+    }
   }
 
   // ── Suscripción / plan ──────────────────────────────────────────────────

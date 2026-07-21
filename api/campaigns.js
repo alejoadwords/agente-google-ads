@@ -27,6 +27,7 @@ function sbHeaders(prefer) {
 }
 
 let _lastPlan = 'free';
+let _emailsExtra = 0; // paquetes de 2.000 emails/mes comprados (Hotmart → Clerk emails_extra)
 async function getUserId(req) {
   const auth = req.headers.get('Authorization');
   if (!auth) return null;
@@ -46,7 +47,9 @@ async function getUserId(req) {
     if (!valid) return null;
     const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    _lastPlan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
+    const meta = payload.public_metadata || payload.publicMetadata || {};
+    _lastPlan = meta.plan || 'free';
+    _emailsExtra = parseInt(meta.emails_extra || 0) || 0;
     return payload.sub || null;
   } catch { return null; }
 }
@@ -135,10 +138,10 @@ export default async function handler(req) {
   if (req.method === 'GET') {
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/campaigns?user_id=eq.${encodeURIComponent(userId)}${scope}&select=*&order=created_at.desc&limit=50`, { headers: sbHeaders() }).then(r => r.json());
-    // Cupo del mes para mostrar en la UI
-    const quota = EMAIL_QUOTAS[_lastPlan] ?? 0;
+    // Cupo del mes para mostrar en la UI (plan + paquetes extra de 2.000)
+    const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     const used = await monthlySent(userId);
-    return jsonResp({ campaigns: rows || [], quota: { plan: _lastPlan, limit: quota, used } });
+    return jsonResp({ campaigns: rows || [], quota: { plan: _lastPlan, limit: quota, used, extra_packs: _emailsExtra } });
   }
 
   // POST ?action=queue — encolar el envío (aquí vive el gate + cupo)
@@ -151,7 +154,7 @@ export default async function handler(req) {
     if (c.status !== 'draft') return jsonResp({ error: 'Esta campaña ya fue enviada o está en curso' }, 400);
 
     const adminUser = await isAdmin(userId);
-    const quota = EMAIL_QUOTAS[_lastPlan] ?? 0;
+    const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     if (!adminUser && quota === 0) return jsonResp({ error: 'Las campañas masivas son parte del plan Pro.', upgrade: true }, 403);
 
     const leads = await resolveAudience(userId, clientId, c.audience, c.channel);
@@ -160,7 +163,7 @@ export default async function handler(req) {
     if (c.channel === 'email' && !adminUser) {
       const used = await monthlySent(userId);
       if (used + leads.length > quota) {
-        return jsonResp({ error: `Cupo mensual insuficiente: tu plan incluye ${quota.toLocaleString()} emails/mes, llevas ${used.toLocaleString()} y esta campaña necesita ${leads.length.toLocaleString()}.`, quota_exceeded: true }, 403);
+        return jsonResp({ error: `Cupo mensual insuficiente: tienes ${quota.toLocaleString()} emails/mes (plan${_emailsExtra ? ' + ' + _emailsExtra + ' paquete(s)' : ''}), llevas ${used.toLocaleString()} y esta campaña necesita ${leads.length.toLocaleString()}. Amplía tu cupo con paquetes de 2.000 emails.`, quota_exceeded: true }, 403);
       }
     }
 
