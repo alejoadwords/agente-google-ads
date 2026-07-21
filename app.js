@@ -20788,3 +20788,262 @@ async function teamEnsureLoaded() {
     crmTeam = d.members || [];
   } catch {}
 }
+
+// ══ IMPORTADOR DE CONTACTOS (CSV / Excel via pegado) ════════════════════════
+// Wizard de 4 pasos: origen → mapeo (auto por alias) → configuración → import
+// por lotes. Los importados NO disparan automatizaciones (protección anti-spam
+// accidental); el flujo correcto es etiqueta de importación → campaña.
+let _impRows = [];       // filas crudas parseadas
+let _impHeaders = [];    // encabezados detectados
+let _impMap = {};        // índice de columna → campo
+let _impStep = 1;
+
+const IMP_FIELDS = [
+  { key: '', label: 'Ignorar esta columna' },
+  { key: 'name', label: 'Nombre' },
+  { key: 'lastname', label: 'Apellidos (se une al nombre)' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Teléfono' },
+  { key: 'company', label: 'Empresa' },
+  { key: 'tags', label: 'Etiquetas (separadas por coma)' },
+  { key: 'value', label: 'Valor ($)' },
+  { key: 'notes', label: 'Notas' },
+];
+const IMP_ALIASES = {
+  name: ['nombre', 'name', 'first name', 'firstname', 'contacto', 'nombre completo', 'full name'],
+  lastname: ['apellido', 'apellidos', 'last name', 'lastname', 'surname'],
+  email: ['email', 'correo', 'correo electronico', 'correo electrónico', 'e-mail', 'mail'],
+  phone: ['telefono', 'teléfono', 'phone', 'celular', 'movil', 'móvil', 'whatsapp', 'telefono movil', 'teléfono móvil', 'mobile'],
+  company: ['empresa', 'company', 'negocio', 'compania', 'compañia', 'compañía', 'organizacion', 'organización'],
+  tags: ['etiqueta', 'etiquetas', 'tags', 'labels', 'segmento'],
+  value: ['valor', 'value', 'presupuesto', 'budget', 'monto'],
+  notes: ['nota', 'notas', 'notes', 'descripcion', 'descripción', 'comentario', 'comentarios', 'mensaje'],
+};
+
+// Parser CSV con soporte de comillas y auto-detección de delimitador (, ; tab)
+function impParse(text) {
+  text = String(text || '').replace(/\r\n?/g, '\n').trim();
+  if (!text) return [];
+  const first = text.split('\n')[0];
+  let best = ',', bestCount = 0;
+  for (const d of [',', ';', '\t']) {
+    let count = 0, inQ = false;
+    for (const ch of first) { if (ch === '"') inQ = !inQ; else if (ch === d && !inQ) count++; }
+    if (count > bestCount) { best = d; bestCount = count; }
+  }
+  const rows = [];
+  let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === best) { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ''));
+}
+
+function impAutoMap(headers) {
+  const map = {};
+  headers.forEach((h, i) => {
+    const hn = String(h).trim().toLowerCase();
+    for (const [field, aliases] of Object.entries(IMP_ALIASES)) {
+      if (aliases.includes(hn) && !Object.values(map).includes(field)) { map[i] = field; return; }
+    }
+    map[i] = '';
+  });
+  return map;
+}
+
+function impOpen() {
+  _impRows = []; _impHeaders = []; _impMap = {}; _impStep = 1;
+  impRender();
+}
+
+function impRender() {
+  document.getElementById('imp-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'imp-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov && _impStep !== 4) ov.remove(); });
+  let body = '';
+
+  if (_impStep === 1) {
+    body =
+      '<div style="border:2px dashed var(--border);border-radius:14px;padding:26px;text-align:center;margin-bottom:14px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'var(--border)\'" onclick="document.getElementById(\'imp-file\').click()">' +
+        '<div style="font-size:26px;margin-bottom:6px">📄</div>' +
+        '<div style="font-weight:700;font-size:var(--fs-md)">Sube tu archivo CSV</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Haz clic o arrastra el archivo aquí</div>' +
+        '<input type="file" id="imp-file" accept=".csv,.txt" style="display:none" onchange="impFile(this)">' +
+      '</div>' +
+      '<div style="text-align:center;font-size:11.5px;color:var(--muted2);margin-bottom:10px">— o —</div>' +
+      '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Pega desde Excel o Google Sheets</div>' +
+      '<textarea class="auto-input" id="imp-paste" rows="7" placeholder="Copia el rango en Excel/Sheets (con la fila de encabezados) y pégalo aquí con Cmd+V..." style="width:100%;font-family:var(--font);font-size:12px" oninput="impPaste(this.value)"></textarea>' +
+      '<div style="font-size:11px;color:var(--muted2);margin-top:8px">Tip: si tienes un Excel (.xlsx), ábrelo, selecciona los datos con los encabezados, cópialos y pégalos aquí — funciona igual que subir el archivo.</div>';
+  }
+
+  if (_impStep === 2) {
+    const preview = _impRows.slice(0, 4);
+    body =
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:10px"><b>' + _impRows.length + ' filas</b> detectadas. Revisa a qué campo va cada columna (mapeo automático aplicado):</div>' +
+      '<div style="overflow-x:auto;margin-bottom:6px"><table style="border-collapse:collapse;font-size:11.5px;min-width:100%">' +
+      '<tr>' + _impHeaders.map((h, i) =>
+        '<th style="padding:6px 8px;background:var(--bg-muted);text-align:left;min-width:130px;border:1px solid var(--border)">' +
+          '<div style="font-weight:700;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">' + esc(String(h)) + '</div>' +
+          '<select class="auto-input" style="padding:3px 6px;font-size:11px;width:100%" onchange="_impMap[' + i + ']=this.value">' +
+            IMP_FIELDS.map(f => '<option value="' + f.key + '"' + (_impMap[i] === f.key ? ' selected' : '') + '>' + f.label + '</option>').join('') +
+          '</select></th>').join('') + '</tr>' +
+      preview.map(r => '<tr>' + _impHeaders.map((h, i) => '<td style="padding:5px 8px;border:1px solid var(--border);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">' + esc(String(r[i] || '')) + '</td>').join('') + '</tr>').join('') +
+      '</table></div>' +
+      '<div style="font-size:11px;color:var(--muted2)">Se muestran las primeras filas. Las columnas en "Ignorar" no se importan.</div>';
+  }
+
+  if (_impStep === 3) {
+    body =
+      '<div class="auto-field"><label class="auto-label">Etiqueta para todos los importados (recomendado — así los segmentas en campañas)</label>' +
+      '<input class="auto-input" id="imp-tags" list="crm-tag-datalist-imp" placeholder="ej: importados-' + new Date().toLocaleDateString('es-CO', { month: 'long' }) + '" style="width:100%">' +
+      '<datalist id="crm-tag-datalist-imp">' + (typeof crmTags !== 'undefined' ? crmTags : []).map(t => '<option value="' + esc(t.name) + '">').join('') + '</datalist></div>' +
+      '<div class="auto-field"><label class="auto-label">Etapa inicial</label><select class="auto-input" id="imp-stage">' + autoStageOptions('nuevo') + '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Si el email ya existe en tu CRM</label>' +
+      '<select class="auto-input" id="imp-dedupe">' +
+        '<option value="skip">Omitirlo (no tocar el lead existente)</option>' +
+        '<option value="update">Actualizarlo (completa datos y suma etiquetas)</option>' +
+      '</select></div>' +
+      '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:9px 12px;margin-top:6px">Las importaciones no disparan automatizaciones de "lead nuevo" (protección anti-envíos accidentales). Para contactarlos, crea una campaña dirigida a la etiqueta de importación.</div>';
+  }
+
+  if (_impStep === 4) {
+    body =
+      '<div id="imp-progress-wrap">' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:8px" id="imp-progress-label">Importando…</div>' +
+        '<div style="height:10px;background:var(--bg-muted);border-radius:6px;overflow:hidden;margin-bottom:16px"><div id="imp-progress-bar" style="height:100%;width:0%;background:var(--agua-grad);transition:width .3s"></div></div>' +
+      '</div>' +
+      '<div id="imp-result"></div>';
+  }
+
+  const canNext = _impStep === 1 ? _impRows.length > 0 : true;
+  ov.innerHTML =
+    '<div style="background:var(--bg);border-radius:18px;width:min(760px,95vw);max-height:88vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg)" onmousedown="event.stopPropagation()">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800">Importar contactos</div>' +
+        '<button class="btn-ghost sm" onclick="document.getElementById(\'imp-overlay\').remove()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted2);margin-bottom:16px">Paso ' + _impStep + ' de 4 · ' + ['', 'Origen de los datos', 'Mapeo de columnas', 'Configuración', 'Importación'][_impStep] + '</div>' +
+      body +
+      (_impStep < 4 ?
+        '<div style="display:flex;justify-content:space-between;margin-top:18px">' +
+          (_impStep > 1 ? '<button class="btn-sec" onclick="_impStep--;impRender()">← Atrás</button>' : '<span></span>') +
+          '<button class="btn-pri" id="imp-next-btn" ' + (canNext ? '' : 'disabled style="opacity:.5"') + ' onclick="impNext()">' + (_impStep === 3 ? 'Importar →' : 'Siguiente →') + '</button>' +
+        '</div>' : '') +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+function impLoadData(text) {
+  const rows = impParse(text);
+  if (rows.length < 2) { showToast('Necesito al menos una fila de encabezados y una de datos', 'error'); return; }
+  _impHeaders = rows[0];
+  _impRows = rows.slice(1);
+  _impMap = impAutoMap(_impHeaders);
+  _impStep = 2;
+  impRender();
+}
+
+function impFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (/\.(xlsx|xls)$/i.test(f.name)) {
+    showToast('Para Excel: abre el archivo, copia los datos y pégalos en el cuadro de abajo', 'error');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => impLoadData(reader.result);
+  reader.readAsText(f, 'UTF-8');
+}
+
+let _impPasteTimer = null;
+function impPaste(val) {
+  clearTimeout(_impPasteTimer);
+  _impPasteTimer = setTimeout(() => { if (val.trim()) impLoadData(val); }, 400);
+}
+
+function impNext() {
+  if (_impStep === 2) {
+    const mapped = Object.values(_impMap);
+    if (!mapped.includes('email') && !mapped.includes('name')) { showToast('Mapea al menos la columna de Nombre o Email', 'error'); return; }
+    _impStep = 3; impRender(); return;
+  }
+  if (_impStep === 3) { impRun(); return; }
+  _impStep++; impRender();
+}
+
+function impBuildLeads() {
+  const idx = {};
+  Object.entries(_impMap).forEach(([i, f]) => { if (f) idx[f] = parseInt(i); });
+  return _impRows.map(r => {
+    const get = f => idx[f] !== undefined ? String(r[idx[f]] || '').trim() : '';
+    const name = [get('name'), get('lastname')].filter(Boolean).join(' ');
+    return {
+      name, email: get('email'), phone: get('phone'), company: get('company'),
+      tags: get('tags'), value: get('value'), notes: get('notes'),
+    };
+  }).filter(l => l.name || l.email);
+}
+
+async function impRun() {
+  const tags = (document.getElementById('imp-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
+  const stage = document.getElementById('imp-stage')?.value || 'nuevo';
+  const dedupe = document.getElementById('imp-dedupe')?.value || 'skip';
+  const leads = impBuildLeads();
+  _impStep = 4; impRender();
+
+  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
+  const BATCH = 250;
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const qs = '?action=import' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
+  for (let i = 0; i < leads.length; i += BATCH) {
+    try {
+      const d = await fetch('/api/leads' + qs, {
+        method: 'POST', headers: await getAuthHeaders(),
+        body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe } }),
+      }).then(r => r.json());
+      if (d.result) {
+        totals.created += d.result.created; totals.updated += d.result.updated;
+        totals.skipped += d.result.skipped; totals.invalid += d.result.invalid;
+        if (d.result.limit_reached) totals.limit_reached = true;
+      } else if (d.error) { showToast('⚠️ ' + d.error, 'error'); break; }
+    } catch (e) { showToast('Error importando el lote ' + (Math.floor(i / BATCH) + 1), 'error'); break; }
+    const pct = Math.min(100, Math.round(((i + BATCH) / leads.length) * 100));
+    const bar = document.getElementById('imp-progress-bar');
+    const lbl = document.getElementById('imp-progress-label');
+    if (bar) bar.style.width = pct + '%';
+    if (lbl) lbl.textContent = 'Importando… ' + Math.min(i + BATCH, leads.length) + ' de ' + leads.length;
+    if (totals.limit_reached) break;
+  }
+
+  track('leads_imported', { total: totals.created + totals.updated });
+  const wrap = document.getElementById('imp-progress-wrap');
+  if (wrap) wrap.style.display = 'none';
+  const resEl = document.getElementById('imp-result');
+  if (resEl) {
+    resEl.innerHTML =
+      '<div style="text-align:center;padding:8px 0 4px">' +
+        '<div style="font-size:34px;margin-bottom:8px">' + (totals.created + totals.updated > 0 ? '✅' : '⚠️') + '</div>' +
+        '<div style="font-weight:800;font-size:var(--fs-lg);margin-bottom:12px">Importación terminada</div>' +
+        '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:var(--fs-sm)">' +
+          '<span style="background:#ECFDF5;color:#059669;padding:5px 12px;border-radius:20px;font-weight:700">' + totals.created + ' creados</span>' +
+          (totals.updated ? '<span style="background:var(--blue-lt);color:var(--blue);padding:5px 12px;border-radius:20px;font-weight:700">' + totals.updated + ' actualizados</span>' : '') +
+          (totals.skipped ? '<span style="background:var(--bg-muted);color:var(--muted);padding:5px 12px;border-radius:20px;font-weight:700">' + totals.skipped + ' omitidos</span>' : '') +
+          (totals.invalid ? '<span style="background:#FEF3C7;color:#B45309;padding:5px 12px;border-radius:20px;font-weight:700">' + totals.invalid + ' inválidos</span>' : '') +
+        '</div>' +
+        (totals.limit_reached ? '<div style="font-size:12px;color:#B45309;margin-top:12px">Alcanzaste el límite de leads de tu plan — los restantes no se importaron.</div>' : '') +
+        (tags.length && totals.created + totals.updated > 0 ? '<div style="font-size:12px;color:var(--muted);margin-top:12px">Todos quedaron con la etiqueta <b>' + esc(tags.join(', ')) + '</b> — ya puedes crear una campaña dirigida a ella.</div>' : '') +
+        '<div style="margin-top:18px"><button class="btn-pri" onclick="document.getElementById(\'imp-overlay\').remove();crmLoadLeads().then(()=>{crmRender();crmLoadTags()})">Ver mis leads</button></div>' +
+      '</div>';
+  }
+}

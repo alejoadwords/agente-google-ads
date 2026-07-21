@@ -176,6 +176,97 @@ export default async function handler(req) {
     return jsonResp({ lead: rows[0] });
   }
 
+  // POST ?action=import — importación masiva (CSV/pegado desde el wizard).
+  // Dedupe por email en el scope, respeta el límite de plan y NO dispara
+  // automatizaciones (una importación de miles no debe detonar flujos de
+  // lead nuevo — para eso está la etiqueta de importación + campañas).
+  if (req.method === 'POST' && url.searchParams.get('action') === 'import') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const rows = Array.isArray(body.leads) ? body.leads.slice(0, 300) : [];
+    if (!rows.length) return jsonResp({ error: 'Sin filas para importar' }, 400);
+    const opts = body.options || {};
+    const dedupe = opts.dedupe === 'update' ? 'update' : 'skip';
+    const stage = String(opts.stage || 'nuevo').slice(0, 40);
+    const importTags = Array.isArray(opts.tags) ? opts.tags : [];
+
+    // Límite de plan (mismo cálculo que la creación individual)
+    let userPlan = 'free', leadsExtra = 0;
+    try {
+      const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      userPlan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
+      leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
+    } catch {}
+    const PLAN_LIMITS_IMP = { free: 50, pro: 1000, agency: 5000 };
+    const planLimit = (PLAN_LIMITS_IMP[userPlan] || 10) + (leadsExtra * 1000);
+    const countRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`, { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } });
+    let currentCount = parseInt((countRes.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
+
+    // Emails existentes del scope para dedupe (una consulta por lote)
+    const emails = rows.map(r => String(r.email || '').trim().toLowerCase()).filter(Boolean);
+    const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
+    let existingByEmail = {};
+    if (emails.length) {
+      const exRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&email=in.(${emails.map(e => '"' + e.replace(/"/g, '') + '"').join(',')})&select=id,email,tags`, { headers: sbHeaders() });
+      ((await exRes.json()) || []).forEach(l => { existingByEmail[(l.email || '').toLowerCase()] = l; });
+    }
+
+    const result = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
+    const toInsert = [];
+    const seenInBatch = new Set();
+    for (const r of rows) {
+      const name = String(r.name || '').trim().slice(0, 120);
+      const email = String(r.email || '').trim().toLowerCase().slice(0, 200) || null;
+      if (!name && !email) { result.invalid++; continue; }
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { result.invalid++; continue; }
+      if (email && seenInBatch.has(email)) { result.skipped++; continue; }
+      if (email) seenInBatch.add(email);
+      const rowTags = [...importTags, ...(Array.isArray(r.tags) ? r.tags : String(r.tags || '').split(','))];
+      const cleanTags = await prepareTags(userId, clientId, rowTags, null);
+
+      const existing = email ? existingByEmail[email] : null;
+      if (existing) {
+        if (dedupe === 'skip') { result.skipped++; continue; }
+        const mergedTags = [...new Set([...(existing.tags || []), ...cleanTags])].slice(0, 15);
+        await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${existing.id}&user_id=eq.${userId}`, {
+          method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            ...(name ? { name } : {}),
+            ...(r.phone ? { phone: String(r.phone).trim().slice(0, 40) } : {}),
+            ...(r.company ? { company: String(r.company).trim().slice(0, 120) } : {}),
+            ...(r.value ? { value: parseFloat(String(r.value).replace(/[^\d.]/g, '')) || null } : {}),
+            tags: mergedTags, updated_at: new Date().toISOString(),
+          }),
+        });
+        result.updated++;
+        continue;
+      }
+      if (currentCount + toInsert.length >= planLimit) { result.limit_reached = true; result.skipped++; continue; }
+      toInsert.push({
+        user_id: userId, client_id: clientId,
+        name: name || email, email,
+        phone: r.phone ? String(r.phone).trim().slice(0, 40) : null,
+        company: r.company ? String(r.company).trim().slice(0, 120) : null,
+        value: r.value ? parseFloat(String(r.value).replace(/[^\d.]/g, '')) || null : null,
+        notes: r.notes ? String(r.notes).trim().slice(0, 1000) : null,
+        stage, stage_position: 0,
+        source: 'importacion',
+        tags: cleanTags,
+        custom_fields: {},
+      });
+    }
+    if (toInsert.length) {
+      const insRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+        method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify(toInsert),
+      });
+      if (!insRes.ok) return jsonResp({ error: 'Error insertando: ' + (await insRes.text()).slice(0, 200) }, 500);
+      result.created = toInsert.length;
+    }
+    return jsonResp({ ok: true, result, plan_limit: planLimit, current: currentCount + result.created });
+  }
+
   // POST — create lead
   if (req.method === 'POST') {
     let body;
