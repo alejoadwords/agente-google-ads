@@ -154,7 +154,15 @@ export default async function handler(req, res) {
       let packs = 1;
       const kMatch = offerName.match(/(\d+)\s*k/); // '4k emails' → 4.000 → 2 paquetes
       if (kMatch) packs = Math.max(1, Math.round(parseInt(kMatch[1]) / 2));
-      else if (price > 0) packs = Math.max(1, Math.round(price / 4));
+      else if (price > 0) {
+        // Fallback alineado a los precios reales de Hotmart: $4→2k, $8→4k, $22→10k
+        if (price <= 5) packs = 1;
+        else if (price <= 9) packs = 2;
+        else if (price <= 13) packs = 3;
+        else if (price <= 17) packs = 4;
+        else if (price <= 23) packs = 5;
+        else packs = Math.round(price / 4);
+      }
       packs = Math.min(packs, 50); // tope de cordura: 100.000 emails extra
       clerkOk = await clerkMergeMetadata(clerkUser.id, { emails_extra: packs });
       return res.status(200).json({ received: true, action: 'email_pack_set', packs, emails: packs * 2000, clerkUpdated: clerkOk });
