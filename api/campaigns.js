@@ -6,9 +6,11 @@
 // de leads con etiqueta 'no-email' (baja) y de leads sin email/teléfono.
 export const config = { runtime: 'edge' };
 
+import { campaignHtml } from './_campaign-email.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -111,13 +113,25 @@ export default async function handler(req) {
   const clientId = url.searchParams.get('client_id') || null;
   const admin = null; // se resuelve solo cuando hace falta (cupo/gate)
 
-  // GET ?preview=1 — conteo de audiencia en vivo para el builder
+  // GET ?preview=1 — conteo de audiencia en vivo para el builder, con
+  // desglose de exclusiones (estilo Clientify): total que matchea los
+  // filtros vs. cuántos quedan fuera por baja o por falta de email/teléfono.
   if (req.method === 'GET' && url.searchParams.get('preview')) {
     let audience = {};
     try { audience = JSON.parse(url.searchParams.get('audience') || '{}'); } catch {}
     const channel = url.searchParams.get('channel') === 'whatsapp' ? 'whatsapp' : 'email';
-    const leads = await resolveAudience(userId, clientId, audience, channel);
-    return jsonResp({ count: leads.length, sample: leads.slice(0, 5).map(l => l.name) });
+    const [leads, all] = await Promise.all([
+      resolveAudience(userId, clientId, audience, channel),
+      fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, audience, null)}&select=id,email,phone,tags&limit=10000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []),
+    ]);
+    const breakdown = { matched: all.length, unsubscribed: 0, missing: 0 };
+    for (const l of all) {
+      if (channel === 'email') {
+        if ((l.tags || []).includes('no-email')) breakdown.unsubscribed++;
+        else if (!l.email) breakdown.missing++;
+      } else if (!l.phone) breakdown.missing++;
+    }
+    return jsonResp({ count: leads.length, sample: leads.slice(0, 5).map(l => l.name), breakdown });
   }
 
   // GET ?stats=1&id= — aperturas de una campaña (join sent → opened por resend_id)
@@ -142,6 +156,81 @@ export default async function handler(req) {
     const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     const used = await monthlySent(userId);
     return jsonResp({ campaigns: rows || [], quota: { plan: _lastPlan, limit: quota, used, extra_packs: _emailsExtra } });
+  }
+
+  // POST ?action=ai — redactar la campaña con IA. Devuelve JSON con asunto,
+  // preencabezado, cuerpo (texto con {{variables}}) y CTA sugerido.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'ai') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    if (!body.objective) return jsonResp({ error: 'Cuéntame el objetivo de la campaña' }, 400);
+    const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
+    const sys = 'Eres un copywriter experto en email marketing y mensajes directos para LatAm. Escribes en español neutro, directo y humano — cero tono corporativo vacío. ' +
+      'Personalizas con las variables {{nombre}} y {{empresa}} cuando suman. Respetas las buenas prácticas anti-spam: sin MAYÚSCULAS sostenidas, sin exceso de signos, promesas creíbles. ' +
+      'Respondes SOLO con un objeto JSON válido, sin markdown ni texto extra, con estas claves: ' +
+      (channel === 'email'
+        ? '"subject" (max 60 chars, gancho concreto), "preheader" (max 100 chars, complementa el asunto sin repetirlo), "body" (el email en texto plano, 80-160 palabras, párrafos cortos separados por \\n\\n, saludo con {{nombre}}), "cta_text" (max 4 palabras, verbo de acción).'
+        : '"body" (mensaje de WhatsApp de 40-80 palabras, cercano, saludo con {{nombre}}, un solo mensaje).');
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5', max_tokens: 900,
+        system: sys,
+        messages: [{ role: 'user', content:
+          'OBJETIVO DE LA CAMPAÑA:\n' + String(body.objective).slice(0, 600) +
+          '\n\nNEGOCIO QUE ENVÍA:\n' + String(body.business_context || 'No especificado').slice(0, 2000) +
+          '\n\nAUDIENCIA (segmento del CRM): ' + String(body.audience_desc || 'leads del CRM').slice(0, 300) +
+          (body.current_body ? '\n\nBORRADOR ACTUAL DEL USUARIO (mejóralo sin perder su intención):\n' + String(body.current_body).slice(0, 1500) : '') }],
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) return jsonResp({ error: 'Error generando: ' + (d.error?.message || r.status) }, 502);
+    let text = (d.content?.find(b => b.type === 'text')?.text || '').trim().replace(/^```(json)?|```$/g, '').trim();
+    try {
+      const out = JSON.parse(text);
+      return jsonResp({ draft: {
+        subject: String(out.subject || '').slice(0, 200),
+        preheader: String(out.preheader || '').slice(0, 150),
+        body: String(out.body || '').replace(/`/g, "'").slice(0, 8000),
+        cta_text: String(out.cta_text || '').slice(0, 60),
+      } });
+    } catch { return jsonResp({ error: 'La IA no devolvió un formato válido, intenta de nuevo' }, 502); }
+  }
+
+  // POST ?action=test — correo de prueba al email del dueño (no gasta cupo:
+  // no se registra en email_events). Renderiza con la plantilla real y un
+  // lead de muestra de la audiencia (o datos de ejemplo si está vacía).
+  if (req.method === 'POST' && url.searchParams.get('action') === 'test') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${body.id}&user_id=eq.${encodeURIComponent(userId)}&select=*`, { headers: sbHeaders() }).then(r => r.json());
+    const c = rows?.[0];
+    if (!c) return jsonResp({ error: 'Campaña no encontrada' }, 404);
+    if (c.channel !== 'email') return jsonResp({ error: 'El correo de prueba solo aplica a campañas de email' }, 400);
+    // Email del usuario que pide la prueba (Clerk)
+    const u = await fetch('https://api.clerk.com/v1/users/' + userId, { headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY } }).then(r => r.json()).catch(() => null);
+    const toEmail = u?.email_addresses?.[0]?.email_address;
+    if (!toEmail) return jsonResp({ error: 'No se pudo obtener tu email' }, 500);
+    const sampleRows = await resolveAudience(userId, clientId, c.audience, 'email');
+    const lead = sampleRows[0] || { name: 'Ana Ejemplo', email: toEmail, phone: '', stage: 'nuevo', source: 'demo', company: 'Empresa Demo', value: 0 };
+    const render = (t) => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => ({
+      nombre: lead.name || '', empresa: lead.company || '', email: lead.email || '', telefono: lead.phone || '',
+      etapa: lead.stage || '', fuente: lead.source || '', valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
+    })[k.toLowerCase()] ?? m);
+    const html = campaignHtml(c, render(c.body), 'https://app.acuarius.app/api/unsubscribe?test=1');
+    const payload = {
+      from: (c.from_name ? c.from_name.replace(/[<>"]/g, '') : 'Acuarius') + ' <notificaciones@app.acuarius.app>',
+      to: [toEmail], subject: '[PRUEBA] ' + render(c.subject), html,
+    };
+    if (c.reply_to) payload.reply_to = c.reply_to;
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) return jsonResp({ error: 'Resend: ' + (await r.text()).slice(0, 150) }, 500);
+    return jsonResp({ ok: true, to: toEmail });
   }
 
   // POST ?action=queue — encolar el envío (aquí vive el gate + cupo)
@@ -174,11 +263,29 @@ export default async function handler(req) {
         body: JSON.stringify(leads.slice(i, i + 500).map(l => ({ campaign_id: c.id, lead_id: l.id, status: 'pending' }))),
       });
     }
+    // Programación opcional: el cron no toca la campaña hasta scheduled_at
+    let scheduledAt = null;
+    if (body.scheduled_at) {
+      const d = new Date(body.scheduled_at);
+      if (!isNaN(d.getTime()) && d.getTime() > Date.now()) scheduledAt = d.toISOString();
+    }
     await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${c.id}`, {
       method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ status: 'queued', stats: { total: leads.length, sent: 0, skipped: 0, failed: 0 }, queued_at: new Date().toISOString() }),
+      body: JSON.stringify({ status: 'queued', stats: { total: leads.length, sent: 0, skipped: 0, failed: 0 }, queued_at: new Date().toISOString(), scheduled_at: scheduledAt }),
     });
-    return jsonResp({ ok: true, total: leads.length });
+    return jsonResp({ ok: true, total: leads.length, scheduled_at: scheduledAt });
+  }
+
+  // Campos v2 compartidos entre crear y editar borrador
+  function extraFields(body) {
+    const out = {};
+    if ('preheader' in body) out.preheader = body.preheader ? String(body.preheader).slice(0, 150) : null;
+    if ('reply_to' in body) out.reply_to = (body.reply_to && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.reply_to)) ? String(body.reply_to).slice(0, 120) : null;
+    if ('cta_text' in body) out.cta_text = body.cta_text ? String(body.cta_text).slice(0, 60) : null;
+    if ('cta_url' in body) out.cta_url = (body.cta_url && /^https?:\/\//i.test(body.cta_url)) ? String(body.cta_url).slice(0, 500) : null;
+    if ('accent_color' in body) out.accent_color = /^#[0-9a-fA-F]{6}$/.test(body.accent_color || '') ? body.accent_color : null;
+    if ('utm' in body) out.utm = body.utm !== false;
+    return out;
   }
 
   // POST — crear borrador
@@ -200,10 +307,33 @@ export default async function handler(req) {
         audience: body.audience || {},
         status: 'draft',
         stats: { total: 0, sent: 0, skipped: 0, failed: 0 },
+        ...extraFields(body),
       }),
     }).then(r => r.ok ? r.json() : null);
     if (!rows) return jsonResp({ error: 'No se pudo crear' }, 500);
     return jsonResp({ campaign: rows[0] }, 201);
+  }
+
+  // PUT — actualizar un borrador (el wizard guarda por pasos)
+  if (req.method === 'PUT') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    if (!body.id) return jsonResp({ error: 'Falta id' }, 400);
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${body.id}&user_id=eq.${encodeURIComponent(userId)}&select=id,status`, { headers: sbHeaders() }).then(r => r.json());
+    if (!rows?.[0]) return jsonResp({ error: 'Campaña no encontrada' }, 404);
+    if (rows[0].status !== 'draft') return jsonResp({ error: 'Solo se pueden editar borradores' }, 400);
+    const patch = { ...extraFields(body) };
+    if (body.name) patch.name = String(body.name).slice(0, 120);
+    if ('subject' in body) patch.subject = body.subject ? String(body.subject).slice(0, 200) : null;
+    if (body.body) patch.body = String(body.body).slice(0, 8000);
+    if ('from_name' in body) patch.from_name = body.from_name ? String(body.from_name).slice(0, 80) : null;
+    if (body.audience) patch.audience = body.audience;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${body.id}`, {
+      method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(patch),
+    });
+    if (!r.ok) return jsonResp({ error: await r.text() }, 500);
+    const updated = await r.json();
+    return jsonResp({ campaign: updated[0] });
   }
 
   // DELETE — borrador o campaña terminada (los pending de una en curso se cancelan)

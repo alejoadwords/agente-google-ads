@@ -20470,10 +20470,12 @@ async function cmpRender() {
   }
 
   const cards = cmpList.map(c => {
-    const st = CMP_STATUS[c.status] || CMP_STATUS.draft;
+    const isScheduled = c.status === 'queued' && c.scheduled_at && new Date(c.scheduled_at) > new Date();
+    const st = isScheduled ? { label: 'Programada 🕑', color: '#8B5CF6' } : (CMP_STATUS[c.status] || CMP_STATUS.draft);
     const s = c.stats || {};
     const chan = c.channel === 'whatsapp' ? '💬 WhatsApp' : '📧 Email';
     const statsTxt = c.status === 'draft' ? 'Sin enviar'
+      : isScheduled ? 'Sale el ' + new Date(c.scheduled_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (s.total || 0) + ' destinatarios'
       : (s.sent || 0) + ' enviados' + (s.skipped ? ' · ' + s.skipped + ' omitidos' : '') + (s.failed ? ' · ' + s.failed + ' fallidos' : '') + ' de ' + (s.total || 0);
     return '<div class="auto-card" style="max-width:820px">' +
       '<div class="auto-ico">' + (c.channel === 'whatsapp' ? '💬' : '📧') + '</div>' +
@@ -20484,6 +20486,7 @@ async function cmpRender() {
       '</div>' +
       '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
       '<div class="auto-actions">' +
+        (c.status === 'draft' ? '<button class="btn-sec sm" title="Editar" onclick="cmpBuilderOpen(\'' + c.id + '\')">✎ Editar</button>' : '') +
         (c.status === 'draft' ? '<button class="btn-pri sm" onclick="cmpQueue(\'' + c.id + '\')">Enviar</button>' : '') +
         (c.status === 'sent' && c.channel === 'email' ? '<button class="btn-ghost sm" title="Ver aperturas" onclick="cmpShowOpens(\'' + c.id + '\')">👀</button>' : '') +
         '<button class="btn-ghost sm" title="Eliminar" onclick="cmpDelete(\'' + c.id + '\')">✕</button>' +
@@ -20494,56 +20497,256 @@ async function cmpRender() {
   view.innerHTML = header + '<div>' + cards + '</div>';
 }
 
-function cmpBuilderOpen() {
-  _cmpAudTags = [];
+// ── Wizard de campaña: 4 pasos a pantalla completa (estilo Clientify) ───────
+// 1 Configuración (remitente + vista previa de inbox) · 2 Contenido (IA +
+// CTA + preview del email real) · 3 Audiencia (desglose de exclusiones) ·
+// 4 Revisión (correo de prueba, programación, envío).
+let _cmpW = null;
+let _cmpChannel = 'email';
+const CMP_STEPS = ['Configuración', 'Contenido', 'Audiencia', 'Revisión y envío'];
+
+function cmpBuilderOpen(id) {
+  const c = id ? cmpList.find(x => x.id === id) : null;
+  _cmpW = {
+    id: c ? c.id : null, step: 1,
+    channel: c ? c.channel : 'email',
+    name: (c && c.name) || '', from_name: (c && c.from_name) || '',
+    subject: (c && c.subject) || '', preheader: (c && c.preheader) || '',
+    reply_to: (c && c.reply_to) || '', body: (c && c.body) || '',
+    cta_text: (c && c.cta_text) || '', cta_url: (c && c.cta_url) || '',
+    accent_color: (c && c.accent_color) || '#2563EB',
+    utm: c ? c.utm !== false : true,
+    tags: (c && c.audience && Array.isArray(c.audience.tags)) ? c.audience.tags.slice() : [],
+    stage: (c && c.audience && c.audience.stage) || '', source: (c && c.audience && c.audience.source) || '',
+    schedule: '', count: null, breakdown: null,
+  };
+  _cmpChannel = _cmpW.channel;
+  _cmpAudTags = _cmpW.tags;
   document.getElementById('cmp-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'cmp-overlay';
-  ov.className = 'auto-modal-overlay';
-  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  const tagChips = (typeof crmTags !== 'undefined' ? crmTags : []).filter(t => t.name !== 'no-email').map(t =>
-    '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + tagColor(t.name) + '1A;color:' + tagColor(t.name) + '" onclick="cmpToggleTag(\'' + esc(t.name) + '\')">' + esc(t.name) + '</button>'
-  ).join('');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column';
   ov.innerHTML =
-    '<div style="background:var(--bg);border-radius:18px;width:min(640px,94vw);max-height:88vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg)" onmousedown="event.stopPropagation()">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
-        '<div style="font-size:var(--fs-lg);font-weight:800">Nueva campaña</div>' +
-        '<button class="btn-ghost sm" onclick="document.getElementById(\'cmp-overlay\').remove()">✕</button>' +
-      '</div>' +
-      '<div class="flow-estado" style="margin-bottom:12px">' +
-        '<button class="on pub" id="cmp-ch-email" onclick="cmpSetChannel(\'email\')">📧 Email</button>' +
-        '<button id="cmp-ch-whatsapp" onclick="cmpSetChannel(\'whatsapp\')">💬 WhatsApp</button>' +
-      '</div>' +
-      '<div id="cmp-wa-warn" style="display:none;font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 12px;margin-bottom:10px">WhatsApp solo llega a leads con conversación abierta en tu Inbox (limitación de Meta hasta habilitar plantillas). Los demás quedan como omitidos.</div>' +
-      '<input class="auto-input" id="cmp-name" placeholder="Nombre interno (ej: Reactivación julio)" style="width:100%;margin-bottom:8px">' +
-      '<div id="cmp-email-fields">' +
-        '<input class="auto-input" id="cmp-from" placeholder="Nombre del remitente (ej: Alejandro de Acuarius)" style="width:100%;margin-bottom:8px">' +
-        '<input class="auto-input" id="cmp-subject" placeholder="Asunto — usa {{nombre}} para personalizar" style="width:100%;margin-bottom:8px">' +
-      '</div>' +
-      '<textarea class="auto-input" id="cmp-body" rows="7" placeholder="Mensaje... Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" style="width:100%;margin-bottom:12px;font-family:var(--font);font-size:12.5px"></textarea>' +
-      '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Audiencia</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">' + (tagChips || '<span style="font-size:11.5px;color:var(--muted2)">Sin etiquetas aún — la campaña irá a todos los leads que cumplan los filtros</span>') + '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
-        '<select class="auto-input" id="cmp-stage" onchange="cmpPreview()"><option value="">Cualquier etapa</option>' + autoStageOptions('') + '</select>' +
-        '<select class="auto-input" id="cmp-source" onchange="cmpPreview()"><option value="">Cualquier fuente</option><option value="manual">Manual</option><option value="webhook">Webhook</option><option value="landing_page">Landing</option><option value="meta_ads">Meta Ads</option><option value="google_ads">Google Ads</option><option value="referido">Referido</option></select>' +
-      '</div>' +
-      '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Calculando audiencia…</div>' +
-      '<div style="display:flex;justify-content:flex-end">' +
-        '<button class="btn-pri" id="cmp-create-btn" onclick="cmpCreate()">Crear campaña (borrador)</button>' +
-      '</div>' +
-    '</div>';
+    '<style>@media (max-width:760px){.cmpw-grid{grid-template-columns:1fr !important}}</style>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 26px;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
+      '<div id="cmpw-steps" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"></div>' +
+      '<button class="btn-ghost sm" onclick="cmpWClose()">Cancelar</button>' +
+    '</div>' +
+    '<div id="cmpw-body" style="flex:1;overflow-y:auto;padding:26px 26px 40px"></div>' +
+    '<div id="cmpw-footer" style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 26px;border-top:1px solid var(--border);background:var(--bg)"></div>';
   document.body.appendChild(ov);
-  cmpPreview();
+  cmpWRender();
 }
 
-let _cmpChannel = 'email';
-function cmpSetChannel(ch) {
+function cmpWClose() {
+  if (_cmpW && (_cmpW.name || _cmpW.body) && !confirm('¿Salir del asistente? Los cambios sin guardar se pierden.')) return;
+  document.getElementById('cmp-overlay')?.remove();
+  _cmpW = null;
+}
+
+function cmpWRender() {
+  const w = _cmpW;
+  document.getElementById('cmpw-steps').innerHTML = CMP_STEPS.map((s, i) => {
+    const n = i + 1;
+    const state = n < w.step ? 'color:var(--accent);cursor:pointer' : n === w.step ? 'color:var(--text);font-weight:800' : 'color:var(--muted2)';
+    return (i ? '<span style="color:var(--muted2);margin:0 4px">›</span>' : '') +
+      '<span style="font-size:var(--fs-sm);' + state + '"' + (n < w.step ? ' onclick="cmpWGo(' + n + ')"' : '') + '>' + s + '</span>';
+  }).join('');
+  const body = document.getElementById('cmpw-body');
+  if (w.step === 1) body.innerHTML = cmpWStep1();
+  else if (w.step === 2) body.innerHTML = cmpWStep2();
+  else if (w.step === 3) body.innerHTML = cmpWStep3();
+  else body.innerHTML = cmpWStep4();
+  const foot = document.getElementById('cmpw-footer');
+  if (w.step < 4) {
+    foot.innerHTML = (w.step > 1 ? '<button class="btn-sec" onclick="cmpWGo(' + (w.step - 1) + ')">Volver</button>' : '') +
+      '<button class="btn-pri" onclick="cmpWNext()">Guardar y continuar</button>';
+  } else {
+    foot.innerHTML = '<button class="btn-sec" onclick="cmpWGo(3)">Volver</button>' +
+      '<button class="btn-sec" id="cmpw-draft-btn" onclick="cmpWSaveDraft()">Guardar como borrador</button>' +
+      '<button class="btn-pri" id="cmpw-send-btn" onclick="cmpWSend()">' + (w.schedule ? 'Programar envío' : 'Enviar') + '</button>';
+  }
+  if (w.step === 1) cmpWSyncInbox();
+  if (w.step === 2) cmpWSyncEmail();
+  if (w.step === 3) cmpPreview();
+  if (w.step === 4) cmpWLoadSummaryCount();
+}
+
+// Paso 1 — Configuración inicial + vista previa de inbox
+function cmpWStep1() {
+  const w = _cmpW;
+  const isEmail = w.channel === 'email';
+  const field = (id, label, val, ph, extra) =>
+    '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">' + label + '</div>' +
+    '<input class="auto-input" id="' + id + '" value="' + esc(val || '') + '" placeholder="' + ph + '" style="width:100%" oninput="cmpWSyncInbox()"' + (extra || '') + '></div>';
+  return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,400px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
+    '<div>' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Configuración inicial</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Define los datos principales y observa la vista previa</div>' +
+      '<div class="flow-estado" style="margin-bottom:14px">' +
+        '<button class="' + (isEmail ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'email\')">📧 Email</button>' +
+        '<button class="' + (!isEmail ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'whatsapp\')">💬 WhatsApp</button>' +
+      '</div>' +
+      (!isEmail ? '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 12px;margin-bottom:12px">WhatsApp solo llega a leads con conversación abierta en tu Inbox (limitación de Meta hasta habilitar plantillas). Los demás quedan como omitidos.</div>' : '') +
+      field('cmpw-name', 'Nombre de la campaña *', w.name, 'Ej: Reactivación julio') +
+      (isEmail ?
+        field('cmpw-subject', 'Asunto *', w.subject, 'Usa {{nombre}} para personalizar') +
+        field('cmpw-preheader', 'Preencabezado', w.preheader, 'El texto gris que se ve en el inbox junto al asunto') +
+        field('cmpw-from', 'Remitente', w.from_name, 'Ej: Alejandro de Acuarius') +
+        field('cmpw-reply', 'Responder a', w.reply_to, 'tu@correo.com — las respuestas llegan aquí, no al remitente técnico')
+      : '') +
+    '</div>' +
+    (isEmail ?
+    '<div style="position:sticky;top:0">' +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Vista previa</div>' +
+      '<div style="border:1px solid var(--border);border-radius:14px;padding:16px 18px;background:var(--panel);box-shadow:var(--shadow-sm)">' +
+        '<div style="height:10px;border-radius:6px;background:var(--border);opacity:.5;margin-bottom:10px;width:60%"></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">' +
+          '<div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px" id="cmpw-prev-avatar">A</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:800;font-size:13px" id="cmpw-prev-from">Remitente</div>' +
+            '<div style="font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cmpw-prev-subject">Este es el asunto del correo</div>' +
+            '<div style="font-size:12px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cmpw-prev-pre">Este es el preencabezado</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="height:10px;border-radius:6px;background:var(--border);opacity:.35;margin-top:10px;width:80%"></div>' +
+        '<div style="height:10px;border-radius:6px;background:var(--border);opacity:.25;margin-top:6px;width:70%"></div>' +
+      '</div>' +
+    '</div>' : '<div></div>') +
+  '</div>';
+}
+
+function cmpWSetChannel(ch) {
+  cmpWCollect();
+  _cmpW.channel = ch;
   _cmpChannel = ch;
-  document.getElementById('cmp-ch-email').className = ch === 'email' ? 'on pub' : '';
-  document.getElementById('cmp-ch-whatsapp').className = ch === 'whatsapp' ? 'on pub' : '';
-  document.getElementById('cmp-email-fields').style.display = ch === 'email' ? 'block' : 'none';
-  document.getElementById('cmp-wa-warn').style.display = ch === 'whatsapp' ? 'block' : 'none';
-  cmpPreview();
+  cmpWRender();
+}
+
+function cmpWSyncInbox() {
+  const g = id => document.getElementById(id);
+  if (!g('cmpw-prev-from')) return;
+  const from = (g('cmpw-from')?.value || '').trim() || 'Remitente';
+  const subj = (g('cmpw-subject')?.value || '').trim() || 'Este es el asunto del correo';
+  const pre = (g('cmpw-preheader')?.value || '').trim() || 'Este es el preencabezado';
+  g('cmpw-prev-from').textContent = from;
+  g('cmpw-prev-avatar').textContent = from.charAt(0).toUpperCase();
+  g('cmpw-prev-subject').textContent = subj.replace(/\{\{\s*nombre\s*\}\}/gi, 'Ana');
+  g('cmpw-prev-pre').textContent = pre;
+}
+
+// Paso 2 — Contenido: IA + CTA + vista previa del email real
+function cmpWStep2() {
+  const w = _cmpW;
+  const isEmail = w.channel === 'email';
+  return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,420px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
+    '<div>' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Contenido</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Escríbelo tú o deja que la IA lo redacte con el contexto de tu negocio</div>' +
+      '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
+        '<div style="font-size:12px;font-weight:800;margin-bottom:6px">✨ Redactar con IA</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<input class="auto-input" id="cmpw-ai-obj" placeholder="Objetivo: ej. reactivar leads fríos con 20% de descuento" style="flex:1">' +
+          '<button class="btn-sec sm" id="cmpw-ai-btn" onclick="cmpWAI()">Generar</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Mensaje *</div>' +
+      '<textarea class="auto-input" id="cmpw-msg" rows="9" placeholder="Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" style="width:100%;margin-bottom:14px;font-family:var(--font);font-size:12.5px" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
+      (isEmail ?
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Botón de acción (opcional)</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-bottom:12px">' +
+        '<input class="auto-input" id="cmpw-cta-text" value="' + esc(w.cta_text || '') + '" placeholder="Texto: ej. Agendar llamada" oninput="cmpWSyncEmail()">' +
+        '<input class="auto-input" id="cmpw-cta-url" value="' + esc(w.cta_url || '') + '" placeholder="https://tu-link.com" oninput="cmpWSyncEmail()">' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">' +
+        '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer">Color de marca ' +
+          '<input type="color" id="cmpw-accent" value="' + esc(w.accent_color || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer" oninput="cmpWSyncEmail()"></label>' +
+        '<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer" title="Los links del email llevan utm_source=acuarius&utm_medium=email para que midas visitas en tu Analytics">' +
+          '<input type="checkbox" id="cmpw-utm"' + (w.utm ? ' checked' : '') + '> Medir clics con UTM en mis links</label>' +
+      '</div>' : '') +
+    '</div>' +
+    '<div style="position:sticky;top:0">' +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Así llega el ' + (isEmail ? 'email' : 'WhatsApp') + '</div>' +
+      '<div id="cmpw-mailprev" style="border:1px solid var(--border);border-radius:14px;background:#ffffff;color:#1a1a2e;padding:22px 22px 16px;box-shadow:var(--shadow-sm);max-height:62vh;overflow-y:auto"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function cmpWSyncEmail() {
+  const box = document.getElementById('cmpw-mailprev');
+  if (!box) return;
+  const g = id => document.getElementById(id);
+  const sample = { nombre: 'Ana', empresa: 'Empresa Demo', etapa: 'contactado', valor: '$1.200.000', email: 'ana@demo.com', telefono: '+57 300 000 0000', fuente: 'importación' };
+  const render = t => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => sample[k.toLowerCase()] !== undefined ? sample[k.toLowerCase()] : m);
+  const bodyTxt = render(g('cmpw-msg')?.value || '');
+  if (_cmpW.channel !== 'email') {
+    box.innerHTML = '<div style="background:#DCF8C6;border-radius:12px 12px 4px 12px;padding:10px 13px;font-size:13px;line-height:1.5;max-width:85%;margin-left:auto;white-space:pre-wrap">' + (esc(bodyTxt) || '<span style="opacity:.5">Tu mensaje…</span>') + '</div>';
+    return;
+  }
+  const accent = g('cmpw-accent')?.value || '#2563EB';
+  const ctaT = (g('cmpw-cta-text')?.value || '').trim();
+  const ctaU = (g('cmpw-cta-url')?.value || '').trim();
+  const paras = bodyTxt.split('\n').map(l => l.trim()
+    ? '<p style="margin:0 0 12px;font-size:13.5px;line-height:1.6">' + esc(l).replace(/(https?:\/\/[^\s<>"']+)/g, '<a style="color:' + accent + '">$1</a>') + '</p>' : '').join('');
+  box.innerHTML =
+    '<div style="border-top:4px solid ' + accent + ';margin-bottom:16px"></div>' +
+    (paras || '<p style="opacity:.4;font-size:13.5px">Tu mensaje aparecerá aquí…</p>') +
+    (ctaT && ctaU ? '<div style="text-align:center;margin:20px 0"><span style="display:inline-block;background:' + accent + ';color:#fff;font-weight:700;font-size:13px;padding:11px 28px;border-radius:8px">' + esc(ctaT) + '</span></div>' : '') +
+    '<p style="margin:20px 0 0;padding-top:10px;border-top:1px solid #eee;font-size:10.5px;color:#9ca3af">¿No quieres recibir estos correos? <u>Darte de baja</u></p>';
+}
+
+async function cmpWAI() {
+  const btn = document.getElementById('cmpw-ai-btn');
+  const objective = document.getElementById('cmpw-ai-obj')?.value.trim();
+  if (!objective) { showToast('Cuéntale a la IA el objetivo de la campaña', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Redactando…';
+  try {
+    const w = _cmpW;
+    const audDesc = [w.tags.length ? 'etiquetas: ' + w.tags.join(', ') : '', w.stage ? 'etapa: ' + w.stage : '', w.source ? 'fuente: ' + w.source : ''].filter(Boolean).join(' · ') || 'todos los leads';
+    const d = await fetch('/api/campaigns?action=ai', {
+      method: 'POST', headers: await getAuthHeaders(),
+      body: JSON.stringify({
+        channel: w.channel, objective,
+        business_context: (typeof memCtx === 'function' ? memCtx() : '').slice(0, 2000),
+        audience_desc: audDesc,
+        current_body: document.getElementById('cmpw-msg')?.value.trim() || null,
+      }),
+    }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    const dr = d.draft || {};
+    if (dr.body) { _cmpW.body = dr.body; const t = document.getElementById('cmpw-msg'); if (t) t.value = dr.body; }
+    if (w.channel === 'email') {
+      if (dr.subject) _cmpW.subject = dr.subject;
+      if (dr.preheader) _cmpW.preheader = dr.preheader;
+      if (dr.cta_text && !document.getElementById('cmpw-cta-text')?.value) {
+        _cmpW.cta_text = dr.cta_text;
+        const c = document.getElementById('cmpw-cta-text'); if (c) c.value = dr.cta_text;
+      }
+    }
+    cmpWSyncEmail();
+    showToast('✨ Listo — el asunto y preencabezado también se actualizaron', 'success');
+  } catch { showToast('Error generando con IA', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Generar'; }
+}
+
+// Paso 3 — Audiencia con desglose de exclusiones
+function cmpWStep3() {
+  const tagChips = (typeof crmTags !== 'undefined' ? crmTags : []).filter(t => t.name !== 'no-email').map(t => {
+    const on = _cmpAudTags.includes(t.name);
+    const c = tagColor(t.name);
+    return '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + (on ? c : c + '1A') + ';color:' + (on ? '#fff' : c) + '" onclick="cmpToggleTag(\'' + esc(t.name) + '\')">' + esc(t.name) + '</button>';
+  }).join('');
+  return '<div style="max-width:640px;margin:0 auto">' +
+    '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Destinatarios</div>' +
+    '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Selecciona el segmento al que quieres impactar</div>' +
+    '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Etiquetas</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">' + (tagChips || '<span style="font-size:11.5px;color:var(--muted2)">Sin etiquetas aún — la campaña irá a todos los leads que cumplan los filtros</span>') + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' +
+      '<select class="auto-input" id="cmp-stage" onchange="cmpPreview()"><option value="">Cualquier etapa</option>' + autoStageOptions(_cmpW.stage || '') + '</select>' +
+      '<select class="auto-input" id="cmp-source" onchange="cmpPreview()"><option value="">Cualquier fuente</option>' + ['manual', 'webhook', 'landing_page', 'meta_ads', 'google_ads', 'referido', 'importacion'].map(s => '<option value="' + s + '"' + (_cmpW.source === s ? ' selected' : '') + '>' + s.replace('_', ' ') + '</option>').join('') + '</select>' +
+    '</div>' +
+    '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted)">Calculando audiencia…</div>' +
+  '</div>';
 }
 
 function cmpToggleTag(name) {
@@ -20562,8 +20765,8 @@ function cmpToggleTag(name) {
 function cmpAudience() {
   return {
     tags: _cmpAudTags,
-    stage: document.getElementById('cmp-stage')?.value || null,
-    source: document.getElementById('cmp-source')?.value || null,
+    stage: document.getElementById('cmp-stage')?.value || (_cmpW ? _cmpW.stage : null) || null,
+    source: document.getElementById('cmp-source')?.value || (_cmpW ? _cmpW.source : null) || null,
   };
 }
 
@@ -20577,37 +20780,215 @@ function cmpPreview() {
       const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
       const qs = '?preview=1&channel=' + _cmpChannel + '&audience=' + encodeURIComponent(JSON.stringify(cmpAudience())) + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
       const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
-      el.innerHTML = '🎯 <b>' + d.count + '</b> destinatarios' + (d.sample?.length ? ' · ej: ' + d.sample.slice(0, 3).map(esc).join(', ') : '') +
-        (_cmpChannel === 'email' && cmpQuota && cmpQuota.limit > 0 ? ' · cupo restante: ' + Math.max(0, cmpQuota.limit - (cmpQuota.used || 0)).toLocaleString('es-CO') : '');
+      if (_cmpW) { _cmpW.count = d.count; _cmpW.breakdown = d.breakdown || null; }
+      const b = d.breakdown || {};
+      const excl = [];
+      if (b.unsubscribed) excl.push(b.unsubscribed + ' dados de baja');
+      if (b.missing) excl.push(b.missing + (_cmpChannel === 'email' ? ' sin email' : ' sin teléfono'));
+      el.innerHTML = '🎯 <b>' + d.count + '</b> destinatarios' +
+        (d.sample?.length ? ' · ej: ' + d.sample.slice(0, 3).map(esc).join(', ') : '') +
+        (excl.length ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:4px">Excluidos: ' + excl.join(' · ') + '</div>' : '') +
+        (_cmpChannel === 'email' && cmpQuota && cmpQuota.limit > 0 ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">Cupo restante del mes: ' + Math.max(0, cmpQuota.limit - (cmpQuota.used || 0)).toLocaleString('es-CO') + '</div>' : '');
     } catch { el.textContent = 'No se pudo calcular la audiencia'; }
   }, 350);
 }
 
-async function cmpCreate() {
-  const name = document.getElementById('cmp-name').value.trim();
-  const body = document.getElementById('cmp-body').value.trim();
-  const subject = document.getElementById('cmp-subject')?.value.trim();
-  if (!name || !body) { showToast('La campaña necesita nombre y mensaje', 'error'); return; }
-  if (_cmpChannel === 'email' && !subject) { showToast('El email necesita asunto', 'error'); return; }
-  const btn = document.getElementById('cmp-create-btn');
-  btn.disabled = true; btn.textContent = 'Creando…';
+// Paso 4 — Revisión y envío
+function cmpWStep4() {
+  const w = _cmpW;
+  const isEmail = w.channel === 'email';
+  const row = (label, val) => '<div style="display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px"><div style="width:150px;flex-shrink:0;color:var(--muted);font-weight:600">' + label + '</div><div style="flex:1;min-width:0">' + val + '</div></div>';
+  const audParts = [w.tags.length ? 'Etiquetas: ' + w.tags.map(esc).join(', ') : 'Todas las etiquetas', w.stage ? 'Etapa: ' + esc(w.stage) : '', w.source ? 'Fuente: ' + esc(w.source) : ''].filter(Boolean).join(' · ');
+  return '<div style="max-width:680px;margin:0 auto">' +
+    '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Revisión y envío</div>' +
+    '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Verifica todo antes de enviar</div>' +
+    '<div style="border:1px solid var(--border);border-radius:14px;padding:6px 18px;background:var(--panel);margin-bottom:16px">' +
+      row('Nombre', esc(w.name || '—')) +
+      row('Canal', isEmail ? '📧 Email' : '💬 WhatsApp') +
+      (isEmail ? row('Asunto', esc(w.subject || '—')) + row('Preencabezado', esc(w.preheader || '—')) +
+        row('Remitente', esc(w.from_name || 'Acuarius')) + row('Responder a', esc(w.reply_to || '—')) +
+        row('Botón CTA', w.cta_text && w.cta_url ? esc(w.cta_text) + ' → ' + esc(w.cta_url) : '—') +
+        row('UTM en links', w.utm ? 'Sí — utm_source=acuarius' : 'No') : '') +
+      row('Audiencia', audParts + '<div id="cmpw-sum-count" style="font-size:12px;color:var(--muted2);margin-top:3px">Calculando…</div>') +
+    '</div>' +
+    (isEmail ? '<button class="btn-sec" id="cmpw-test-btn" onclick="cmpWTest()" style="margin-bottom:16px">✉️ Enviarme un correo de prueba</button>' : '') +
+    '<div style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel)">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer">' +
+        '<input type="checkbox" id="cmpw-sched-on"' + (w.schedule ? ' checked' : '') + ' onchange="cmpWSchedToggle()"> Programar envío</label>' +
+      '<div id="cmpw-sched-box" style="display:' + (w.schedule ? 'block' : 'none') + ';margin-top:10px">' +
+        '<input type="datetime-local" class="auto-input" id="cmpw-sched" value="' + esc(w.schedule || '') + '" onchange="cmpWSchedChange()">' +
+        '<div style="font-size:11.5px;color:var(--muted2);margin-top:5px">El envío arranca en el ciclo siguiente a la hora elegida (máx. 10 min después)</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function cmpWSchedToggle() {
+  const on = document.getElementById('cmpw-sched-on').checked;
+  document.getElementById('cmpw-sched-box').style.display = on ? 'block' : 'none';
+  if (!on) _cmpW.schedule = '';
+  else {
+    const d = new Date(Date.now() + 3600000);
+    d.setMinutes(0, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    _cmpW.schedule = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':00';
+    const inp = document.getElementById('cmpw-sched');
+    if (inp) inp.value = _cmpW.schedule;
+  }
+  const btn = document.getElementById('cmpw-send-btn');
+  if (btn) btn.textContent = _cmpW.schedule ? 'Programar envío' : 'Enviar';
+}
+
+function cmpWSchedChange() {
+  _cmpW.schedule = document.getElementById('cmpw-sched')?.value || '';
+  const btn = document.getElementById('cmpw-send-btn');
+  if (btn) btn.textContent = _cmpW.schedule ? 'Programar envío' : 'Enviar';
+}
+
+function cmpWLoadSummaryCount() {
+  cmpPreview();
+  // cmpPreview escribe en #cmp-count; el resumen usa otro nodo — puente:
+  const iv = setInterval(() => {
+    const el = document.getElementById('cmpw-sum-count');
+    if (!el) { clearInterval(iv); return; }
+    if (_cmpW && _cmpW.count !== null) {
+      const b = _cmpW.breakdown || {};
+      const excl = [];
+      if (b.unsubscribed) excl.push(b.unsubscribed + ' dados de baja');
+      if (b.missing) excl.push(b.missing + (_cmpW.channel === 'email' ? ' sin email' : ' sin teléfono'));
+      el.innerHTML = '<b>' + _cmpW.count + '</b> destinatarios' + (excl.length ? ' · excluidos: ' + excl.join(', ') : '');
+      clearInterval(iv);
+    }
+  }, 400);
+}
+
+function cmpWGo(step) { cmpWCollect(); _cmpW.step = step; cmpWRender(); }
+
+function cmpWCollect() {
+  const g = id => document.getElementById(id);
+  const w = _cmpW;
+  if (w.step === 1) {
+    if (g('cmpw-name')) w.name = g('cmpw-name').value.trim();
+    if (g('cmpw-subject')) w.subject = g('cmpw-subject').value.trim();
+    if (g('cmpw-preheader')) w.preheader = g('cmpw-preheader').value.trim();
+    if (g('cmpw-from')) w.from_name = g('cmpw-from').value.trim();
+    if (g('cmpw-reply')) w.reply_to = g('cmpw-reply').value.trim();
+  } else if (w.step === 2) {
+    if (g('cmpw-msg')) w.body = g('cmpw-msg').value.trim();
+    if (g('cmpw-cta-text')) w.cta_text = g('cmpw-cta-text').value.trim();
+    if (g('cmpw-cta-url')) w.cta_url = g('cmpw-cta-url').value.trim();
+    if (g('cmpw-accent')) w.accent_color = g('cmpw-accent').value;
+    if (g('cmpw-utm')) w.utm = g('cmpw-utm').checked;
+  } else if (w.step === 3) {
+    w.tags = _cmpAudTags.slice();
+    if (g('cmp-stage')) w.stage = g('cmp-stage').value;
+    if (g('cmp-source')) w.source = g('cmp-source').value;
+  } else if (w.step === 4) {
+    if (g('cmpw-sched-on')) w.schedule = g('cmpw-sched-on').checked ? (g('cmpw-sched')?.value || '') : '';
+  }
+}
+
+function cmpWValidate(step) {
+  const w = _cmpW;
+  if (step === 1) {
+    if (!w.name) { showToast('La campaña necesita un nombre', 'error'); return false; }
+    if (w.channel === 'email' && !w.subject) { showToast('El email necesita asunto', 'error'); return false; }
+    if (w.reply_to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(w.reply_to)) { showToast('El email de "Responder a" no es válido', 'error'); return false; }
+  }
+  if (step === 2) {
+    if (!w.body) { showToast('Escribe el mensaje (o genera uno con IA)', 'error'); return false; }
+    if ((w.cta_text && !w.cta_url) || (!w.cta_text && w.cta_url)) { showToast('El botón CTA necesita texto y link', 'error'); return false; }
+    if (w.cta_url && !/^https?:\/\//i.test(w.cta_url)) { showToast('El link del CTA debe empezar con https://', 'error'); return false; }
+  }
+  if (step === 3 && w.count === 0) { showToast('La audiencia quedó vacía con esos filtros', 'error'); return false; }
+  return true;
+}
+
+function cmpWNext() {
+  cmpWCollect();
+  if (!cmpWValidate(_cmpW.step)) return;
+  _cmpW.step++;
+  cmpWRender();
+}
+
+// Persistencia: POST crea el borrador, PUT lo actualiza (el wizard guarda al final)
+async function cmpWSave() {
+  const w = _cmpW;
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+  const payload = {
+    name: w.name, channel: w.channel, subject: w.subject || null, body: w.body,
+    from_name: w.from_name || null, audience: { tags: w.tags, stage: w.stage || null, source: w.source || null },
+    preheader: w.preheader || null, reply_to: w.reply_to || null,
+    cta_text: w.cta_text || null, cta_url: w.cta_url || null,
+    accent_color: w.accent_color || null, utm: w.utm,
+  };
+  if (w.id) payload.id = w.id;
+  const d = await fetch('/api/campaigns' + qs, {
+    method: w.id ? 'PUT' : 'POST', headers: await getAuthHeaders(), body: JSON.stringify(payload),
+  }).then(r => r.json());
+  if (d.error) throw new Error(d.error);
+  _cmpW.id = d.campaign.id;
+  return d.campaign;
+}
+
+async function cmpWTest() {
+  cmpWCollect();
+  if (!cmpWValidate(1) || !cmpWValidate(2)) return;
+  const btn = document.getElementById('cmpw-test-btn');
+  btn.disabled = true; btn.textContent = 'Enviando prueba…';
   try {
+    await cmpWSave();
+    const d = await fetch('/api/campaigns?action=test', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ id: _cmpW.id }) }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    showToast('✉️ Prueba enviada a ' + d.to + ' — revisa tu inbox', 'success');
+  } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando la prueba'), 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✉️ Enviarme un correo de prueba'; }
+}
+
+async function cmpWSaveDraft() {
+  cmpWCollect();
+  if (!cmpWValidate(1) || !cmpWValidate(2)) return;
+  const btn = document.getElementById('cmpw-draft-btn');
+  btn.disabled = true;
+  try {
+    await cmpWSave();
+    document.getElementById('cmp-overlay')?.remove();
+    _cmpW = null;
+    showToast('💾 Borrador guardado', 'success');
+    cmpRender();
+  } catch (e) { showToast('⚠️ ' + (e.message || 'Error guardando'), 'error'); btn.disabled = false; }
+}
+
+async function cmpWSend() {
+  cmpWCollect();
+  if (!cmpWValidate(1) || !cmpWValidate(2) || !cmpWValidate(3)) return;
+  const w = _cmpW;
+  const when = w.schedule ? new Date(w.schedule) : null;
+  if (when && (isNaN(when.getTime()) || when.getTime() <= Date.now())) { showToast('La fecha de programación debe ser futura', 'error'); return; }
+  const msg = when
+    ? '¿Programar "' + w.name + '" para el ' + when.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '?'
+    : '¿Enviar "' + w.name + '" ahora? El envío arranca en el próximo ciclo (máx. 10 min) y no se puede deshacer.';
+  if (!confirm(msg)) return;
+  const btn = document.getElementById('cmpw-send-btn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    await cmpWSave();
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
-    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const qs = '?action=queue' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
     const d = await fetch('/api/campaigns' + qs, {
       method: 'POST', headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        name, channel: _cmpChannel, subject: subject || null, body,
-        from_name: document.getElementById('cmp-from')?.value.trim() || null,
-        audience: cmpAudience(),
-      }),
+      body: JSON.stringify({ id: _cmpW.id, scheduled_at: when ? when.toISOString() : null }),
     }).then(r => r.json());
+    if (d.upgrade) { openUpgradeFlow('Las campañas masivas son parte del plan Pro.'); return; }
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
-    document.getElementById('cmp-overlay').remove();
-    showToast('✅ Campaña creada como borrador — revísala y dale Enviar', 'success');
+    track('campaign_sent', { channel: w.channel, total: d.total, scheduled: !!when });
+    document.getElementById('cmp-overlay')?.remove();
+    _cmpW = null;
+    showToast(when ? '🕑 Campaña programada: ' + d.total + ' destinatarios' : '🚀 Campaña en cola: ' + d.total + ' destinatarios', 'success');
     cmpRender();
-  } catch (e) { showToast('Error creando la campaña', 'error'); }
-  finally { btn.disabled = false; btn.textContent = 'Crear campaña (borrador)'; }
+  } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando'), 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = w.schedule ? 'Programar envío' : 'Enviar'; } }
 }
 
 async function cmpQueue(id) {

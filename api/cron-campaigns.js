@@ -9,6 +9,7 @@
 // Actualiza stats en vivo y cierra la campaña (status sent) al agotar la cola.
 
 import crypto from 'crypto';
+import { campaignHtml } from './_campaign-email.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -53,18 +54,17 @@ async function sendEmail(campaign, lead) {
   const subject = renderVars(campaign.subject, lead);
   const bodyTxt = renderVars(campaign.body, lead);
   const unsub = unsubLink(lead.id);
-  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
-    bodyTxt.split('\n').map(p => p.trim() ? '<p style="margin:0 0 14px">' + p + '</p>' : '').join('') +
-    '<p style="margin:26px 0 0;padding-top:14px;border-top:1px solid #eee;font-size:11.5px;color:#9ca3af">' +
-    '¿No quieres recibir estos correos? <a href="' + unsub + '" style="color:#9ca3af">Darte de baja</a></p></div>';
+  const html = campaignHtml(campaign, bodyTxt, unsub);
   const from = (campaign.from_name ? campaign.from_name.replace(/[<>"]/g, '') : 'Acuarius') + ' <notificaciones@app.acuarius.app>';
+  const payload = {
+    from, to: [lead.email], subject, html,
+    headers: { 'List-Unsubscribe': '<' + unsub + '>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+  };
+  if (campaign.reply_to) payload.reply_to = campaign.reply_to;
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from, to: [lead.email], subject, html,
-      headers: { 'List-Unsubscribe': '<' + unsub + '>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-    }),
+    body: JSON.stringify(payload),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return { status: 'failed', detail: JSON.stringify(d).slice(0, 150) };
@@ -123,7 +123,9 @@ export default async function handler(req, res) {
 
   let processed = 0, closed = 0;
   try {
-    const campaigns = await sb(`/campaigns?status=in.(queued,sending)&select=*&order=queued_at.asc&limit=5`);
+    // Programación: una campaña con scheduled_at futuro espera su hora
+    const nowIso = new Date().toISOString();
+    const campaigns = await sb(`/campaigns?status=in.(queued,sending)&or=(scheduled_at.is.null,scheduled_at.lte.${encodeURIComponent(nowIso)})&select=*&order=queued_at.asc&limit=5`);
     for (const c of (campaigns || [])) {
       if (c.status === 'queued') {
         await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'sending' }, 'return=minimal');
