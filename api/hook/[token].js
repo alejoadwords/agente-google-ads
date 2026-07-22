@@ -7,6 +7,11 @@
 
 import { intakeLead, mapExternalPayload, pick as pickIntake } from '../_lead-intake.js';
 
+// Edge runtime: los imports de módulos compartidos (_lead-intake) se bundlean
+// sin problema — en el runtime Node de Vercel ese import rompía el build de
+// la función y la ruta caía al catch-all de index.html.
+export const config = { runtime: 'edge' };
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -60,14 +65,29 @@ function pick(body, ...keys) {
   return null;
 }
 
-export default async function handler(req, res) {
-  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method === 'GET') return res.status(200).json({ ok: true, hint: 'Envía un POST con los datos del lead (name, email, phone, company, value, source)' });
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
+function jsonOut(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+}
 
-  const token = String(req.query.token || '');
-  if (!/^[a-f0-9]{24,64}$/i.test(token)) return res.status(404).json({ error: 'Webhook no encontrado' });
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method === 'GET') return jsonOut({ ok: true, hint: 'Envía un POST con los datos del lead (name, email, phone, company, value, source)' });
+  if (req.method !== 'POST') return jsonOut({ error: 'Método no permitido' }, 405);
+
+  const url = new URL(req.url);
+  const token = String(url.searchParams.get('token') || url.pathname.split('/').pop() || '');
+  if (!/^[a-f0-9]{24,64}$/i.test(token)) return jsonOut({ error: 'Webhook no encontrado' }, 404);
+
+  // Body: JSON o form-urlencoded (en edge se parsea a mano)
+  let reqBody = {};
+  try {
+    const ct = req.headers.get('content-type') || '';
+    if (ct.includes('json')) reqBody = await req.json();
+    else {
+      const text = await req.text();
+      reqBody = Object.fromEntries(new URLSearchParams(text));
+    }
+  } catch {}
 
   try {
     // 1. Automatización activa dueña de este token
@@ -78,8 +98,8 @@ export default async function handler(req, res) {
       // Crea/mergea el lead y dispara lead_created/tag_added — sin automatización fija.
       const conns = await sb(`/platform_connections?platform=eq.lead_webhook&access_token=eq.${encodeURIComponent(token)}&select=user_id&limit=1`);
       const conn = conns?.[0];
-      if (!conn) return res.status(404).json({ error: 'Webhook no encontrado o automatización inactiva' });
-      const gBody = (typeof req.body === 'object' && req.body) || {};
+      if (!conn) return jsonOut({ error: 'Webhook no encontrado o automatización inactiva' }, 404);
+      const gBody = reqBody;
       const mapped = mapExternalPayload(gBody) || {
         name: pickIntake(gBody, 'name', 'nombre', 'full_name', 'fullname'),
         email: pickIntake(gBody, 'email', 'correo', 'mail'),
@@ -91,13 +111,13 @@ export default async function handler(req, res) {
         sourceLabel: 'Webhook',
         tags: Array.isArray(gBody.tags || gBody.etiquetas) ? (gBody.tags || gBody.etiquetas) : String(gBody.tags || gBody.etiquetas || '').split(',').filter(Boolean),
       };
-      if (!mapped.name && !mapped.email && !mapped.phone) return res.status(400).json({ error: 'Faltan datos de contacto (name, email o phone)' });
+      if (!mapped.name && !mapped.email && !mapped.phone) return jsonOut({ error: 'Faltan datos de contacto (name, email o phone)' }, 400);
       const { lead, created } = await intakeLead(conn.user_id, null, mapped);
-      return res.status(200).json({ ok: true, lead_id: lead.id, created });
+      return jsonOut({ ok: true, lead_id: lead.id, created });
     }
 
-    // 2. Datos del lead (req.body ya viene parseado por Vercel para JSON y form-urlencoded)
-    const body = (typeof req.body === 'object' && req.body) || {};
+    // 2. Datos del lead (ya parseado arriba: JSON o form-urlencoded)
+    const body = reqBody;
     const name = pick(body, 'name', 'nombre', 'full_name', 'fullname') || 'Lead sin nombre';
     const email = pick(body, 'email', 'correo', 'mail');
     const phone = pick(body, 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp');
@@ -178,9 +198,9 @@ export default async function handler(req, res) {
       }, 'return=minimal').catch(() => {});
     }
 
-    return res.status(200).json({ ok: true, lead_id: lead.id });
+    return jsonOut({ ok: true, lead_id: lead.id });
   } catch (e) {
     console.error('[hook] error:', e.message);
-    return res.status(500).json({ error: 'Error interno' });
+    return jsonOut({ error: 'Error interno' }, 500);
   }
 }
