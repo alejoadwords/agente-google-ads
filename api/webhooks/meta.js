@@ -4,6 +4,8 @@
 
 export const config = { runtime: 'edge' };
 
+import { intakeLead, ensureCatalog, enqueueAutomations } from '../_lead-intake.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -107,7 +109,8 @@ async function upsertLead(userId, clientId, conv, captureData) {
     return conv.lead_id;
   }
 
-  // Crear nuevo lead
+  // Crear nuevo lead — con etiqueta automática del canal (whatsapp/messenger/instagram)
+  const channelTag = String(conv.channel || '').toLowerCase().slice(0, 30);
   const leadPayload = {
     user_id: userId,
     client_id: clientId || null,
@@ -117,6 +120,7 @@ async function upsertLead(userId, clientId, conv, captureData) {
     stage: 'nuevo',
     stage_position: Date.now(),
     source: conv.channel,
+    tags: channelTag.length >= 2 ? [channelTag] : [],
     notes: captureData.interes ? `Interés: ${captureData.interes}` : null,
   };
   const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
@@ -147,8 +151,61 @@ async function upsertLead(userId, clientId, conv, captureData) {
         metadata: { conversation_id: conv.id, channel: conv.channel },
       }),
     });
+    // Etiqueta del canal al catálogo + automatizaciones (lead_created y tag_added)
+    const createdLead = rows[0];
+    if (leadPayload.tags.length) await ensureCatalog(userId, clientId || null, leadPayload.tags, channelTag).catch(() => {});
+    await enqueueAutomations(userId, createdLead, 'lead_created').catch(() => {});
+    if (leadPayload.tags.length) await enqueueAutomations(userId, createdLead, 'tag_added', leadPayload.tags).catch(() => {});
   }
   return leadId;
+}
+
+// ── Meta Lead Ads (formularios de anuncios) ──────────────────────────────────
+// Requiere el permiso leads_retrieval de la app (en trámite) y suscripción al
+// campo leadgen de la página. Cuando llegue el evento, trae el lead completo
+// via Graph con el token de la página conectada y lo ingesta al CRM.
+async function processLeadgen(value) {
+  const pageId = String(value.page_id || '');
+  const leadgenId = String(value.leadgen_id || '');
+  if (!pageId || !leadgenId) return;
+  const connRows = await fetch(
+    `${SUPABASE_URL}/rest/v1/channel_connections?external_id=eq.${encodeURIComponent(pageId)}&is_active=eq.true&select=*&limit=1`,
+    { headers: sb() }
+  ).then(r => r.json()).catch(() => []);
+  const connection = connRows?.[0];
+  if (!connection || !connection.access_token) return;
+
+  const lead = await fetch(`https://graph.facebook.com/v19.0/${leadgenId}?access_token=${connection.access_token}`)
+    .then(r => r.json()).catch(() => null);
+  if (!lead || lead.error || !Array.isArray(lead.field_data)) {
+    console.error('[leadgen] no se pudo traer el lead:', JSON.stringify(lead?.error || {}).slice(0, 200));
+    return;
+  }
+  const fields = {};
+  for (const f of lead.field_data) fields[String(f.name || '').toLowerCase()] = (f.values || [])[0] || null;
+  const name = fields.full_name || [fields.first_name, fields.last_name].filter(Boolean).join(' ') || fields.nombre || null;
+  const email = fields.email || fields.correo || null;
+  const phone = fields.phone_number || fields.telefono || fields.whatsapp || null;
+  if (!name && !email && !phone) return;
+
+  // Nombre del formulario como etiqueta (best effort)
+  let formName = null;
+  if (value.form_id) {
+    const form = await fetch(`https://graph.facebook.com/v19.0/${value.form_id}?fields=name&access_token=${connection.access_token}`)
+      .then(r => r.json()).catch(() => null);
+    if (form && form.name) formName = String(form.name);
+  }
+  const known = new Set(['full_name', 'first_name', 'last_name', 'nombre', 'email', 'correo', 'phone_number', 'telefono', 'whatsapp', 'company_name', 'empresa']);
+  const extras = Object.entries(fields).filter(([k, v]) => !known.has(k) && v).map(([k, v]) => `${k}: ${String(v).slice(0, 150)}`).slice(0, 8);
+
+  await intakeLead(connection.user_id, null, {
+    name, email, phone,
+    company: fields.company_name || fields.empresa || null,
+    note: extras.join(' · ') || null,
+    source: 'meta_lead_ads',
+    sourceLabel: 'Meta Lead Ads',
+    tags: ['meta lead ads', ...(formName ? [formName] : [])],
+  });
 }
 
 // ── Proceso principal de mensaje ──────────────────────────────────────────────
@@ -296,6 +353,12 @@ export default async function handler(req) {
   const process = (async () => {
     try {
       if (body.object === 'page') {
+        // Formularios de clientes potenciales (Lead Ads)
+        for (const entry of body.entry || []) {
+          for (const change of entry.changes || []) {
+            if (change.field === 'leadgen' && change.value) await processLeadgen(change.value);
+          }
+        }
         // Messenger
         for (const entry of body.entry || []) {
           for (const msg of entry.messaging || []) {

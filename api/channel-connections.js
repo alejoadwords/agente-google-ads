@@ -53,6 +53,15 @@ export default async function handler(req) {
     return jsonResp({ pages: data.data || [] });
   }
 
+  // GET ?all=1 — todas las conexiones del usuario (hub Fuentes de leads)
+  if (req.method === 'GET' && url.searchParams.get('all')) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=id,channel,channel_name,is_active&order=created_at.desc&limit=50`,
+      { headers: sb() }
+    );
+    return jsonResp({ connections: (await res.json()) || [] });
+  }
+
   // GET — list connections for an agent
   if (req.method === 'GET') {
     const agentId = url.searchParams.get('agent_id');

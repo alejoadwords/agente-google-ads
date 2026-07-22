@@ -5,6 +5,8 @@
 // (o reutiliza el existente por email) y encola el flujo.
 // Pensado para formularios de landing, Zapier, Make, Meta Lead Ads, etc.
 
+import { intakeLead, mapExternalPayload, pick as pickIntake } from '../_lead-intake.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -71,7 +73,28 @@ export default async function handler(req, res) {
     // 1. Automatización activa dueña de este token
     const autos = await sb(`/automations?trigger->>type=eq.webhook&trigger->>token=eq.${encodeURIComponent(token)}&active=eq.true&select=*&limit=1`);
     const auto = autos?.[0];
-    if (!auto) return res.status(404).json({ error: 'Webhook no encontrado o automatización inactiva' });
+    if (!auto) {
+      // Fallback: webhook de entrada genérico del usuario (Fuentes de leads).
+      // Crea/mergea el lead y dispara lead_created/tag_added — sin automatización fija.
+      const conns = await sb(`/platform_connections?platform=eq.lead_webhook&access_token=eq.${encodeURIComponent(token)}&select=user_id&limit=1`);
+      const conn = conns?.[0];
+      if (!conn) return res.status(404).json({ error: 'Webhook no encontrado o automatización inactiva' });
+      const gBody = (typeof req.body === 'object' && req.body) || {};
+      const mapped = mapExternalPayload(gBody) || {
+        name: pickIntake(gBody, 'name', 'nombre', 'full_name', 'fullname'),
+        email: pickIntake(gBody, 'email', 'correo', 'mail'),
+        phone: pickIntake(gBody, 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp', 'celular'),
+        company: pickIntake(gBody, 'company', 'empresa', 'negocio'),
+        value: pickIntake(gBody, 'value', 'valor', 'budget', 'presupuesto'),
+        note: pickIntake(gBody, 'note', 'nota', 'message', 'mensaje', 'comentario'),
+        source: pickIntake(gBody, 'source', 'fuente', 'utm_source') || 'webhook',
+        sourceLabel: 'Webhook',
+        tags: Array.isArray(gBody.tags || gBody.etiquetas) ? (gBody.tags || gBody.etiquetas) : String(gBody.tags || gBody.etiquetas || '').split(',').filter(Boolean),
+      };
+      if (!mapped.name && !mapped.email && !mapped.phone) return res.status(400).json({ error: 'Faltan datos de contacto (name, email o phone)' });
+      const { lead, created } = await intakeLead(conn.user_id, null, mapped);
+      return res.status(200).json({ ok: true, lead_id: lead.id, created });
+    }
 
     // 2. Datos del lead (req.body ya viene parseado por Vercel para JSON y form-urlencoded)
     const body = (typeof req.body === 'object' && req.body) || {};

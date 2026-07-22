@@ -36,10 +36,36 @@ export function pick(body, ...keys) {
   return null;
 }
 
+// Detección de payloads conocidos de plataformas externas.
+// Hotmart: {event:'PURCHASE_APPROVED', data:{buyer:{name,email,checkout_phone},
+// product:{name}, purchase:{price:{value}}}} — compra aprobada entra como Ganado.
+export function mapExternalPayload(body) {
+  const d = body && body.data;
+  const ev = String(body?.event || '');
+  if (d && (d.buyer || /^(PURCHASE|SUBSCRIPTION|CART|CLUB)/.test(ev))) {
+    const buyer = d.buyer || {};
+    const product = d.product || {};
+    const price = (d.purchase && d.purchase.price) || {};
+    const won = /APPROVED|COMPLETE/.test(ev);
+    return {
+      name: buyer.name || null,
+      email: buyer.email || null,
+      phone: buyer.checkout_phone || buyer.phone || null,
+      value: price.value || null,
+      source: 'hotmart',
+      sourceLabel: 'Hotmart',
+      note: [ev.replace(/_/g, ' ').toLowerCase() || null, product.name || null].filter(Boolean).join(' · ') || null,
+      tags: ['hotmart', ...(product.name ? [String(product.name)] : [])],
+      stage: won ? 'ganado' : 'nuevo',
+    };
+  }
+  return null;
+}
+
 const TAG_PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#EF4444','#6366F1','#84CC16','#F97316'];
 function colorFor(n) { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return TAG_PALETTE[h % TAG_PALETTE.length]; }
 
-async function ensureCatalog(userId, clientId, tags, autoTag) {
+export async function ensureCatalog(userId, clientId, tags, autoTag) {
   if (!tags.length) return;
   try {
     const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
@@ -54,7 +80,7 @@ async function ensureCatalog(userId, clientId, tags, autoTag) {
   } catch {}
 }
 
-async function enqueueAutomations(userId, lead, triggerType, extra) {
+export async function enqueueAutomations(userId, lead, triggerType, extra) {
   try {
     const scope = lead.client_id ? `&client_id=eq.${lead.client_id}` : '&client_id=is.null';
     const autos = await sb(`/automations?user_id=eq.${encodeURIComponent(userId)}${scope}&active=eq.true&select=id,trigger`);

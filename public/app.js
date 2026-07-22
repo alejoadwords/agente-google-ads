@@ -21295,14 +21295,78 @@ async function srcRender() {
         '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted)">Crea un formulario y tienes 3 formas de usarlo: <b>página alojada</b> (link listo para compartir o poner en tu bio), <b>incrustado</b> en tu web, o <b>conectar un formulario que ya tengas</b> con una línea de código. Cada envío crea el lead con su etiqueta y dispara tus automatizaciones.</div>') +
     '</div>';
 
-  // ── Placeholder de las demás fuentes (se completan en la fase 2) ──
+  // ── Webhook de entrada + canales de chat + Meta Lead Ads ──
   const rest =
-    '<div style="max-width:860px" id="src-more">' +
-      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">🔌 Otras fuentes</div>' +
-      '<div style="border:1px dashed var(--border);border-radius:14px;padding:16px;font-size:12.5px;color:var(--muted2)">Webhook para plataformas externas (Hotmart, Zapier, Make), canales de chat y Meta Lead Ads — en construcción.</div>' +
+    '<div style="max-width:860px;margin-bottom:26px">' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">🔌 Plataformas externas (Hotmart, Zapier, Make…)</div>' +
+      '<div style="border:1px solid var(--border);border-radius:14px;padding:16px 18px;background:var(--panel)">' +
+        '<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Tu webhook de entrada: cualquier plataforma que pueda enviar un POST crea leads aquí. Detecta automáticamente el formato de Hotmart (compra aprobada entra como <b>Ganado</b> con el producto como etiqueta).</div>' +
+        '<div style="display:flex;gap:6px;align-items:stretch;margin-bottom:10px">' +
+          '<code id="src-wh-url" style="flex:1;font-size:10.5px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:nowrap">Cargando…</code>' +
+          '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(document.getElementById(\'src-wh-url\').textContent).then(function(){showToast(\'Copiado ✓\',\'success\')})">Copiar</button>' +
+        '</div>' +
+        '<details style="margin-bottom:6px"><summary style="font-size:12px;font-weight:700;cursor:pointer">🛒 Receta: conectar Hotmart</summary>' +
+          '<ol style="font-size:12px;color:var(--muted);margin:8px 0 4px 18px;line-height:1.7">' +
+            '<li>En Hotmart ve a <b>Herramientas → Webhook (API y notificaciones)</b></li>' +
+            '<li>Crea una configuración nueva y pega tu URL de arriba</li>' +
+            '<li>Marca los eventos de <b>Compra aprobada</b> (y los que quieras rastrear)</li>' +
+            '<li>Listo: cada compra crea/actualiza el lead con etiquetas <b>hotmart</b> + el nombre del producto</li>' +
+          '</ol></details>' +
+        '<details><summary style="font-size:12px;font-weight:700;cursor:pointer">⚡ Receta: Zapier, Make o cualquier sistema</summary>' +
+          '<div style="font-size:12px;color:var(--muted);margin:8px 0 4px;line-height:1.7">Envía un POST con JSON. Campos: <code>name, email, phone, company, value, note, source, tags</code> (acepta alias en español). Ejemplo:<br><code style="font-size:10.5px;display:block;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;margin-top:5px;overflow-x:auto;white-space:nowrap">{"name":"Ana López","email":"ana@x.com","phone":"+57 300...","tags":"webinar, vip"}</code></div></details>' +
+      '</div>' +
+    '</div>' +
+    '<div style="max-width:860px;margin-bottom:26px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+        '<div style="font-weight:800;font-size:var(--fs-md)">💬 Canales de chat (WhatsApp, Messenger, Instagram)</div>' +
+        '<button class="btn-sec sm" onclick="crmSetView(\'agents\')">Configurar canales</button>' +
+      '</div>' +
+      '<div id="src-channels" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando canales…</div>' +
+    '</div>' +
+    '<div style="max-width:860px">' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">📋 Meta Lead Ads (formularios de anuncios)</div>' +
+      '<div style="border:1px dashed var(--border);border-radius:14px;padding:14px 18px;font-size:12.5px;color:var(--muted2)">En preparación — requiere el permiso de la app de Meta que está en trámite. Cuando esté activo, los formularios de tus campañas de clientes potenciales entrarán directo al CRM con su campaña como etiqueta.</div>' +
     '</div>';
 
   view.innerHTML = header + formsSection + rest;
+  srcLoadWebhook();
+  srcLoadChannels();
+}
+
+async function srcLoadWebhook() {
+  const el = document.getElementById('src-wh-url');
+  if (!el) return;
+  try {
+    const d = await fetch('/api/lead-webhook', { headers: await getAuthHeaders() }).then(r => r.json());
+    if (d.url) el.textContent = d.url;
+    else el.textContent = d.error || 'Error';
+  } catch { el.textContent = 'No se pudo cargar'; }
+}
+
+const SRC_CHANNEL_META = {
+  whatsapp: { icon: '💬', label: 'WhatsApp' },
+  messenger: { icon: '📘', label: 'Messenger' },
+  instagram: { icon: '📸', label: 'Instagram' },
+};
+async function srcLoadChannels() {
+  const el = document.getElementById('src-channels');
+  if (!el) return;
+  try {
+    const d = await fetch('/api/channel-connections?all=1', { headers: await getAuthHeaders() }).then(r => r.json());
+    const conns = d.connections || [];
+    if (!conns.length) {
+      el.innerHTML = 'Sin canales conectados aún. Conecta WhatsApp, Messenger o Instagram en <b>Agentes IA</b>: el agente conversa, captura nombre y contacto de forma natural, y crea el lead solo.';
+      return;
+    }
+    el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px">' + conns.map(c => {
+      const m = SRC_CHANNEL_META[c.channel] || { icon: '💬', label: c.channel };
+      const on = c.is_active !== false;
+      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg)">' +
+        m.icon + ' ' + esc(c.channel_name || m.label) +
+        '<span style="width:7px;height:7px;border-radius:50%;background:' + (on ? '#10B981' : '#9ca3af') + '"></span></span>';
+    }).join('') + '</div>' +
+    '<div style="font-size:11.5px;color:var(--muted2);margin-top:8px">Cada conversación nueva captura el contacto con IA y crea el lead automáticamente.</div>';
+  } catch { el.textContent = 'No se pudieron cargar los canales'; }
 }
 
 // ── Editor de formulario ──
