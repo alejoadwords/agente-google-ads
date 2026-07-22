@@ -22429,3 +22429,62 @@ function navRenderAgentChips(agentKey) {
     };
   }
 })();
+
+// ── Selector de cliente en el header (solo cuentas agencia) ─────────────────
+function hdrClientRender() {
+  const wrap = document.getElementById('hdr-client-switch');
+  if (!wrap) return;
+  const isAgency = (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients) && agencyClients.length > 0);
+  wrap.style.display = isAgency ? '' : 'none';
+  if (!isAgency) return;
+  const nameEl = document.getElementById('hdr-client-name');
+  const active = agencyClients.find(c => c.id === agencyActiveClientId);
+  if (nameEl) nameEl.textContent = active ? (active.client_name || active.name || 'Cliente') : 'Mi cuenta';
+}
+
+function hdrClientToggle(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('hdr-client-menu');
+  if (!menu) return;
+  if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
+  const item = (label, active, onclick, sub) =>
+    '<div onclick="' + onclick + ';document.getElementById(\'hdr-client-menu\').style.display=\'none\'" ' +
+    'style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:12.5px;' + (active ? 'background:var(--blue-lt);color:var(--blue);font-weight:700' : 'color:var(--text)') + '" ' +
+    'onmouseover="if(!this.dataset.on)this.style.background=\'var(--sidebar2)\'" onmouseout="if(!this.dataset.on)this.style.background=\'' + (active ? 'var(--blue-lt)' : '') + '\'"' + (active ? ' data-on="1"' : '') + '>' +
+    '<span style="width:7px;height:7px;border-radius:50%;background:' + (active ? 'var(--blue)' : 'var(--border)') + ';flex-shrink:0"></span>' +
+    '<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + label + (sub ? '<div style="font-size:10.5px;color:var(--muted2);font-weight:400">' + sub + '</div>' : '') + '</span></div>';
+  let html = item('Mi cuenta', !agencyActiveClientId, 'hdrClientPick(null)');
+  html += '<div style="height:1px;background:var(--border);margin:5px 4px"></div>';
+  html += (agencyClients || []).map(c => item(esc(c.client_name || c.name || 'Cliente'), c.id === agencyActiveClientId, 'hdrClientPick(\'' + c.id + '\')', esc(c.client_industry || c.industria || ''))).join('');
+  html += '<div style="height:1px;background:var(--border);margin:5px 4px"></div>';
+  html += '<div onclick="showView(\'agency\');document.getElementById(\'hdr-client-menu\').style.display=\'none\'" style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted)" onmouseover="this.style.background=\'var(--sidebar2)\'" onmouseout="this.style.background=\'\'">⚙ Gestionar clientes (panel completo)</div>';
+  menu.innerHTML = html;
+  menu.style.display = 'block';
+  setTimeout(() => document.addEventListener('click', function close() { menu.style.display = 'none'; document.removeEventListener('click', close); }), 0);
+}
+
+function hdrClientPick(id) {
+  if (!id) {
+    agencyActiveClientId = null;
+    if (typeof activeClientContext !== 'undefined') activeClientContext = null;
+    document.getElementById('agency-ctx-bar')?.remove();
+    showView('home');
+  } else {
+    agencyOpenClient(id);
+  }
+  hdrClientRender();
+}
+
+// Mantener el selector sincronizado: al abrir/salir de cliente y al arrancar
+(function () {
+  if (typeof agencyOpenClient === 'function') {
+    const _prevOpenClient = agencyOpenClient;
+    agencyOpenClient = function (id) { const r = _prevOpenClient(id); Promise.resolve(r).finally(hdrClientRender); return r; };
+  }
+  if (typeof agencyExitClientContext === 'function') {
+    const _prevExit = agencyExitClientContext;
+    agencyExitClientContext = function () { _prevExit(); hdrClientRender(); };
+  }
+  setTimeout(hdrClientRender, 4000);
+  setInterval(hdrClientRender, 60000);
+})();

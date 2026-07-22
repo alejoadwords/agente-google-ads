@@ -1976,6 +1976,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
     <span class="hdr-logo-name">acuarius</span>
   </a>
+  
+  <div id="hdr-client-switch" style="display:none;position:relative;margin-left:10px">
+    <button id="hdr-client-btn" onclick="hdrClientToggle(event)" style="display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:9px;padding:5px 12px;font-size:12.5px;color:var(--muted);cursor:pointer;background:var(--bg);font-family:var(--font);max-width:230px">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+      <span style="font-weight:400">Cliente:</span>
+      <b id="hdr-client-name" style="color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Mi cuenta</b>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div id="hdr-client-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:240px;max-height:340px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(20,22,46,.14);padding:6px;z-index:600"></div>
+  </div>
   <button class="mob-menu-btn" id="mob-menu-btn" onclick="toggleSidebar()" aria-label="Menú">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -2048,6 +2058,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <svg class="sb-chevron" id="chev-ga" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-ga">
+      <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='google-ads')openAgent('google-ads');setTimeout(openRoadmap,400)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        hoja de ruta
+      </div>
       <div class="sb-new-conv" onclick="startNewConversation('google-ads')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
@@ -2062,6 +2076,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <svg class="sb-chevron" id="chev-meta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-meta">
+      <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='meta-ads')openAgent('meta-ads');setTimeout(openRoadmap,400)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        hoja de ruta
+      </div>
       <div class="sb-new-conv" onclick="startNewConversation('meta-ads')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
@@ -2076,6 +2094,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <svg class="sb-chevron" id="chev-tiktok" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-tiktok">
+      <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='tiktok-ads')openAgent('tiktok-ads');setTimeout(openRoadmap,400)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        hoja de ruta
+      </div>
       <div class="sb-new-conv" onclick="startNewConversation('tiktok-ads')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
@@ -2094,6 +2116,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <svg class="sb-chevron" id="chev-linkedin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-linkedin">
+      <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='linkedin-ads')openAgent('linkedin-ads');setTimeout(openRoadmap,400)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        hoja de ruta
+      </div>
     </div>
 
     <!-- SEO -->
