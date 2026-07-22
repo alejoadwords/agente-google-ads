@@ -17704,8 +17704,17 @@ function cmdkCommands() {
     { group: 'Agentes', icon: '🧭', label: 'Consultor de Marketing',       kw: 'consultor estrategia plan',     run: () => openAgent('consultor') },
     // Ir a
     { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
-    { group: 'Ir a', icon: '📋', label: 'CRM de leads',                    kw: 'crm leads pipeline kanban clientes', run: () => showView('crm') },
-    { group: 'Ir a', icon: '💬', label: 'Inbox (WhatsApp y Meta)',         kw: 'inbox whatsapp mensajes chat',  run: () => { showView('crm'); setTimeout(() => crmSetView('inbox'), 100); } },
+    { group: 'Ir a', icon: '👥', label: 'CRM · Pipeline',                  kw: 'crm leads pipeline kanban clientes', run: () => navGo('crm') },
+    { group: 'Ir a', icon: '📇', label: 'CRM · Contactos',                 kw: 'contactos lista importar leads', run: () => { navGo('crm'); setTimeout(() => crmSetView('list'), 100); } },
+    { group: 'Ir a', icon: '📅', label: 'CRM · Agenda',                    kw: 'agenda tareas calendario citas', run: () => { navGo('crm'); setTimeout(() => crmSetView('agenda'), 100); } },
+    { group: 'Ir a', icon: '📣', label: 'Marketing · Campañas',            kw: 'campanas email whatsapp masivo', run: () => navGo('marketing') },
+    { group: 'Ir a', icon: '⚡', label: 'Marketing · Automatizaciones',    kw: 'automatizaciones flujos flows', run: () => { navGo('marketing'); setTimeout(() => crmSetView('autos'), 100); } },
+    { group: 'Ir a', icon: '📥', label: 'Marketing · Fuentes y formularios', kw: 'fuentes formularios webhook hotmart importar', run: () => { navGo('marketing'); setTimeout(() => crmSetView('sources'), 100); } },
+    { group: 'Ir a', icon: '📄', label: 'Marketing · Propuestas',          kw: 'propuestas cotizacion comercial', run: () => { navGo('marketing'); setTimeout(() => crmSetView('proposals'), 100); } },
+    { group: 'Ir a', icon: '💬', label: 'Conversaciones · Inbox',          kw: 'inbox whatsapp mensajes chat messenger instagram', run: () => navGo('conversaciones') },
+    { group: 'Ir a', icon: '🤖', label: 'Conversaciones · Chatbots',       kw: 'chatbots agentes ia canales bots', run: () => { navGo('conversaciones'); setTimeout(() => crmSetView('agents'), 100); } },
+    { group: 'Ir a', icon: '📊', label: 'Análisis',                        kw: 'analisis metricas embudo reportes', run: () => navGo('analisis') },
+    { group: 'Ir a', icon: '⭐', label: 'Análisis · Satisfacción (NPS)',   kw: 'nps satisfaccion encuestas detractores', run: () => { navGo('analisis'); setTimeout(() => crmSetView('nps'), 100); } },
     { group: 'Ir a', icon: '🎨', label: 'Social Media Studio',             kw: 'studio imagenes parrilla calendario', run: () => showView('social-studio') },
     { group: 'Ir a', icon: '📈', label: 'Proyecto SEO',                    kw: 'seo proyecto keywords posiciones ranking', run: () => openSeoProject() },
     { group: 'Ir a', icon: '🎓', label: 'Academia Acuarius',               kw: 'academia cursos videos tutoriales', run: () => openAcademia() },
@@ -20207,7 +20216,7 @@ function agnScheduleForLead() {
     kanban: '/crm', list: '/crm/contactos', agenda: '/crm/agenda',
     campaigns: '/marketing/campanas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
-    analytics: '/analisis', nps: '/analisis/nps',
+    analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
   const CRM_LEGACY = { '': 'kanban', '/contactos': 'list', '/agentes-ia': 'agents', '/inbox': 'inbox', '/analisis': 'analytics', '/automatizaciones': 'autos', '/agenda': 'agenda', '/campanas': 'campaigns', '/fuentes': 'sources' };
   const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
@@ -20216,7 +20225,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', campaigns: 'Campañas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', campaigns: 'Campañas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -22161,11 +22170,12 @@ const NAV_TABS = {
   crm: ['kanban', 'list', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
-  analisis: ['analytics', 'nps'],
+  analisis: ['analytics', 'nps', 'campstats'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'studio', 'seoproj'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj'];
+const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
 function navGo(mod) {
@@ -22197,7 +22207,65 @@ function navApplyModule() {
     const b = document.getElementById('crm-btn-' + id);
     if (b) b.style.display = tabs.includes(id) ? '' : 'none';
   });
+  const crumb = document.getElementById('crm-mod-crumb');
+  if (crumb) crumb.textContent = NAV_MOD_LABELS[mod] || 'CRM';
   navHighlight(mod);
+}
+
+// ── Badge global de no-leídos en Conversaciones ──────────────────────────────
+async function navUpdateConvBadge() {
+  const el = document.getElementById('navm-conv-badge');
+  if (!el) return;
+  try {
+    const d = await fetch('/api/chat-conversations', { headers: await getAuthHeaders() }).then(r => r.json());
+    const unread = (d.conversations || []).reduce((s, c) => s + (parseInt(c.unread_count) || 0), 0);
+    el.style.display = unread > 0 ? '' : 'none';
+    el.textContent = unread > 99 ? '99+' : String(unread);
+  } catch {}
+}
+
+// ── Análisis → Aperturas: campañas de email enviadas con su tasa de apertura ─
+async function crmRenderCampStats() {
+  const view = document.getElementById('crm-campstats-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  let rows = [];
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    rows = (d.campaigns || []).filter(c => c.channel === 'email' && (c.status === 'sent' || c.status === 'sending'));
+  } catch {}
+  const header =
+    '<div style="margin-bottom:16px;max-width:860px">' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Campañas y aperturas</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted)">Rendimiento de tus campañas de email · las aperturas llegan por el webhook de Resend</div>' +
+    '</div>';
+  if (!rows.length) {
+    view.innerHTML = header + '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted);max-width:860px">Aún no has enviado campañas de email. Créalas en <b>Marketing → Campañas</b> y aquí verás enviados, aperturas y tasa por campaña.</div>';
+    return;
+  }
+  view.innerHTML = header +
+    '<div style="max-width:860px;background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden">' +
+    rows.slice(0, 20).map(c => {
+      const s = c.stats || {};
+      const when = c.sent_at ? new Date(c.sent_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);font-size:12.5px">' +
+        '<div style="flex:1;min-width:0"><div style="font-weight:700">' + esc(c.name) + '</div><div style="font-size:11px;color:var(--muted2)">' + when + (c.subject ? ' · "' + esc(c.subject) + '"' : '') + '</div></div>' +
+        '<div style="text-align:right;flex-shrink:0"><b>' + (s.sent || 0) + '</b><div style="font-size:10px;color:var(--muted2)">enviados</div></div>' +
+        '<div style="text-align:right;flex-shrink:0;min-width:76px" id="cst-' + c.id + '"><span style="color:var(--muted2)">…</span></div>' +
+      '</div>';
+    }).join('') + '</div>';
+  // Aperturas en paralelo (primeras 10)
+  rows.slice(0, 10).forEach(async c => {
+    try {
+      const d = await fetch('/api/campaigns?stats=1&id=' + encodeURIComponent(c.id), { headers: await getAuthHeaders() }).then(r => r.json());
+      const el = document.getElementById('cst-' + c.id);
+      if (!el) return;
+      const pct = d.sent ? Math.round((d.opened / d.sent) * 100) : 0;
+      el.innerHTML = '<b style="color:' + (pct >= 30 ? 'var(--success,#10B981)' : pct >= 15 ? '#F59E0B' : 'var(--text)') + '">' + d.opened + ' (' + pct + '%)</b><div style="font-size:10px;color:var(--muted2)">abiertos</div>';
+    } catch {}
+  });
 }
 
 // ── Vista Propuestas (lista completa — antes solo dentro del lead) ──────────
@@ -22271,8 +22339,12 @@ function crmRenderNpsView() {
     if (nv) nv.style.display = v === 'nps' ? 'flex' : 'none';
     document.getElementById('crm-btn-proposals')?.classList.toggle('active', v === 'proposals');
     document.getElementById('crm-btn-nps')?.classList.toggle('active', v === 'nps');
+    const cv = document.getElementById('crm-campstats-view');
+    if (cv) cv.style.display = v === 'campstats' ? 'flex' : 'none';
+    document.getElementById('crm-btn-campstats')?.classList.toggle('active', v === 'campstats');
     if (v === 'proposals') prpRenderAll();
     if (v === 'nps') crmRenderNpsView();
+    if (v === 'campstats') crmRenderCampStats();
     if (NAV_TAB2MOD[v]) window._navMod = NAV_TAB2MOD[v];
     navApplyModule();
   };
@@ -22336,7 +22408,24 @@ function navRenderAgentChips(agentKey) {
     '.agent-chip:hover{border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt)}' +
     '.agent-chip-pri{border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt)}';
   document.head.appendChild(st);
-  const init = () => { try { navApplyModule(); navHighlight('home'); } catch {} };
+  const init = () => {
+    try { navApplyModule(); navHighlight('home'); } catch {}
+    // Badge de no-leídos: primer cálculo cuando ya hay sesión, luego cada 3 min
+    setTimeout(() => { try { navUpdateConvBadge(); } catch {} }, 6000);
+    setInterval(() => { try { navUpdateConvBadge(); } catch {} }, 180000);
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
+})();
+
+// Refrescar el badge al cargar el inbox (marca leídos al abrir conversaciones)
+(function () {
+  if (typeof crmLoadInbox === 'function') {
+    const _prevInbox = crmLoadInbox;
+    crmLoadInbox = function () {
+      const r = _prevInbox.apply(this, arguments);
+      Promise.resolve(r).finally(() => setTimeout(navUpdateConvBadge, 1200));
+      return r;
+    };
+  }
 })();
