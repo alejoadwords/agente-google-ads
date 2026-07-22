@@ -104,6 +104,40 @@ async function emailWasOpened(job) {
   return !!opened?.length;
 }
 
+// Encuesta NPS: crea el registro con token único y envía el email con la
+// escala 0-10. La respuesta (api/nps.js) etiqueta al lead como nps promotor/
+// neutro/detractor y eso dispara las automatizaciones tag_added del usuario.
+async function actionSendNps(step, lead, auto) {
+  if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
+  if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
+  const token = globalThis.crypto.randomUUID().replace(/-/g, '');
+  await sb('/nps_responses', 'POST', {
+    user_id: auto.user_id, client_id: auto.client_id || null, lead_id: lead.id, token,
+  }, 'return=minimal');
+  const question = renderVars(step.question || '¿Qué tan probable es que nos recomiendes a un amigo o colega?', lead);
+  const intro = renderVars(step.message || 'Hola {{nombre}}, tu opinión nos ayuda a mejorar. Solo te tomará 5 segundos:', lead);
+  const base = 'https://app.acuarius.app/api/nps?t=' + token + '&s=';
+  const btn = (n) =>
+    '<td style="padding:2px"><a href="' + base + n + '" style="display:block;width:34px;height:34px;line-height:34px;text-align:center;' +
+    'background:' + (n <= 6 ? '#FEE2E2' : n <= 8 ? '#FEF3C7' : '#D1FAE5') + ';color:#1a1a2e;font-weight:bold;font-size:14px;' +
+    'border-radius:8px;text-decoration:none;font-family:Arial,sans-serif">' + n + '</a></td>';
+  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
+    '<p style="margin:0 0 14px">' + intro + '</p>' +
+    '<p style="margin:0 0 16px;font-weight:bold;font-size:16px">' + question + '</p>' +
+    '<table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>' + Array.from({ length: 11 }, (_, n) => btn(n)).join('') + '</tr></table>' +
+    '<p style="margin:10px 0 0;font-size:11.5px;color:#9ca3af;text-align:center">0 = Nada probable &nbsp;·&nbsp; 10 = Muy probable</p>' +
+    '</div>';
+  const subject = renderVars(step.subject || '¿Nos recomendarías? — 5 segundos', lead);
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
+  return { result: 'sent', detail: 'Encuesta NPS a ' + lead.email };
+}
+
 async function actionSendWhatsapp(step, lead) {
   if (!lead.phone) return { result: 'skipped', detail: 'El lead no tiene teléfono' };
   const digits = String(lead.phone).replace(/\D/g, '');
@@ -365,7 +399,7 @@ async function processJobs() {
         const step = steps[i];
 
         // Ventana horaria: los mensajes al lead esperan la próxima hora hábil
-        if ((step.type === 'send_email' || step.type === 'send_whatsapp') && !inSendWindow(auto.trigger?.window)) {
+        if ((step.type === 'send_email' || step.type === 'send_whatsapp' || step.type === 'send_nps') && !inSendWindow(auto.trigger?.window)) {
           const runAt = nextWindowStart(auto.trigger.window);
           await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
           await log(auto.id, job.user_id, lead.id, i, 'window', 'scheduled', 'Fuera del horario de envío (' + auto.trigger.window.start + ':00–' + auto.trigger.window.end + ':00) — continúa a las ' + auto.trigger.window.start + ':00');
@@ -416,6 +450,12 @@ async function processJobs() {
         if (step.type === 'send_email') {
           const r = await actionSendEmail(step, lead, auto, job);
           await log(auto.id, job.user_id, lead.id, i, 'send_email', r.result, r.detail);
+          i++; continue;
+        }
+
+        if (step.type === 'send_nps') {
+          const r = await actionSendNps(step, lead, auto);
+          await log(auto.id, job.user_id, lead.id, i, 'send_nps', r.result, r.detail);
           i++; continue;
         }
 

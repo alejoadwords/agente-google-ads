@@ -17505,7 +17505,42 @@ function crmRenderAnalytics() {
         '</div>';
       }).join('') + '</div>'
     : '';
-  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(sourceLabels[src] || src) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
+  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div id="crm-nps-section"></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(sourceLabels[src] || src) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
+}
+
+// ── Widget NPS en Análisis (async — se pinta al llegar los datos) ───────────
+async function crmRenderNps() {
+  const box = document.getElementById('crm-nps-section');
+  if (!box) return;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetch('/api/nps' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    if (!d || d.error || !d.sent) { box.innerHTML = ''; return; }
+    const npsColor = d.nps === null ? 'var(--muted)' : d.nps >= 50 ? '#10B981' : d.nps >= 0 ? '#F59E0B' : '#EF4444';
+    const seg = (n, c, l) => d.answered
+      ? '<div style="flex:' + Math.max(n, 0.001) + ';background:' + c + ';height:100%" title="' + l + ': ' + n + '"></div>' : '';
+    box.innerHTML =
+      '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Satisfacción (NPS)</div>' +
+        '<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap">' +
+          '<div style="text-align:center"><div style="font-size:34px;font-weight:800;letter-spacing:-.03em;color:' + npsColor + '">' + (d.nps === null ? '—' : d.nps) + '</div><div style="font-size:10.5px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.04em">NPS</div></div>' +
+          '<div style="flex:1;min-width:220px">' +
+            '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--border)">' + seg(d.promoters, '#10B981', 'Promotores') + seg(d.passives, '#F59E0B', 'Neutros') + seg(d.detractors, '#EF4444', 'Detractores') + '</div>' +
+            '<div style="display:flex;gap:14px;margin-top:6px;font-size:11.5px;color:var(--muted)">' +
+              '<span>🟢 ' + d.promoters + ' promotores</span><span>🟡 ' + d.passives + ' neutros</span><span>🔴 ' + d.detractors + ' detractores</span>' +
+              '<span style="margin-left:auto">' + d.answered + '/' + d.sent + ' respondieron</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        (d.comments && d.comments.length ?
+          '<div style="margin-top:12px">' + d.comments.slice(0, 5).map(c =>
+            '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border);font-size:12.5px">' +
+              '<span style="font-weight:800;color:' + (c.score >= 9 ? '#10B981' : c.score >= 7 ? '#F59E0B' : '#EF4444') + ';flex-shrink:0">' + c.score + '/10</span>' +
+              '<span style="color:var(--text)">' + esc(c.comment) + '</span>' +
+              '<span style="margin-left:auto;color:var(--muted2);flex-shrink:0">' + esc(c.name) + '</span>' +
+            '</div>').join('') + '</div>' : '') +
+      '</div>';
+  } catch { box.innerHTML = ''; }
 }
 
 function crmCreateLeadFromConversation(conv) {
@@ -17639,7 +17674,7 @@ function crmSetView(v) {
   if (v === 'kanban' || v === 'list') crmRender();
   if (v === 'agents') crmRenderAgents();
   if (v === 'inbox') crmLoadInbox();
-  if (v === 'analytics') crmRenderAnalytics();
+  if (v === 'analytics') { crmRenderAnalytics(); crmRenderNps(); }
   if (v === 'autos') crmRenderAutos();
   if (v === 'agenda') agnRender();
   if (v === 'campaigns') cmpRender();
@@ -19238,6 +19273,7 @@ const AUTO_STEP_META = {
   branch:        { label: 'Ramas Sí / No',       icon: 'split' },
   add_tag:       { label: 'Añadir etiqueta',     icon: 'tag' },
   remove_tag:    { label: 'Quitar etiqueta',     icon: 'tag' },
+  send_nps:      { label: 'Encuesta NPS',        icon: 'trend' },
 };
 
 const AUTO_TEMPLATES = [
@@ -19431,6 +19467,7 @@ const FLOW_TYPE_STYLE = {
   branch:        { bg: 'var(--agua-grad)', fg: '#fff', icon: 'split' },
   add_tag:       { bg: 'var(--success-bg)', fg: 'var(--success)', icon: 'tag' },
   remove_tag:    { bg: 'var(--bg-muted)', fg: 'var(--text-2)', icon: 'tag' },
+  send_nps:      { bg: 'var(--warning-bg)', fg: 'var(--warning)', icon: 'trend' },
 };
 
 // ── Rutas anidadas del canvas ────────────────────────────────────────────────
@@ -19539,6 +19576,12 @@ function autoStepFields(s, path) {
         ? 'Se añade al lead (y al catálogo si es nueva, marcada como automática ⚡). Úsala luego para filtrar, en condiciones o en otras automatizaciones.'
         : 'Se quita del lead si la tiene. El catálogo no se toca.') + '</div></div>';
   }
+  if (s.type === 'send_nps') {
+    return '<div class="auto-field"><label class="auto-label">Asunto del email</label><input class="auto-input" value="' + esc(s.subject || '') + '" placeholder="¿Nos recomendarías? — 5 segundos" oninput="' + U + '\'subject\',this.value)"></div>' +
+      '<div class="auto-field"><label class="auto-label">Pregunta</label><input class="auto-input" value="' + esc(s.question || '') + '" placeholder="¿Qué tan probable es que nos recomiendes a un amigo o colega?" oninput="' + U + '\'question\',this.value)"></div>' +
+      '<div class="auto-field"><label class="auto-label">Mensaje de intro (opcional)</label><textarea class="auto-input" rows="3" placeholder="Hola {{nombre}}, tu opinión nos ayuda a mejorar…" oninput="' + U + '\'message\',this.value)">' + esc(s.message || '') + '</textarea>' +
+      '<div class="auto-vars-hint">El lead recibe la escala 0-10 en el email. Al responder queda etiquetado como <b>nps promotor</b> (9-10), <b>nps neutro</b> (7-8) o <b>nps detractor</b> (0-6) — usa esas etiquetas como lanzador de otras automatizaciones (ej: detractor → notificarme + crear tarea). Los resultados se ven en Análisis.</div></div>';
+  }
   if (s.type === 'branch') {
     const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email'],['has_tag','Tiene la etiqueta']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
@@ -19587,6 +19630,7 @@ function autoNodeSummary(s) {
   }
   if (s.type === 'add_tag') return s.tag ? '+ "' + s.tag + '"' : 'Sin etiqueta todavía';
   if (s.type === 'remove_tag') return s.tag ? '− "' + s.tag + '"' : 'Sin etiqueta todavía';
+  if (s.type === 'send_nps') return s.question ? s.question.slice(0, 60) : 'Escala 0-10 por email';
   return '';
 }
 
@@ -19671,6 +19715,7 @@ function autoBuilderRender() {
       create_activity: 'Tarea en la Agenda vinculada al lead', notify_owner: 'Email a tu correo, no al lead',
       branch: 'Divide el flujo en carriles Sí / No',
       add_tag: 'Etiqueta al lead por comportamiento', remove_tag: 'Quita una etiqueta del lead',
+      send_nps: 'Escala 0-10 por email · etiqueta al lead según su respuesta',
     }[type];
     return '<div class="flow-block" onclick="autoStepAdd(\'' + type + '\')">' +
       '<span class="flow-block-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 14) + '</span>' +
@@ -19679,7 +19724,7 @@ function autoBuilderRender() {
   };
   const palette =
     '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
-    ['send_email', 'send_whatsapp', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
+    ['send_email', 'send_whatsapp', 'send_nps', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
     '<div class="flow-palette-title">Control del flujo</div>' +
     ['branch', 'wait', 'condition'].map(paletteBlock).join('') +
     '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
@@ -19820,6 +19865,7 @@ function autoStepAdd(type) {
     branch: { type, field: 'has_email', op: 'eq', value: 'true', yes: [], no: [] },
     add_tag: { type, tag: '' },
     remove_tag: { type, tag: '' },
+    send_nps: { type, subject: '', question: '', message: '' },
   };
   const arr = autoLaneArr(lane);
   arr.push(defaults[type] || { type });
