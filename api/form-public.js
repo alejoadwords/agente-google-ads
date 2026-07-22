@@ -94,8 +94,8 @@ export default async function handler(req) {
       sourceLabel: 'Formulario: ' + form.name,
       tags: form.tags || [],
     });
-    // Contador de envíos — best effort
-    fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {
+    // Contador de envíos — con await: en edge las promesas sueltas mueren al responder
+    await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {
       method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
       body: JSON.stringify({ submissions: (form.submissions || 0) + 1, last_submission_at: new Date().toISOString() }),
     }).catch(() => {});
