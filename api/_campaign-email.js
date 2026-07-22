@@ -52,9 +52,12 @@ export function campaignHtml(campaign, bodyTxt, unsubUrl) {
       'style="display:inline-block;background:' + accent + ';color:#ffffff;font-weight:bold;font-size:15px;' +
       'padding:13px 34px;border-radius:8px;text-decoration:none">' + escapeHtml(campaign.cta_text) + '</a></div>'
     : '';
+  const headerImg = /^https?:\/\//i.test(campaign.header_image_url || '')
+    ? '<img src="' + campaign.header_image_url + '" alt="" style="display:block;width:100%;max-width:560px;border-radius:10px;margin:0 0 22px">'
+    : '<div style="border-top:4px solid ' + accent + ';margin-bottom:22px"></div>';
   return pre +
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px;margin:0 auto">' +
-    '<div style="border-top:4px solid ' + accent + ';margin-bottom:22px"></div>' +
+    headerImg +
     paragraphs(bodyTxt, { accent, utm, campaignName: campaign.name }) +
     cta +
     '<p style="margin:26px 0 0;padding-top:14px;border-top:1px solid #eee;font-size:11.5px;color:#9ca3af">' +

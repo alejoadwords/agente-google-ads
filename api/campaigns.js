@@ -88,8 +88,39 @@ function audienceQuery(userId, clientId, audience, channel) {
   return q;
 }
 
+// Una lista guardada se traduce a su audiencia real: estática → lead_ids,
+// dinámica → sus filtros. Lista borrada → audiencia vacía (no enviar a todos).
+async function normalizeAudience(userId, audience) {
+  const a = audience || {};
+  if (!a.list_id) return a;
+  try {
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/lead_lists?id=eq.${encodeURIComponent(a.list_id)}&user_id=eq.${encodeURIComponent(userId)}&select=*`, { headers: sbHeaders() }).then(r => r.json());
+    const l = rows?.[0];
+    if (!l) return { lead_ids: ['00000000-0000-0000-0000-000000000000'] };
+    return l.kind === 'static' ? { lead_ids: l.lead_ids || [] } : (l.filters || {});
+  } catch { return { lead_ids: ['00000000-0000-0000-0000-000000000000'] }; }
+}
+
+// Selección manual: cargar leads por id en chunks (respeta scope y exclusiones de canal)
+async function leadsByIds(userId, clientId, ids, channel, select) {
+  const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+  let ch = '';
+  if (channel === 'email') ch = `&email=not.is.null&tags=not.cs.{"no-email"}`;
+  if (channel === 'whatsapp') ch = `&phone=not.is.null`;
+  const out = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&deleted_at=is.null&id=in.(${ids.slice(i, i + 150).join(',')})${ch}&select=${select}`, { headers: sbHeaders() }).then(r => r.json());
+    out.push(...(rows || []));
+  }
+  return out;
+}
+
 async function resolveAudience(userId, clientId, audience, channel) {
-  const q = audienceQuery(userId, clientId, audience, channel);
+  const a = await normalizeAudience(userId, audience);
+  if (Array.isArray(a.lead_ids) && a.lead_ids.length) {
+    return leadsByIds(userId, clientId, a.lead_ids, channel, 'id,name,email,phone');
+  }
+  const q = audienceQuery(userId, clientId, a, channel);
   const rows = await fetch(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone&limit=10000`, { headers: sbHeaders() }).then(r => r.json());
   return rows || [];
 }
@@ -120,9 +151,13 @@ export default async function handler(req) {
     let audience = {};
     try { audience = JSON.parse(url.searchParams.get('audience') || '{}'); } catch {}
     const channel = url.searchParams.get('channel') === 'whatsapp' ? 'whatsapp' : 'email';
+    const a = await normalizeAudience(userId, audience);
+    const hasIds = Array.isArray(a.lead_ids) && a.lead_ids.length;
     const [leads, all] = await Promise.all([
-      resolveAudience(userId, clientId, audience, channel),
-      fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, audience, null)}&select=id,email,phone,tags&limit=10000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []),
+      resolveAudience(userId, clientId, a, channel),
+      hasIds
+        ? leadsByIds(userId, clientId, a.lead_ids, null, 'id,email,phone,tags')
+        : fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, a, null)}&select=id,email,phone,tags&limit=10000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []),
     ]);
     const breakdown = { matched: all.length, unsubscribed: 0, missing: 0 };
     for (const l of all) {
@@ -208,9 +243,13 @@ export default async function handler(req) {
     const c = rows?.[0];
     if (!c) return jsonResp({ error: 'Campaña no encontrada' }, 404);
     if (c.channel !== 'email') return jsonResp({ error: 'El correo de prueba solo aplica a campañas de email' }, 400);
-    // Email del usuario que pide la prueba (Clerk)
-    const u = await fetch('https://api.clerk.com/v1/users/' + userId, { headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY } }).then(r => r.json()).catch(() => null);
-    const toEmail = u?.email_addresses?.[0]?.email_address;
+    // Destino: el que pida el body (cualquier correo) o el email del dueño (Clerk)
+    let toEmail = null;
+    if (body.to && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.to)) toEmail = String(body.to).slice(0, 120);
+    if (!toEmail) {
+      const u = await fetch('https://api.clerk.com/v1/users/' + userId, { headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY } }).then(r => r.json()).catch(() => null);
+      toEmail = u?.email_addresses?.[0]?.email_address;
+    }
     if (!toEmail) return jsonResp({ error: 'No se pudo obtener tu email' }, 500);
     const sampleRows = await resolveAudience(userId, clientId, c.audience, 'email');
     const lead = sampleRows[0] || { name: 'Ana Ejemplo', email: toEmail, phone: '', stage: 'nuevo', source: 'demo', company: 'Empresa Demo', value: 0 };
@@ -284,6 +323,7 @@ export default async function handler(req) {
     if ('cta_text' in body) out.cta_text = body.cta_text ? String(body.cta_text).slice(0, 60) : null;
     if ('cta_url' in body) out.cta_url = (body.cta_url && /^https?:\/\//i.test(body.cta_url)) ? String(body.cta_url).slice(0, 500) : null;
     if ('accent_color' in body) out.accent_color = /^#[0-9a-fA-F]{6}$/.test(body.accent_color || '') ? body.accent_color : null;
+    if ('header_image_url' in body) out.header_image_url = (body.header_image_url && /^https?:\/\//i.test(body.header_image_url)) ? String(body.header_image_url).slice(0, 500) : null;
     if ('utm' in body) out.utm = body.utm !== false;
     return out;
   }

@@ -20516,8 +20516,13 @@ function cmpBuilderOpen(id) {
     cta_text: (c && c.cta_text) || '', cta_url: (c && c.cta_url) || '',
     accent_color: (c && c.accent_color) || '#2563EB',
     utm: c ? c.utm !== false : true,
+    header_image_url: (c && c.header_image_url) || '',
     tags: (c && c.audience && Array.isArray(c.audience.tags)) ? c.audience.tags.slice() : [],
     stage: (c && c.audience && c.audience.stage) || '', source: (c && c.audience && c.audience.source) || '',
+    mode: (c && c.audience && Array.isArray(c.audience.lead_ids) && c.audience.lead_ids.length) ? 'manual'
+      : (c && c.audience && c.audience.list_id) ? 'list' : 'filters',
+    list_id: (c && c.audience && c.audience.list_id) || '',
+    lead_ids: (c && c.audience && Array.isArray(c.audience.lead_ids)) ? c.audience.lead_ids.slice() : [],
     schedule: '', count: null, breakdown: null,
   };
   _cmpChannel = _cmpW.channel;
@@ -20568,7 +20573,12 @@ function cmpWRender() {
   }
   if (w.step === 1) cmpWSyncInbox();
   if (w.step === 2) cmpWSyncEmail();
-  if (w.step === 3) cmpPreview();
+  if (w.step === 3) {
+    cmpWAudRender();
+    cmpPreview();
+    cmpWLoadLists().then(() => { if (_cmpW && _cmpW.step === 3 && _cmpW.mode === 'list') cmpWAudRender(); });
+    cmpWManualEnsureLeads();
+  }
   if (w.step === 4) cmpWLoadSummaryCount();
 }
 
@@ -20653,6 +20663,13 @@ function cmpWStep2() {
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Mensaje *</div>' +
       '<textarea class="auto-input" id="cmpw-msg" rows="9" placeholder="Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" style="width:100%;margin-bottom:14px;font-family:var(--font);font-size:12.5px" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
       (isEmail ?
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Imagen de cabecera (opcional)</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="cmpw-img-row">' +
+        '<input type="file" id="cmpw-img-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="cmpWImgUpload(this)">' +
+        '<button class="btn-sec sm" id="cmpw-img-btn" onclick="document.getElementById(\'cmpw-img-file\').click()">' + (w.header_image_url ? 'Cambiar imagen' : '🖼️ Subir imagen') + '</button>' +
+        (w.header_image_url ? '<button class="btn-ghost sm" onclick="cmpWImgRemove()">✕ Quitar</button>' : '') +
+        '<span style="font-size:11px;color:var(--muted2)">PNG/JPG, máx 2MB — ancho ideal 1120px</span>' +
+      '</div>' +
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Botón de acción (opcional)</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-bottom:12px">' +
         '<input class="auto-input" id="cmpw-cta-text" value="' + esc(w.cta_text || '') + '" placeholder="Texto: ej. Agendar llamada" oninput="cmpWSyncEmail()">' +
@@ -20688,8 +20705,11 @@ function cmpWSyncEmail() {
   const ctaU = (g('cmpw-cta-url')?.value || '').trim();
   const paras = bodyTxt.split('\n').map(l => l.trim()
     ? '<p style="margin:0 0 12px;font-size:13.5px;line-height:1.6">' + esc(l).replace(/(https?:\/\/[^\s<>"']+)/g, '<a style="color:' + accent + '">$1</a>') + '</p>' : '').join('');
+  const header = _cmpW.header_image_url
+    ? '<img src="' + esc(_cmpW.header_image_url) + '" style="display:block;width:100%;border-radius:8px;margin-bottom:16px">'
+    : '<div style="border-top:4px solid ' + accent + ';margin-bottom:16px"></div>';
   box.innerHTML =
-    '<div style="border-top:4px solid ' + accent + ';margin-bottom:16px"></div>' +
+    header +
     (paras || '<p style="opacity:.4;font-size:13.5px">Tu mensaje aparecerá aquí…</p>') +
     (ctaT && ctaU ? '<div style="text-align:center;margin:20px 0"><span style="display:inline-block;background:' + accent + ';color:#fff;font-weight:700;font-size:13px;padding:11px 28px;border-radius:8px">' + esc(ctaT) + '</span></div>' : '') +
     '<p style="margin:20px 0 0;padding-top:10px;border-top:1px solid #eee;font-size:10.5px;color:#9ca3af">¿No quieres recibir estos correos? <u>Darte de baja</u></p>';
@@ -20729,24 +20749,200 @@ async function cmpWAI() {
   finally { btn.disabled = false; btn.textContent = 'Generar'; }
 }
 
-// Paso 3 — Audiencia con desglose de exclusiones
+// Subida de imagen de cabecera → Supabase Storage (público) via api/upload-image
+function cmpWImgUpload(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('La imagen supera 2MB — comprímela antes de subirla', 'error'); input.value = ''; return; }
+  const btn = document.getElementById('cmpw-img-btn');
+  btn.disabled = true; btn.textContent = 'Subiendo…';
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const d = await fetch('/api/upload-image', {
+        method: 'POST', headers: await getAuthHeaders(),
+        body: JSON.stringify({ data: reader.result, type: file.type }),
+      }).then(r => r.json());
+      if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+      cmpWCollect();
+      _cmpW.header_image_url = d.url;
+      cmpWRender();
+      showToast('🖼️ Imagen de cabecera lista', 'success');
+    } catch { showToast('Error subiendo la imagen', 'error'); }
+    finally { const b = document.getElementById('cmpw-img-btn'); if (b) { b.disabled = false; } }
+  };
+  reader.readAsDataURL(file);
+}
+
+function cmpWImgRemove() {
+  cmpWCollect();
+  _cmpW.header_image_url = '';
+  cmpWRender();
+}
+
+// Paso 3 — Destinatarios: por filtros, lista guardada o selección manual
+let _cmpLists = [];
+async function cmpWLoadLists() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetch('/api/lead-lists' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    _cmpLists = d.lists || [];
+  } catch { _cmpLists = []; }
+}
+
 function cmpWStep3() {
-  const tagChips = (typeof crmTags !== 'undefined' ? crmTags : []).filter(t => t.name !== 'no-email').map(t => {
-    const on = _cmpAudTags.includes(t.name);
-    const c = tagColor(t.name);
-    return '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + (on ? c : c + '1A') + ';color:' + (on ? '#fff' : c) + '" onclick="cmpToggleTag(\'' + esc(t.name) + '\')">' + esc(t.name) + '</button>';
-  }).join('');
+  const w = _cmpW;
+  const tab = (m, label) => '<button class="' + (w.mode === m ? 'on pub' : '') + '" onclick="cmpWAudMode(\'' + m + '\')">' + label + '</button>';
   return '<div style="max-width:640px;margin:0 auto">' +
     '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Destinatarios</div>' +
-    '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Selecciona el segmento al que quieres impactar</div>' +
-    '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Etiquetas</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">' + (tagChips || '<span style="font-size:11.5px;color:var(--muted2)">Sin etiquetas aún — la campaña irá a todos los leads que cumplan los filtros</span>') + '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' +
-      '<select class="auto-input" id="cmp-stage" onchange="cmpPreview()"><option value="">Cualquier etapa</option>' + autoStageOptions(_cmpW.stage || '') + '</select>' +
-      '<select class="auto-input" id="cmp-source" onchange="cmpPreview()"><option value="">Cualquier fuente</option>' + ['manual', 'webhook', 'landing_page', 'meta_ads', 'google_ads', 'referido', 'importacion'].map(s => '<option value="' + s + '"' + (_cmpW.source === s ? ' selected' : '') + '>' + s.replace('_', ' ') + '</option>').join('') + '</select>' +
+    '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Elige a quién le llega esta campaña</div>' +
+    '<div class="flow-estado" style="margin-bottom:14px">' +
+      tab('filters', '🎯 Por filtros') + tab('list', '📋 Lista guardada') + tab('manual', '☝️ Elegir uno a uno') +
     '</div>' +
-    '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted)">Calculando audiencia…</div>' +
+    '<div id="cmpw-aud-box"></div>' +
+    '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted);margin-top:14px">Calculando audiencia…</div>' +
+    (w.channel === 'email' ?
+    '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:18px;background:var(--panel)">' +
+      '<div style="font-size:12px;font-weight:800;margin-bottom:6px">✉️ Correo de prueba</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<input class="auto-input" id="cmpw-test-to" placeholder="cualquier@correo.com" style="flex:1;min-width:200px">' +
+        '<button class="btn-sec sm" id="cmpw-test3-btn" onclick="cmpWTestTo()">Enviar prueba</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted2);margin-top:5px">Llega con asunto [PRUEBA] y datos de ejemplo · no gasta tu cupo</div>' +
+    '</div>' : '') +
   '</div>';
+}
+
+function cmpWAudMode(m) {
+  cmpWCollect();
+  _cmpW.mode = m;
+  cmpWRender();
+}
+
+function cmpWAudRender() {
+  const w = _cmpW;
+  const box = document.getElementById('cmpw-aud-box');
+  if (!box) return;
+  if (w.mode === 'filters') {
+    const tagChips = (typeof crmTags !== 'undefined' ? crmTags : []).filter(t => t.name !== 'no-email').map(t => {
+      const on = _cmpAudTags.includes(t.name);
+      const c = tagColor(t.name);
+      return '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + (on ? c : c + '1A') + ';color:' + (on ? '#fff' : c) + '" onclick="cmpToggleTag(\'' + esc(t.name) + '\')">' + esc(t.name) + '</button>';
+    }).join('');
+    box.innerHTML =
+      '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Etiquetas</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">' + (tagChips || '<span style="font-size:11.5px;color:var(--muted2)">Sin etiquetas aún — la campaña irá a todos los leads que cumplan los filtros</span>') + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
+        '<select class="auto-input" id="cmp-stage" onchange="cmpPreview()"><option value="">Cualquier etapa</option>' + autoStageOptions(w.stage || '') + '</select>' +
+        '<select class="auto-input" id="cmp-source" onchange="cmpPreview()"><option value="">Cualquier fuente</option>' + ['manual', 'webhook', 'landing_page', 'meta_ads', 'google_ads', 'referido', 'importacion'].map(s => '<option value="' + s + '"' + (w.source === s ? ' selected' : '') + '>' + s.replace('_', ' ') + '</option>').join('') + '</select>' +
+      '</div>' +
+      '<button class="btn-ghost sm" onclick="cmpWSaveList()">💾 Guardar este segmento como lista</button>';
+  } else if (w.mode === 'list') {
+    const opts = _cmpLists.map(l =>
+      '<option value="' + l.id + '"' + (w.list_id === l.id ? ' selected' : '') + '>' + esc(l.name) + (l.kind === 'static' ? ' (' + (l.lead_ids || []).length + ' contactos)' : ' (dinámica)') + '</option>').join('');
+    box.innerHTML = _cmpLists.length
+      ? '<div style="display:flex;gap:8px;align-items:center">' +
+          '<select class="auto-input" id="cmpw-list-sel" style="flex:1" onchange="_cmpW.list_id=this.value;cmpPreview()"><option value="">Elige una lista…</option>' + opts + '</select>' +
+          '<button class="btn-ghost sm" title="Eliminar la lista seleccionada" onclick="cmpWDeleteList()">🗑</button>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted2);margin-top:6px">Las listas dinámicas se resuelven al momento del envío (entran los leads que cumplan los filtros en ese momento); las estáticas son los contactos exactos que guardaste.</div>'
+      : '<div style="font-size:12.5px;color:var(--muted);padding:14px;border:1px dashed var(--border);border-radius:12px">Aún no tienes listas guardadas. Créalas desde "Por filtros" (💾 Guardar segmento) o desde "Elegir uno a uno" (💾 Guardar selección).</div>';
+  } else {
+    const sel = w.lead_ids.map(id => {
+      const l = (crmLeads || []).find(x => x.id === id);
+      return '<span class="tag-chip" style="background:var(--accent)1A;color:var(--accent)">' + esc(l ? l.name : 'lead') + ' <span style="cursor:pointer;font-weight:800" onclick="cmpWManualToggle(\'' + id + '\')">✕</span></span>';
+    }).join('');
+    box.innerHTML =
+      '<input class="auto-input" id="cmpw-man-search" placeholder="Busca por nombre, email o empresa…" style="width:100%;margin-bottom:8px" oninput="cmpWManualSearch()">' +
+      '<div id="cmpw-man-results" style="max-height:220px;overflow-y:auto;margin-bottom:10px"></div>' +
+      '<div style="font-size:12px;font-weight:700;margin-bottom:5px">Seleccionados (' + w.lead_ids.length + ')</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' + (sel || '<span style="font-size:11.5px;color:var(--muted2)">Nadie aún — busca arriba y ve sumando</span>') + '</div>' +
+      (w.lead_ids.length ? '<button class="btn-ghost sm" onclick="cmpWSaveList()">💾 Guardar selección como lista</button>' : '');
+    cmpWManualSearch();
+  }
+}
+
+async function cmpWManualEnsureLeads() {
+  if ((typeof crmLeads === 'undefined' || !crmLeads.length) && typeof crmLoadLeads === 'function') {
+    try { await crmLoadLeads(); } catch {}
+    cmpWManualSearch();
+  }
+}
+
+function cmpWManualSearch() {
+  const box = document.getElementById('cmpw-man-results');
+  if (!box) return;
+  const q = (document.getElementById('cmpw-man-search')?.value || '').trim().toLowerCase();
+  const pool = (typeof crmLeads !== 'undefined' ? crmLeads : []).filter(l => !l.deleted_at);
+  const hits = (q ? pool.filter(l =>
+    (l.name || '').toLowerCase().includes(q) || (l.email || '').toLowerCase().includes(q) || (l.company || '').toLowerCase().includes(q)
+  ) : pool).slice(0, 20);
+  box.innerHTML = hits.map(l => {
+    const on = _cmpW.lead_ids.includes(l.id);
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;cursor:pointer;' + (on ? 'background:var(--accent)14' : '') + '" onclick="cmpWManualToggle(\'' + l.id + '\')">' +
+      '<span style="width:16px;text-align:center;font-weight:800;color:var(--accent)">' + (on ? '✓' : '+') + '</span>' +
+      '<span style="font-weight:700;font-size:12.5px">' + esc(l.name || 'Sin nombre') + '</span>' +
+      '<span style="font-size:11.5px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l.email || l.phone || 'sin contacto') + '</span>' +
+    '</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted2);padding:8px 10px">' + (pool.length ? 'Sin resultados para esa búsqueda' : 'Cargando tus leads…') + '</div>';
+}
+
+function cmpWManualToggle(id) {
+  const i = _cmpW.lead_ids.indexOf(id);
+  if (i >= 0) _cmpW.lead_ids.splice(i, 1);
+  else {
+    if (_cmpW.lead_ids.length >= 500) { showToast('Máximo 500 contactos en selección manual — usa filtros o una lista para más', 'error'); return; }
+    _cmpW.lead_ids.push(id);
+  }
+  cmpWAudRender();
+  cmpPreview();
+}
+
+async function cmpWSaveList() {
+  cmpWCollect();
+  const w = _cmpW;
+  const name = prompt(w.mode === 'manual' ? 'Nombre para esta lista de contactos:' : 'Nombre para este segmento:');
+  if (!name || name.trim().length < 2) return;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const payload = w.mode === 'manual'
+      ? { name: name.trim(), lead_ids: w.lead_ids }
+      : { name: name.trim(), filters: { tags: _cmpAudTags, stage: w.stage || null, source: w.source || null } };
+    const d = await fetch('/api/lead-lists' + qs, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify(payload) }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    await cmpWLoadLists();
+    showToast('📋 Lista "' + name.trim() + '" guardada — ya aparece en "Lista guardada"', 'success');
+  } catch { showToast('Error guardando la lista', 'error'); }
+}
+
+async function cmpWDeleteList() {
+  const id = document.getElementById('cmpw-list-sel')?.value;
+  if (!id) { showToast('Elige primero la lista a eliminar', 'error'); return; }
+  const l = _cmpLists.find(x => x.id === id);
+  if (!confirm('¿Eliminar la lista "' + (l?.name || '') + '"? Las campañas ya enviadas no se afectan.')) return;
+  await fetch('/api/lead-lists?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  if (_cmpW.list_id === id) _cmpW.list_id = '';
+  await cmpWLoadLists();
+  cmpWAudRender();
+  cmpPreview();
+}
+
+async function cmpWTestTo() {
+  cmpWCollect();
+  if (!cmpWValidate(1) || !cmpWValidate(2)) return;
+  const to = (document.getElementById('cmpw-test-to')?.value || '').trim();
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { showToast('Escribe un correo válido para la prueba', 'error'); return; }
+  const btn = document.getElementById('cmpw-test3-btn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    await cmpWSave();
+    const d = await fetch('/api/campaigns?action=test', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ id: _cmpW.id, to }) }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    showToast('✉️ Prueba enviada a ' + d.to, 'success');
+  } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando la prueba'), 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Enviar prueba'; }
 }
 
 function cmpToggleTag(name) {
@@ -20763,6 +20959,8 @@ function cmpToggleTag(name) {
 }
 
 function cmpAudience() {
+  if (_cmpW && _cmpW.mode === 'manual') return { lead_ids: _cmpW.lead_ids };
+  if (_cmpW && _cmpW.mode === 'list') return _cmpW.list_id ? { list_id: _cmpW.list_id } : { lead_ids: [] };
   return {
     tags: _cmpAudTags,
     stage: document.getElementById('cmp-stage')?.value || (_cmpW ? _cmpW.stage : null) || null,
@@ -20798,7 +20996,9 @@ function cmpWStep4() {
   const w = _cmpW;
   const isEmail = w.channel === 'email';
   const row = (label, val) => '<div style="display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px"><div style="width:150px;flex-shrink:0;color:var(--muted);font-weight:600">' + label + '</div><div style="flex:1;min-width:0">' + val + '</div></div>';
-  const audParts = [w.tags.length ? 'Etiquetas: ' + w.tags.map(esc).join(', ') : 'Todas las etiquetas', w.stage ? 'Etapa: ' + esc(w.stage) : '', w.source ? 'Fuente: ' + esc(w.source) : ''].filter(Boolean).join(' · ');
+  const audParts = w.mode === 'manual' ? 'Selección manual: ' + w.lead_ids.length + ' contactos'
+    : w.mode === 'list' ? 'Lista: ' + esc((_cmpLists.find(l => l.id === w.list_id) || {}).name || '—')
+    : [w.tags.length ? 'Etiquetas: ' + w.tags.map(esc).join(', ') : 'Todas las etiquetas', w.stage ? 'Etapa: ' + esc(w.stage) : '', w.source ? 'Fuente: ' + esc(w.source) : ''].filter(Boolean).join(' · ');
   return '<div style="max-width:680px;margin:0 auto">' +
     '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Revisión y envío</div>' +
     '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Verifica todo antes de enviar</div>' +
@@ -20880,9 +21080,13 @@ function cmpWCollect() {
     if (g('cmpw-accent')) w.accent_color = g('cmpw-accent').value;
     if (g('cmpw-utm')) w.utm = g('cmpw-utm').checked;
   } else if (w.step === 3) {
-    w.tags = _cmpAudTags.slice();
-    if (g('cmp-stage')) w.stage = g('cmp-stage').value;
-    if (g('cmp-source')) w.source = g('cmp-source').value;
+    if (w.mode === 'filters') {
+      w.tags = _cmpAudTags.slice();
+      if (g('cmp-stage')) w.stage = g('cmp-stage').value;
+      if (g('cmp-source')) w.source = g('cmp-source').value;
+    } else if (w.mode === 'list') {
+      if (g('cmpw-list-sel')) w.list_id = g('cmpw-list-sel').value;
+    }
   } else if (w.step === 4) {
     if (g('cmpw-sched-on')) w.schedule = g('cmpw-sched-on').checked ? (g('cmpw-sched')?.value || '') : '';
   }
@@ -20900,7 +21104,11 @@ function cmpWValidate(step) {
     if ((w.cta_text && !w.cta_url) || (!w.cta_text && w.cta_url)) { showToast('El botón CTA necesita texto y link', 'error'); return false; }
     if (w.cta_url && !/^https?:\/\//i.test(w.cta_url)) { showToast('El link del CTA debe empezar con https://', 'error'); return false; }
   }
-  if (step === 3 && w.count === 0) { showToast('La audiencia quedó vacía con esos filtros', 'error'); return false; }
+  if (step === 3) {
+    if (w.mode === 'list' && !w.list_id) { showToast('Elige una lista guardada (o cambia de modo)', 'error'); return false; }
+    if (w.mode === 'manual' && !w.lead_ids.length) { showToast('Selecciona al menos un contacto', 'error'); return false; }
+    if (w.count === 0) { showToast('La audiencia quedó vacía con esos filtros', 'error'); return false; }
+  }
   return true;
 }
 
@@ -20916,12 +21124,16 @@ async function cmpWSave() {
   const w = _cmpW;
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
   const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+  const audience = w.mode === 'manual' ? { lead_ids: w.lead_ids }
+    : w.mode === 'list' ? { list_id: w.list_id }
+    : { tags: w.tags, stage: w.stage || null, source: w.source || null };
   const payload = {
     name: w.name, channel: w.channel, subject: w.subject || null, body: w.body,
-    from_name: w.from_name || null, audience: { tags: w.tags, stage: w.stage || null, source: w.source || null },
+    from_name: w.from_name || null, audience,
     preheader: w.preheader || null, reply_to: w.reply_to || null,
     cta_text: w.cta_text || null, cta_url: w.cta_url || null,
     accent_color: w.accent_color || null, utm: w.utm,
+    header_image_url: w.header_image_url || null,
   };
   if (w.id) payload.id = w.id;
   const d = await fetch('/api/campaigns' + qs, {
