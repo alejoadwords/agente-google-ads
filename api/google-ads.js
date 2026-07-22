@@ -507,6 +507,8 @@ export default async function handler(req, res) {
           advertisingChannelType: 'SEARCH',
           campaignBudget: budgetRes,
           networkSettings: { targetGoogleSearch: true, targetSearchNetwork: false, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+          // Obligatorio desde v21 — segmentamos LatAm/ES/US, sin pauta política UE
+          containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
         };
         if (bidding === 'conversions') campaignBody.maximizeConversions = {};
         else campaignBody.targetSpend = {};
