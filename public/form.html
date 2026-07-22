@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Formulario</title>
+<style>
+  :root { --accent: #2563EB; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #F6F7FB; color: #14162E; min-height: 100vh;
+    display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px 60px;
+  }
+  .card {
+    background: #fff; border-radius: 18px; width: 100%; max-width: 480px;
+    padding: 34px 32px 30px; box-shadow: 0 8px 40px rgba(20,22,46,.08);
+    border-top: 5px solid var(--accent);
+  }
+  h1 { font-size: 22px; letter-spacing: -.02em; margin-bottom: 6px; }
+  .desc { font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 20px; }
+  label { display: block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; margin: 14px 0 5px; }
+  label .req { color: #EF4444; }
+  input, textarea, select {
+    width: 100%; padding: 11px 13px; border: 1.5px solid #E5E7EB; border-radius: 10px;
+    font-size: 15px; font-family: inherit; background: #fff; color: inherit; outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { min-height: 90px; resize: vertical; }
+  button {
+    width: 100%; margin-top: 22px; padding: 13px; border: none; border-radius: 11px;
+    background: var(--accent); color: #fff; font-size: 15px; font-weight: 800;
+    font-family: inherit; cursor: pointer; transition: opacity .15s;
+  }
+  button:hover { opacity: .92; }
+  button:disabled { opacity: .55; cursor: default; }
+  .ok { text-align: center; padding: 30px 6px 16px; }
+  .ok .ico { width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 28px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .ok p { font-size: 15.5px; line-height: 1.55; color: #374151; }
+  .err { margin-top: 12px; font-size: 13px; color: #B91C1C; background: #FEF2F2; border-radius: 9px; padding: 9px 12px; display: none; }
+  .powered { text-align: center; margin-top: 18px; font-size: 11.5px; color: #9ca3af; }
+  .powered a { color: #9ca3af; font-weight: 700; text-decoration: none; }
+  .hp { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; }
+  .loading { text-align: center; color: #9ca3af; padding: 40px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="card" id="card"><div class="loading">Cargando…</div></div>
+<script>
+(function () {
+  var token = (location.pathname.match(/\/form\/([a-f0-9]{24,64})/i) || [])[1] || '';
+  var card = document.getElementById('card');
+  var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  if (!token) { card.innerHTML = '<div class="loading">Formulario no encontrado</div>'; return; }
+
+  fetch('/api/form-public?token=' + token).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.form) { card.innerHTML = '<div class="loading">' + esc(d.error || 'Formulario no encontrado') + '</div>'; return; }
+    var f = d.form;
+    document.title = f.title || 'Formulario';
+    document.documentElement.style.setProperty('--accent', f.accent_color || '#2563EB');
+    card.style.borderTopColor = f.accent_color || '#2563EB';
+
+    var nameFor = { name: 'name', email: 'email', phone: 'phone', company: 'company' };
+    var html = '<h1>' + esc(f.title) + '</h1>' + (f.description ? '<div class="desc">' + esc(f.description) + '</div>' : '');
+    html += '<form id="lf" novalidate>';
+    (f.fields || []).forEach(function (fl, i) {
+      var nm = nameFor[fl.key] || ('custom_' + (fl.label || i).toString().toLowerCase().replace(/[^a-z0-9]+/g, '_'));
+      html += '<label>' + esc(fl.label) + (fl.required ? ' <span class="req">*</span>' : '') + '</label>';
+      if (fl.type === 'textarea') html += '<textarea name="' + nm + '"' + (fl.required ? ' required' : '') + '></textarea>';
+      else if (fl.type === 'select') html += '<select name="' + nm + '"' + (fl.required ? ' required' : '') + '><option value="">Elige…</option>' + (fl.options || []).map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') + '</select>';
+      else html += '<input type="' + (fl.type || 'text') + '" name="' + nm + '"' + (fl.required ? ' required' : '') + '>';
+    });
+    html += '<div class="hp"><input type="text" name="_hp" tabindex="-1" autocomplete="off"></div>';
+    html += '<button type="submit" id="lf-btn">' + esc(f.button_text) + '</button>';
+    html += '<div class="err" id="lf-err"></div></form>';
+    html += '<div class="powered">Con la tecnología de <a href="https://acuarius.app" target="_blank" rel="noopener">Acuarius</a></div>';
+    card.innerHTML = html;
+
+    document.getElementById('lf').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var form = e.target;
+      var err = document.getElementById('lf-err');
+      err.style.display = 'none';
+      var missing = Array.prototype.filter.call(form.querySelectorAll('[required]'), function (el) { return !el.value.trim(); });
+      if (missing.length) { err.textContent = 'Completa los campos marcados con *'; err.style.display = 'block'; missing[0].focus(); return; }
+      var btn = document.getElementById('lf-btn');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      var data = {};
+      Array.prototype.forEach.call(form.elements, function (el) { if (el.name) data[el.name] = el.value; });
+      data._page = document.referrer || '';
+      fetch('/api/form-public?token=' + token, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res.error) { err.textContent = res.error; err.style.display = 'block'; btn.disabled = false; btn.textContent = f.button_text; return; }
+        if (res.redirect_url) { location.href = res.redirect_url; return; }
+        card.innerHTML = '<div class="ok"><div class="ico">✓</div><p>' + esc(res.success_message) + '</p></div>' +
+          '<div class="powered">Con la tecnología de <a href="https://acuarius.app" target="_blank" rel="noopener">Acuarius</a></div>';
+      }).catch(function () { err.textContent = 'Error de conexión — intenta de nuevo'; err.style.display = 'block'; btn.disabled = false; btn.textContent = f.button_text; });
+    });
+  }).catch(function () { card.innerHTML = '<div class="loading">Error cargando el formulario</div>'; });
+})();
+</script>
+</body>
+</html>

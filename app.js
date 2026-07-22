@@ -17598,7 +17598,7 @@ async function crmInit() {
 const _crmSetViewOrig = crmSetView;
 function crmSetView(v) {
   crmView = v;
-  ['kanban','list','agents','inbox','analytics','autos','agenda','campaigns'].forEach(id => {
+  ['kanban','list','agents','inbox','analytics','autos','agenda','campaigns','sources'].forEach(id => {
     const btn = document.getElementById('crm-btn-' + id);
     if (btn) btn.classList.toggle('active', v === id);
   });
@@ -17614,6 +17614,8 @@ function crmSetView(v) {
   if (agendaView) agendaView.style.display = v === 'agenda' ? 'flex' : 'none';
   const campaignsView = document.getElementById('crm-campaigns-view');
   if (campaignsView) campaignsView.style.display = v === 'campaigns' ? 'flex' : 'none';
+  const sourcesView = document.getElementById('crm-sources-view');
+  if (sourcesView) sourcesView.style.display = v === 'sources' ? 'flex' : 'none';
   const searchBar = document.getElementById('crm-search-bar');
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
@@ -17625,6 +17627,7 @@ function crmSetView(v) {
   if (v === 'autos') crmRenderAutos();
   if (v === 'agenda') agnRender();
   if (v === 'campaigns') cmpRender();
+  if (v === 'sources') srcRender();
 }
 // ── FIN AGENTES IA / INBOX ────────────────────────────────────────────────────
 
@@ -20137,7 +20140,7 @@ function agnScheduleForLead() {
 // index.html para cualquier ruta (rewrite catch-all en vercel.json).
 (function () {
   const AGENT_KEYS = ['google-ads', 'meta-ads', 'tiktok-ads', 'linkedin-ads', 'seo', 'social', 'consultor'];
-  const CRM_SUB = { kanban: '', list: '/contactos', agents: '/agentes-ia', inbox: '/inbox', analytics: '/analisis', autos: '/automatizaciones', agenda: '/agenda', campaigns: '/campanas' };
+  const CRM_SUB = { kanban: '', list: '/contactos', agents: '/agentes-ia', inbox: '/inbox', analytics: '/analisis', autos: '/automatizaciones', agenda: '/agenda', campaigns: '/campanas', sources: '/fuentes' };
   const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
   const TITLES = {
     '/': 'Acuarius', '/clientes': 'Panel de clientes · Acuarius', '/studio': 'Social Studio · Acuarius',
@@ -21234,6 +21237,231 @@ async function cmpDelete(id) {
   if (!confirm('¿Eliminar la campaña "' + (c?.name || '') + '"?' + (c?.status === 'sending' || c?.status === 'queued' ? ' Los envíos pendientes se cancelan.' : ''))) return;
   await fetch('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
   cmpRender();
+}
+
+// ══ FUENTES DE LEADS ════════════════════════════════════════════════════════
+// Hub de entrada de leads: formularios web (página alojada + embed + conector
+// para formularios existentes), webhook externo y canales de chat.
+let frmList = [];
+
+async function frmLoad() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetch('/api/forms' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    frmList = d.forms || [];
+  } catch { frmList = []; }
+}
+
+async function srcRender() {
+  const view = document.getElementById('crm-sources-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  await frmLoad();
+
+  const header =
+    '<div style="margin-bottom:18px;max-width:860px">' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Fuentes de leads</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted)">Todas las puertas de entrada a tu CRM: formularios, canales de chat y conexiones externas</div>' +
+    '</div>';
+
+  // ── Sección Formularios ──
+  const formCards = frmList.map(f => {
+    const st = f.active ? { label: 'Activo', color: '#10B981' } : { label: 'Pausado', color: '#6b7280' };
+    return '<div class="auto-card" style="max-width:860px">' +
+      '<div class="auto-ico">📝</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="auto-name">' + esc(f.name) + '</div>' +
+        '<div class="auto-trigger">' + (f.fields || []).length + ' campos' + ((f.tags || []).length ? ' · etiquetas: ' + f.tags.map(esc).join(', ') : '') + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' + (f.submissions || 0) + ' envíos' + (f.last_submission_at ? ' · último: ' + new Date(f.last_submission_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '') + '</div>' +
+      '</div>' +
+      '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
+      '<div class="auto-actions">' +
+        '<button class="btn-sec sm" onclick="frmSnippets(\'' + f.id + '\')">📎 Instalar</button>' +
+        '<button class="btn-ghost sm" title="Editar" onclick="frmOpen(\'' + f.id + '\')">✎</button>' +
+        '<button class="btn-ghost sm" title="' + (f.active ? 'Pausar' : 'Activar') + '" onclick="frmToggle(\'' + f.id + '\')">' + (f.active ? '⏸' : '▶') + '</button>' +
+        '<button class="btn-ghost sm" title="Eliminar" onclick="frmDelete(\'' + f.id + '\')">✕</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  const formsSection =
+    '<div style="max-width:860px;margin-bottom:26px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+        '<div style="font-weight:800;font-size:var(--fs-md)">📝 Formularios web</div>' +
+        '<button class="btn-pri sm" onclick="frmOpen()">' + icn('plus', 12) + ' Nuevo formulario</button>' +
+      '</div>' +
+      (formCards ||
+        '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted)">Crea un formulario y tienes 3 formas de usarlo: <b>página alojada</b> (link listo para compartir o poner en tu bio), <b>incrustado</b> en tu web, o <b>conectar un formulario que ya tengas</b> con una línea de código. Cada envío crea el lead con su etiqueta y dispara tus automatizaciones.</div>') +
+    '</div>';
+
+  // ── Placeholder de las demás fuentes (se completan en la fase 2) ──
+  const rest =
+    '<div style="max-width:860px" id="src-more">' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">🔌 Otras fuentes</div>' +
+      '<div style="border:1px dashed var(--border);border-radius:14px;padding:16px;font-size:12.5px;color:var(--muted2)">Webhook para plataformas externas (Hotmart, Zapier, Make), canales de chat y Meta Lead Ads — en construcción.</div>' +
+    '</div>';
+
+  view.innerHTML = header + formsSection + rest;
+}
+
+// ── Editor de formulario ──
+function frmOpen(id) {
+  const f = id ? frmList.find(x => x.id === id) : null;
+  const st = {
+    id: f ? f.id : null,
+    fields: f ? JSON.parse(JSON.stringify(f.fields || [])) : [
+      { key: 'name', label: 'Nombre', type: 'text', required: true },
+      { key: 'email', label: 'Email', type: 'email', required: true },
+      { key: 'phone', label: 'Teléfono / WhatsApp', type: 'tel', required: false },
+    ],
+  };
+  window._frmSt = st;
+  document.getElementById('frm-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'frm-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div style="background:var(--bg);border-radius:18px;width:min(620px,94vw);max-height:90vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg)" onmousedown="event.stopPropagation()">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800">' + (f ? 'Editar formulario' : 'Nuevo formulario') + '</div>' +
+        '<button class="btn-ghost sm" onclick="document.getElementById(\'frm-overlay\').remove()">✕</button>' +
+      '</div>' +
+      '<input class="auto-input" id="frm-name" value="' + esc(f ? f.name : '') + '" placeholder="Nombre interno (ej: Landing servicios)" style="width:100%;margin-bottom:8px">' +
+      '<input class="auto-input" id="frm-title" value="' + esc(f ? f.title || '' : '') + '" placeholder="Título visible (ej: Agenda tu asesoría gratis)" style="width:100%;margin-bottom:8px">' +
+      '<textarea class="auto-input" id="frm-desc" rows="2" placeholder="Descripción corta (opcional)" style="width:100%;margin-bottom:10px;font-family:var(--font);font-size:12.5px">' + esc(f ? f.description || '' : '') + '</textarea>' +
+      '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Campos</div>' +
+      '<div id="frm-fields"></div>' +
+      '<button class="btn-ghost sm" onclick="frmAddField()" style="margin:4px 0 14px">+ Agregar campo</button>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+        '<input class="auto-input" id="frm-button" value="' + esc(f ? f.button_text || '' : '') + '" placeholder="Texto del botón (Enviar)">' +
+        '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px">Color <input type="color" id="frm-accent" value="' + esc((f && f.accent_color) || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer"></label>' +
+      '</div>' +
+      '<input class="auto-input" id="frm-tags" value="' + esc(f ? (f.tags || []).join(', ') : '') + '" placeholder="Etiquetas para estos leads (separadas por coma)" style="width:100%;margin-bottom:8px">' +
+      '<input class="auto-input" id="frm-success" value="' + esc(f ? f.success_message || '' : '') + '" placeholder="Mensaje de gracias (opcional)" style="width:100%;margin-bottom:8px">' +
+      '<input class="auto-input" id="frm-redirect" value="' + esc(f ? f.redirect_url || '' : '') + '" placeholder="O redirigir a una URL después de enviar (opcional)" style="width:100%;margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px">' +
+        '<button class="btn-pri" id="frm-save-btn" onclick="frmSave()">' + (f ? 'Guardar cambios' : 'Crear formulario') + '</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  frmRenderFields();
+}
+
+const FRM_KEY_OPTS = [
+  { v: 'name', l: 'Nombre' }, { v: 'email', l: 'Email' }, { v: 'phone', l: 'Teléfono' },
+  { v: 'company', l: 'Empresa' }, { v: 'custom', l: 'Personalizado (va a la nota)' },
+];
+const FRM_TYPE_OPTS = [
+  { v: 'text', l: 'Texto' }, { v: 'email', l: 'Email' }, { v: 'tel', l: 'Teléfono' },
+  { v: 'textarea', l: 'Párrafo' }, { v: 'select', l: 'Lista de opciones' },
+];
+
+function frmRenderFields() {
+  const box = document.getElementById('frm-fields');
+  if (!box) return;
+  box.innerHTML = window._frmSt.fields.map((fl, i) =>
+    '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr auto auto;gap:6px;align-items:center;margin-bottom:6px">' +
+      '<input class="auto-input" value="' + esc(fl.label) + '" placeholder="Etiqueta" oninput="_frmSt.fields[' + i + '].label=this.value">' +
+      '<select class="auto-input" onchange="_frmSt.fields[' + i + '].key=this.value">' + FRM_KEY_OPTS.map(o => '<option value="' + o.v + '"' + (fl.key === o.v ? ' selected' : '') + '>' + o.l + '</option>').join('') + '</select>' +
+      '<select class="auto-input" onchange="_frmSt.fields[' + i + '].type=this.value;if(this.value===\'select\'&&!_frmSt.fields[' + i + '].options)_frmSt.fields[' + i + '].options=[];frmRenderFields()">' + FRM_TYPE_OPTS.map(o => '<option value="' + o.v + '"' + (fl.type === o.v ? ' selected' : '') + '>' + o.l + '</option>').join('') + '</select>' +
+      '<label title="Obligatorio" style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox"' + (fl.required ? ' checked' : '') + ' onchange="_frmSt.fields[' + i + '].required=this.checked"> *</label>' +
+      '<button class="btn-ghost sm" onclick="_frmSt.fields.splice(' + i + ',1);frmRenderFields()">✕</button>' +
+    '</div>' +
+    (fl.type === 'select' ? '<input class="auto-input" value="' + esc((fl.options || []).join(', ')) + '" placeholder="Opciones separadas por coma" style="width:100%;margin:-2px 0 8px" oninput="_frmSt.fields[' + i + '].options=this.value.split(\',\').map(function(s){return s.trim()}).filter(Boolean)">' : '')
+  ).join('');
+}
+
+function frmAddField() {
+  if (window._frmSt.fields.length >= 12) { showToast('Máximo 12 campos', 'error'); return; }
+  window._frmSt.fields.push({ key: 'custom', label: '', type: 'text', required: false });
+  frmRenderFields();
+}
+
+async function frmSave() {
+  const name = document.getElementById('frm-name').value.trim();
+  if (!name) { showToast('El formulario necesita un nombre interno', 'error'); return; }
+  const fields = window._frmSt.fields.filter(f => f.label.trim());
+  if (!fields.length) { showToast('Agrega al menos un campo', 'error'); return; }
+  const btn = document.getElementById('frm-save-btn');
+  btn.disabled = true;
+  const payload = {
+    name,
+    title: document.getElementById('frm-title').value.trim() || null,
+    description: document.getElementById('frm-desc').value.trim() || null,
+    button_text: document.getElementById('frm-button').value.trim() || null,
+    accent_color: document.getElementById('frm-accent').value,
+    tags: document.getElementById('frm-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    success_message: document.getElementById('frm-success').value.trim() || null,
+    redirect_url: document.getElementById('frm-redirect').value.trim() || null,
+    fields,
+  };
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    if (window._frmSt.id) payload.id = window._frmSt.id;
+    const d = await fetch('/api/forms' + qs, {
+      method: window._frmSt.id ? 'PUT' : 'POST', headers: await getAuthHeaders(), body: JSON.stringify(payload),
+    }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
+    document.getElementById('frm-overlay').remove();
+    track('form_created', {});
+    showToast(window._frmSt.id ? '✅ Formulario actualizado' : '✅ Formulario creado — dale a 📎 Instalar para conectarlo', 'success');
+    srcRender();
+    if (!window._frmSt.id && d.form) setTimeout(() => frmSnippets(d.form.id, d.form), 400);
+  } catch { showToast('Error guardando', 'error'); }
+  finally { btn.disabled = false; }
+}
+
+async function frmToggle(id) {
+  const f = frmList.find(x => x.id === id);
+  if (!f) return;
+  await fetch('/api/forms', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, active: !f.active }) });
+  srcRender();
+}
+
+async function frmDelete(id) {
+  const f = frmList.find(x => x.id === id);
+  if (!confirm('¿Eliminar el formulario "' + (f?.name || '') + '"? El link público y el conector dejarán de funcionar.')) return;
+  await fetch('/api/forms?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  srcRender();
+}
+
+// ── Snippets de instalación ──
+function frmSnippets(id, formObj) {
+  const f = formObj || frmList.find(x => x.id === id);
+  if (!f) return;
+  const base = 'https://app.acuarius.app';
+  const link = base + '/form/' + f.token;
+  const iframe = '<iframe src="' + link + '" style="width:100%;max-width:520px;height:640px;border:none;border-radius:16px" loading="lazy"></iframe>';
+  const connector = '<scr' + 'ipt src="' + base + '/f.js" data-token="' + f.token + '" defer></scr' + 'ipt>';
+  const block = (title, desc, code, mid) =>
+    '<div style="margin-bottom:16px">' +
+      '<div style="font-weight:800;font-size:12.5px;margin-bottom:2px">' + title + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">' + desc + '</div>' +
+      '<div style="display:flex;gap:6px;align-items:stretch">' +
+        '<code id="frm-code-' + mid + '" style="flex:1;font-size:10.5px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:nowrap">' + esc(code) + '</code>' +
+        '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(document.getElementById(\'frm-code-' + mid + '\').textContent).then(function(){showToast(\'Copiado ✓\',\'success\')})">Copiar</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('frm-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'frm-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div style="background:var(--bg);border-radius:18px;width:min(640px,94vw);max-height:90vh;overflow-y:auto;padding:26px 28px;box-shadow:var(--shadow-lg)" onmousedown="event.stopPropagation()">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800">Instalar "' + esc(f.name) + '"</div>' +
+        '<button class="btn-ghost sm" onclick="document.getElementById(\'frm-overlay\').remove()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:18px">Tres formas de usarlo — elige la que te sirva:</div>' +
+      block('1 · Página lista para compartir', 'Compártela en tu bio, anuncios o QR. <a href="' + link + '" target="_blank" style="color:var(--accent)">Ver mi formulario ↗</a>', link, 'link') +
+      block('2 · Incrustar en tu web', 'Pega este código donde quieras que aparezca el formulario.', iframe, 'iframe') +
+      block('3 · Conectar un formulario que ya tienes', 'Pega este código antes de &lt;/body&gt; en tu web: detecta el envío de tus formularios existentes y crea el lead en Acuarius sin cambiar nada de tu página.', connector, 'script') +
+    '</div>';
+  document.body.appendChild(ov);
 }
 
 // ══ EQUIPO Y ASIENTOS ═══════════════════════════════════════════════════════

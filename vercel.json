@@ -27,6 +27,10 @@
       "destination": "/proposal.html"
     },
     {
+      "source": "/form/:token",
+      "destination": "/form.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
