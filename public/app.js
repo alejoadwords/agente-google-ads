@@ -4791,6 +4791,10 @@ if(typeof BENCHMARKS_LATAM!=='undefined'&&['google-ads','meta-ads','tiktok-ads',
 if(typeof WEB_SEARCH_RULES!=='undefined'){
   sys+='\n\n'+WEB_SEARCH_RULES;
 }
+// Protocolo de creación de campañas — solo Google Ads con cuenta conectada
+if(typeof CAMPAIGN_BUILD_RULES!=='undefined' && currentAgentCtx==='google-ads' && _adsToken && _adsCustId){
+  sys+='\n\n'+CAMPAIGN_BUILD_RULES;
+}
 // Packs publicados por el cron de auto-actualización (una sola carga por sesión;
 // sobreescriben los estáticos — ver prompts/actualizaciones-2026.js)
 if(!window._kpLoaded){
@@ -4872,7 +4876,7 @@ while(!streamDone){
         } else if(hasWebSearch){
           if(bbl)bbl.innerHTML='<span style="color:var(--muted);font-size:13px">🔍 Buscando en la web…</span>';
         } else {
-          const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[WEB_SEARCH:[^\]]*\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'');
+          const cleanForBubble=replyFinal.replace(/\[META_API:\s*\{[\s\S]*?\}\]/g,'').replace(/\[GAQL_QUERY:[\s\S]*?\]/g,'').replace(/\[WEB_SEARCH:[^\]]*\]/g,'').replace(/\[SUGERENCIAS:[^\]]*\]/g,'').replace(/<CAMPAIGN_BUILD>[\s\S]*?(<\/CAMPAIGN_BUILD>|$)/g,'<div style="color:var(--muted);font-size:12px;margin-top:8px">⚙️ Armando el plan de campaña…</div>');
           if(bbl)bbl.innerHTML=fmt(cleanForBubble);
         }
         // Calendario en tiempo real (cuando se genera desde el Studio)
@@ -5095,6 +5099,18 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           }
         }
       }
+    }
+    // Detectar plan de campaña de Google Ads → panel de revisión editable
+    else if(replyFinalProcessed.includes('<CAMPAIGN_BUILD>')){
+      const cbMatch = replyFinalProcessed.match(/<CAMPAIGN_BUILD>([\s\S]*?)<\/CAMPAIGN_BUILD>/);
+      const cleanReply = replyFinalProcessed.replace(/<CAMPAIGN_BUILD>[\s\S]*?<\/CAMPAIGN_BUILD>/g, '').trim();
+      if(cleanReply) { addAgent(cleanReply); hist.push({role:'assistant', content: cleanReply + '\n[Plan de campaña presentado al usuario en el panel de revisión]'}); }
+      let cbPlan = null;
+      try { cbPlan = JSON.parse(cbMatch[1].trim()); } catch(e) {}
+      if (cbPlan && Array.isArray(cbPlan.ad_groups)) cbRenderPanel(cbPlan);
+      else addAgent('No pude leer el plan de campaña — pídeme que lo genere de nuevo.');
+      if (sugerencias.length) setTimeout(() => renderSugerencias(sugerencias), 100);
+      loading=false; document.getElementById('sbtn').disabled=false; return;
     }
     // Detectar opciones de bienvenida del agente Social
     else if(replyFinalProcessed.includes('[SOCIAL_OPTIONS]')){
@@ -21237,6 +21253,147 @@ async function cmpDelete(id) {
   if (!confirm('¿Eliminar la campaña "' + (c?.name || '') + '"?' + (c?.status === 'sending' || c?.status === 'queued' ? ' Los envíos pendientes se cancelan.' : ''))) return;
   await fetch('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
   cmpRender();
+}
+
+// ══ CREACIÓN DE CAMPAÑAS DE GOOGLE ADS DESDE EL AGENTE ══════════════════════
+// El agente emite <CAMPAIGN_BUILD>{plan}</CAMPAIGN_BUILD>; aquí se renderiza
+// el panel de revisión editable y se ejecuta action=create-campaign (la
+// campaña SIEMPRE nace en pausa; Activar usa update-campaign-status).
+let _cbPlan = null;
+const CB_COUNTRIES = { CO: 'Colombia', MX: 'México', AR: 'Argentina', CL: 'Chile', PE: 'Perú', EC: 'Ecuador', ES: 'España', US: 'Estados Unidos', PA: 'Panamá', CR: 'Costa Rica', UY: 'Uruguay', PY: 'Paraguay', BO: 'Bolivia', GT: 'Guatemala', DO: 'Rep. Dominicana', BR: 'Brasil', VE: 'Venezuela', HN: 'Honduras', SV: 'El Salvador', NI: 'Nicaragua' };
+
+function cbRenderPanel(plan) {
+  _cbPlan = plan;
+  document.getElementById('cb-panel')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'cb-panel';
+  wrap.className = 'msg';
+  const lbl = t => '<div style="font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:10px 0 3px">' + t + '</div>';
+  const groups = (plan.ad_groups || []).map((g, i) =>
+    '<details' + (i === 0 ? ' open' : '') + ' style="border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:8px">' +
+      '<summary style="font-weight:800;font-size:12.5px;cursor:pointer">Grupo ' + (i + 1) + ': ' + esc(g.name || '') + ' · ' + (g.keywords || []).length + ' keywords</summary>' +
+      lbl('Nombre del grupo') + '<input class="auto-input" id="cb-g' + i + '-name" value="' + esc(g.name || '') + '" style="width:100%">' +
+      lbl('Keywords — una por línea (agrega | exact o | broad para cambiar la concordancia; sin nada = phrase)') +
+      '<textarea class="auto-input" id="cb-g' + i + '-kw" rows="5" style="width:100%;font-size:12px;font-family:var(--font)">' + esc((g.keywords || []).map(k => (k.text || k) + (k.match === 'EXACT' ? ' | exact' : k.match === 'BROAD' ? ' | broad' : '')).join('\n')) + '</textarea>' +
+      lbl('URL de destino') + '<input class="auto-input" id="cb-g' + i + '-url" value="' + esc((g.ad || {}).final_url || '') + '" style="width:100%">' +
+      lbl('Títulos — uno por línea, máx 30 caracteres') +
+      '<textarea class="auto-input" id="cb-g' + i + '-h" rows="6" style="width:100%;font-size:12px;font-family:var(--font)" oninput="cbCheckLines(this,30,\'cb-g' + i + '-h-warn\')">' + esc(((g.ad || {}).headlines || []).join('\n')) + '</textarea>' +
+      '<div id="cb-g' + i + '-h-warn" style="font-size:11px;color:var(--muted2);margin-top:2px"></div>' +
+      lbl('Descripciones — una por línea, máx 90 caracteres (usa 4)') +
+      '<textarea class="auto-input" id="cb-g' + i + '-d" rows="4" style="width:100%;font-size:12px;font-family:var(--font)" oninput="cbCheckLines(this,90,\'cb-g' + i + '-d-warn\')">' + esc(((g.ad || {}).descriptions || []).join('\n')) + '</textarea>' +
+      '<div id="cb-g' + i + '-d-warn" style="font-size:11px;color:var(--muted2);margin-top:2px"></div>' +
+    '</details>'
+  ).join('');
+  wrap.innerHTML =
+    '<div style="border:1.5px solid var(--accent);border-radius:16px;padding:18px 20px;max-width:660px;width:100%;background:var(--panel)">' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:2px">📋 Plan de campaña — revísalo antes de crear</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Se crea en tu cuenta de Google Ads <b>en pausa</b> — nada se publica hasta que la actives.</div>' +
+      '<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:8px">' +
+        '<div>' + lbl('Nombre de la campaña') + '<input class="auto-input" id="cb-name" value="' + esc(plan.name || '') + '" style="width:100%"></div>' +
+        '<div>' + lbl('Presupuesto diario') + '<input class="auto-input" id="cb-budget" type="number" min="1" value="' + esc(String(plan.budget_daily || '')) + '" style="width:100%"></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">' +
+        '<div>' + lbl('País') + '<select class="auto-input" id="cb-country" style="width:100%">' + Object.entries(CB_COUNTRIES).map(([c, n]) => '<option value="' + c + '"' + (String(plan.country).toUpperCase() === c ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></div>' +
+        '<div>' + lbl('Estrategia de puja') + '<select class="auto-input" id="cb-bidding" style="width:100%"><option value="clicks"' + (plan.bidding !== 'conversions' ? ' selected' : '') + '>Maximizar clics</option><option value="conversions"' + (plan.bidding === 'conversions' ? ' selected' : '') + '>Maximizar conversiones</option></select></div>' +
+      '</div>' +
+      groups +
+      '<div id="cb-result" style="display:none;font-size:12.5px;border-radius:10px;padding:10px 13px;margin-top:8px"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px" id="cb-actions">' +
+        '<button class="btn-sec sm" onclick="document.getElementById(\'cb-panel\').remove()">Descartar</button>' +
+        '<button class="btn-pri sm" id="cb-create-btn" onclick="cbCreate()">🚀 Crear en Google Ads (en pausa)</button>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('chat-area').appendChild(wrap);
+  scrollB();
+}
+
+function cbCheckLines(ta, max, warnId) {
+  const bad = ta.value.split('\n').map(s => s.trim()).filter(Boolean).filter(l => l.length > max);
+  const el = document.getElementById(warnId);
+  if (el) {
+    el.textContent = bad.length ? '⚠️ ' + bad.length + ' línea(s) superan los ' + max + ' caracteres: "' + bad[0].slice(0, 40) + '…"' : '';
+    el.style.color = bad.length ? '#B45309' : 'var(--muted2)';
+  }
+}
+
+function cbCollect() {
+  const g = id => document.getElementById(id);
+  const plan = {
+    name: g('cb-name').value.trim(),
+    budget_daily: parseFloat(g('cb-budget').value),
+    country: g('cb-country').value,
+    language: _cbPlan.language || 'es',
+    bidding: g('cb-bidding').value,
+    ad_groups: [],
+  };
+  (_cbPlan.ad_groups || []).forEach((orig, i) => {
+    const kws = g('cb-g' + i + '-kw').value.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+      const m = line.match(/^(.*?)\s*\|\s*(exact|broad|phrase)\s*$/i);
+      return m ? { text: m[1].trim(), match: m[2].toUpperCase() } : { text: line, match: 'PHRASE' };
+    });
+    plan.ad_groups.push({
+      name: g('cb-g' + i + '-name').value.trim(),
+      keywords: kws,
+      ad: {
+        final_url: g('cb-g' + i + '-url').value.trim(),
+        path1: (orig.ad || {}).path1 || '', path2: (orig.ad || {}).path2 || '',
+        headlines: g('cb-g' + i + '-h').value.split('\n').map(s => s.trim()).filter(Boolean),
+        descriptions: g('cb-g' + i + '-d').value.split('\n').map(s => s.trim()).filter(Boolean),
+      },
+    });
+  });
+  return plan;
+}
+
+async function cbCreate() {
+  const plan = cbCollect();
+  const btn = document.getElementById('cb-create-btn');
+  const result = document.getElementById('cb-result');
+  const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
+  const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
+  const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
+  if (!custId) { showToast('Conecta tu cuenta de Google Ads primero', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Creando campaña…';
+  try {
+    const d = await fetch('/api/google-ads?action=create-campaign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, confirm: true, plan }),
+    }).then(r => r.json());
+    result.style.display = 'block';
+    if (d.error) {
+      result.style.background = '#FEF2F2'; result.style.color = '#991B1B';
+      result.innerHTML = '⚠️ ' + esc(d.error) + (d.details ? '<div style="font-size:11px;margin-top:4px;opacity:.8">' + esc(Array.isArray(d.details) ? d.details.join(' · ') : String(d.details).slice(0, 300)) + '</div>' : '');
+      btn.disabled = false; btn.textContent = '🚀 Crear en Google Ads (en pausa)';
+      return;
+    }
+    track('ads_campaign_created', { groups: d.adGroups, keywords: d.keywords });
+    result.style.background = '#ECFDF5'; result.style.color = '#065F46';
+    result.innerHTML = '✅ <b>' + esc(d.campaignName) + '</b> creada en pausa: ' + d.adGroups + ' grupo(s), ' + d.keywords + ' keywords, ' + d.ads + ' anuncio(s) · presupuesto diario ' + d.budgetDaily + '.<br>Revísala y actívala cuando estés listo.';
+    document.getElementById('cb-actions').innerHTML =
+      '<a class="btn-sec sm" href="' + d.adsUrl + '" target="_blank" rel="noopener" style="text-decoration:none">Ver en Google Ads ↗</a>' +
+      '<button class="btn-pri sm" onclick="cbActivate(\'' + d.campaignId + '\')">▶ Activar campaña</button>';
+  } catch (e) {
+    result.style.display = 'block'; result.style.background = '#FEF2F2'; result.style.color = '#991B1B';
+    result.textContent = 'Error de conexión — intenta de nuevo';
+    btn.disabled = false; btn.textContent = '🚀 Crear en Google Ads (en pausa)';
+  }
+}
+
+async function cbActivate(campaignId) {
+  if (!confirm('¿Activar la campaña? Empezará a gastar presupuesto real en Google Ads.')) return;
+  const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
+  const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
+  const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
+  try {
+    const d = await fetch('/api/google-ads?action=update-campaign-status', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, campaignId, status: 'ENABLED', confirm: true }),
+    }).then(r => r.json());
+    if (d.error) { showToast('⚠️ ' + (d.error.message || d.error), 'error'); return; }
+    showToast('🟢 Campaña "' + (d.campaignName || '') + '" activada', 'success');
+    const acts = document.getElementById('cb-actions');
+    if (acts) acts.innerHTML = '<span style="font-size:12.5px;color:#065F46;font-weight:700;padding:6px 4px">🟢 Campaña activa</span>';
+  } catch { showToast('Error activando', 'error'); }
 }
 
 // ══ FUENTES DE LEADS ════════════════════════════════════════════════════════

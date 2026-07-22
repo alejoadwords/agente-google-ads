@@ -422,6 +422,153 @@ export default async function handler(req, res) {
       return res.json({ ads });
     }
 
+    // ── create-campaign ────────────────────────────────────
+    // Crea una campaña de búsqueda COMPLETA y SIEMPRE EN PAUSA:
+    // presupuesto → campaña → geo/idioma → grupos → keywords → anuncios RSA.
+    // La activa el usuario después (update-campaign-status). Rollback best-effort.
+    if (action === 'create-campaign') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+      const { plan, confirm } = req.body || {};
+      if (!confirm) return res.status(400).json({ error: 'confirm: true requerido' });
+      if (!plan || typeof plan !== 'object') return res.status(400).json({ error: 'plan requerido' });
+
+      const conn = await getStoredToken(userId);
+      if (!conn || (conn.account_id && conn.account_id.replace(/-/g, '') !== customerId)) {
+        return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
+      }
+
+      // Validación del plan
+      const GEO = { CO: 2170, MX: 2484, AR: 2032, CL: 2152, PE: 2604, EC: 2218, ES: 2724, US: 2840, PA: 2591, CR: 2188, UY: 2858, PY: 2600, BO: 2068, GT: 2320, DO: 2214, BR: 2076, VE: 2862, HN: 2340, SV: 2222, NI: 2558 };
+      const LANG = { es: 1003, en: 1000, pt: 1014 };
+      const errs = [];
+      const name = String(plan.name || '').trim().slice(0, 120);
+      if (!name) errs.push('Falta el nombre de la campaña');
+      const budget = parseFloat(plan.budget_daily);
+      if (!(budget > 0) || budget > 100000) errs.push('Presupuesto diario inválido');
+      const geoId = GEO[String(plan.country || '').toUpperCase()];
+      if (!geoId) errs.push('País no soportado: ' + plan.country);
+      const langId = LANG[String(plan.language || 'es').toLowerCase()] || 1003;
+      const bidding = plan.bidding === 'conversions' ? 'conversions' : 'clicks';
+      const groups = Array.isArray(plan.ad_groups) ? plan.ad_groups.slice(0, 10) : [];
+      if (!groups.length) errs.push('La campaña necesita al menos un grupo de anuncios');
+      for (const [gi, g] of groups.entries()) {
+        const gn = 'Grupo ' + (gi + 1);
+        if (!String(g.name || '').trim()) errs.push(gn + ': falta el nombre');
+        const kws = Array.isArray(g.keywords) ? g.keywords : [];
+        if (!kws.length || kws.length > 25) errs.push(gn + ': entre 1 y 25 keywords');
+        const ad = g.ad || {};
+        if (!/^https?:\/\//i.test(ad.final_url || '')) errs.push(gn + ': URL final inválida');
+        const hs = (ad.headlines || []).map(h => String(h).trim()).filter(Boolean);
+        const ds = (ad.descriptions || []).map(d => String(d).trim()).filter(Boolean);
+        if (hs.length < 3 || hs.length > 15) errs.push(gn + ': entre 3 y 15 títulos');
+        if (hs.some(h => h.length > 30)) errs.push(gn + ': títulos de máx. 30 caracteres');
+        if (ds.length < 2 || ds.length > 4) errs.push(gn + ': entre 2 y 4 descripciones');
+        if (ds.some(d => d.length > 90)) errs.push(gn + ': descripciones de máx. 90 caracteres');
+      }
+      if (errs.length) return res.status(400).json({ error: 'Plan inválido', details: errs });
+
+      const ver = _detectedApiVersion || 19;
+      const mutHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'developer-token': DEV_TOKEN,
+        'Content-Type': 'application/json',
+        ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
+      };
+      const gadsMutate = async (entity, operations) => {
+        const r = await fetch(`https://googleads.googleapis.com/v${ver}/customers/${customerId}/${entity}:mutate`, {
+          method: 'POST', headers: mutHeaders, body: JSON.stringify({ operations }),
+        });
+        const data = await r.json();
+        return { ok: r.ok, data };
+      };
+      const firstErr = (d) => JSON.stringify(d?.error?.details?.[0]?.errors?.slice(0, 3) || d?.error?.message || d).slice(0, 500);
+
+      let budgetRes = null, campaignRes = null;
+      const rollback = async () => {
+        try { if (campaignRes) await gadsMutate('campaigns', [{ remove: campaignRes }]); } catch {}
+        try { if (budgetRes) await gadsMutate('campaignBudgets', [{ remove: budgetRes }]); } catch {}
+      };
+
+      try {
+        // 1. Presupuesto
+        const b = await gadsMutate('campaignBudgets', [{ create: {
+          name: name.slice(0, 90) + ' · budget ' + Date.now(),
+          amountMicros: String(Math.round(budget * 1000000)),
+          deliveryMethod: 'STANDARD',
+          explicitlyShared: false,
+        } }]);
+        if (!b.ok) return res.status(422).json({ error: 'No se pudo crear el presupuesto', details: firstErr(b.data) });
+        budgetRes = b.data.results[0].resourceName;
+
+        // 2. Campaña (SIEMPRE en pausa)
+        const campaignBody = {
+          name,
+          status: 'PAUSED',
+          advertisingChannelType: 'SEARCH',
+          campaignBudget: budgetRes,
+          networkSettings: { targetGoogleSearch: true, targetSearchNetwork: false, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+        };
+        if (bidding === 'conversions') campaignBody.maximizeConversions = {};
+        else campaignBody.targetSpend = {};
+        const c = await gadsMutate('campaigns', [{ create: campaignBody }]);
+        if (!c.ok) { await rollback(); return res.status(422).json({ error: 'No se pudo crear la campaña', details: firstErr(c.data) }); }
+        campaignRes = c.data.results[0].resourceName;
+        const newCampaignId = campaignRes.split('/').pop();
+
+        // 3. Segmentación: país + idioma
+        const crit = await gadsMutate('campaignCriteria', [
+          { create: { campaign: campaignRes, location: { geoTargetConstant: 'geoTargetConstants/' + geoId } } },
+          { create: { campaign: campaignRes, language: { languageConstant: 'languageConstants/' + langId } } },
+        ]);
+        if (!crit.ok) { await rollback(); return res.status(422).json({ error: 'No se pudo segmentar la campaña', details: firstErr(crit.data) }); }
+
+        // 4-6. Grupos, keywords y anuncios
+        let totalKw = 0, totalAds = 0;
+        for (const g of groups) {
+          const ag = await gadsMutate('adGroups', [{ create: {
+            name: String(g.name).slice(0, 120), campaign: campaignRes, type: 'SEARCH_STANDARD', status: 'ENABLED',
+          } }]);
+          if (!ag.ok) { await rollback(); return res.status(422).json({ error: 'No se pudo crear el grupo "' + g.name + '"', details: firstErr(ag.data) }); }
+          const agRes = ag.data.results[0].resourceName;
+
+          const kwOps = g.keywords.slice(0, 25).map(k => ({ create: {
+            adGroup: agRes, status: 'ENABLED',
+            keyword: { text: String(k.text || k).slice(0, 80), matchType: ['EXACT', 'PHRASE', 'BROAD'].includes(k.match) ? k.match : 'PHRASE' },
+          } }));
+          const kw = await gadsMutate('adGroupCriteria', kwOps);
+          if (!kw.ok) { await rollback(); return res.status(422).json({ error: 'Error creando keywords en "' + g.name + '"', details: firstErr(kw.data) }); }
+          totalKw += kwOps.length;
+
+          const ad = g.ad;
+          const adBody = { create: {
+            adGroup: agRes, status: 'ENABLED',
+            ad: {
+              finalUrls: [ad.final_url],
+              responsiveSearchAd: {
+                headlines: ad.headlines.map(t => ({ text: String(t).trim().slice(0, 30) })).filter(h => h.text).slice(0, 15),
+                descriptions: ad.descriptions.map(t => ({ text: String(t).trim().slice(0, 90) })).filter(d => d.text).slice(0, 4),
+                ...(ad.path1 ? { path1: String(ad.path1).slice(0, 15) } : {}),
+                ...(ad.path2 ? { path2: String(ad.path2).slice(0, 15) } : {}),
+              },
+            },
+          } };
+          const adRes = await gadsMutate('adGroupAds', [adBody]);
+          if (!adRes.ok) { await rollback(); return res.status(422).json({ error: 'Error creando el anuncio en "' + g.name + '"', details: firstErr(adRes.data) }); }
+          totalAds += 1;
+        }
+
+        return res.json({
+          ok: true, campaignId: newCampaignId, campaignName: name, status: 'PAUSED',
+          adGroups: groups.length, keywords: totalKw, ads: totalAds,
+          budgetDaily: budget,
+          adsUrl: 'https://ads.google.com/aw/campaigns?ocid=' + customerId,
+        });
+      } catch (e) {
+        await rollback();
+        return res.status(500).json({ error: 'Error creando la campaña: ' + e.message });
+      }
+    }
+
     // ── update-campaign-status ─────────────────────────────
     if (action === 'update-campaign-status') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });

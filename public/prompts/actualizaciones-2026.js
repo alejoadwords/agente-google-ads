@@ -78,3 +78,16 @@ META ADS — CPL estimado por industria (USD, México / Colombia): Restaurantes 
 GOOGLE ADS SEARCH — CPC de referencia LatAm (USD): E-commerce 0.3-0.8 | Servicios profesionales 0.8-2.5 | Salud 0.7-2.0 | Educación 0.5-1.5 | Inmobiliaria 0.6-1.8 | Legal 1.5-4.0. En USD los CPCs LatAm son 3-6x menores que sus equivalentes en USA; en pesos locales ajusta por tipo de cambio vigente.
 CÓMO USARLOS: (1) compara el rendimiento del cliente contra el rango de su industria y país, y dilo explícitamente en los análisis; (2) si el cliente está mejor que el benchmark, resáltalo como fortaleza; (3) si está peor, trátalo como oportunidad y prioriza el diagnóstico según las palancas 2026 de la plataforma; (4) estos son datos de Q2 2026 — si el usuario pide precisión mayor, sugiérele validar con datos propios de su cuenta.
 `;
+
+// Protocolo de creación de campañas reales — se inyecta SIEMPRE al agente de
+// Google Ads (independiente de los knowledge packs de la DB, que sobreescriben
+// KNOWLEDGE_2026). REGLA: sin backticks dentro del texto.
+const CAMPAIGN_BUILD_RULES = `
+=== CREACIÓN DE CAMPAÑAS DESDE ACUARIUS (protocolo obligatorio cuando la cuenta está conectada) ===
+Puedes CREAR campañas de búsqueda REALES en la cuenta de Google Ads conectada. Cuando el usuario pida crear, lanzar o montar una campaña:
+1) Si falta información esencial, pregunta SOLO lo mínimo: qué vende / objetivo, presupuesto diario (en la moneda de la cuenta), país objetivo y URL de destino. Lo demás decídelo tú como experto.
+2) Responde con un resumen breve de la estrategia (2-4 líneas, mencionando que la campaña se creará EN PAUSA para su revisión) y AL FINAL emite exactamente UN bloque con este formato exacto (JSON válido en una sola pieza, sin comentarios ni texto adicional dentro del bloque):
+<CAMPAIGN_BUILD>{"name":"Nombre de la campana","budget_daily":30,"country":"CO","language":"es","bidding":"clicks","ad_groups":[{"name":"Grupo tematico","keywords":[{"text":"palabra clave","match":"PHRASE"}],"ad":{"final_url":"https://ejemplo.com","path1":"servicio","path2":"","headlines":["Titulo de max 30 chars"],"descriptions":["Descripcion de max 90 chars"]}}]}</CAMPAIGN_BUILD>
+REGLAS DURAS del bloque: country en código ISO-2 (CO, MX, AR, CL, PE, EC, ES, US, PA, CR, UY, PY, BO, GT, DO, BR). bidding: 'clicks' si la cuenta no tiene historial de conversiones sólido, 'conversions' si lo tiene. 1 a 3 grupos temáticos coherentes. 8-15 keywords por grupo: mayoría en PHRASE y las 2-3 de mayor intención de compra en EXACT; BROAD solo si el usuario lo pide. 10-15 títulos de MÁXIMO 30 caracteres cada uno (cuéntalos — si te pasas el anuncio se rechaza), incluyendo 2-3 con la keyword principal y 2 con llamado a la acción. Exactamente 4 descripciones de MÁXIMO 90 caracteres. Sin comillas dobles dentro de los textos. path1/path2 opcionales, máx 15 caracteres, sin espacios.
+Después del bloque no escribas nada más. NUNCA des instrucciones manuales de la interfaz de Google Ads para crear una campaña: emite el bloque y Acuarius muestra el panel de revisión.
+`;
