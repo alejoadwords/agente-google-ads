@@ -1203,6 +1203,12 @@ textarea.seop-input{resize:vertical;min-height:70px}
 /* ── FIN VIDEO BRIEF ─────────────────────────────────────────────────────── */
 
 /* ── REFERRAL SIDEBAR BUTTON ─────────────────────────────────────────────── */
+.sb-mod{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border:1px solid transparent;transition:all .15s;margin:1px 0}
+.sb-mod:hover{background:var(--sidebar2);color:var(--text)}
+.sb-mod.active{background:var(--blue-lt);color:var(--blue);border-color:var(--blue-md);font-weight:700}
+#sb-agents-group{margin-left:4px}
+#sb-agents-group.sb-collapsed{display:none}
+#sb-leads-btn{display:none !important}
 .sb-referral {
   margin-top: auto; display: flex; align-items: center; gap: 10px;
   padding: 11px 12px; border-radius: var(--rlg);
@@ -2015,7 +2021,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="sidebar" id="sidebar">
 
     <!-- AGENTES -->
-    <div class="sb-section">Agentes</div>
+    <div class="sb-mod" id="navm-home" onclick="navGo('home')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Inicio</span></div>
+    <div class="sb-section">Trabaja</div>
+    <div class="sb-mod" id="navm-agents" onclick="navToggleAgents()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4M8 4h8"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg><span style="flex:1">Agentes</span><svg class="sb-chevron" id="navm-agents-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+    <div id="sb-agents-group">
+
 
     <!-- Consultor de Marketing -->
     <div class="sb-agent-row" onclick="toggleAgent('consultor')">
@@ -2028,24 +2038,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <div class="sb-actions-section">
-        <div class="sb-section-label">acciones</div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Necesito una estrategia de marketing digital completa para mi negocio')">
-          <div class="sb-dot"></div>estrategia integral
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a definir cuánto invertir en marketing digital y cómo distribuir el presupuesto')">
-          <div class="sb-dot"></div>distribución de presupuesto
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Analiza mi situación de marketing digital y dime qué canales debo priorizar')">
-          <div class="sb-dot"></div>diagnóstico de canales
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Explícame cómo medir el ROI de mis inversiones en marketing digital')">
-          <div class="sb-dot"></div>medición y ROI
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('¿Qué herramientas de marketing digital necesito para mi negocio?')">
-          <div class="sb-dot"></div>stack de herramientas
-        </div>
-      </div>
+      
     </div>
 
     <!-- Google Ads -->
@@ -2059,28 +2052,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <div class="sb-actions-section">
-        <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='google-ads')openAgent('google-ads');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          hoja de ruta
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Google Ads para mi negocio')">
-          <div class="sb-dot"></div>planeación de campaña
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto y estrategia de pujas para mi negocio en Google Ads')">
-          <div class="sb-dot"></div>presupuesto
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Hacer keyword research completo para mi negocio')">
-          <div class="sb-dot"></div>keywords
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Crear anuncios RSA completos para mi campaña principal de Google Ads')">
-          <div class="sb-dot"></div>anuncios rsa
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mi cuenta de Google Ads y dame recomendaciones de optimización')">
-          <div class="sb-dot"></div>análisis y optimización
-        </div>
-      </div>
+      
     </div>
 
     <!-- Meta Ads -->
@@ -2094,25 +2066,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <div class="sb-actions-section">
-        <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='meta-ads')openAgent('meta-ads');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          hoja de ruta
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio')">
-          <div class="sb-dot"></div>planeación de campaña
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto para Meta Ads según mi negocio y objetivos')">
-          <div class="sb-dot"></div>presupuesto
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Crear copys profesionales para anuncios de Meta Ads para mi negocio')">
-          <div class="sb-dot"></div>copys
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización')">
-          <div class="sb-dot"></div>análisis y optimización
-        </div>
-      </div>
+      
     </div>
 
     <!-- TikTok Ads -->
@@ -2130,22 +2084,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="sb-section-label">historial</div>
         <div id="hist-list-tiktok-ads"></div>
       </div>
-      <div class="sb-actions-section">
-        <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='tiktok-ads')openAgent('tiktok-ads');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          hoja de ruta
-        </div>
-        <div class="sb-item" onclick="qSend('Ayúdame a planear una campaña completa de TikTok Ads para mi negocio')">
-          <div class="sb-dot"></div>planeación de campaña
-        </div>
-        <div class="sb-item" onclick="qSend('Dame guión, hooks y estrategia para anuncios de video en TikTok Ads')">
-          <div class="sb-dot"></div>anuncios de video
-        </div>
-        <div class="sb-item" onclick="qSend('Analizar el rendimiento de mis campañas de TikTok Ads y dame recomendaciones')">
-          <div class="sb-dot"></div>análisis y optimización
-        </div>
-      </div>
+      
     </div>
 
     <!-- LinkedIn Ads -->
@@ -2155,28 +2094,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <svg class="sb-chevron" id="chev-linkedin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="sb-agent-items sb-collapsed" id="ag-linkedin">
-      <div class="sb-item sb-roadmap" onclick="switchSb(this);openRoadmap()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        hoja de ruta
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Ayúdame a planear una campaña completa de LinkedIn Ads para mi negocio B2B')">
-        <div class="sb-dot"></div>planeación de campaña
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Recomendar presupuesto para LinkedIn Ads según mi negocio y objetivos B2B')">
-        <div class="sb-dot"></div>presupuesto
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Crear copys profesionales para anuncios de LinkedIn Ads orientados a audiencia B2B')">
-        <div class="sb-dot"></div>copys
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame especificaciones y textos para anuncios gráficos en LinkedIn')">
-        <div class="sb-dot"></div>anuncios gráficos
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Dame guión y estrategia para anuncios de video en LinkedIn Ads')">
-        <div class="sb-dot"></div>anuncios de video
-      </div>
-      <div class="sb-item" onclick="switchSb(this);qSend('Analizar el rendimiento de mis campañas de LinkedIn Ads y dame recomendaciones de optimización')">
-        <div class="sb-dot"></div>análisis y optimización
-      </div>
     </div>
 
     <!-- SEO -->
@@ -2190,25 +2107,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <div class="sb-actions-section">
-        <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='seo')openAgent('seo');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          hoja de ruta
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Haz una auditoría técnica SEO completa de mi sitio web')">
-          <div class="sb-dot"></div>auditoría técnica
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Haz un estudio completo de palabras clave para SEO de mi negocio')">
-          <div class="sb-dot"></div>investigación de keywords
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Dame recomendaciones de optimización on-page SEO para mi sitio')">
-          <div class="sb-dot"></div>optimización on-page
-        </div>
-        <div class="sb-item" onclick="switchSb(this);qSend('Cómo puedo posicionar mi negocio en las respuestas de ChatGPT, Claude, Gemini y Perplexity?')">
-          <div class="sb-dot"></div>posicionamiento en IAs (AEO)
-        </div>
-      </div>
+      
     </div>
 
     <!-- Contenido para redes -->
@@ -2222,26 +2121,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         nueva conversación
       </div>
-      <div class="sb-actions-section">
-        <div class="sb-section-label">acciones</div>
-        <div class="sb-item sb-roadmap" onclick="if(currentAgentCtx!=='social')openAgent('social');setTimeout(openRoadmap,400)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          hoja de ruta
-        </div>
-        <div class="sb-item sb-studio-link" onclick="switchSb(this);openSocialStudio()">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          studio de contenido
-        </div>
-        <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia.')">
-          <div class="sb-dot"></div>diagnóstico de redes
-        </div>
-        <div class="sb-item" onclick="openStudioWizard()">
-          <div class="sb-dot"></div>parrilla semanal
-        </div>
-        <div class="sb-item" onclick="switchSb(this);setAgentContext('social');showView('chat');qSend('Crea copys y guiones listos para publicar: posts para feed, guiones para reels y textos para stories.')">
-          <div class="sb-dot"></div>copys y guiones
-        </div>
-      </div>
+      
     </div>
 
     <div class="sb-divider"></div>
@@ -2251,6 +2131,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:0 10px 6px;display:flex;align-items:center;justify-content:space-between">recientes</div>
       <div id="recientes-list"></div>
     </div>
+
+    </div><!-- /sb-agents-group -->
+    <div class="sb-mod" id="navm-crm" onclick="navGo('crm')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3.87-3.87M16 3.13a4 4 0 010 7.75"/></svg><span>CRM</span></div>
+    <div class="sb-mod" id="navm-marketing" onclick="navGo('marketing')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg><span>Marketing</span></div>
+    <div class="sb-mod" id="navm-conversaciones" onclick="navGo('conversaciones')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span style="flex:1">Conversaciones</span><span id="navm-conv-badge" style="display:none;background:var(--danger,#EF4444);color:#fff;font-size:9.5px;font-weight:800;border-radius:10px;padding:1px 6px"></span></div>
+    <div class="sb-mod" id="navm-analisis" onclick="navGo('analisis')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Análisis</span></div>
 
     <div class="sb-recents" id="sb-recents-panel" style="display:none">
       <div class="sb-recents-label">recientes</div>
@@ -2291,6 +2177,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <span style="flex:1;font-weight:600;color:var(--blue);font-size:12px">panel de clientes</span>
           <span id="sb-agency-count" style="font-size:10px;font-weight:700;background:var(--blue);color:#fff;padding:1px 6px;border-radius:8px;flex-shrink:0">0</span>
         </div>
+      </div>
+
+      <!-- Academia -->
+      <div onclick="showView('academia')" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent" onmouseover="this.style.background='var(--sidebar2)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--muted)'">
+        <div style="width:22px;height:22px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10L12 5 2 10l10 5 10-5zM6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></div>
+        <span style="flex:1">academia</span>
       </div>
 
       <!-- Configuración -->
@@ -3748,7 +3640,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </button>
         <button class="crm-view-btn" id="crm-btn-agents" onclick="crmSetView('agents')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/></svg>
-          Agentes IA
+          Chatbots
         </button>
         <button class="crm-view-btn" id="crm-btn-inbox" onclick="crmSetView('inbox')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -3774,6 +3666,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button class="crm-view-btn" id="crm-btn-sources" onclick="crmSetView('sources')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1.5"/></svg>
           Fuentes
+        </button>
+        <button class="crm-view-btn" id="crm-btn-proposals" style="display:none" onclick="crmSetView('proposals')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Propuestas
+        </button>
+        <button class="crm-view-btn" id="crm-btn-nps" style="display:none" onclick="crmSetView('nps')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Satisfacción
+        </button>
+        <button class="crm-view-btn" id="crm-btn-studio" style="display:none" onclick="showView('social-studio')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Studio Social
+        </button>
+        <button class="crm-view-btn" id="crm-btn-seoproj" style="display:none" onclick="showView('seo-project')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          Proyecto SEO
         </button>
       </div>
       <button class="crm-btn-add" id="crm-add-btn" onclick="crmOpenModal()">
@@ -3875,6 +3783,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="crm-agenda-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-campaigns-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-sources-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div id="crm-proposals-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div id="crm-nps-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
   </div>
   </div>
 

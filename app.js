@@ -17509,8 +17509,8 @@ function crmRenderAnalytics() {
 }
 
 // ── Widget NPS en Análisis (async — se pinta al llegar los datos) ───────────
-async function crmRenderNps() {
-  const box = document.getElementById('crm-nps-section');
+async function crmRenderNps(targetId) {
+  const box = document.getElementById(targetId || 'crm-nps-section');
   if (!box) return;
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -20202,14 +20202,21 @@ function agnScheduleForLead() {
 // index.html para cualquier ruta (rewrite catch-all en vercel.json).
 (function () {
   const AGENT_KEYS = ['google-ads', 'meta-ads', 'tiktok-ads', 'linkedin-ads', 'seo', 'social', 'consultor'];
-  const CRM_SUB = { kanban: '', list: '/contactos', agents: '/agentes-ia', inbox: '/inbox', analytics: '/analisis', autos: '/automatizaciones', agenda: '/agenda', campaigns: '/campanas', sources: '/fuentes' };
+  // Rutas canónicas v2 (por módulo). Las /leads/* viejas siguen funcionando como alias.
+  const CRM_SUB = {
+    kanban: '/crm', list: '/crm/contactos', agenda: '/crm/agenda',
+    campaigns: '/marketing/campanas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
+    inbox: '/conversaciones', agents: '/conversaciones/chatbots',
+    analytics: '/analisis', nps: '/analisis/nps',
+  };
+  const CRM_LEGACY = { '': 'kanban', '/contactos': 'list', '/agentes-ia': 'agents', '/inbox': 'inbox', '/analisis': 'analytics', '/automatizaciones': 'autos', '/agenda': 'agenda', '/campanas': 'campaigns', '/fuentes': 'sources' };
   const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
   const TITLES = {
     '/': 'Acuarius', '/clientes': 'Panel de clientes · Acuarius', '/studio': 'Social Studio · Acuarius',
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'Leads', list: 'Contactos', agents: 'Agentes IA', inbox: 'Inbox', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', campaigns: 'Campañas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', campaigns: 'Campañas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -20217,7 +20224,7 @@ function agnScheduleForLead() {
 
   function currentPath() {
     if (currentView === 'chat') return '/agente/' + (typeof currentAgentCtx !== 'undefined' ? currentAgentCtx : 'google-ads');
-    if (currentView === 'crm') return '/leads' + (CRM_SUB[typeof crmView !== 'undefined' ? crmView : 'kanban'] || '');
+    if (currentView === 'crm') return CRM_SUB[typeof crmView !== 'undefined' ? crmView : 'kanban'] || '/crm';
     return VIEW_PATHS[currentView] || '/';
   }
 
@@ -20244,11 +20251,20 @@ function agnScheduleForLead() {
       if (agentMatch && AGENT_KEYS.includes(agentMatch[1])) {
         openAgent(agentMatch[1]);
       } else if (p === '/leads' || p.startsWith('/leads/')) {
+        // Alias de las URLs viejas /leads/* → tab equivalente
         showView('crm');
         if (typeof crmInit === 'function') crmInit();
-        const sub = Object.keys(CRM_SUB).find(k => CRM_SUB[k] === p.slice(6)) || 'kanban';
+        const sub = CRM_LEGACY[p.slice(6)] || 'kanban';
         setTimeout(function () { crmSetView(sub); }, 60);
-      } else if (p === '/clientes') { showView('agency'); }
+      } else if (Object.values(CRM_SUB).indexOf(p) !== -1) {
+        // Rutas canónicas v2: /crm/*, /marketing/*, /conversaciones/*, /analisis/*
+        showView('crm');
+        if (typeof crmInit === 'function') crmInit();
+        const sub = Object.keys(CRM_SUB).find(k => CRM_SUB[k] === p) || 'kanban';
+        setTimeout(function () { crmSetView(sub); }, 60);
+      } else if (p === '/marketing/studio') { showView('social-studio'); }
+      else if (p === '/marketing/seo') { showView('seo-project'); }
+      else if (p === '/clientes') { showView('agency'); }
       else if (p === '/studio') { showView('social-studio'); }
       else if (p === '/academia') { if (typeof openAcademia === 'function') openAcademia(); else showView('academia'); }
       else if (p === '/roadmap') { showView('roadmap'); }
@@ -22135,3 +22151,192 @@ async function impRun() {
       '</div>';
   }
 }
+
+// ══ NAVEGACIÓN V2 ════════════════════════════════════════════════════════════
+// Sidebar por módulos (Inicio/Agentes/CRM/Marketing/Conversaciones/Análisis) +
+// tabs superiores contextuales. Las vistas existentes no cambian: esto es un
+// re-montaje de navegación. Va AL FINAL del archivo para envolver las
+// versiones ya envueltas de crmSetView/showView (router incluido).
+const NAV_TABS = {
+  crm: ['kanban', 'list', 'agenda'],
+  marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
+  conversaciones: ['inbox', 'agents'],
+  analisis: ['analytics', 'nps'],
+};
+const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'studio', 'seoproj'];
+window._navMod = 'crm';
+
+function navGo(mod) {
+  if (mod === 'home') { showView('home'); return; }
+  window._navMod = mod;
+  showView('crm');
+  crmSetView(NAV_DEFAULT[mod] || 'kanban');
+}
+
+function navToggleAgents() {
+  const g = document.getElementById('sb-agents-group');
+  if (!g) return;
+  g.classList.toggle('sb-collapsed');
+  const ch = document.getElementById('navm-agents-chev');
+  if (ch) ch.style.transform = g.classList.contains('sb-collapsed') ? 'rotate(-90deg)' : '';
+}
+
+function navHighlight(key) {
+  ['home', 'agents', 'crm', 'marketing', 'conversaciones', 'analisis'].forEach(k => {
+    const el = document.getElementById('navm-' + k);
+    if (el) el.classList.toggle('active', k === key);
+  });
+}
+
+function navApplyModule() {
+  const mod = window._navMod || 'crm';
+  const tabs = NAV_TABS[mod] || NAV_TABS.crm;
+  NAV_ALL_TABS.forEach(id => {
+    const b = document.getElementById('crm-btn-' + id);
+    if (b) b.style.display = tabs.includes(id) ? '' : 'none';
+  });
+  navHighlight(mod);
+}
+
+// ── Vista Propuestas (lista completa — antes solo dentro del lead) ──────────
+const PRP_STATUS_META = {
+  draft: { label: 'Borrador', color: '#6b7280' }, sent: { label: 'Enviada', color: '#F59E0B' },
+  viewed: { label: 'Vista 👀', color: '#3B82F6' }, accepted: { label: 'Aceptada', color: '#8B5CF6' },
+  paid: { label: 'Pagada 💰', color: '#10B981' },
+};
+async function prpRenderAll() {
+  const view = document.getElementById('crm-proposals-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  let rows = [];
+  try {
+    const d = await fetch('/api/proposals', { headers: await getAuthHeaders() }).then(r => r.json());
+    rows = d.proposals || [];
+  } catch {}
+  const header =
+    '<div style="margin-bottom:16px;max-width:860px">' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Propuestas</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted)">Todas tus propuestas comerciales · se crean desde el detalle de cada lead con el botón 📄</div>' +
+    '</div>';
+  if (!rows.length) {
+    view.innerHTML = header + emptyAgua('doc', 'Aún no hay propuestas',
+      'Abre un lead en el CRM y usa el botón de propuesta: la IA la redacta con el contexto del negocio, la envías como página pública y cobras con tu link de pago.',
+      '<button class="btn-sec sm" onclick="navGo(\'crm\')">Ir al CRM</button>');
+    return;
+  }
+  view.innerHTML = header + rows.map(p => {
+    const st = PRP_STATUS_META[p.status] || PRP_STATUS_META.draft;
+    const amt = p.amount ? '$' + Number(p.amount).toLocaleString('es-CO') + ' ' + (p.currency || 'USD') : '';
+    return '<div class="auto-card" style="max-width:860px">' +
+      '<div class="auto-ico">📄</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="auto-name">' + esc(p.title || 'Propuesta') + '</div>' +
+        '<div class="auto-trigger">' + esc(p.lead_name || '') + (amt ? ' · ' + amt : '') + ' · ' + new Date(p.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + '</div>' +
+      '</div>' +
+      '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
+      '<div class="auto-actions">' +
+        '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(\'https://app.acuarius.app/p/' + esc(p.public_token || '') + '\').then(function(){showToast(\'Link copiado ✓\',\'success\')})">Copiar link</button>' +
+        '<a class="btn-ghost sm" href="/p/' + esc(p.public_token || '') + '" target="_blank" rel="noopener" style="text-decoration:none" title="Ver">↗</a>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function crmRenderNpsView() {
+  const view = document.getElementById('crm-nps-view');
+  if (!view) return;
+  view.innerHTML =
+    '<div style="margin-bottom:16px;max-width:860px">' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Satisfacción (NPS)</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted)">Respuestas de tus encuestas NPS · se envían con el paso "Encuesta NPS" de las automatizaciones</div>' +
+    '</div>' +
+    '<div id="crm-nps-full" style="max-width:860px"></div>';
+  crmRenderNps('crm-nps-full');
+  setTimeout(() => {
+    const box = document.getElementById('crm-nps-full');
+    if (box && !box.innerHTML) box.innerHTML = '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted)">Aún no has enviado encuestas. En Automatizaciones agrega el paso <b>Encuesta NPS</b> (ej: al pasar a Ganado → esperar 7 días → encuesta) y aquí verás el score, la distribución y los comentarios.</div>';
+  }, 1500);
+}
+
+// ── Extensión de crmSetView: vistas proposals/nps + sincronía de módulo ──────
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const pv = document.getElementById('crm-proposals-view');
+    if (pv) pv.style.display = v === 'proposals' ? 'flex' : 'none';
+    const nv = document.getElementById('crm-nps-view');
+    if (nv) nv.style.display = v === 'nps' ? 'flex' : 'none';
+    document.getElementById('crm-btn-proposals')?.classList.toggle('active', v === 'proposals');
+    document.getElementById('crm-btn-nps')?.classList.toggle('active', v === 'nps');
+    if (v === 'proposals') prpRenderAll();
+    if (v === 'nps') crmRenderNpsView();
+    if (NAV_TAB2MOD[v]) window._navMod = NAV_TAB2MOD[v];
+    navApplyModule();
+  };
+})();
+
+// ── Highlight del sidebar según la vista global ──────────────────────────────
+(function () {
+  const _prevShow = showView;
+  showView = function (v) {
+    _prevShow(v);
+    if (v === 'home') navHighlight('home');
+    else if (v === 'chat') navHighlight('agents');
+    else if (v === 'crm') navHighlight(window._navMod || 'crm');
+    else if (v === 'social-studio' || v === 'seo-project') navHighlight('marketing');
+    else navHighlight(null);
+  };
+})();
+
+// ── Acciones de agentes → chips sobre el input del chat ──────────────────────
+const AGENT_ACTIONS = {
+  consultor: [['💡 estrategia integral', 'Necesito una estrategia de marketing digital completa para mi negocio'], ['💰 presupuesto', 'Ayúdame a definir cuánto invertir en marketing digital y cómo distribuir el presupuesto'], ['🧭 diagnóstico de canales', 'Analiza mi situación de marketing digital y dime qué canales debo priorizar'], ['📏 medición y ROI', 'Explícame cómo medir el ROI de mis inversiones en marketing digital'], ['🧰 herramientas', '¿Qué herramientas de marketing digital necesito para mi negocio?']],
+  'google-ads': [['📋 planear campaña', 'Ayúdame a planear una campaña completa de Google Ads para mi negocio'], ['💰 presupuesto y pujas', 'Recomendar presupuesto y estrategia de pujas para mi negocio en Google Ads'], ['🔑 keyword research', 'Hacer keyword research completo para mi negocio'], ['✍️ anuncios RSA', 'Crear anuncios RSA completos para mi campaña principal de Google Ads'], ['📊 analizar mi cuenta', 'Analizar el rendimiento de mi cuenta de Google Ads y dame recomendaciones de optimización']],
+  'meta-ads': [['📋 planear campaña', 'Ayúdame a planear una campaña completa de Meta Ads (Facebook e Instagram) para mi negocio'], ['💰 presupuesto', 'Recomendar presupuesto para Meta Ads según mi negocio y objetivos'], ['✍️ copys', 'Crear copys profesionales para anuncios de Meta Ads para mi negocio'], ['📊 analizar campañas', 'Analizar el rendimiento de mis campañas de Meta Ads y dame recomendaciones de optimización']],
+  'tiktok-ads': [['📋 planear campaña', 'Ayúdame a planear una campaña completa de TikTok Ads para mi negocio'], ['🎬 anuncios de video', 'Dame guión, hooks y estrategia para anuncios de video en TikTok Ads'], ['📊 analizar campañas', 'Analizar el rendimiento de mis campañas de TikTok Ads y dame recomendaciones']],
+  'linkedin-ads': [['📋 planear campaña', 'Ayúdame a planear una campaña completa de LinkedIn Ads para mi negocio B2B'], ['💰 presupuesto', 'Recomendar presupuesto para LinkedIn Ads según mi negocio y objetivos B2B'], ['✍️ copys', 'Crear copys profesionales para anuncios de LinkedIn Ads orientados a audiencia B2B'], ['🖼️ anuncios gráficos', 'Dame especificaciones y textos para anuncios gráficos en LinkedIn'], ['🎬 anuncios de video', 'Dame guión y estrategia para anuncios de video en LinkedIn Ads'], ['📊 analizar campañas', 'Analizar el rendimiento de mis campañas de LinkedIn Ads y dame recomendaciones de optimización']],
+  seo: [['🔧 auditoría técnica', 'Haz una auditoría técnica SEO completa de mi sitio web'], ['🔑 keywords', 'Haz un estudio completo de palabras clave para SEO de mi negocio'], ['📄 on-page', 'Dame recomendaciones de optimización on-page SEO para mi sitio'], ['🤖 posicionar en IAs', 'Cómo puedo posicionar mi negocio en las respuestas de ChatGPT, Claude, Gemini y Perplexity?']],
+  social: [['🧭 diagnóstico de redes', 'Analiza mi negocio y dime exactamente en qué redes sociales debo tener presencia.'], ['✍️ copys y guiones', 'Crea copys y guiones listos para publicar: posts para feed, guiones para reels y textos para stories.']],
+};
+
+function navRenderAgentChips(agentKey) {
+  document.getElementById('agent-chips')?.remove();
+  const area = document.getElementById('chat-input-area');
+  if (!area) return;
+  const acts = AGENT_ACTIONS[agentKey] || [];
+  const special = [];
+  if (agentKey !== 'consultor') special.push('<button class="agent-chip agent-chip-pri" onclick="openRoadmap()">🗺️ hoja de ruta</button>');
+  if (agentKey === 'social') special.push('<button class="agent-chip agent-chip-pri" onclick="openStudioWizard()">✨ crear parrilla (Studio)</button>');
+  const html = special.join('') + acts.map(a =>
+    '<button class="agent-chip" onclick="qSend(\'' + a[1].replace(/'/g, "\\'") + '\')">' + a[0] + '</button>'
+  ).join('');
+  if (!html) return;
+  const div = document.createElement('div');
+  div.id = 'agent-chips';
+  div.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 8px;max-width:820px;margin:0 auto;width:100%';
+  div.innerHTML = html;
+  area.parentNode.insertBefore(div, area);
+}
+
+(function () {
+  const _prevOpen = openAgent;
+  openAgent = async function (agentKey) {
+    await _prevOpen(agentKey);
+    try { navRenderAgentChips(agentKey); } catch {}
+  };
+})();
+
+// Estilos de los chips + arranque
+(function () {
+  const st = document.createElement('style');
+  st.textContent = '.agent-chip{padding:6px 13px;background:var(--bg);border:1.5px solid var(--border);border-radius:20px;font-size:11.5px;color:var(--muted);cursor:pointer;font-family:var(--font);font-weight:600;transition:all .15s;white-space:nowrap}' +
+    '.agent-chip:hover{border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt)}' +
+    '.agent-chip-pri{border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt)}';
+  document.head.appendChild(st);
+  const init = () => { try { navApplyModule(); navHighlight('home'); } catch {} };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
