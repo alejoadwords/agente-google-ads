@@ -22209,6 +22209,8 @@ function navApplyModule() {
   });
   const crumb = document.getElementById('crm-mod-crumb');
   if (crumb) crumb.textContent = NAV_MOD_LABELS[mod] || 'CRM';
+  const title = document.getElementById('crm-title');
+  if (title) title.textContent = NAV_MOD_LABELS[mod] || 'CRM';
   navHighlight(mod);
 }
 
@@ -22485,6 +22487,9 @@ function hdrClientPick(id) {
     const _prevExit = agencyExitClientContext;
     agencyExitClientContext = function () { _prevExit(); hdrClientRender(); };
   }
-  setTimeout(hdrClientRender, 4000);
+  // Los clientes cargan asíncrono (Supabase con reintentos) — poll rápido el
+  // primer minuto para que el selector aparezca apenas estén, luego cada 60s.
+  let _hdrPolls = 0;
+  const _hdrFast = setInterval(() => { hdrClientRender(); if (++_hdrPolls > 20) clearInterval(_hdrFast); }, 3000);
   setInterval(hdrClientRender, 60000);
 })();
