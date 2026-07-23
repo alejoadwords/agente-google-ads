@@ -139,17 +139,45 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     })
     .catch(function () { state.className = 'error'; state.textContent = 'No se pudo cargar la propuesta.'; });
 
+  // Pago con MercadoPago: la preferencia se crea al vuelo (el dinero va
+  // directo a la cuenta MP del emisor) y el webhook marca la propuesta pagada.
+  function mpPay(btnEl, p) {
+    btnEl.disabled = true; btnEl.textContent = 'Generando pago seguro…';
+    fetch('/api/proposals?public_token=' + token + '&action=accept', { method: 'POST' }).catch(function () {});
+    fetch('/api/proposals?public_token=' + token + '&action=mp_checkout', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.init_point) { window.location.href = d.init_point; return; }
+        btnEl.disabled = false; btnEl.textContent = '💳 Pagar con MercadoPago';
+        alert(d.error || 'No se pudo generar el pago — intenta de nuevo');
+      })
+      .catch(function () { btnEl.disabled = false; btnEl.textContent = '💳 Pagar con MercadoPago'; });
+  }
+
   function renderCta(p) {
     var cta = document.getElementById('p-cta');
     var statusEl = document.getElementById('p-status');
     cta.innerHTML = ''; statusEl.innerHTML = '';
-    if (p.status === 'paid') {
+    var justPaid = new URLSearchParams(location.search).get('paid');
+    if (p.status === 'paid' || justPaid === '1') {
       statusEl.innerHTML = '<div class="status-banner status-accepted">✓ Propuesta aceptada y pagada — ¡gracias!</div>';
       return;
     }
+    if (justPaid === 'pending') {
+      statusEl.innerHTML = '<div class="status-banner status-accepted">⏳ Tu pago está en proceso — apenas se confirme quedará registrado automáticamente.</div>';
+      return;
+    }
+    var hasPay = p.mp_available || p.payment_link;
     if (p.status === 'accepted') {
-      statusEl.innerHTML = '<div class="status-banner status-accepted">✓ Aceptaste esta propuesta' + (p.payment_link ? ' — puedes completar el pago cuando quieras' : '. Pronto te contactarán para coordinar el arranque.') + '</div>';
-      if (p.payment_link) cta.innerHTML = '<a class="btn btn-pay" href="' + p.payment_link.replace(/"/g, '') + '" target="_blank" rel="noopener">💳 Completar el pago</a>';
+      statusEl.innerHTML = '<div class="status-banner status-accepted">✓ Aceptaste esta propuesta' + (hasPay ? ' — puedes completar el pago cuando quieras' : '. Pronto te contactarán para coordinar el arranque.') + '</div>';
+      if (p.mp_available) {
+        var mp = document.createElement('button');
+        mp.className = 'btn btn-pay'; mp.textContent = '💳 Pagar con MercadoPago';
+        mp.onclick = function () { mpPay(mp, p); };
+        cta.appendChild(mp);
+      } else if (p.payment_link) {
+        cta.innerHTML = '<a class="btn btn-pay" href="' + p.payment_link.replace(/"/g, '') + '" target="_blank" rel="noopener">💳 Completar el pago</a>';
+      }
       return;
     }
     var btn = document.createElement('button');
@@ -163,12 +191,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         .catch(function () { btn.disabled = false; btn.textContent = '✓ Aceptar propuesta'; });
     };
     cta.appendChild(btn);
-    if (p.payment_link) {
-      var pay = document.createElement('a');
-      pay.className = 'btn btn-pay'; pay.target = '_blank'; pay.rel = 'noopener';
-      pay.href = p.payment_link; pay.textContent = '💳 Aceptar y pagar';
-      pay.onclick = function () { fetch('/api/proposals?public_token=' + token + '&action=accept', { method: 'POST' }).catch(function () {}); };
+    if (p.mp_available) {
+      var pay = document.createElement('button');
+      pay.className = 'btn btn-pay'; pay.textContent = '💳 Aceptar y pagar';
+      pay.onclick = function () { mpPay(pay, p); };
       cta.appendChild(pay);
+    } else if (p.payment_link) {
+      var payL = document.createElement('a');
+      payL.className = 'btn btn-pay'; payL.target = '_blank'; payL.rel = 'noopener';
+      payL.href = p.payment_link; payL.textContent = '💳 Aceptar y pagar';
+      payL.onclick = function () { fetch('/api/proposals?public_token=' + token + '&action=accept', { method: 'POST' }).catch(function () {}); };
+      cta.appendChild(payL);
     }
   }
 })();

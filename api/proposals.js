@@ -167,8 +167,74 @@ export default async function handler(req) {
         if (p.status === 'sent' || p.status === 'draft') patch.status = 'viewed';
         await fetch(`${SUPABASE_URL}/rest/v1/proposals?id=eq.${p.id}`, { method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' }, body: JSON.stringify(patch) });
       }
+      // ¿El dueño tiene MercadoPago conectado? (habilita el botón de pago automático)
+      let mpAvailable = false;
+      if (p.amount > 0) {
+        try {
+          const c = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(p.user_id)}&platform=eq.mercadopago&select=id&limit=1`, { headers: sbHeaders() }).then(r => r.json());
+          mpAvailable = !!c?.length;
+        } catch {}
+      }
       // Solo lo que la página pública necesita
-      return jsonResp({ proposal: { title: p.title, content: p.content, amount: p.amount, currency: p.currency, payment_link: p.payment_link, status: p.status, business_name: p.business_name } });
+      return jsonResp({ proposal: { title: p.title, content: p.content, amount: p.amount, currency: p.currency, payment_link: p.payment_link, status: p.status, business_name: p.business_name, mp_available: mpAvailable } });
+    }
+
+    // POST ?action=mp_checkout — preferencia de Checkout Pro creada al vuelo con
+    // el token del DUEÑO de la propuesta (el dinero va directo a su cuenta MP).
+    if (req.method === 'POST' && url.searchParams.get('action') === 'mp_checkout') {
+      if (!(p.amount > 0)) return jsonResp({ error: 'La propuesta no tiene monto definido' }, 400);
+      const conns = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(p.user_id)}&platform=eq.mercadopago&select=*&limit=1`, { headers: sbHeaders() }).then(r => r.json());
+      const conn = conns?.[0];
+      if (!conn) return jsonResp({ error: 'El emisor no tiene MercadoPago conectado' }, 400);
+
+      const preference = {
+        items: [{
+          title: (p.title || 'Propuesta') + (p.business_name ? ' — ' + p.business_name : ''),
+          quantity: 1,
+          unit_price: Number(p.amount),
+          currency_id: p.currency || 'USD',
+        }],
+        external_reference: String(p.id),
+        notification_url: 'https://app.acuarius.app/api/mp-webhook',
+        back_urls: {
+          success: 'https://app.acuarius.app/p/' + publicToken + '?paid=1',
+          pending: 'https://app.acuarius.app/p/' + publicToken + '?paid=pending',
+          failure: 'https://app.acuarius.app/p/' + publicToken,
+        },
+        auto_return: 'approved',
+        statement_descriptor: (p.business_name || 'Acuarius').slice(0, 22),
+      };
+      const createPref = (tok) => fetch('https://api.mercadopago.com/checkout/preferences', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(preference),
+      });
+      let r = await createPref(conn.access_token);
+      // Token vencido → refresh y reintento único
+      if (r.status === 401 && conn.refresh_token) {
+        try {
+          const tr = await fetch('https://api.mercadopago.com/oauth/token', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: process.env.MP_CLIENT_ID, client_secret: process.env.MP_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: conn.refresh_token }),
+          });
+          const t = await tr.json();
+          if (t.access_token) {
+            await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(p.user_id)}&platform=eq.mercadopago`, {
+              method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+              body: JSON.stringify({ access_token: t.access_token, ...(t.refresh_token ? { refresh_token: t.refresh_token } : {}), updated_at: new Date().toISOString() }),
+            });
+            r = await createPref(t.access_token);
+          }
+        } catch {}
+      }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.init_point) {
+        const msg = JSON.stringify(d.message || d.error || d).toLowerCase();
+        if (msg.includes('currency')) return jsonResp({ error: 'MercadoPago solo acepta la moneda local de la cuenta del emisor (ej: COP para Colombia). Pídele al emisor ajustar la moneda de la propuesta.' }, 400);
+        console.error('[mp_checkout] error:', JSON.stringify(d).slice(0, 300));
+        return jsonResp({ error: 'No se pudo generar el pago — intenta de nuevo' }, 502);
+      }
+      return jsonResp({ init_point: d.init_point });
     }
 
     if (req.method === 'POST' && url.searchParams.get('action') === 'accept') {
@@ -203,6 +269,12 @@ export default async function handler(req) {
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
   const clientId = url.searchParams.get('client_id') || null;
+
+  // GET ?mp_status=1 — ¿tengo MercadoPago conectado? (para la UI de Propuestas)
+  if (req.method === 'GET' && url.searchParams.get('mp_status')) {
+    const c = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.mercadopago&select=account_name,updated_at&limit=1`, { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
+    return jsonResp({ connected: !!c?.length, account: c?.[0]?.account_name || null });
+  }
 
   // GET — propuestas de un lead (o todas)
   if (req.method === 'GET') {

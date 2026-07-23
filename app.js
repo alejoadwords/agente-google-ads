@@ -17810,6 +17810,7 @@ function cmdkCommands() {
     { group: 'Acciones', icon: '⚙️', label: 'Configuración',               kw: 'settings ajustes perfil cuenta', run: () => openSettings() },
     { group: 'Acciones', icon: '🔗', label: 'Conectar Google Ads',         kw: 'conectar google api vincular',  run: () => connectGoogleAds() },
     { group: 'Acciones', icon: '🔗', label: 'Conectar Meta Ads',           kw: 'conectar meta facebook api vincular', run: () => connectMetaAds() },
+    { group: 'Acciones', icon: '💳', label: 'Conectar MercadoPago',        kw: 'mercadopago pagos cobrar propuestas', run: () => connectMercadoPago() },
     { group: 'Acciones', icon: '⭐', label: 'Actualizar plan',             kw: 'upgrade plan pro agency precio pagar', run: () => openUpgradeFlow() },
     { group: 'Acciones', icon: '🌙', label: 'Cambiar tema (claro/oscuro)', kw: 'dark mode modo oscuro tema claro noche', run: () => toggleTheme() },
   ];
@@ -20070,6 +20071,29 @@ async function agnLoad() {
     } catch { agnGcal.checked = true; }
   }
 }
+
+// ── MercadoPago: conexión para cobro automático de propuestas ───────────────
+function connectMercadoPago() {
+  const uid = clerkInstance?.user?.id || '';
+  window.location.href = '/api/mp-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+}
+
+(function checkMpCallback() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mp_connected')) {
+    track('account_connected', { platform: 'mercadopago' });
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => {
+      showToast('✅ MercadoPago conectado — tus propuestas ya cobran automático', 'success');
+      navGo('marketing');
+      setTimeout(() => crmSetView('proposals'), 300);
+    }, 1500);
+  }
+  if (params.get('mp_error')) {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => showToast('❌ No se pudo conectar MercadoPago', 'error'), 1500);
+  }
+})();
 
 function connectGoogleCalendar() {
   const uid = clerkInstance?.user?.id || '';
@@ -22379,7 +22403,19 @@ async function prpRenderAll() {
     '<div style="margin-bottom:16px;max-width:860px">' +
       '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Propuestas</div>' +
       '<div style="font-size:var(--fs-sm);color:var(--muted)">Todas tus propuestas comerciales · se crean desde el detalle de cada lead con el botón 📄</div>' +
+      '<div id="prp-mp-status" style="margin-top:10px"></div>' +
     '</div>';
+  // Estado de MercadoPago (async — no bloquea la lista)
+  (async () => {
+    try {
+      const d = await fetch('/api/proposals?mp_status=1', { headers: await getAuthHeaders() }).then(r => r.json());
+      const el = document.getElementById('prp-mp-status');
+      if (!el) return;
+      el.innerHTML = d.connected
+        ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#009EE3;background:#009EE314;border:1px solid #009EE340;border-radius:20px;padding:5px 13px">💳 MercadoPago conectado — tus propuestas cobran automático</span>'
+        : '<button class="btn-sec sm" onclick="connectMercadoPago()" style="border-color:#009EE3;color:#009EE3">💳 Conectar MercadoPago — cobra tus propuestas automático</button>';
+    } catch {}
+  })();
   if (!rows.length) {
     view.innerHTML = header + emptyAgua('doc', 'Aún no hay propuestas',
       'Abre un lead en el CRM y usa el botón de propuesta: la IA la redacta con el contexto del negocio, la envías como página pública y cobras con tu link de pago.',
