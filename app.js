@@ -13959,7 +13959,7 @@ function openSettings() {
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
     if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agency · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · 3 asientos de equipo · CRM 5.000 leads · Campañas 10.000 emails/mes · Imágenes ilimitadas · $99/mes' : isProPlan ? 'CRM 1.000 leads · Automatizaciones y campañas (2.000 emails/mes) · Propuestas con IA · Proyecto SEO+GEO · $39/mes' : 'Plan gratuito · 50 mensajes/mes · 50 leads · 3 imágenes · 1 conexión API';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · 3 usuarios adicionales · CRM 5.000 leads · Campañas 10.000 emails/mes · Imágenes ilimitadas · $99/mes' : isProPlan ? 'CRM 1.000 leads · Automatizaciones y campañas (2.000 emails/mes) · Propuestas con IA · Proyecto SEO+GEO · $39/mes' : 'Plan gratuito · 50 mensajes/mes · 50 leads · 3 imágenes · 1 conexión API';
     const upgradeBtn = document.getElementById('cfg-upgrade-btn');
     if (upgradeBtn) {
       if (isAgencyPlan) {
@@ -21841,7 +21841,7 @@ function frmSnippets(id, formObj) {
 }
 
 // ══ EQUIPO Y ASIENTOS ═══════════════════════════════════════════════════════
-// El dueño invita miembros (asientos por plan: Pro 1, Agency 3); los miembros
+// El dueño invita usuarios adicionales (por plan: Pro 1, Agency 3); los miembros
 // trabajan sobre los leads/agenda/inbox del dueño (resolución server-side).
 // window._workspace = {ownerId, role, ownerName} cuando soy miembro; null si dueño.
 let crmTeam = [];
@@ -21895,7 +21895,7 @@ async function teamRenderSettings() {
     crmTeam = d.members || [];
     _teamSeats = d.seats || null;
     if (seatsEl && _teamSeats) {
-      seatsEl.innerHTML = '👥 <b>' + _teamSeats.used + ' de ' + (_teamSeats.total >= 99 ? '∞' : _teamSeats.total) + '</b> asientos usados' +
+      seatsEl.innerHTML = '👥 <b>' + _teamSeats.used + ' de ' + (_teamSeats.total >= 99 ? '∞' : _teamSeats.total) + '</b> usuarios usados' +
         (_teamSeats.total < 99 && _teamSeats.used >= _teamSeats.total ? ' · <span style="color:var(--blue)">amplía con el plan Agency</span>' : '');
     }
     if (!crmTeam.length) {
@@ -21927,7 +21927,7 @@ async function teamInvite() {
       method: 'POST', headers: await getAuthHeaders(),
       body: JSON.stringify({ email, name, owner_name: ownerName }),
     }).then(r => r.json());
-    if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios asientos son parte del plan Agency.'); return; }
+    if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     track('team_invite_sent');
     showToast('📨 Invitación enviada a ' + email, 'success');

@@ -172,12 +172,12 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Asientos extra de equipo (suscripción mensual) ───────────────────────
-  // Producto con 'asiento' o 'seat' en el nombre. La oferta lleva la cantidad
+  // ── Usuarios adicionales de equipo (suscripción mensual) ─────────────────
+  // Producto con 'usuario', 'asiento' o 'seat' en el nombre. La oferta lleva la cantidad
   // ('1 asiento' → 1, '2 asientos' → 2...). Fallback por precio (~$10/asiento).
   // seats_extra se FIJA con la cantidad de la oferta comprada — idempotente
   // ante renovaciones. Cancelación → 0. api/team.js lo suma al cupo del plan.
-  if (productName.includes('asiento') || productName.includes('seat')) {
+  if (productName.includes('asiento') || productName.includes('seat') || productName.includes('usuario')) {
     let clerkOk = false;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
