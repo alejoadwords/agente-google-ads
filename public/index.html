@@ -83,6 +83,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .hdr-logo-icon{width:28px;height:28px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px var(--blue-glow);flex-shrink:0}
 .hdr-logo-icon svg{width:18px;height:18px}
 .hdr-logo-name{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px}
+.hdr-logo-img{height:34px;width:auto;display:block}
+.hdr-logo-dark{display:none}
+html[data-theme="dark"] .hdr-logo-light{display:none}
+html[data-theme="dark"] .hdr-logo-dark{display:block}
 .hdr-sep{width:1px;height:18px;background:var(--border);margin:0 2px}
 .hdr-agent{font-size:12.5px;font-weight:500;color:var(--text-2);white-space:nowrap}
 .hdr-badge{font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:var(--blue-lt);color:var(--blue);border:1px solid var(--blue-md);letter-spacing:.2px;white-space:nowrap}
@@ -1991,8 +1995,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- HEADER -->
 <div class="hdr">
   <a class="hdr-logo" href="#" onclick="event.preventDefault();showView('home')" style="cursor:pointer" title="Ir al inicio">
-    <svg width="27" height="27" viewBox="0 0 75 75" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="var(--blue)" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="var(--blue)" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="var(--blue)" cx="60.13" cy="10.7" r="5.3"/></svg>
-    <span class="hdr-logo-name">cuarius</span>
+    <img src="/logo.png" alt="acuarius" class="hdr-logo-img hdr-logo-light">
+    <img src="/logo-white.png" alt="acuarius" class="hdr-logo-img hdr-logo-dark">
   </a>
   
   <div id="hdr-client-switch" style="display:none;position:relative;margin-left:10px">
