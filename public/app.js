@@ -21896,7 +21896,7 @@ async function teamRenderSettings() {
     _teamSeats = d.seats || null;
     if (seatsEl && _teamSeats) {
       seatsEl.innerHTML = '👥 <b>' + _teamSeats.used + ' de ' + (_teamSeats.total >= 99 ? '∞' : _teamSeats.total) + '</b> usuarios usados' +
-        (_teamSeats.total < 99 && _teamSeats.used >= _teamSeats.total ? ' · <span style="color:var(--blue)">amplía con el plan Agency</span>' : '');
+        (_teamSeats.total < 99 ? ' · <a href="https://pay.hotmart.com/D106852996L" target="_blank" rel="noopener" style="color:var(--blue);font-weight:700;text-decoration:none">➕ ampliar usuarios</a>' : '');
     }
     if (!crmTeam.length) {
       list.innerHTML = '<div style="font-size:12.5px;color:var(--muted2)">Aún no has invitado a nadie. Tu equipo verá los mismos leads, agenda e inbox que tú.</div>';
@@ -21928,6 +21928,12 @@ async function teamInvite() {
       body: JSON.stringify({ email, name, owner_name: ownerName }),
     }).then(r => r.json());
     if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
+    if (d.seats_full) {
+      if (confirm(d.error + '\n\n¿Quieres agregar usuarios adicionales a tu plan? ($10/mes por usuario)')) {
+        window.open('https://pay.hotmart.com/D106852996L', '_blank');
+      }
+      return;
+    }
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     track('team_invite_sent');
     showToast('📨 Invitación enviada a ' + email, 'success');

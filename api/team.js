@@ -128,7 +128,7 @@ export default async function handler(req) {
     if (1 + (existing || []).length >= seats) {
       return jsonResp({
         error: _lastPlan === 'agency' || _lastPlan === 'agencia'
-          ? 'Alcanzaste los ' + seats + ' asientos de tu plan Agency.'
+          ? 'Alcanzaste los ' + seats + ' usuarios de tu plan. Amplía tu equipo con usuarios adicionales.'
           : 'Tu plan incluye 1 usuario. Los equipos son parte del plan Agency.',
         upgrade: _lastPlan !== 'agency' && _lastPlan !== 'agencia',
         seats_full: true,
