@@ -2600,74 +2600,119 @@ function warClose() {
 
 // ── PRODUCT TOUR ──────────────────────────────────────────────────────────────
 
+// En móvil el sidebar vive oculto — los pasos que lo apuntan lo abren y cierran
+function tourSidebar(open) {
+  // matchMedia usa la misma vara que el CSS (innerWidth puede diferir en móviles)
+  if (!window.matchMedia('(max-width: 768px)').matches) return;
+  var sb = document.getElementById('sidebar');
+  if (sb) {
+    // Sin transición durante el tour: apertura instantánea (no compite con la
+    // animación del spotlight) e inline para ganar a cualquier regla
+    sb.style.transition = 'none';
+    sb.classList.toggle('mob-open', !!open);
+    sb.style.transform = open ? 'translateX(0)' : '';
+    setTimeout(function () { sb.style.transition = ''; }, 50);
+  }
+  var ov = document.getElementById('sb-overlay');
+  if (ov) ov.classList.toggle('open', false); // sin overlay: el backdrop del tour ya oscurece
+}
+
 var TOUR_STEPS = [
   {
     title: 'Bienvenido a Acuarius 👋',
-    desc: 'Tu plataforma de agentes de marketing con IA para Latinoamérica. Este tour rápido te muestra cómo sacarle el máximo provecho.',
+    desc: 'Tu plataforma de marketing con IA para Latinoamérica: agentes expertos, CRM, campañas, automatizaciones y análisis en un solo lugar. Este tour de 1 minuto te muestra el mapa.',
     target: null,
     position: 'center'
   },
   {
-    title: 'Tu centro de comando',
-    desc: 'Desde esta pantalla puedes elegir el agente con el que quieres trabajar. También puedes hacerlo desde el menú lateral — es exactamente lo mismo.',
+    title: 'Inicio: tu Pulso diario',
+    desc: 'Al entrar ves el Pulso — el estado de todo tu marketing de un vistazo: alertas de campañas, leads recientes y lo que necesita atención hoy.',
     target: 'view-home',
     position: 'center'
   },
   {
-    title: 'Consultor de Marketing',
-    desc: '¿No sabes por dónde empezar? El Consultor analiza tu negocio y te dice qué canales priorizar, cómo distribuir tu presupuesto y qué hacer primero.',
-    target: 'home-consultor-hero',
-    position: 'bottom'
+    title: 'Agentes expertos',
+    desc: 'Siete especialistas con conocimiento 2026: Google Ads, Meta, TikTok, LinkedIn, SEO, Contenido y el Consultor. La primera opción de cada uno es su hoja de ruta, y el de Google Ads puede crear campañas reales en tu cuenta (siempre en pausa, tú las activas).',
+    target: 'navm-agents',
+    position: 'right',
+    onEnter: function() { tourSidebar(true); },
   },
   {
-    title: 'Agentes especializados',
-    desc: 'Cada agente domina un canal: Google Ads, Meta Ads, SEO, TikTok y más. Haz clic en cualquiera para empezar a trabajar con él.',
-    target: 'home-agents-grid',
-    position: 'top'
+    title: 'CRM',
+    desc: 'Tu pipeline de ventas: leads en kanban, contactos (con importador desde Excel) y la Agenda sincronizada con Google Calendar.',
+    target: 'navm-crm',
+    position: 'right',
+    onEnter: function() { tourSidebar(true); }
   },
   {
-    title: 'Menú lateral',
-    desc: 'Aquí tienes acceso rápido a todos los agentes. Haz clic en cualquiera para ver sus acciones disponibles y empezar una conversación.',
-    target: 'sidebar',
-    position: 'right'
+    title: 'Marketing',
+    desc: 'Todo lo que sale hacia tus leads: campañas masivas de email y WhatsApp (la IA las redacta), automatizaciones con flujos visuales, formularios y fuentes de captación, y propuestas comerciales con link de pago.',
+    target: 'navm-marketing',
+    position: 'right',
+    onEnter: function() { tourSidebar(true); }
   },
   {
-    title: 'Hoja de ruta',
-    desc: 'Cada agente tiene una hoja de ruta con checklists por etapa: qué configurar, qué optimizar y qué métricas revisar según en qué momento estás.',
-    target: 'rm-panel',
-    position: 'left',
-    onEnter: function() { openAgent('google-ads'); setTimeout(openRoadmap, 600); },
-    onExit: function() { document.getElementById('rm-panel').classList.remove('open'); document.getElementById('rm-panel-overlay').classList.remove('open'); }
+    title: 'Conversaciones',
+    desc: 'El inbox unificado de WhatsApp, Messenger e Instagram. Los chatbots con IA responden, capturan el contacto de forma natural y crean el lead solos. El punto rojo te avisa de mensajes sin leer.',
+    target: 'navm-conversaciones',
+    position: 'right',
+    onEnter: function() { tourSidebar(true); }
+  },
+  {
+    title: 'Análisis',
+    desc: 'La medición de todo: embudo del pipeline, fuentes de leads, satisfacción de clientes (NPS) y aperturas de tus campañas de email.',
+    target: 'navm-analisis',
+    position: 'right',
+    onEnter: function() { tourSidebar(true); },
+    onExit: function() { tourSidebar(false); }
+  },
+  {
+    title: 'Cambia de cliente en un clic',
+    desc: 'Como agencia, aquí seleccionas con qué cliente estás trabajando — los agentes, el CRM y las campañas cambian de contexto automáticamente.',
+    target: 'hdr-client-switch',
+    position: 'bottom',
+    when: function() { var el = document.getElementById('hdr-client-switch'); return el && el.style.display !== 'none'; }
   },
   {
     title: 'Conecta tus plataformas',
-    desc: 'Desde Configuración puedes conectar tu cuenta de Google Ads y Meta Ads. Cuando están conectadas, los agentes pueden leer tus datos en tiempo real.',
+    desc: 'Desde Configuración conectas Google Ads, Meta y tu Google Calendar. Con las cuentas conectadas, los agentes leen tus datos reales y pueden ejecutar por ti.',
     target: 'settings-panel',
     position: 'settings',
     onEnter: function() { openSettings(); },
     onExit: function() { document.getElementById('settings-panel').style.display='none'; document.getElementById('settings-overlay').style.display='none'; }
   },
   {
-    title: 'Historial de conversaciones',
-    desc: 'Todas tus consultas quedan guardadas aquí. Puedes retomar cualquier conversación anterior exactamente donde la dejaste.',
-    target: 'sb-recents-panel',
-    position: 'right-safe'
+    title: 'Atajo para todo: ⌘K',
+    desc: 'Desde cualquier pantalla, ⌘K (o este botón) abre el buscador: escribe dos letras y salta a cualquier módulo, cliente o acción.',
+    target: 'cmdk-hint-btn',
+    position: 'bottom',
+    when: function() { var el = document.getElementById('cmdk-hint-btn'); return el && el.offsetParent !== null; }
   },
   {
     title: '¡Listo para empezar! 🚀',
-    desc: 'Tu perfil de negocio se guarda automáticamente. Cada agente lo usa para darte respuestas personalizadas. ¡Elige un agente y empieza!',
-    target: 'mem-card',
-    position: 'right-safe'
+    desc: 'Configura el perfil de tu negocio una sola vez y todos los agentes lo usarán como contexto. Empieza por el Consultor si no sabes por dónde arrancar — él arma el plan.',
+    target: null,
+    position: 'center'
   }
 ];
 
 var tourStep = 0;
 var tourActive = false;
+var _tourList = null; // pasos activos de esta corrida (filtra los condicionales "when")
+
+function tourActiveSteps() {
+  if (!_tourList) _tourList = TOUR_STEPS.slice();
+  return _tourList;
+}
 
 function tourStart() {
   if (tourActive) return;
   tourActive = true;
   tourStep = 0;
+  _tourList = TOUR_STEPS.filter(function (s) {
+    if (!s.when) return true;
+    try { return !!s.when(); } catch (e) { return false; }
+  });
   var overlay = document.getElementById('tour-overlay');
   var tooltip = document.getElementById('tour-tooltip');
   var spotlight = document.getElementById('tour-spotlight');
@@ -2679,7 +2724,7 @@ function tourStart() {
   
   // Build dots
   var dots = document.getElementById('tour-dots');
-  dots.innerHTML = TOUR_STEPS.map(function(_, i) {
+  dots.innerHTML = tourActiveSteps().map(function(_, i) {
     return '<div class="tour-dot" id="tour-dot-' + i + '"></div>';
   }).join('');
   
@@ -2688,13 +2733,13 @@ function tourStart() {
 
 function tourShow(idx) {
   // Call onExit of previous step
-  var prevStep = TOUR_STEPS[tourStep];
+  var prevStep = tourActiveSteps()[tourStep];
   if (idx !== tourStep && prevStep && prevStep.onExit) {
     try { prevStep.onExit(); } catch(e) {}
   }
   tourStep = idx;
-  var step = TOUR_STEPS[idx];
-  var total = TOUR_STEPS.length;
+  var step = tourActiveSteps()[idx];
+  var total = tourActiveSteps().length;
   // Call onEnter of new step
   if (step.onEnter) {
     setTimeout(function() { try { step.onEnter(); } catch(e) {} }, 100);
@@ -2706,7 +2751,7 @@ function tourShow(idx) {
   document.getElementById('tour-desc').textContent = step.desc;
   
   // Update dots
-  TOUR_STEPS.forEach(function(_, i) {
+  tourActiveSteps().forEach(function(_, i) {
     var d = document.getElementById('tour-dot-' + i);
     if (d) d.className = 'tour-dot' + (i === idx ? ' active' : '');
   });
@@ -2721,6 +2766,10 @@ function tourShow(idx) {
   
   // Position spotlight and tooltip
   tourPosition(step);
+  // Re-posicionar tras las transiciones (sidebar móvil desliza 300ms, paneles animan)
+  setTimeout(function () {
+    if (tourActive && tourActiveSteps()[tourStep] === step) tourPosition(step);
+  }, 550);
 }
 
 function tourPosition(step) {
@@ -2766,6 +2815,16 @@ function tourPosition(step) {
   
   var winH = window.innerHeight;
   var winW = window.innerWidth;
+  // Móvil: los tooltips laterales no caben — van debajo del elemento, a lo ancho
+  if (window.matchMedia('(max-width: 768px)').matches && step.position !== 'settings') {
+    tooltip.style.left = '12px';
+    tooltip.style.right = '12px';
+    tooltip.style.bottom = 'auto';
+    var below = rect.bottom + pad + 14;
+    if (below + tth > winH - 12) below = Math.max(12, rect.top - tth - 14);
+    tooltip.style.top = below + 'px';
+    return;
+  }
   if (step.position === 'left') {
     tooltip.style.left = Math.max(16, rect.left - ttw - margin - pad) + 'px';
     tooltip.style.top = Math.max(16, Math.min(rect.top + rect.height / 2 - tth / 2, winH - tth - 16)) + 'px';
@@ -2789,7 +2848,7 @@ function tourPosition(step) {
       tt.style.bottom = 'auto';
     }, 400);
     // Initial position while panel animates in
-    tooltip.style.left = (winW - 520 - ttw - 20) + 'px';
+    tooltip.style.left = Math.max(12, winW - 520 - ttw - 20) + 'px';
     tooltip.style.top = '80px';
     tooltip.style.right = 'auto';
     tooltip.style.bottom = 'auto';
@@ -2820,7 +2879,7 @@ function tourPosition(step) {
 }
 
 function tourNext() {
-  if (tourStep >= TOUR_STEPS.length - 1) {
+  if (tourStep >= tourActiveSteps().length - 1) {
     tourEnd();
     return;
   }
@@ -2834,8 +2893,9 @@ function tourSkip() {
 function tourEnd() {
   tourActive = false;
   // Call onExit of current step if any
-  var curStep = TOUR_STEPS[tourStep];
+  var curStep = tourActiveSteps()[tourStep];
   if (curStep && curStep.onExit) { try { curStep.onExit(); } catch(e) {} }
+  tourSidebar(false); // si el tour se abandona con el sidebar móvil abierto
   var overlay = document.getElementById('tour-overlay');
   var backdrop = document.getElementById('tour-backdrop');
   var spotlight = document.getElementById('tour-spotlight');
