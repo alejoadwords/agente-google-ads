@@ -22493,3 +22493,29 @@ function hdrClientPick(id) {
   const _hdrFast = setInterval(() => { hdrClientRender(); if (++_hdrPolls > 20) clearInterval(_hdrFast); }, 3000);
   setInterval(hdrClientRender, 60000);
 })();
+
+// ── Reintento persistente de carga de clientes (fix móvil) ──────────────────
+// En celulares el token de Clerk hidrata tarde: agencyLoadClients agota sus 3
+// intentos con 401, cae al localStorage (vacío en incógnito) y el único
+// reintento posterior era UNO a los 3s. Este poll insiste hasta 40s después
+// del arranque y repinta panel, contador del sidebar y selector del header.
+(function () {
+  let tries = 0;
+  const iv = setInterval(async () => {
+    tries++;
+    if (tries > 16) { clearInterval(iv); return; }
+    try {
+      const eligible = (typeof userPlan !== 'undefined' && userPlan === 'agency') || (typeof isAdminUser === 'function' && isAdminUser());
+      if (!eligible) return;
+      if (Array.isArray(agencyClients) && agencyClients.length > 0) { hdrClientRender(); clearInterval(iv); return; }
+      await agencyLoadClients();
+      if (agencyClients.length > 0) {
+        try { agencyUpdateSidebarCount(); } catch {}
+        try { if (document.getElementById('view-agency')?.classList.contains('active')) { agencyRender(); renderPulsoAgency(true); } } catch {}
+        try { document.getElementById('sb-agency-btn').style.display = 'block'; } catch {}
+        hdrClientRender();
+        clearInterval(iv);
+      }
+    } catch {}
+  }, 2500);
+})();
