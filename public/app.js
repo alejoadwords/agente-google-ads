@@ -2617,6 +2617,11 @@ function tourSidebar(open) {
   if (ov) ov.classList.toggle('open', false); // sin overlay: el backdrop del tour ya oscurece
 }
 
+// ¿El tour corre para una cuenta de agencia? (cambia la narrativa inicial)
+function tourIsAgency() {
+  return (typeof userPlan !== 'undefined' && userPlan === 'agency') || (typeof isAdminUser === 'function' && isAdminUser());
+}
+
 var TOUR_STEPS = [
   {
     title: 'Bienvenido a Acuarius 👋',
@@ -2624,11 +2629,37 @@ var TOUR_STEPS = [
     target: null,
     position: 'center'
   },
+  // ── Rama individual/Pro: el Pulso del home ──
   {
     title: 'Inicio: tu Pulso diario',
     desc: 'Al entrar ves el Pulso — el estado de todo tu marketing de un vistazo: alertas de campañas, leads recientes y lo que necesita atención hoy.',
     target: 'view-home',
-    position: 'center'
+    position: 'center',
+    when: function() { return !tourIsAgency(); }
+  },
+  // ── Rama agencia: el panel de clientes es la base de operaciones ──
+  {
+    title: 'Tu panel de clientes',
+    desc: 'Como agencia, aquí vive tu cartera: cada cliente es una tarjeta con su semáforo de salud, y el Pulso de tu cartera te muestra cada día qué cuentas necesitan atención (conversiones caídas, presupuestos, tokens vencidos).',
+    target: null,
+    position: 'center',
+    when: tourIsAgency,
+    onEnter: function() { showView('agency'); }
+  },
+  {
+    title: 'Crea y configura cada cliente',
+    desc: 'Con este botón das de alta un cliente: el brief guiado arma su perfil (la IA puede analizar su sitio web), y le conectas su cuenta de Google Ads o Meta. Ese perfil alimenta TODO lo de ese cliente: agentes, CRM, campañas y propuestas.',
+    target: 'agency-add-btn',
+    position: 'bottom',
+    when: tourIsAgency,
+    onEnter: function() { showView('agency'); }
+  },
+  {
+    title: 'Cambia de cliente en un clic',
+    desc: 'Aquí seleccionas con qué cliente estás trabajando — los agentes, el CRM y las campañas cambian de contexto automáticamente. Sin volver al panel.',
+    target: 'hdr-client-switch',
+    position: 'bottom',
+    when: function() { var el = document.getElementById('hdr-client-switch'); return tourIsAgency() && el && el.style.display !== 'none'; }
   },
   {
     title: 'Agentes expertos',
@@ -2665,13 +2696,6 @@ var TOUR_STEPS = [
     position: 'right',
     onEnter: function() { tourSidebar(true); },
     onExit: function() { tourSidebar(false); }
-  },
-  {
-    title: 'Cambia de cliente en un clic',
-    desc: 'Como agencia, aquí seleccionas con qué cliente estás trabajando — los agentes, el CRM y las campañas cambian de contexto automáticamente.',
-    target: 'hdr-client-switch',
-    position: 'bottom',
-    when: function() { var el = document.getElementById('hdr-client-switch'); return el && el.style.display !== 'none'; }
   },
   {
     title: 'Conecta tus plataformas',
