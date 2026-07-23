@@ -172,6 +172,35 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── Asientos extra de equipo (suscripción mensual) ───────────────────────
+  // Producto con 'asiento' o 'seat' en el nombre. La oferta lleva la cantidad
+  // ('1 asiento' → 1, '2 asientos' → 2...). Fallback por precio (~$10/asiento).
+  // seats_extra se FIJA con la cantidad de la oferta comprada — idempotente
+  // ante renovaciones. Cancelación → 0. api/team.js lo suma al cupo del plan.
+  if (productName.includes('asiento') || productName.includes('seat')) {
+    let clerkOk = false;
+    try {
+      const clerkUser = await clerkFindUserByEmail(email);
+      if (!clerkUser) return res.status(200).json({ received: true, action: 'user_not_found', email });
+      if (eventosCancelacion.includes(eventType)) {
+        clerkOk = await clerkMergeMetadata(clerkUser.id, { seats_extra: 0 });
+        return res.status(200).json({ received: true, action: 'seats_cancelled', clerkUpdated: clerkOk });
+      }
+      const offerName = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
+      const price = data?.purchase?.price?.value || 0;
+      let seats = 1;
+      const nMatch = offerName.match(/(\d+)/);
+      if (nMatch) seats = Math.max(1, parseInt(nMatch[1]));
+      else if (price > 0) seats = Math.max(1, Math.round(price / 10));
+      seats = Math.min(seats, 20); // tope de cordura
+      clerkOk = await clerkMergeMetadata(clerkUser.id, { seats_extra: seats });
+      return res.status(200).json({ received: true, action: 'seats_set', seats, clerkUpdated: clerkOk });
+    } catch (e) {
+      console.error('[hotmart-webhook] seats error:', e.message);
+      return res.status(200).json({ received: true, action: 'seats_error' });
+    }
+  }
+
   // ── Suscripción / plan ──────────────────────────────────────────────────
   // Modelo actual: Pro $39 / Agency $99. 'agenc' cubre "Agency" y "Agencia".
   const plan = productName.includes('agenc') ? 'agency' : 'pro';
