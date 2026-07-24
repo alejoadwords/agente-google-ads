@@ -8,7 +8,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
 const CK             = process.env.CLERK_SECRET_KEY;
 
-const PRO_CHECKOUT = 'https://pay.hotmart.com/L105202723X';
+const PRO_CHECKOUT = 'https://pay.hotmart.com/G105202218G';
 
 async function sendMail(to, subject, html) {
   if (!RESEND_API_KEY) return false;
