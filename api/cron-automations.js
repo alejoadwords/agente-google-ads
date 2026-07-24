@@ -12,7 +12,7 @@ const CRON_SECRET    = process.env.CRON_SECRET;
 
 // ── Gate por plan en ejecución: si el dueño ya no es Pro/Agency (downgrade),
 // sus automatizaciones no corren ────────────────────────────────────────────
-const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 const _planCache = {};
 async function userIsPaid(userId) {

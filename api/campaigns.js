@@ -17,7 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Cupo de emails de campaña por mes calendario
-const EMAIL_QUOTAS = { free: 0, pro: 2000, individual: 2000, agency: 10000, agencia: 10000 };
+const EMAIL_QUOTAS = { free: 0, pro: 2000, individual: 2000, agency: 10000, agencia: 10000, trial: 2000 };
 
 function sbHeaders(prefer) {
   return {

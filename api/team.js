@@ -17,7 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
-const PLAN_SEATS = { free: 1, pro: 1, individual: 1, agency: 3, agencia: 3 };
+const PLAN_SEATS = { free: 1, pro: 1, individual: 1, agency: 3, agencia: 3, trial: 1 };
 
 function sbHeaders(prefer) {
   return {

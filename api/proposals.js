@@ -50,7 +50,7 @@ async function getUserId(req) {
   } catch { return null; }
 }
 
-const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 async function isPaidOrAdmin(userId) {
   if (PAID_PLANS.includes(_lastPlan)) return true;

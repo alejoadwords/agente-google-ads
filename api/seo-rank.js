@@ -8,7 +8,7 @@ const SERPER_KEY = process.env.SERPER_API_KEY;
 const MAX_KEYWORDS = 30; // tope por request para acotar costo
 
 // ── Gate por plan (las consultas SERP cuestan dinero real) ──
-const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 
 async function isPaidOrAdmin(req) {

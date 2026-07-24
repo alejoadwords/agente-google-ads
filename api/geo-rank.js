@@ -9,7 +9,7 @@
 const MAX_QUERIES = 10;
 
 // ── Gate por plan (cada chequeo son llamadas reales a 4 IAs) ──
-const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 
 async function isPaidOrAdmin(req) {

@@ -269,6 +269,29 @@ async function initAuth(){
     }
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
+    // Prueba Pro de 7 días: 'trial' vigente se comporta como Pro; vencida como free
+    window._trialUntil = null;
+    try {
+      const _tm = clerkInstance.user.publicMetadata || {};
+      if (userPlan === 'trial') {
+        if (_tm.trial_until && new Date(_tm.trial_until) > new Date()) { window._trialUntil = _tm.trial_until; userPlan = 'pro'; }
+        else userPlan = 'free'; // vencida — api/cron-trials ajusta el metadata a diario
+      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser()) {
+        // Primer ingreso de una cuenta free: activar la prueba automáticamente
+        setTimeout(async () => {
+          try {
+            const d = await fetch('/api/trial', { method: 'POST', headers: await getAuthHeaders() }).then(r => r.json());
+            if (d.ok && d.started) {
+              window._trialUntil = d.trial_until;
+              userPlan = 'pro';
+              updateUserUI(clerkInstance.user);
+              showToast('🎁 Tienes Acuarius Pro completo por 7 días — sin tarjeta', 'success');
+              track('trial_started');
+            }
+          } catch {}
+        }, 2500);
+      }
+    } catch {}
     updateUserUI(clerkInstance.user);
     // Conversión: registro completado (usuario creado hace <10 min, una sola vez)
     try {
@@ -302,6 +325,7 @@ function updateUserUI(u){
   const badge=document.getElementById('plan-badge');
   if(badge){
     if(isAdminUser()) badge.textContent='admin';
+    else if(window._trialUntil){ const _dl=Math.max(1,Math.ceil((new Date(window._trialUntil)-Date.now())/86400000)); badge.textContent='pro · '+_dl+'d de prueba'; }
     else badge.textContent=userPlan==='pro'?'pro':userPlan==='agency'?'agency':'free';
   }
   const greeting=document.getElementById('home-greeting');

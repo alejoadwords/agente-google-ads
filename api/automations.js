@@ -52,7 +52,7 @@ async function getUserId(req) {
 
 // ── Gate por plan: crear/editar automatizaciones es feature Pro ──────────────
 let _lastPlan = 'free';
-const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia'];
+const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 
 async function isPaidOrAdmin(userId) {
