@@ -6,6 +6,8 @@ const CORS = {
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// agent_key reservado para guardar la cartera de clientes en user_profiles
+const AGENCY_CLIENTS_KEY = '__agency_clients__';
 function sbHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -133,14 +135,31 @@ export default async function handler(req) {
   }
 
   // ── AGENCY CLIENTS ───────────────────────────────────────────────────────
+  // Se guardan en user_profiles con un agent_key reservado. Antes esto
+  // apuntaba a una tabla dedicada agency_clients que nunca existió en
+  // Supabase, así que todo guardado fallaba en silencio y la cartera vivía
+  // sólo en localStorage. Reutilizamos user_profiles porque ya está creada
+  // y tiene el upsert por (user_id, agent_key).
   if (type === 'agency_clients') {
     if (req.method === 'GET') {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/agency_clients?user_id=eq.${userId}&select=clients_data&limit=1`,
+        // order por updated_at: si (user_id, agent_key) no tuviera índice único,
+        // merge-duplicates degrada a INSERT y quedarían filas duplicadas —
+        // así siempre leemos la más reciente en vez de una arbitraria.
+        `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&agent_key=eq.${AGENCY_CLIENTS_KEY}&select=profile_data&order=updated_at.desc&limit=1`,
         { headers: sbHeaders() }
       );
+      if (!res.ok) {
+        const err = await res.text();
+        return new Response(JSON.stringify({ error: err }), {
+          status: 500, headers: { ...CORS, 'Content-Type': 'application/json' }
+        });
+      }
       const rows = await res.json();
-      const data = rows?.[0]?.clients_data ?? [];
+      const stored = rows?.[0]?.profile_data;
+      const data = Array.isArray(stored?.clients) ? stored.clients
+                 : Array.isArray(stored)          ? stored
+                 : [];
       return new Response(JSON.stringify({ data }), {
         status: 200, headers: { ...CORS, 'Content-Type': 'application/json' }
       });
@@ -152,12 +171,18 @@ export default async function handler(req) {
           status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
         });
       }
+      if (!Array.isArray(body?.data)) {
+        return new Response(JSON.stringify({ error: 'data debe ser un array' }), {
+          status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
+        });
+      }
       const payload = {
         user_id: userId,
-        clients_data: body.data,
+        agent_key: AGENCY_CLIENTS_KEY,
+        profile_data: { clients: body.data },
         updated_at: new Date().toISOString(),
       };
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/agency_clients`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
         method: 'POST',
         headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
         body: JSON.stringify(payload),

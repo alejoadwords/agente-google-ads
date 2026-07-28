@@ -657,7 +657,7 @@ async function agencyInit() {
   await agencyLoadClients();
   // Si hay clientes, asegurar que están sincronizados en Supabase.
   // Esto repara el caso donde datos viejos sólo quedaron en localStorage del PC.
-  if (agencyClients.length > 0) agencyPersistRemote();
+  if (agencyClients.length > 0) agencyPersistRemote({ silent: true });
   if (isAgency) agencyUpdateSidebarCount();
 
   // Pro: auto-activar perfil de negocio si ya existe
@@ -722,6 +722,8 @@ async function agencyLoadClients() {
           agencyPersistLocal();
           return;
         }
+      } else {
+        console.error('[agency] no se pudo leer la cartera del servidor:', res.status, await res.text().catch(() => ''));
       }
       break; // Respuesta ok pero vacía — no reintentar
     } catch(e) {
@@ -734,19 +736,37 @@ async function agencyLoadClients() {
     const localData = raw ? JSON.parse(raw) : [];
     agencyClients = localData;
     // Si hay datos en localStorage pero no en Supabase, subirlos ahora
-    if (localData.length > 0) agencyPersistRemote();
+    if (localData.length > 0) agencyPersistRemote({ silent: true });
   } catch(e) { agencyClients = []; }
 }
 
-async function agencyPersistRemote() {
+// Devuelve true si la cartera quedó guardada en el servidor.
+// NUNCA silenciar el fallo: si esto falla, los clientes viven sólo en
+// localStorage y se pierden al cambiar de navegador o borrar caché.
+async function agencyPersistRemote({ silent = false } = {}) {
   try {
+    let token = sessionToken;
+    if (!token && clerkInstance?.session) {
+      try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
+    }
     const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-    await fetch('/api/profile?type=agency_clients', {
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch('/api/profile?type=agency_clients', {
       method: 'POST', headers,
       body: JSON.stringify({ data: agencyClients })
     });
-  } catch(e) {}
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      console.error('[agency] no se pudo guardar la cartera en el servidor:', res.status, detail);
+      if (!silent) showToast('No pudimos guardar tus clientes en la nube. Se guardaron en este dispositivo — reintenta más tarde.', 'error');
+      return false;
+    }
+    return true;
+  } catch(e) {
+    console.error('[agency] error de red al guardar la cartera:', e);
+    if (!silent) showToast('Sin conexión: tus clientes se guardaron sólo en este dispositivo.', 'error');
+    return false;
+  }
 }
 
 function agencyPersistLocal() {

@@ -482,18 +482,6 @@ CREATE TABLE campaign_alerts (
 );
 CREATE INDEX idx_alerts_user_unread ON campaign_alerts(user_id, is_read, is_dismissed);
 
-CREATE TABLE agency_clients (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  agency_user_id TEXT NOT NULL,
-  client_name TEXT NOT NULL,
-  client_email TEXT,
-  client_industry TEXT,
-  monthly_budget NUMERIC,
-  notes TEXT,
-  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'churned')),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_clients_agency ON agency_clients(agency_user_id);
 */
 
 async function handleGetConnection(req, res) {
@@ -733,52 +721,6 @@ async function handleRefreshMetaToken(req, res) {
   return res.json({ ok: true, refreshed: true, daysLeft: Math.round((data.expires_in || 5184000) / 86400) });
 }
 
-// ── AGENCY CLIENTS ────────────────────────────────────────
-
-async function handleCreateClient(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const { agencyUserId, clientName, clientEmail, clientIndustry, monthlyBudget, notes } = req.body || {};
-  if (!agencyUserId || !clientName) return res.status(400).json({ error: 'agencyUserId y clientName requeridos' });
-  const result = await supabaseReq('/agency_clients', 'POST', {
-    agency_user_id: agencyUserId, client_name: clientName,
-    client_email: clientEmail || null, client_industry: clientIndustry || null,
-    monthly_budget: monthlyBudget || null, notes: notes || null,
-  });
-  return res.json({ id: result?.[0]?.id, client: result?.[0] });
-}
-
-async function handleGetClients(req, res) {
-  const { agencyUserId } = req.query;
-  if (!agencyUserId) return res.status(400).json({ error: 'agencyUserId requerido' });
-  const clients = await supabaseReq(
-    `/agency_clients?agency_user_id=eq.${encodeURIComponent(agencyUserId)}&status=neq.churned&order=created_at.desc`
-  );
-  return res.json(clients || []);
-}
-
-async function handleUpdateClient(req, res) {
-  if (req.method !== 'PATCH') return res.status(405).json({ error: 'PATCH only' });
-  const { id, clientName, clientEmail, clientIndustry, monthlyBudget, notes, status } = req.body || {};
-  if (!id) return res.status(400).json({ error: 'id requerido' });
-  const updates = {};
-  if (clientName     !== undefined) updates.client_name     = clientName;
-  if (clientEmail    !== undefined) updates.client_email    = clientEmail;
-  if (clientIndustry !== undefined) updates.client_industry = clientIndustry;
-  if (monthlyBudget  !== undefined) updates.monthly_budget  = monthlyBudget;
-  if (notes          !== undefined) updates.notes           = notes;
-  if (status         !== undefined) updates.status          = status;
-  await supabaseReq(`/agency_clients?id=eq.${id}`, 'PATCH', updates);
-  return res.json({ ok: true });
-}
-
-async function handleArchiveClient(req, res) {
-  if (req.method !== 'PATCH') return res.status(405).json({ error: 'PATCH only' });
-  const { id } = req.body || {};
-  if (!id) return res.status(400).json({ error: 'id requerido' });
-  await supabaseReq(`/agency_clients?id=eq.${id}`, 'PATCH', { status: 'churned' });
-  return res.json({ ok: true });
-}
-
 // ── API ACTION LOGS ───────────────────────────────────────
 /*
 SQL para Supabase (ejecutar una vez):
@@ -956,11 +898,6 @@ export default async function handler(req, res) {
     if (action === 'dismiss-alert')         return await handleDismissAlert(req, res);
     // Meta token refresh
     if (action === 'refresh-meta-token')    return await handleRefreshMetaToken(req, res);
-    // Agency clients
-    if (action === 'create-client')         return await handleCreateClient(req, res);
-    if (action === 'get-clients')           return await handleGetClients(req, res);
-    if (action === 'update-client')         return await handleUpdateClient(req, res);
-    if (action === 'archive-client')        return await handleArchiveClient(req, res);
     // Sprint 3
     if (action === 'log-api-action')        return await handleLogApiAction(req, res);
     if (action === 'save-connection')       return await handleSaveConnection(req, res);
