@@ -21684,7 +21684,7 @@ async function frmLoad() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const d = await fetch('/api/forms' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/forms' + qs).then(r => r.json());
     frmList = d.forms || [];
   } catch { frmList = []; }
 }
@@ -21773,7 +21773,7 @@ async function srcLoadWebhook() {
   const el = document.getElementById('src-wh-url');
   if (!el) return;
   try {
-    const d = await fetch('/api/lead-webhook', { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/lead-webhook').then(r => r.json());
     if (d.url) el.textContent = d.url;
     else el.textContent = d.error || 'Error';
   } catch { el.textContent = 'No se pudo cargar'; }
@@ -21788,7 +21788,7 @@ async function srcLoadChannels() {
   const el = document.getElementById('src-channels');
   if (!el) return;
   try {
-    const d = await fetch('/api/channel-connections?all=1', { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/channel-connections?all=1').then(r => r.json());
     const conns = d.connections || [];
     if (!conns.length) {
       el.innerHTML = 'Sin canales conectados aún. Conecta WhatsApp, Messenger o Instagram en <b>Agentes IA</b>: el agente conversa, captura nombre y contacto de forma natural, y crea el lead solo.';
@@ -21901,8 +21901,8 @@ async function frmSave() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     if (window._frmSt.id) payload.id = window._frmSt.id;
-    const d = await fetch('/api/forms' + qs, {
-      method: window._frmSt.id ? 'PUT' : 'POST', headers: await getAuthHeaders(), body: JSON.stringify(payload),
+    const d = await fetchAuth('/api/forms' + qs, {
+      method: window._frmSt.id ? 'PUT' : 'POST', body: JSON.stringify(payload),
     }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     document.getElementById('frm-overlay').remove();
@@ -21917,14 +21917,14 @@ async function frmSave() {
 async function frmToggle(id) {
   const f = frmList.find(x => x.id === id);
   if (!f) return;
-  await fetch('/api/forms', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, active: !f.active }) });
+  await fetchAuth('/api/forms', { method: 'PUT', body: JSON.stringify({ id, active: !f.active }) });
   srcRender();
 }
 
 async function frmDelete(id) {
   const f = frmList.find(x => x.id === id);
   if (!confirm('¿Eliminar el formulario "' + (f?.name || '') + '"? El link público y el conector dejarán de funcionar.')) return;
-  await fetch('/api/forms?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  await fetchAuth('/api/forms?id=' + encodeURIComponent(id), { method: 'DELETE' });
   srcRender();
 }
 
@@ -21987,14 +21987,14 @@ async function teamInit() {
   try {
     const pending = localStorage.getItem('acuarius_join_token');
     if (pending) {
-      const d = await fetch('/api/team?action=redeem', {
-        method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ token: pending }),
+      const d = await fetchAuth('/api/team?action=redeem', {
+        method: 'POST', body: JSON.stringify({ token: pending }),
       }).then(r => r.json());
       localStorage.removeItem('acuarius_join_token');
       if (d.ok) showToast('🎉 Te uniste al equipo de ' + (d.owner_name || 'tu empresa'), 'success');
       else if (d.error) showToast('⚠️ ' + d.error, 'error');
     }
-    const me = await fetch('/api/team?me=1', { headers: await getAuthHeaders() }).then(r => r.json());
+    const me = await fetchAuth('/api/team?me=1').then(r => r.json());
     window._workspace = me.membership ? { ownerId: me.membership.owner_user_id, role: me.membership.role, ownerName: me.membership.owner_name } : null;
     if (window._workspace) teamApplyMemberUI();
   } catch (e) { window._workspace = null; }
@@ -22015,7 +22015,7 @@ async function teamRenderSettings() {
   if (!list) return;
   list.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Cargando…</div>';
   try {
-    const d = await fetch('/api/team', { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/team').then(r => r.json());
     crmTeam = d.members || [];
     _teamSeats = d.seats || null;
     if (seatsEl && _teamSeats) {
@@ -22047,8 +22047,8 @@ async function teamInvite() {
   btn.disabled = true; btn.textContent = 'Enviando…';
   try {
     const ownerName = (clerkInstance?.user?.firstName ? clerkInstance.user.firstName + (clerkInstance.user.lastName ? ' ' + clerkInstance.user.lastName : '') : null) || 'Tu equipo';
-    const d = await fetch('/api/team', {
-      method: 'POST', headers: await getAuthHeaders(),
+    const d = await fetchAuth('/api/team', {
+      method: 'POST',
       body: JSON.stringify({ email, name, owner_name: ownerName }),
     }).then(r => r.json());
     if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
@@ -22070,7 +22070,7 @@ async function teamInvite() {
 
 async function teamRemove(id) {
   if (!confirm('¿Quitar a esta persona del equipo? Perderá el acceso a tus leads de inmediato.')) return;
-  await fetch('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
   teamRenderSettings();
 }
 
@@ -22102,7 +22102,7 @@ async function teamAssignLead(sel) {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    await fetch('/api/leads' + qs, { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id: lead.id, assigned_to: lead.assigned_to, assigned_name: name }) });
+    await fetchAuth('/api/leads' + qs, { method: 'PUT', body: JSON.stringify({ id: lead.id, assigned_to: lead.assigned_to, assigned_name: name }) });
     showToast(id ? '👤 Lead asignado a ' + name : 'Lead sin asignar', 'success');
   } catch (e) { showToast('No se pudo guardar la asignación', 'error'); }
 }
@@ -22111,7 +22111,7 @@ async function teamAssignLead(sel) {
 async function teamEnsureLoaded() {
   if (window._workspace || crmTeam.length) return;
   try {
-    const d = await fetch('/api/team', { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/team').then(r => r.json());
     crmTeam = d.members || [];
   } catch {}
 }
@@ -22335,8 +22335,8 @@ async function impRun() {
   const qs = '?action=import' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
   for (let i = 0; i < leads.length; i += BATCH) {
     try {
-      const d = await fetch('/api/leads' + qs, {
-        method: 'POST', headers: await getAuthHeaders(),
+      const d = await fetchAuth('/api/leads' + qs, {
+        method: 'POST',
         body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe } }),
       }).then(r => r.json());
       if (d.result) {
@@ -22433,7 +22433,7 @@ async function navUpdateConvBadge() {
   const el = document.getElementById('navm-conv-badge');
   if (!el) return;
   try {
-    const d = await fetch('/api/chat-conversations', { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/chat-conversations').then(r => r.json());
     const unread = (d.conversations || []).reduce((s, c) => s + (parseInt(c.unread_count) || 0), 0);
     el.style.display = unread > 0 ? '' : 'none';
     el.textContent = unread > 99 ? '99+' : String(unread);
@@ -22449,7 +22449,7 @@ async function crmRenderCampStats() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
     rows = (d.campaigns || []).filter(c => c.channel === 'email' && (c.status === 'sent' || c.status === 'sending'));
   } catch {}
   const header =
@@ -22475,7 +22475,7 @@ async function crmRenderCampStats() {
   // Aperturas en paralelo (primeras 10)
   rows.slice(0, 10).forEach(async c => {
     try {
-      const d = await fetch('/api/campaigns?stats=1&id=' + encodeURIComponent(c.id), { headers: await getAuthHeaders() }).then(r => r.json());
+      const d = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(c.id)).then(r => r.json());
       const el = document.getElementById('cst-' + c.id);
       if (!el) return;
       const pct = d.sent ? Math.round((d.opened / d.sent) * 100) : 0;
@@ -22496,7 +22496,7 @@ async function prpRenderAll() {
   view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
   let rows = [];
   try {
-    const d = await fetch('/api/proposals', { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/proposals').then(r => r.json());
     rows = d.proposals || [];
   } catch {}
   const header =
@@ -22508,7 +22508,7 @@ async function prpRenderAll() {
   // Estado de MercadoPago (async — no bloquea la lista)
   (async () => {
     try {
-      const d = await fetch('/api/proposals?mp_status=1', { headers: await getAuthHeaders() }).then(r => r.json());
+      const d = await fetchAuth('/api/proposals?mp_status=1').then(r => r.json());
       const el = document.getElementById('prp-mp-status');
       if (!el) return;
       el.innerHTML = d.connected
