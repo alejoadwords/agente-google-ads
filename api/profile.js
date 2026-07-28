@@ -143,9 +143,8 @@ export default async function handler(req) {
   if (type === 'agency_clients') {
     if (req.method === 'GET') {
       const res = await fetch(
-        // order por updated_at: si (user_id, agent_key) no tuviera índice único,
-        // merge-duplicates degrada a INSERT y quedarían filas duplicadas —
-        // así siempre leemos la más reciente en vez de una arbitraria.
+        // (user_id, agent_key) tiene índice único verificado, así que nunca hay
+        // más de una fila; el order queda como red de seguridad barata.
         `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&agent_key=eq.${AGENCY_CLIENTS_KEY}&select=profile_data&order=updated_at.desc&limit=1`,
         { headers: sbHeaders() }
       );
@@ -182,7 +181,10 @@ export default async function handler(req) {
         profile_data: { clients: body.data },
         updated_at: new Date().toISOString(),
       };
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
+      // on_conflict es obligatorio: sin él PostgREST infiere ON CONFLICT (id)
+      // — la PK — y como nunca choca, hace un INSERT plano que revienta contra
+      // el índice único (user_id, agent_key) con 409 en el segundo guardado.
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?on_conflict=user_id,agent_key`, {
         method: 'POST',
         headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
         body: JSON.stringify(payload),
@@ -238,7 +240,10 @@ export default async function handler(req) {
       [dataField]: body.data,
       updated_at: new Date().toISOString(),
     };
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    // Mismo caso que arriba: user_profiles y chat_history tienen índice único
+    // en (user_id, agent_key), que no es la PK. Sin on_conflict, todo guardado
+    // posterior al primero fallaba con 409 y el servidor quedaba desactualizado.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=user_id,agent_key`, {
       method: 'POST',
       headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify(payload),
