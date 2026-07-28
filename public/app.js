@@ -1918,12 +1918,8 @@ async function dashLoadList() {
   empty.style.display = 'none';
 
   try {
-    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
-    if (!token) { loading.textContent = 'Inicia sesión para ver tus dashboards'; return; }
-
-    const res = await fetch('/api/dashboard?action=list', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
+    const res = await fetchAuth('/api/dashboard?action=list');
+    if (res.status === 401) { loading.textContent = 'Inicia sesión para ver tus dashboards'; return; }
     const data = await res.json();
     const dashes = data.dashboards || [];
 
@@ -1964,10 +1960,8 @@ async function dashLoadList() {
 async function dashDelete(id, name) {
   if (!confirm('¿Eliminar el dashboard de "' + name + '"? El enlace compartido dejará de funcionar.')) return;
   try {
-    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
-    await fetch('/api/dashboard', {
+    await fetchAuth('/api/dashboard', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', dashboardId: id }),
     });
     showToast('Dashboard eliminado', 'success');
@@ -2006,12 +2000,8 @@ async function dashCreate() {
   btn.textContent = 'Creando...';
 
   try {
-    const token = window.Clerk?.session ? await window.Clerk.session.getToken() : null;
-    if (!token) throw new Error('No autenticado');
-
-    const res = await fetch('/api/dashboard', {
+    const res = await fetchAuth('/api/dashboard', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -2521,11 +2511,8 @@ async function warGenerate() {
 
   try {
     // 1. Generar texto con IA
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-    const r = await fetch('/api/chat', {
-      method: 'POST', headers,
+    const r = await fetchAuth('/api/chat', {
+      method: 'POST',
       body: JSON.stringify({
         messages: [{ role: 'user', content: prompt }],
         system: 'Eres un especialista en marketing digital que redacta reportes ejecutivos concisos para agencias en Latinoamérica. Respondes siempre en español.',
@@ -2562,11 +2549,8 @@ async function warGenerate() {
     try {
       const dateFrom = dates.from || document.getElementById('war-date-from')?.value || null;
       const dateTo   = dates.to   || document.getElementById('war-date-to')?.value   || null;
-      const rptHeaders = { 'Content-Type': 'application/json' };
-      if (sessionToken) rptHeaders['Authorization'] = 'Bearer ' + sessionToken;
-
-      const rptRes = await fetch('/api/report', {
-        method: 'POST', headers: rptHeaders,
+      const rptRes = await fetchAuth('/api/report', {
+        method: 'POST',
         body: JSON.stringify({
           clientId:    client.id,
           clientName:  client.name,
@@ -3024,10 +3008,8 @@ async function dbSaveProfile(agentKey, data) {
   // Clave de Supabase incluye el clientId si hay cliente de agencia activo
   const scopedAgent = agencyActiveClientId ? `client_${agencyActiveClientId}_${agentKey}` : agentKey;
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-    await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, {
-      method: 'POST', headers, body: JSON.stringify({ data })
+    await fetchAuth(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, {
+      method: 'POST', body: JSON.stringify({ data })
     });
     localStorage.setItem(getProfileKey(agentKey), JSON.stringify(data));
   } catch(e) {
@@ -3039,9 +3021,7 @@ async function dbSaveProfile(agentKey, data) {
 async function dbLoadProfile(agentKey) {
   const scopedAgent = agencyActiveClientId ? `client_${agencyActiveClientId}_${agentKey}` : agentKey;
   try {
-    const headers = {};
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-    const res = await fetch(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, { headers });
+    const res = await fetchAuth(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`);
     if (res.ok) {
       const { data } = await res.json();
       if (data && Object.keys(data).length > 0) return data;
@@ -4264,12 +4244,8 @@ async function homeChat() {
   const loadId = appendHomeThinking();
 
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-
-    const r = await fetch('/api/chat', {
+    const r = await fetchAuth('/api/chat', {
       method: 'POST',
-      headers,
       body: JSON.stringify({
         messages: homeHist.length > MAX_HIST_MESSAGES ? homeHist.slice(homeHist.length - MAX_HIST_MESSAGES) : homeHist,
         system: SYSTEM_GENERAL,
@@ -4967,7 +4943,7 @@ if(activeClientContext){
     '\nEstas ayudando a gestionar las campanas de este cliente especifico.';
   sys = clientCtx + '\n\n' + sys;
 }
-if(clerkInstance?.session){try{sessionToken=await clerkInstance.session.getToken()}catch{}}const headers={'Content-Type':'application/json'};if(sessionToken)headers['Authorization']=`Bearer ${sessionToken}`;try{// Truncar historial: mantener los últimos MAX_HIST_MESSAGES mensajes
+try{// Truncar historial: mantener los últimos MAX_HIST_MESSAGES mensajes
 const histTruncated = hist.length > MAX_HIST_MESSAGES
   ? hist.slice(hist.length - MAX_HIST_MESSAGES)
   : hist;
@@ -4988,7 +4964,7 @@ const histSanitized = histTruncated.map(m => {
 const payload={messages:histSanitized,system:sysSanitized,userPlan};
 let payloadStr;
 try { payloadStr = JSON.stringify(payload); } catch(jsonErr) { addAgent('Error preparando la solicitud. Intenta de nuevo.'); loading=false; document.getElementById('sbtn').disabled=false; return; }
-const r=await fetch('/api/chat',{method:'POST',headers,body:payloadStr});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}const errMsg=errData.error||'error desconocido';addAgent('⚠️ Error del servidor: ' + errMsg);loading=false;document.getElementById('sbtn').disabled=false;return;}
+const r=await fetchAuth('/api/chat',{method:'POST',body:payloadStr});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}const errMsg=errData.error||'error desconocido';addAgent('⚠️ Error del servidor: ' + errMsg);loading=false;document.getElementById('sbtn').disabled=false;return;}
 // Leer stream SSE
 let replyFinal='';
 let streamBubble=null;
@@ -6202,8 +6178,7 @@ async function showVideoAdForm() {
   // ── Verificar créditos antes de mostrar el formulario ──────────────────────
   let credits = null;
   try {
-    const tok = sessionToken || (clerkInstance?.session ? await clerkInstance.session.getToken().catch(()=>null) : null);
-    const r = await fetch('/api/video-credits', { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
+    const r = await fetchAuth('/api/video-credits');
     if (r.ok) credits = await r.json();
   } catch(e) { /* fail open: mostrar formulario aunque no se pueda verificar */ }
 
@@ -6530,10 +6505,8 @@ async function generateVideo(briefId, btn) {
 
     // 3. Descontar 1 crédito (generación exitosa)
     try {
-      const tok = sessionToken || (clerkInstance?.session ? await clerkInstance.session.getToken().catch(()=>null) : null);
-      await fetch('/api/video-credits', {
+      await fetchAuth('/api/video-credits', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}) },
         body: JSON.stringify({ action: 'deduct' })
       });
     } catch(ce) { console.warn('No se pudo descontar crédito:', ce.message); }
@@ -7563,8 +7536,6 @@ async function publishPostNow(postId) {
   const conns    = loadSocialConnections();
   const caption  = post.caption || '';
   const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
-  const headers  = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
 
   // ── Helper: obtener URL pública de una imagen ──────────────────────────────
   // Estrategia:
@@ -7636,8 +7607,8 @@ async function publishPostNow(postId) {
     const timeoutId  = setTimeout(() => controller.abort(), 55000);
     let upRes;
     try {
-      upRes = await fetch('/api/upload-media', {
-        method: 'POST', headers, signal: controller.signal,
+      upRes = await fetchAuth('/api/upload-media', {
+        method: 'POST', signal: controller.signal,
         body: JSON.stringify({ base64: uploadBase64, mediaType: uploadType }),
       });
     } catch (fetchErr) {
@@ -7684,8 +7655,8 @@ async function publishPostNow(postId) {
         const mimeType    = blobData.type || 'video/mp4';
         const controller  = new AbortController();
         const tid = setTimeout(() => controller.abort(), 55000);
-        const upRes  = await fetch('/api/upload-media', {
-          method: 'POST', headers, signal: controller.signal,
+        const upRes  = await fetchAuth('/api/upload-media', {
+          method: 'POST', signal: controller.signal,
           body: JSON.stringify({ base64: videoBase64, mediaType: mimeType, fileName: 'video.mp4' }),
         });
         clearTimeout(tid);
@@ -7743,7 +7714,7 @@ async function publishPostNow(postId) {
         carouselImageUrls: sharedCarouselUrls,
       };
 
-      const pubRes  = await fetch('/api/social-publish', { method: 'POST', headers, body: JSON.stringify(body) });
+      const pubRes  = await fetchAuth('/api/social-publish', { method: 'POST', body: JSON.stringify(body) });
       const pubData = await pubRes.json();
 
       if (!pubRes.ok || !pubData.success) {
@@ -8829,12 +8800,10 @@ async function generateScriptForPost(postId) {
   const prompt = 'Crea un guión de producción corto y práctico para este ' + (post.format || 'reel') + ':\n\nTÍTULO: ' + post.title + '\nCAPTION/HOOK: ' + (post.caption || '') + '\nRED: ' + post.network + '\n\nIncluye: hook de 3 segundos, estructura de escenas con duración, texto en pantalla, música o sonido sugerido y CTA final. Formato lista clara.';
 
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (typeof sessionToken !== 'undefined' && sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
     const sysPrompt = (typeof SYSTEM_SOCIAL !== 'undefined' ? SYSTEM_SOCIAL : '')
       .replace('{MEMORY}', mem ? JSON.stringify(mem) : '').replace('{STAGE}', '').replace('{AGENT}', 'Social Media Manager');
-    const res = await fetch('/api/chat', {
-      method: 'POST', headers,
+    const res = await fetchAuth('/api/chat', {
+      method: 'POST',
       body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt })
     });
 
@@ -8911,11 +8880,8 @@ async function generateVideoForPost(postId) {
 
   try {
     // 1. Submit job
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
-    const submitRes = await fetch('/api/video-gen', {
-      method: 'POST', headers,
+    const submitRes = await fetchAuth('/api/video-gen', {
+      method: 'POST',
       body: JSON.stringify({ action: 'submit', prompt, aspect_ratio: aspect, duration: 10, resolution: '1080p' })
     });
     const submitData = await submitRes.json();
@@ -8933,8 +8899,8 @@ async function generateVideoForPost(postId) {
       attempts++;
       setBtn(spinSvg + ' ' + msgs[Math.min(Math.floor(attempts / 9), 3)], true);
 
-      const statusRes = await fetch('/api/video-gen', {
-        method: 'POST', headers,
+      const statusRes = await fetchAuth('/api/video-gen', {
+        method: 'POST',
         body: JSON.stringify({ action: 'status', job_id: jobId })
       });
       const statusData = await statusRes.json();
@@ -8947,8 +8913,8 @@ async function generateVideoForPost(postId) {
 
     // 3. Descontar crédito
     try {
-      await fetch('/api/video-credits', {
-        method: 'POST', headers,
+      await fetchAuth('/api/video-credits', {
+        method: 'POST',
         body: JSON.stringify({ action: 'deduct' })
       });
     } catch(_) {}
@@ -9014,10 +8980,8 @@ async function generateImageForPost(postId) {
   const prompt = basePrompt + '. Estilo visual profesional para redes sociales, sin texto superpuesto.';
 
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-    const res = await fetch('/api/generate-image', {
-      method: 'POST', headers,
+    const res = await fetchAuth('/api/generate-image', {
+      method: 'POST',
       body: JSON.stringify({ prompt, format: apiFormat, variations: 1, hasText: false })
     });
     let data;
@@ -9065,9 +9029,6 @@ async function generateCarouselSlides(postId, post) {
   // Generar prompts específicos por slide
   const slidePrompts = buildCarouselSlidePrompts(topic, post, slideCount);
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
   // Mostrar progreso en el botón
   const updateProgress = (done, total) => {
     if (genBtn) genBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>' + done + ' / ' + total + ' slides…';
@@ -9077,8 +9038,8 @@ async function generateCarouselSlides(postId, post) {
   try {
     for (let i = 0; i < slidePrompts.length; i++) {
       updateProgress(i, slidePrompts.length);
-      const res = await fetch('/api/generate-image', {
-        method: 'POST', headers,
+      const res = await fetchAuth('/api/generate-image', {
+        method: 'POST',
         // carouselSlide:true → Ideogram REALISTIC + 1080×1080 + negative prompt anti-texto
         body: JSON.stringify({ prompt: slidePrompts[i], format: 'square', variations: 1, carouselSlide: true })
       });
@@ -9294,12 +9255,8 @@ async function exportToSheets(btn) {
     const negocio = mem?.negocio || '';
     const titulo = `Parrilla de contenido${negocio ? ' · ' + negocio.split('·')[0].trim() : ''} · ${new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' })}`;
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-
-    const res = await fetch('/api/create-sheet', {
+    const res = await fetchAuth('/api/create-sheet', {
       method: 'POST',
-      headers,
       body: JSON.stringify({ parrilla: lastParrillaText, titulo, userEmail, negocio }),
     });
 
@@ -10771,10 +10728,8 @@ async function generateAdImages(cmd) {
     if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>generando creativo ' + batchIndex + ' de ' + batchTotal + '...'; }
   }, 100);
   try {
-    var headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-    var res = await fetch('/api/generate-image', {
-      method: 'POST', headers: headers,
+    var res = await fetchAuth('/api/generate-image', {
+      method: 'POST',
       body: JSON.stringify({ prompt: prompt, format: format, variations: 1, hasText: hasText }),
     });
     var data = await res.json();
@@ -12201,15 +12156,12 @@ async function startABVariation() {
     if (el) { var txt = el.querySelector('.thinking-bbl'); if (txt) txt.innerHTML = '<div class="spinner"></div>aplicando variaciones con Flux Kontext...'; }
   }, 100);
 
-  var headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
   try {
     // Usar modo kontext: envía la imagen original + instrucción de edición
     // Flux Kontext edita la imagen manteniendo lo que se indica y cambiando solo lo especificado
     var fetchPromises = variations.map(function(v) {
-      return fetch('/api/generate-image', {
-        method: 'POST', headers: headers,
+      return fetchAuth('/api/generate-image', {
+        method: 'POST',
         body: JSON.stringify({
           mode: 'kontext',
           referenceImage: _abImageData,   // imagen original completa en base64
@@ -12462,9 +12414,7 @@ var VARIATION_AXES = [
 // Helper: lee SSE de /api/chat y devuelve el texto completo
 // El proxy siempre devuelve streaming — no se puede usar .json() directamente
 async function fetchChatFull(payload) {
-  var headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-  var res = await fetch('/api/chat', { method: 'POST', headers: headers, body: JSON.stringify(payload) });
+  var res = await fetchAuth('/api/chat', { method: 'POST', body: JSON.stringify(payload) });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   var reader = res.body.getReader();
   var decoder = new TextDecoder();
@@ -12643,9 +12593,8 @@ async function launchAxisVariations(designEncoded, format, count) {
   try {
     var imgPromises = prompts.list.map(function(p) {
       var body = { prompt: p, format: format, variations: 1, hasText: false };
-      return fetch('/api/generate-image', {
+      return fetchAuth('/api/generate-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}) },
         body: JSON.stringify(body)
       }).then(function(r) { return r.json(); });
     });
@@ -13573,9 +13522,6 @@ async function dqGenerateSelectedConcepts() {
     })(thinkId, concept);
 
     try {
-      var headers = { 'Content-Type': 'application/json' };
-      if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
       // ── Construir adCopy desde el concepto de Claude ──────────────────────
       var adCopy = {
         brand:       brand,
@@ -13600,8 +13546,8 @@ async function dqGenerateSelectedConcepts() {
         body.productImageBase64 = 'data:' + (designQData.productImageMediaType || 'image/jpeg') + ';base64,' + designQData.productImageBase64;
       }
 
-      var res = await fetch('/api/generate-image', {
-        method: 'POST', headers: headers,
+      var res = await fetchAuth('/api/generate-image', {
+        method: 'POST',
         body: JSON.stringify(body)
       });
       var result = await res.json();
@@ -15377,12 +15323,9 @@ async function runHtmlDesign() {
   try {
     updateMsg('Analizando tu negocio con IA...');
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
-
     // Step 1: Get design brief from Claude
-    const briefRes = await fetch('/api/design-brief', {
-      method: 'POST', headers,
+    const briefRes = await fetchAuth('/api/design-brief', {
+      method: 'POST',
       body: JSON.stringify({ prompt, format: fmt, category: cat }),
     });
     const brief = await briefRes.json();
@@ -15394,8 +15337,8 @@ async function runHtmlDesign() {
       updateMsg('Generando foto de fondo...');
       const fluxFormat = fmt === 'story' ? 'story' : fmt === 'square' ? 'square' : 'vertical';
       const needsPeople = ['yoga','fitness','belleza','turismo','educacion','moda'].includes(cat);
-      const bgRes = await fetch('/api/generate-image', {
-        method: 'POST', headers,
+      const bgRes = await fetchAuth('/api/generate-image', {
+        method: 'POST',
         body: JSON.stringify({
           prompt: brief.photo_query + ', professional lifestyle advertising photography, clean composition, no text' + (needsPeople ? ', natural lighting, authentic feeling' : ', no people') + ', vibrant colors',
           format: fluxFormat,
