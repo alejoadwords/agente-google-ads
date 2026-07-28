@@ -18257,10 +18257,18 @@ async function pulsoMetaCards() {
 async function pulsoCrmCards() {
   try {
     if (!clerkInstance?.user?.id) return [];
-    const res = await fetch('/api/leads', { headers: await getAuthHeaders() });
+    // Sin client_id el endpoint devuelve los leads de TODOS los clientes: eso es
+    // lo que necesita _pulsoLeadsCache para la salud por cliente.
+    const res = await fetchAuth('/api/leads');
     if (!res.ok) return [];
-    const leads = (await res.json()).leads || [];
-    _pulsoLeadsCache = leads; // usado por pulsoApplyHealth (leads fríos por cliente)
+    const todos = (await res.json()).leads || [];
+    _pulsoLeadsCache = todos; // usado por pulsoApplyHealth (leads fríos por cliente)
+    // Las tarjetas, en cambio, deben hablar del MISMO conjunto que el CRM va a
+    // mostrar. Con un cliente activo el CRM pide ?client_id=X, así que anunciar
+    // "6 leads sin actividad" sobre el total mandaba al usuario a un pipeline
+    // vacío: el Pulso contaba la cuenta entera y el CRM sólo ese cliente.
+    const activo = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const leads = activo ? todos.filter(l => l.client_id === activo) : todos;
     if (!leads.length) return [];
     const now = Date.now();
     const DAY = 864e5;
@@ -18278,7 +18286,7 @@ async function pulsoCrmCards() {
         title: 'CRM · ' + stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
         body: 'Sin contacto hace más de 3 días. Incluye a "' + (top.name || '—') + '"' + (top.stage ? ' (etapa ' + top.stage + ')' : '') + '.',
         actLabel: 'Ver en el CRM →',
-        act: () => showView('crm'),
+        act: () => navGo('crm'), // navGo inicializa el modulo; showView solo cambia de vista
       });
     }
 
@@ -18289,7 +18297,7 @@ async function pulsoCrmCards() {
         title: 'CRM · ' + fresh.length + (fresh.length === 1 ? ' lead nuevo' : ' leads nuevos') + ' hoy',
         body: fresh.slice(0, 2).map(l => l.name).filter(Boolean).join(', ') + (fresh.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
         actLabel: 'Ver leads →',
-        act: () => showView('crm'),
+        act: () => navGo('crm'), // navGo inicializa el modulo; showView solo cambia de vista
       });
     }
     return cards;
@@ -22789,4 +22797,57 @@ async function crmEnsureLoaded() {
   // 3) Al cambiar de tab dentro del CRM.
   const _crmSetView = crmSetView;
   crmSetView = function (v) { _crmSetView(v); crmEnsureLoaded(); };
+})();
+
+// ── Aviso: el pipeline está vacío sólo por el cliente activo ─────────────────
+// Con un cliente de agencia activo el CRM pide ?client_id=X, así que una cuenta
+// con leads propios ve un pipeline vacío sin explicación. El aviso sólo aparece
+// cuando hay leads en otro alcance — si la cuenta está de verdad vacía, no.
+async function crmAvisoAlcance() {
+  const ID = 'crm-aviso-alcance';
+  document.getElementById(ID)?.remove();
+  const activo = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  if (!activo || !crmLeadsLoaded || crmLeads.length) return;
+  let otros = 0;
+  try {
+    const res = await fetchAuth('/api/leads'); // sin client_id = toda la cuenta
+    if (!res.ok) return;
+    otros = ((await res.json()).leads || []).filter(l => l.client_id !== activo).length;
+  } catch { return; }
+  if (!otros) return;
+  const kanban = document.getElementById('crm-kanban');
+  if (!kanban || !kanban.parentElement) return;
+  const clients = typeof agencyClients !== 'undefined' ? agencyClients : [];
+  const c = clients.find(x => x.id === activo);
+  const nombre = c ? (c.client_name || c.name || 'este cliente') : 'este cliente';
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 20px 6px;padding:10px 14px;background:var(--sidebar);border:1px solid var(--border);' +
+    'border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--muted)';
+  el.innerHTML =
+    '<span>Estás viendo el pipeline de <strong style="color:var(--text)">' + esc(nombre) + '</strong>, que aún no tiene leads. ' +
+    'Tu cuenta tiene ' + otros + (otros === 1 ? ' lead' : ' leads') + ' en otro alcance.</span>' +
+    '<button class="btn-sec sm" onclick="crmVerTodosLosLeads()">Ver todos mis leads</button>';
+  kanban.parentElement.insertBefore(el, kanban);
+}
+
+// Igual que hdrClientPick(null) pero sin sacar al usuario del CRM
+function crmVerTodosLosLeads() {
+  agencyActiveClientId = null;
+  if (typeof activeClientContext !== 'undefined') activeClientContext = null;
+  document.getElementById('agency-ctx-bar')?.remove();
+  try { hdrClientRender(); } catch {}
+  crmLeadsLoaded = false;
+  crmLoadLeads().then(() => { try { crmUpdateSidebarCount(); } catch {} });
+}
+
+(function () {
+  const _load = crmLoadLeads;
+  crmLoadLeads = function () {
+    return Promise.resolve(_load.apply(null, arguments)).then(ok => {
+      try { crmUpdateClientTag(); } catch {}
+      crmAvisoAlcance();
+      return ok;
+    });
+  };
 })();
