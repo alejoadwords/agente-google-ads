@@ -4863,6 +4863,10 @@ function askAgent(stage){const msgs={dia:'Guíame paso a paso en la configuraci�
 async function callClaude(){loading=true;document.getElementById('sbtn').disabled=true;const tid=addThinking();const agentLabels={'google-ads':'Google Ads','meta-ads':'Meta Ads (Facebook e Instagram)','tiktok-ads':'TikTok Ads','linkedin-ads':'LinkedIn Ads','seo':'SEO','social':'generación de contenido para redes sociales','consultor':'Consultor de Marketing'};
 // Seleccionar system prompt según agente activo
 let sys;
+// Declarados aquí (no dentro del else) porque se vuelven a usar más abajo,
+// en el bloque de CAMPAIGN_BUILD_RULES — con const dentro del bloque quedaban
+// fuera de alcance y el agente de Google Ads reventaba con ReferenceError.
+let _adsToken = '', _adsCustId = '';
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
   const metaCtx = await getMetaAdsContext().catch(()=>'');
@@ -4883,8 +4887,8 @@ if(currentAgentCtx==='meta-ads'){
   const gCtx = await getGoogleAdsContext().catch(()=>'');
   if(gCtx) sys = gCtx + '\n\n' + sys;
   // Inyectar estado de conexión + moneda — señal crítica para que el agente sepa si puede usar GAQL
-  const _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
-  const _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
+  _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+  _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
   let _adsCurrency = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount && adsActiveAccount.currency)
     ? adsActiveAccount.currency
     : (sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '');
