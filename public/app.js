@@ -486,14 +486,66 @@ function getProfileKey(agentKey) {
 let currentConvId = null;
 let convSaveTimer = null;
 
-async function getAuthHeaders() {
-  let sessionToken = null;
+// ── Autenticación: nunca salir sin token ─────────────────────────────────────
+// Clerk hidrata la sesión de forma asíncrona (bastante más lento en móvil).
+// Toda petición disparada antes de eso salía SIN header Authorization y el
+// endpoint respondía 401 — de ahí los reintentos a mano de agencyLoadClients y
+// el CRM arrancando en "0 leads". clerkReady() centraliza la espera: mientras
+// la sesión pueda llegar a existir, getAuthHeaders() y fetchAuth() no salen
+// sin token. Cualquier fetch autenticado nuevo debe usar fetchAuth().
+const CLERK_READY_TIMEOUT = 10000;
+let _clerkReadyPromise = null;
+
+function clerkReady() {
+  if (clerkInstance && clerkInstance.session) return Promise.resolve(true);
+  if (_clerkReadyPromise) return _clerkReadyPromise;
+  _clerkReadyPromise = new Promise(resolve => {
+    const started = Date.now();
+    const done = (ok) => {
+      clearInterval(iv);
+      // Limpiar SIEMPRE: si se deja la promesa resuelta en caché, una llamada
+      // posterior sin sesión (expiró, logout, o llegó tarde tras un timeout)
+      // la reutiliza y devuelve al instante sin esperar nada.
+      _clerkReadyPromise = null;
+      resolve(ok);
+    };
+    const iv = setInterval(() => {
+      if (clerkInstance && clerkInstance.session) done(true);
+      else if (Date.now() - started > CLERK_READY_TIMEOUT) done(false);
+    }, 100);
+  });
+  return _clerkReadyPromise;
+}
+
+// fresh: fuerza un token nuevo saltándose la caché de Clerk (para reintentar un 401)
+async function getAuthHeaders({ fresh = false } = {}) {
+  await clerkReady();
+  let token = fresh ? null : sessionToken;
   if (clerkInstance && clerkInstance.session) {
-    try { sessionToken = await clerkInstance.session.getToken(); } catch(e) {}
+    try { token = await clerkInstance.session.getToken(fresh ? { skipCache: true } : undefined); } catch(e) {}
   }
+  if (token) sessionToken = token;
   const headers = { 'Content-Type': 'application/json' };
-  if (sessionToken) headers['Authorization'] = 'Bearer ' + sessionToken;
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   return headers;
+}
+
+// fetch autenticado: espera a que la sesión hidrate y, si el token igual fue
+// rechazado, reintenta UNA vez con uno fresco. Devuelve la Response tal cual.
+async function fetchAuth(url, opts = {}) {
+  const withAuth = async (fresh) => {
+    const headers = await getAuthHeaders({ fresh });
+    // Los headers explícitos del llamador mandan sobre los nuestros
+    return { ...opts, headers: { ...headers, ...(opts.headers || {}) } };
+  };
+  let res = await fetch(url, await withAuth(false));
+  // Sin sesión el reintento volvería a esperar el timeout entero para nada
+  const haySesion = clerkInstance && clerkInstance.session;
+  if ((res.status === 401 || res.status === 403) && haySesion) {
+    sessionToken = null;
+    res = await fetch(url, await withAuth(true));
+  }
+  return res;
 }
 
 async function saveCurrentConversation() {
@@ -692,43 +744,21 @@ function agencyGetStorageKey() {
 }
 
 async function agencyLoadClients() {
-  // Intentar hasta 3 veces con espera progresiva (mobile: Clerk puede tardar en hidratar la sesión)
-  const maxAttempts = 3;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      // Siempre obtener token fresco — en mobile el global puede ser null al primer intento
-      let token = sessionToken;
-      if (!token && clerkInstance?.session) {
-        try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
+  // La espera de la sesión y el reintento del 401 los resuelve fetchAuth()
+  try {
+    const res = await fetchAuth('/api/profile?type=agency_clients');
+    if (res.ok) {
+      const { data } = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        agencyClients = data;
+        agencyPersistLocal();
+        return;
       }
-      // Si aún no hay token en el primer intento, esperar y reintentar
-      if (!token && attempt < maxAttempts - 1) {
-        await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
-        continue;
-      }
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('/api/profile?type=agency_clients', { headers });
-      if (res.status === 401 && attempt < maxAttempts - 1) {
-        // Token rechazado — esperar y reintentar con token fresco
-        sessionToken = null; // forzar refresh en siguiente intento
-        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-        continue;
-      }
-      if (res.ok) {
-        const { data } = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          agencyClients = data;
-          agencyPersistLocal();
-          return;
-        }
-      } else {
-        console.error('[agency] no se pudo leer la cartera del servidor:', res.status, await res.text().catch(() => ''));
-      }
-      break; // Respuesta ok pero vacía — no reintentar
-    } catch(e) {
-      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, 600));
+    } else {
+      console.error('[agency] no se pudo leer la cartera del servidor:', res.status, await res.text().catch(() => ''));
     }
+  } catch(e) {
+    console.error('[agency] error de red leyendo la cartera:', e);
   }
   // Fallback localStorage
   try {
@@ -745,14 +775,8 @@ async function agencyLoadClients() {
 // localStorage y se pierden al cambiar de navegador o borrar caché.
 async function agencyPersistRemote({ silent = false } = {}) {
   try {
-    let token = sessionToken;
-    if (!token && clerkInstance?.session) {
-      try { token = await clerkInstance.session.getToken(); if (token) sessionToken = token; } catch {}
-    }
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch('/api/profile?type=agency_clients', {
-      method: 'POST', headers,
+    const res = await fetchAuth('/api/profile?type=agency_clients', {
+      method: 'POST',
       body: JSON.stringify({ data: agencyClients })
     });
     if (!res.ok) {
@@ -16358,7 +16382,7 @@ async function crmInit() {
 async function crmLoadStages() {
   try {
     // Stages are global per user (not per client)
-    const res = await fetch('/api/pipeline-stages', { headers: await getAuthHeaders() });
+    const res = await fetchAuth('/api/pipeline-stages');
     if (!res.ok) throw new Error();
     const data = await res.json();
     crmStages = data.stages || [];
@@ -16375,7 +16399,7 @@ async function crmLoadLeads() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
-    const res = await fetch(`/api/leads${qs}`, { headers: await getAuthHeaders() });
+    const res = await fetchAuth(`/api/leads${qs}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     crmLeads = data.leads || [];
@@ -16449,7 +16473,7 @@ async function crmLoadTags() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const res = await fetch('/api/lead-tags' + qs, { headers: await getAuthHeaders() });
+    const res = await fetchAuth('/api/lead-tags' + qs);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     crmTags = (await res.json()).tags || [];
     crmTagsLoaded = true;
@@ -17168,7 +17192,7 @@ async function crmLoadAgents() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
-    const res = await fetch(`/api/chat-agents${qs}`, { headers: await getAuthHeaders() });
+    const res = await fetchAuth(`/api/chat-agents${qs}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
     crmAgents = data.agents || [];
@@ -22714,12 +22738,11 @@ function hdrClientPick(id) {
   }, 2500);
 })();
 
-// ── Carga inicial del CRM: reintento persistente + carga al entrar al módulo ──
-// El token de Clerk hidrata después de que el router dispara crmInit(), así que
-// /api/leads salía sin Authorization, crmLeads quedaba vacío y — como crmInited
-// ya estaba en true — nadie volvía a intentarlo: el CRM mostraba "0 leads"
-// hasta que el usuario recargaba. Mismo patrón que el reintento de
-// agencyLoadClients: insistir mientras el token exista y falte algo por cargar.
+// ── Carga inicial del CRM: carga al entrar al módulo + red de seguridad ──────
+// La carrera con el token de Clerk ya la mata fetchAuth()/clerkReady(). Lo que
+// queda aquí cubre lo otro: navGo() nunca llamaba a crmInit() (el único disparo
+// era el router en el arranque), y crmInited=true dejaba el módulo pegado en
+// "0 leads" si la carga fallaba por red. El poll es la red de seguridad.
 var _crmEnsureInFlight = false; // var: se usa antes de esta linea en el arranque
 
 async function crmEnsureLoaded() {
