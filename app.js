@@ -16491,7 +16491,7 @@ async function crmEnsureTag(name) {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const res = await fetch('/api/lead-tags' + qs, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ name: n }) });
+    const res = await fetchAuth('/api/lead-tags' + qs, { method: 'POST', body: JSON.stringify({ name: n }) });
     const d = await res.json();
     if (d.tag && !crmTags.find(t => t.name === d.tag.name)) crmTags.push(d.tag);
   } catch {}
@@ -16721,15 +16721,13 @@ function crmSetupDrop(el, stageKey) {
     lead.stage = stageKey;
     crmRenderKanban();
     try {
-      await fetch(`/api/leads`, {
+      await fetchAuth(`/api/leads`, {
         method: 'PUT',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: leadId, stage: stageKey }),
       });
       // log stage change activity
-      await fetch('/api/lead-activities', {
+      await fetchAuth('/api/lead-activities', {
         method: 'POST',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Movido de ${oldStage} a ${stageKey}`, metadata: { from: oldStage, to: stageKey } }),
       });
     } catch(e) { console.error('crmDrop', e); }
@@ -16823,9 +16821,8 @@ async function crmSaveLead() {
   try {
     if (crmEditingId) {
       payload.id = crmEditingId;
-      const res = await fetch('/api/leads', {
+      const res = await fetchAuth('/api/leads', {
         method: 'PUT',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
@@ -16834,9 +16831,8 @@ async function crmSaveLead() {
       if (idx >= 0) crmLeads[idx] = data.lead;
     } else {
       const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
-      const res = await fetch(`/api/leads${qs}`, {
+      const res = await fetchAuth(`/api/leads${qs}`, {
         method: 'POST',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -16855,9 +16851,8 @@ async function crmSaveLead() {
       crmLeads.unshift(data.lead);
       track('crm_lead_created', { source: data.lead.source || 'manual' });
       // log creation activity
-      await fetch('/api/lead-activities', {
+      await fetchAuth('/api/lead-activities', {
         method: 'POST',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ lead_id: data.lead.id, type: 'creacion', content: 'Lead creado', metadata: {} }),
       });
     }
@@ -16948,7 +16943,7 @@ async function crmDetailSaveTags(newTags) {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const res = await fetch('/api/leads' + qs, { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id: lead.id, tags: newTags }) });
+    const res = await fetchAuth('/api/leads' + qs, { method: 'PUT', body: JSON.stringify({ id: lead.id, tags: newTags }) });
     const d = await res.json();
     if (d.lead) { lead.tags = d.lead.tags || newTags; }
     await crmLoadTags(); // refrescar catálogo (colores de etiquetas nuevas)
@@ -16988,7 +16983,7 @@ async function crmLoadLinkedConversations(leadId) {
   const list = document.getElementById('crm-d-convs-list');
   if (!section || !list) return;
   try {
-    const res = await fetch('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId), { headers: await getAuthHeaders() });
+    const res = await fetchAuth('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId));
     if (!res.ok) throw new Error();
     const data = await res.json();
     const convs = data.conversations || [];
@@ -17036,16 +17031,15 @@ async function crmSuggestNextAction() {
     // Fetch recent activities for context
     let actContext = '';
     try {
-      const ar = await fetch('/api/lead-activities?lead_id=' + encodeURIComponent(lead.id), { headers: await getAuthHeaders() });
+      const ar = await fetchAuth('/api/lead-activities?lead_id=' + encodeURIComponent(lead.id));
       const ad = await ar.json();
       const acts = (ad.activities || []).slice(0, 5);
       const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Cambio etapa', creacion: 'Creación' };
       actContext = acts.map(function(a){ return typeLabels[a.type] + ': ' + (a.content || '').slice(0, 80); }).join('\n');
     } catch(e) {}
     const prompt = 'Eres un experto en ventas y CRM. Analiza este lead y sugiere la próxima acción concreta.\n\nLead: ' + lead.name + (lead.company ? ' (' + lead.company + ')' : '') + '\nEtapa: ' + stage + '\nDías sin actividad: ' + daysSince + '\nFuente: ' + (lead.source || 'Manual') + '\nValor del deal: ' + (lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : 'No definido') + '\nNotas: ' + (lead.notes || 'Sin notas') + '\n\nÚltimas actividades:\n' + (actContext || 'Sin actividades registradas') + '\n\nResponde en 2-3 oraciones máximo con una acción específica, concreta y con urgencia apropiada. Empieza directamente con la recomendación (no digas "te recomiendo" ni "sugiero"). Sé directo.';
-    const res = await fetch('/api/chat', {
+    const res = await fetchAuth('/api/chat', {
       method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: prompt, agent: 'consultor', noPersist: true }),
     });
     if (!res.ok) throw new Error();
@@ -17071,14 +17065,12 @@ async function crmChangeStage(newStage) {
   if (lead) lead.stage = newStage;
   crmRender();
   try {
-    await fetch('/api/leads', {
+    await fetchAuth('/api/leads', {
       method: 'PUT',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: leadId, stage: newStage }),
     });
-    await fetch('/api/lead-activities', {
+    await fetchAuth('/api/lead-activities', {
       method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Etapa cambiada de "${oldStage}" a "${newStage}"`, metadata: { from: oldStage, to: newStage } }),
     });
     await crmLoadActivities(leadId);
@@ -17089,7 +17081,7 @@ async function crmLoadActivities(leadId) {
   const list = document.getElementById('crm-activity-list');
   if (!list) return;
   try {
-    const res = await fetch(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`, { headers: await getAuthHeaders() });
+    const res = await fetchAuth(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
     const acts = data.activities || [];
@@ -17130,9 +17122,8 @@ async function crmAddActivity() {
     if (dueInput && dueInput.value) metadata.due_date = dueInput.value;
   }
   try {
-    await fetch('/api/lead-activities', {
+    await fetchAuth('/api/lead-activities', {
       method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lead_id: crmDetailLead.id, type: crmActivityType, content, metadata }),
     });
     input.value = '';
@@ -17171,9 +17162,8 @@ async function crmDeleteCurrentLead() {
   const leadId = crmDetailLead.id;
   crmCloseDetail();
   try {
-    await fetch(`/api/leads?id=${encodeURIComponent(leadId)}`, {
+    await fetchAuth(`/api/leads?id=${encodeURIComponent(leadId)}`, {
       method: 'DELETE',
-      headers: await getAuthHeaders(),
     });
     crmLeads = crmLeads.filter(l => l.id !== leadId);
     crmRender();
@@ -17337,17 +17327,15 @@ async function crmSaveAgent() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     if (agEditingId) {
       payload.id = agEditingId;
-      const res = await fetch('/api/chat-agents', {
+      const res = await fetchAuth('/api/chat-agents', {
         method: 'PUT',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
     } else {
       const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
-      const res = await fetch(`/api/chat-agents${qs}`, {
+      const res = await fetchAuth(`/api/chat-agents${qs}`, {
         method: 'POST',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
@@ -17402,9 +17390,8 @@ async function waConnectSave() {
     if (testData.error) { showErr('Token o Phone Number ID inválido: ' + testData.error.message); return; }
 
     btn.textContent = 'Conectando...';
-    const res = await fetch('/api/channel-connections', {
+    const res = await fetchAuth('/api/channel-connections', {
       method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent_id: _waConnectAgentId, channel: 'whatsapp', external_id: phoneNumberId, access_token: token, channel_name: name }),
     });
     if (!res.ok) { showErr('Error guardando la conexión. Verifica los datos e intenta de nuevo.'); return; }
@@ -17427,7 +17414,7 @@ async function agConnectChannel(channel, agentId) {
       alert('Primero conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads');
       return;
     }
-    const res = await fetch(`/api/channel-connections?action=list_pages&token=${encodeURIComponent(metaToken)}`, { headers: await getAuthHeaders() });
+    const res = await fetchAuth(`/api/channel-connections?action=list_pages&token=${encodeURIComponent(metaToken)}`);
     if (!res.ok) { alert('Error listando páginas de Meta.'); return; }
     const data = await res.json();
     const pages = data.pages || [];
@@ -17444,9 +17431,8 @@ async function agConnectChannel(channel, agentId) {
       const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
       const ptData = await ptRes.json();
       const pageToken = ptData.access_token;
-      const connRes = await fetch('/api/channel-connections', {
+      const connRes = await fetchAuth('/api/channel-connections', {
         method: 'POST',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent_id: agentId, channel: 'messenger', external_id: page.id, access_token: pageToken, channel_name: page.name }),
       });
       if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
@@ -17461,9 +17447,8 @@ async function agConnectChannel(channel, agentId) {
       const igAcct = page.instagram_business_account;
       const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
       const ptData = await ptRes.json();
-      const connRes = await fetch('/api/channel-connections', {
+      const connRes = await fetchAuth('/api/channel-connections', {
         method: 'POST',
-        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent_id: agentId, channel: 'instagram', external_id: igAcct.id, access_token: ptData.access_token, channel_name: igAcct.name || page.name }),
       });
       if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
@@ -17473,8 +17458,8 @@ async function agConnectChannel(channel, agentId) {
 
 async function agDisconnectChannel(connId, agentId) {
   if (!confirm('¿Desconectar este canal? El agente dejará de responder mensajes por este canal.')) return;
-  await fetch(`/api/channel-connections?id=${encodeURIComponent(connId)}`, {
-    method: 'DELETE', headers: await getAuthHeaders(),
+  await fetchAuth(`/api/channel-connections?id=${encodeURIComponent(connId)}`, {
+    method: 'DELETE',
   });
   await crmLoadAgents();
   crmOpenAgentModal(agentId);
@@ -17485,7 +17470,7 @@ async function crmLoadInbox(filterStatus) {
   if (filterStatus) inboxFilter = filterStatus;
   try {
     let qs = inboxFilter === 'all' ? '' : `&status=${inboxFilter}`;
-    const res = await fetch(`/api/chat-conversations?${qs}`, { headers: await getAuthHeaders() });
+    const res = await fetchAuth(`/api/chat-conversations?${qs}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
     inboxConversations = data.conversations || [];
@@ -17531,16 +17516,15 @@ async function inboxOpenConv(convId) {
   // Mark as read
   if (conv.unread_count > 0) {
     conv.unread_count = 0;
-    await fetch('/api/chat-conversations', {
+    await fetchAuth('/api/chat-conversations', {
       method: 'PUT',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: convId, unread_count: 0 }),
     });
     inboxUpdateBadge();
   }
 
   // Load messages
-  const res = await fetch(`/api/chat-conversations?messages=${encodeURIComponent(convId)}`, { headers: await getAuthHeaders() });
+  const res = await fetchAuth(`/api/chat-conversations?messages=${encodeURIComponent(convId)}`);
   if (!res.ok) return;
   const data = await res.json();
   const messages = data.messages || [];
@@ -17589,9 +17573,8 @@ async function inboxSendManual(convId) {
   const btn = input.nextElementSibling;
   if (btn) btn.disabled = true;
   try {
-    await fetch('/api/chat-conversations', {
+    await fetchAuth('/api/chat-conversations', {
       method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: convId, content }),
     });
     await inboxOpenConv(convId);
@@ -17601,9 +17584,8 @@ async function inboxSendManual(convId) {
 
 async function inboxCycleStatus(convId, current) {
   const next = current === 'bot' ? 'human' : current === 'human' ? 'resolved' : 'bot';
-  await fetch('/api/chat-conversations', {
+  await fetchAuth('/api/chat-conversations', {
     method: 'PUT',
-    headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: convId, status: next }),
   });
   const conv = inboxConversations.find(c => c.id === convId);
@@ -17690,7 +17672,7 @@ async function crmRenderNps(targetId) {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const d = await fetch('/api/nps' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/nps' + qs).then(r => r.json());
     if (!d || d.error || !d.sent) { box.innerHTML = ''; return; }
     const npsColor = d.nps === null ? 'var(--muted)' : d.nps >= 50 ? '#10B981' : d.nps >= 0 ? '#F59E0B' : '#EF4444';
     const seg = (n, c, l) => d.answered
@@ -17772,9 +17754,8 @@ async function crmCopilotAction(action, btn) {
   content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px">Analizando con IA...</div>';
 
   try {
-    const res = await fetch('/api/lead-copilot', {
+    const res = await fetchAuth('/api/lead-copilot', {
       method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lead_id: crmDetailLead.id, action }),
     });
     if (!res.ok) throw new Error();
