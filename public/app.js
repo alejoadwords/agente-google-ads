@@ -4967,6 +4967,7 @@ try { payloadStr = JSON.stringify(payload); } catch(jsonErr) { addAgent('Error p
 const r=await fetchAuth('/api/chat',{method:'POST',body:payloadStr});if(!r.ok){rmThinking(tid);const errData=await r.json().catch(()=>({}));if(r.status===401){window.location.href='/login.html';return}if(r.status===429){showLimitBanner(errData);loading=false;document.getElementById('sbtn').disabled=false;return}const errMsg=errData.error||'error desconocido';addAgent('⚠️ Error del servidor: ' + errMsg);loading=false;document.getElementById('sbtn').disabled=false;return;}
 // Leer stream SSE
 let replyFinal='';
+let lastStopReason=null;
 let streamBubble=null;
 let streamEl=null;
 const reader=r.body.getReader();
@@ -4985,7 +4986,9 @@ while(!streamDone){
     const data=line.slice(6).trim();
     try{
       const evt=JSON.parse(data);
-      if(evt.error){rmThinking(tid);addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
+      // El servidor manda el motivo real en evt.error; antes se descartaba y el
+      // usuario (y la consola) sólo veían el mensaje genérico.
+      if(evt.error){console.error('[chat] el servidor cortó el stream:',evt.error);rmThinking(tid);addAgent('error al procesar la respuesta. intenta de nuevo.');loading=false;document.getElementById('sbtn').disabled=false;return;}
       if(evt.delta!==undefined){
         // Mostrar tokens en tiempo real
         if(!streamEl){
@@ -5024,12 +5027,15 @@ while(!streamDone){
         }
         scrollB();
       }
-      if(evt.done&&evt.full!==undefined){replyFinal=evt.full;streamDone=true;}
+      if(evt.done&&evt.full!==undefined){replyFinal=evt.full;lastStopReason=evt.stopReason||null;streamDone=true;}
     }catch(_){}
   }
 }
 // Remover burbuja de stream temporal (se reemplaza abajo con addAgent o lógica especial)
 if(streamEl)streamEl.remove();
+// Stream terminado sin una sola línea de texto: no es un fallo de parseo, es
+// que el modelo nunca escribió nada. Dejar rastro para poder diagnosticarlo.
+if(!replyFinal)console.error('[chat] el stream terminó sin texto (stopReason:',lastStopReason,')');
 let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de nuevo.';
 
     // Extraer sugerencias de seguimiento

@@ -111,7 +111,15 @@ export default async function handler(req) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 4000,
+        // OJO: max_tokens es el techo de TODA la salida — razonamiento + texto.
+        // Con 4000 el razonamiento se comía el presupuesto entero y la respuesta
+        // llegaba vacía (stop_reason max_tokens, cero bloques de texto).
+        max_tokens: 32000,
+        // Declarado explícitamente: Sonnet 5 activa el razonamiento adaptativo
+        // solo con no mandar este campo. effort medium cuesta ~3x menos que el
+        // 'high' implícito y produce un texto del mismo largo.
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'medium' },
         stream: true,
         // Prompt caching: el system (grande y estable dentro de una conversación)
         // se cachea 5 min — los turnos siguientes pagan ~10% del costo de input
@@ -145,9 +153,14 @@ export default async function handler(req) {
       const decoder = new TextDecoder();
       let buffer = '';
       let fullText = '';
+      let stopReason = null;
+
+      // Se pone en true al emitir un error terminal: corta el for interno y el
+      // while externo, para no mandar dos motivos por el mismo fallo.
+      let terminado = false;
 
       try {
-        while (true) {
+        while (!terminado) {
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -169,9 +182,33 @@ export default async function handler(req) {
                 await writer.write(encoder.encode(`data: ${JSON.stringify({ delta: evt.delta.text })}\n\n`));
               }
 
+              // Anthropic puede mandar un evento de error a mitad del stream
+              // (overloaded, rate limit, request inválido). Antes se ignoraba:
+              // el cliente se quedaba sin texto y sin motivo.
+              if (evt.type === 'error') {
+                const msg = evt.error?.message || evt.error?.type || 'error desconocido de la API';
+                await writer.write(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
+                terminado = true;
+                break;
+              }
+
+              // message_delta trae stop_reason. Si se corta por max_tokens sin
+              // haber emitido texto, el cliente necesita saberlo — si no, ve un
+              // "error al procesar la respuesta" sin ninguna pista.
+              if (evt.type === 'message_delta' && evt.delta?.stop_reason) {
+                stopReason = evt.delta.stop_reason;
+              }
+
               if (evt.type === 'message_stop') {
+                if (!fullText && stopReason === 'max_tokens') {
+                  await writer.write(encoder.encode(`data: ${JSON.stringify({
+                    error: 'La respuesta se agotó en razonamiento antes de escribir texto (stop_reason: max_tokens). Subí max_tokens o bajá el effort.',
+                  })}\n\n`));
+                  terminado = true;
+                  break;
+                }
                 // Emitir el texto completo al final para que el cliente pueda procesarlo
-                await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, full: fullText })}\n\n`));
+                await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, full: fullText, stopReason })}\n\n`));
               }
             } catch (_) {
               // Ignorar líneas SSE no parseables
