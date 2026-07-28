@@ -16332,6 +16332,12 @@ let crmView = 'kanban'; // 'kanban' | 'list'
 let crmEditingId = null;
 let crmDetailLead = null;
 let crmInited = false;
+// Estado de la carga inicial: el token de Clerk hidrata tarde y estas peticiones
+// pueden salir sin Authorization. Los flags permiten reintentar solo lo que falló.
+let crmLeadsLoaded = false;
+let crmStagesLoaded = false;
+let crmTagsLoaded = false;
+let crmAgentsLoaded = false;
 let crmSearchQuery = '';
 let crmFilterSource = '';
 let crmActivityType = 'nota';
@@ -16352,9 +16358,12 @@ async function crmLoadStages() {
     if (!res.ok) throw new Error();
     const data = await res.json();
     crmStages = data.stages || [];
+    crmStagesLoaded = true;
     crmPopulateStageSelects();
+    return true;
   } catch(e) {
     console.error('crmLoadStages', e);
+    return false;
   }
 }
 
@@ -16363,12 +16372,15 @@ async function crmLoadLeads() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
     const res = await fetch(`/api/leads${qs}`, { headers: await getAuthHeaders() });
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     crmLeads = data.leads || [];
+    crmLeadsLoaded = true;
     crmRender();
+    return true;
   } catch(e) {
     console.error('crmLoadLeads', e);
+    return false;
   }
 }
 
@@ -16434,9 +16446,14 @@ async function crmLoadTags() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const res = await fetch('/api/lead-tags' + qs, { headers: await getAuthHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     crmTags = (await res.json()).tags || [];
+    crmTagsLoaded = true;
+    crmRenderTagFilter();
+    return true;
   } catch { crmTags = []; }
   crmRenderTagFilter();
+  return false;
 }
 
 async function crmEnsureTag(name) {
@@ -17151,8 +17168,10 @@ async function crmLoadAgents() {
     if (!res.ok) throw new Error();
     const data = await res.json();
     crmAgents = data.agents || [];
+    crmAgentsLoaded = true;
     crmRenderAgents();
-  } catch(e) { console.error('crmLoadAgents', e); }
+    return true;
+  } catch(e) { console.error('crmLoadAgents', e); return false; }
 }
 
 function crmRenderAgents() {
@@ -17764,8 +17783,9 @@ async function crmCopilotAction(action, btn) {
 
 // crmInit — carga stages + leads + agents en paralelo y renderiza al final
 async function crmInit() {
-  if (crmInited) { crmRender(); return; }
+  if (crmInited) { crmRender(); crmEnsureLoaded(); return; }
   crmInited = true;
+  crmLeadsLoaded = crmStagesLoaded = crmTagsLoaded = crmAgentsLoaded = false;
   await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags()]);
   crmRender(); // garantiza render con todos los datos cargados
   crmRenderTagFilter();
@@ -22688,4 +22708,58 @@ function hdrClientPick(id) {
       }
     } catch {}
   }, 2500);
+})();
+
+// ── Carga inicial del CRM: reintento persistente + carga al entrar al módulo ──
+// El token de Clerk hidrata después de que el router dispara crmInit(), así que
+// /api/leads salía sin Authorization, crmLeads quedaba vacío y — como crmInited
+// ya estaba en true — nadie volvía a intentarlo: el CRM mostraba "0 leads"
+// hasta que el usuario recargaba. Mismo patrón que el reintento de
+// agencyLoadClients: insistir mientras el token exista y falte algo por cargar.
+var _crmEnsureInFlight = false; // var: se usa antes de esta linea en el arranque
+
+async function crmEnsureLoaded() {
+  if (_crmEnsureInFlight) return;
+  if (crmLeadsLoaded && crmStagesLoaded && crmTagsLoaded && crmAgentsLoaded) return;
+  // Sin sesión de Clerk la petición saldría otra vez sin Authorization.
+  if (!(typeof clerkInstance !== 'undefined' && clerkInstance && clerkInstance.session)) return;
+  _crmEnsureInFlight = true;
+  try {
+    const jobs = [];
+    if (!crmStagesLoaded) jobs.push(crmLoadStages());
+    if (!crmLeadsLoaded)  jobs.push(crmLoadLeads());
+    if (!crmAgentsLoaded) jobs.push(crmLoadAgents());
+    if (!crmTagsLoaded)   jobs.push(crmLoadTags());
+    await Promise.all(jobs);
+    if (crmLeadsLoaded) {
+      try { crmRender(); } catch {}
+      try { crmUpdateSidebarCount(); } catch {}
+    }
+  } catch {} finally { _crmEnsureInFlight = false; }
+}
+
+(function () {
+  // 1) Poll de arranque: hasta 40s mientras falte algo por cargar.
+  let tries = 0;
+  const iv = setInterval(async () => {
+    tries++;
+    if (tries > 16) { clearInterval(iv); return; }
+    if (!crmInited) return; // aún no se entró al CRM: crmInit hará la carga
+    if (crmLeadsLoaded && crmStagesLoaded && crmTagsLoaded && crmAgentsLoaded) { clearInterval(iv); return; }
+    await crmEnsureLoaded();
+  }, 2500);
+
+  // 2) Al entrar al CRM desde el sidebar (navGo nunca llamaba a crmInit).
+  const _navGo = navGo;
+  navGo = function (mod) {
+    _navGo(mod);
+    if (mod !== 'home') {
+      if (!crmInited) { try { crmInit(); } catch {} }
+      else crmEnsureLoaded();
+    }
+  };
+
+  // 3) Al cambiar de tab dentro del CRM.
+  const _crmSetView = crmSetView;
+  crmSetView = function (v) { _crmSetView(v); crmEnsureLoaded(); };
 })();
