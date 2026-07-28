@@ -18999,9 +18999,8 @@ async function seoUpdatePositions(quiet) {
     const all = seoProject.keywords.map(k => k.kw);
     for (let i = 0; i < all.length; i += 30) {
       const chunk = all.slice(i, i + 30);
-      const r = await fetch('/api/seo-rank', {
+      const r = await fetchAuth('/api/seo-rank', {
         method: 'POST',
-        headers: await getAuthHeaders(),
         body: JSON.stringify({ keywords: chunk, domain: seoProject.domain, gl: seoProject.country, hl: 'es' }),
       });
       const data = await r.json();
@@ -19319,9 +19318,8 @@ async function seoGeoUpdate() {
   const btn = document.getElementById('seop-geo-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Consultando IAs...'; }
   try {
-    const r = await fetch('/api/geo-rank', {
+    const r = await fetchAuth('/api/geo-rank', {
       method: 'POST',
-      headers: await getAuthHeaders(),
       body: JSON.stringify({
         queries,
         domain: seoProject.domain,
@@ -19536,7 +19534,7 @@ async function crmLoadAutomations() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
-    const res = await fetch(`/api/automations${qs}`, { headers: await getAuthHeaders() });
+    const res = await fetchAuth(`/api/automations${qs}`);
     const data = await res.json();
     crmAutomations = data.automations || [];
   } catch (e) { console.error('crmLoadAutomations', e); crmAutomations = []; }
@@ -19609,7 +19607,7 @@ async function crmRenderAutos() {
 
 async function autoToggle(id, active) {
   try {
-    const data = await fetch('/api/automations', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, active }) }).then(r => r.json());
+    const data = await fetchAuth('/api/automations', { method: 'PUT', body: JSON.stringify({ id, active }) }).then(r => r.json());
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
     crmRenderAutos();
   } catch (e) { alert('Error: ' + e.message); }
@@ -19628,7 +19626,7 @@ async function autoDuplicate(id) {
       steps: JSON.parse(JSON.stringify(a.steps)),
       active: false,
     };
-    const data = await fetch(`/api/automations${qs}`, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify(body) }).then(r => r.json());
+    const data = await fetchAuth(`/api/automations${qs}`, { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
     if (data.error) { alert(data.error); return; }
     showToast('⧉ Copia creada en borrador — edítala y actívala cuando esté lista', 'success');
@@ -19639,7 +19637,7 @@ async function autoDuplicate(id) {
 async function autoDelete(id) {
   if (!confirm('¿Eliminar esta automatización? Los flujos en curso se cancelan.')) return;
   try {
-    await fetch('/api/automations?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+    await fetchAuth('/api/automations?id=' + encodeURIComponent(id), { method: 'DELETE' });
     crmRenderAutos();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -20100,7 +20098,7 @@ async function autoBuilderSave() {
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
     const method = _autoEditingId ? 'PUT' : 'POST';
     const body = _autoEditingId ? { id: _autoEditingId, name: d.name, trigger: d.trigger, steps: d.steps, active: d.active } : d;
-    const res = await fetch(`/api/automations${qs}`, { method, headers: await getAuthHeaders(), body: JSON.stringify(body) });
+    const res = await fetchAuth(`/api/automations${qs}`, { method, body: JSON.stringify(body) });
     const data = await res.json();
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads (flujos con email, WhatsApp y condiciones) son parte del plan Pro.'); return; }
     if (data.error) { alert(data.error); return; }
@@ -20124,7 +20122,7 @@ async function autoShowLogs(id) {
   const a = crmAutomations.find(x => x.id === id);
   let logs = [];
   try {
-    const res = await fetch('/api/automations?logs=1&automation_id=' + encodeURIComponent(id), { headers: await getAuthHeaders() });
+    const res = await fetchAuth('/api/automations?logs=1&automation_id=' + encodeURIComponent(id));
     logs = (await res.json()).logs || [];
   } catch {}
   const badge = r => r === 'sent' || r === 'done' || r === 'passed' || r === 'enqueued' || r === 'yes' ? 'ok' : (r === 'failed' ? 'bad' : 'mid');
@@ -20161,12 +20159,12 @@ async function agnLoad() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const cq = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
-    const res = await fetch('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq, { headers: await getAuthHeaders() });
+    const res = await fetchAuth('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq);
     agnActivities = (await res.json()).activities || [];
   } catch { agnActivities = []; }
   if (!agnGcal.checked) {
     try {
-      const st = await fetch('/api/agenda?gcal_status=1', { headers: await getAuthHeaders() }).then(r => r.json());
+      const st = await fetchAuth('/api/agenda?gcal_status=1').then(r => r.json());
       agnGcal = { connected: !!st.connected, email: st.email, checked: true };
     } catch { agnGcal.checked = true; }
   }
@@ -20300,7 +20298,7 @@ async function agnRender() {
 
 async function agnToggleDone(id, done) {
   try {
-    await fetch('/api/agenda', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, done }) });
+    await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, done }) });
     agnRender();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -20308,7 +20306,7 @@ async function agnToggleDone(id, done) {
 async function agnDelete(id) {
   if (!confirm('¿Eliminar esta actividad? Si tiene evento en Google Calendar también se elimina.')) return;
   try {
-    await fetch('/api/agenda?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+    await fetchAuth('/api/agenda?id=' + encodeURIComponent(id), { method: 'DELETE' });
     agnRender();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -20377,9 +20375,8 @@ async function agnSave() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const cq = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const data = await fetch('/api/agenda' + cq, {
+    const data = await fetchAuth('/api/agenda' + cq, {
       method: 'POST',
-      headers: await getAuthHeaders(),
       body: JSON.stringify({
         type, title,
         description: document.getElementById('agn-f-desc').value.trim() || null,
