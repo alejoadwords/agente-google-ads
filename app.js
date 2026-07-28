@@ -20556,7 +20556,7 @@ async function prpOpenForLead() {
 
 async function prpLoad() {
   try {
-    const res = await fetch('/api/proposals?lead_id=' + encodeURIComponent(_prpLead.id), { headers: await getAuthHeaders() });
+    const res = await fetchAuth('/api/proposals?lead_id=' + encodeURIComponent(_prpLead.id));
     _prpList = (await res.json()).proposals || [];
   } catch { _prpList = []; }
   prpRenderList();
@@ -20637,8 +20637,8 @@ async function prpGenerate() {
   const btn = document.getElementById('prp-gen-btn');
   btn.disabled = true; btn.textContent = '✨ Redactando…';
   try {
-    const res = await fetch('/api/proposals?action=generate', {
-      method: 'POST', headers: await getAuthHeaders(),
+    const res = await fetchAuth('/api/proposals?action=generate', {
+      method: 'POST',
       body: JSON.stringify({
         lead: { name: _prpLead.name, company: _prpLead.company, email: _prpLead.email, source: _prpLead.source, stage: _prpLead.stage, notes: (_prpLead.notes || '').slice(0, 600), tags: _prpLead.tags },
         business_context: prpBusinessContext(),
@@ -20669,8 +20669,8 @@ async function prpCreate() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const res = await fetch('/api/proposals' + qs, {
-      method: 'POST', headers: await getAuthHeaders(),
+    const res = await fetchAuth('/api/proposals' + qs, {
+      method: 'POST',
       body: JSON.stringify({
         lead_id: _prpLead.id, lead_name: _prpLead.name,
         business_name: (typeof activeClientContext !== 'undefined' && activeClientContext?.clientName) || (typeof mem !== 'undefined' && mem?.negocio ? String(mem.negocio).split('·')[0].trim() : ''),
@@ -20696,7 +20696,7 @@ async function prpCreate() {
 async function prpMarkPaid(id) {
   if (!confirm('¿Marcar como pagada? El lead pasará a Ganado con el valor de la propuesta.')) return;
   try {
-    const res = await fetch('/api/proposals', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ id, mark_paid: true }) });
+    const res = await fetchAuth('/api/proposals', { method: 'PUT', body: JSON.stringify({ id, mark_paid: true }) });
     const d = await res.json();
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     track('proposal_paid', { amount: d.proposal?.amount || 0 });
@@ -20710,7 +20710,7 @@ async function prpMarkPaid(id) {
 
 async function prpDelete(id) {
   if (!confirm('¿Eliminar esta propuesta? El link público dejará de funcionar.')) return;
-  await fetch('/api/proposals?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  await fetchAuth('/api/proposals?id=' + encodeURIComponent(id), { method: 'DELETE' });
   await prpLoad();
 }
 
@@ -20732,7 +20732,7 @@ async function cmpLoad() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
     cmpList = d.campaigns || [];
     cmpQuota = d.quota || null;
   } catch { cmpList = []; }
@@ -21021,8 +21021,8 @@ async function cmpWAI() {
   try {
     const w = _cmpW;
     const audDesc = [w.tags.length ? 'etiquetas: ' + w.tags.join(', ') : '', w.stage ? 'etapa: ' + w.stage : '', w.source ? 'fuente: ' + w.source : ''].filter(Boolean).join(' · ') || 'todos los leads';
-    const d = await fetch('/api/campaigns?action=ai', {
-      method: 'POST', headers: await getAuthHeaders(),
+    const d = await fetchAuth('/api/campaigns?action=ai', {
+      method: 'POST',
       body: JSON.stringify({
         channel: w.channel, objective,
         business_context: (typeof memCtx === 'function' ? memCtx() : '').slice(0, 2000),
@@ -21057,8 +21057,8 @@ function cmpWImgUpload(input) {
   const reader = new FileReader();
   reader.onload = async () => {
     try {
-      const d = await fetch('/api/upload-image', {
-        method: 'POST', headers: await getAuthHeaders(),
+      const d = await fetchAuth('/api/upload-image', {
+        method: 'POST',
         body: JSON.stringify({ data: reader.result, type: file.type }),
       }).then(r => r.json());
       if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
@@ -21084,7 +21084,7 @@ async function cmpWLoadLists() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const d = await fetch('/api/lead-lists' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/lead-lists' + qs).then(r => r.json());
     _cmpLists = d.lists || [];
   } catch { _cmpLists = []; }
 }
@@ -21208,7 +21208,7 @@ async function cmpWSaveList() {
     const payload = w.mode === 'manual'
       ? { name: name.trim(), lead_ids: w.lead_ids }
       : { name: name.trim(), filters: { tags: _cmpAudTags, stage: w.stage || null, source: w.source || null } };
-    const d = await fetch('/api/lead-lists' + qs, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify(payload) }).then(r => r.json());
+    const d = await fetchAuth('/api/lead-lists' + qs, { method: 'POST', body: JSON.stringify(payload) }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     await cmpWLoadLists();
     showToast('📋 Lista "' + name.trim() + '" guardada — ya aparece en "Lista guardada"', 'success');
@@ -21220,7 +21220,7 @@ async function cmpWDeleteList() {
   if (!id) { showToast('Elige primero la lista a eliminar', 'error'); return; }
   const l = _cmpLists.find(x => x.id === id);
   if (!confirm('¿Eliminar la lista "' + (l?.name || '') + '"? Las campañas ya enviadas no se afectan.')) return;
-  await fetch('/api/lead-lists?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  await fetchAuth('/api/lead-lists?id=' + encodeURIComponent(id), { method: 'DELETE' });
   if (_cmpW.list_id === id) _cmpW.list_id = '';
   await cmpWLoadLists();
   cmpWAudRender();
@@ -21236,7 +21236,7 @@ async function cmpWTestTo() {
   btn.disabled = true; btn.textContent = 'Enviando…';
   try {
     await cmpWSave();
-    const d = await fetch('/api/campaigns?action=test', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ id: _cmpW.id, to }) }).then(r => r.json());
+    const d = await fetchAuth('/api/campaigns?action=test', { method: 'POST', body: JSON.stringify({ id: _cmpW.id, to }) }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     showToast('✉️ Prueba enviada a ' + d.to, 'success');
   } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando la prueba'), 'error'); }
@@ -21275,7 +21275,7 @@ function cmpPreview() {
     try {
       const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
       const qs = '?preview=1&channel=' + _cmpChannel + '&audience=' + encodeURIComponent(JSON.stringify(cmpAudience())) + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
-      const d = await fetch('/api/campaigns' + qs, { headers: await getAuthHeaders() }).then(r => r.json());
+      const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
       if (_cmpW) { _cmpW.count = d.count; _cmpW.breakdown = d.breakdown || null; }
       const b = d.breakdown || {};
       const excl = [];
@@ -21434,8 +21434,8 @@ async function cmpWSave() {
     header_image_url: w.header_image_url || null,
   };
   if (w.id) payload.id = w.id;
-  const d = await fetch('/api/campaigns' + qs, {
-    method: w.id ? 'PUT' : 'POST', headers: await getAuthHeaders(), body: JSON.stringify(payload),
+  const d = await fetchAuth('/api/campaigns' + qs, {
+    method: w.id ? 'PUT' : 'POST', body: JSON.stringify(payload),
   }).then(r => r.json());
   if (d.error) throw new Error(d.error);
   _cmpW.id = d.campaign.id;
@@ -21449,7 +21449,7 @@ async function cmpWTest() {
   btn.disabled = true; btn.textContent = 'Enviando prueba…';
   try {
     await cmpWSave();
-    const d = await fetch('/api/campaigns?action=test', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ id: _cmpW.id }) }).then(r => r.json());
+    const d = await fetchAuth('/api/campaigns?action=test', { method: 'POST', body: JSON.stringify({ id: _cmpW.id }) }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     showToast('✉️ Prueba enviada a ' + d.to + ' — revisa tu inbox', 'success');
   } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando la prueba'), 'error'); }
@@ -21486,8 +21486,8 @@ async function cmpWSend() {
     await cmpWSave();
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = '?action=queue' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
-    const d = await fetch('/api/campaigns' + qs, {
-      method: 'POST', headers: await getAuthHeaders(),
+    const d = await fetchAuth('/api/campaigns' + qs, {
+      method: 'POST',
       body: JSON.stringify({ id: _cmpW.id, scheduled_at: when ? when.toISOString() : null }),
     }).then(r => r.json());
     if (d.upgrade) { openUpgradeFlow('Las campañas masivas son parte del plan Pro.'); return; }
@@ -21508,7 +21508,7 @@ async function cmpQueue(id) {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = '?action=queue' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
-    const d = await fetch('/api/campaigns' + qs, { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ id }) }).then(r => r.json());
+    const d = await fetchAuth('/api/campaigns' + qs, { method: 'POST', body: JSON.stringify({ id }) }).then(r => r.json());
     if (d.upgrade) { openUpgradeFlow('Las campañas masivas son parte del plan Pro.'); return; }
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
     track('campaign_sent', { channel: c.channel, total: d.total });
@@ -21521,7 +21521,7 @@ async function cmpShowOpens(id) {
   const el = document.getElementById('cmp-stats-' + id);
   if (el) el.textContent = 'Calculando aperturas…';
   try {
-    const d = await fetch('/api/campaigns?stats=1&id=' + encodeURIComponent(id), { headers: await getAuthHeaders() }).then(r => r.json());
+    const d = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(id)).then(r => r.json());
     const pct = d.sent ? Math.round((d.opened / d.sent) * 100) : 0;
     if (el) el.innerHTML = d.sent + ' enviados · <b>' + d.opened + ' abiertos (' + pct + '%)</b>';
   } catch { if (el) el.textContent = 'No se pudieron calcular las aperturas'; }
@@ -21530,7 +21530,7 @@ async function cmpShowOpens(id) {
 async function cmpDelete(id) {
   const c = cmpList.find(x => x.id === id);
   if (!confirm('¿Eliminar la campaña "' + (c?.name || '') + '"?' + (c?.status === 'sending' || c?.status === 'queued' ? ' Los envíos pendientes se cancelan.' : ''))) return;
-  await fetch('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE', headers: await getAuthHeaders() });
+  await fetchAuth('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE' });
   cmpRender();
 }
 
