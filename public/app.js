@@ -280,7 +280,7 @@ async function initAuth(){
         // Primer ingreso de una cuenta free: activar la prueba automáticamente
         setTimeout(async () => {
           try {
-            const d = await fetch('/api/trial', { method: 'POST', headers: await getAuthHeaders() }).then(r => r.json());
+            const d = await fetchAuth('/api/trial', { method: 'POST' }).then(r => r.json());
             if (d.ok && d.started) {
               window._trialUntil = d.trial_until;
               userPlan = 'pro';
@@ -491,8 +491,9 @@ let convSaveTimer = null;
 // Toda petición disparada antes de eso salía SIN header Authorization y el
 // endpoint respondía 401 — de ahí los reintentos a mano de agencyLoadClients y
 // el CRM arrancando en "0 leads". clerkReady() centraliza la espera: mientras
-// la sesión pueda llegar a existir, getAuthHeaders() y fetchAuth() no salen
-// sin token. Cualquier fetch autenticado nuevo debe usar fetchAuth().
+// la sesión pueda llegar a existir, fetchAuth() no sale sin token.
+// TODA petición autenticada pasa por fetchAuth(): getAuthHeaders() quedó como
+// detalle interno suyo. No volver a construir headers de auth a mano.
 const CLERK_READY_TIMEOUT = 10000;
 let _clerkReadyPromise = null;
 
@@ -552,11 +553,10 @@ async function saveCurrentConversation() {
   if (!hist || hist.length < 2) return;
   if (!currentAgentCtx) return;
   try {
-    const headers = await getAuthHeaders();
     const body = { agent: currentAgentCtx, messages: hist };
     if (currentConvId) body.conversationId = currentConvId;
-    const res = await fetch('/api/profile?type=conversations&action=save', {
-      method: 'POST', headers: headers, body: JSON.stringify(body)
+    const res = await fetchAuth('/api/profile?type=conversations&action=save', {
+      method: 'POST', body: JSON.stringify(body)
     });
     if (res.ok) {
       const data = await res.json();
@@ -572,8 +572,7 @@ async function loadRecentConversations() {
   const listEl = document.getElementById('recientes-list');
   if (!listEl || !sectionEl) return;
   try {
-    const headers = await getAuthHeaders();
-    const res = await fetch('/api/profile?type=conversations&action=list&limit=20', { headers: headers });
+    const res = await fetchAuth('/api/profile?type=conversations&action=list&limit=20');
     if (!res.ok) return;
     const data = await res.json();
     const convs = data.conversations || [];
@@ -603,8 +602,7 @@ async function loadConvHistory(agentKey) {
 async function loadConversation(convId, agentKey) {
   if (convId === currentConvId) return;
   try {
-    const headers = await getAuthHeaders();
-    const res = await fetch('/api/profile?type=conversations&action=get&id=' + convId, { headers: headers });
+    const res = await fetchAuth('/api/profile?type=conversations&action=get&id=' + convId);
     if (!res.ok) return;
     const data = await res.json();
     const conv = data.conversation;
@@ -638,8 +636,7 @@ async function startNewConversation(agentKey) {
 
 async function deleteConversation(convId, agentKey) {
   try {
-    const headers = await getAuthHeaders();
-    await fetch('/api/profile?type=conversations&action=delete&id=' + convId, { method: 'DELETE', headers: headers });
+    await fetchAuth('/api/profile?type=conversations&action=delete&id=' + convId, { method: 'DELETE' });
     if (convId === currentConvId) currentConvId = null;
     loadRecentConversations();
   } catch(e) { console.warn('deleteConversation error:', e); }
@@ -661,8 +658,7 @@ async function loadRecentConversations() {
   var listEl = document.getElementById('sb-recents-list');
   if (!panel || !listEl) return;
   try {
-    var headers = await getAuthHeaders();
-    var res = await fetch('/api/profile?type=conversations&action=list&limit=10', { headers: headers });
+    var res = await fetchAuth('/api/profile?type=conversations&action=list&limit=10');
     if (!res.ok) return;
     var data = await res.json();
     var convs = data.conversations || [];
@@ -5220,7 +5216,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         const _gl = _glMap[_clientCountry] || 'co';
         let wsData = null;
         try{
-          const wsRes = await fetch('/api/web-search', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ query: wsQuery, gl: _gl }) });
+          const wsRes = await fetchAuth('/api/web-search', { method: 'POST', body: JSON.stringify({ query: wsQuery, gl: _gl }) });
           wsData = await wsRes.json();
         }catch(e){ wsData = { error: String(e.message || e) }; }
         hist.push({role:'assistant',content:replyFinalProcessed || '[WEB_SEARCH: ' + wsQuery + ']'});
