@@ -22770,13 +22770,96 @@ function navHighlight(key) {
   });
 }
 
+
+// ── SUBMENÚS DEL SIDEBAR ──────────────────────────────────────────────────────
+// Cada módulo despliega sus vistas en el propio menú (al pasar por encima o al
+// entrar al módulo), en lugar de las píldoras que había arriba de cada pantalla.
+const NAV_TAB_LABELS = {
+  kanban: 'Pipeline', list: 'Contactos', agenda: 'Agenda',
+  campaigns: 'Campañas', autos: 'Automatizaciones', sources: 'Fuentes',
+  proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
+  inbox: 'Inbox', agents: 'Chatbots',
+  sales: 'Ventas', prod: 'Productividad', mk: 'Marketing', cv: 'Conversaciones',
+  analytics: 'Resumen', nps: 'Satisfacción', campstats: 'Aperturas',
+};
+// Acciones que no son vistas pero viven en el mismo menú
+const NAV_MOD_ACTIONS = {
+  crm: [{ label: 'Editar pipeline', fn: 'pipeOpenEditor()' }],
+};
+let _navHoverTimer = null;
+
+function navBuildSubmenus() {
+  Object.keys(NAV_TABS).forEach(mod => {
+    const host = document.getElementById('navm-' + mod);
+    if (!host || document.getElementById('navsub-' + mod)) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'sb-sub';
+    wrap.id = 'navsub-' + mod;
+    wrap.innerHTML =
+      (NAV_TABS[mod] || []).map(t =>
+        '<div class="sb-sub-item" data-tab="' + t + '" onclick="event.stopPropagation();navGoTab(\'' + mod + '\',\'' + t + '\')">' +
+          esc(NAV_TAB_LABELS[t] || t) + '</div>').join('') +
+      (NAV_MOD_ACTIONS[mod] || []).map(a =>
+        '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();' + a.fn + '">' + esc(a.label) + '</div>').join('');
+    host.insertAdjacentElement('afterend', wrap);
+
+    // Al pasar por encima se abre; al salir se cierra salvo que sea el módulo activo
+    const open = () => { clearTimeout(_navHoverTimer); navOpenSub(mod); };
+    const close = () => {
+      _navHoverTimer = setTimeout(() => {
+        if ((window._navMod || '') !== mod) wrap.classList.remove('open');
+      }, 260);
+    };
+    host.addEventListener('mouseenter', open);
+    host.addEventListener('mouseleave', close);
+    wrap.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
+    wrap.addEventListener('mouseleave', close);
+  });
+  navSyncSubmenus();
+}
+
+function navOpenSub(mod) {
+  Object.keys(NAV_TABS).forEach(m => {
+    const el = document.getElementById('navsub-' + m);
+    if (!el) return;
+    if (m === mod || m === (window._navMod || '')) el.classList.add('open');
+    else el.classList.remove('open');
+  });
+}
+
+// Deja abierto el submenú del módulo activo y marca la vista actual
+function navSyncSubmenus() {
+  const mod = window._navMod || '';
+  Object.keys(NAV_TABS).forEach(m => {
+    const el = document.getElementById('navsub-' + m);
+    if (!el) return;
+    el.classList.toggle('open', m === mod);
+    el.querySelectorAll('.sb-sub-item[data-tab]').forEach(it => {
+      it.classList.toggle('active', m === mod && it.dataset.tab === (typeof crmView !== 'undefined' ? crmView : ''));
+    });
+  });
+}
+
+function navGoTab(mod, tab) {
+  window._navMod = mod;
+  if (typeof showView === 'function') showView('crm');
+  crmSetView(tab);
+  navSyncSubmenus();
+  if (window.innerWidth <= 768 && typeof toggleSidebar === 'function') {
+    const sb = document.getElementById('sidebar');
+    if (sb && sb.classList.contains('open')) toggleSidebar();
+  }
+}
+
 function navApplyModule() {
   const mod = window._navMod || 'crm';
-  const tabs = NAV_TABS[mod] || NAV_TABS.crm;
+  // Las vistas ahora viven en el submenú del sidebar: las píldoras quedan ocultas
   NAV_ALL_TABS.forEach(id => {
     const b = document.getElementById('crm-btn-' + id);
-    if (b) b.style.display = tabs.includes(id) ? '' : 'none';
+    if (b) b.style.display = 'none';
   });
+  navBuildSubmenus();
+  navSyncSubmenus();
   const crumb = document.getElementById('crm-mod-crumb');
   if (crumb) crumb.textContent = NAV_MOD_LABELS[mod] || 'CRM';
   const title = document.getElementById('crm-title');
@@ -23595,6 +23678,7 @@ function crmRenderNpsView() {
     if (v === 'campstats') crmRenderCampStats();
     if (NAV_TAB2MOD[v]) window._navMod = NAV_TAB2MOD[v];
     navApplyModule();
+    navSyncSubmenus();
   };
 })();
 
