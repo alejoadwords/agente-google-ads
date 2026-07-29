@@ -18153,6 +18153,9 @@ function crmSetView(v) {
   if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const pipeBtn = document.getElementById('crm-btn-pipe');
   if (pipeBtn) pipeBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
+  // el total del pipeline pertenece al tablero: no debe colarse en Marketing ni Análisis
+  const pipeTotal = document.getElementById('crm-pipeline-total');
+  if (pipeTotal) pipeTotal.style.display = (v === 'kanban' || v === 'list') ? '' : 'none';
   if (v === 'kanban' || v === 'list') crmRender();
   if (v === 'agents') crmRenderAgents();
   if (v === 'inbox') crmLoadInbox();
