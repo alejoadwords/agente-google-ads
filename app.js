@@ -16365,6 +16365,154 @@ function crmPopulateStageSelects() {
   });
 }
 
+// ── EDITOR DE PIPELINE ────────────────────────────────────────────────────────
+// Las etapas son libres salvo nuevo/ganado/perdido, que otros módulos (cobros,
+// automatizaciones, tasa de cierre) usan por su key. Esas se renombran, no se borran.
+const PIPE_PROTECTED = ['nuevo', 'ganado', 'perdido'];
+const PIPE_COLORS = ['#6B7280','#3B82F6','#8B5CF6','#F59E0B','#EF4444','#10B981','#EC4899','#0891B2','#84CC16','#F97316'];
+let _pipeDraft = [];   // copia de trabajo
+let _pipeDeleted = []; // {id, key, moveTo}
+
+function pipeOpenEditor() {
+  _pipeDraft = crmStages.map(s => ({ ...s, _new: false, _dirty: false }));
+  _pipeDeleted = [];
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'pipe-editor';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:620px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Editar pipeline</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Agrega, renombra, reordena o elimina etapas</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">✕</button>' +
+    '</div>' +
+    '<div class="auto-modal-body"><div id="pipe-rows"></div>' +
+      '<button class="btn-sec sm" style="width:100%;margin-top:6px" onclick="pipeAdd()">+ Agregar etapa</button>' +
+      '<div id="pipe-msg" style="font-size:12px;margin-top:12px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="pipe-save" onclick="pipeSave()">Guardar cambios</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  pipeRenderRows();
+}
+
+function pipeLeadCount(key) {
+  return (typeof crmLeads !== 'undefined' ? crmLeads : []).filter(l => l.stage === key).length;
+}
+
+function pipeRenderRows() {
+  const box = document.getElementById('pipe-rows');
+  if (!box) return;
+  box.innerHTML = _pipeDraft.map((s, i) => {
+    const prot = PIPE_PROTECTED.includes(s.key);
+    const n = s._new ? 0 : pipeLeadCount(s.key);
+    return '<div class="auto-step" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+      '<div style="display:flex;flex-direction:column;gap:2px">' +
+        '<button class="auto-step-mini" onclick="pipeMove(' + i + ',-1)"' + (i === 0 ? ' disabled style="opacity:.3"' : '') + '>▲</button>' +
+        '<button class="auto-step-mini" onclick="pipeMove(' + i + ',1)"' + (i === _pipeDraft.length - 1 ? ' disabled style="opacity:.3"' : '') + '>▼</button>' +
+      '</div>' +
+      '<input type="color" value="' + esc(s.color || '#6B7280') + '" onchange="pipeSet(' + i + ',\'color\',this.value)" ' +
+        'style="width:30px;height:30px;border:none;border-radius:8px;background:none;cursor:pointer;padding:0" title="Color">' +
+      '<input class="auto-input" value="' + esc(s.label || '') + '" maxlength="40" oninput="pipeSet(' + i + ',\'label\',this.value)" style="flex:1">' +
+      '<div style="font-size:11px;color:var(--muted2);min-width:62px;text-align:right">' + (s._new ? 'nueva' : n + (n === 1 ? ' lead' : ' leads')) + '</div>' +
+      (prot
+        ? '<span title="Otros módulos dependen de esta etapa: puedes renombrarla, no eliminarla" style="font-size:11px;color:var(--muted2);padding:4px 6px">🔒</span>'
+        : '<button class="auto-step-mini" onclick="pipeDel(' + i + ')" title="Eliminar">🗑</button>') +
+    '</div>';
+  }).join('');
+}
+
+function pipeSet(i, field, val) {
+  if (!_pipeDraft[i]) return;
+  _pipeDraft[i][field] = val;
+  _pipeDraft[i]._dirty = true;
+}
+
+function pipeMove(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= _pipeDraft.length) return;
+  [_pipeDraft[i], _pipeDraft[j]] = [_pipeDraft[j], _pipeDraft[i]];
+  pipeRenderRows();
+}
+
+function pipeAdd() {
+  if (_pipeDraft.length >= 12) { pipeMsg('Máximo 12 etapas por pipeline', true); return; }
+  const used = _pipeDraft.map(s => s.color);
+  const color = PIPE_COLORS.find(c => !used.includes(c)) || '#6B7280';
+  // se inserta antes de las etapas de cierre, que es donde tiene sentido un paso nuevo
+  const closeIdx = _pipeDraft.findIndex(s => s.key === 'ganado');
+  const row = { id: null, key: null, label: '', color, _new: true, _dirty: true };
+  if (closeIdx > 0) _pipeDraft.splice(closeIdx, 0, row); else _pipeDraft.push(row);
+  pipeRenderRows();
+}
+
+function pipeDel(i) {
+  const s = _pipeDraft[i];
+  if (!s || PIPE_PROTECTED.includes(s.key)) return;
+  const n = s._new ? 0 : pipeLeadCount(s.key);
+  if (n > 0) {
+    const dest = _pipeDraft.filter((x, idx) => idx !== i && x.key);
+    const opts = dest.map(d => d.label).join(', ');
+    const to = prompt('"' + (s.label || 'Esta etapa') + '" tiene ' + n + ' lead(s).\n¿A qué etapa los movemos?\n\nOpciones: ' + opts, dest[0]?.label || '');
+    if (to === null) return;
+    const match = dest.find(d => (d.label || '').toLowerCase() === String(to).trim().toLowerCase()) || dest[0];
+    if (!s._new) _pipeDeleted.push({ id: s.id, key: s.key, moveTo: match.key });
+  } else if (!s._new) {
+    _pipeDeleted.push({ id: s.id, key: s.key, moveTo: null });
+  }
+  _pipeDraft.splice(i, 1);
+  pipeRenderRows();
+}
+
+function pipeMsg(text, isErr) {
+  const el = document.getElementById('pipe-msg');
+  if (el) { el.textContent = text; el.style.color = isErr ? '#B91C1C' : 'var(--muted)'; }
+}
+
+async function pipeSave() {
+  const btn = document.getElementById('pipe-save');
+  if (_pipeDraft.some(s => !String(s.label || '').trim())) { pipeMsg('Todas las etapas necesitan un nombre', true); return; }
+  if (_pipeDraft.length < 2) { pipeMsg('El pipeline necesita al menos 2 etapas', true); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    for (const d of _pipeDeleted) {
+      const qs = '?id=' + encodeURIComponent(d.id) + (d.moveTo ? '&move_to=' + encodeURIComponent(d.moveTo) : '');
+      const r = await fetchAuth('/api/pipeline-stages' + qs, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo eliminar');
+    }
+    for (const s of _pipeDraft) {
+      if (s._new) {
+        const r = await fetchAuth('/api/pipeline-stages', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: s.label.trim(), color: s.color }),
+        });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la etapa');
+        const d = await r.json();
+        s.id = d.stage?.id; s.key = d.stage?.key; s._new = false;
+      } else if (s._dirty) {
+        await fetchAuth('/api/pipeline-stages', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: s.id, label: s.label.trim(), color: s.color }),
+        });
+      }
+    }
+    await fetchAuth('/api/pipeline-stages', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order: _pipeDraft.map(s => s.id).filter(Boolean) }),
+    });
+    await crmLoadStages();
+    await crmLoadLeads();
+    crmRender();
+    document.getElementById('pipe-editor')?.remove();
+    if (typeof showToast === 'function') showToast('✅ Pipeline actualizado', 'success');
+  } catch (e) {
+    pipeMsg(e.message || 'No se pudo guardar', true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; }
+  }
+}
+
 function crmSetView(v) {
   crmView = v;
   document.getElementById('crm-btn-kanban').classList.toggle('active', v === 'kanban');
@@ -17773,6 +17921,8 @@ function crmSetView(v) {
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
   if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
+  const pipeBtn = document.getElementById('crm-btn-pipe');
+  if (pipeBtn) pipeBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   if (v === 'kanban' || v === 'list') crmRender();
   if (v === 'agents') crmRenderAgents();
   if (v === 'inbox') crmLoadInbox();
@@ -21518,7 +21668,31 @@ function cbCheckLines(ta, max, warnId) {
   }
 }
 
+// Los modelos cuentan caracteres mal: un título de 31 hacía fallar la creación entera
+// con un error genérico. Ajustamos aquí y avisamos qué se tocó, en vez de bloquear.
+function cbFitLines(lines, max, minCount, label, groupName) {
+  const over = lines.filter(l => l.length > max);
+  if (!over.length) return lines;
+  const ok = lines.filter(l => l.length <= max);
+  if (ok.length >= minCount) {
+    over.forEach(l => _cbAdjust.push('Descarté un ' + label + ' de ' + l.length + ' caracteres en "' + groupName + '": ' + l));
+    return ok;
+  }
+  return lines.map(l => {
+    if (l.length <= max) return l;
+    let t = l.slice(0, max);
+    const sp = t.lastIndexOf(' ');
+    if (sp > max * 0.6) t = t.slice(0, sp);
+    t = t.trim();
+    _cbAdjust.push('Acorté un ' + label + ' en "' + groupName + '": ' + l + ' → ' + t);
+    return t;
+  });
+}
+
+let _cbAdjust = [];
+
 function cbCollect() {
+  _cbAdjust = [];
   const g = id => document.getElementById(id);
   const plan = {
     name: g('cb-name').value.trim(),
@@ -21539,8 +21713,8 @@ function cbCollect() {
       ad: {
         final_url: g('cb-g' + i + '-url').value.trim(),
         path1: (orig.ad || {}).path1 || '', path2: (orig.ad || {}).path2 || '',
-        headlines: g('cb-g' + i + '-h').value.split('\n').map(s => s.trim()).filter(Boolean),
-        descriptions: g('cb-g' + i + '-d').value.split('\n').map(s => s.trim()).filter(Boolean),
+        headlines: cbFitLines(g('cb-g' + i + '-h').value.split('\n').map(s => s.trim()).filter(Boolean), 30, 3, 'título', g('cb-g' + i + '-name').value.trim()),
+        descriptions: cbFitLines(g('cb-g' + i + '-d').value.split('\n').map(s => s.trim()).filter(Boolean), 90, 2, 'descripción', g('cb-g' + i + '-name').value.trim()),
       },
     });
   });
@@ -21555,6 +21729,12 @@ async function cbCreate() {
   const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
   const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
   if (!custId) { showToast('Conecta tu cuenta de Google Ads primero', 'error'); return; }
+  if (_cbAdjust.length) {
+    result.style.display = 'block';
+    result.style.background = '#FFFBEB'; result.style.color = '#92400E';
+    result.innerHTML = '✂️ Ajusté ' + _cbAdjust.length + ' línea(s) que superaban el límite de Google:' +
+      '<div style="font-size:11px;margin-top:4px;opacity:.85">' + _cbAdjust.map(esc).join('<br>') + '</div>';
+  }
   btn.disabled = true; btn.textContent = 'Creando campaña…';
   try {
     const d = await fetch('/api/google-ads?action=create-campaign', {
