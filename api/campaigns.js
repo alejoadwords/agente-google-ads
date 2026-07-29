@@ -17,7 +17,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Cupo de emails de campaña por mes calendario
-const EMAIL_QUOTAS = { free: 0, pro: 2000, individual: 2000, agency: 10000, agencia: 10000, trial: 2000 };
+// Infinity = sin tope. Los planes de pago no tienen limite de envios; free sigue en 0
+// (las campanas masivas son de pago). Las automatizaciones nunca consumieron cupo:
+// monthlySent solo cuenta envios con campaign_id.
+const EMAIL_QUOTAS = { free: 0, pro: Infinity, individual: Infinity, agency: Infinity, agencia: Infinity, trial: Infinity };
 
 function sbHeaders(prefer) {
   return {
@@ -190,7 +193,8 @@ export default async function handler(req) {
     // Cupo del mes para mostrar en la UI (plan + paquetes extra de 2.000)
     const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     const used = await monthlySent(userId);
-    return jsonResp({ campaigns: rows || [], quota: { plan: _lastPlan, limit: quota, used, extra_packs: _emailsExtra } });
+    const unlimited = quota === Infinity;
+    return jsonResp({ campaigns: rows || [], quota: { plan: _lastPlan, limit: unlimited ? null : quota, unlimited, used, extra_packs: _emailsExtra } });
   }
 
   // POST ?action=ai — redactar la campaña con IA. Devuelve JSON con asunto,

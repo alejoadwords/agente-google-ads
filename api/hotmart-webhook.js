@@ -174,7 +174,7 @@ export default async function handler(req, res) {
 
   // ── Usuarios adicionales de equipo (suscripción mensual) ─────────────────
   // Producto con 'usuario', 'asiento' o 'seat' en el nombre. La oferta lleva la cantidad
-  // ('1 asiento' → 1, '2 asientos' → 2...). Fallback por precio (~$10/asiento).
+  // ('1 asiento' → 1, '2 asientos' → 2...). Fallback por precio ($9/asiento).
   // seats_extra se FIJA con la cantidad de la oferta comprada — idempotente
   // ante renovaciones. Cancelación → 0. api/team.js lo suma al cupo del plan.
   if (productName.includes('asiento') || productName.includes('seat') || productName.includes('usuario')) {
@@ -191,7 +191,7 @@ export default async function handler(req, res) {
       let seats = 1;
       const nMatch = offerName.match(/(\d+)/);
       if (nMatch) seats = Math.max(1, parseInt(nMatch[1]));
-      else if (price > 0) seats = Math.max(1, Math.round(price / 10));
+      else if (price > 0) seats = Math.max(1, Math.round(price / 9));
       seats = Math.min(seats, 20); // tope de cordura
       clerkOk = await clerkMergeMetadata(clerkUser.id, { seats_extra: seats });
       return res.status(200).json({ received: true, action: 'seats_set', seats, clerkUpdated: clerkOk });
@@ -199,6 +199,49 @@ export default async function handler(req, res) {
       console.error('[hotmart-webhook] seats error:', e.message);
       return res.status(200).json({ received: true, action: 'seats_error' });
     }
+  }
+
+  // ── Paquetes de contactos del CRM (suscripción mensual) ──────────────────
+  // Producto con 'contacto' o 'lead' en el nombre. Paquetes de 1.000 contactos:
+  // la oferta lleva el volumen en el nombre ('1k'/'1.000' → 1 paquete, '5k' → 5).
+  // Fallback por precio (~$4 por paquete en Pro, ~$3 en Agency).
+  // leads_extra se FIJA con el total de la oferta comprada — idempotente ante
+  // renovaciones. Cancelación → 0. api/leads.js lo suma al cupo del plan.
+  if (productName.includes('contacto') || productName.includes('lead')) {
+    let clerkOk = false;
+    try {
+      const clerkUser = await clerkFindUserByEmail(email);
+      if (!clerkUser) return res.status(200).json({ received: true, action: 'user_not_found', email });
+      if (eventosCancelacion.includes(eventType)) {
+        clerkOk = await clerkMergeMetadata(clerkUser.id, { leads_extra: 0 });
+        return res.status(200).json({ received: true, action: 'lead_pack_cancelled', clerkUpdated: clerkOk });
+      }
+      const offerName = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
+      const price = data?.purchase?.price?.value || 0;
+      let packs = 1;
+      const kMatch = offerName.match(/(\d+)\s*k/);            // '5k contactos' → 5 paquetes
+      const milMatch = offerName.match(/(\d+)[.,](\d{3})/);    // '5.000 contactos' → 5 paquetes
+      if (kMatch) packs = Math.max(1, parseInt(kMatch[1]));
+      else if (milMatch) packs = Math.max(1, parseInt(milMatch[1]));
+      else if (price > 0) packs = Math.max(1, Math.round(price / 4));
+      packs = Math.min(packs, 100); // tope de cordura: 100.000 contactos extra
+      clerkOk = await clerkMergeMetadata(clerkUser.id, { leads_extra: packs });
+      return res.status(200).json({ received: true, action: 'lead_pack_set', packs, contacts: packs * 1000, clerkUpdated: clerkOk });
+    } catch (e) {
+      console.error('[hotmart-webhook] lead pack error:', e.message);
+      return res.status(200).json({ received: true, action: 'lead_pack_error' });
+    }
+  }
+
+  // ── Red de seguridad antes de tocar el plan ──────────────────────────────
+  // Todo lo que llega hasta aquí se trataba como compra de plan, con 'pro' por
+  // defecto: un add-on nuevo con un nombre no contemplado DEGRADABA a un Agency.
+  // Si el nombre huele a complemento y no menciona un plan, no tocar nada.
+  const pareceAddon = /extra|adicional|paquete|pack|cr[eé]dito|ampliaci[oó]n/.test(productName);
+  const mencionaPlan = /pro\b|agenc|plan|acuarius/.test(productName);
+  if (pareceAddon && !mencionaPlan) {
+    console.error('[hotmart-webhook] producto no reconocido, plan intacto:', productName);
+    return res.status(200).json({ received: true, action: 'unhandled_product', product: productName });
   }
 
   // ── Suscripción / plan ──────────────────────────────────────────────────

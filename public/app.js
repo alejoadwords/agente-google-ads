@@ -14999,7 +14999,7 @@ function openUpgradeFlow(reason) {
         '<button onclick="document.getElementById(\'upgrade-flow-modal\').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:20px;line-height:1;padding:2px 8px">&times;</button>' +
       '</div>' +
       '<div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Todo el stack de marketing digital con IA · Sin límites por función</div>' +
-      '<div style="font-size:11px;color:var(--text-3);background:var(--sidebar);border-radius:8px;padding:8px 12px;margin-bottom:14px">Plan Free actual: <strong>50 msgs/mes · 50 leads · 3 imágenes · 1 conexión API</strong> — Sin Inbox/WhatsApp</div>' +
+      '<div style="font-size:11px;color:var(--text-3);background:var(--sidebar);border-radius:8px;padding:8px 12px;margin-bottom:14px">Plan Free actual: <strong>50 msgs/mes · 50 contactos · 1 usuario · 3 imágenes</strong> — Sin Inbox ni campañas</div>' +
       reasonHtml +
       '<div style="display:flex;flex-direction:column;gap:10px">' +
         // Plan Pro
@@ -15017,14 +15017,16 @@ function openUpgradeFlow(reason) {
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;color:var(--text-3);line-height:1.7">' +
             '<span>&#10003; Todos los agentes IA</span>' +
             '<span>&#10003; Todas las conexiones API</span>' +
-            '<span>&#10003; CRM · 1.000 leads incluidos</span>' +
+            '<span>&#10003; CRM · 1.000 contactos incluidos</span>' +
+            '<span>&#10003; <strong>3 usuarios</strong> en la plataforma</span>' +
+            '<span>&#10003; <strong>Emails ilimitados</strong> (campañas y automatizaciones)</span>' +
             '<span>&#10003; Inbox (WhatsApp, Meta, IG)</span>' +
             '<span>&#10003; 60 imágenes + 5 videos IA/mes</span>' +
             '<span>&#10003; Proyecto SEO + reporte GEO</span>' +
             '<span>&#10003; Posiciones reales en Google</span>' +
             '<span>&#10003; Reportes y exportes PDF/CSV</span>' +
           '</div>' +
-          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Leads adicionales: <strong style="color:var(--blue)">$4 por 1.000 contactos</strong></div>' +
+          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Contactos adicionales: <strong style="color:var(--blue)">$4 por 1.000</strong> · Usuarios extra: <strong style="color:var(--blue)">$9/mes</strong></div>' +
         '</div>' +
         // Plan Agency
         '<div style="border:2px solid var(--blue);border-radius:14px;padding:18px;cursor:pointer;background:var(--sidebar);position:relative;transition:.15s" onmouseover="this.style.background=\'var(--sidebar2)\'" onmouseout="this.style.background=\'var(--sidebar)\'" onclick="window.open(\'https://pay.hotmart.com/L105202723X\',\'_blank\');document.getElementById(\'upgrade-flow-modal\').remove()">' +
@@ -15042,12 +15044,13 @@ function openUpgradeFlow(reason) {
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;color:var(--text-3);line-height:1.7">' +
             '<span>&#10003; Todo lo del plan Pro</span>' +
             '<span>&#10003; 10 perfiles de cliente/marca</span>' +
-            '<span>&#10003; CRM · 5.000 leads incluidos</span>' +
+            '<span>&#10003; CRM · 5.000 contactos incluidos</span>' +
+            '<span>&#10003; <strong>10 usuarios</strong> en la plataforma</span>' +
             '<span>&#10003; Imágenes IA ilimitadas</span>' +
             '<span>&#10003; Dashboard salud por cliente</span>' +
-            '<span>&#10003; Leads extra a precio preferente</span>' +
+            '<span>&#10003; Contactos extra a precio preferente</span>' +
           '</div>' +
-          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Leads adicionales: <strong style="color:var(--blue)">$3 por 1.000 contactos</strong></div>' +
+          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Contactos adicionales: <strong style="color:var(--blue)">$3 por 1.000</strong> · Usuarios extra: <strong style="color:var(--blue)">$9/mes</strong></div>' +
         '</div>' +
       '</div>' +
       '<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">' +
@@ -17168,7 +17171,7 @@ async function crmSaveLead() {
           btn.textContent = 'Guardar';
           btn.disabled = false;
           crmCloseModal();
-          const planLabel = userPlan === 'pro' ? 'Pro (1.000 leads)' : userPlan === 'agency' ? 'Agency (5.000 leads)' : 'Free (10 leads)';
+          const planLabel = userPlan === 'pro' ? 'Pro (1.000 contactos)' : userPlan === 'agency' ? 'Agency (5.000 contactos)' : 'Free (50 contactos)';
           openUpgradeFlow('Alcanzaste el límite de leads de tu plan ' + planLabel + '. Actualiza para agregar más contactos.');
           return;
         }
@@ -21066,7 +21069,9 @@ async function cmpRender() {
   if (typeof crmTags !== 'undefined' && !crmTags.length) { try { await crmLoadTags(); } catch {} }
   await cmpLoad();
 
-  const quotaHtml = cmpQuota && cmpQuota.limit > 0
+  const quotaHtml = cmpQuota && cmpQuota.unlimited
+    ? '<div style="font-size:var(--fs-sm);color:var(--muted)">📧 ' + (cmpQuota.used || 0).toLocaleString('es-CO') + ' enviados este mes · <strong style="color:var(--text)">envíos ilimitados</strong></div>'
+    : cmpQuota && cmpQuota.limit > 0
     ? '<div style="font-size:var(--fs-sm);color:var(--muted)">📧 ' + (cmpQuota.used || 0).toLocaleString('es-CO') + ' / ' + cmpQuota.limit.toLocaleString('es-CO') + ' emails este mes</div>'
     : '';
 

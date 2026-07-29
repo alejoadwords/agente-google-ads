@@ -17,6 +17,7 @@ const PLAN_LIMITS = {
   free:       1,   // lifetime (no se resetea)
   individual: 5,   // por mes
   pro:        5,   // alias de individual
+  trial:      5,   // la prueba de 7 dias se comporta como Pro
   agencia:    15,  // por mes
   agency:     15,
 };

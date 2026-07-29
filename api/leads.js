@@ -198,7 +198,7 @@ export default async function handler(req) {
       userPlan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
       leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
     } catch {}
-    const PLAN_LIMITS_IMP = { free: 50, pro: 1000, agency: 5000 };
+    const PLAN_LIMITS_IMP = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency: 5000, agencia: 5000 };
     const planLimit = (PLAN_LIMITS_IMP[userPlan] || 10) + (leadsExtra * 1000);
     const countRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`, { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } });
     let currentCount = parseInt((countRes.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
@@ -290,7 +290,7 @@ export default async function handler(req) {
         leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
       }
     } catch {}
-    const PLAN_LIMITS = { free: 50, pro: 1000, agency: 5000 };
+    const PLAN_LIMITS = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency: 5000, agencia: 5000 };
     const planLimit = (PLAN_LIMITS[userPlan] || 10) + (leadsExtra * 1000);
     const countRes = await fetch(
       `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`,
