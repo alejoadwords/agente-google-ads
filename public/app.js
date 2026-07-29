@@ -22812,7 +22812,7 @@ function navBuildSubmenus() {
     // Se abre al pasar por encima y permanece abierto hasta que se entra en otro
     // módulo o se sale del menú — así no se pierde al mover el ratón en diagonal.
     const abrir = () => { clearTimeout(_navHoverTimer); navOpenSub(mod); };
-    const cerrar = () => { _navHoverTimer = setTimeout(navCloseSubs, 220); };
+    const cerrar = () => { _navHoverTimer = setTimeout(navCloseSubs, 450); };
     host.addEventListener('mouseenter', abrir);
     host.addEventListener('mouseleave', cerrar);
     wrap.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
@@ -22848,7 +22848,7 @@ function navOpenSub(mod) {
   if (window.innerWidth <= 768) return;   // en móvil se despliega en línea
   const r = host.getBoundingClientRect();
   const sb = document.getElementById('sidebar')?.getBoundingClientRect();
-  el.style.left = Math.round((sb ? sb.right : r.right) + 6) + 'px';
+  el.style.left = Math.round((sb ? sb.right : r.right) + 2) + 'px';
   el.style.top = '0px';                   // se mide con el panel ya visible
   const h = el.offsetHeight;
   const top = Math.min(Math.max(8, r.top - 6), window.innerHeight - h - 8);
