@@ -22735,11 +22735,11 @@ const NAV_TABS = {
   crm: ['kanban', 'list', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
-  analisis: ['sales', 'prod', 'mk', 'analytics', 'nps'],
+  analisis: ['sales', 'prod', 'mk', 'cv', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', mk: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'mk'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', mk: 'analisis', cv: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'mk', 'cv'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -22792,6 +22792,131 @@ async function navUpdateConvBadge() {
 }
 
 // ── Análisis → Aperturas: campañas de email enviadas con su tasa de apertura ─
+// ── INFORME DE CONVERSACIONES ─────────────────────────────────────────────────
+// Rendimiento del inbox: volumen, canales, estado y tiempo de primera respuesta.
+// Se calcula sobre chat_conversations + chat_messages.
+let _cvRange = 30;
+let _cvData = null;
+
+function cvSetRange(d) { _cvRange = d; _cvData = null; cvRender(); }
+
+function cvFmtDur(min) {
+  if (!isFinite(min) || min <= 0) return '—';
+  if (min < 60) return Math.round(min) + ' min';
+  if (min < 1440) return Math.round(min / 60) + ' h ' + Math.round(min % 60) + ' m';
+  return Math.round(min / 1440) + ' d';
+}
+
+async function cvLoad() {
+  const from = new Date(Date.now() - (_cvRange || 3650) * 86400000).toISOString();
+  try {
+    const r = await fetchAuth('/api/chat-conversations?report=1&from=' + encodeURIComponent(from));
+    _cvData = r.ok ? await r.json() : { conversations: [], messages: [], channels: [] };
+  } catch (e) { _cvData = { conversations: [], messages: [], channels: [] }; }
+  return _cvData;
+}
+
+async function cvRender() {
+  const box = document.getElementById('crm-cv-view');
+  if (!box) return;
+  if (!_cvData) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando conversaciones…</div>';
+    await cvLoad();
+  }
+  const { conversations: convs, messages: msgs, channels } = _cvData;
+  const now = Date.now();
+
+  const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+    '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento del inbox</div>' +
+    '<div style="font-size:12px;color:var(--muted)">Volumen, canales y velocidad de respuesta</div></div>' +
+    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
+      '<button class="btn-' + (_cvRange === d ? 'pri' : 'sec') + ' sm" onclick="cvSetRange(' + d + ')">' + t + '</button>').join('') +
+    '</div></div>';
+
+  // Sin canales conectados: estado vacío honesto en vez de un tablero de ceros
+  const activos = (channels || []).filter(c => c.is_active);
+  if (!convs.length && !activos.length) {
+    box.innerHTML = html +
+      '<div style="border:1px dashed var(--border);border-radius:16px;padding:34px;text-align:center;max-width:640px;margin:0 auto">' +
+        '<div style="font-size:15px;font-weight:800;margin-bottom:6px">Aún no hay conversaciones que medir</div>' +
+        '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:16px">' +
+          'Conecta WhatsApp, Messenger o Instagram en <b>Conversaciones → Chatbots</b> y aquí verás el volumen por canal, ' +
+          'el estado de cada conversación y cuánto tardas en responder.</div>' +
+        '<button class="btn-pri sm" onclick="navGo(\'conversaciones\')">Ir a Conversaciones</button>' +
+      '</div>';
+    return;
+  }
+
+  const nuevas = convs.filter(c => !_cvRange || new Date(c.created_at).getTime() >= now - _cvRange * 86400000);
+  const abiertas = convs.filter(c => (c.status || 'open') !== 'closed');
+  const sinLeer = convs.reduce((s, c) => s + (c.unread_count || 0), 0);
+
+  // Tiempo hasta la primera respuesta: primer mensaje entrante vs primera salida
+  const porConv = {};
+  (msgs || []).forEach(m => { (porConv[m.conversation_id] = porConv[m.conversation_id] || []).push(m); });
+  const tiempos = [];
+  Object.values(porConv).forEach(list => {
+    const inbound = list.find(m => m.role === 'user');
+    if (!inbound) return;
+    const reply = list.find(m => m.role !== 'user' && new Date(m.created_at) > new Date(inbound.created_at));
+    if (reply) tiempos.push((new Date(reply.created_at) - new Date(inbound.created_at)) / 60000);
+  });
+  tiempos.sort((a, b) => a - b);
+  const mediana = tiempos.length ? tiempos[Math.floor(tiempos.length / 2)] : NaN;
+  const p90 = tiempos.length ? tiempos[Math.floor(tiempos.length * 0.9)] : NaN;
+  const totalMsgs = (msgs || []).length;
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
+    salesCard('Conversaciones', convs.length, nuevas.length + ' nuevas en el periodo') +
+    salesCard('Abiertas', abiertas.length, sinLeer ? sinLeer + ' mensajes sin leer' : 'sin pendientes') +
+    salesCard('1.ª respuesta (mediana)', cvFmtDur(mediana), tiempos.length + ' conversaciones medidas') +
+    salesCard('1.ª respuesta (p90)', cvFmtDur(p90), 'las más lentas') +
+    salesCard('Mensajes', totalMsgs.toLocaleString('es-CO'), 'intercambiados') +
+  '</div>';
+
+  // Volumen por día
+  const dias = Math.min(_cvRange || 30, 30) || 30;
+  const dayKey = t => new Date(t).toISOString().slice(0, 10);
+  const porDia = {};
+  convs.forEach(c => { const k = dayKey(c.created_at); porDia[k] = (porDia[k] || 0) + 1; });
+  const serie = [];
+  for (let i = dias - 1; i >= 0; i--) { const k = dayKey(now - i * 86400000); serie.push([k, porDia[k] || 0]); }
+  const maxV = Math.max(1, ...serie.map(x => x[1]));
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:12px">Conversaciones nuevas por día</div>' +
+    '<div style="display:flex;align-items:flex-end;gap:3px;height:80px">' + serie.map(([k, v]) =>
+      '<div style="flex:1;background:#0891B2;border-radius:3px 3px 0 0;height:' + Math.round(v / maxV * 76) + 'px;min-height:' + (v ? 3 : 1) + 'px" title="' + k + ': ' + v + '"></div>').join('') +
+    '</div></div>';
+
+  // Canales y estado
+  const porCanal = {};
+  convs.forEach(c => { const k = c.channel || 'otro'; porCanal[k] = (porCanal[k] || 0) + 1; });
+  const canales = Object.entries(porCanal).sort((a, b) => b[1] - a[1]);
+  const maxC = Math.max(1, ...canales.map(e => e[1]));
+  const porEstado = {};
+  convs.forEach(c => { const k = c.status || 'open'; porEstado[k] = (porEstado[k] || 0) + 1; });
+  const estados = Object.entries(porEstado).sort((a, b) => b[1] - a[1]);
+  const maxE = Math.max(1, ...estados.map(e => e[1]));
+  const estLbl = { open: 'Abiertas', closed: 'Cerradas', pending: 'Pendientes' };
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Reparto por canal</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + activos.length + ' canal(es) conectado(s)</div>' +
+    (canales.length ? canales.map(([k, v]) => salesBar(k, v, maxC, '#0891B2', Math.round(v / convs.length * 100) + '%')).join('')
+                    : '<div style="font-size:12px;color:var(--muted2)">Sin conversaciones en el periodo</div>') +
+  '</div>';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Estado de las conversaciones</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Cuántas siguen abiertas</div>' +
+    (estados.length ? estados.map(([k, v]) => salesBar(estLbl[k] || k, v, maxE, k === 'closed' ? '#10B981' : '#F59E0B', Math.round(v / convs.length * 100) + '%')).join('')
+                    : '<div style="font-size:12px;color:var(--muted2)">Sin datos</div>') +
+  '</div></div>';
+
+  box.innerHTML = html;
+}
+
 // ── INFORME DE MARKETING ──────────────────────────────────────────────────────
 // Campañas de email, automatizaciones y captación de leads en un solo lugar.
 let _mkRange = 90;
@@ -23444,6 +23569,10 @@ function crmRenderNpsView() {
     if (mkv) mkv.style.display = v === 'mk' ? 'flex' : 'none';
     document.getElementById('crm-btn-mk')?.classList.toggle('active', v === 'mk');
     if (v === 'mk') mkRender();
+    const cvv = document.getElementById('crm-cv-view');
+    if (cvv) cvv.style.display = v === 'cv' ? 'flex' : 'none';
+    document.getElementById('crm-btn-cv')?.classList.toggle('active', v === 'cv');
+    if (v === 'cv') cvRender();
     const pv = document.getElementById('crm-proposals-view');
     if (pv) pv.style.display = v === 'proposals' ? 'flex' : 'none';
     const nv = document.getElementById('crm-nps-view');

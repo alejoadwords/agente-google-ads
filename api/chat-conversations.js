@@ -49,6 +49,29 @@ export default async function handler(req) {
 
   const url = new URL(req.url);
 
+  // GET ?report=1&from= — datos agregados para el informe de Conversaciones
+  if (req.method === 'GET' && url.searchParams.get('report')) {
+    const from = url.searchParams.get('from');
+    let cq = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}&select=id,channel,status,unread_count,created_at,last_message_at,lead_id&order=created_at.desc&limit=1000`;
+    if (from) cq += `&created_at=gte.${encodeURIComponent(from)}`;
+    const convs = await fetch(cq, { headers: sbHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
+
+    // Mensajes de esas conversaciones, para medir el tiempo de primera respuesta
+    let msgs = [];
+    const ids = (convs || []).map(c => c.id).slice(0, 300);
+    if (ids.length) {
+      const mq = `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=in.(${ids.join(',')})` +
+        `&select=conversation_id,role,created_at&order=created_at.asc&limit=5000`;
+      msgs = await fetch(mq, { headers: sbHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
+    }
+    const chans = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=channel,channel_name,is_active`,
+      { headers: sbHeaders() }
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+
+    return jsonResp({ conversations: convs || [], messages: msgs || [], channels: chans || [] });
+  }
+
   // GET — list conversations
   if (req.method === 'GET' && !url.searchParams.get('messages')) {
     const status = url.searchParams.get('status');
