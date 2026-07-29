@@ -84,7 +84,15 @@ function resolverCantidad(data, { tipo, patronNombre, porPrecio, maximo }) {
   if (o && o.cantidad && o.tipo === tipo) {
     return { cantidad: Math.min(o.cantidad, maximo), fuente: 'codigo' };
   }
-  // OJO: solo el NOMBRE, nunca el codigo — el codigo es aleatorio
+  // Nombre del PRODUCTO: la señal mas estable que da Hotmart. La define el
+  // vendedor, no cambia y no depende de moneda. Vale tanto si hay un producto
+  // por cantidad ('3 usuarios adicionales') como si el nombre ya la lleva.
+  const nombreProducto = (data?.product?.name || '').toLowerCase().trim();
+  if (nombreProducto && patronNombre) {
+    const n = patronNombre(nombreProducto);
+    if (n > 0) return { cantidad: Math.min(n, maximo), fuente: 'producto' };
+  }
+  // OJO: solo el NOMBRE de la oferta, nunca el codigo — el codigo es aleatorio
   const nombre = (data?.purchase?.offer?.name || '').toLowerCase().trim();
   if (nombre && patronNombre) {
     const n = patronNombre(nombre);
