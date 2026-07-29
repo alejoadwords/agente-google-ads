@@ -16372,10 +16372,22 @@ const PIPE_PROTECTED = ['nuevo', 'ganado', 'perdido'];
 const PIPE_COLORS = ['#6B7280','#3B82F6','#8B5CF6','#F59E0B','#EF4444','#10B981','#EC4899','#0891B2','#84CC16','#F97316'];
 let _pipeDraft = [];   // copia de trabajo
 let _pipeDeleted = []; // {id, key, moveTo}
+let _pipeCounts = null; // conteo global de leads por etapa
 
-function pipeOpenEditor() {
+async function pipeOpenEditor() {
   _pipeDraft = crmStages.map(s => ({ ...s, _new: false, _dirty: false }));
   _pipeDeleted = [];
+  // Las etapas son globales del usuario y al borrar una se migran los leads de
+  // todos los clientes, así que el conteo también debe ser global (crmLeads solo
+  // trae los del cliente activo).
+  _pipeCounts = null;
+  try {
+    const r = await fetchAuth('/api/leads');
+    if (r.ok) {
+      const all = (await r.json()).leads || [];
+      _pipeCounts = all.reduce((m, l) => { m[l.stage] = (m[l.stage] || 0) + 1; return m; }, {});
+    }
+  } catch (e) {}
   const ov = document.createElement('div');
   ov.className = 'auto-modal-overlay';
   ov.id = 'pipe-editor';
@@ -16399,6 +16411,7 @@ function pipeOpenEditor() {
 }
 
 function pipeLeadCount(key) {
+  if (_pipeCounts) return _pipeCounts[key] || 0;
   return (typeof crmLeads !== 'undefined' ? crmLeads : []).filter(l => l.stage === key).length;
 }
 
