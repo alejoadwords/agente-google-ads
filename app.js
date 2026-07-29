@@ -22797,17 +22797,27 @@ function navBuildSubmenus() {
     wrap.className = 'sb-sub';
     wrap.id = 'navsub-' + mod;
     wrap.innerHTML =
+      '<div class="sb-sub-title">' + esc(NAV_MOD_LABELS[mod] || mod) + '</div>' +
       (NAV_TABS[mod] || []).map(t =>
         '<div class="sb-sub-item" data-tab="' + t + '" onclick="event.stopPropagation();navGoTab(\'' + mod + '\',\'' + t + '\')">' +
           esc(NAV_TAB_LABELS[t] || t) + '</div>').join('') +
+      ((NAV_MOD_ACTIONS[mod] || []).length ? '<div class="sb-sub-sep"></div>' : '') +
       (NAV_MOD_ACTIONS[mod] || []).map(a =>
-        '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();' + a.fn + '">' + esc(a.label) + '</div>').join('');
-    host.insertAdjacentElement('afterend', wrap);
+        '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();navCloseSubs();' + a.fn + '">' + esc(a.label) + '</div>').join('');
+    // En escritorio cuelga del body para que no lo recorte el scroll del menú;
+    // en móvil vive dentro del propio menú, desplegándose bajo el módulo.
+    if (window.innerWidth > 768) document.body.appendChild(wrap);
+    else host.insertAdjacentElement('afterend', wrap);
 
     // Se abre al pasar por encima y permanece abierto hasta que se entra en otro
     // módulo o se sale del menú — así no se pierde al mover el ratón en diagonal.
-    host.addEventListener('mouseenter', () => { clearTimeout(_navHoverTimer); navOpenSub(mod); });
+    const abrir = () => { clearTimeout(_navHoverTimer); navOpenSub(mod); };
+    const cerrar = () => { _navHoverTimer = setTimeout(navCloseSubs, 220); };
+    host.addEventListener('mouseenter', abrir);
+    host.addEventListener('mouseleave', cerrar);
     wrap.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
+    wrap.addEventListener('mouseleave', cerrar);
+    host.addEventListener('click', () => setTimeout(navCloseSubs, 60));
   });
   navBindSidebarLeave();
   navSyncSubmenus();
@@ -22824,29 +22834,51 @@ function navBindSidebarLeave() {
   sb.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
 }
 
+function navCloseSubs() {
+  Object.keys(NAV_TABS).forEach(m => document.getElementById('navsub-' + m)?.classList.remove('open'));
+}
+
 function navOpenSub(mod) {
+  navCloseSubs();
+  const el = document.getElementById('navsub-' + mod);
+  const host = document.getElementById('navm-' + mod);
+  if (!el || !host) return;
+  el.classList.add('open');
+  navMarkActive();
+  if (window.innerWidth <= 768) return;   // en móvil se despliega en línea
+  const r = host.getBoundingClientRect();
+  const sb = document.getElementById('sidebar')?.getBoundingClientRect();
+  el.style.left = Math.round((sb ? sb.right : r.right) + 6) + 'px';
+  el.style.top = '0px';                   // se mide con el panel ya visible
+  const h = el.offsetHeight;
+  const top = Math.min(Math.max(8, r.top - 6), window.innerHeight - h - 8);
+  el.style.top = Math.round(top) + 'px';
+}
+
+// Marca la vista actual dentro de los paneles
+function navMarkActive() {
+  const mod = window._navMod || '';
   Object.keys(NAV_TABS).forEach(m => {
-    const el = document.getElementById('navsub-' + m);
-    if (!el) return;
-    if (m === mod || m === (window._navMod || '')) el.classList.add('open');
-    else el.classList.remove('open');
+    document.getElementById('navsub-' + m)?.querySelectorAll('.sb-sub-item[data-tab]').forEach(it => {
+      it.classList.toggle('active', m === mod && it.dataset.tab === (typeof crmView !== 'undefined' ? crmView : ''));
+    });
   });
 }
 
 // Deja abierto el submenú del módulo activo y marca la vista actual
 function navSyncSubmenus() {
   const mod = window._navMod || '';
+  const movil = window.innerWidth <= 768;
   Object.keys(NAV_TABS).forEach(m => {
     const el = document.getElementById('navsub-' + m);
     if (!el) return;
-    el.classList.toggle('open', m === mod);
-    el.querySelectorAll('.sb-sub-item[data-tab]').forEach(it => {
-      it.classList.toggle('active', m === mod && it.dataset.tab === (typeof crmView !== 'undefined' ? crmView : ''));
-    });
+    el.classList.toggle('open', movil && m === mod);
   });
+  navMarkActive();
 }
 
 function navGoTab(mod, tab) {
+  navCloseSubs();
   window._navMod = mod;
   if (typeof showView === 'function') showView('crm');
   crmSetView(tab);
@@ -22869,7 +22901,11 @@ function navApplyModule() {
   const crumb = document.getElementById('crm-mod-crumb');
   if (crumb) crumb.textContent = NAV_MOD_LABELS[mod] || 'CRM';
   const title = document.getElementById('crm-title');
-  if (title) title.textContent = NAV_MOD_LABELS[mod] || 'CRM';
+  if (title) {
+    const vista = NAV_TAB_LABELS[typeof crmView !== 'undefined' ? crmView : ''] || '';
+    const base = NAV_MOD_LABELS[mod] || 'CRM';
+    title.textContent = vista && vista !== base ? base + ' · ' + vista : base;
+  }
   navHighlight(mod);
 }
 
