@@ -16813,6 +16813,207 @@ function crmCardHTML(lead, now) {
     '</div>';
 }
 
+// ── CIERRE DE OPORTUNIDAD (ganada / perdida) ──────────────────────────────────
+// Al mover un lead a ganado o perdido se pide el detalle del cierre: importe y
+// moneda si se ganó, y siempre el motivo y la fecha. El motivo sale de un
+// catálogo editable (api/close-reasons) al que se pueden añadir motivos al vuelo.
+const CLOSE_CURRENCIES = ['COP', 'MXN', 'USD', 'ARS', 'CLP', 'PEN', 'EUR', 'BRL', 'UYU', 'GTQ', 'CRC', 'DOP'];
+let _closeReasons = { won: [], lost: [] };
+let _closeCtx = null;   // { leadId, kind, prevStage, stageKey, onCancel }
+
+function crmIsWonStage(key) { return key === 'ganado'; }
+function crmIsLostStage(key) { return key === 'perdido'; }
+
+async function closeLoadReasons(force) {
+  if (!force && (_closeReasons.won.length || _closeReasons.lost.length)) return _closeReasons;
+  try {
+    const r = await fetchAuth('/api/close-reasons');
+    if (r.ok) _closeReasons = await r.json();
+  } catch (e) {}
+  return _closeReasons;
+}
+
+async function closeOpenModal(lead, stageKey, prevStage, onCancel) {
+  const kind = crmIsWonStage(stageKey) ? 'won' : 'lost';
+  _closeCtx = { leadId: lead.id, kind, prevStage, stageKey, onCancel };
+  await closeLoadReasons();
+  const won = kind === 'won';
+  const today = new Date().toISOString().slice(0, 10);
+  const lastCur = localStorage.getItem('crm_last_currency') || 'COP';
+
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'close-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) closeCancel(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:' +
+          (won ? 'var(--green-lt,#ECFDF5)' : '#FEF2F2') + '">' + (won ? '👍' : '👎') + '</div>' +
+        '<div><div style="font-size:var(--fs-md);font-weight:800">' +
+          (won ? '¿Marcar esta oportunidad como ganada?' : '¿Marcar esta oportunidad como perdida?') + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + esc(lead.name || '') + '</div></div>' +
+      '</div>' +
+      '<button class="btn-ghost sm" onclick="closeCancel()">✕</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      (won
+        ? '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Confirma el importe con el que se cerró.</div>' +
+          '<div style="display:flex;gap:10px;margin-bottom:16px">' +
+            '<div style="flex:1"><label class="auto-label">Importe</label>' +
+              '<input class="auto-input" id="close-amount" type="number" min="0" step="any" value="' + (lead.value || '') + '" placeholder="0"></div>' +
+            '<div style="width:130px"><label class="auto-label">Moneda</label>' +
+              '<select class="auto-input" id="close-currency">' +
+              CLOSE_CURRENCIES.map(c => '<option' + (c === lastCur ? ' selected' : '') + '>' + c + '</option>').join('') +
+              '</select></div>' +
+          '</div>'
+        : '') +
+      '<div class="auto-field"><label class="auto-label">' +
+        (won ? 'Motivo por el que se ganó' : 'Motivo de la pérdida') + '</label>' +
+        '<input class="auto-input" id="close-search" placeholder="Buscar o escribir un motivo nuevo…" oninput="closeFilter()" autocomplete="off">' +
+        '<div id="close-list" style="max-height:190px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>' +
+      '</div>' +
+      '<div class="auto-field"><label class="auto-label">Fecha de cierre</label>' +
+        '<input class="auto-input" id="close-date" type="date" value="' + today + '"></div>' +
+      '<div id="close-msg" style="font-size:12px;color:#B91C1C"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="closeCancel()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="close-confirm" onclick="closeConfirm()">Confirmar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  closeFilter();
+  setTimeout(() => document.getElementById('close-search')?.focus(), 80);
+}
+
+function closeFilter() {
+  const q = (document.getElementById('close-search')?.value || '').trim().toLowerCase();
+  const list = _closeReasons[_closeCtx?.kind === 'won' ? 'won' : 'lost'] || [];
+  const box = document.getElementById('close-list');
+  if (!box) return;
+  const hits = list.filter(r => (r.label || '').toLowerCase().includes(q));
+  let html = hits.map(r =>
+    '<button class="btn-sec sm" style="justify-content:flex-start;text-align:left;width:100%' +
+      (_closeCtx.reasonId === r.id ? ';border-color:var(--blue);color:var(--blue);font-weight:700' : '') + '" ' +
+      'onclick="closePick(\'' + r.id + '\')">' + esc(r.label) + '</button>').join('');
+  const exact = hits.some(r => (r.label || '').toLowerCase() === q);
+  if (q && !exact) {
+    html += '<button class="btn-sec sm" style="justify-content:flex-start;text-align:left;width:100%;border-style:dashed" ' +
+      'onclick="closeAddReason()">+ Agregar «' + esc(document.getElementById('close-search').value.trim()) + '» como motivo</button>';
+  }
+  if (!html) html = '<div style="font-size:12px;color:var(--muted2);padding:6px 2px">Escribe para crear tu primer motivo</div>';
+  box.innerHTML = html;
+}
+
+function closePick(id) {
+  if (!_closeCtx) return;
+  _closeCtx.reasonId = id;
+  const list = _closeReasons[_closeCtx.kind === 'won' ? 'won' : 'lost'] || [];
+  const r = list.find(x => x.id === id);
+  _closeCtx.reasonLabel = r?.label || '';
+  const inp = document.getElementById('close-search');
+  if (inp) inp.value = _closeCtx.reasonLabel;
+  closeFilter();
+}
+
+async function closeAddReason() {
+  const inp = document.getElementById('close-search');
+  const label = (inp?.value || '').trim();
+  if (!label || !_closeCtx) return;
+  try {
+    const r = await fetchAuth('/api/close-reasons', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: _closeCtx.kind, label }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo agregar');
+    await closeLoadReasons(true);
+    closePick(d.reason.id);
+  } catch (e) {
+    const m = document.getElementById('close-msg');
+    if (m) m.textContent = e.message;
+  }
+}
+
+function closeCancel() {
+  const cb = _closeCtx?.onCancel;
+  document.getElementById('close-modal')?.remove();
+  _closeCtx = null;
+  if (typeof cb === 'function') cb();
+}
+
+async function closeConfirm() {
+  if (!_closeCtx) return;
+  const msg = document.getElementById('close-msg');
+  const btn = document.getElementById('close-confirm');
+  const label = (document.getElementById('close-search')?.value || '').trim();
+  if (!label) { if (msg) msg.textContent = 'Selecciona o escribe un motivo'; return; }
+  const date = document.getElementById('close-date')?.value || new Date().toISOString().slice(0, 10);
+  const payload = {
+    id: _closeCtx.leadId,
+    stage: _closeCtx.stageKey,
+    close_reason: label,
+    closed_at: new Date(date + 'T12:00:00').toISOString(),
+  };
+  if (_closeCtx.kind === 'won') {
+    const amount = parseFloat(document.getElementById('close-amount')?.value || '');
+    const cur = document.getElementById('close-currency')?.value || 'COP';
+    if (Number.isFinite(amount)) payload.value = amount;
+    payload.close_currency = cur;
+    try { localStorage.setItem('crm_last_currency', cur); } catch (e) {}
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/leads', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!r.ok) throw new Error('No se pudo guardar el cierre');
+    // si el motivo se escribió a mano y no existía en el catálogo, se guarda para la próxima
+    const list = _closeReasons[_closeCtx.kind] || [];
+    if (!list.some(x => (x.label || '').toLowerCase() === label.toLowerCase())) {
+      fetchAuth('/api/close-reasons', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: _closeCtx.kind, label }),
+      }).then(() => closeLoadReasons(true)).catch(() => {});
+    }
+    await fetchAuth('/api/lead-activities', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lead_id: _closeCtx.leadId, type: 'stage_change',
+        content: (_closeCtx.kind === 'won' ? 'Ganada' : 'Perdida') + ' · ' + label,
+        metadata: { from: _closeCtx.prevStage, to: _closeCtx.stageKey, close_reason: label },
+      }),
+    }).catch(() => {});
+    const idx = crmLeads.findIndex(l => l.id === _closeCtx.leadId);
+    if (idx >= 0) Object.assign(crmLeads[idx], payload);
+    document.getElementById('close-modal')?.remove();
+    _closeCtx = null;
+    crmRender();
+    if (typeof showToast === 'function') showToast(payload.stage === 'ganado' ? '🎉 Oportunidad ganada' : 'Oportunidad marcada como perdida', 'success');
+  } catch (e) {
+    if (msg) msg.textContent = e.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar'; }
+  }
+}
+
+// Muestra el cierre registrado dentro de la ficha del lead
+function crmRenderCloseInfo(lead) {
+  const host = document.getElementById('crm-d-stage')?.closest('.crm-detail-section');
+  if (!host) return;
+  document.getElementById('crm-d-close-info')?.remove();
+  if (!lead.close_reason && !lead.closed_at) return;
+  const won = crmIsWonStage(lead.stage);
+  const fecha = lead.closed_at ? new Date(lead.closed_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  const monto = (won && lead.value) ? (lead.close_currency || '') + ' ' + Number(lead.value).toLocaleString('es-CO') : '';
+  const box = document.createElement('div');
+  box.id = 'crm-d-close-info';
+  box.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:10px;font-size:12.5px;line-height:1.6;' +
+    'background:' + (won ? '#ECFDF5' : '#FEF2F2') + ';color:' + (won ? '#065F46' : '#991B1B');
+  box.innerHTML = '<b>' + (won ? '🎉 Ganada' : 'Perdida') + '</b>' +
+    (monto ? ' · ' + esc(monto) : '') +
+    (fecha ? ' · ' + esc(fecha) : '') +
+    (lead.close_reason ? '<br><span style="opacity:.85">Motivo: ' + esc(lead.close_reason) + '</span>' : '');
+  host.appendChild(box);
+}
+
 function crmSetupDrop(el, stageKey) {
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
   el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
@@ -16826,6 +17027,11 @@ function crmSetupDrop(el, stageKey) {
     const oldStage = lead.stage;
     lead.stage = stageKey;
     crmRenderKanban();
+    // Ganado/Perdido piden el detalle del cierre antes de confirmar el movimiento
+    if (crmIsWonStage(stageKey) || crmIsLostStage(stageKey)) {
+      closeOpenModal(lead, stageKey, oldStage, () => { lead.stage = oldStage; crmRenderKanban(); });
+      return;
+    }
     try {
       await fetchAuth(`/api/leads`, {
         method: 'PUT',
@@ -17013,6 +17219,7 @@ async function crmOpenDetail(leadId) {
   }
   crmPopulateStageSelects();
   document.getElementById('crm-d-stage').value = lead.stage;
+  crmRenderCloseInfo(lead);
   document.getElementById('crm-detail-overlay').classList.add('open');
   document.getElementById('crm-detail-panel').classList.add('open');
   document.getElementById('crm-activity-input').value = '';
@@ -17170,6 +17377,16 @@ async function crmChangeStage(newStage) {
   const lead = crmLeads.find(l => l.id === leadId);
   if (lead) lead.stage = newStage;
   crmRender();
+  if (crmIsWonStage(newStage) || crmIsLostStage(newStage)) {
+    closeOpenModal(crmDetailLead, newStage, oldStage, () => {
+      crmDetailLead.stage = oldStage;
+      if (lead) lead.stage = oldStage;
+      const sel = document.getElementById('crm-d-stage');
+      if (sel) sel.value = oldStage;
+      crmRender();
+    });
+    return;
+  }
   try {
     await fetchAuth('/api/leads', {
       method: 'PUT',

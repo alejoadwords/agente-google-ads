@@ -347,7 +347,7 @@ export default async function handler(req) {
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
 
     // Only allow safe fields
-    const allowed = ['name','email','phone','company','stage','stage_position','notes','source','tags','custom_fields','value','assigned_to','assigned_name'];
+    const allowed = ['name','email','phone','company','stage','stage_position','notes','source','tags','custom_fields','value','assigned_to','assigned_name','close_reason','close_currency','closed_at'];
     const update = {};
     for (const k of allowed) {
       if (fields[k] !== undefined) update[k] = fields[k];
