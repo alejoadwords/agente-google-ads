@@ -22717,11 +22717,11 @@ const NAV_TABS = {
   crm: ['kanban', 'list', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
-  analisis: ['analytics', 'nps', 'campstats'],
+  analisis: ['sales', 'analytics', 'nps', 'campstats'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -22774,6 +22774,142 @@ async function navUpdateConvBadge() {
 }
 
 // ── Análisis → Aperturas: campañas de email enviadas con su tasa de apertura ─
+// ── INFORME DE VENTAS ─────────────────────────────────────────────────────────
+// Se calcula sobre los leads ya cargados (respeta el cliente activo si eres agencia).
+let _salesRange = 90;
+
+function salesSetRange(d) { _salesRange = d; salesRender(); }
+
+function salesFmtMoney(n, cur) {
+  const c = cur || localStorage.getItem('crm_last_currency') || '';
+  return (c ? c + ' ' : '$') + Math.round(n || 0).toLocaleString('es-CO');
+}
+
+function salesBar(label, value, max, color, extra) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">' +
+    '<div style="width:170px;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(label) + '">' + esc(label) + '</div>' +
+    '<div style="flex:1;height:9px;background:var(--bg-muted);border-radius:5px;overflow:hidden">' +
+      '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:5px"></div></div>' +
+    '<div style="width:44px;text-align:right;font-size:12.5px;font-weight:700">' + value + '</div>' +
+    (extra ? '<div style="width:96px;text-align:right;font-size:11.5px;color:var(--muted)">' + extra + '</div>' : '') +
+  '</div>';
+}
+
+function salesCard(title, value, sub) {
+  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px 16px">' +
+    '<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">' + esc(title) + '</div>' +
+    '<div style="font-size:23px;font-weight:800;margin-top:6px;letter-spacing:-.5px">' + value + '</div>' +
+    (sub ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:3px">' + sub + '</div>' : '') +
+  '</div>';
+}
+
+function salesRender() {
+  const box = document.getElementById('crm-sales-view');
+  if (!box) return;
+  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  const now = Date.now();
+  const from = _salesRange ? now - _salesRange * 86400000 : 0;
+  const inRange = d => d && new Date(d).getTime() >= from;
+
+  const won  = leads.filter(l => l.stage === 'ganado'  && (!_salesRange || inRange(l.closed_at || l.updated_at)));
+  const lost = leads.filter(l => l.stage === 'perdido' && (!_salesRange || inRange(l.closed_at || l.updated_at)));
+  const open = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
+  const revenue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
+  const pipeline = open.reduce((s, l) => s + (Number(l.value) || 0), 0);
+  const ticket = won.length ? revenue / won.length : 0;
+  const closeRate = (won.length + lost.length) ? Math.round(won.length / (won.length + lost.length) * 100) : 0;
+  const cycles = won.filter(l => l.closed_at && l.created_at)
+    .map(l => (new Date(l.closed_at) - new Date(l.created_at)) / 86400000).filter(d => d >= 0);
+  const cycle = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : 0;
+  const cur = won.find(l => l.close_currency)?.close_currency || '';
+
+  const ranges = [[30, '30 días'], [90, '90 días'], [365, '12 meses'], [0, 'Todo']];
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+    '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento de ventas</div>' +
+    '<div style="font-size:12px;color:var(--muted)">Cómo cerró tu pipeline en el periodo</div></div>' +
+    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
+      '<button class="btn-' + (_salesRange === d ? 'pri' : 'sec') + ' sm" onclick="salesSetRange(' + d + ')">' + t + '</button>').join('') +
+    '</div></div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
+    salesCard('Importe ganado', salesFmtMoney(revenue, cur), won.length + (won.length === 1 ? ' venta' : ' ventas')) +
+    salesCard('Ticket medio', salesFmtMoney(ticket, cur), 'por venta cerrada') +
+    salesCard('Tasa de cierre', closeRate + '%', won.length + ' ganadas · ' + lost.length + ' perdidas') +
+    salesCard('Ciclo de venta', cycle + ' d', 'del alta al cierre') +
+    salesCard('Pipeline abierto', salesFmtMoney(pipeline, cur), open.length + ' oportunidades') +
+  '</div>';
+
+  // Motivos de pérdida y de ganada
+  const group = (arr) => {
+    const m = {};
+    arr.forEach(l => { const k = l.close_reason || 'Sin motivo registrado'; m[k] = m[k] || { n: 0, v: 0 }; m[k].n++; m[k].v += Number(l.value) || 0; });
+    return Object.entries(m).sort((a, b) => b[1].n - a[1].n);
+  };
+  const lostG = group(lost), wonG = group(won);
+  const maxL = Math.max(1, ...lostG.map(e => e[1].n)), maxW = Math.max(1, ...wonG.map(e => e[1].n));
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;margin-bottom:20px">';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Motivos de pérdida</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Por qué se cayeron ' + lost.length + ' oportunidades</div>' +
+    (lostG.length ? lostG.map(([k, d]) => salesBar(k, d.n, maxL, '#EF4444', Math.round(d.n / lost.length * 100) + '%')).join('')
+                  : '<div style="font-size:12px;color:var(--muted2)">Sin pérdidas registradas en el periodo</div>') +
+  '</div>';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Motivos de ganada</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Qué hace que te compren</div>' +
+    (wonG.length ? wonG.map(([k, d]) => salesBar(k, d.n, maxW, '#10B981', salesFmtMoney(d.v, cur))).join('')
+                 : '<div style="font-size:12px;color:var(--muted2)">Sin ventas registradas en el periodo</div>') +
+  '</div></div>';
+
+  // Evolución de ingresos por mes
+  const byMonth = {};
+  won.forEach(l => {
+    const d = new Date(l.closed_at || l.updated_at || l.created_at);
+    const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    byMonth[k] = (byMonth[k] || 0) + (Number(l.value) || 0);
+  });
+  const months = Object.entries(byMonth).sort();
+  const maxM = Math.max(1, ...months.map(e => e[1]));
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:12px">Evolución de ingresos</div>' +
+    (months.length
+      ? '<div style="display:flex;align-items:flex-end;gap:8px;height:130px">' + months.map(([k, v]) =>
+          '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px" title="' + salesFmtMoney(v, cur) + '">' +
+            '<div style="font-size:10.5px;color:var(--muted);white-space:nowrap">' + (v >= 1000 ? Math.round(v / 1000) + 'k' : Math.round(v)) + '</div>' +
+            '<div style="width:100%;max-width:54px;height:' + Math.max(4, Math.round(v / maxM * 95)) + 'px;background:linear-gradient(180deg,#3D52E5,#1520B0);border-radius:6px 6px 0 0"></div>' +
+            '<div style="font-size:10.5px;color:var(--muted2)">' + k.slice(2) + '</div>' +
+          '</div>').join('') + '</div>'
+      : '<div style="font-size:12px;color:var(--muted2)">Aún no hay ventas cerradas en el periodo</div>') +
+  '</div>';
+
+  // Por vendedor y por origen
+  const byField = (arr, field, fallback) => {
+    const m = {};
+    arr.forEach(l => { const k = l[field] || fallback; m[k] = m[k] || { n: 0, v: 0 }; m[k].n++; m[k].v += Number(l.value) || 0; });
+    return Object.entries(m).sort((a, b) => b[1].v - a[1].v);
+  };
+  const sellers = byField(won, 'assigned_name', 'Sin asignar');
+  const sources = byField(won.concat(lost).concat(open), 'source', 'manual');
+  const maxS = Math.max(1, ...sellers.map(e => e[1].v)), maxO = Math.max(1, ...sources.map(e => e[1].n));
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:12px">Ventas por responsable</div>' +
+    (sellers.length ? sellers.map(([k, d]) => salesBar(k, d.n, Math.max(1, ...sellers.map(e => e[1].n)), '#1E2BCC', salesFmtMoney(d.v, cur))).join('')
+                    : '<div style="font-size:12px;color:var(--muted2)">Sin ventas en el periodo</div>') +
+  '</div>';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Oportunidades por origen</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">De dónde vienen tus leads</div>' +
+    (sources.length ? sources.map(([k, d]) => salesBar(k, d.n, maxO, '#8B5CF6', salesFmtMoney(d.v, cur))).join('')
+                    : '<div style="font-size:12px;color:var(--muted2)">Sin datos</div>') +
+  '</div></div>';
+
+  box.innerHTML = html;
+}
+
 async function crmRenderCampStats() {
   const view = document.getElementById('crm-campstats-view');
   if (!view) return;
@@ -22894,6 +23030,10 @@ function crmRenderNpsView() {
   const _prev = crmSetView;
   crmSetView = function (v) {
     _prev(v);
+    const sv = document.getElementById('crm-sales-view');
+    if (sv) sv.style.display = v === 'sales' ? 'flex' : 'none';
+    document.getElementById('crm-btn-sales')?.classList.toggle('active', v === 'sales');
+    if (v === 'sales') salesRender();
     const pv = document.getElementById('crm-proposals-view');
     if (pv) pv.style.display = v === 'proposals' ? 'flex' : 'none';
     const nv = document.getElementById('crm-nps-view');
