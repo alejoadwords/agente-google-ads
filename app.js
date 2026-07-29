@@ -22735,11 +22735,11 @@ const NAV_TABS = {
   crm: ['kanban', 'list', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
-  analisis: ['sales', 'prod', 'analytics', 'nps', 'campstats'],
+  analisis: ['sales', 'prod', 'mk', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', mk: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'mk'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -22792,6 +22792,133 @@ async function navUpdateConvBadge() {
 }
 
 // ── Análisis → Aperturas: campañas de email enviadas con su tasa de apertura ─
+// ── INFORME DE MARKETING ──────────────────────────────────────────────────────
+// Campañas de email, automatizaciones y captación de leads en un solo lugar.
+let _mkRange = 90;
+let _mkData = null;
+
+function mkSetRange(d) { _mkRange = d; _mkData = null; mkRender(); }
+
+async function mkLoad() {
+  const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+  const [camps, autos, logs] = await Promise.all([
+    fetchAuth('/api/campaigns' + qs).then(r => r.ok ? r.json() : { campaigns: [] }).catch(() => ({ campaigns: [] })),
+    fetchAuth('/api/automations' + qs).then(r => r.ok ? r.json() : { automations: [] }).catch(() => ({ automations: [] })),
+    fetchAuth('/api/automations?logs=1').then(r => r.ok ? r.json() : { logs: [] }).catch(() => ({ logs: [] })),
+  ]);
+  _mkData = { camps: camps.campaigns || [], autos: autos.automations || [], logs: logs.logs || [] };
+  return _mkData;
+}
+
+async function mkRender() {
+  const box = document.getElementById('crm-mk-view');
+  if (!box) return;
+  if (!_mkData) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando marketing…</div>';
+    await mkLoad();
+  }
+  const { camps, autos, logs } = _mkData;
+  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  const now = Date.now();
+  const from = _mkRange ? now - _mkRange * 86400000 : 0;
+  const inR = d => d && new Date(d).getTime() >= from;
+
+  const enviadas = camps.filter(c => c.channel === 'email' && ['sent', 'sending'].includes(c.status) && (!_mkRange || inR(c.sent_at || c.created_at)));
+  const totalSent = enviadas.reduce((s, c) => s + ((c.stats || {}).sent || 0), 0);
+  const totalDeliv = enviadas.reduce((s, c) => s + ((c.stats || {}).delivered || (c.stats || {}).sent || 0), 0);
+  const totalOpen = enviadas.reduce((s, c) => s + ((c.stats || {}).opened || 0), 0);
+  const openRate = totalDeliv ? Math.round(totalOpen / totalDeliv * 100) : 0;
+
+  const logsR = logs.filter(l => !_mkRange || inR(l.created_at));
+  const impactados = new Set(logsR.map(l => l.lead_id).filter(Boolean)).size;
+  const activas = autos.filter(a => a.active).length;
+
+  const nuevos = leads.filter(l => !_mkRange || inR(l.created_at));
+
+  const ranges = [[30, '30 días'], [90, '90 días'], [365, '12 meses'], [0, 'Todo']];
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+    '<div><div style="font-size:var(--fs-lg);font-weight:800">Marketing</div>' +
+    '<div style="font-size:12px;color:var(--muted)">Campañas, automatizaciones y captación de leads</div></div>' +
+    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
+      '<button class="btn-' + (_mkRange === d ? 'pri' : 'sec') + ' sm" onclick="mkSetRange(' + d + ')">' + t + '</button>').join('') +
+    '</div></div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
+    salesCard('Campañas enviadas', enviadas.length, 'en el periodo') +
+    salesCard('Correos entregados', totalDeliv.toLocaleString('es-CO'), totalSent ? 'de ' + totalSent.toLocaleString('es-CO') + ' enviados' : '') +
+    salesCard('Tasa de apertura', openRate + '%', totalOpen.toLocaleString('es-CO') + ' aperturas') +
+    salesCard('Automatizaciones activas', activas, autos.length + ' creadas') +
+    salesCard('Contactos impactados', impactados, 'por automatizaciones') +
+  '</div>';
+
+  // Rendimiento por campaña
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Rendimiento por campaña</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Las aperturas llegan por el webhook de Resend</div>' +
+    (enviadas.length
+      ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+        '<thead><tr style="text-align:left;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">' +
+        '<th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Envío</th>' +
+        '<th style="padding:6px 8px;text-align:right">Enviados</th><th style="padding:6px 8px;text-align:right">Aperturas</th>' +
+        '<th style="padding:6px 8px;text-align:right">Tasa</th></tr></thead><tbody>' +
+        enviadas.slice().sort((a, b) => new Date(b.sent_at || b.created_at) - new Date(a.sent_at || a.created_at)).map(c => {
+          const st = c.stats || {};
+          const d = st.delivered || st.sent || 0;
+          const rate = d ? Math.round((st.opened || 0) / d * 100) : 0;
+          return '<tr style="border-top:1px solid var(--border)">' +
+            '<td style="padding:8px"><b>' + esc(c.name || '') + '</b>' + (c.subject ? '<div style="font-size:11px;color:var(--muted2)">' + esc(c.subject) + '</div>' : '') + '</td>' +
+            '<td style="padding:8px;color:var(--muted)">' + (c.sent_at ? new Date(c.sent_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '—') + '</td>' +
+            '<td style="padding:8px;text-align:right">' + (st.sent || 0) + '</td>' +
+            '<td style="padding:8px;text-align:right">' + (st.opened || 0) + '</td>' +
+            '<td style="padding:8px;text-align:right;font-weight:700;color:' + (rate >= 20 ? '#059669' : rate > 0 ? '#B45309' : 'var(--muted2)') + '">' + rate + '%</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div style="font-size:12px;color:var(--muted2)">Aún no has enviado campañas. Créalas en <b>Marketing → Campañas</b>.</div>') +
+  '</div>';
+
+  // Automatizaciones + captación
+  const porAuto = {};
+  logsR.forEach(l => {
+    porAuto[l.automation_id] = porAuto[l.automation_id] || { n: 0, leads: new Set(), err: 0 };
+    porAuto[l.automation_id].n++;
+    if (l.lead_id) porAuto[l.automation_id].leads.add(l.lead_id);
+    if (l.result && /error|fail/i.test(l.result)) porAuto[l.automation_id].err++;
+  });
+  const autoRows = autos.map(a => ({ a, d: porAuto[a.id] || { n: 0, leads: new Set(), err: 0 } }))
+    .sort((x, y) => y.d.n - x.d.n);
+  const maxA = Math.max(1, ...autoRows.map(r => r.d.n));
+
+  const porFuente = {};
+  nuevos.forEach(l => { const k = l.source || 'manual'; porFuente[k] = (porFuente[k] || 0) + 1; });
+  const fuentes = Object.entries(porFuente).sort((a, b) => b[1] - a[1]);
+  const maxFu = Math.max(1, ...fuentes.map(e => e[1]));
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Automatizaciones</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Acciones ejecutadas y contactos únicos alcanzados</div>' +
+    (autoRows.length ? autoRows.map(({ a, d }) =>
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+        '<span style="width:7px;height:7px;border-radius:50%;background:' + (a.active ? '#10B981' : 'var(--muted2)') + ';flex-shrink:0"></span>' +
+        '<div style="width:150px;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.name || '') + '">' + esc(a.name || '') + '</div>' +
+        '<div style="flex:1;height:9px;background:var(--bg-muted);border-radius:5px;overflow:hidden">' +
+          '<div style="height:100%;width:' + Math.round(d.n / maxA * 100) + '%;background:#F59E0B;border-radius:5px"></div></div>' +
+        '<div style="width:40px;text-align:right;font-size:12.5px;font-weight:700">' + d.n + '</div>' +
+        '<div style="width:82px;text-align:right;font-size:11.5px;color:var(--muted)">' + d.leads.size + ' contactos</div>' +
+      '</div>').join('')
+      : '<div style="font-size:12px;color:var(--muted2)">Sin automatizaciones creadas todavía</div>') +
+  '</div>';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Captación de leads</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + nuevos.length + ' leads nuevos en el periodo, por fuente</div>' +
+    (fuentes.length ? fuentes.map(([k, v]) => salesBar(k, v, maxFu, '#8B5CF6', Math.round(v / nuevos.length * 100) + '%')).join('')
+                    : '<div style="font-size:12px;color:var(--muted2)">Sin leads nuevos en el periodo</div>') +
+  '</div></div>';
+
+  box.innerHTML = html;
+}
+
 // ── INFORME DE PRODUCTIVIDAD ──────────────────────────────────────────────────
 // Mide la disciplina comercial: qué se agenda, qué se cumple, qué se vence y
 // qué leads se están quedando sin seguimiento.
@@ -23313,6 +23440,10 @@ function crmRenderNpsView() {
     if (prv) prv.style.display = v === 'prod' ? 'flex' : 'none';
     document.getElementById('crm-btn-prod')?.classList.toggle('active', v === 'prod');
     if (v === 'prod') prodRender();
+    const mkv = document.getElementById('crm-mk-view');
+    if (mkv) mkv.style.display = v === 'mk' ? 'flex' : 'none';
+    document.getElementById('crm-btn-mk')?.classList.toggle('active', v === 'mk');
+    if (v === 'mk') mkRender();
     const pv = document.getElementById('crm-proposals-view');
     if (pv) pv.style.display = v === 'proposals' ? 'flex' : 'none';
     const nv = document.getElementById('crm-nps-view');
