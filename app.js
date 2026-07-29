@@ -22735,11 +22735,11 @@ const NAV_TABS = {
   crm: ['kanban', 'list', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
-  analisis: ['sales', 'analytics', 'nps', 'campstats'],
+  analisis: ['sales', 'prod', 'analytics', 'nps', 'campstats'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -22792,6 +22792,158 @@ async function navUpdateConvBadge() {
 }
 
 // ── Análisis → Aperturas: campañas de email enviadas con su tasa de apertura ─
+// ── INFORME DE PRODUCTIVIDAD ──────────────────────────────────────────────────
+// Mide la disciplina comercial: qué se agenda, qué se cumple, qué se vence y
+// qué leads se están quedando sin seguimiento.
+let _prodRange = 30;
+let _prodData = null;
+
+function prodSetRange(d) { _prodRange = d; _prodData = null; prodRender(); }
+
+async function prodLoad() {
+  const fromIso = new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString();
+  const toIso = new Date(Date.now() + 60 * 86400000).toISOString();
+  const [acts, inter] = await Promise.all([
+    fetchAuth('/api/agenda?from=' + encodeURIComponent(new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString()) + '&to=' + encodeURIComponent(toIso))
+      .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
+    fetchAuth('/api/lead-activities?from=' + encodeURIComponent(fromIso))
+      .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
+  ]);
+  _prodData = { acts: acts.activities || [], inter: inter.activities || [] };
+  return _prodData;
+}
+
+async function prodRender() {
+  const box = document.getElementById('crm-prod-view');
+  if (!box) return;
+  if (!_prodData) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando actividad…</div>';
+    await prodLoad();
+  }
+  const { acts, inter } = _prodData;
+  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  const now = Date.now();
+  const from = now - (_prodRange || 3650) * 86400000;
+
+  const inRange = a => new Date(a.due_at || a.created_at).getTime() >= from;
+  const periodo = acts.filter(inRange);
+  const vencidas = acts.filter(a => !a.done && a.due_at && new Date(a.due_at).getTime() < now);
+  const debidas = periodo.filter(a => a.due_at && new Date(a.due_at).getTime() <= now);
+  const hechas = debidas.filter(a => a.done);
+  const compl = debidas.length ? Math.round(hechas.length / debidas.length * 100) : 0;
+  const proximas = acts.filter(a => !a.done && a.due_at &&
+    new Date(a.due_at).getTime() > now && new Date(a.due_at).getTime() <= now + 7 * 86400000);
+
+  // Interacciones reales (se excluye lo que genera el sistema)
+  const SYS = ['creacion', 'stage_change'];
+  const interReal = (inter || []).filter(a => !SYS.includes(a.type));
+
+  // Cobertura: leads abiertos con próxima actividad agendada
+  const abiertos = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
+  const conProxima = new Set(acts.filter(a => !a.done && a.due_at && new Date(a.due_at).getTime() > now).map(a => a.lead_id).filter(Boolean));
+  const cubiertos = abiertos.filter(l => conProxima.has(l.id));
+  const cobertura = abiertos.length ? Math.round(cubiertos.length / abiertos.length * 100) : 0;
+  const huerfanos = abiertos.filter(l => !conProxima.has(l.id));
+
+  const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+    '<div><div style="font-size:var(--fs-lg);font-weight:800">Productividad comercial</div>' +
+    '<div style="font-size:12px;color:var(--muted)">Qué se agenda, qué se cumple y qué leads se están enfriando</div></div>' +
+    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
+      '<button class="btn-' + (_prodRange === d ? 'pri' : 'sec') + ' sm" onclick="prodSetRange(' + d + ')">' + t + '</button>').join('') +
+    '</div></div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
+    salesCard('Actividades', periodo.length, 'agendadas en el periodo') +
+    salesCard('Tasa de cumplimiento', compl + '%', hechas.length + ' de ' + debidas.length + ' vencidas') +
+    salesCard('Vencidas sin hacer', vencidas.length, vencidas.length ? 'requieren acción' : 'todo al día') +
+    salesCard('Próximos 7 días', proximas.length, 'ya agendadas') +
+    salesCard('Cobertura de seguimiento', cobertura + '%', cubiertos.length + ' de ' + abiertos.length + ' leads abiertos') +
+  '</div>';
+
+  // Pulso diario
+  const dias = Math.min(_prodRange || 30, 30) || 30;
+  const dayKey = t => new Date(t).toISOString().slice(0, 10);
+  const creadas = {}, completadas = {};
+  acts.forEach(a => {
+    if (a.created_at && new Date(a.created_at).getTime() >= now - dias * 86400000) creadas[dayKey(a.created_at)] = (creadas[dayKey(a.created_at)] || 0) + 1;
+    if (a.done && a.updated_at && new Date(a.updated_at).getTime() >= now - dias * 86400000) completadas[dayKey(a.updated_at)] = (completadas[dayKey(a.updated_at)] || 0) + 1;
+  });
+  const serie = [];
+  for (let i = dias - 1; i >= 0; i--) {
+    const k = dayKey(now - i * 86400000);
+    serie.push([k, creadas[k] || 0, completadas[k] || 0]);
+  }
+  const maxD = Math.max(1, ...serie.map(s => Math.max(s[1], s[2])));
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
+    '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">' +
+      '<div style="font-size:13.5px;font-weight:800">Pulso diario</div>' +
+      '<div style="display:flex;gap:12px;font-size:11px;color:var(--muted)">' +
+        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#3D52E5;margin-right:4px"></span>creadas</span>' +
+        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#10B981;margin-right:4px"></span>completadas</span>' +
+      '</div></div>' +
+    '<div style="display:flex;align-items:flex-end;gap:3px;height:90px">' + serie.map(([k, c, d]) =>
+      '<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:1px" title="' + k + ' · ' + c + ' creadas, ' + d + ' completadas">' +
+        '<div style="height:' + Math.round(c / maxD * 45) + 'px;background:#3D52E5;border-radius:3px 3px 0 0;min-height:' + (c ? 3 : 0) + 'px"></div>' +
+        '<div style="height:' + Math.round(d / maxD * 45) + 'px;background:#10B981;border-radius:0 0 3px 3px;min-height:' + (d ? 3 : 0) + 'px"></div>' +
+      '</div>').join('') + '</div>' +
+  '</div>';
+
+  // Mix por tipo + interacciones registradas
+  const tipoLbl = { task: 'Tareas', meeting: 'Reuniones', nota: 'Notas', llamada: 'Llamadas', email: 'Emails', reunion: 'Reuniones', tarea: 'Tareas' };
+  const mix = {};
+  periodo.forEach(a => { const k = tipoLbl[a.type] || a.type; mix[k] = (mix[k] || 0) + 1; });
+  const mixArr = Object.entries(mix).sort((a, b) => b[1] - a[1]);
+  const maxMix = Math.max(1, ...mixArr.map(e => e[1]));
+  const iMix = {};
+  interReal.forEach(a => { const k = tipoLbl[a.type] || a.type; iMix[k] = (iMix[k] || 0) + 1; });
+  const iArr = Object.entries(iMix).sort((a, b) => b[1] - a[1]);
+  const maxI = Math.max(1, ...iArr.map(e => e[1]));
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;margin-bottom:20px">';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Agenda por tipo</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Lo que programaste en el periodo</div>' +
+    (mixArr.length ? mixArr.map(([k, v]) => salesBar(k, v, maxMix, '#1E2BCC', '')).join('')
+                   : '<div style="font-size:12px;color:var(--muted2)">Nada agendado en el periodo</div>') +
+  '</div>';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Interacciones registradas</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Notas, llamadas y correos anotados en las fichas</div>' +
+    (iArr.length ? iArr.map(([k, v]) => salesBar(k, v, maxI, '#0891B2', '')).join('')
+                 : '<div style="font-size:12px;color:var(--muted2)">Sin interacciones registradas — anótalas desde la ficha del lead</div>') +
+  '</div></div>';
+
+  // Alertas accionables
+  const venc = vencidas.slice().sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 8);
+  const leadName = id => (leads.find(l => l.id === id) || {}).name || '';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Actividades vencidas</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + vencidas.length + ' sin completar</div>' +
+    (venc.length ? venc.map(a =>
+      '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--border)">' +
+        '<div style="flex:1;font-size:12.5px"><b>' + esc(a.title || '(sin título)') + '</b>' +
+          (leadName(a.lead_id) ? '<div style="font-size:11px;color:var(--muted2)">' + esc(leadName(a.lead_id)) + '</div>' : '') + '</div>' +
+        '<div style="font-size:11.5px;color:#DC2626;font-weight:700">' + Math.round((now - new Date(a.due_at).getTime()) / 86400000) + ' d</div>' +
+      '</div>').join('')
+      : '<div style="font-size:12px;color:var(--muted2)">Ninguna actividad vencida 👏</div>') +
+  '</div>';
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Leads sin próxima actividad</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + huerfanos.length + ' oportunidades abiertas sin seguimiento agendado</div>' +
+    (huerfanos.length ? huerfanos.slice(0, 8).map(l =>
+      '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--border)">' +
+        '<div style="flex:1;font-size:12.5px"><b>' + esc(l.name || '') + '</b>' +
+          (l.company ? '<div style="font-size:11px;color:var(--muted2)">' + esc(l.company) + '</div>' : '') + '</div>' +
+        '<button class="btn-sec sm" onclick="crmOpenDetail(\'' + l.id + '\')">Abrir</button>' +
+      '</div>').join('')
+      : '<div style="font-size:12px;color:var(--muted2)">Todos los leads abiertos tienen seguimiento 👏</div>') +
+  '</div></div>';
+
+  box.innerHTML = html;
+}
+
 // ── INFORME DE VENTAS ─────────────────────────────────────────────────────────
 // Se calcula sobre los leads ya cargados (respeta el cliente activo si eres agencia).
 let _salesRange = 90;
@@ -23157,6 +23309,10 @@ function crmRenderNpsView() {
     if (sv) sv.style.display = v === 'sales' ? 'flex' : 'none';
     document.getElementById('crm-btn-sales')?.classList.toggle('active', v === 'sales');
     if (v === 'sales') salesRender();
+    const prv = document.getElementById('crm-prod-view');
+    if (prv) prv.style.display = v === 'prod' ? 'flex' : 'none';
+    document.getElementById('crm-btn-prod')?.classList.toggle('active', v === 'prod');
+    if (v === 'prod') prodRender();
     const pv = document.getElementById('crm-proposals-view');
     if (pv) pv.style.display = v === 'proposals' ? 'flex' : 'none';
     const nv = document.getElementById('crm-nps-view');

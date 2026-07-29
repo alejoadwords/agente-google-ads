@@ -57,7 +57,16 @@ export default async function handler(req) {
   // GET — list activities for a lead
   if (req.method === 'GET') {
     const leadId = url.searchParams.get('lead_id');
-    if (!leadId) return jsonResp({ error: 'Falta lead_id' }, 400);
+
+    // Sin lead_id: histórico del usuario por rango, para el informe de productividad
+    if (!leadId) {
+      const from = url.searchParams.get('from');
+      let q = `${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${userId}&select=id,lead_id,type,created_at&order=created_at.desc&limit=2000`;
+      if (from) q += `&created_at=gte.${encodeURIComponent(from)}`;
+      const r = await fetch(q, { headers: sbHeaders() });
+      if (!r.ok) return jsonResp({ error: await r.text() }, 500);
+      return jsonResp({ activities: (await r.json()) || [] });
+    }
     // Verify the lead belongs to this user
     const checkRes = await fetch(
       `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&user_id=eq.${userId}&select=id`,

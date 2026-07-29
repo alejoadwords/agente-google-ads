@@ -3722,6 +3722,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Ventas
         </button>
+        <button class="crm-view-btn" id="crm-btn-prod" style="display:none" onclick="crmSetView('prod')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Productividad
+        </button>
         <button class="crm-view-btn" id="crm-btn-nps" style="display:none" onclick="crmSetView('nps')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           Satisfacción
@@ -3844,6 +3848,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="crm-sources-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-proposals-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-sales-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div id="crm-prod-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-nps-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-campstats-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
   </div>
