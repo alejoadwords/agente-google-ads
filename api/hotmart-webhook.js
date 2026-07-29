@@ -5,6 +5,49 @@ const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
 const HOTMART_SECRET = process.env.HOTMART_WEBHOOK_SECRET;
 const CLERK_SECRET  = process.env.CLERK_SECRET_KEY;
+const RESEND_KEY    = process.env.RESEND_API_KEY;
+const ALERTA_A      = process.env.ALERT_EMAIL || 'alejandro.gonzalez.ads@gmail.com';
+
+// ── Aviso cuando una compra NO se pudo activar ───────────────────────────────
+// El fallo silencioso es el peor caso del negocio: el cliente paga, no recibe
+// nada, y el unico rastro era un console.error en los logs de Vercel. Pasa
+// cuando el email de Hotmart no coincide con el de Clerk o cuando el comprador
+// paga antes de registrarse. Nunca lanza: un fallo del aviso no puede tumbar
+// el webhook ni provocar reintentos de Hotmart.
+async function avisarFalloActivacion({ email, productName, motivo, extra }) {
+  console.error('[hotmart-webhook] ACTIVACION FALLIDA:', motivo, '|', email, '|', productName);
+  if (!RESEND_KEY) return false;
+  try {
+    const html =
+      '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
+        '<h2 style="font-size:18px;margin:0 0 12px">Una compra no se pudo activar</h2>' +
+        '<p style="margin:0 0 14px">Hotmart confirmo un pago pero no se pudo aplicar el plan en Clerk. ' +
+        'El cliente pago y <strong>no tiene acceso</strong>.</p>' +
+        '<table style="border-collapse:collapse;font-size:14px">' +
+          '<tr><td style="padding:4px 12px 4px 0;color:#5a5a72">Email del comprador</td><td><strong>' + (email || '—') + '</strong></td></tr>' +
+          '<tr><td style="padding:4px 12px 4px 0;color:#5a5a72">Producto</td><td>' + (productName || '—') + '</td></tr>' +
+          '<tr><td style="padding:4px 12px 4px 0;color:#5a5a72">Motivo</td><td>' + motivo + '</td></tr>' +
+          (extra ? '<tr><td style="padding:4px 12px 4px 0;color:#5a5a72">Detalle</td><td>' + extra + '</td></tr>' : '') +
+        '</table>' +
+        '<p style="margin:16px 0 0">Como arreglarlo: verifica que el cliente tenga cuenta en Acuarius con ese mismo email. ' +
+        'Si la tiene con otro, asigna el plan a mano desde el panel de admin (escribe en Clerk y la app lo respeta al instante).</p>' +
+      '</div>';
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Acuarius <notificaciones@app.acuarius.app>',
+        to: [ALERTA_A],
+        subject: 'Compra sin activar: ' + (email || 'sin email') + ' (' + (productName || 'producto desconocido') + ')',
+        html,
+      }),
+    });
+    return r.ok;
+  } catch (e) {
+    console.error('[hotmart-webhook] no se pudo enviar el aviso:', e.message);
+    return false;
+  }
+}
 
 // ── Clerk: la app lee el plan de publicMetadata.plan — actualizarlo es lo que
 // realmente activa/desactiva el plan para el usuario ─────────────────────────
@@ -112,7 +155,10 @@ export default async function handler(req, res) {
 
   // ── Compra de créditos de video ──────────────────────────────────────────
   if (productName.includes('video')) {
-    if (!usuario) return res.status(200).json({ received: true, action: 'user_not_found', email });
+    if (!usuario) {
+      await avisarFalloActivacion({ email, productName, motivo: 'El comprador no existe en la tabla users de Supabase' });
+      return res.status(200).json({ received: true, action: 'user_not_found', email });
+    }
     if (eventosCancelacion.includes(eventType)) {
       return res.status(200).json({ received: true, action: 'video_credits_no_refund' });
     }
@@ -144,7 +190,10 @@ export default async function handler(req, res) {
     let clerkOk = false;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
-      if (!clerkUser) return res.status(200).json({ received: true, action: 'user_not_found', email });
+      if (!clerkUser) {
+        await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email (complemento sin aplicar)' });
+        return res.status(200).json({ received: true, action: 'user_not_found', email });
+      }
       if (eventosCancelacion.includes(eventType)) {
         clerkOk = await clerkMergeMetadata(clerkUser.id, { emails_extra: 0 });
         return res.status(200).json({ received: true, action: 'email_pack_cancelled', clerkUpdated: clerkOk });
@@ -181,7 +230,10 @@ export default async function handler(req, res) {
     let clerkOk = false;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
-      if (!clerkUser) return res.status(200).json({ received: true, action: 'user_not_found', email });
+      if (!clerkUser) {
+        await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email (complemento sin aplicar)' });
+        return res.status(200).json({ received: true, action: 'user_not_found', email });
+      }
       if (eventosCancelacion.includes(eventType)) {
         clerkOk = await clerkMergeMetadata(clerkUser.id, { seats_extra: 0 });
         return res.status(200).json({ received: true, action: 'seats_cancelled', clerkUpdated: clerkOk });
@@ -211,7 +263,10 @@ export default async function handler(req, res) {
     let clerkOk = false;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
-      if (!clerkUser) return res.status(200).json({ received: true, action: 'user_not_found', email });
+      if (!clerkUser) {
+        await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email (complemento sin aplicar)' });
+        return res.status(200).json({ received: true, action: 'user_not_found', email });
+      }
       if (eventosCancelacion.includes(eventType)) {
         clerkOk = await clerkMergeMetadata(clerkUser.id, { leads_extra: 0 });
         return res.status(200).json({ received: true, action: 'lead_pack_cancelled', clerkUpdated: clerkOk });
@@ -271,7 +326,7 @@ export default async function handler(req, res) {
   try {
     const clerkUser = await clerkFindUserByEmail(email);
     if (clerkUser) clerkOk = await clerkSetPlan(clerkUser.id, plan);
-    else console.error('[hotmart-webhook] Usuario no encontrado en Clerk:', email);
+    else await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email', extra: 'Plan que deberia tener: ' + plan });
   } catch (e) { console.error('[hotmart-webhook] Clerk activate error:', e.message); }
 
   const ahora      = new Date();
