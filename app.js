@@ -18169,8 +18169,9 @@ function crmSetView(v) {
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
   if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
+  // "Editar pipeline" pasó al submenú del sidebar
   const pipeBtn = document.getElementById('crm-btn-pipe');
-  if (pipeBtn) pipeBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
+  if (pipeBtn) pipeBtn.style.display = 'none';
   // el total del pipeline pertenece al tablero: no debe colarse en Marketing ni Análisis
   const pipeTotal = document.getElementById('crm-pipeline-total');
   if (pipeTotal) pipeTotal.style.display = (v === 'kanban' || v === 'list') ? '' : 'none';
@@ -22803,19 +22804,24 @@ function navBuildSubmenus() {
         '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();' + a.fn + '">' + esc(a.label) + '</div>').join('');
     host.insertAdjacentElement('afterend', wrap);
 
-    // Al pasar por encima se abre; al salir se cierra salvo que sea el módulo activo
-    const open = () => { clearTimeout(_navHoverTimer); navOpenSub(mod); };
-    const close = () => {
-      _navHoverTimer = setTimeout(() => {
-        if ((window._navMod || '') !== mod) wrap.classList.remove('open');
-      }, 260);
-    };
-    host.addEventListener('mouseenter', open);
-    host.addEventListener('mouseleave', close);
+    // Se abre al pasar por encima y permanece abierto hasta que se entra en otro
+    // módulo o se sale del menú — así no se pierde al mover el ratón en diagonal.
+    host.addEventListener('mouseenter', () => { clearTimeout(_navHoverTimer); navOpenSub(mod); });
     wrap.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
-    wrap.addEventListener('mouseleave', close);
   });
+  navBindSidebarLeave();
   navSyncSubmenus();
+}
+
+// Al salir del menú lateral se recogen los submenús que no son del módulo activo
+function navBindSidebarLeave() {
+  const sb = document.getElementById('sidebar');
+  if (!sb || sb.dataset.navLeaveBound) return;
+  sb.dataset.navLeaveBound = '1';
+  sb.addEventListener('mouseleave', () => {
+    _navHoverTimer = setTimeout(navSyncSubmenus, 500);
+  });
+  sb.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
 }
 
 function navOpenSub(mod) {
