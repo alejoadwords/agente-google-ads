@@ -22849,7 +22849,9 @@ async function cvRender() {
   }
 
   const nuevas = convs.filter(c => !_cvRange || new Date(c.created_at).getTime() >= now - _cvRange * 86400000);
-  const abiertas = convs.filter(c => (c.status || 'open') !== 'closed');
+  // El inbox usa bot | human | resolved — abierta es todo lo que no está resuelto
+  const abiertas = convs.filter(c => (c.status || 'bot') !== 'resolved');
+  const escaladas = convs.filter(c => c.status === 'human');
   const sinLeer = convs.reduce((s, c) => s + (c.unread_count || 0), 0);
 
   // Tiempo hasta la primera respuesta: primer mensaje entrante vs primera salida
@@ -22869,7 +22871,7 @@ async function cvRender() {
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
     salesCard('Conversaciones', convs.length, nuevas.length + ' nuevas en el periodo') +
-    salesCard('Abiertas', abiertas.length, sinLeer ? sinLeer + ' mensajes sin leer' : 'sin pendientes') +
+    salesCard('Sin resolver', abiertas.length, escaladas.length + ' escaladas · ' + sinLeer + ' sin leer') +
     salesCard('1.ª respuesta (mediana)', cvFmtDur(mediana), tiempos.length + ' conversaciones medidas') +
     salesCard('1.ª respuesta (p90)', cvFmtDur(p90), 'las más lentas') +
     salesCard('Mensajes', totalMsgs.toLocaleString('es-CO'), 'intercambiados') +
@@ -22895,10 +22897,11 @@ async function cvRender() {
   const canales = Object.entries(porCanal).sort((a, b) => b[1] - a[1]);
   const maxC = Math.max(1, ...canales.map(e => e[1]));
   const porEstado = {};
-  convs.forEach(c => { const k = c.status || 'open'; porEstado[k] = (porEstado[k] || 0) + 1; });
+  convs.forEach(c => { const k = c.status || 'bot'; porEstado[k] = (porEstado[k] || 0) + 1; });
   const estados = Object.entries(porEstado).sort((a, b) => b[1] - a[1]);
   const maxE = Math.max(1, ...estados.map(e => e[1]));
-  const estLbl = { open: 'Abiertas', closed: 'Cerradas', pending: 'Pendientes' };
+  const estLbl = { bot: 'Atendidas por el bot', human: 'Escaladas a una persona', resolved: 'Resueltas' };
+  const estCol = { resolved: '#10B981', human: '#F59E0B', bot: '#0891B2' };
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
   html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
@@ -22909,8 +22912,8 @@ async function cvRender() {
   '</div>';
   html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
     '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Estado de las conversaciones</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Cuántas siguen abiertas</div>' +
-    (estados.length ? estados.map(([k, v]) => salesBar(estLbl[k] || k, v, maxE, k === 'closed' ? '#10B981' : '#F59E0B', Math.round(v / convs.length * 100) + '%')).join('')
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Cuántas resolvió el bot y cuántas necesitaron a una persona</div>' +
+    (estados.length ? estados.map(([k, v]) => salesBar(estLbl[k] || k, v, maxE, estCol[k] || '#8B5CF6', Math.round(v / convs.length * 100) + '%')).join('')
                     : '<div style="font-size:12px;color:var(--muted2)">Sin datos</div>') +
   '</div></div>';
 
