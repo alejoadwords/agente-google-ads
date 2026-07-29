@@ -22811,10 +22811,11 @@ function navBuildSubmenus() {
 
     // Se abre al pasar por encima y permanece abierto hasta que se entra en otro
     // módulo o se sale del menú — así no se pierde al mover el ratón en diagonal.
-    const abrir = () => { clearTimeout(_navHoverTimer); navOpenSub(mod); };
+    // El panel NO se cierra al salir del módulo: hacerlo obligaba a cruzar el
+    // hueco en menos de medio segundo y volvía imposible llegar a los items.
+    // Se cierra solo al entrar en otro módulo, al salir del panel o del menú.
     const cerrar = () => { _navHoverTimer = setTimeout(navCloseSubs, 450); };
-    host.addEventListener('mouseenter', abrir);
-    host.addEventListener('mouseleave', cerrar);
+    host.addEventListener('mouseenter', () => { clearTimeout(_navHoverTimer); navOpenSub(mod); });
     wrap.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
     wrap.addEventListener('mouseleave', cerrar);
     host.addEventListener('click', () => setTimeout(navCloseSubs, 60));
