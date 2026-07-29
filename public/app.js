@@ -22788,6 +22788,7 @@ const NAV_MOD_ACTIONS = {
   crm: [{ label: 'Editar pipeline', fn: 'pipeOpenEditor()' }],
 };
 let _navHoverTimer = null;
+let _navSwitchTimer = null;
 
 function navBuildSubmenus() {
   Object.keys(NAV_TABS).forEach(mod => {
@@ -22815,8 +22816,18 @@ function navBuildSubmenus() {
     // hueco en menos de medio segundo y volvía imposible llegar a los items.
     // Se cierra solo al entrar en otro módulo, al salir del panel o del menú.
     const cerrar = () => { _navHoverTimer = setTimeout(navCloseSubs, 450); };
-    host.addEventListener('mouseenter', () => { clearTimeout(_navHoverTimer); navOpenSub(mod); });
-    wrap.addEventListener('mouseenter', () => clearTimeout(_navHoverTimer));
+    // Al ir en diagonal hacia un item del panel el ratón cruza por encima de los
+    // módulos de abajo. Si ya hay un panel abierto, se espera antes de cambiar:
+    // si el ratón llega al panel a tiempo, el cambio se cancela.
+    host.addEventListener('mouseenter', () => {
+      clearTimeout(_navHoverTimer);
+      const abierto = Object.keys(NAV_TABS).find(m =>
+        document.getElementById('navsub-' + m)?.classList.contains('open'));
+      clearTimeout(_navSwitchTimer);
+      if (abierto && abierto !== mod) _navSwitchTimer = setTimeout(() => navOpenSub(mod), 280);
+      else navOpenSub(mod);
+    });
+    wrap.addEventListener('mouseenter', () => { clearTimeout(_navHoverTimer); clearTimeout(_navSwitchTimer); });
     wrap.addEventListener('mouseleave', cerrar);
     host.addEventListener('click', () => setTimeout(navCloseSubs, 60));
   });
@@ -22836,6 +22847,7 @@ function navBindSidebarLeave() {
 }
 
 function navCloseSubs() {
+  clearTimeout(_navSwitchTimer);
   Object.keys(NAV_TABS).forEach(m => document.getElementById('navsub-' + m)?.classList.remove('open'));
 }
 
