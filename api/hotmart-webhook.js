@@ -49,6 +49,55 @@ async function avisarFalloActivacion({ email, productName, motivo, extra }) {
   }
 }
 
+// ── Cantidad comprada: de donde sale y por que en ese orden ─────────────────
+// Hotmart 2.0 manda data.purchase.offer.code, un alfanumerico ALEATORIO
+// ('2muq4ex2'). Sacarle digitos con un regex es una bomba: '2muq4ex2' daria 2.
+// Y data.purchase.price.value viene en la moneda del comprador (ISO 4217 en
+// price.currency_value), asi que una compra colombiana de 13.512 COP inferida
+// como USD daba miles de paquetes. Orden de confianza:
+//   1. Mapa explicito por codigo de oferta  → exacto, no adivina
+//   2. Nombre de la oferta, si trae un patron claro de cantidad
+//   3. Precio, SOLO si la moneda es USD
+//   4. Nada fiable → 1 unidad y aviso por email para ajustarlo a mano
+//
+// Para añadir una oferta: su codigo esta en el link de pago, en ?off=CODIGO.
+const OFERTAS = {
+  // Creditos de video (producto 7642463)
+  '2muq4ex2': { tipo: 'video',     cantidad: 5  },
+  'mfjz53b5': { tipo: 'video',     cantidad: 10 },
+  // Usuarios adicionales (producto 8179091) — $9 por usuario
+  // Contactos adicionales (producto 8216932) — paquetes de 1.000
+  // Pendiente: añadir aqui los codigos ?off= de cada oferta
+};
+
+function monedaEsUSD(data) {
+  const c = (data?.purchase?.price?.currency_value || data?.purchase?.full_price?.currency_value || '').toUpperCase();
+  return c === 'USD' || c === '';  // vacio = payloads viejos sin el campo
+}
+
+// Devuelve { cantidad, fuente } — 'fuente' sirve para saber si hay que avisar
+function resolverCantidad(data, { tipo, patronNombre, porPrecio, maximo }) {
+  const codigo = (data?.purchase?.offer?.code || '').trim();
+  const o = codigo ? OFERTAS[codigo] : null;
+  // El tipo debe coincidir: si no, una oferta de video mapeada a 5 acabaria
+  // dando 5 asientos al caer en otra rama.
+  if (o && o.cantidad && o.tipo === tipo) {
+    return { cantidad: Math.min(o.cantidad, maximo), fuente: 'codigo' };
+  }
+  // OJO: solo el NOMBRE, nunca el codigo — el codigo es aleatorio
+  const nombre = (data?.purchase?.offer?.name || '').toLowerCase().trim();
+  if (nombre && patronNombre) {
+    const n = patronNombre(nombre);
+    if (n > 0) return { cantidad: Math.min(n, maximo), fuente: 'nombre' };
+  }
+  const precio = data?.purchase?.price?.value || 0;
+  if (precio > 0 && monedaEsUSD(data)) {
+    const n = porPrecio(precio);
+    if (n > 0) return { cantidad: Math.min(n, maximo), fuente: 'precio' };
+  }
+  return { cantidad: 1, fuente: 'indeterminada' };
+}
+
 // ── Clerk: la app lee el plan de publicMetadata.plan — actualizarlo es lo que
 // realmente activa/desactiva el plan para el usuario ─────────────────────────
 async function clerkFindUserByEmail(email) {
@@ -162,14 +211,13 @@ export default async function handler(req, res) {
     if (eventosCancelacion.includes(eventType)) {
       return res.status(200).json({ received: true, action: 'video_credits_no_refund' });
     }
-    const offerName  = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
-    const price      = data?.purchase?.price?.value || 0;
-    let creditsToAdd = 0;
-    if      (offerName.includes('10')) creditsToAdd = 10;
-    else if (offerName.includes('5'))  creditsToAdd = 5;
-    else if (price <= 12)              creditsToAdd = 5;
-    else if (price <= 20)              creditsToAdd = 10;
-    else                               creditsToAdd = 5;
+    const rv = resolverCantidad(data, {
+      tipo: 'video',
+      patronNombre: (n) => { const m = n.match(/(\d+)\s*(cr[eé]dito|video)/); return m ? parseInt(m[1]) : 0; },
+      porPrecio: (p) => (p <= 12 ? 5 : 10),
+      maximo: 50,
+    });
+    const creditsToAdd = rv.fuente === 'indeterminada' ? 5 : rv.cantidad;
 
     await sb(
       `/users?id=eq.${encodeURIComponent(usuario.id)}`,
@@ -198,21 +246,13 @@ export default async function handler(req, res) {
         clerkOk = await clerkMergeMetadata(clerkUser.id, { emails_extra: 0 });
         return res.status(200).json({ received: true, action: 'email_pack_cancelled', clerkUpdated: clerkOk });
       }
-      const offerName = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
-      const price = data?.purchase?.price?.value || 0;
-      let packs = 1;
-      const kMatch = offerName.match(/(\d+)\s*k/); // '4k emails' → 4.000 → 2 paquetes
-      if (kMatch) packs = Math.max(1, Math.round(parseInt(kMatch[1]) / 2));
-      else if (price > 0) {
-        // Fallback alineado a los precios reales de Hotmart: $4→2k, $8→4k, $22→10k
-        if (price <= 5) packs = 1;
-        else if (price <= 9) packs = 2;
-        else if (price <= 13) packs = 3;
-        else if (price <= 17) packs = 4;
-        else if (price <= 23) packs = 5;
-        else packs = Math.round(price / 4);
-      }
-      packs = Math.min(packs, 50); // tope de cordura: 100.000 emails extra
+      const re = resolverCantidad(data, {
+        tipo: 'emails',
+        patronNombre: (n) => { const k = n.match(/(\d+)\s*k\b/); return k ? Math.round(parseInt(k[1]) / 2) : 0; },
+        porPrecio: (p) => (p <= 5 ? 1 : p <= 9 ? 2 : p <= 13 ? 3 : p <= 17 ? 4 : p <= 23 ? 5 : Math.round(p / 4)),
+        maximo: 50,
+      });
+      const packs = re.cantidad;
       clerkOk = await clerkMergeMetadata(clerkUser.id, { emails_extra: packs });
       return res.status(200).json({ received: true, action: 'email_pack_set', packs, emails: packs * 2000, clerkUpdated: clerkOk });
     } catch (e) {
@@ -238,15 +278,19 @@ export default async function handler(req, res) {
         clerkOk = await clerkMergeMetadata(clerkUser.id, { seats_extra: 0 });
         return res.status(200).json({ received: true, action: 'seats_cancelled', clerkUpdated: clerkOk });
       }
-      const offerName = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
-      const price = data?.purchase?.price?.value || 0;
-      let seats = 1;
-      const nMatch = offerName.match(/(\d+)/);
-      if (nMatch) seats = Math.max(1, parseInt(nMatch[1]));
-      else if (price > 0) seats = Math.max(1, Math.round(price / 9));
-      seats = Math.min(seats, 20); // tope de cordura
+      const r = resolverCantidad(data, {
+        tipo: 'asientos',
+        patronNombre: (n) => { const m = n.match(/(\d+)\s*(usuario|asiento|seat)/); return m ? parseInt(m[1]) : 0; },
+        porPrecio: (p) => Math.round(p / 9),   // $9 por usuario
+        maximo: 20,
+      });
+      const seats = r.cantidad;
       clerkOk = await clerkMergeMetadata(clerkUser.id, { seats_extra: seats });
-      return res.status(200).json({ received: true, action: 'seats_set', seats, clerkUpdated: clerkOk });
+      if (r.fuente === 'indeterminada') {
+        await avisarFalloActivacion({ email, productName, motivo: 'No se pudo determinar cuantos usuarios compro — se aplico 1',
+          extra: 'Oferta: ' + (data?.purchase?.offer?.code || 'sin codigo') + ' · Precio: ' + (data?.purchase?.price?.value || 0) + ' ' + (data?.purchase?.price?.currency_value || '?') });
+      }
+      return res.status(200).json({ received: true, action: 'seats_set', seats, fuente: r.fuente, clerkUpdated: clerkOk });
     } catch (e) {
       console.error('[hotmart-webhook] seats error:', e.message);
       return res.status(200).json({ received: true, action: 'seats_error' });
@@ -271,17 +315,25 @@ export default async function handler(req, res) {
         clerkOk = await clerkMergeMetadata(clerkUser.id, { leads_extra: 0 });
         return res.status(200).json({ received: true, action: 'lead_pack_cancelled', clerkUpdated: clerkOk });
       }
-      const offerName = (data?.purchase?.offer?.key || data?.purchase?.offer?.name || '').toLowerCase();
-      const price = data?.purchase?.price?.value || 0;
-      let packs = 1;
-      const kMatch = offerName.match(/(\d+)\s*k/);            // '5k contactos' → 5 paquetes
-      const milMatch = offerName.match(/(\d+)[.,](\d{3})/);    // '5.000 contactos' → 5 paquetes
-      if (kMatch) packs = Math.max(1, parseInt(kMatch[1]));
-      else if (milMatch) packs = Math.max(1, parseInt(milMatch[1]));
-      else if (price > 0) packs = Math.max(1, Math.round(price / 4));
-      packs = Math.min(packs, 100); // tope de cordura: 100.000 contactos extra
+      const r = resolverCantidad(data, {
+        tipo: 'contactos',
+        patronNombre: (n) => {
+          const k = n.match(/(\d+)\s*k\b/);              // '5k contactos' → 5
+          if (k) return parseInt(k[1]);
+          const mil = n.match(/(\d+)[.,](\d{3})/);        // '5.000 contactos' → 5
+          if (mil) return parseInt(mil[1]);
+          return 0;
+        },
+        porPrecio: (p) => Math.round(p / 4),   // $4 por cada 1.000
+        maximo: 100,
+      });
+      const packs = r.cantidad;
       clerkOk = await clerkMergeMetadata(clerkUser.id, { leads_extra: packs });
-      return res.status(200).json({ received: true, action: 'lead_pack_set', packs, contacts: packs * 1000, clerkUpdated: clerkOk });
+      if (r.fuente === 'indeterminada') {
+        await avisarFalloActivacion({ email, productName, motivo: 'No se pudo determinar cuantos contactos compro — se aplicaron 1.000',
+          extra: 'Oferta: ' + (data?.purchase?.offer?.code || 'sin codigo') + ' · Precio: ' + (data?.purchase?.price?.value || 0) + ' ' + (data?.purchase?.price?.currency_value || '?') });
+      }
+      return res.status(200).json({ received: true, action: 'lead_pack_set', packs, contacts: packs * 1000, fuente: r.fuente, clerkUpdated: clerkOk });
     } catch (e) {
       console.error('[hotmart-webhook] lead pack error:', e.message);
       return res.status(200).json({ received: true, action: 'lead_pack_error' });
