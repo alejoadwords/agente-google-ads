@@ -16410,6 +16410,16 @@ async function pipeOpenEditor() {
   pipeRenderRows();
 }
 
+// Probabilidad de cierre por etapa. Si el usuario no la fijó, se estima por la
+// posición dentro del pipeline (las etapas de cierre son 100% y 0%).
+function pipeProbFor(stage, idx, total) {
+  if (stage.key === 'ganado') return 100;
+  if (stage.key === 'perdido') return 0;
+  if (Number.isFinite(stage.probability) && stage.probability !== null) return stage.probability;
+  const openCount = Math.max(1, total - 2);
+  return Math.min(90, Math.round(((idx + 1) / (openCount + 1)) * 100));
+}
+
 function pipeLeadCount(key) {
   if (_pipeCounts) return _pipeCounts[key] || 0;
   return (typeof crmLeads !== 'undefined' ? crmLeads : []).filter(l => l.stage === key).length;
@@ -16430,6 +16440,11 @@ function pipeRenderRows() {
         'style="width:30px;height:30px;border:none;border-radius:8px;background:none;cursor:pointer;padding:0" title="Color">' +
       '<input class="auto-input" value="' + esc(s.label || '') + '" maxlength="40" oninput="pipeSet(' + i + ',\'label\',this.value)" style="flex:1">' +
       '<div style="font-size:11px;color:var(--muted2);min-width:62px;text-align:right">' + (s._new ? 'nueva' : n + (n === 1 ? ' lead' : ' leads')) + '</div>' +
+      (prot && s.key !== 'nuevo' ? '<div style="width:74px"></div>'
+        : '<div style="width:74px;display:flex;align-items:center;gap:3px" title="Probabilidad de cierre — se usa en el forecast">' +
+          '<input class="auto-input" type="number" min="0" max="100" value="' + pipeProbFor(s, i, _pipeDraft.length) + '" ' +
+          'oninput="pipeSet(' + i + ',\'probability\',this.value)" style="padding:6px 7px;text-align:right">' +
+          '<span style="font-size:11px;color:var(--muted2)">%</span></div>') +
       (prot
         ? '<span title="Otros módulos dependen de esta etapa: puedes renombrarla, no eliminarla" style="font-size:11px;color:var(--muted2);padding:4px 6px">🔒</span>'
         : '<button class="auto-step-mini" onclick="pipeDel(' + i + ')" title="Eliminar">🗑</button>') +
@@ -16499,7 +16514,7 @@ async function pipeSave() {
       if (s._new) {
         const r = await fetchAuth('/api/pipeline-stages', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label: s.label.trim(), color: s.color }),
+          body: JSON.stringify({ label: s.label.trim(), color: s.color, probability: Number(s.probability) }),
         });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la etapa');
         const d = await r.json();
@@ -16507,7 +16522,7 @@ async function pipeSave() {
       } else if (s._dirty) {
         await fetchAuth('/api/pipeline-stages', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: s.id, label: s.label.trim(), color: s.color }),
+          body: JSON.stringify({ id: s.id, label: s.label.trim(), color: s.color, probability: Number(s.probability) }),
         });
       }
     }
@@ -22799,12 +22814,35 @@ function salesBar(label, value, max, color, extra) {
   '</div>';
 }
 
-function salesCard(title, value, sub) {
+function salesCard(title, value, sub, delta) {
+  let d = '';
+  if (delta !== undefined && delta !== null && isFinite(delta)) {
+    const up = delta >= 0;
+    d = '<span style="font-size:11.5px;font-weight:700;color:' + (up ? '#059669' : '#DC2626') + ';margin-left:7px">' +
+      (up ? '▲' : '▼') + ' ' + Math.abs(Math.round(delta)) + '%</span>';
+  }
   return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px 16px">' +
     '<div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">' + esc(title) + '</div>' +
-    '<div style="font-size:23px;font-weight:800;margin-top:6px;letter-spacing:-.5px">' + value + '</div>' +
+    '<div style="font-size:23px;font-weight:800;margin-top:6px;letter-spacing:-.5px">' + value + d + '</div>' +
     (sub ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:3px">' + sub + '</div>' : '') +
   '</div>';
+}
+
+// Descarga el listado de ganadas del periodo
+function salesExportCsv() {
+  const rows = (window._salesWon || []);
+  const head = ['Nombre', 'Empresa', 'Email', 'Importe', 'Moneda', 'Motivo', 'Fecha de cierre', 'Responsable', 'Origen'];
+  const esq = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const csv = [head.join(',')].concat(rows.map(l => [
+    l.name, l.company, l.email, l.value || 0, l.close_currency || '',
+    l.close_reason || '', (l.closed_at || '').slice(0, 10), l.assigned_name || '', l.source || '',
+  ].map(esq).join(','))).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ventas-ganadas-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function salesRender() {
@@ -22827,6 +22865,21 @@ function salesRender() {
   const cycle = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : 0;
   const cur = won.find(l => l.close_currency)?.close_currency || '';
 
+  window._salesWon = won;
+  // Periodo anterior de la misma longitud, para la comparativa
+  let dRev = null, dCount = null;
+  if (_salesRange) {
+    const prevFrom = from - _salesRange * 86400000;
+    const prevWon = leads.filter(l => {
+      if (l.stage !== 'ganado') return false;
+      const t = new Date(l.closed_at || l.updated_at || 0).getTime();
+      return t >= prevFrom && t < from;
+    });
+    const prevRev = prevWon.reduce((s2, l) => s2 + (Number(l.value) || 0), 0);
+    if (prevRev > 0) dRev = ((revenue - prevRev) / prevRev) * 100;
+    if (prevWon.length > 0) dCount = ((won.length - prevWon.length) / prevWon.length) * 100;
+  }
+
   const ranges = [[30, '30 días'], [90, '90 días'], [365, '12 meses'], [0, 'Todo']];
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento de ventas</div>' +
@@ -22836,8 +22889,8 @@ function salesRender() {
     '</div></div>';
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
-    salesCard('Importe ganado', salesFmtMoney(revenue, cur), won.length + (won.length === 1 ? ' venta' : ' ventas')) +
-    salesCard('Ticket medio', salesFmtMoney(ticket, cur), 'por venta cerrada') +
+    salesCard('Importe ganado', salesFmtMoney(revenue, cur), won.length + (won.length === 1 ? ' venta' : ' ventas') + (dRev !== null ? ' · vs periodo anterior' : ''), dRev) +
+    salesCard('Ticket medio', salesFmtMoney(ticket, cur), 'por venta cerrada', dCount) +
     salesCard('Tasa de cierre', closeRate + '%', won.length + ' ganadas · ' + lost.length + ' perdidas') +
     salesCard('Ciclo de venta', cycle + ' d', 'del alta al cierre') +
     salesCard('Pipeline abierto', salesFmtMoney(pipeline, cur), open.length + ' oportunidades') +
@@ -22865,6 +22918,50 @@ function salesRender() {
     (wonG.length ? wonG.map(([k, d]) => salesBar(k, d.n, maxW, '#10B981', salesFmtMoney(d.v, cur))).join('')
                  : '<div style="font-size:12px;color:var(--muted2)">Sin ventas registradas en el periodo</div>') +
   '</div></div>';
+
+  // Embudo del pipeline con conversión entre etapas + forecast ponderado
+  const stages = (typeof crmStages !== 'undefined' ? crmStages : []);
+  const openStages = stages.filter(st => !['ganado', 'perdido'].includes(st.key));
+  const cnt = k => leads.filter(l => l.stage === k).length;
+  const val = k => leads.filter(l => l.stage === k).reduce((a, l) => a + (Number(l.value) || 0), 0);
+  const maxF = Math.max(1, ...openStages.map(st => cnt(st.key)), won.length);
+
+  const forecast = openStages.reduce((sum, st, i) => {
+    const prob = pipeProbFor(st, i, stages.length) / 100;
+    return sum + val(st.key) * prob;
+  }, 0);
+
+  const funnelRows = openStages.concat(stages.filter(st => st.key === 'ganado')).map((st, i, arr) => {
+    const n = cnt(st.key), v = val(st.key);
+    const prev = i > 0 ? cnt(arr[i - 1].key) : null;
+    const conv = (prev && prev > 0) ? Math.round(n / prev * 100) : null;
+    const prob = pipeProbFor(st, i, stages.length);
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+      '<div style="width:130px;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(st.label) + '</div>' +
+      '<div style="flex:1;height:26px;background:var(--bg-muted);border-radius:7px;overflow:hidden;position:relative">' +
+        '<div style="height:100%;width:' + Math.max(2, Math.round(n / maxF * 100)) + '%;background:' + (st.color || '#1E2BCC') + ';border-radius:7px;opacity:.85"></div>' +
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;padding-left:9px;font-size:12px;font-weight:700;color:var(--text)">' + n + '</div>' +
+      '</div>' +
+      '<div style="width:92px;text-align:right;font-size:11.5px;color:var(--muted)">' + salesFmtMoney(v, cur) + '</div>' +
+      '<div style="width:52px;text-align:right;font-size:11.5px;color:var(--muted2)">' + (st.key === 'ganado' ? '' : prob + '%') + '</div>' +
+      '<div style="width:62px;text-align:right;font-size:11.5px;font-weight:700;color:' + (conv === null ? 'var(--muted2)' : conv >= 50 ? '#059669' : '#B45309') + '">' +
+        (conv === null ? '—' : '↓ ' + conv + '%') + '</div>' +
+    '</div>';
+  }).join('');
+
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">' +
+      '<div><div style="font-size:13.5px;font-weight:800">Embudo del pipeline</div>' +
+      '<div style="font-size:11.5px;color:var(--muted)">Cuántas oportunidades hay en cada etapa y qué porcentaje pasa a la siguiente</div></div>' +
+      '<div style="text-align:right"><div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Forecast ponderado</div>' +
+      '<div style="font-size:19px;font-weight:800;color:var(--blue)">' + salesFmtMoney(forecast, cur) + '</div>' +
+      '<div style="font-size:10.5px;color:var(--muted2)">importe × probabilidad de cada etapa</div></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;margin-bottom:6px;font-size:10.5px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.04em">' +
+      '<div style="width:130px">Etapa</div><div style="flex:1">Oportunidades</div>' +
+      '<div style="width:92px;text-align:right">Valor</div><div style="width:52px;text-align:right">Prob.</div><div style="width:62px;text-align:right">Conv.</div>' +
+    '</div>' + funnelRows +
+  '</div>';
 
   // Evolución de ingresos por mes
   const byMonth = {};
@@ -22909,6 +23006,29 @@ function salesRender() {
     (sources.length ? sources.map(([k, d]) => salesBar(k, d.n, maxO, '#8B5CF6', salesFmtMoney(d.v, cur))).join('')
                     : '<div style="font-size:12px;color:var(--muted2)">Sin datos</div>') +
   '</div></div>';
+
+  // Listado de oportunidades ganadas + descarga
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:14px">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">' +
+      '<div><div style="font-size:13.5px;font-weight:800">Oportunidades ganadas</div>' +
+      '<div style="font-size:11.5px;color:var(--muted)">' + won.length + ' en el periodo</div></div>' +
+      (won.length ? '<button class="btn-sec sm" onclick="salesExportCsv()">Descargar CSV</button>' : '') +
+    '</div>' +
+    (won.length
+      ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+        '<thead><tr style="text-align:left;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">' +
+        '<th style="padding:6px 8px">Cliente</th><th style="padding:6px 8px">Motivo</th>' +
+        '<th style="padding:6px 8px">Cierre</th><th style="padding:6px 8px;text-align:right">Importe</th></tr></thead><tbody>' +
+        won.slice().sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0)).map(l =>
+          '<tr style="border-top:1px solid var(--border)">' +
+          '<td style="padding:8px"><b>' + esc(l.name || '') + '</b>' + (l.company ? '<div style="font-size:11px;color:var(--muted2)">' + esc(l.company) + '</div>' : '') + '</td>' +
+          '<td style="padding:8px;color:var(--muted)">' + esc(l.close_reason || '—') + '</td>' +
+          '<td style="padding:8px;color:var(--muted)">' + ((l.closed_at || '').slice(0, 10) || '—') + '</td>' +
+          '<td style="padding:8px;text-align:right;font-weight:700">' + salesFmtMoney(Number(l.value) || 0, l.close_currency || cur) + '</td>' +
+          '</tr>').join('') +
+        '</tbody></table></div>'
+      : '<div style="font-size:12px;color:var(--muted2)">Sin ventas cerradas en el periodo</div>') +
+  '</div>';
 
   box.innerHTML = html;
 }

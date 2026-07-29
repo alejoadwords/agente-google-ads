@@ -74,6 +74,22 @@ const DEFAULT_STAGES = [
   { key: 'perdido',     label: 'Perdido',      color: '#9CA3AF', position: 7 },
 ];
 
+
+// La columna probability se añadió después; si la base aún no la tiene, se
+// reintenta sin ella en vez de romper el guardado del pipeline.
+async function patchStage(url, update) {
+  let res = await fetch(url, { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) });
+  if (!res.ok && update.probability !== undefined) {
+    const txt = await res.clone().text().catch(() => '');
+    if (txt.includes('probability')) {
+      const { probability, ...rest } = update;
+      if (!Object.keys(rest).length) return null;
+      res = await fetch(url, { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(rest) });
+    }
+  }
+  return res;
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
@@ -159,11 +175,13 @@ export default async function handler(req) {
     const update = {};
     if (label) update.label = label.trim().slice(0, 40);
     if (color) update.color = color;
+    if (body.probability !== undefined) {
+      update.probability = body.probability === null ? null
+        : Math.max(0, Math.min(100, Math.round(Number(body.probability) || 0)));
+    }
     if (!Object.keys(update).length) return jsonResp({ error: 'Nada que actualizar' }, 400);
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/pipeline_stages?id=eq.${id}&user_id=eq.${userId}`,
-      { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) }
-    );
+    const res = await patchStage(`${SUPABASE_URL}/rest/v1/pipeline_stages?id=eq.${id}&user_id=eq.${userId}`, update);
+    if (!res) return jsonResp({ error: 'Nada que actualizar' }, 400);
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
     if (!rows.length) return jsonResp({ error: 'Etapa no encontrada' }, 404);
@@ -194,9 +212,19 @@ export default async function handler(req) {
       color: /^#[0-9A-Fa-f]{6}$/.test(body.color || '') ? body.color : '#6B7280',
       position: Number.isFinite(body.position) ? body.position : maxPos + 1,
     };
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/pipeline_stages`, {
+    if (Number.isFinite(body.probability)) payload.probability = Math.max(0, Math.min(100, Math.round(body.probability)));
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/pipeline_stages`, {
       method: 'POST', headers: sbHeaders(), body: JSON.stringify(payload),
     });
+    if (!res.ok && payload.probability !== undefined) {
+      const txt = await res.clone().text().catch(() => '');
+      if (txt.includes('probability')) {
+        const { probability, ...rest } = payload;
+        res = await fetch(`${SUPABASE_URL}/rest/v1/pipeline_stages`, {
+          method: 'POST', headers: sbHeaders(), body: JSON.stringify(rest),
+        });
+      }
+    }
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
     return jsonResp({ stage: rows[0] });
