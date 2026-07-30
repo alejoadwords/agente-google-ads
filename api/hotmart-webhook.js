@@ -98,6 +98,26 @@ function codigosCandidatos(data) {
   ].filter(Boolean).map(x => String(x).trim());
 }
 
+// ── Periodicidad: mensual o anual ───────────────────────────────────────────
+// Hotmart no expone la periodicidad en un unico campo segun el evento, asi que
+// se miran varios y, si no hay señal clara, se asume MENSUAL (lo conservador:
+// un anual mal leido como mensual solo deja el registro corto; al reves daria
+// 11 meses de acceso no pagado).
+function esAnual(data) {
+  const campos = [
+    data?.subscription?.plan?.recurrency_period,
+    data?.plan?.recurrency_period,
+    data?.purchase?.subscription?.plan?.recurrency_period,
+    data?.purchase?.recurrency_period,
+  ].filter(v => v !== undefined && v !== null);
+  for (const v of campos) {
+    if (typeof v === 'number' && v >= 300) return true;          // periodo en dias
+    if (typeof v === 'string' && /anual|annual|year/i.test(v)) return true;
+  }
+  // El nombre del plan tambien vale: '... anual', '... annual', '... por año'
+  return nombresCandidatos(data).some(n => /\banual\b|\bannual\b|\baño\b|\banno\b|12\s*mes/.test(n));
+}
+
 // Devuelve { cantidad, fuente } — 'fuente' sirve para saber si hay que avisar
 function resolverCantidad(data, { tipo, patronNombre, porPrecio, maximo }) {
   // 1. Mapa explicito por codigo de oferta. El tipo debe coincidir: si no, una
@@ -424,8 +444,9 @@ export default async function handler(req, res) {
   } catch (e) { console.error('[hotmart-webhook] Clerk activate error:', e.message); }
 
   const ahora      = new Date();
+  const anual      = esAnual(data);
   const vencimiento = new Date(ahora);
-  vencimiento.setMonth(vencimiento.getMonth() + 1);
+  vencimiento.setMonth(vencimiento.getMonth() + (anual ? 12 : 1));
 
   if (usuario) {
     // Resetear créditos mensuales de video al renovar
@@ -436,18 +457,26 @@ export default async function handler(req, res) {
       'return=minimal'
     );
 
+    // Importe real cobrado, con su moneda. Antes se guardaba el precio de lista
+    // en USD siempre: una compra anual quedaba registrada como un mes, y una
+    // compra en pesos quedaba etiquetada como dolares.
+    const precioPagado = data?.purchase?.price?.value || 0;
+    const monedaPagada = (data?.purchase?.price?.currency_value || '').toUpperCase();
+    const importe  = precioPagado > 0 ? precioPagado : (anual ? planAmount * 12 : planAmount);
+    const moneda   = (precioPagado > 0 && monedaPagada) ? monedaPagada : 'USD';
+
     // Upsert billing (histórico de facturación y sistema de referidos)
     await sb('/billing', 'POST', {
       user_id:                  usuario.id,
       plan,
       status:                   'active',
-      amount:                   planAmount,
-      currency:                 'USD',
+      amount:                   importe,
+      currency:                 moneda,
       period_start:             ahora.toISOString(),
       period_end:               vencimiento.toISOString(),
       hotmart_transaction:      transactionId,
       hotmart_subscription_id:  subscriptionId,
-      notes:                    `Activado via Hotmart - ${eventType}`,
+      notes:                    `Activado via Hotmart - ${eventType} - ${anual ? 'anual' : 'mensual'}`,
     }, 'resolution=merge-duplicates,return=minimal');
   }
 

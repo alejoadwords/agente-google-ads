@@ -15087,9 +15087,9 @@ function openUpgradeFlow(reason) {
             '<span>&#10003; <strong>10 usuarios</strong> en la plataforma</span>' +
             '<span>&#10003; Imágenes IA ilimitadas</span>' +
             '<span>&#10003; Dashboard salud por cliente</span>' +
-            '<span>&#10003; Contactos extra a precio preferente</span>' +
+            '<span>&#10003; Soporte prioritario</span>' +
           '</div>' +
-          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Contactos adicionales: <strong style="color:var(--blue)">$3 por 1.000</strong> · Usuarios extra: <strong style="color:var(--blue)">$9/mes</strong></div>' +
+          '<div style="margin-top:10px;font-size:10px;color:var(--text-3)">Contactos adicionales: <strong style="color:var(--blue)">$4 por 1.000</strong> · Usuarios extra: <strong style="color:var(--blue)">$9/mes</strong></div>' +
         '</div>' +
       '</div>' +
       '<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">' +
