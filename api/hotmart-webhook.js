@@ -98,6 +98,27 @@ function codigosCandidatos(data) {
   ].filter(Boolean).map(x => String(x).trim());
 }
 
+// ── Cambio de plan: cual es el plan NUEVO ───────────────────────────────────
+// El payload de SWITCH_PLAN no lo hemos visto en real. Lo mas probable es que
+// traiga una lista de planes marcando el vigente, asi que se prueban las formas
+// razonables y, si ninguna encaja, se devuelve null y se avisa con el payload
+// entero en vez de aplicar algo a ciegas.
+function planNuevoDeSwitch(data) {
+  const listas = [data?.plans, data?.subscription?.plans, data?.purchase?.plans].filter(Array.isArray);
+  for (const lista of listas) {
+    if (!lista.length) continue;
+    // El vigente tras el cambio: 'current' o 'active' en true
+    const vigente = lista.find(p => p && (p.current === true || p.active === true));
+    const elegido = vigente || lista[lista.length - 1];
+    const nombre = elegido?.name || elegido?.plan?.name;
+    if (nombre) return String(nombre);
+  }
+  // Formas planas
+  const sueltos = [data?.new_plan?.name, data?.subscription?.plan?.name, data?.plan?.name];
+  for (const n of sueltos) if (n) return String(n);
+  return null;
+}
+
 // ── Periodicidad: mensual o anual ───────────────────────────────────────────
 // Hotmart no expone la periodicidad en un unico campo segun el evento, asi que
 // se miran varios y, si no hay señal clara, se asume MENSUAL (lo conservador:
@@ -239,13 +260,86 @@ export default async function handler(req, res) {
   // sabremos la estructura exacta y se podra automatizar sin inventar nada.
   if (eventType === 'SWITCH_PLAN') {
     console.log('[hotmart-webhook] SWITCH_PLAN payload completo:', JSON.stringify(event));
-    await avisarFalloActivacion({
-      email: data?.buyer?.email,
+    const correo   = data?.buyer?.email;
+    const prod     = (data?.product?.name || '').toLowerCase();
+    const planNuevo = planNuevoDeSwitch(data);
+
+    // Sin plan nuevo identificable o sin cuenta en Clerk no se toca nada: se
+    // avisa con el payload entero para poder automatizarlo con certeza.
+    const avisarConPayload = (motivo) => avisarFalloActivacion({
+      email: correo,
       productName: data?.product?.name || 'desconocido',
-      motivo: 'Un cliente cambio de plan (SWITCH_PLAN) — hay que ajustar la cantidad a mano',
-      extra: 'El payload quedo registrado en los logs de Vercel para automatizarlo despues',
+      motivo,
+      extra: 'Payload: <code style="font-size:11px;word-break:break-all">' + JSON.stringify(event).slice(0, 3000) + '</code>',
     });
-    return res.status(200).json({ received: true, action: 'switch_plan_manual' });
+
+    if (!correo || !planNuevo) {
+      await avisarConPayload('Cambio de plan sin plan nuevo identificable — ajustalo a mano');
+      return res.status(200).json({ received: true, action: 'switch_plan_sin_plan' });
+    }
+
+    let clerkUser = null;
+    try { clerkUser = await clerkFindUserByEmail(correo); } catch {}
+    if (!clerkUser) {
+      await avisarConPayload('Cambio de plan de alguien sin cuenta en Clerk con ese email');
+      return res.status(200).json({ received: true, action: 'switch_plan_sin_usuario' });
+    }
+
+    // El nombre del plan nuevo manda. Se apaga el respaldo por precio: en un
+    // cambio de plan el importe suele venir prorrateado y daria una cantidad
+    // equivocada.
+    const datosNuevos = { ...data, subscription: { ...(data.subscription || {}), plan: { name: planNuevo } } };
+    const sinPrecio = () => 0;
+    let resultado = null;
+
+    if (prod.includes('asiento') || prod.includes('seat') || prod.includes('usuario')) {
+      const r = resolverCantidad(datosNuevos, {
+        tipo: 'asientos',
+        patronNombre: (n) => { const m = n.match(/(\d+)\s*(usuario|asiento|seat)/); return m ? parseInt(m[1]) : 0; },
+        porPrecio: sinPrecio, maximo: 20,
+      });
+      if (r.fuente !== 'indeterminada') {
+        await clerkMergeMetadata(clerkUser.id, { seats_extra: r.cantidad });
+        resultado = { campo: 'seats_extra', valor: r.cantidad };
+      }
+    } else if (prod.includes('contacto') || prod.includes('lead')) {
+      const r = resolverCantidad(datosNuevos, {
+        tipo: 'contactos',
+        patronNombre: (n) => {
+          const k = n.match(/(\d+)\s*k\b/); if (k) return parseInt(k[1]);
+          const mil = n.match(/(\d+)[.,](\d{3})/); if (mil) return parseInt(mil[1]);
+          return 0;
+        },
+        porPrecio: sinPrecio, maximo: 100,
+      });
+      if (r.fuente !== 'indeterminada') {
+        await clerkMergeMetadata(clerkUser.id, { leads_extra: r.cantidad });
+        resultado = { campo: 'leads_extra', valor: r.cantidad };
+      }
+    } else if (prod.includes('email')) {
+      const r = resolverCantidad(datosNuevos, {
+        tipo: 'emails',
+        patronNombre: (n) => { const k = n.match(/(\d+)\s*k\b/); return k ? Math.round(parseInt(k[1]) / 2) : 0; },
+        porPrecio: sinPrecio, maximo: 50,
+      });
+      if (r.fuente !== 'indeterminada') {
+        await clerkMergeMetadata(clerkUser.id, { emails_extra: r.cantidad });
+        resultado = { campo: 'emails_extra', valor: r.cantidad };
+      }
+    } else {
+      // Producto de plan base: Pro <-> Agency, mensual <-> anual. El plan sale
+      // del nombre del PRODUCTO, igual que en una compra normal.
+      const planDestino = prod.includes('agenc') ? 'agency' : 'pro';
+      await clerkSetPlan(clerkUser.id, planDestino);
+      resultado = { campo: 'plan', valor: planDestino, anual: esAnual(datosNuevos) };
+    }
+
+    if (!resultado) {
+      await avisarConPayload('Cambio de plan a "' + planNuevo + '" — no se pudo deducir la cantidad nueva');
+      return res.status(200).json({ received: true, action: 'switch_plan_indeterminado', plan_nuevo: planNuevo });
+    }
+    console.log('[hotmart-webhook] SWITCH_PLAN aplicado:', correo, planNuevo, JSON.stringify(resultado));
+    return res.status(200).json({ received: true, action: 'switch_plan_aplicado', plan_nuevo: planNuevo, ...resultado });
   }
 
   if (!eventosValidos.includes(eventType) && !eventosCancelacion.includes(eventType)) {
