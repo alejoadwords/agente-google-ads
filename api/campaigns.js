@@ -214,7 +214,10 @@ export default async function handler(req) {
       method: 'POST',
       headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-5', max_tokens: 900,
+        // Sonnet 5 razona por defecto y el razonamiento comparte presupuesto con
+        // el texto: con 900 tokens la respuesta llegaba vacía y el JSON.parse
+        // reventaba con "formato no válido".
+        model: 'claude-sonnet-5', max_tokens: 3000,
         system: sys,
         messages: [{ role: 'user', content:
           'OBJETIVO DE LA CAMPAÑA:\n' + String(body.objective).slice(0, 600) +
@@ -226,6 +229,11 @@ export default async function handler(req) {
     const d = await r.json();
     if (!r.ok) return jsonResp({ error: 'Error generando: ' + (d.error?.message || r.status) }, 502);
     let text = (d.content?.find(b => b.type === 'text')?.text || '').trim().replace(/^```(json)?|```$/g, '').trim();
+    // Por si acompaña el JSON con alguna frase: nos quedamos con el objeto.
+    if (text && text[0] !== '{') {
+      const a = text.indexOf('{'), b = text.lastIndexOf('}');
+      if (a >= 0 && b > a) text = text.slice(a, b + 1);
+    }
     try {
       const out = JSON.parse(text);
       return jsonResp({ draft: {
