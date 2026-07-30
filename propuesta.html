@@ -4,878 +4,710 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Propuesta comercial · Acuarius CRM</title>
-</head>
-<body>
+<title>Propuesta comercial · Acuarius</title>
 <style>
   :root{
-    --marca:#1E2BCC; --marca-hov:#1520AA; --marca-suave:#EDEEFC; --marca-borde:#C7CBF4;
-    --apunte:#B4531F; --apunte-suave:#FBEFE7; --apunte-borde:#EBC7AE;
-    --tinta:#0B0D18; --papel:#FBFBFD; --tarjeta:#FFFFFF;
-    --gris:#5A5E78; --gris-2:#8C90A8; --linea:#E2E3EE; --linea-fuerte:#CDCFE0;
-    --ok:#0F7A55; --ok-suave:#E6F4EE;
-    --lienzo:#F4F5FB;
+    --azul:#1E2BCC; --azul-hondo:#151B94; --azul-claro:#4A56D8; --azul-tenue:#EDEEFC;
+    --ambar:#F5A524; --ambar-tinta:#3A2600;
+    --tinta:#0B0D18; --papel:#FFFFFF; --hueso:#F6F7FB;
+    --gris:#5A5E78; --gris-2:#8C90A8; --linea:#E2E3EE;
+    --ok:#0F7A55;
     --display:"Avenir Next","Futura","Century Gothic","Trebuchet MS",system-ui,sans-serif;
-    --prosa:Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-    --dato:"Avenir Next",system-ui,-apple-system,"Segoe UI",sans-serif;
-    --rail:236px;
+    --texto:"Avenir Next",system-ui,-apple-system,"Segoe UI",sans-serif;
   }
-  @media (prefers-color-scheme:dark){
-    :root{
-      --marca:#8B95FF; --marca-hov:#A6AEFF; --marca-suave:#191C3A; --marca-borde:#2E3468;
-      --apunte:#E8A06A; --apunte-suave:#2A1C13; --apunte-borde:#5A3A24;
-      --tinta:#EEEFF6; --papel:#0A0B14; --tarjeta:#121422;
-      --gris:#9BA0BC; --gris-2:#6E7391; --linea:#23263F; --linea-fuerte:#333853;
-      --ok:#4ECFA0; --ok-suave:#0F2A22; --lienzo:#0F1120;
-    }
-  }
-  :root[data-theme="dark"]{
-    --marca:#8B95FF; --marca-hov:#A6AEFF; --marca-suave:#191C3A; --marca-borde:#2E3468;
-    --apunte:#E8A06A; --apunte-suave:#2A1C13; --apunte-borde:#5A3A24;
-    --tinta:#EEEFF6; --papel:#0A0B14; --tarjeta:#121422;
-    --gris:#9BA0BC; --gris-2:#6E7391; --linea:#23263F; --linea-fuerte:#333853;
-    --ok:#4ECFA0; --ok-suave:#0F2A22; --lienzo:#0F1120;
-  }
-  :root[data-theme="light"]{
-    --marca:#1E2BCC; --marca-hov:#1520AA; --marca-suave:#EDEEFC; --marca-borde:#C7CBF4;
-    --apunte:#B4531F; --apunte-suave:#FBEFE7; --apunte-borde:#EBC7AE;
-    --tinta:#0B0D18; --papel:#FBFBFD; --tarjeta:#FFFFFF;
-    --gris:#5A5E78; --gris-2:#8C90A8; --linea:#E2E3EE; --linea-fuerte:#CDCFE0;
-    --ok:#0F7A55; --ok-suave:#E6F4EE; --lienzo:#F4F5FB;
-  }
-
   *{box-sizing:border-box}
-  body{margin:0;background:var(--papel);color:var(--tinta);font-family:var(--prosa);font-size:17px;line-height:1.68;-webkit-font-smoothing:antialiased}
-  .marco{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);max-width:1180px;margin:0 auto}
+  body{margin:0;background:var(--hueso);font-family:var(--texto);color:var(--tinta);-webkit-font-smoothing:antialiased}
 
-  .rail{position:sticky;top:0;align-self:start;height:100vh;padding:38px 26px 26px;border-right:1px solid var(--linea);display:flex;flex-direction:column;gap:24px}
-  .marca{display:flex;align-items:baseline;gap:7px;font-family:var(--display);letter-spacing:-.035em}
-  .marca-n{font-size:23px;font-weight:800}
-  .marca-p{width:7px;height:7px;border-radius:50%;background:var(--marca);align-self:center}
-  .rail-para{font-family:var(--dato);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gris-2);margin-bottom:9px}
-  .rail-cliente{font-family:var(--display);font-size:17px;font-weight:700;line-height:1.25;color:var(--apunte);letter-spacing:-.02em;word-break:break-word}
-  .indice{display:flex;flex-direction:column;gap:1px;font-family:var(--dato);font-size:13.5px}
-  .indice a{color:var(--gris);text-decoration:none;padding:6px 10px;margin-left:-10px;border-radius:7px;transition:background .14s,color .14s}
-  .indice a:hover{background:var(--marca-suave);color:var(--marca)}
-  .indice a.on{color:var(--tinta);background:var(--marca-suave);font-weight:600}
-  .rail-pie{margin-top:auto;font-family:var(--dato);font-size:11.5px;color:var(--gris-2);line-height:1.5;display:flex;flex-direction:column;gap:9px}
+  /* ── La lámina ───────────────────────────────────────────────
+     container-type permite dimensionar TODO en cqw, así el texto
+     escala igual en pantalla que al imprimir sin tocar una regla. */
+  .mazo{max-width:1180px;margin:0 auto;padding:26px 20px 70px;display:flex;flex-direction:column;gap:22px}
+  .lamina{position:relative;width:100%;aspect-ratio:16/9;container-type:inline-size;background:var(--papel);
+    border-radius:10px;overflow:hidden;box-shadow:0 6px 26px rgba(11,13,24,.10);break-inside:avoid}
+  .lamina.azul{background:linear-gradient(150deg,var(--azul-hondo) 0%,var(--azul) 52%,var(--azul-claro) 100%);color:#fff}
+  .lamina.azul .gris{color:rgba(255,255,255,.82)}
 
-  .cuerpo{padding:0 62px 90px;min-width:0}
-  section{padding:52px 0;border-bottom:1px solid var(--linea);scroll-margin-top:24px}
-  section:last-of-type{border-bottom:none}
-  .eyebrow{font-family:var(--dato);font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--marca);margin:0 0 14px}
-  h1{font-family:var(--display);font-size:clamp(34px,4.6vw,52px);font-weight:800;letter-spacing:-.038em;line-height:1.04;margin:0 0 20px;text-wrap:balance}
-  h2{font-family:var(--display);font-size:clamp(24px,3vw,32px);font-weight:800;letter-spacing:-.03em;line-height:1.12;margin:0 0 16px;text-wrap:balance}
-  h3{font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:-.015em;margin:0 0 6px}
-  p{margin:0 0 17px;max-width:64ch}
-  .entrada{font-size:20px;line-height:1.6;color:var(--gris)}
-  .apunte-txt{color:var(--gris);font-size:15px}
+  /* Marca de agua: la A de Acuarius, girada, muy sutil */
+  .agua{position:absolute;right:-8cqw;bottom:-16cqw;width:52cqw;height:52cqw;opacity:.07;pointer-events:none}
+  .lamina.azul .agua{opacity:.13}
 
-  .portada{padding-top:76px}
-  .meta-portada{display:flex;flex-wrap:wrap;gap:26px 46px;margin-top:34px;padding-top:26px;border-top:1px solid var(--linea)}
-  .meta-b{font-family:var(--dato)}
-  .meta-b .k{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--gris-2);margin-bottom:4px}
-  .meta-b .v{font-size:15px;font-weight:600}
+  .campo{position:absolute;inset:0;padding:6.2cqw 6.6cqw 8cqw;display:flex;flex-direction:column;overflow:hidden}
+  .pie{position:absolute;left:6.6cqw;right:6.6cqw;bottom:3.1cqw;display:flex;align-items:center;justify-content:space-between;
+    font-size:1.32cqw;letter-spacing:.06em;color:var(--gris-2)}
+  .lamina.azul .pie{color:rgba(255,255,255,.6)}
+  .pie .marca{font-family:var(--display);font-weight:800;letter-spacing:-.02em;font-size:1.72cqw;color:var(--tinta)}
+  .lamina.azul .pie .marca{color:#fff}
+  .num{position:absolute;top:3.4cqw;right:6.6cqw;font-size:1.35cqw;font-weight:700;color:var(--gris-2)}
+  .lamina.azul .num{color:rgba(255,255,255,.55)}
 
-  /* ── Ilustraciones del producto ─────────────────────────────── */
-  figure{margin:30px 0;border:1px solid var(--linea);border-radius:14px;overflow:hidden;background:var(--lienzo)}
-  figure svg{display:block;width:100%;height:auto}
-  figcaption{font-family:var(--dato);font-size:12.5px;color:var(--gris-2);padding:12px 18px;border-top:1px solid var(--linea);background:var(--tarjeta)}
+  h2.titulo{font-family:var(--display);font-size:3.5cqw;font-weight:800;letter-spacing:-.028em;line-height:1.13;margin:0 0 2.4cqw;max-width:74cqw;text-wrap:balance}
+  .marcador{background:var(--ambar);color:var(--ambar-tinta);padding:0 .5cqw;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .rotulo{display:inline-block;font-size:1.4cqw;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--azul);margin-bottom:1.6cqw}
+  .lamina.azul .rotulo{color:var(--ambar)}
+  .entrada{font-size:1.95cqw;line-height:1.55;color:var(--gris);max-width:62cqw;margin:0}
+  .lamina.azul .entrada{color:rgba(255,255,255,.88)}
 
-  .rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:1px;background:var(--linea);border:1px solid var(--linea);border-radius:13px;overflow:hidden;margin:26px 0}
-  .celda{background:var(--tarjeta);padding:22px}
-  .celda p{font-size:14.5px;color:var(--gris);margin:0;line-height:1.6}
-  .celda .glifo{width:30px;height:30px;border-radius:8px;background:var(--marca-suave);color:var(--marca);display:flex;align-items:center;justify-content:center;font-family:var(--dato);font-size:13px;font-weight:800;margin-bottom:12px}
+  /* Lista con flecha, el patrón que mejor funciona en una lámina */
+  .puntos{display:grid;grid-template-columns:1fr 1fr;gap:2.6cqw 4cqw;margin-top:1cqw}
+  .puntos.una{grid-template-columns:1fr;max-width:66cqw}
+  .punto{display:flex;gap:1.6cqw;align-items:flex-start}
+  .flecha{flex:0 0 auto;width:3.1cqw;height:3.1cqw;border:.19cqw solid var(--ambar);border-radius:.5cqw;
+    display:flex;align-items:center;justify-content:center;margin-top:.2cqw}
+  .flecha svg{width:1.7cqw;height:1.7cqw;stroke:var(--ambar);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .punto h3{font-family:var(--display);font-size:1.95cqw;font-weight:800;letter-spacing:-.015em;margin:0 0 .5cqw;color:var(--azul)}
+  .lamina.azul .punto h3{color:#fff}
+  .punto h3 span{display:block;height:.22cqw;width:5.6cqw;background:var(--ambar);margin-top:.55cqw;border-radius:.2cqw}
+  .punto p{font-size:1.55cqw;line-height:1.5;margin:0;color:var(--gris)}
+  .lamina.azul .punto p{color:rgba(255,255,255,.84)}
 
-  .lista-plana{list-style:none;padding:0;margin:20px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:10px 28px}
-  .lista-plana li{position:relative;padding-left:20px;font-size:15.5px;color:var(--gris);line-height:1.55}
-  .lista-plana li::before{content:"";position:absolute;left:0;top:9px;width:7px;height:7px;border-radius:2px;background:var(--marca);opacity:.5}
-  .lista-plana li b{color:var(--tinta);font-weight:700}
+  .dos{display:grid;grid-template-columns:1.05fr .95fr;gap:4cqw;align-items:center;flex:1;min-height:0}
+  .dos.texto-der{grid-template-columns:.95fr 1.05fr}
+  .figura{width:100%;flex:1;min-height:0;border-radius:1.1cqw;overflow:hidden;background:var(--hueso);border:.14cqw solid var(--linea);display:flex}
+  .lamina.azul .figura{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.16)}
+  .figura svg{display:block;width:100%;height:100%}
 
-  .tabla-env{overflow-x:auto;margin:24px 0;border:1px solid var(--linea);border-radius:13px}
-  table{width:100%;border-collapse:collapse;font-family:var(--dato);font-size:14.5px;min-width:540px}
-  th{text-align:left;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gris-2);font-weight:700;padding:13px 18px;background:var(--marca-suave);border-bottom:1px solid var(--linea)}
-  td{padding:13px 18px;border-bottom:1px solid var(--linea);vertical-align:top}
+  /* Portada partida */
+  .portada{display:grid;grid-template-columns:38% 62%;position:absolute;inset:0}
+  .portada .izq{background:var(--papel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4cqw;padding:4cqw}
+  .portada .izq .logo{font-family:var(--display);font-size:5cqw;font-weight:800;letter-spacing:-.045em;color:var(--tinta);display:flex;align-items:center;gap:.7cqw}
+  .portada .izq .logo i{width:1.1cqw;height:1.1cqw;border-radius:50%;background:var(--azul);display:block}
+  .portada .izq .bajo{font-size:1.45cqw;letter-spacing:.16em;text-transform:uppercase;color:var(--gris-2);text-align:center}
+  .portada .der{background:linear-gradient(150deg,var(--azul-hondo),var(--azul) 55%,var(--azul-claro));color:#fff;
+    display:flex;flex-direction:column;justify-content:center;padding:4.6cqw 5.4cqw;position:relative;overflow:hidden}
+  .portada .der h1{font-family:var(--display);font-size:3.6cqw;font-weight:800;letter-spacing:-.03em;line-height:1.14;margin:0 0 2.2cqw;text-wrap:balance}
+  .portada .para{font-size:1.35cqw;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:.7cqw}
+  .portada .cliente{font-family:var(--display);font-size:2.4cqw;font-weight:800;letter-spacing:-.02em;color:var(--ambar);line-height:1.18;overflow-wrap:anywhere}
+  .portada .fecha{font-size:1.4cqw;color:rgba(255,255,255,.72);margin-top:2.2cqw}
+
+  /* Cita grande */
+  .cita{flex:1;display:flex;flex-direction:column;justify-content:center}
+  .cita p{font-family:var(--display);font-size:3.1cqw;font-weight:700;letter-spacing:-.02em;line-height:1.32;margin:0;max-width:76cqw;text-wrap:balance}
+  .cita .firma{margin-top:2.6cqw;font-size:1.6cqw;color:rgba(255,255,255,.75)}
+
+  /* Cifras */
+  .cifras{display:grid;grid-template-columns:repeat(3,1fr);gap:3cqw;margin-top:1.4cqw}
+  .cifra-b .n{font-family:var(--display);font-size:5.2cqw;font-weight:800;letter-spacing:-.04em;line-height:1;color:var(--ambar)}
+  .cifra-b .t{font-size:1.5cqw;line-height:1.45;margin-top:.9cqw;color:rgba(255,255,255,.85)}
+
+  /* Tabla comparativa */
+  table{width:100%;border-collapse:collapse;font-size:1.5cqw;margin-top:1cqw}
+  th{text-align:left;font-size:1.22cqw;letter-spacing:.1em;text-transform:uppercase;color:var(--gris-2);font-weight:800;padding:1cqw 1.2cqw;border-bottom:.14cqw solid var(--linea)}
+  th.destaca{color:var(--azul)}
+  td{padding:.95cqw 1.2cqw;border-bottom:.1cqw solid var(--linea);vertical-align:top;line-height:1.4}
+  td.k{font-weight:700;width:22%}
+  td.ellos{color:var(--gris-2);width:36%}
+  td.nos{color:var(--ok);font-weight:700;width:42%}
   tr:last-child td{border-bottom:none}
-  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-  td.si{color:var(--ok);font-weight:700}
-  td.no{color:var(--gris-2)}
 
-  .taller{background:var(--apunte-suave);border:1px solid var(--apunte-borde);border-radius:15px;padding:28px;margin:26px 0}
-  .taller-cab{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
-  .taller-cab h3{color:var(--apunte)}
-  .taller-nota{font-family:var(--dato);font-size:12px;color:var(--apunte);opacity:.85}
-  .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:18px}
-  label{display:block;font-family:var(--dato);font-size:11px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--apunte);margin-bottom:6px}
-  input[type=text],input[type=date],textarea,select{width:100%;font-family:var(--dato);font-size:15px;color:var(--tinta);background:var(--tarjeta);border:1px solid var(--apunte-borde);border-radius:9px;padding:10px 12px;transition:border-color .14s,box-shadow .14s}
-  textarea{font-family:var(--prosa);line-height:1.6;resize:vertical;min-height:88px}
-  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--apunte);box-shadow:0 0 0 3px color-mix(in srgb,var(--apunte) 18%,transparent)}
-  .pareja{display:flex;gap:8px;align-items:center}
-  .pareja input{text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
-  .paso{width:34px;height:34px;flex-shrink:0;border:1px solid var(--apunte-borde);background:var(--tarjeta);color:var(--apunte);border-radius:9px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;transition:background .14s}
-  .paso:hover:not(:disabled){background:var(--apunte);color:#fff}
-  .paso:disabled{opacity:.35;cursor:not-allowed}
-  .segmentado{display:flex;gap:4px;background:var(--tarjeta);border:1px solid var(--apunte-borde);border-radius:10px;padding:4px}
-  .segmentado button{flex:1;border:none;background:transparent;font-family:var(--dato);font-size:13px;font-weight:600;color:var(--gris);padding:8px 6px;border-radius:7px;cursor:pointer;transition:.14s}
-  .segmentado button[aria-pressed="true"]{background:var(--apunte);color:#fff}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  .chip{font-family:var(--dato);font-size:13px;border:1px solid var(--apunte-borde);background:var(--tarjeta);color:var(--gris);border-radius:20px;padding:7px 14px;cursor:pointer;transition:.14s;user-select:none}
-  .chip[aria-pressed="true"]{background:var(--apunte);border-color:var(--apunte);color:#fff;font-weight:600}
+  /* Lámina de precio: checklist + tarjeta */
+  .precio-fila{display:grid;grid-template-columns:1.05fr .95fr;gap:4cqw;flex:1;align-items:center;min-height:0;overflow:hidden}
+  .chk{display:flex;flex-direction:column;gap:1.15cqw;min-height:0}
+  .chk li{display:flex;gap:1.2cqw;align-items:flex-start;font-size:1.5cqw;line-height:1.38;list-style:none;color:rgba(255,255,255,.92)}
+  .chk li svg{flex:0 0 auto;width:1.9cqw;height:1.9cqw;stroke:var(--ambar);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;margin-top:.25cqw}
+  .chk li.top{background:var(--ambar);color:var(--ambar-tinta);font-weight:800;padding:.7cqw 1.1cqw;border-radius:.5cqw;margin-bottom:.4cqw}
+  .chk li.top svg{stroke:var(--ambar-tinta)}
+  .tarjeta{background:var(--papel);border-radius:1.2cqw;padding:1.8cqw 2cqw;text-align:center;box-shadow:0 1.4cqw 3.4cqw rgba(0,0,0,.22)}
+  .tarjeta .cabe{font-size:1.24cqw;letter-spacing:.14em;text-transform:uppercase;color:var(--gris-2);margin-bottom:.6cqw}
+  .tarjeta .plan{font-family:var(--display);font-size:1.95cqw;font-weight:800;letter-spacing:-.02em;color:var(--azul);margin-bottom:.3cqw}
+  .tarjeta .val{font-family:var(--display);font-size:4.3cqw;font-weight:800;letter-spacing:-.045em;color:var(--azul);line-height:1;display:flex;align-items:flex-start;justify-content:center;gap:.3cqw}
+  .tarjeta .val sup{font-size:2.4cqw;margin-top:.7cqw}
+  .tarjeta .val small{font-size:1.6cqw;font-weight:700;align-self:flex-end;margin-bottom:1cqw;color:var(--gris)}
+  .tarjeta .modo{font-size:1.35cqw;font-weight:700;color:var(--tinta);margin-top:.45cqw}
+  .tarjeta .barra{height:.4cqw;background:var(--ambar);border-radius:.25cqw;margin:.85cqw 0}
+  .tarjeta .anual{font-size:1.45cqw;color:var(--gris);line-height:1.4}
+  .tarjeta .ahorro{display:inline-block;margin-top:.7cqw;font-size:1.35cqw;font-weight:800;color:var(--ok);background:#E6F4EE;border-radius:2cqw;padding:.5cqw 1.2cqw}
 
-  .cierre{border:1px solid var(--marca-borde);background:var(--marca-suave);border-radius:15px;padding:28px;margin-top:28px}
-  .cifra{display:flex;align-items:flex-start;gap:6px;font-family:var(--display);letter-spacing:-.04em;line-height:1}
-  .cifra .sim{font-size:26px;font-weight:700;margin-top:9px;color:var(--marca)}
-  .cifra .val{font-size:clamp(46px,7vw,66px);font-weight:800;color:var(--marca);font-variant-numeric:tabular-nums}
-  .cifra .per{font-family:var(--dato);font-size:13px;font-weight:600;color:var(--gris);align-self:flex-end;margin-bottom:13px;letter-spacing:0}
-  .ahorro{display:inline-block;font-family:var(--dato);font-size:12.5px;font-weight:700;color:var(--ok);background:var(--ok-suave);border-radius:20px;padding:6px 13px;margin-top:12px}
-  .desglose{margin-top:20px;font-family:var(--dato);font-size:14px}
-  .desglose .fila{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--marca-borde);color:var(--gris)}
-  .desglose .fila:last-child{border-bottom:none}
-  .desglose .fila b{color:var(--tinta);font-variant-numeric:tabular-nums}
-  .desglose .total{padding-top:12px;margin-top:4px;border-top:2px solid var(--marca-borde);border-bottom:none;font-size:16px;color:var(--tinta);font-weight:700}
+  /* Desglose de la propuesta */
+  .tarjeta .desglose{display:flex;flex-direction:column;margin-top:.4cqw;font-size:1.28cqw;text-align:left}
+  .tarjeta .desglose .f{display:flex;justify-content:space-between;gap:1.2cqw;padding:.33cqw 0;border-bottom:.08cqw solid var(--linea);color:var(--gris)}
+  .tarjeta .desglose .f b{color:var(--tinta);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tarjeta .desglose .f.total{border-bottom:none;border-top:.16cqw solid var(--ambar);margin-top:.35cqw;padding-top:.6cqw;font-size:1.38cqw;color:var(--tinta)}
 
-  .acciones{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
-  .btn{font-family:var(--dato);font-size:14px;font-weight:700;border-radius:10px;padding:12px 20px;cursor:pointer;border:1px solid transparent;transition:.15s}
-  .btn-p{background:var(--marca);color:#fff}
-  .btn-p:hover{background:var(--marca-hov)}
-  .btn-s{background:transparent;color:var(--gris);border-color:var(--linea-fuerte)}
-  .btn-s:hover{border-color:var(--marca);color:var(--marca)}
-  .aviso{font-family:var(--dato);font-size:12.5px;color:var(--gris-2);margin-top:14px;max-width:64ch}
-  .aviso b{color:var(--tinta)}
-  .estado{font-family:var(--dato);font-size:13px;font-weight:600;color:var(--ok);margin-top:12px;min-height:20px}
+  .nota-cli{margin-top:1.4cqw;padding:1.5cqw 1.8cqw;background:rgba(255,255,255,.1);border-left:.35cqw solid var(--ambar);border-radius:.5cqw;
+    font-size:1.55cqw;line-height:1.5;color:rgba(255,255,255,.9);white-space:pre-wrap}
 
-  a{color:var(--marca)}
-  :focus-visible{outline:2px solid var(--marca);outline-offset:2px;border-radius:4px}
-  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  .pasos{display:grid;grid-template-columns:repeat(4,1fr);gap:2.6cqw;margin-top:2cqw}
+  .paso-b .n{font-family:var(--display);font-size:3.4cqw;font-weight:800;color:var(--ambar);line-height:1}
+  .paso-b h3{font-family:var(--display);font-size:1.8cqw;font-weight:800;margin:.9cqw 0 .5cqw;letter-spacing:-.015em}
+  .paso-b p{font-size:1.45cqw;line-height:1.45;margin:0;color:var(--gris)}
+  .lamina.azul .paso-b p{color:rgba(255,255,255,.84)}
 
+  .cierre-f{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.6cqw}
+  .cierre-f .logo{font-family:var(--display);font-size:6cqw;font-weight:800;letter-spacing:-.045em;display:flex;align-items:center;gap:.9cqw}
+  .cierre-f .logo i{width:1.3cqw;height:1.3cqw;border-radius:50%;background:var(--ambar)}
+  .cierre-f .web{font-size:1.8cqw;color:rgba(255,255,255,.8);letter-spacing:.08em}
+
+  /* ── Panel de edición: solo pantalla ─────────────────────────── */
+  .editor{max-width:1180px;margin:0 auto 60px;padding:0 20px}
+  .caja{background:#FBEFE7;border:1px solid #EBC7AE;border-radius:14px;padding:26px}
+  .caja h3{font-family:var(--display);font-size:17px;margin:0 0 4px;color:#B4531F}
+  .caja .sub{font-size:12.5px;color:#B4531F;opacity:.85;margin-bottom:18px}
+  .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
+  label{display:block;font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:#B4531F;margin-bottom:6px}
+  input[type=text],input[type=date],select,textarea{width:100%;font-family:var(--texto);font-size:14.5px;color:var(--tinta);
+    background:#fff;border:1px solid #EBC7AE;border-radius:9px;padding:10px 12px}
+  textarea{min-height:80px;resize:vertical;line-height:1.55}
+  input:focus,select:focus,textarea:focus{outline:2px solid #B4531F;outline-offset:1px}
+  .par{display:flex;gap:8px;align-items:center}
+  .par input{text-align:center;font-weight:700}
+  .pz{width:34px;height:34px;flex-shrink:0;border:1px solid #EBC7AE;background:#fff;color:#B4531F;border-radius:9px;font-size:18px;font-weight:700;cursor:pointer}
+  .pz:hover:not(:disabled){background:#B4531F;color:#fff}
+  .pz:disabled{opacity:.35;cursor:not-allowed}
+  .seg{display:flex;gap:4px;background:#fff;border:1px solid #EBC7AE;border-radius:10px;padding:4px}
+  .seg button{flex:1;border:none;background:transparent;font-family:var(--texto);font-size:12.5px;font-weight:700;color:var(--gris);padding:8px 4px;border-radius:7px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:#B4531F;color:#fff}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .chip{font-size:12.5px;border:1px solid #EBC7AE;background:#fff;color:var(--gris);border-radius:20px;padding:7px 13px;cursor:pointer}
+  .chip[aria-pressed="true"]{background:#B4531F;border-color:#B4531F;color:#fff;font-weight:700}
+  .alerta{display:none;margin-top:16px;background:#fff;border:1px solid #B4531F;border-radius:10px;padding:12px 15px;font-size:13.5px;color:#B4531F;line-height:1.5}
+  .barra-acc{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;align-items:center}
+  .btn{font-size:14px;font-weight:700;border-radius:10px;padding:12px 20px;cursor:pointer;border:1px solid transparent;font-family:var(--texto)}
+  .btn-p{background:var(--azul);color:#fff}
+  .btn-p:hover{background:var(--azul-hondo)}
+  .btn-s{background:#fff;color:var(--gris);border-color:#EBC7AE}
+  .btn-s:hover{border-color:var(--azul);color:var(--azul)}
+  .estado{font-size:13px;font-weight:700;color:var(--ok);min-height:19px;margin-top:10px}
+  .letra{font-size:12px;color:var(--gris-2);margin-top:12px;line-height:1.5;max-width:70ch}
+
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media (max-width:760px){ .mazo{padding:14px 12px 40px;gap:14px} .editor{padding:0 12px} .caja{padding:18px} }
+
+  /* ── Impresión: una lámina por página, 16:9 ──────────────────── */
   @media print{
-    @page{margin:15mm}
-    :root{--papel:#fff;--tarjeta:#fff;--lienzo:#fff}
-    .rail,.acciones,.estado,#taller,#aviso-plan,#aviso-precio,.aviso{display:none!important}
-    .marco{grid-template-columns:1fr;max-width:none}
-    .cuerpo{padding:0}
-    body{font-size:11.5pt}
-    section{padding:22px 0;break-inside:avoid}
-    figure,table,.cierre{break-inside:avoid}
-    h1,h2{break-after:avoid}
-    a{text-decoration:none;color:var(--tinta)}
-  }
-
-  @media (max-width:900px){
-    .marco{grid-template-columns:1fr}
-    .rail{position:static;height:auto;border-right:none;border-bottom:1px solid var(--linea);padding:26px 24px}
-    .indice{flex-direction:row;flex-wrap:wrap;gap:2px}
-    .rail-pie{margin-top:14px}
-    .cuerpo{padding:0 24px 64px}
-    body{font-size:16px}
+    @page{ size:297mm 167mm; margin:0 }
+    body{background:#fff}
+    .editor,.no-print{display:none!important}
+    .mazo{max-width:none;margin:0;padding:0;gap:0;display:block}
+    .lamina{width:297mm;height:167mm;aspect-ratio:auto;border-radius:0;box-shadow:none;break-after:page;page-break-after:always}
+    .lamina:last-child{break-after:auto;page-break-after:auto}
+    .lamina,.lamina *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
 </style>
-
-<div class="marco">
-  <aside class="rail">
-    <div class="marca"><span class="marca-n">Acuarius</span><span class="marca-p"></span></div>
-    <div>
-      <div class="rail-para">Propuesta para</div>
-      <div class="rail-cliente" id="rail-cliente">tu cliente</div>
-    </div>
-    <nav class="indice" id="indice">
-      <a href="#portada">Resumen</a>
-      <a href="#problema">Dónde se pierde el dinero</a>
-      <a href="#pipeline">El pipeline</a>
-      <a href="#automatizaciones">Automatizaciones</a>
-      <a href="#conversaciones">WhatsApp e inbox</a>
-      <a href="#campanas">Campañas y propuestas</a>
-      <a href="#comparativa">Por qué este CRM</a>
-      <a href="#ia">La IA que viene incluida</a>
-      <a href="#planes">Planes</a>
-      <a href="#propuesta">Tu propuesta</a>
-      <a href="#siguiente">Cómo empezamos</a>
-    </nav>
-    <div class="rail-pie">
-      <div>acuarius.app</div>
-      <div>Ajusta la sección “Tu propuesta” y usa “Guardar como PDF”.</div>
-    </div>
-  </aside>
-
-  <main class="cuerpo">
-
-    <section class="portada" id="portada">
-      <p class="eyebrow">Propuesta comercial</p>
-      <h1>Un CRM que no espera a que alguien se acuerde del cliente</h1>
-      <p class="entrada">Acuarius es un CRM pensado para equipos comerciales de Latinoamérica: pipeline, contactos y agenda, con las automatizaciones y el WhatsApp integrados en el mismo lugar. Sin cupos de correo, sin cobrar por cada usuario que entra, y en español.</p>
-
-      <div class="meta-portada">
-        <div class="meta-b"><div class="k">Preparada para</div><div class="v" id="meta-cliente">—</div></div>
-        <div class="meta-b"><div class="k">Fecha</div><div class="v" id="meta-fecha">—</div></div>
-        <div class="meta-b"><div class="k">Validez</div><div class="v" id="meta-validez">—</div></div>
-        <div class="meta-b"><div class="k">Preparada por</div><div class="v" id="meta-autor">—</div></div>
-      </div>
-    </section>
-
-    <section id="problema">
-      <p class="eyebrow">El diagnóstico</p>
-      <h2>El problema casi nunca es conseguir leads</h2>
-      <p>Es lo que pasa después. El contacto entra por un formulario o escribe por WhatsApp, alguien lo anota en una hoja de cálculo, y ahí se queda. Para cuando el equipo vuelve a mirarlo, ya compró en otro lado o se enfrió.</p>
-      <p>La mayoría de los negocios no necesita más tráfico: necesita que <b>ningún contacto se quede sin respuesta</b> y que el seguimiento ocurra aunque nadie se acuerde de hacerlo.</p>
-      <div class="rejilla">
-        <div class="celda"><div class="glifo">1</div><h3>Sin segundo contacto</h3><p>La mayoría de leads recibe un primer mensaje y ninguno más. La venta suele estar en el tercero o el cuarto.</p></div>
-        <div class="celda"><div class="glifo">2</div><h3>Conversaciones sueltas</h3><p>WhatsApp en el teléfono de un vendedor, Instagram en otro. Si esa persona no está, la conversación se pierde.</p></div>
-        <div class="celda"><div class="glifo">3</div><h3>Sin visibilidad</h3><p>Nadie sabe cuántas oportunidades hay abiertas, por cuánto, ni cuáles llevan días sin moverse.</p></div>
-      </div>
-    </section>
-
-    <section id="pipeline">
-      <p class="eyebrow">El corazón del sistema</p>
-      <h2>Un pipeline que se adapta a cómo vendes</h2>
-      <p>Las etapas las defines tú: las que usa tu equipo, con los nombres que ya usa. Cada tarjeta muestra el valor de la oportunidad, la etiqueta de origen y cuántos días lleva sin movimiento, para que lo estancado se vea sin buscarlo.</p>
-
-      <figure>
-        <svg viewBox="0 0 900 330" role="img" aria-label="Vista del pipeline con cuatro etapas y tarjetas de oportunidades">
-          <rect width="900" height="330" fill="var(--lienzo)"/>
-          <g font-family="var(--dato)">
-            <!-- Columnas -->
-            <g>
-              <rect x="24" y="24" width="200" height="282" rx="12" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <rect x="24" y="24" width="200" height="4" rx="2" fill="var(--marca)"/>
-              <text x="42" y="56" font-size="12" font-weight="700" fill="var(--tinta)" letter-spacing="1.2">NUEVO</text>
-              <text x="196" y="56" font-size="12" font-weight="700" fill="var(--gris-2)" text-anchor="end">6</text>
-              <g>
-                <rect x="40" y="72" width="168" height="62" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="54" y="94" font-size="12.5" font-weight="700" fill="var(--tinta)">Mariana López</text>
-                <text x="54" y="112" font-size="11" fill="var(--gris)">$2.400.000</text>
-                <rect x="54" y="118" width="52" height="12" rx="6" fill="var(--marca-suave)"/>
-                <text x="60" y="127" font-size="8" font-weight="700" fill="var(--marca)">FORMULARIO</text>
-              </g>
-              <g>
-                <rect x="40" y="144" width="168" height="62" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="54" y="166" font-size="12.5" font-weight="700" fill="var(--tinta)">Carlos Restrepo</text>
-                <text x="54" y="184" font-size="11" fill="var(--gris)">$980.000</text>
-                <rect x="54" y="190" width="44" height="12" rx="6" fill="var(--apunte-suave)"/>
-                <text x="60" y="199" font-size="8" font-weight="700" fill="var(--apunte)">WHATSAPP</text>
-              </g>
-              <g opacity="0.5">
-                <rect x="40" y="216" width="168" height="52" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="54" y="238" font-size="12.5" font-weight="700" fill="var(--tinta)">Laura Gómez</text>
-                <text x="54" y="256" font-size="11" fill="var(--gris)">$1.200.000</text>
-              </g>
-            </g>
-            <g>
-              <rect x="240" y="24" width="200" height="282" rx="12" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <rect x="240" y="24" width="200" height="4" rx="2" fill="#F59E0B"/>
-              <text x="258" y="56" font-size="12" font-weight="700" fill="var(--tinta)" letter-spacing="1.2">CONTACTADO</text>
-              <text x="412" y="56" font-size="12" font-weight="700" fill="var(--gris-2)" text-anchor="end">4</text>
-              <g>
-                <rect x="256" y="72" width="168" height="74" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="270" y="94" font-size="12.5" font-weight="700" fill="var(--tinta)">Andrea Ruiz</text>
-                <text x="270" y="112" font-size="11" fill="var(--gris)">$3.100.000</text>
-                <rect x="270" y="120" width="88" height="14" rx="7" fill="#FEF3C7"/>
-                <text x="277" y="130" font-size="8.5" font-weight="700" fill="#B45309">5 DÍAS SIN ACTIVIDAD</text>
-              </g>
-              <g>
-                <rect x="256" y="156" width="168" height="62" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="270" y="178" font-size="12.5" font-weight="700" fill="var(--tinta)">Distribuidora Sur</text>
-                <text x="270" y="196" font-size="11" fill="var(--gris)">$5.600.000</text>
-              </g>
-            </g>
-            <g>
-              <rect x="456" y="24" width="200" height="282" rx="12" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <rect x="456" y="24" width="200" height="4" rx="2" fill="#8B5CF6"/>
-              <text x="474" y="56" font-size="12" font-weight="700" fill="var(--tinta)" letter-spacing="1.2">PROPUESTA</text>
-              <text x="628" y="56" font-size="12" font-weight="700" fill="var(--gris-2)" text-anchor="end">3</text>
-              <g>
-                <rect x="472" y="72" width="168" height="74" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="486" y="94" font-size="12.5" font-weight="700" fill="var(--tinta)">Grupo Andino</text>
-                <text x="486" y="112" font-size="11" fill="var(--gris)">$12.400.000</text>
-                <rect x="486" y="120" width="64" height="14" rx="7" fill="var(--marca-suave)"/>
-                <text x="493" y="130" font-size="8.5" font-weight="700" fill="var(--marca)">PROPUESTA</text>
-              </g>
-            </g>
-            <g>
-              <rect x="672" y="24" width="200" height="282" rx="12" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <rect x="672" y="24" width="200" height="4" rx="2" fill="var(--ok)"/>
-              <text x="690" y="56" font-size="12" font-weight="700" fill="var(--tinta)" letter-spacing="1.2">GANADO</text>
-              <text x="844" y="56" font-size="12" font-weight="700" fill="var(--gris-2)" text-anchor="end">2</text>
-              <g>
-                <rect x="688" y="72" width="168" height="62" rx="9" fill="var(--papel)" stroke="var(--linea)"/>
-                <text x="702" y="94" font-size="12.5" font-weight="700" fill="var(--tinta)">Ferretería Norte</text>
-                <text x="702" y="112" font-size="11" font-weight="700" fill="var(--ok)">$8.900.000</text>
-              </g>
-            </g>
-          </g>
-        </svg>
-        <figcaption>Etapas configurables, valor por oportunidad, origen del lead y aviso automático cuando algo lleva días detenido.</figcaption>
-      </figure>
-
-      <ul class="lista-plana">
-        <li><b>Etapas propias</b> — las creas, renombras y reordenas sin ayuda técnica</li>
-        <li><b>Etiquetas</b> por origen, interés o campaña, con filtros guardados</li>
-        <li><b>Importación por CSV</b> con detección de duplicados</li>
-        <li><b>Agenda</b> sincronizada con Google Calendar</li>
-        <li><b>Asignación por vendedor</b> y filtro "solo los míos"</li>
-        <li><b>Motivos de cierre</b> para saber por qué se pierde y no repetirlo</li>
-      </ul>
-    </section>
-
-    <section id="automatizaciones">
-      <p class="eyebrow">Lo que trabaja solo</p>
-      <h2>El seguimiento ocurre aunque nadie se acuerde</h2>
-      <p>Un flujo se arma arrastrando pasos: cuándo empieza, cuánto espera, qué manda y qué hace según lo que responda la persona. Una vez activo, corre en el servidor todo el día, incluso con la plataforma cerrada.</p>
-
-      <figure>
-        <svg viewBox="0 0 900 250" role="img" aria-label="Diagrama de un flujo de automatización con disparador, espera, email, condición y WhatsApp">
-          <rect width="900" height="250" fill="var(--lienzo)"/>
-          <defs>
-            <marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-              <path d="M0,0 L10,5 L0,10 z" fill="var(--linea-fuerte)"/>
-            </marker>
-          </defs>
-          <g font-family="var(--dato)" stroke-linecap="round">
-            <line x1="150" y1="72" x2="196" y2="72" stroke="var(--linea-fuerte)" stroke-width="2" marker-end="url(#flecha)"/>
-            <line x1="330" y1="72" x2="376" y2="72" stroke="var(--linea-fuerte)" stroke-width="2" marker-end="url(#flecha)"/>
-            <line x1="510" y1="72" x2="556" y2="72" stroke="var(--linea-fuerte)" stroke-width="2" marker-end="url(#flecha)"/>
-            <path d="M690,72 L716,72 L716,44 L742,44" fill="none" stroke="var(--ok)" stroke-width="2" marker-end="url(#flecha)"/>
-            <path d="M690,72 L716,72 L716,150 L742,150" fill="none" stroke="var(--apunte)" stroke-width="2" marker-end="url(#flecha)"/>
-
-            <g>
-              <rect x="24" y="44" width="126" height="56" rx="10" fill="var(--tarjeta)" stroke="var(--marca)" stroke-width="1.5"/>
-              <text x="40" y="68" font-size="9" font-weight="700" fill="var(--marca)" letter-spacing="1">DISPARADOR</text>
-              <text x="40" y="86" font-size="12.5" font-weight="700" fill="var(--tinta)">Lead nuevo</text>
-            </g>
-            <g>
-              <rect x="204" y="44" width="126" height="56" rx="10" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <text x="220" y="68" font-size="9" font-weight="700" fill="var(--gris-2)" letter-spacing="1">ESPERA</text>
-              <text x="220" y="86" font-size="12.5" font-weight="700" fill="var(--tinta)">10 minutos</text>
-            </g>
-            <g>
-              <rect x="384" y="44" width="126" height="56" rx="10" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <text x="400" y="68" font-size="9" font-weight="700" fill="var(--gris-2)" letter-spacing="1">ENVÍA</text>
-              <text x="400" y="86" font-size="12.5" font-weight="700" fill="var(--tinta)">Email de bienvenida</text>
-            </g>
-            <g>
-              <rect x="564" y="44" width="126" height="56" rx="10" fill="var(--tarjeta)" stroke="var(--linea)"/>
-              <text x="580" y="68" font-size="9" font-weight="700" fill="var(--gris-2)" letter-spacing="1">CONDICIÓN</text>
-              <text x="580" y="86" font-size="12.5" font-weight="700" fill="var(--tinta)">¿Lo abrió?</text>
-            </g>
-            <g>
-              <rect x="746" y="18" width="130" height="52" rx="10" fill="var(--tarjeta)" stroke="var(--ok)" stroke-width="1.5"/>
-              <text x="762" y="40" font-size="9" font-weight="700" fill="var(--ok)" letter-spacing="1">SÍ</text>
-              <text x="762" y="58" font-size="12.5" font-weight="700" fill="var(--tinta)">Avisar al vendedor</text>
-            </g>
-            <g>
-              <rect x="746" y="124" width="130" height="52" rx="10" fill="var(--tarjeta)" stroke="var(--apunte)" stroke-width="1.5"/>
-              <text x="762" y="146" font-size="9" font-weight="700" fill="var(--apunte)" letter-spacing="1">NO</text>
-              <text x="762" y="164" font-size="12.5" font-weight="700" fill="var(--tinta)">WhatsApp a los 2 días</text>
-            </g>
-
-            <rect x="24" y="196" width="852" height="34" rx="9" fill="var(--marca-suave)"/>
-            <text x="44" y="217" font-size="12" fill="var(--marca)" font-weight="600">También se disparan por etiqueta añadida, cambio de etapa, o cuando un lead lleva N días sin actividad.</text>
-          </g>
-        </svg>
-        <figcaption>Un flujo real: contacto nuevo, espera, correo, y una ruta distinta según si lo abrió o no.</figcaption>
-      </figure>
-    </section>
-
-    <section id="conversaciones">
-      <p class="eyebrow">Donde de verdad hablan tus clientes</p>
-      <h2>WhatsApp, Instagram y Messenger en una sola bandeja</h2>
-      <p>Las conversaciones dejan de vivir en el teléfono de una persona. Entran a un inbox compartido, quedan ligadas a la ficha del contacto y cualquiera del equipo puede retomarlas. Si quieres, un chatbot responde primero y avisa cuando hay que intervenir.</p>
-
-      <figure>
-        <svg viewBox="0 0 900 300" role="img" aria-label="Inbox unificado con conversaciones de WhatsApp, Instagram y Messenger">
-          <rect width="900" height="300" fill="var(--lienzo)"/>
-          <g font-family="var(--dato)">
-            <rect x="24" y="24" width="286" height="252" rx="12" fill="var(--tarjeta)" stroke="var(--linea)"/>
-            <text x="44" y="52" font-size="12" font-weight="700" fill="var(--tinta)" letter-spacing="1.2">INBOX</text>
-            <rect x="256" y="40" width="34" height="16" rx="8" fill="var(--marca)"/>
-            <text x="273" y="52" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">12</text>
-
-            <g>
-              <rect x="38" y="68" width="258" height="58" rx="9" fill="var(--marca-suave)"/>
-              <circle cx="64" cy="90" r="11" fill="#25D366"/>
-              <text x="64" y="94" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">W</text>
-              <text x="84" y="88" font-size="12.5" font-weight="700" fill="var(--tinta)">Mariana López</text>
-              <text x="84" y="106" font-size="11" fill="var(--gris)">¿Tienen envío a Medellín?</text>
-              <text x="282" y="88" font-size="10" fill="var(--gris-2)" text-anchor="end">2 min</text>
-            </g>
-            <g>
-              <circle cx="64" cy="154" r="11" fill="#E1306C"/>
-              <text x="64" y="158" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">IG</text>
-              <text x="84" y="152" font-size="12.5" font-weight="700" fill="var(--tinta)">@carlos.r</text>
-              <text x="84" y="170" font-size="11" fill="var(--gris)">Me interesa el plan grande</text>
-              <text x="282" y="152" font-size="10" fill="var(--gris-2)" text-anchor="end">1 h</text>
-            </g>
-            <g>
-              <circle cx="64" cy="212" r="11" fill="#0084FF"/>
-              <text x="64" y="216" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">M</text>
-              <text x="84" y="210" font-size="12.5" font-weight="700" fill="var(--tinta)">Andrea Ruiz</text>
-              <text x="84" y="228" font-size="11" fill="var(--gris)">Gracias, lo reviso</text>
-              <text x="282" y="210" font-size="10" fill="var(--gris-2)" text-anchor="end">3 h</text>
-            </g>
-
-            <rect x="326" y="24" width="550" height="252" rx="12" fill="var(--tarjeta)" stroke="var(--linea)"/>
-            <text x="348" y="52" font-size="13" font-weight="700" fill="var(--tinta)">Mariana López</text>
-            <rect x="452" y="40" width="80" height="16" rx="8" fill="var(--ok-suave)"/>
-            <text x="492" y="52" font-size="9" font-weight="700" fill="var(--ok)" text-anchor="middle">EN PIPELINE</text>
-
-            <rect x="348" y="76" width="240" height="40" rx="10" fill="var(--lienzo)"/>
-            <text x="364" y="101" font-size="12" fill="var(--tinta)">¿Tienen envío a Medellín?</text>
-
-            <rect x="560" y="128" width="296" height="40" rx="10" fill="var(--marca)"/>
-            <text x="580" y="153" font-size="12" fill="#fff">Sí, llega en 48 horas. ¿Te comparto precios?</text>
-            <rect x="560" y="172" width="86" height="14" rx="7" fill="var(--marca-suave)"/>
-            <text x="603" y="182" font-size="8.5" font-weight="700" fill="var(--marca)" text-anchor="middle">RESPUESTA DEL BOT</text>
-
-            <rect x="348" y="200" width="508" height="34" rx="9" fill="var(--lienzo)" stroke="var(--linea)"/>
-            <text x="366" y="221" font-size="11.5" fill="var(--gris-2)">Escribe para tomar la conversación…</text>
-            <rect x="348" y="244" width="180" height="18" rx="9" fill="var(--apunte-suave)"/>
-            <text x="360" y="257" font-size="9" font-weight="700" fill="var(--apunte)">LEAD CREADO AUTOMÁTICAMENTE</text>
-          </g>
-        </svg>
-        <figcaption>Cada conversación crea o actualiza el contacto en el pipeline. El bot responde primero; el equipo toma el control cuando hace falta.</figcaption>
-      </figure>
-    </section>
-
-    <section id="campanas">
-      <p class="eyebrow">Para mover la base que ya tienes</p>
-      <h2>Campañas y propuestas, sin herramientas extra</h2>
-      <p>La base de contactos no sirve de nada guardada. Desde el mismo CRM se lanzan campañas segmentadas por etiqueta, se miden las aperturas y quien pide la baja queda excluido automáticamente de los siguientes envíos.</p>
-      <ul class="lista-plana">
-        <li><b>Campañas de email y WhatsApp</b> segmentadas por etiqueta, etapa u origen</li>
-        <li><b>Envíos ilimitados</b> — sin cupos mensuales ni costo por contacto enviado</li>
-        <li><b>Baja automática</b> gestionada por el sistema</li>
-        <li><b>Propuestas comerciales</b> con página propia y link de pago</li>
-        <li><b>Formularios y webhooks</b> que entran directo al pipeline</li>
-        <li><b>Encuestas de satisfacción</b> que etiquetan promotores y detractores</li>
-        <li><b>Reportes</b> de ventas, productividad y marketing</li>
-        <li><b>Multi-cliente</b> con datos separados por marca</li>
-      </ul>
-    </section>
-
-    <section id="comparativa">
-      <p class="eyebrow">La diferencia</p>
-      <h2>Por qué este CRM y no otro</h2>
-      <p>La referencia en habla hispana es Clientify, y sirve bien para ver la diferencia de modelo. Su precio de entrada publicado es de <b>65&nbsp;€ al mes por un solo usuario</b> con 1.000 contactos de marketing; bajando a 39&nbsp;€ si se paga el año completo por adelantado.</p>
-      <p>Dicho de otro modo: <b>lo que en Clientify cuesta su plan anual por un usuario, en Acuarius es el precio mensual por tres</b>, y sin comprometerte a doce meses.</p>
-
-      <div class="tabla-env">
-        <table>
-          <thead><tr><th>&nbsp;</th><th>Clientify · plan de entrada</th><th>Acuarius Pro</th></tr></thead>
-          <tbody>
-            <tr><td><b>Precio de entrada</b></td><td class="no">65&nbsp;€/mes · 39&nbsp;€/mes pagando el año</td><td class="si">$39/mes · $32,50 pagando el año</td></tr>
-            <tr><td><b>Usuarios incluidos</b></td><td class="no">1</td><td class="si">3 · $9 el adicional</td></tr>
-            <tr><td><b>Contactos incluidos</b></td><td class="no">1.000</td><td class="si">1.000 · $4 por cada 1.000 más</td></tr>
-            <tr><td><b>Envío de correos</b></td><td class="no">Sujeto al cupo del plan</td><td class="si">Ilimitado en campañas y automatizaciones</td></tr>
-            <tr><td><b>Agentes de IA para pauta</b></td><td class="no">No es su terreno</td><td class="si">Siete, incluidos</td></tr>
-            <tr><td><b>Permanencia</b></td><td class="no">El precio bueno exige pagar el año</td><td class="si">Mensual sin permanencia; el anual es opcional</td></tr>
-            <tr><td><b>Prueba gratuita</b></td><td>14 días</td><td>14 días, con el plan completo</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="apunte-txt">Clientify es una buena herramienta y lleva años en el mercado; la comparación es de modelo de precio, no de calidad. Precios de Clientify tomados de su página pública de precios en julio de 2026 y sujetos a cambios: conviene comprobarlos antes de usarlos como argumento.</p>
-    </section>
-
-    <section id="ia">
-      <p class="eyebrow">El extra que no pagas aparte</p>
-      <h2>Y además, siete agentes de IA incluidos</h2>
-      <p>No es el motivo por el que se contrata Acuarius, pero viene en el mismo precio. Siete agentes especializados en Google Ads, Meta, TikTok, LinkedIn, SEO, contenido para redes y estrategia general, conectados a tus cuentas reales.</p>
-      <p>El uso natural es el que ya tienes delante: pedirle al agente que escriba la secuencia de seguimiento, que redacte la campaña para un segmento del CRM, o que revise por qué una fuente de leads convierte peor que otra.</p>
-    </section>
-
-    <section id="planes">
-      <p class="eyebrow">Inversión</p>
-      <h2>Planes</h2>
-      <p>Sin costos de implementación ni permanencia. El precio sube solo si sube el uso.</p>
-      <div class="tabla-env">
-        <table>
-          <thead><tr><th>Plan</th><th>Usuarios</th><th>Contactos</th><th class="num">Mensual</th><th class="num">Anual</th></tr></thead>
-          <tbody>
-            <tr><td><b>Pro</b><br><span class="apunte-txt">Equipos pequeños</span></td><td>3</td><td>1.000</td><td class="num">$39</td><td class="num">$390</td></tr>
-            <tr><td><b>Agency</b><br><span class="apunte-txt">Agencias y equipos grandes</span></td><td>10</td><td>5.000</td><td class="num">$99</td><td class="num">$990</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="apunte-txt">Los dos incluyen todo el CRM, las automatizaciones, el inbox de WhatsApp, los siete agentes de IA y <b>envíos de correo ilimitados</b>. El plan anual equivale a pagar diez meses. Si hace falta más capacidad: <b>$9</b> por usuario adicional al mes y <b>$4</b> por cada 1.000 contactos adicionales al mes.</p>
-    </section>
-
-    <section id="propuesta">
-      <p class="eyebrow">Ajusta esta sección</p>
-      <h2>Tu propuesta</h2>
-      <p>Completa los datos y la inversión se calcula sola. Todo queda guardado en este navegador para la próxima vez.</p>
-
-      <div class="taller" id="taller">
-        <div class="taller-cab">
-          <h3>Datos del cliente</h3>
-          <span class="taller-nota">Solo tú ves esta zona · no aparece en el documento descargado</span>
-        </div>
-        <div class="campos">
-          <div><label for="f-cliente">Empresa</label><input type="text" id="f-cliente" placeholder="Tierra de Mascotas"></div>
-          <div><label for="f-contacto">Persona de contacto</label><input type="text" id="f-contacto" placeholder="Mariana López"></div>
-          <div><label for="f-sector">Sector</label><input type="text" id="f-sector" placeholder="E-commerce / Retail"></div>
-          <div><label for="f-fecha">Fecha</label><input type="date" id="f-fecha"></div>
-          <div><label for="f-validez">Validez de la oferta</label><input type="text" id="f-validez" placeholder="15 días"></div>
-          <div><label for="f-autor">Preparada por</label><input type="text" id="f-autor" placeholder="Alejandro González"></div>
-        </div>
-
-        <div class="campos" style="margin-top:22px">
-          <div>
-            <label for="f-plan">Plan recomendado</label>
-            <select id="f-plan">
-              <option value="auto">El más conveniente (recomendado)</option>
-              <option value="pro">Pro</option>
-              <option value="agency">Agency</option>
-            </select>
-          </div>
-          <div>
-            <label>Periodicidad</label>
-            <div class="segmentado" role="group" aria-label="Periodicidad">
-              <button type="button" id="f-mensual" aria-pressed="true">Mensual</button>
-              <button type="button" id="f-anual" aria-pressed="false">Anual · 2 meses gratis</button>
-            </div>
-          </div>
-          <div>
-            <label for="f-usuarios">Usuarios</label>
-            <div class="pareja">
-              <button type="button" class="paso" id="u-menos" aria-label="Menos usuarios">−</button>
-              <input type="text" id="f-usuarios" value="3" inputmode="numeric" aria-label="Número de usuarios">
-              <button type="button" class="paso" id="u-mas" aria-label="Más usuarios">+</button>
-            </div>
-          </div>
-          <div>
-            <label for="f-contactos">Contactos</label>
-            <div class="pareja">
-              <button type="button" class="paso" id="c-menos" aria-label="Menos contactos">−</button>
-              <input type="text" id="f-contactos" value="1.000" readonly aria-label="Número de contactos">
-              <button type="button" class="paso" id="c-mas" aria-label="Más contactos">+</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="aviso-plan" style="display:none;margin-top:18px;background:var(--tarjeta);border:1px solid var(--apunte);border-radius:10px;padding:13px 16px;font-family:var(--dato);font-size:13.5px;color:var(--apunte);line-height:1.5"></div>
-
-        <div style="margin-top:22px">
-          <label>Qué destacar en esta propuesta</label>
-          <div class="chips" id="chips"></div>
-        </div>
-
-        <div style="margin-top:22px">
-          <label for="f-notas">Nota personalizada <span style="text-transform:none;letter-spacing:0;font-weight:400">(sí aparece en el documento)</span></label>
-          <textarea id="f-notas" placeholder="Conversamos sobre los leads que llegan por WhatsApp y se quedan sin seguimiento…"></textarea>
-        </div>
-      </div>
-
-      <div id="salida-nota" style="display:none">
-        <h3 style="margin-bottom:10px">Sobre tu caso</h3>
-        <p id="nota-texto" style="white-space:pre-wrap"></p>
-      </div>
-
-      <h3 style="margin-top:30px">Lo que incluye</h3>
-      <ul class="lista-plana" id="salida-chips"></ul>
-
-      <div class="cierre">
-        <div style="font-family:var(--dato);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--gris-2);margin-bottom:10px" id="cierre-plan">Plan Pro · mensual</div>
-        <div class="cifra"><span class="sim">$</span><span class="val" id="cierre-valor">39</span><span class="per">USD / mes</span></div>
-        <div id="aviso-precio" style="display:none;margin-top:14px;background:var(--apunte-suave);border:1px solid var(--apunte);border-radius:10px;padding:12px 15px;font-family:var(--dato);font-size:13.5px;color:var(--apunte);line-height:1.5"></div>
-        <div class="ahorro" id="cierre-ahorro" style="display:none"></div>
-        <div class="desglose" id="cierre-desglose"></div>
-      </div>
-
-      <div class="acciones">
-        <button class="btn btn-p" id="btn-imprimir">Guardar como PDF</button>
-        <button class="btn btn-s" id="btn-descargar">Descargar archivo</button>
-        <button class="btn btn-s" id="btn-limpiar">Empezar una nueva</button>
-      </div>
-      <div class="estado" id="estado"></div>
-      <p class="aviso"><b>Guardar como PDF</b> abre el diálogo de impresión: elige «Guardar como PDF» como destino. La zona de edición, el índice y los botones no salen impresos: solo la propuesta.</p>
-      <p class="aviso">Precios en dólares, sin impuestos según el país del cliente. Los complementos de usuarios y contactos se cobran mensualmente, también en el plan anual.</p>
-    </section>
-
-    <section id="siguiente">
-      <p class="eyebrow">Cómo empezamos</p>
-      <h2>Catorce días de prueba, sin tarjeta</h2>
-      <p>La cuenta se crea en minutos y arranca con el plan Pro completo durante dos semanas. En ese tiempo importamos tu base de contactos, dejamos el pipeline con tus etapas reales y activamos la primera automatización de seguimiento. Si al final no ves el valor, no pagas nada.</p>
-      <ol class="lista-plana" style="list-style:decimal;padding-left:20px">
-        <li><b>Creamos la cuenta</b> con el correo del responsable</li>
-        <li><b>Importamos</b> los contactos y armamos el pipeline con tus etapas</li>
-        <li><b>Conectamos</b> WhatsApp y los formularios de tu sitio</li>
-        <li><b>Activamos</b> la primera automatización de seguimiento</li>
-      </ol>
-      <p style="margin-top:22px"><a href="https://acuarius.app" target="_blank" rel="noopener">acuarius.app</a></p>
-    </section>
-
-  </main>
-</div>
-
+</head>
+<body>
+<div class="mazo" id="mazo"></div>
+<div class="editor no-print" id="editor"></div>
 <script>
-(function(){
-  var PLANES={
-    pro:{nombre:'Pro',base:39,usuarios:3,contactos:1000},
-    agency:{nombre:'Agency',base:99,usuarios:10,contactos:5000}
-  };
-  var PRECIO_USUARIO=9, PASO=1000, MESES_ANUAL=10, MAX_U=60, MAX_C=100000;
-  var CLAVE='acuarius_propuesta_v3';  // v3: el estado v2 forzaba un plan y tapaba la recomendacion
+/* Propuesta comercial de Acuarius — deck 16:9.
+   Las láminas se generan desde el estado, así que editar los datos del cliente
+   repinta la presentación entera. Al imprimir, cada .lamina es una página. */
+(function () {
+  'use strict';
 
-  var DESTACADOS=[
-    'Pipeline a medida','Automatizaciones de seguimiento','Inbox de WhatsApp',
-    'Campañas de email','Chatbots','Formularios y webhooks','Propuestas con link de pago',
-    'Reportes de ventas','Agenda y Google Calendar','Multi-cliente','Agentes de IA'
+  var PLANES = {
+    pro:    { nombre: 'Pro',    base: 39, usuarios: 3,  contactos: 1000 },
+    agency: { nombre: 'Agency', base: 99, usuarios: 10, contactos: 5000 }
+  };
+  var PRECIO_USUARIO = 9, PASO = 1000, PRECIO_PACK = 4, MESES_ANUAL = 10;
+  var MAX_U = 60, MAX_C = 100000;
+  var CLAVE = 'acuarius_deck_v1';
+
+  var DESTACADOS = [
+    'Pipeline a medida', 'Automatizaciones de seguimiento', 'Inbox de WhatsApp',
+    'Campañas de email ilimitadas', 'Chatbots con IA', 'Formularios y webhooks',
+    'Propuestas con link de pago', 'Reportes de ventas', 'Agenda con Google Calendar',
+    'Multi-cliente', 'Siete agentes de IA'
   ];
 
-  var $=function(id){return document.getElementById(id)};
-  var estado={anual:false,contactos:1000,destacados:['Pipeline a medida','Automatizaciones de seguimiento','Inbox de WhatsApp','Campañas de email']};
-  var fmt=function(n){return n.toLocaleString('es-CO')};
+  var e = {
+    cliente: '', contacto: '', sector: '', fecha: '', validez: '15 días',
+    autor: '', plan: 'auto', usuarios: 3, contactos: 1000, anual: false,
+    notas: '', destacados: ['Pipeline a medida', 'Automatizaciones de seguimiento', 'Inbox de WhatsApp', 'Campañas de email ilimitadas']
+  };
 
-  DESTACADOS.forEach(function(d){
-    var b=document.createElement('button');
-    b.type='button'; b.className='chip'; b.textContent=d;
-    b.setAttribute('aria-pressed', estado.destacados.indexOf(d)>=0?'true':'false');
-    b.addEventListener('click',function(){
-      var i=estado.destacados.indexOf(d);
-      if(i>=0) estado.destacados.splice(i,1); else estado.destacados.push(d);
-      b.setAttribute('aria-pressed', i>=0?'false':'true');
-      pintar(); guardar();
-    });
-    $('chips').appendChild(b);
-  });
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var fmt = function (n) { return n.toLocaleString('es-CO'); };
+  var esc = function (t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
 
-  function pasoContactos(v,dir){
-    var p = v>=20000?10000 : v>=5000?5000 : PASO;
-    if(dir<0) p = v>20000?10000 : v>5000?5000 : PASO;
-    return Math.max(PASO, Math.min(MAX_C, v + dir*p));
+  // ── Precio ────────────────────────────────────────────────────────────────
+  function costeDe(clave, u, c) {
+    var p = PLANES[clave];
+    var eu = Math.max(0, u - p.usuarios);
+    var packs = Math.max(0, Math.ceil((c - p.contactos) / PASO));
+    var cu = eu * PRECIO_USUARIO, cc = packs * PRECIO_PACK;
+    return {
+      clave: clave, plan: p, usuarios: u, extraU: eu, costeU: cu, packs: packs, costeC: cc,
+      planAnual: p.base * MESES_ANUAL,
+      totalMes: p.base + cu + cc,
+      efectivoAnual: Math.round(p.base * MESES_ANUAL / 12) + cu + cc
+    };
   }
 
-  function costeDe(clave,u){
-    var plan=PLANES[clave];
-    var extraU=Math.max(0,u-plan.usuarios);
-    var packs=Math.max(0,Math.ceil((estado.contactos-plan.contactos)/PASO));
-    var costeU=extraU*PRECIO_USUARIO, costeC=packs*4;
-    var planAnual=plan.base*MESES_ANUAL;
-    return {clave:clave,plan:plan,usuarios:u,extraU:extraU,costeU:costeU,packs:packs,costeC:costeC,
-      planAnual:planAnual,totalMes:plan.base+costeU+costeC,
-      efectivoAnual:Math.round(planAnual/12)+costeU+costeC};
-  }
-
-  // La web recomienda sola el plan mas barato. Si aqui se cotizara otro, el
-  // cliente podria entrar a la calculadora y ver un precio MENOR que el de la
-  // propuesta. Por eso 'auto' es el valor por defecto y, si se fuerza un plan
-  // mas caro, se avisa antes de enviar nada.
-  function calcular(){
-    var u=parseInt(String($('f-usuarios').value).replace(/\D/g,''),10);
-    if(isNaN(u)||u<1) u=1; if(u>MAX_U) u=MAX_U;
-    var elegido=$('f-plan').value;
-    var opciones=Object.keys(PLANES).map(function(k){return costeDe(k,u)});
-    opciones.sort(function(a,b){return a.totalMes-b.totalMes});
-    var barato=opciones[0];
-    var r = (elegido==='auto') ? barato : costeDe(elegido,u);
+  // Mismo criterio que la calculadora de acuarius.app: gana el más barato. Si
+  // se fuerza otro, el precio de la propuesta quedaría POR ENCIMA del que el
+  // cliente ve en la web, así que hay que avisarlo.
+  function calcular() {
+    var u = Math.max(1, Math.min(MAX_U, parseInt(e.usuarios, 10) || 1));
+    var opciones = Object.keys(PLANES).map(function (k) { return costeDe(k, u, e.contactos); });
+    opciones.sort(function (a, b) { return a.totalMes - b.totalMes; });
+    var barato = opciones[0];
+    var r = (e.plan === 'auto') ? barato : costeDe(e.plan, u, e.contactos);
     r.masBarato = barato;
-    r.esElMasBarato = (r.clave===barato.clave) || (r.totalMes<=barato.totalMes);
+    r.esElMasBarato = r.totalMes <= barato.totalMes;
     return r;
   }
 
-  function fila(k,v,clase){
-    return '<div class="fila'+(clase?' '+clase:'')+'"><span>'+k+'</span><b>'+v+'</b></div>';
+  function pasoContactos(v, dir) {
+    var p = v >= 20000 ? 10000 : v >= 5000 ? 5000 : PASO;
+    if (dir < 0) p = v > 20000 ? 10000 : v > 5000 ? 5000 : PASO;
+    return Math.max(PASO, Math.min(MAX_C, v + dir * p));
   }
 
-  function pintar(){
-    var c=calcular();
-    $('f-usuarios').value=c.usuarios;
-    $('f-contactos').value=fmt(estado.contactos);
+  // ── Piezas ────────────────────────────────────────────────────────────────
+  var AGUA = '<svg class="agua" viewBox="0 0 100 100" aria-hidden="true"><text x="50" y="84" text-anchor="middle" font-size="104" font-weight="800" font-family="Avenir Next,Futura,sans-serif" fill="currentColor">A</text></svg>';
+  var FLECHA = '<span class="flecha"><svg viewBox="0 0 24 24"><path d="M4 12h14M13 6l6 6-6 6"/></svg></span>';
+  var TICK = '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>';
 
-    var cli=$('f-cliente').value.trim(), ctc=$('f-contacto').value.trim();
-    $('rail-cliente').textContent = cli || 'tu cliente';
-    $('meta-cliente').textContent = (cli||'—') + (ctc? ' · '+ctc : '');
-    var f=$('f-fecha').value;
-    $('meta-fecha').textContent = f ? new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}) : '—';
-    $('meta-validez').textContent = $('f-validez').value.trim() || '—';
-    $('meta-autor').textContent = $('f-autor').value.trim() || '—';
+  function fila(k, v, cls) {
+    return '<div class="f' + (cls ? ' ' + cls : '') + '"><span>' + k + '</span><b>' + v + '</b></div>';
+  }
 
-    var nota=$('f-notas').value.trim();
-    $('salida-nota').style.display = nota ? '' : 'none';
-    $('nota-texto').textContent = nota;
+  function pie(n, total) {
+    var cli = e.cliente.trim();
+    return '<div class="pie"><span class="marca">Acuarius</span>' +
+      '<span>' + (cli ? esc(cli) : 'Propuesta comercial') + '</span></div>' +
+      '<div class="num">' + n + ' / ' + total + '</div>';
+  }
 
-    $('salida-chips').innerHTML = estado.destacados.length
-      ? estado.destacados.map(function(d){return '<li>'+d+'</li>'}).join('')
-      : '<li>Acceso completo a la plataforma</li>';
+  function punto(t, d) {
+    return '<div class="punto">' + FLECHA + '<div><h3>' + t + '<span></span></h3>' +
+      (d ? '<p>' + d + '</p>' : '') + '</div></div>';
+  }
 
-    $('cierre-plan').textContent = 'Plan '+c.plan.nombre+' · '+(estado.anual?'pago anual':'pago mensual');
-    $('cierre-valor').textContent = fmt(estado.anual ? c.efectivoAnual : c.totalMes);
+  // ── Ilustraciones ─────────────────────────────────────────────────────────
+  function svgPipeline() {
+    var col = function (x, tit, n, color, tarjetas) {
+      var s = '<rect x="' + x + '" y="14" width="196" height="250" rx="11" fill="#fff" stroke="#E2E3EE"/>' +
+        '<rect x="' + x + '" y="14" width="196" height="4" rx="2" fill="' + color + '"/>' +
+        '<text x="' + (x + 16) + '" y="44" font-size="11.5" font-weight="700" fill="#0B0D18" letter-spacing="1.1">' + tit + '</text>' +
+        '<text x="' + (x + 180) + '" y="44" font-size="11.5" font-weight="700" fill="#8C90A8" text-anchor="end">' + n + '</text>';
+      tarjetas.forEach(function (t, i) {
+        var y = 60 + i * 66;
+        s += '<rect x="' + (x + 14) + '" y="' + y + '" width="168" height="56" rx="8" fill="#F6F7FB" stroke="#E2E3EE"/>' +
+          '<text x="' + (x + 28) + '" y="' + (y + 22) + '" font-size="12" font-weight="700" fill="#0B0D18">' + t[0] + '</text>' +
+          '<text x="' + (x + 28) + '" y="' + (y + 40) + '" font-size="10.5" fill="#5A5E78">' + t[1] + '</text>';
+        if (t[2]) {
+          s += '<rect x="' + (x + 112) + '" y="' + (y + 30) + '" width="60" height="13" rx="6.5" fill="' + t[3] + '"/>' +
+            '<text x="' + (x + 142) + '" y="' + (y + 39) + '" font-size="7.5" font-weight="700" fill="' + t[4] + '" text-anchor="middle">' + t[2] + '</text>';
+        }
+      });
+      return s;
+    };
+    return '<svg viewBox="0 0 880 280" role="img" aria-label="Pipeline de ventas con cuatro etapas">' +
+      '<rect width="880" height="280" fill="#F6F7FB"/>' +
+      col(14, 'NUEVO', 6, '#1E2BCC', [['Mariana López', '$2.400.000', 'FORMULARIO', '#EDEEFC', '#1E2BCC'], ['Carlos Restrepo', '$980.000', 'WHATSAPP', '#FBEFE7', '#B4531F']]) +
+      col(224, 'CONTACTADO', 4, '#F5A524', [['Andrea Ruiz', '$3.100.000', '5 DÍAS', '#FEF3C7', '#B45309'], ['Distribuidora Sur', '$5.600.000']]) +
+      col(434, 'PROPUESTA', 3, '#8B5CF6', [['Grupo Andino', '$12.400.000', 'ENVIADA', '#EDEEFC', '#1E2BCC']]) +
+      col(644, 'GANADO', 2, '#0F7A55', [['Ferretería Norte', '$8.900.000']]) +
+      '</svg>';
+  }
 
-    var ah=$('cierre-ahorro');
-    if(estado.anual){ ah.style.display=''; ah.textContent='Ahorra $'+fmt(c.plan.base*2)+' al año — dos meses gratis'; }
-    else { ah.style.display='none'; }
+  function svgFlujo() {
+    var caja = function (x, y, w, rot, txt, borde) {
+      return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="54" rx="9" fill="#fff" stroke="' + (borde || '#E2E3EE') + '" stroke-width="' + (borde ? 1.6 : 1) + '"/>' +
+        '<text x="' + (x + 15) + '" y="' + (y + 22) + '" font-size="8.5" font-weight="700" fill="' + (borde || '#8C90A8') + '" letter-spacing="1">' + rot + '</text>' +
+        '<text x="' + (x + 15) + '" y="' + (y + 40) + '" font-size="12" font-weight="700" fill="#0B0D18">' + txt + '</text>';
+    };
+    return '<svg viewBox="0 0 880 230" role="img" aria-label="Flujo de automatización">' +
+      '<rect width="880" height="230" fill="#F6F7FB"/>' +
+      '<defs><marker id="fl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#CDCFE0"/></marker></defs>' +
+      '<line x1="158" y1="63" x2="196" y2="63" stroke="#CDCFE0" stroke-width="2" marker-end="url(#fl)"/>' +
+      '<line x1="336" y1="63" x2="374" y2="63" stroke="#CDCFE0" stroke-width="2" marker-end="url(#fl)"/>' +
+      '<line x1="514" y1="63" x2="552" y2="63" stroke="#CDCFE0" stroke-width="2" marker-end="url(#fl)"/>' +
+      '<path d="M692,63 L716,63 L716,36 L740,36" fill="none" stroke="#0F7A55" stroke-width="2" marker-end="url(#fl)"/>' +
+      '<path d="M692,63 L716,63 L716,140 L740,140" fill="none" stroke="#B4531F" stroke-width="2" marker-end="url(#fl)"/>' +
+      caja(14, 36, 144, 'DISPARADOR', 'Lead nuevo', '#1E2BCC') +
+      caja(198, 36, 138, 'ESPERA', '10 minutos') +
+      caja(376, 36, 138, 'ENVÍA', 'Email 1') +
+      caja(554, 36, 138, 'CONDICIÓN', '¿Lo abrió?') +
+      caja(742, 10, 124, 'SÍ', 'Avisar al asesor', '#0F7A55') +
+      caja(742, 114, 124, 'NO', 'WhatsApp a 2 días', '#B4531F') +
+      '<rect x="14" y="182" width="852" height="32" rx="8" fill="#EDEEFC"/>' +
+      '<text x="32" y="203" font-size="11.5" font-weight="600" fill="#1E2BCC">También arrancan por etiqueta, cambio de etapa o cuando un lead lleva días sin actividad.</text>' +
+      '</svg>';
+  }
 
-    var d='';
-    if(estado.anual) d+=fila('Plan '+c.plan.nombre+' anual — '+c.plan.usuarios+' usuarios y '+fmt(c.plan.contactos)+' contactos','$'+fmt(c.planAnual)+' / año');
-    else d+=fila('Plan '+c.plan.nombre+' — '+c.plan.usuarios+' usuarios y '+fmt(c.plan.contactos)+' contactos','$'+fmt(c.plan.base)+' / mes');
-    if(c.extraU) d+=fila(c.extraU+(c.extraU===1?' usuario adicional':' usuarios adicionales')+' × $'+PRECIO_USUARIO,'$'+fmt(c.costeU)+' / mes');
-    if(c.packs) d+=fila(fmt(c.packs*PASO)+' contactos adicionales × $4 por 1.000','$'+fmt(c.costeC)+' / mes');
-    d+=fila('Correos de campañas y automatizaciones','Ilimitados');
-    if(estado.anual){
-      d+=fila('Pago inicial del plan','$'+fmt(c.planAnual)+' USD','total');
-      if(c.costeU+c.costeC) d+=fila('Complementos, cobro mensual','$'+fmt(c.costeU+c.costeC)+' / mes');
-    } else {
-      d+=fila('Total mensual','$'+fmt(c.totalMes)+' USD','total');
+  function svgInbox() {
+    return '<svg viewBox="0 0 880 280" role="img" aria-label="Inbox unificado de WhatsApp, Instagram y Messenger">' +
+      '<rect width="880" height="280" fill="#F6F7FB"/>' +
+      '<rect x="14" y="14" width="280" height="250" rx="11" fill="#fff" stroke="#E2E3EE"/>' +
+      '<text x="34" y="42" font-size="11.5" font-weight="700" fill="#0B0D18" letter-spacing="1.1">INBOX</text>' +
+      '<rect x="248" y="30" width="30" height="15" rx="7.5" fill="#1E2BCC"/>' +
+      '<text x="263" y="41" font-size="9.5" font-weight="700" fill="#fff" text-anchor="middle">12</text>' +
+      '<rect x="28" y="56" width="252" height="56" rx="8" fill="#EDEEFC"/>' +
+      '<circle cx="54" cy="78" r="11" fill="#25D366"/><text x="54" y="82" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">W</text>' +
+      '<text x="74" y="76" font-size="12" font-weight="700" fill="#0B0D18">Mariana López</text>' +
+      '<text x="74" y="94" font-size="10.5" fill="#5A5E78">¿Tienen envío a Medellín?</text>' +
+      '<circle cx="54" cy="142" r="11" fill="#E1306C"/><text x="54" y="146" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">IG</text>' +
+      '<text x="74" y="140" font-size="12" font-weight="700" fill="#0B0D18">@carlos.r</text>' +
+      '<text x="74" y="158" font-size="10.5" fill="#5A5E78">Me interesa el plan grande</text>' +
+      '<circle cx="54" cy="202" r="11" fill="#0084FF"/><text x="54" y="206" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">M</text>' +
+      '<text x="74" y="200" font-size="12" font-weight="700" fill="#0B0D18">Andrea Ruiz</text>' +
+      '<text x="74" y="218" font-size="10.5" fill="#5A5E78">Gracias, lo reviso</text>' +
+      '<rect x="310" y="14" width="556" height="250" rx="11" fill="#fff" stroke="#E2E3EE"/>' +
+      '<text x="332" y="42" font-size="12.5" font-weight="700" fill="#0B0D18">Mariana López</text>' +
+      '<rect x="438" y="30" width="74" height="15" rx="7.5" fill="#E6F4EE"/>' +
+      '<text x="475" y="41" font-size="8.5" font-weight="700" fill="#0F7A55" text-anchor="middle">EN PIPELINE</text>' +
+      '<rect x="332" y="62" width="238" height="38" rx="9" fill="#F6F7FB"/>' +
+      '<text x="348" y="86" font-size="11.5" fill="#0B0D18">¿Tienen envío a Medellín?</text>' +
+      '<rect x="546" y="112" width="300" height="38" rx="9" fill="#1E2BCC"/>' +
+      '<text x="566" y="136" font-size="11.5" fill="#fff">Sí, llega en 48 horas. ¿Te paso precios?</text>' +
+      '<rect x="546" y="154" width="88" height="14" rx="7" fill="#EDEEFC"/>' +
+      '<text x="590" y="164" font-size="8" font-weight="700" fill="#1E2BCC" text-anchor="middle">RESPUESTA DEL BOT</text>' +
+      '<rect x="332" y="184" width="514" height="30" rx="8" fill="#F6F7FB" stroke="#E2E3EE"/>' +
+      '<text x="350" y="204" font-size="11" fill="#8C90A8">Escribe para tomar la conversación…</text>' +
+      '<rect x="332" y="224" width="196" height="17" rx="8.5" fill="#FBEFE7"/>' +
+      '<text x="344" y="236" font-size="8.5" font-weight="700" fill="#B4531F">LEAD CREADO AUTOMÁTICAMENTE</text>' +
+      '</svg>';
+  }
+
+  // ── Láminas ───────────────────────────────────────────────────────────────
+  function laminas() {
+    var c = calcular();
+    var cli = e.cliente.trim();
+    var fechaTxt = '';
+    if (e.fecha) {
+      try { fechaTxt = new Date(e.fecha + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (x) {}
     }
-    $('cierre-desglose').innerHTML=d;
+    var L = [];
 
-    var textoAviso='';
-    if(!c.esElMasBarato){
-      var dif=c.totalMes-c.masBarato.totalMes;
-      textoAviso='Con esta configuración, <b>'+c.masBarato.plan.nombre+'</b> sale <b>$'+fmt(dif)+' más barato</b> al mes ($'+fmt(c.masBarato.totalMes)+' frente a $'+fmt(c.totalMes)+'). La calculadora de acuarius.app le mostrará ese precio al cliente.';
+    // 1 — Portada
+    L.push({ cls: '', sinPie: true, html:
+      '<div class="portada">' +
+        '<div class="izq"><div class="logo">Acuarius<i></i></div>' +
+          '<div class="bajo">CRM y automatización<br>para equipos comerciales</div></div>' +
+        '<div class="der">' + AGUA +
+          '<h1>Un CRM que no espera a que alguien se acuerde del cliente</h1>' +
+          '<div class="para">Propuesta preparada para</div>' +
+          '<div class="cliente">' + esc(cli || 'tu empresa') + '</div>' +
+          '<div class="fecha">' + esc([fechaTxt, e.contacto.trim(), e.autor.trim() ? 'Por ' + e.autor.trim() : ''].filter(Boolean).join(' · ')) + '</div>' +
+        '</div>' +
+      '</div>' });
+
+    // 2 — El problema
+    L.push({ cls: 'azul', html: AGUA + '<div class="campo">' +
+      '<span class="rotulo">El diagnóstico</span>' +
+      '<div class="cita"><p>El problema casi nunca es conseguir leads. Es que <span class="marcador">nadie los contactó a tiempo</span>.</p>' +
+      '<div class="firma">El contacto entra, alguien lo anota, y ahí se queda. Cuando el equipo vuelve a mirarlo, ya compró en otro lado.</div></div>' +
+      '</div>' });
+
+    // 3 — Dónde se pierde
+    L.push({ cls: 'azul', html: AGUA + '<div class="campo">' +
+      '<h2 class="titulo">Dónde se pierde el dinero</h2>' +
+      '<div class="cifras">' +
+        '<div class="cifra-b"><div class="n">1</div><div class="t"><b>Sin segundo contacto.</b> La mayoría de leads recibe un mensaje y ninguno más. La venta suele estar en el tercero o el cuarto.</div></div>' +
+        '<div class="cifra-b"><div class="n">2</div><div class="t"><b>Conversaciones sueltas.</b> WhatsApp en el teléfono de un vendedor. Si esa persona no está, la conversación se pierde.</div></div>' +
+        '<div class="cifra-b"><div class="n">3</div><div class="t"><b>Sin visibilidad.</b> Nadie sabe cuántas oportunidades hay abiertas, por cuánto, ni cuáles llevan días sin moverse.</div></div>' +
+      '</div></div>' });
+
+    // 4 — Pipeline
+    L.push({ cls: '', html: '<div class="campo">' +
+      '<span class="rotulo">El corazón del sistema</span>' +
+      '<h2 class="titulo">Un pipeline que se adapta a <span class="marcador">cómo vendes tú</span></h2>' +
+      '<div class="figura">' + svgPipeline() + '</div>' +
+      '<div class="puntos" style="margin-top:2.2cqw">' +
+        punto('Etapas propias', 'Las creas y reordenas sin ayuda técnica.') +
+        punto('Lo estancado se ve', 'Aviso automático cuando un lead lleva días sin movimiento.') +
+      '</div></div>' });
+
+    // 5 — Automatizaciones
+    L.push({ cls: 'azul', html: AGUA + '<div class="campo">' +
+      '<span class="rotulo">Lo que trabaja solo</span>' +
+      '<h2 class="titulo">El seguimiento ocurre <span class="marcador">aunque nadie se acuerde</span></h2>' +
+      '<div class="figura">' + svgFlujo() + '</div>' +
+      '<p class="entrada" style="margin-top:2.2cqw;font-size:1.6cqw">Los flujos corren en el servidor todo el día, con la plataforma cerrada. Se arman arrastrando pasos: espera, correo, WhatsApp y condiciones según lo que responda la persona.</p>' +
+      '</div>' });
+
+    // 6 — Inbox
+    L.push({ cls: '', html: '<div class="campo">' +
+      '<span class="rotulo">Donde de verdad hablan tus clientes</span>' +
+      '<h2 class="titulo">WhatsApp, Instagram y Messenger <span class="marcador">en una sola bandeja</span></h2>' +
+      '<div class="figura">' + svgInbox() + '</div>' +
+      '<div class="puntos" style="margin-top:2.2cqw">' +
+        punto('Bandeja compartida', 'Cualquiera del equipo retoma la conversación.') +
+        punto('Ligado al contacto', 'Cada mensaje crea o actualiza el lead en el pipeline.') +
+      '</div></div>' });
+
+    // 7 — Todo lo que incluye
+    L.push({ cls: 'azul', html: AGUA + '<div class="campo">' +
+      '<h2 class="titulo">Todo esto viene incluido, <span class="marcador">sin módulos aparte</span></h2>' +
+      '<div class="puntos">' +
+        punto('Campañas masivas', 'Email y WhatsApp por etiqueta, con baja automática. Envíos ilimitados.') +
+        punto('Propuestas comerciales', 'Con página propia, seguimiento de apertura y link de pago.') +
+        punto('Formularios y webhooks', 'Los leads entran directo al pipeline desde tu web.') +
+        punto('Reportes', 'Ventas, productividad y marketing, sin armarlos a mano.') +
+        punto('Agenda', 'Sincronizada con Google Calendar.') +
+        punto('Multi-cliente', 'Perfiles independientes por marca, con datos separados.') +
+      '</div></div>' });
+
+    // 8 — Comparativa
+    L.push({ cls: '', html: '<div class="campo">' +
+      '<span class="rotulo">La diferencia</span>' +
+      '<h2 class="titulo">Por qué este CRM y <span class="marcador">no otro</span></h2>' +
+      '<table><thead><tr><th></th><th>Clientify · plan de entrada</th><th class="destaca">Acuarius Pro</th></tr></thead><tbody>' +
+      '<tr><td class="k">Precio de entrada</td><td class="ellos">65 €/mes · 39 € pagando el año</td><td class="nos">$39/mes · $32,50 pagando el año</td></tr>' +
+      '<tr><td class="k">Usuarios incluidos</td><td class="ellos">1</td><td class="nos">3 · $9 el adicional</td></tr>' +
+      '<tr><td class="k">Envío de correos</td><td class="ellos">Sujeto al cupo del plan</td><td class="nos">Ilimitado</td></tr>' +
+      '<tr><td class="k">Agentes de IA</td><td class="ellos">No es su terreno</td><td class="nos">Siete, incluidos</td></tr>' +
+      '<tr><td class="k">Permanencia</td><td class="ellos">El precio bueno exige pagar el año</td><td class="nos">Mensual, sin permanencia</td></tr>' +
+      '</tbody></table>' +
+      '<p style="font-size:1.25cqw;color:#8C90A8;margin-top:1.4cqw;line-height:1.5">Clientify es una buena herramienta; la comparación es de modelo de precio, no de calidad. Precios públicos de julio de 2026, sujetos a cambios.</p>' +
+      '</div>' });
+
+    // 9 — LA LÁMINA DEL DINERO
+    // Una lámina de venta no aguanta once viñetas: se muestran seis y el resto
+    // se resume, para que nunca se desborde por encima del pie.
+    var TOPE = (c.extraU || c.packs) ? 5 : 6;
+    var todos = e.destacados.length ? e.destacados : ['Acceso completo a la plataforma'];
+    var items = todos.slice(0, TOPE);
+    var resto = todos.length - items.length;
+    var chk = '<li class="top">' + TICK + '<span>' + esc(c.plan.nombre) + ' · ' + c.plan.usuarios + ' usuarios y ' + fmt(c.plan.contactos) + ' contactos incluidos</span></li>';
+    items.forEach(function (i) { chk += '<li>' + TICK + '<span>' + esc(i) + '</span></li>'; });
+    if (resto > 0) chk += '<li>' + TICK + '<span>y ' + resto + ' funciones más incluidas</span></li>';
+    // Los complementos NO se repiten aquí: ya están desglosados en la tarjeta.
+
+    var desglose = '';
+    if (e.anual) desglose += fila('Plan ' + c.plan.nombre + ' anual', '$' + fmt(c.planAnual) + '/año');
+    else desglose += fila('Plan ' + c.plan.nombre, '$' + fmt(c.plan.base) + '/mes');
+    if (c.extraU) desglose += fila(c.extraU + ' × usuario', '$' + fmt(c.costeU) + '/mes');
+    if (c.packs) desglose += fila(fmt(c.packs * PASO) + ' contactos', '$' + fmt(c.costeC) + '/mes');
+
+    L.push({ cls: 'azul', html: AGUA + '<div class="campo">' +
+      '<span class="rotulo">Tu propuesta</span>' +
+      '<h2 class="titulo" style="font-size:2.9cqw;margin-bottom:1.6cqw">Lo que incluye para ' + esc(cli || 'tu empresa') + '</h2>' +
+      '<div class="precio-fila">' +
+        '<ul class="chk" style="margin:0;padding:0">' + chk + '</ul>' +
+        '<div class="tarjeta">' +
+          '<div class="cabe">Plan recomendado</div>' +
+          '<div class="plan">' + esc(c.plan.nombre) + '</div>' +
+          '<div class="val"><sup>$</sup>' + fmt(e.anual ? c.efectivoAnual : c.totalMes) + '<small>/mes</small></div>' +
+          '<div class="modo">' + (e.anual ? 'facturado anualmente' : 'facturación mensual') + '</div>' +
+          '<div class="barra"></div>' +
+          '<div class="desglose">' + desglose +
+            (e.anual
+              ? fila('<b>Pago inicial</b>', '<b>$' + fmt(c.planAnual) + '</b>', 'total')
+              : fila('<b>Total mensual</b>', '<b>$' + fmt(c.totalMes) + ' USD</b>', 'total')) +
+          '</div>' +
+          // Con los dos complementos el desglose ya ocupa cuatro filas: la
+          // linea del pago anual se omite para que la tarjeta no se recorte.
+          // El ahorro anual sigue estando en la lámina de Planes.
+          ((c.extraU && c.packs)
+            ? ''
+            : e.anual
+              ? '<div class="ahorro">2 meses gratis · ahorras $' + fmt(c.plan.base * 2) + '</div>'
+              : '<div class="anual">Pagando el año: <b>$' + fmt(c.planAnual) + '</b> · 2 meses gratis</div>') +
+        '</div>' +
+      '</div>' +
+      '</div>' });
+
+    // 9b — La nota, solo si existe, con su propia lámina
+    if (e.notas.trim()) {
+      L.push({ cls: '', html: '<div class="campo">' +
+        '<span class="rotulo">Sobre tu caso</span>' +
+        '<div class="cita" style="color:var(--tinta)"><p style="font-size:2.6cqw;color:var(--tinta)">' +
+          esc(e.notas.trim()) + '</p>' +
+        '<div class="firma" style="color:var(--gris)">' +
+          esc([e.contacto.trim(), e.cliente.trim()].filter(Boolean).join(' · ')) + '</div></div>' +
+        '</div>' });
     }
-    [$('aviso-plan'),$('aviso-precio')].forEach(function(el){
-      if(!el) return;
-      el.style.display = textoAviso ? '' : 'none';
-      el.innerHTML = textoAviso;
+
+    // 10 — Cómo empezamos
+    L.push({ cls: '', html: '<div class="campo">' +
+      '<span class="rotulo">Cómo empezamos</span>' +
+      '<h2 class="titulo"><span class="marcador">14 días de prueba</span>, sin tarjeta</h2>' +
+      '<div class="pasos">' +
+        '<div class="paso-b"><div class="n">1</div><h3>Creamos la cuenta</h3><p>Con el correo del responsable. Toma minutos.</p></div>' +
+        '<div class="paso-b"><div class="n">2</div><h3>Importamos</h3><p>Tus contactos y el pipeline con tus etapas reales.</p></div>' +
+        '<div class="paso-b"><div class="n">3</div><h3>Conectamos</h3><p>WhatsApp y los formularios de tu sitio.</p></div>' +
+        '<div class="paso-b"><div class="n">4</div><h3>Activamos</h3><p>La primera automatización de seguimiento.</p></div>' +
+      '</div>' +
+      '<p class="entrada" style="margin-top:2.6cqw;font-size:1.6cqw">Si al final de la prueba no ves el valor, no pagas nada. Sin permanencia ni costo de implementación.</p>' +
+      '</div>' });
+
+    // 11 — Cierre
+    L.push({ cls: 'azul', sinPie: true, html: AGUA + '<div class="campo"><div class="cierre-f">' +
+      '<div class="logo">Acuarius<i></i></div>' +
+      '<div class="web">acuarius.app</div>' +
+      (e.validez.trim() ? '<div style="font-size:1.4cqw;color:rgba(255,255,255,.65);margin-top:1.4cqw">Esta propuesta tiene una validez de ' + esc(e.validez.trim()) + '</div>' : '') +
+      '</div></div>' });
+
+    return L;
+  }
+
+  function pintarMazo() {
+    var L = laminas();
+    $('#mazo').innerHTML = L.map(function (l, i) {
+      return '<section class="lamina ' + l.cls + '">' + l.html +
+        (l.sinPie ? '<div class="num">' + (i + 1) + ' / ' + L.length + '</div>' : pie(i + 1, L.length)) + '</section>';
+    }).join('');
+  }
+
+  // ── Editor ────────────────────────────────────────────────────────────────
+  function pintarEditor() {
+    var c = calcular();
+    $('#editor').innerHTML =
+      '<div class="caja">' +
+        '<h3>Datos del cliente</h3>' +
+        '<div class="sub">Esta zona no sale impresa · los datos se guardan en tu navegador</div>' +
+        '<div class="campos">' +
+          campo('cliente', 'Empresa', 'text', 'Tierra de Mascotas') +
+          campo('contacto', 'Persona de contacto', 'text', 'Mariana López') +
+          campo('sector', 'Sector', 'text', 'E-commerce / Retail') +
+          campo('fecha', 'Fecha', 'date', '') +
+          campo('validez', 'Validez', 'text', '15 días') +
+          campo('autor', 'Preparada por', 'text', 'Alejandro González') +
+        '</div>' +
+        '<div class="campos" style="margin-top:20px">' +
+          '<div><label for="i-plan">Plan</label><select id="i-plan">' +
+            '<option value="auto">El más conveniente (recomendado)</option>' +
+            '<option value="pro">Pro</option><option value="agency">Agency</option></select></div>' +
+          '<div><label>Periodicidad</label><div class="seg" role="group">' +
+            '<button type="button" id="i-mes" aria-pressed="' + (!e.anual) + '">Mensual</button>' +
+            '<button type="button" id="i-anu" aria-pressed="' + (e.anual) + '">Anual · 2 meses gratis</button></div></div>' +
+          '<div><label for="i-usuarios">Usuarios</label><div class="par">' +
+            '<button type="button" class="pz" id="u-menos">−</button>' +
+            '<input type="text" id="i-usuarios" value="' + c.usuarios + '" inputmode="numeric">' +
+            '<button type="button" class="pz" id="u-mas">+</button></div></div>' +
+          '<div><label>Contactos</label><div class="par">' +
+            '<button type="button" class="pz" id="c-menos">−</button>' +
+            '<input type="text" id="i-contactos" value="' + fmt(e.contactos) + '" readonly>' +
+            '<button type="button" class="pz" id="c-mas">+</button></div></div>' +
+        '</div>' +
+        '<div id="alerta" class="alerta"></div>' +
+        '<div style="margin-top:20px"><label>Qué destacar</label><div class="chips" id="chips">' +
+          DESTACADOS.map(function (d) {
+            return '<button type="button" class="chip" data-d="' + esc(d) + '" aria-pressed="' + (e.destacados.indexOf(d) >= 0) + '">' + esc(d) + '</button>';
+          }).join('') + '</div></div>' +
+        '<div style="margin-top:20px"><label for="i-notas">Nota personalizada <span style="text-transform:none;letter-spacing:0;font-weight:400">(sale en la lámina de precio)</span></label>' +
+          '<textarea id="i-notas" placeholder="Conversamos sobre los leads de WhatsApp que se quedan sin seguimiento…">' + esc(e.notas) + '</textarea></div>' +
+        '<div class="barra-acc">' +
+          '<button class="btn btn-p" id="b-pdf">Guardar como PDF</button>' +
+          '<button class="btn btn-s" id="b-file">Descargar archivo</button>' +
+          '<button class="btn btn-s" id="b-new">Empezar una nueva</button>' +
+        '</div>' +
+        '<div class="estado" id="estado"></div>' +
+        '<p class="letra"><b>Guardar como PDF</b> abre el diálogo de impresión: elige «Guardar como PDF» y verifica que esté en horizontal. Cada lámina sale como una página 16:9. Precios en dólares, sin impuestos según el país del cliente.</p>' +
+      '</div>';
+
+    $('#i-plan').value = e.plan;
+    var al = $('#alerta');
+    if (!c.esElMasBarato) {
+      al.style.display = 'block';
+      al.innerHTML = 'Con esta configuración, <b>' + c.masBarato.plan.nombre + '</b> sale <b>$' +
+        fmt(c.totalMes - c.masBarato.totalMes) + ' más barato</b> al mes ($' + fmt(c.masBarato.totalMes) +
+        ' frente a $' + fmt(c.totalMes) + '). La calculadora de acuarius.app le mostrará ese precio al cliente.';
+    } else { al.style.display = 'none'; }
+
+    conectar();
+  }
+
+  function campo(k, et, tipo, ph) {
+    return '<div><label for="i-' + k + '">' + et + '</label>' +
+      '<input type="' + tipo + '" id="i-' + k + '" value="' + esc(e[k]) + '" placeholder="' + esc(ph) + '"></div>';
+  }
+
+  function repintar() { pintarMazo(); pintarEditor(); guardar(); }
+
+  // Un selector malo tumbaba conectar() a media funcion y dejaba los chips y
+  // los botones muertos, sin error visible. Cada enlace va aislado.
+  function liga(sel, ev, fn) {
+    try {
+      var el = $(sel);
+      if (el) el.addEventListener(ev, fn);
+      else console.warn('[propuesta] no existe', sel);
+    } catch (x) { console.error('[propuesta] selector invalido', sel, x); }
+  }
+
+  function conectar() {
+    ['cliente', 'contacto', 'sector', 'fecha', 'validez', 'autor'].forEach(function (k) {
+      var el = $('#i-' + k);
+      el.addEventListener('input', function () { e[k] = el.value; pintarMazo(); guardar(); });
     });
-
-    $('u-menos').disabled = c.usuarios<=1;
-    $('u-mas').disabled   = c.usuarios>=MAX_U;
-    $('c-menos').disabled = estado.contactos<=PASO;
-    $('c-mas').disabled   = estado.contactos>=MAX_C;
-  }
-
-  function guardar(){
-    try{
-      localStorage.setItem(CLAVE, JSON.stringify({
-        cliente:$('f-cliente').value, contacto:$('f-contacto').value, sector:$('f-sector').value,
-        fecha:$('f-fecha').value, validez:$('f-validez').value, autor:$('f-autor').value,
-        plan:$('f-plan').value, usuarios:$('f-usuarios').value, notas:$('f-notas').value,
-        anual:estado.anual, contactos:estado.contactos, destacados:estado.destacados
-      }));
-    }catch(e){}
-  }
-
-  function restaurar(){
-    var d=null;
-    try{ d=JSON.parse(localStorage.getItem(CLAVE)||'null'); }catch(e){}
-    if(!d) return;
-    ['cliente','contacto','sector','fecha','validez','autor','plan','usuarios','notas'].forEach(function(k){
-      if(d[k]!=null && $('f-'+k)) $('f-'+k).value=d[k];
+    liga('#i-notas', 'input', function () { e.notas = this.value; pintarMazo(); guardar(); });
+    liga('#i-plan', 'change', function () { e.plan = this.value; repintar(); });
+    liga('#i-mes', 'click', function () { e.anual = false; repintar(); });
+    liga('#i-anu', 'click', function () { e.anual = true; repintar(); });
+    liga('#i-usuarios', 'input', function () {
+      var v = parseInt(this.value.replace(/\D/g, ''), 10);
+      e.usuarios = isNaN(v) || v < 1 ? 1 : Math.min(MAX_U, v);
+      pintarMazo(); guardar();
     });
-    if(typeof d.anual==='boolean') estado.anual=d.anual;
-    if(d.contactos) estado.contactos=d.contactos;
-    if(Array.isArray(d.destacados)) estado.destacados=d.destacados;
-    Array.prototype.forEach.call($('chips').children,function(b){
-      b.setAttribute('aria-pressed', estado.destacados.indexOf(b.textContent)>=0?'true':'false');
+    liga('#u-menos', 'click', function () { e.usuarios = Math.max(1, e.usuarios - 1); repintar(); });
+    liga('#u-mas', 'click', function () { e.usuarios = Math.min(MAX_U, e.usuarios + 1); repintar(); });
+    liga('#c-menos', 'click', function () { e.contactos = pasoContactos(e.contactos, -1); repintar(); });
+    liga('#c-mas', 'click', function () { e.contactos = pasoContactos(e.contactos, 1); repintar(); });
+    Array.prototype.forEach.call(document.querySelectorAll('#chips .chip'), function (b) {
+      b.addEventListener('click', function () {
+        var d = b.getAttribute('data-d'), i = e.destacados.indexOf(d);
+        if (i >= 0) e.destacados.splice(i, 1); else e.destacados.push(d);
+        repintar();
+      });
     });
-    aplicarPeriodicidad();
+    liga('#b-pdf', 'click', function () {
+      decir('Elige «Guardar como PDF» y orientación horizontal.');
+      window.print();
+    });
+    liga('#b-file', 'click', descargar);
+    liga('#b-new', 'click', function () {
+      if (!confirm('Se borran los datos de esta propuesta. ¿Seguir?')) return;
+      try { localStorage.removeItem(CLAVE); } catch (x) {}
+      e.cliente = e.contacto = e.sector = e.notas = '';
+      e.plan = 'auto'; e.usuarios = 3; e.contactos = 1000; e.anual = false;
+      repintar(); decir('');
+    });
   }
 
-  function aplicarPeriodicidad(){
-    $('f-mensual').setAttribute('aria-pressed', estado.anual?'false':'true');
-    $('f-anual').setAttribute('aria-pressed', estado.anual?'true':'false');
+  function decir(t, alerta) {
+    var el = $('#estado');
+    el.style.color = alerta ? '#B4531F' : '#0F7A55';
+    el.textContent = t;
   }
 
-  // ── Descarga del documento ───────────────────────────────────
-  // El artefacto vive dentro de un iframe, asi que window.print() no imprime
-  // este documento. Se genera un HTML autonomo, sin la zona de edicion, que se
-  // abre en el navegador y se guarda como PDF desde ahi.
-  function documentoParaEnviar(){
-    var clon=document.documentElement.cloneNode(true);
-    var q=function(sel){return clon.querySelector(sel)};
-    var qa=function(sel){return Array.prototype.slice.call(clon.querySelectorAll(sel))};
-    qa('script').forEach(function(n){n.remove()});
-    var taller=q('#taller'); if(taller) taller.remove();
-    var acc=q('.acciones'); if(acc) acc.remove();
-    var est=q('#estado'); if(est) est.remove();
-    var avp=q('#aviso-plan'); if(avp) avp.remove();
-    var avc=q('#aviso-precio'); if(avc) avc.remove();
-    qa('.aviso').forEach(function(n,i){ if(i===0) n.remove(); });
-    var rail=q('.rail'); if(rail) rail.remove();
-    var marco=q('.marco'); if(marco) marco.style.gridTemplateColumns='1fr';
-    var cuerpo=q('.cuerpo'); if(cuerpo) cuerpo.style.padding='0 46px 60px';
-
-    var cli=($('f-cliente').value.trim()||'Propuesta');
-    var cab=clon.querySelector('.portada');
-    if(cab){
-      var m=clon.ownerDocument.createElement('div');
-      m.style.cssText='font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.03em;margin-bottom:26px';
-      m.textContent='Acuarius';
-      cab.insertBefore(m,cab.firstChild);
-    }
-    var titulo=q('title'); if(titulo) titulo.textContent='Propuesta Acuarius · '+cli;
-    var imprimir=clon.ownerDocument.createElement('style');
-    imprimir.textContent='@media print{@page{margin:16mm}section{break-inside:avoid;padding:26px 0}body{font-size:11.5pt}.cuerpo{padding:0!important}figure{break-inside:avoid}}';
-    clon.querySelector('head, body').appendChild(imprimir);
-    return '<!doctype html><html lang="es">'+clon.innerHTML+'</html>';
-  }
-
-  function nombreArchivo(){
-    var cli=($('f-cliente').value.trim()||'cliente').replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]/g,'').trim();
-    return 'Propuesta Acuarius - '+cli+'.html';
-  }
-  function decir(txt,alerta){
-    var e=$('estado');
-    e.style.color = alerta ? 'var(--apunte)' : 'var(--ok)';
-    e.textContent = txt;
-  }
-
-  // Pagina propia, no un iframe: window.print() imprime ESTE documento y el
-  // CSS de impresion ya oculta el andamiaje.
-  function imprimir(){
-    decir('Elige «Guardar como PDF» como destino en el diálogo.');
-    window.print();
-  }
-
-  function descargar(){
-    try{
-      var blob=new Blob([documentoParaEnviar()],{type:'text/html;charset=utf-8'});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement('a');
-      a.href=url; a.download=nombreArchivo();
+  function descargar() {
+    try {
+      var clon = document.documentElement.cloneNode(true);
+      Array.prototype.forEach.call(clon.querySelectorAll('script,.editor,.no-print'), function (n) { n.remove(); });
+      var est = document.createElement('style');
+      est.textContent = 'body{background:#fff}.mazo{max-width:none;padding:0;gap:0}' +
+        '.lamina{border-radius:0;box-shadow:none}';
+      (clon.querySelector('head') || clon).appendChild(est);
+      var t = clon.querySelector('title');
+      if (t) t.textContent = 'Propuesta Acuarius · ' + (e.cliente.trim() || 'cliente');
+      var html = '<!doctype html><html lang="es">' + clon.innerHTML + '</html>';
+      var nom = 'Propuesta Acuarius - ' + (e.cliente.trim() || 'cliente').replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]/g, '').trim() + '.html';
+      var url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+      var a = document.createElement('a');
+      a.href = url; a.download = nom;
       document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function(){URL.revokeObjectURL(url)},2000);
-      decir('Descargado: «'+nombreArchivo()+'» está en tu carpeta de descargas.');
-    }catch(e){
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      decir('Descargado: «' + nom + '».');
+    } catch (x) {
       decir('No se pudo generar el archivo. Usa «Guardar como PDF».', true);
     }
   }
 
-
-
-  ['f-cliente','f-contacto','f-sector','f-fecha','f-validez','f-autor','f-notas','f-usuarios']
-    .forEach(function(id){ $(id).addEventListener('input',function(){pintar();guardar();}); });
-  $('f-plan').addEventListener('change',function(){pintar();guardar();});
-  $('f-mensual').addEventListener('click',function(){estado.anual=false;aplicarPeriodicidad();pintar();guardar();});
-  $('f-anual').addEventListener('click',function(){estado.anual=true;aplicarPeriodicidad();pintar();guardar();});
-  $('u-menos').addEventListener('click',function(){$('f-usuarios').value=Math.max(1,calcular().usuarios-1);pintar();guardar();});
-  $('u-mas').addEventListener('click',function(){$('f-usuarios').value=Math.min(MAX_U,calcular().usuarios+1);pintar();guardar();});
-  $('c-menos').addEventListener('click',function(){estado.contactos=pasoContactos(estado.contactos,-1);pintar();guardar();});
-  $('c-mas').addEventListener('click',function(){estado.contactos=pasoContactos(estado.contactos,1);pintar();guardar();});
-  $('btn-imprimir').addEventListener('click',imprimir);
-  $('btn-descargar').addEventListener('click',descargar);
-  $('btn-limpiar').addEventListener('click',function(){
-    if(!confirm('Se borran los datos de esta propuesta. ¿Seguir?')) return;
-    try{localStorage.removeItem(CLAVE);}catch(e){}
-    ['f-cliente','f-contacto','f-sector','f-notas'].forEach(function(id){$(id).value='';});
-    $('f-plan').value='auto'; $('f-usuarios').value=3;
-    estado.anual=false; estado.contactos=1000;
-    aplicarPeriodicidad(); pintar(); $('estado').textContent='';
-  });
-
-  var enlaces={};
-  Array.prototype.forEach.call($('indice').children,function(a){ enlaces[a.getAttribute('href').slice(1)]=a; });
-  if('IntersectionObserver' in window){
-    var obs=new IntersectionObserver(function(entradas){
-      entradas.forEach(function(e){
-        var a=enlaces[e.target.id]; if(!a) return;
-        if(e.isIntersecting){
-          Object.keys(enlaces).forEach(function(k){enlaces[k].classList.remove('on')});
-          a.classList.add('on');
-        }
-      });
-    },{rootMargin:'-20% 0px -70% 0px'});
-    Array.prototype.forEach.call(document.querySelectorAll('section[id]'),function(s){obs.observe(s)});
+  function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify(e)); } catch (x) {} }
+  function restaurar() {
+    try {
+      var d = JSON.parse(localStorage.getItem(CLAVE) || 'null');
+      if (d) Object.keys(e).forEach(function (k) { if (d[k] != null) e[k] = d[k]; });
+    } catch (x) {}
   }
 
-  if(!$('f-fecha').value){
-    var hoy=new Date();
-    $('f-fecha').value=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
-  }
-  if(!$('f-validez').value) $('f-validez').value='15 días';
   restaurar();
-  pintar();
+  if (!e.fecha) {
+    var h = new Date();
+    e.fecha = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0');
+  }
+  pintarMazo();
+  pintarEditor();
 })();
+
 </script>
 </body>
 </html>
