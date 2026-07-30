@@ -533,7 +533,46 @@ async function getAuthHeaders({ fresh = false } = {}) {
 
 // fetch autenticado: espera a que la sesión hidrate y, si el token igual fue
 // rechazado, reintenta UNA vez con uno fresco. Devuelve la Response tal cual.
+// Caché muy corta para los GET: al cambiar de vista se repetían las mismas
+// consultas (leads, automations, campaigns…) y cada pantalla esperaba de nuevo.
+// Las peticiones idénticas en vuelo se comparten y cualquier escritura al mismo
+// endpoint invalida lo cacheado.
+const _faCache = new Map();     // url -> { t, body, status }
+const _faInFlight = new Map();  // url -> Promise
+const FA_TTL = 25000;
+
+function fetchAuthInvalidate(url) {
+  const base = String(url).split('?')[0];
+  [..._faCache.keys()].forEach(k => { if (k.split('?')[0] === base) _faCache.delete(k); });
+}
+
 async function fetchAuth(url, opts = {}) {
+  const metodo = (opts.method || 'GET').toUpperCase();
+  if (metodo !== 'GET') fetchAuthInvalidate(url);
+  if (metodo === 'GET' && !opts.noCache) {
+    const hit = _faCache.get(url);
+    if (hit && Date.now() - hit.t < FA_TTL) {
+      return new Response(hit.body, { status: hit.status, headers: { 'Content-Type': 'application/json' } });
+    }
+    const enVuelo = _faInFlight.get(url);
+    if (enVuelo) {
+      const r = await enVuelo;
+      return r.clone();
+    }
+    const promesa = _fetchAuthRaw(url, opts).then(async res => {
+      if (res.ok) {
+        try { _faCache.set(url, { t: Date.now(), body: await res.clone().text(), status: res.status }); } catch {}
+      }
+      return res;
+    }).finally(() => _faInFlight.delete(url));
+    _faInFlight.set(url, promesa);
+    const res = await promesa;
+    return res.clone();
+  }
+  return _fetchAuthRaw(url, opts);
+}
+
+async function _fetchAuthRaw(url, opts = {}) {
   const withAuth = async (fresh) => {
     const headers = await getAuthHeaders({ fresh });
     // Los headers explícitos del llamador mandan sobre los nuestros
@@ -20490,11 +20529,17 @@ async function agnLoad() {
     const res = await fetchAuth('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq);
     agnActivities = (await res.json()).activities || [];
   } catch { agnActivities = []; }
+  // El estado de Google Calendar sale de una llamada a Google y tardaba ~2s:
+  // se consulta en segundo plano y la agenda se pinta sin esperarlo.
   if (!agnGcal.checked) {
-    try {
-      const st = await fetchAuth('/api/agenda?gcal_status=1').then(r => r.json());
-      agnGcal = { connected: !!st.connected, email: st.email, checked: true };
-    } catch { agnGcal.checked = true; }
+    agnGcal.checked = true;
+    fetchAuth('/api/agenda?gcal_status=1')
+      .then(r => r.json())
+      .then(st => {
+        agnGcal = { connected: !!st.connected, email: st.email, checked: true };
+        if (typeof crmView !== 'undefined' && crmView === 'agenda' && typeof agnRender === 'function') agnRender();
+      })
+      .catch(() => {});
   }
 }
 
