@@ -269,7 +269,7 @@ async function initAuth(){
     }
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
-    // Prueba Pro de 7 días: 'trial' vigente se comporta como Pro; vencida como free
+    // Prueba Pro de 14 días: 'trial' vigente se comporta como Pro; vencida como free
     window._trialUntil = null;
     try {
       const _tm = clerkInstance.user.publicMetadata || {};
@@ -285,7 +285,7 @@ async function initAuth(){
               window._trialUntil = d.trial_until;
               userPlan = 'pro';
               updateUserUI(clerkInstance.user);
-              showToast('🎁 Tienes Acuarius Pro completo por 7 días — sin tarjeta', 'success');
+              showToast('🎁 Tienes Acuarius Pro completo por 14 días — sin tarjeta', 'success');
               track('trial_started');
             }
           } catch {}

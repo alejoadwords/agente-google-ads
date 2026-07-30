@@ -1,5 +1,5 @@
 // api/cron-trials.js
-// Ciclo de vida de la prueba Pro de 7 días (corre 1 vez al día, vercel.json):
+// Ciclo de vida de la prueba Pro de 14 días (corre 1 vez al día, vercel.json):
 // - trial vencido → plan 'free' + email de cierre con CTA a Pro
 // - trial a ≤48h de vencer → email recordatorio (una sola vez: trial_reminded)
 // Recorre los usuarios de Clerk por páginas (base pequeña; tope de cordura 10 págs).

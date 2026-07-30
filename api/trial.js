@@ -1,7 +1,7 @@
 // api/trial.js
-// Prueba Pro de 7 días para cuentas free: una sola vez por usuario.
+// Prueba Pro de 14 días para cuentas free: una sola vez por usuario.
 // POST autenticado → si el plan es free y nunca usó trial, fija en Clerk
-// {plan:'trial', trial_until:+7d, trial_used:true}. Los gates del server
+// {plan:'trial', trial_until:+14d, trial_used:true}. Los gates del server
 // aceptan 'trial' como plan pago y api/cron-trials.js lo expira a 'free'.
 export const config = { runtime: 'edge' };
 
@@ -57,7 +57,7 @@ export default async function handler(req) {
   if (plan !== 'free') return jsonResp({ ok: false, reason: 'plan_activo', plan });
   if (meta.trial_used) return jsonResp({ ok: false, reason: 'trial_usado' });
 
-  const trialUntil = new Date(Date.now() + 7 * 86400000).toISOString();
+  const trialUntil = new Date(Date.now() + 14 * 86400000).toISOString();
   const r = await fetch(`https://api.clerk.com/v1/users/${userId}/metadata`, {
     method: 'PATCH',
     headers: { Authorization: 'Bearer ' + CK, 'Content-Type': 'application/json' },
