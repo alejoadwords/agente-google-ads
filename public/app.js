@@ -22576,6 +22576,119 @@ function impParse(text) {
   return rows.filter(r => r.some(c => String(c).trim() !== ''));
 }
 
+// ── Lectura de .xlsx sin dependencias externas ──────────────────────────────
+// Un .xlsx es un ZIP con XML dentro y el navegador ya trae todo lo necesario:
+// DecompressionStream para el deflate y DOMParser para el XML. El proyecto solo
+// carga jsPDF de fuera, asi que no se anade una libreria por esto.
+async function zipLeer(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  // Localizar el End Of Central Directory (puede llevar comentario al final)
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('El archivo no parece un .xlsx valido');
+  const total = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const entradas = [];
+  for (let n = 0; n < total; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = dv.getUint16(p + 10, true);
+    const comp   = dv.getUint32(p + 20, true);
+    const lenNom = dv.getUint16(p + 28, true);
+    const lenExt = dv.getUint16(p + 30, true);
+    const lenCom = dv.getUint16(p + 32, true);
+    const offset = dv.getUint32(p + 42, true);
+    const nombre = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + lenNom));
+    entradas.push({ nombre, metodo, comp, offset });
+    p += 46 + lenNom + lenExt + lenCom;
+  }
+  const salida = new Map();
+  for (const e of entradas) {
+    if (dv.getUint32(e.offset, true) !== 0x04034b50) continue;
+    const lnNom = dv.getUint16(e.offset + 26, true);
+    const lnExt = dv.getUint16(e.offset + 28, true);
+    const ini = e.offset + 30 + lnNom + lnExt;
+    const crudo = u8.subarray(ini, ini + e.comp);
+    if (e.metodo === 0) { salida.set(e.nombre, crudo); continue; }
+    if (e.metodo !== 8) continue; // solo stored y deflate
+    if (typeof DecompressionStream === 'undefined') throw new Error('SIN_SOPORTE');
+    const ds = new DecompressionStream('deflate-raw');
+    const flujo = new Blob([crudo]).stream().pipeThrough(ds);
+    salida.set(e.nombre, new Uint8Array(await new Response(flujo).arrayBuffer()));
+  }
+  return salida;
+}
+
+// 'BC' → 54. Las columnas vacias dejan hueco, hay que respetarlo.
+function colAIndice(ref) {
+  const m = String(ref || '').match(/^([A-Z]+)/);
+  if (!m) return -1;
+  let n = 0;
+  for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
+async function xlsxAFilas(buf) {
+  const zip = await zipLeer(buf);
+  const txt = (n) => { const b = zip.get(n); return b ? new TextDecoder('utf-8').decode(b) : null; };
+  const xml = (t) => new DOMParser().parseFromString(t, 'application/xml');
+
+  // Primera hoja segun el orden del libro, resolviendo la relacion r:id
+  let ruta = 'xl/worksheets/sheet1.xml';
+  const libro = txt('xl/workbook.xml'), rels = txt('xl/_rels/workbook.xml.rels');
+  if (libro && rels) {
+    const hoja = xml(libro).getElementsByTagName('sheet')[0];
+    const rid = hoja && (hoja.getAttribute('r:id') || hoja.getAttribute('id'));
+    if (rid) {
+      const rel = Array.prototype.find.call(xml(rels).getElementsByTagName('Relationship'),
+        (r) => r.getAttribute('Id') === rid);
+      if (rel) {
+        let t = rel.getAttribute('Target') || '';
+        t = t.replace(/^\//, '').replace(/^xl\//, '');
+        ruta = 'xl/' + t;
+      }
+    }
+  }
+  const hojaTxt = txt(ruta) || txt('xl/worksheets/sheet1.xml');
+  if (!hojaTxt) throw new Error('No encontre ninguna hoja en el archivo');
+
+  // Cadenas compartidas: Excel guarda casi todo el texto aqui
+  const compartidas = [];
+  const ssTxt = txt('xl/sharedStrings.xml');
+  if (ssTxt) {
+    Array.prototype.forEach.call(xml(ssTxt).getElementsByTagName('si'), (si) => {
+      // Un <si> puede venir partido en varios <t> por formato enriquecido
+      let s = '';
+      Array.prototype.forEach.call(si.getElementsByTagName('t'), (t) => { s += t.textContent; });
+      compartidas.push(s);
+    });
+  }
+
+  const filas = [];
+  Array.prototype.forEach.call(xml(hojaTxt).getElementsByTagName('row'), (fila) => {
+    const celdas = [];
+    Array.prototype.forEach.call(fila.getElementsByTagName('c'), (c) => {
+      const i = colAIndice(c.getAttribute('r'));
+      const tipo = c.getAttribute('t');
+      let v = '';
+      if (tipo === 'inlineStr') {
+        const is = c.getElementsByTagName('is')[0];
+        if (is) Array.prototype.forEach.call(is.getElementsByTagName('t'), (t) => { v += t.textContent; });
+      } else {
+        const nodo = c.getElementsByTagName('v')[0];
+        v = nodo ? nodo.textContent : '';
+        if (tipo === 's') v = compartidas[parseInt(v, 10)] || '';
+        else if (tipo === 'b') v = v === '1' ? 'VERDADERO' : 'FALSO';
+      }
+      if (i >= 0) { while (celdas.length < i) celdas.push(''); celdas[i] = v; }
+      else celdas.push(v);
+    });
+    filas.push(celdas);
+  });
+  return filas.filter((f) => f.some((c) => String(c).trim() !== ''));
+}
+
 function impAutoMap(headers) {
   const map = {};
   headers.forEach((h, i) => {
@@ -22605,9 +22718,9 @@ function impRender() {
     body =
       '<div style="border:2px dashed var(--border);border-radius:14px;padding:26px;text-align:center;margin-bottom:14px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'var(--border)\'" onclick="document.getElementById(\'imp-file\').click()">' +
         '<div style="font-size:26px;margin-bottom:6px">📄</div>' +
-        '<div style="font-weight:700;font-size:var(--fs-md)">Sube tu archivo CSV</div>' +
-        '<div style="font-size:var(--fs-sm);color:var(--muted)">Haz clic o arrastra el archivo aquí</div>' +
-        '<input type="file" id="imp-file" accept=".csv,.txt" style="display:none" onchange="impFile(this)">' +
+        '<div style="font-weight:700;font-size:var(--fs-md)">Sube tu archivo Excel o CSV</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Haz clic o arrastra aquí · .xlsx, .csv</div>' +
+        '<input type="file" id="imp-file" accept=".csv,.txt,.xlsx" style="display:none" onchange="impFile(this)">' +
       '</div>' +
       '<div style="text-align:center;font-size:11.5px;color:var(--muted2);margin-bottom:10px">— o —</div>' +
       '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Pega desde Excel o Google Sheets</div>' +
@@ -22673,8 +22786,12 @@ function impRender() {
 }
 
 function impLoadData(text) {
-  const rows = impParse(text);
-  if (rows.length < 2) { showToast('Necesito al menos una fila de encabezados y una de datos', 'error'); return; }
+  impLoadRows(impParse(text));
+}
+
+// El xlsx llega ya en filas: no debe pasar por el parser de CSV.
+function impLoadRows(rows) {
+  if (!rows || rows.length < 2) { showToast('Necesito al menos una fila de encabezados y una de datos', 'error'); return; }
   _impHeaders = rows[0];
   _impRows = rows.slice(1);
   _impMap = impAutoMap(_impHeaders);
@@ -22682,14 +22799,33 @@ function impLoadData(text) {
   impRender();
 }
 
-function impFile(input) {
+async function impFile(input) {
   const f = input.files && input.files[0];
   if (!f) return;
-  if (/\.(xlsx|xls)$/i.test(f.name)) {
-    showToast('Para Excel: abre el archivo, copia los datos y pégalos en el cuadro de abajo', 'error');
-    input.value = '';
+  input.value = '';
+
+  // .xls es el binario viejo de Excel (anterior a 2007) y no es un ZIP: leerlo
+  // exigiria una libreria entera. Para ese caso sigue estando el pegado.
+  if (/\.xls$/i.test(f.name)) {
+    showToast('El formato .xls antiguo no se puede leer. Guárdalo como .xlsx, o copia los datos y pégalos abajo', 'error');
     return;
   }
+
+  if (/\.xlsx$/i.test(f.name)) {
+    try {
+      showToast('Leyendo el Excel…', 'info');
+      const filas = await xlsxAFilas(await f.arrayBuffer());
+      if (!filas.length) { showToast('La primera hoja del Excel está vacía', 'error'); return; }
+      impLoadRows(filas);
+    } catch (err) {
+      console.error('[importar] xlsx', err);
+      showToast(err && err.message === 'SIN_SOPORTE'
+        ? 'Tu navegador no puede abrir Excel aquí. Actualízalo, o copia los datos y pégalos abajo'
+        : 'No pude leer ese Excel. Revisa que sea .xlsx, o copia los datos y pégalos abajo', 'error');
+    }
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = () => impLoadData(reader.result);
   reader.readAsText(f, 'UTF-8');
