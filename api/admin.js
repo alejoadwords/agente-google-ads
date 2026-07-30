@@ -48,16 +48,30 @@ async function clerkGetUser(id) {
   return res.json();
 }
 
+// Clerk es la fuente de verdad del plan: la app lee publicMetadata.plan del JWT,
+// no la tabla users. Si esta escritura falla y nadie lo mira, el panel dice que
+// guardó y el usuario se queda con el plan viejo.
 async function clerkUpdateMetadata(id, metadata) {
-  const res = await fetch(`https://api.clerk.com/v1/users/${id}/metadata`, {
-    method: 'PATCH',
-    headers: {
-      'Authorization': `Bearer ${CLERK_SECRET}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ public_metadata: metadata }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`https://api.clerk.com/v1/users/${id}/metadata`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${CLERK_SECRET}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ public_metadata: metadata }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detalle = data?.errors?.[0]?.message || ('HTTP ' + res.status);
+      console.error('[admin] Clerk rechazó el cambio de plan:', id, detalle);
+      return { ok: false, error: detalle };
+    }
+    return { ok: true, plan: data?.public_metadata?.plan };
+  } catch (e) {
+    console.error('[admin] Clerk no respondió:', e.message);
+    return { ok: false, error: e.message };
+  }
 }
 
 // ── METRICS ──────────────────────────────────────────────
@@ -150,11 +164,24 @@ async function handleUsers(req, res) {
     if (agency_extra_accounts !== undefined) updates.agency_extra_accounts = agency_extra_accounts;
 
     const dbResult = await supabaseReq(`/users?id=eq.${id}`, 'PATCH', updates);
-    if (plan !== undefined) await clerkUpdateMetadata(id, { plan, status: status || 'active' });
+
+    let clerk = null;
+    if (plan !== undefined) {
+      clerk = await clerkUpdateMetadata(id, { plan, status: status || 'active' });
+      // Sin Clerk el cambio NO surte efecto: mejor un error visible que un
+      // "guardado" que engaña. La fila de Supabase ya quedó escrita.
+      if (!clerk.ok) {
+        return res.status(502).json({
+          error: 'El plan no se pudo aplicar en Clerk (' + clerk.error + '). El usuario sigue con su plan anterior.',
+          supabase_ok: true, clerk_ok: false,
+        });
+      }
+    }
+
     await supabaseReq('/activity_logs', 'POST', {
       user_id: id, action: 'admin_update', details: { changes: updates, notes: notes || '' },
     });
-    return res.json({ success: true, user: dbResult?.[0] || null });
+    return res.json({ success: true, user: dbResult?.[0] || null, clerk_ok: clerk ? true : null, plan_aplicado: clerk?.plan });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
