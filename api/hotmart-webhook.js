@@ -194,6 +194,22 @@ export default async function handler(req, res) {
   const eventosValidos     = ['PURCHASE_APPROVED','PURCHASE_COMPLETE','SUBSCRIPTION_REACTIVATED','SUBSCRIPTION_PURCHASE'];
   const eventosCancelacion = ['PURCHASE_REFUNDED','PURCHASE_CHARGEBACK','SUBSCRIPTION_CANCELLATION'];
 
+  // SWITCH_PLAN: el cliente se mueve entre planes del mismo producto (p.ej. de
+  // '2 usuarios' a '4 usuarios'). Su payload tiene otra forma — trae los planes
+  // actual y nuevo — y no la hemos visto en real todavia. NO se adivina: se
+  // registra entero y se avisa para ajustarlo a mano. Con el primer evento real
+  // sabremos la estructura exacta y se podra automatizar sin inventar nada.
+  if (eventType === 'SWITCH_PLAN') {
+    console.log('[hotmart-webhook] SWITCH_PLAN payload completo:', JSON.stringify(event));
+    await avisarFalloActivacion({
+      email: data?.buyer?.email,
+      productName: data?.product?.name || 'desconocido',
+      motivo: 'Un cliente cambio de plan (SWITCH_PLAN) — hay que ajustar la cantidad a mano',
+      extra: 'El payload quedo registrado en los logs de Vercel para automatizarlo despues',
+    });
+    return res.status(200).json({ received: true, action: 'switch_plan_manual' });
+  }
+
   if (!eventosValidos.includes(eventType) && !eventosCancelacion.includes(eventType)) {
     return res.status(200).json({ received: true, action: 'ignored' });
   }
