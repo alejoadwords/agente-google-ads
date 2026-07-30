@@ -75,28 +75,46 @@ function monedaEsUSD(data) {
   return c === 'USD' || c === '';  // vacio = payloads viejos sin el campo
 }
 
+// Hotmart no manda el nombre del plan siempre en el mismo sitio segun el
+// evento (compra suelta, suscripcion, cambio de plan). En vez de apostar por
+// una forma concreta, se recogen todos los sitios donde puede venir. Leer de
+// mas es inofensivo: el patron exige un numero junto a la palabra clave, asi
+// que un nombre generico como 'Contactos adicionales' no produce cantidad.
+function nombresCandidatos(data) {
+  return [
+    data?.subscription?.plan?.name,
+    data?.plan?.name,
+    data?.purchase?.subscription?.plan?.name,
+    data?.purchase?.offer?.name,
+    data?.product?.name,
+  ].filter(Boolean).map(x => String(x).toLowerCase().trim());
+}
+
+function codigosCandidatos(data) {
+  return [
+    data?.purchase?.offer?.code,
+    data?.subscription?.plan?.offer?.code,
+    data?.plan?.offer?.code,
+  ].filter(Boolean).map(x => String(x).trim());
+}
+
 // Devuelve { cantidad, fuente } — 'fuente' sirve para saber si hay que avisar
 function resolverCantidad(data, { tipo, patronNombre, porPrecio, maximo }) {
-  const codigo = (data?.purchase?.offer?.code || '').trim();
-  const o = codigo ? OFERTAS[codigo] : null;
-  // El tipo debe coincidir: si no, una oferta de video mapeada a 5 acabaria
-  // dando 5 asientos al caer en otra rama.
-  if (o && o.cantidad && o.tipo === tipo) {
-    return { cantidad: Math.min(o.cantidad, maximo), fuente: 'codigo' };
+  // 1. Mapa explicito por codigo de oferta. El tipo debe coincidir: si no, una
+  //    oferta de video mapeada a 5 acabaria dando 5 asientos en otra rama.
+  for (const codigo of codigosCandidatos(data)) {
+    const o = OFERTAS[codigo];
+    if (o && o.cantidad && o.tipo === tipo) {
+      return { cantidad: Math.min(o.cantidad, maximo), fuente: 'codigo' };
+    }
   }
-  // Nombre del PRODUCTO: la señal mas estable que da Hotmart. La define el
-  // vendedor, no cambia y no depende de moneda. Vale tanto si hay un producto
-  // por cantidad ('3 usuarios adicionales') como si el nombre ya la lleva.
-  const nombreProducto = (data?.product?.name || '').toLowerCase().trim();
-  if (nombreProducto && patronNombre) {
-    const n = patronNombre(nombreProducto);
-    if (n > 0) return { cantidad: Math.min(n, maximo), fuente: 'producto' };
-  }
-  // OJO: solo el NOMBRE de la oferta, nunca el codigo — el codigo es aleatorio
-  const nombre = (data?.purchase?.offer?.name || '').toLowerCase().trim();
-  if (nombre && patronNombre) {
-    const n = patronNombre(nombre);
-    if (n > 0) return { cantidad: Math.min(n, maximo), fuente: 'nombre' };
+  // 2. Cualquier nombre que traiga un patron claro de cantidad. NUNCA el
+  //    codigo de oferta, que es un alfanumerico aleatorio.
+  if (patronNombre) {
+    for (const nombre of nombresCandidatos(data)) {
+      const n = patronNombre(nombre);
+      if (n > 0) return { cantidad: Math.min(n, maximo), fuente: 'nombre' };
+    }
   }
   const precio = data?.purchase?.price?.value || 0;
   if (precio > 0 && monedaEsUSD(data)) {
