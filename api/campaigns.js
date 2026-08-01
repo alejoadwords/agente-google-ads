@@ -8,6 +8,28 @@ export const config = { runtime: 'edge' };
 
 import { campaignHtml } from './_campaign-email.js';
 
+
+// ── Plan del usuario ──────────────────────────────────────────────────────────
+// Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
+// que el plan ya no viaja en el JWT y todo usuario de pago se leía como "free".
+// Cuando el token no lo trae, se consulta a Clerk y se cachea un minuto.
+const _planCache = new Map();
+async function clerkMeta(userId) {
+  if (!userId || !process.env.CLERK_SECRET_KEY) return {};
+  const hit = _planCache.get(userId);
+  if (hit && hit.exp > Date.now()) return hit.meta;
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    const u = await r.json();
+    const meta = Object.assign({}, u.public_metadata || {});
+    meta._email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
+    _planCache.set(userId, { meta, exp: Date.now() + 60000 });
+    return meta;
+  } catch { return {}; }
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -142,6 +164,11 @@ async function monthlySent(userId) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const userId = await getUserId(req);
+  if (userId && _lastPlan === 'free') {
+    const meta = await clerkMeta(userId);
+    if (meta.plan) _lastPlan = meta.plan;
+    if (meta.emails_extra) _emailsExtra = parseInt(meta.emails_extra) || 0;
+  }
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;

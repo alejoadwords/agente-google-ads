@@ -6,6 +6,25 @@ const CORS = {
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+// El token de sesión de Clerk (v2) ya no trae public_metadata: si el plan no
+// viene en el JWT hay que preguntárselo a Clerk, o todo usuario de pago se
+// quedaría con el límite del plan gratuito. Cache de un minuto por usuario.
+const _planCache = new Map();
+async function clerkMeta(userId) {
+  if (!userId || !process.env.CLERK_SECRET_KEY) return {};
+  const hit = _planCache.get(userId);
+  if (hit && hit.exp > Date.now()) return hit.meta;
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    const meta = (await r.json()).public_metadata || {};
+    _planCache.set(userId, { meta, exp: Date.now() + 60000 });
+    return meta;
+  } catch { return {}; }
+}
+
 function sbHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -198,6 +217,11 @@ export default async function handler(req) {
       userPlan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
       leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
     } catch {}
+    if (userPlan === 'free') {
+      const meta = await clerkMeta(userId);
+      if (meta.plan) userPlan = meta.plan;
+      if (meta.leads_extra) leadsExtra = parseInt(meta.leads_extra) || 0;
+    }
     const PLAN_LIMITS_IMP = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency: 5000, agencia: 5000 };
     const planLimit = (PLAN_LIMITS_IMP[userPlan] || 10) + (leadsExtra * 1000);
     const countRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`, { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } });
@@ -290,6 +314,11 @@ export default async function handler(req) {
         leadsExtra = parseInt(payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0);
       }
     } catch {}
+    if (userPlan === 'free') {
+      const meta = await clerkMeta(userId);
+      if (meta.plan) userPlan = meta.plan;
+      if (meta.leads_extra) leadsExtra = parseInt(meta.leads_extra) || 0;
+    }
     const PLAN_LIMITS = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency: 5000, agencia: 5000 };
     const planLimit = (PLAN_LIMITS[userPlan] || 10) + (leadsExtra * 1000);
     const countRes = await fetch(

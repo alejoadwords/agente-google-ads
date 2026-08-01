@@ -29,6 +29,10 @@ async function isPaidOrAdmin(req) {
         headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
       });
       const u = await r.json();
+      // Clerk dejó de mandar public_metadata en el token de sesión (v2): el plan
+      // real se lee aquí, si no todo usuario de pago quedaba como "free".
+      const realPlan = u.public_metadata?.plan;
+      if (PAID_PLANS.includes(realPlan)) return { ok: true, plan: realPlan };
       const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
       if (ADMIN_EMAILS.includes(email)) return { ok: true, plan: 'admin' };
     } catch {}

@@ -52,22 +52,36 @@ async function getUserId(req) {
 
 // ── Gate por plan: crear/editar automatizaciones es feature Pro ──────────────
 let _lastPlan = 'free';
+
+// ── Plan del usuario ──────────────────────────────────────────────────────────
+// Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
+// que el plan ya no viaja en el JWT y todo usuario de pago se leía como "free".
+// Cuando el token no lo trae, se consulta a Clerk y se cachea un minuto.
+const _planCache = new Map();
+async function clerkMeta(userId) {
+  if (!userId || !process.env.CLERK_SECRET_KEY) return {};
+  const hit = _planCache.get(userId);
+  if (hit && hit.exp > Date.now()) return hit.meta;
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    const u = await r.json();
+    const meta = Object.assign({}, u.public_metadata || {});
+    meta._email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
+    _planCache.set(userId, { meta, exp: Date.now() + 60000 });
+    return meta;
+  } catch { return {}; }
+}
+
 const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 
 async function isPaidOrAdmin(userId) {
   if (PAID_PLANS.includes(_lastPlan)) return true;
-  // Bypass admin: verificar email real via Clerk (el JWT no siempre lo trae)
-  if (userId && process.env.CLERK_SECRET_KEY) {
-    try {
-      const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
-        headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
-      });
-      const u = await r.json();
-      const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
-      if (ADMIN_EMAILS.includes(email)) return true;
-    } catch {}
-  }
+  const meta = await clerkMeta(userId);
+  if (PAID_PLANS.includes(meta.plan)) { _lastPlan = meta.plan; return true; }
+  if (ADMIN_EMAILS.includes(meta._email)) return true;
   return false;
 }
 
