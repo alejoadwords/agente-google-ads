@@ -316,6 +316,9 @@ export default async function handler(req) {
       method: 'POST',
       headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // En streaming: la redacción tarda ~30 s y una respuesta de una sola pieza
+        // se pasaba del límite de la función (FUNCTION_INVOCATION_TIMEOUT).
+        stream: true,
         model: 'claude-sonnet-5', max_tokens: 2500,
         system: PROPOSAL_TEMPLATES[template] + '\n\n' + PROPOSAL_BASE_RULES,
         messages: [{ role: 'user', content:
@@ -326,10 +329,49 @@ export default async function handler(req) {
           (body.instructions ? '\n\nINSTRUCCIONES ADICIONALES DEL USUARIO:\n' + String(body.instructions).slice(0, 500) : '') }],
       }),
     });
-    const d = await r.json();
-    if (!r.ok) return jsonResp({ error: 'Error generando: ' + (d.error?.message || r.status) }, 502);
-    const content = d.content?.find(b => b.type === 'text')?.text || '';
-    return jsonResp({ content: content.replace(/`/g, "'") });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      return jsonResp({ error: 'Error generando: ' + (d.error?.message || r.status) }, 502);
+    }
+    // Retransmitir el texto al cliente a medida que se escribe
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const enc = new TextEncoder();
+    (async () => {
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const evt = JSON.parse(line.slice(6).trim());
+              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+                await writer.write(enc.encode('data: ' + JSON.stringify({ delta: evt.delta.text.replace(/`/g, "'") }) + '\n\n'));
+              }
+              if (evt.type === 'error') {
+                await writer.write(enc.encode('data: ' + JSON.stringify({ error: evt.error?.message || 'error de la API' }) + '\n\n'));
+              }
+              if (evt.type === 'message_stop') {
+                await writer.write(enc.encode('data: ' + JSON.stringify({ done: true }) + '\n\n'));
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        await writer.write(enc.encode('data: ' + JSON.stringify({ error: err.message }) + '\n\n'));
+      } finally { await writer.close(); }
+    })();
+    return new Response(readable, {
+      status: 200,
+      headers: { ...CORS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no' },
+    });
   }
 
   // POST — crear propuesta

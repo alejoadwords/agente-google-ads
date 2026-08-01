@@ -21018,12 +21018,36 @@ async function prpGenerate() {
         instructions: document.getElementById('prp-instructions').value,
       }),
     });
-    const d = await res.json();
-    if (d.upgrade) { document.getElementById('prp-overlay')?.remove(); openUpgradeFlow('Las propuestas comerciales con IA son parte del plan Pro.'); return; }
-    if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
-    document.getElementById('prp-content').value = d.content || '';
+    // El endpoint responde en streaming: si algo falla, llega un JSON normal
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('text/event-stream')) {
+      const d = await res.json().catch(() => ({ error: 'Respuesta inesperada del servidor' }));
+      if (d.upgrade) { document.getElementById('prp-overlay')?.remove(); openUpgradeFlow('Las propuestas comerciales con IA son parte del plan Pro.'); return; }
+      showToast('⚠️ ' + (d.error || 'No se pudo generar'), 'error');
+      return;
+    }
+    const ta = document.getElementById('prp-content');
+    ta.value = '';
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', texto = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.delta) { texto += evt.delta; ta.value = texto; ta.scrollTop = ta.scrollHeight; }
+          if (evt.error) showToast('⚠️ ' + evt.error, 'error');
+        } catch {}
+      }
+    }
     if (!document.getElementById('prp-title').value) {
-      const h1 = (d.content.match(/^#\s+(.+)$/m) || [])[1];
+      const h1 = (texto.match(/^#\s+(.+)$/m) || [])[1];
       if (h1) document.getElementById('prp-title').value = h1.slice(0, 120);
     }
   } catch (e) { showToast('Error generando la propuesta', 'error'); }
