@@ -115,7 +115,12 @@
   .tarjeta .val small{font-size:1.6cqw;font-weight:700;align-self:flex-end;margin-bottom:1cqw;color:var(--gris)}
   .tarjeta .modo{font-size:1.35cqw;font-weight:700;color:var(--tinta);margin-top:.45cqw}
   .tarjeta .barra{height:.4cqw;background:var(--ambar);border-radius:.25cqw;margin:.85cqw 0}
-  .tarjeta .anual{font-size:1.45cqw;color:var(--gris);line-height:1.4}
+  .tarjeta .anual{font-size:1.45cqw;color:var(--gris);line-height:1.4;margin-top:.9cqw;padding-top:.7cqw;border-top:.08cqw solid var(--linea)}
+  .tarjeta .setup{margin-top:.9cqw;padding-top:.8cqw;border-top:.16cqw dashed var(--linea)}
+  .tarjeta .setup-fila{display:flex;justify-content:space-between;align-items:baseline;gap:1cqw;font-size:1.38cqw;color:var(--tinta);font-weight:700}
+  .tarjeta .setup-fila i{font-style:normal;font-weight:600;font-size:1.1cqw;color:var(--gris);margin-left:.4cqw}
+  .tarjeta .setup-fila b{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tarjeta .setup-pie{font-size:1.12cqw;color:var(--gris);line-height:1.4;margin-top:.3cqw;text-align:left}
   .tarjeta .ahorro{display:inline-block;margin-top:.7cqw;font-size:1.35cqw;font-weight:800;color:var(--ok);background:#E6F4EE;border-radius:2cqw;padding:.5cqw 1.2cqw}
 
   /* Desglose de la propuesta */
@@ -201,6 +206,7 @@
     agency: { nombre: 'Agency', base: 99, usuarios: 10, contactos: 5000 }
   };
   var PRECIO_USUARIO = 9, PASO = 1000, PRECIO_PACK = 4, MESES_ANUAL = 10;
+  var SETUP = 550;   // pago unico al arrancar: configuracion, personalizacion y capacitacion
   var MAX_U = 60, MAX_C = 100000;
   var CLAVE = 'acuarius_deck_v1';
 
@@ -471,11 +477,14 @@
     if (resto > 0) chk += '<li>' + TICK + '<span>y ' + resto + ' funciones más incluidas</span></li>';
     // Los complementos NO se repiten aquí: ya están desglosados en la tarjeta.
 
+    var hayExtras = !!(c.extraU || c.packs);
     var desglose = '';
-    if (e.anual) desglose += fila('Plan ' + c.plan.nombre + ' anual', '$' + fmt(c.planAnual) + '/año');
-    else desglose += fila('Plan ' + c.plan.nombre, '$' + fmt(c.plan.base) + '/mes');
-    if (c.extraU) desglose += fila(c.extraU + ' × usuario', '$' + fmt(c.costeU) + '/mes');
-    if (c.packs) desglose += fila(fmt(c.packs * PASO) + ' contactos', '$' + fmt(c.costeC) + '/mes');
+    if (hayExtras) {
+      if (e.anual) desglose += fila('Plan ' + c.plan.nombre + ' anual', '$' + fmt(c.planAnual) + '/año');
+      else desglose += fila('Plan ' + c.plan.nombre, '$' + fmt(c.plan.base) + '/mes');
+      if (c.extraU) desglose += fila(c.extraU + ' × usuario', '$' + fmt(c.costeU) + '/mes');
+      if (c.packs) desglose += fila(fmt(c.packs * PASO) + ' contactos', '$' + fmt(c.costeC) + '/mes');
+    }
 
     L.push({ cls: 'azul', html: AGUA + '<div class="campo">' +
       '<span class="rotulo">Tu propuesta</span>' +
@@ -490,13 +499,17 @@
           '<div class="barra"></div>' +
           '<div class="desglose">' + desglose +
             (e.anual
-              ? fila('<b>Pago inicial</b>', '<b>$' + fmt(c.planAnual) + '</b>', 'total')
+              ? fila('<b>Pago inicial del plan</b>', '<b>$' + fmt(c.planAnual) + '</b>', 'total')
               : fila('<b>Total mensual</b>', '<b>$' + fmt(c.totalMes) + ' USD</b>', 'total')) +
           '</div>' +
-          // Con los dos complementos el desglose ya ocupa cuatro filas: la
-          // linea del pago anual se omite para que la tarjeta no se recorte.
-          // El ahorro anual sigue estando en la lámina de Planes.
-          ((c.extraU && c.packs)
+          '<div class="setup">' +
+            '<div class="setup-fila"><span>Setup inicial <i>pago único</i></span><b>$' + fmt(SETUP) + '</b></div>' +
+            '<div class="setup-pie">Configuración del CRM a tu medida y capacitación del equipo</div>' +
+          '</div>' +
+          // Con complementos el desglose ya ocupa varias filas: la linea del
+          // pago anual se omite para que la tarjeta no se recorte. El ahorro
+          // anual sigue estando en la lamina de Planes.
+          (hayExtras
             ? ''
             : e.anual
               ? '<div class="ahorro">2 meses gratis · ahorras $' + fmt(c.plan.base * 2) + '</div>'
@@ -521,12 +534,12 @@
       '<span class="rotulo">Cómo empezamos</span>' +
       '<h2 class="titulo"><span class="marcador">14 días de prueba</span>, sin tarjeta</h2>' +
       '<div class="pasos">' +
-        '<div class="paso-b"><div class="n">1</div><h3>Creamos la cuenta</h3><p>Con el correo del responsable. Toma minutos.</p></div>' +
-        '<div class="paso-b"><div class="n">2</div><h3>Importamos</h3><p>Tus contactos y el pipeline con tus etapas reales.</p></div>' +
-        '<div class="paso-b"><div class="n">3</div><h3>Conectamos</h3><p>WhatsApp y los formularios de tu sitio.</p></div>' +
-        '<div class="paso-b"><div class="n">4</div><h3>Activamos</h3><p>La primera automatización de seguimiento.</p></div>' +
+        '<div class="paso-b"><div class="n">1</div><h3>Configuramos</h3><p>El pipeline con tus etapas reales y los campos que usa tu equipo.</p></div>' +
+        '<div class="paso-b"><div class="n">2</div><h3>Importamos</h3><p>Tu base de contactos, con sus etiquetas y su origen.</p></div>' +
+        '<div class="paso-b"><div class="n">3</div><h3>Conectamos</h3><p>WhatsApp, los formularios de tu sitio y la primera automatización.</p></div>' +
+        '<div class="paso-b"><div class="n">4</div><h3>Capacitamos</h3><p>Sesión completa de uso con todo tu equipo, hasta que lo manejen solos.</p></div>' +
       '</div>' +
-      '<p class="entrada" style="margin-top:2.6cqw;font-size:1.6cqw">Si al final de la prueba no ves el valor, no pagas nada. Sin permanencia ni costo de implementación.</p>' +
+      '<p class="entrada" style="margin-top:2.4cqw;font-size:1.55cqw">Estos cuatro pasos no los haces solo: son el <b>setup inicial</b> — $' + fmt(SETUP) + ' en un único pago al arrancar. La suscripción no tiene permanencia y la puedes cancelar cuando quieras.</p>' +
       '</div>' });
 
     // 11 — Cierre
