@@ -23525,8 +23525,13 @@ function prodSetRange(d) { _prodRange = d; _prodData = null; prodRender(); }
 async function prodLoad() {
   const fromIso = new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString();
   const toIso = new Date(Date.now() + 60 * 86400000).toISOString();
+  // El cliente activo es obligatorio: api/agenda filtra por client_id y, sin él,
+  // solo devuelve lo que se creó sin cliente — el informe salía siempre en cero
+  // para quien trabaja con una cartera.
+  const cli = (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId)
+    ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
   const [acts, inter] = await Promise.all([
-    fetchAuth('/api/agenda?from=' + encodeURIComponent(new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString()) + '&to=' + encodeURIComponent(toIso))
+    fetchAuth('/api/agenda?from=' + encodeURIComponent(new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString()) + '&to=' + encodeURIComponent(toIso) + cli)
       .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
     fetchAuth('/api/lead-activities?from=' + encodeURIComponent(fromIso))
       .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
