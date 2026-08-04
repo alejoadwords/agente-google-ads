@@ -19656,8 +19656,15 @@ function seoRenderGeoTab() {
   const activeEngines = Object.keys(engines).filter(k => engines[k].active);
 
   // Chips de motores
+  // Antes del primer reporte no se sabe qué motores responden: decir
+  // "no configurado" era mentira, la comprobación la hace el servidor al
+  // generar el reporte.
   const chips = Object.keys(GEO_ENGINE_META).map(k => {
-    const active = engines[k] ? engines[k].active : (k === 'claude');
+    if (!hist) {
+      return '<span class="seop-delta same" style="margin-right:5px" title="Se comprueba al generar el reporte">' +
+        geoEngineDot(k) + GEO_ENGINE_META[k].label + '</span>';
+    }
+    const active = engines[k] ? engines[k].active : false;
     return '<span class="seop-delta ' + (active ? 'up' : 'same') + '" style="margin-right:5px" title="' + (active ? 'Motor activo' : 'Agrega la API key en Vercel para activarlo') + '">' +
       geoEngineDot(k) + GEO_ENGINE_META[k].label + (active ? '' : ' · no configurado') + '</span>';
   }).join('');
