@@ -1,4 +1,7 @@
 export const config = { runtime: 'edge' };
+
+import { upsertLeadFromConversation } from './_inbox-engine.js';
+import { getPolicy } from './_channel-policy.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
@@ -124,6 +127,38 @@ export default async function handler(req) {
     return jsonResp({ conversation: rows[0] });
   }
 
+  // POST ?action=to_pipeline — la conversación entra al CRM como lead
+  // Es la decisión manual: se elige la etapa y el lead queda vinculado a la
+  // conversación (con su etiqueta de canal y las automatizaciones disparadas).
+  if (req.method === 'POST' && url.searchParams.get('action') === 'to_pipeline') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const { conversation_id, stage, name, phone, email } = body || {};
+    if (!conversation_id) return jsonResp({ error: 'Falta conversation_id' }, 400);
+
+    const conv = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conversation_id}&user_id=eq.${userId}&select=*`,
+      { headers: sbHeaders() }
+    ).then(r => r.json()).then(r => r?.[0]).catch(() => null);
+    if (!conv) return jsonResp({ error: 'No autorizado' }, 403);
+    if (conv.lead_id) return jsonResp({ lead_id: conv.lead_id, ya_estaba: true });
+
+    const agent = conv.agent_id ? await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${conv.agent_id}&select=client_id`,
+      { headers: sbHeaders() }
+    ).then(r => r.json()).then(r => r?.[0]).catch(() => null) : null;
+
+    const policy = await getPolicy(userId, conv.channel);
+    const leadId = await upsertLeadFromConversation(
+      userId, agent?.client_id || null, conv,
+      { nombre: name || conv.contact_name, celular: phone || conv.contact_phone, email: email || conv.contact_email },
+      // 'always' porque la decisión ya la tomó una persona
+      { ...policy, mode: 'always', stage: stage || policy.stage }
+    );
+    if (!leadId) return jsonResp({ error: 'No se pudo crear el lead' }, 500);
+    return jsonResp({ lead_id: leadId }, 201);
+  }
+
   // POST — send manual message (when human took over)
   if (req.method === 'POST') {
     let body;
@@ -163,9 +198,10 @@ export default async function handler(req) {
       body: JSON.stringify({ last_message: content.slice(0, 200), last_message_at: new Date().toISOString() }),
     });
 
-    // Send via Meta API
+    // Enviar por el canal que corresponda
     if (conn) {
-      await sendMetaMessage(conn, conv.contact_id, conv.channel, content);
+      if (conv.channel === 'tiktok') await sendTikTokMessage(conn, conv.contact_id, content);
+      else await sendMetaMessage(conn, conv.contact_id, conv.channel, content);
     }
 
     return jsonResp({ ok: true }, 201);
@@ -190,4 +226,16 @@ async function sendMetaMessage(conn, contactId, channel, text) {
       });
     }
   } catch(e) { console.error('sendMetaMessage', e); }
+}
+
+// TikTok Business Messaging: el envío manual desde el inbox usa el mismo
+// endpoint que el webhook cuando el agente contesta solo.
+async function sendTikTokMessage(conn, contactId, text) {
+  try {
+    await fetch(process.env.TIKTOK_SEND_URL || 'https://business-api.tiktok.com/open_api/v1.3/business/message/send/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Access-Token': conn.access_token },
+      body: JSON.stringify({ business_id: conn.external_id, to_user_id: contactId, message: { type: 'text', text } }),
+    });
+  } catch (e) { console.error('sendTikTokMessage', e); }
 }

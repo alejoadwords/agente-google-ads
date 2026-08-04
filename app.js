@@ -17671,6 +17671,7 @@ function agRenderChannels(agent) {
     { key: 'whatsapp', label: 'WhatsApp Business', icon: '📱', color: '#128C7E', desc: 'Conecta un número de WhatsApp Business' },
     { key: 'messenger', label: 'Messenger', icon: '💬', color: '#1877F2', desc: 'Conecta una Página de Facebook' },
     { key: 'instagram', label: 'Instagram DMs', icon: '📷', color: '#C13584', desc: 'Conecta una cuenta Instagram Business' },
+    { key: 'tiktok', label: 'TikTok DMs', icon: '🎵', color: '#010101', desc: 'Conecta una cuenta TikTok Business' },
   ];
   list.innerHTML = channels.map(ch => {
     const conn = conns.find(c => c.channel === ch.key && c.is_active);
@@ -17786,6 +17787,19 @@ async function waConnectSave() {
 async function agConnectChannel(channel, agentId) {
   if (channel === 'whatsapp') {
     waConnectOpen(agentId);
+    return;
+  } else if (channel === 'tiktok') {
+    // TikTok tiene su propio OAuth: el agente viaja en el state para que la
+    // conexión quede colgada de él al volver.
+    const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
+    if (!uid) { showToast('Vuelve a iniciar sesión para conectar TikTok', 'error'); return; }
+    const r = await fetch('/api/tiktok-auth?userId=' + encodeURIComponent(uid) + '&agentId=' + encodeURIComponent(agentId), { redirect: 'manual' });
+    if (r.status === 503) {
+      const d = await r.json().catch(() => ({}));
+      showToast('⚠️ ' + (d.detail || 'TikTok todavía no está configurado'), 'error');
+      return;
+    }
+    window.location.href = '/api/tiktok-auth?userId=' + encodeURIComponent(uid) + '&agentId=' + encodeURIComponent(agentId);
     return;
   } else {
     // Messenger / Instagram: usar token Meta existente
@@ -17921,7 +17935,7 @@ async function inboxOpenConv(convId) {
         <div style="font-size:11px;color:var(--muted)">${esc(channelLabels[conv.channel] || conv.channel)}${conv.lead_id ? ` · <button class="crm-lead-link-btn" onclick="crmOpenDetail('${esc(conv.lead_id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Ver lead</button>` : ''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        ${!conv.lead_id ? `<button class="crm-conv-link-btn" style="width:auto;padding:5px 10px;border-style:solid" onclick="crmCreateLeadFromConversation(inboxConversations.find(c=>c.id==='${esc(conv.id)}'))"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Crear lead</button>` : ''}
+        ${!conv.lead_id ? `<button class="crm-conv-link-btn" style="width:auto;padding:5px 10px;border-style:solid" onclick="inboxToPipeline('${esc(conv.id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Pasar al pipeline</button>` : ''}
         <button class="crm-inbox-status-btn ${conv.status}" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
       </div>
     </div>
@@ -17942,6 +17956,72 @@ async function inboxOpenConv(convId) {
     const msgs = document.getElementById('inbox-msgs');
     if (msgs) msgs.scrollTop = msgs.scrollHeight;
   }, 50);
+}
+
+// Pasar la conversación al pipeline: se elige la etapa y el lead queda
+// vinculado a la conversación (con su etiqueta de canal y las automatizaciones).
+function inboxToPipeline(convId) {
+  const conv = inboxConversations.find(c => c.id === convId);
+  if (!conv) return;
+  const stages = (typeof crmStages !== 'undefined' ? crmStages : []).filter(st => st.key !== 'ganado' && st.key !== 'perdido');
+  const lista = (stages.length ? stages : [{ key: 'nuevo', label: 'Nuevo' }]);
+  document.getElementById('inbox-pipe-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'inbox-pipe-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div class="auto-modal" style="max-width:420px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Pasar al pipeline</div>' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'inbox-pipe-modal\').remove()">✕</button></div>' +
+      '<div class="auto-modal-body">' +
+        '<div class="auto-field"><label class="auto-label">Nombre</label>' +
+          '<input class="auto-input" id="ipipe-name" value="' + esc(conv.contact_name || '') + '" placeholder="Nombre del contacto"></div>' +
+        '<div class="auto-field"><label class="auto-label">Teléfono</label>' +
+          '<input class="auto-input" id="ipipe-phone" value="' + esc(conv.contact_phone || '') + '" placeholder="Opcional"></div>' +
+        '<div class="auto-field"><label class="auto-label">Email</label>' +
+          '<input class="auto-input" id="ipipe-email" value="' + esc(conv.contact_email || '') + '" placeholder="Opcional"></div>' +
+        '<div class="auto-field"><label class="auto-label">Etapa</label>' +
+          '<select class="auto-input" id="ipipe-stage">' +
+            lista.map(function(st){ return '<option value="' + esc(st.key) + '">' + esc(st.label) + '</option>'; }).join('') +
+          '</select></div>' +
+        '<div style="font-size:11.5px;color:var(--muted2)">Se crea el lead con la etiqueta del canal y se dispara lo que tengas automatizado para leads nuevos.</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border)">' +
+        '<button class="btn-pri" style="flex:1" id="ipipe-save" onclick="inboxToPipelineConfirm(\'' + esc(convId) + '\')">Crear lead</button>' +
+        '<button class="btn-ghost" onclick="document.getElementById(\'inbox-pipe-modal\').remove()">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+async function inboxToPipelineConfirm(convId) {
+  const btn = document.getElementById('ipipe-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+  try {
+    const res = await fetchAuth('/api/chat-conversations?action=to_pipeline', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversation_id: convId,
+        stage: document.getElementById('ipipe-stage')?.value || 'nuevo',
+        name: document.getElementById('ipipe-name')?.value.trim() || null,
+        phone: document.getElementById('ipipe-phone')?.value.trim() || null,
+        email: document.getElementById('ipipe-email')?.value.trim() || null,
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok || !d.lead_id) throw new Error(d.error || 'error');
+    document.getElementById('inbox-pipe-modal')?.remove();
+    const conv = inboxConversations.find(c => c.id === convId);
+    if (conv) conv.lead_id = d.lead_id;
+    showToast('Lead creado en el pipeline ✓', 'success');
+    fetchAuthInvalidate('/api/leads');
+    if (typeof crmLoadLeads === 'function') crmLoadLeads().catch(() => {});
+    await inboxOpenConv(convId);
+  } catch (e) {
+    showToast('No se pudo crear el lead', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear lead'; }
+  }
 }
 
 async function inboxSendManual(convId) {
@@ -22180,7 +22260,7 @@ async function srcRender() {
     '</div>' +
     '<div style="max-width:860px;margin-bottom:26px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
-        '<div style="font-weight:800;font-size:var(--fs-md)">💬 Canales de chat (WhatsApp, Messenger, Instagram)</div>' +
+        '<div style="font-weight:800;font-size:var(--fs-md)">💬 Canales de chat (WhatsApp, Messenger, Instagram, TikTok)</div>' +
         '<button class="btn-sec sm" onclick="crmSetView(\'agents\')">Configurar canales</button>' +
       '</div>' +
       '<div id="src-channels" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando canales…</div>' +
@@ -22209,7 +22289,16 @@ const SRC_CHANNEL_META = {
   whatsapp: { icon: '💬', label: 'WhatsApp' },
   messenger: { icon: '📘', label: 'Messenger' },
   instagram: { icon: '📸', label: 'Instagram' },
+  tiktok: { icon: '🎵', label: 'TikTok' },
 };
+// Regla de entrada al pipeline por canal: qué hace la plataforma cuando llega
+// una conversación nueva.
+const SRC_POLICY_MODES = [
+  ['manual', 'Yo decido cada una'],
+  ['on_contact', 'Cuando haya contacto'],
+  ['always', 'Siempre'],
+];
+let srcPolicies = {};
 async function srcLoadChannels() {
   const el = document.getElementById('src-channels');
   if (!el) return;
@@ -22220,15 +22309,45 @@ async function srcLoadChannels() {
       el.innerHTML = 'Sin canales conectados aún. Conecta WhatsApp, Messenger o Instagram en <b>Agentes IA</b>: el agente conversa, captura nombre y contacto de forma natural, y crea el lead solo.';
       return;
     }
-    el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px">' + conns.map(c => {
+    const pol = await fetchAuth('/api/channel-policy').then(r => r.json()).catch(() => ({}));
+    srcPolicies = pol.policies || {};
+    const stages = (typeof crmStages !== 'undefined' ? crmStages : []).filter(st => st.key !== 'ganado' && st.key !== 'perdido');
+    const canales = [...new Set(conns.map(c => c.channel))];
+    el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">' + conns.map(c => {
       const m = SRC_CHANNEL_META[c.channel] || { icon: '💬', label: c.channel };
       const on = c.is_active !== false;
       return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg)">' +
         m.icon + ' ' + esc(c.channel_name || m.label) +
         '<span style="width:7px;height:7px;border-radius:50%;background:' + (on ? '#10B981' : '#9ca3af') + '"></span></span>';
     }).join('') + '</div>' +
-    '<div style="font-size:11.5px;color:var(--muted2);margin-top:8px">Cada conversación nueva captura el contacto con IA y crea el lead automáticamente.</div>';
+    '<div style="font-weight:700;font-size:12.5px;color:var(--text-2);margin-bottom:6px">¿Cuándo entra la conversación al pipeline?</div>' +
+    canales.map(ch => {
+      const m = SRC_CHANNEL_META[ch] || { icon: '💬', label: ch };
+      const p = srcPolicies[ch] || { mode: 'on_contact', stage: 'nuevo' };
+      return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px">' +
+        '<span style="min-width:120px;font-size:12.5px;font-weight:700">' + m.icon + ' ' + esc(m.label) + '</span>' +
+        '<select class="auto-input" style="width:auto;min-width:180px" onchange="srcSetPolicy(\'' + esc(ch) + '\',\'mode\',this.value)">' +
+          SRC_POLICY_MODES.map(function(x){ return '<option value="' + x[0] + '"' + (p.mode === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') +
+        '</select>' +
+        '<span style="font-size:12px;color:var(--muted)">en</span>' +
+        '<select class="auto-input" style="width:auto;min-width:130px"' + (p.mode === 'manual' ? ' disabled' : '') + ' onchange="srcSetPolicy(\'' + esc(ch) + '\',\'stage\',this.value)">' +
+          (stages.length ? stages : [{ key: 'nuevo', label: 'Nuevo' }]).map(function(st){ return '<option value="' + esc(st.key) + '"' + (p.stage === st.key ? ' selected' : '') + '>' + esc(st.label) + '</option>'; }).join('') +
+        '</select>' +
+      '</div>';
+    }).join('') +
+    '<div style="font-size:11.5px;color:var(--muted2);margin-top:6px">Con <b>Yo decido cada una</b> la conversación se queda en Conversaciones hasta que pulses “Pasar al pipeline”. El agente contesta igual en los tres casos.</div>';
   } catch { el.textContent = 'No se pudieron cargar los canales'; }
+}
+
+async function srcSetPolicy(channel, campo, valor) {
+  srcPolicies[channel] = Object.assign({ mode: 'on_contact', stage: 'nuevo' }, srcPolicies[channel] || {});
+  srcPolicies[channel][campo] = valor;
+  try {
+    const r = await fetchAuth('/api/channel-policy', { method: 'PUT', body: JSON.stringify({ policies: srcPolicies }) });
+    if (!r.ok) throw new Error();
+    showToast('Regla guardada ✓', 'success');
+    if (campo === 'mode') srcLoadChannels();  // habilita/deshabilita la etapa
+  } catch { showToast('No se pudo guardar la regla', 'error'); }
 }
 
 // ── Editor de formulario ──

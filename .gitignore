@@ -8,3 +8,9 @@ node_modules/
 *.pdf
 acuarios-*.json
 client_secret_*.json
+
+# Videos de la Academia: pesan cientos de MB, no van al repo
+Academia/
+*.mp4
+fal-ai-client-*.tgz
+recovery-codes.txt
