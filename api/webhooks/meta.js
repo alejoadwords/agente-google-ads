@@ -107,8 +107,12 @@ export default async function handler(req) {
   let body;
   try { body = await req.json(); } catch { return new Response('Bad request', { status: 400 }); }
 
-  // Responder 200 a Meta inmediatamente para evitar reintentos
-  const process = (async () => {
+  // Responder 200 a Meta inmediatamente para evitar reintentos.
+  // Ojo con el nombre: llamar "process" a esta promesa dejaba el objeto global
+  // process en zona muerta durante todo el handler, así que la verificación de
+  // arriba (process.env.META_WEBHOOK_VERIFY_TOKEN) reventaba con 500 y Meta
+  // nunca podía dar de alta el webhook.
+  const procesar = (async () => {
     try {
       if (body.object === 'page') {
         // Formularios de clientes potenciales (Lead Ads)
@@ -172,7 +176,7 @@ export default async function handler(req) {
   })();
 
   // En Edge Runtime, awaiteamos el proceso (no tenemos waitUntil sin Cloudflare)
-  await process;
+  await procesar;
 
   return new Response('EVENT_RECEIVED', { status: 200 });
 }
