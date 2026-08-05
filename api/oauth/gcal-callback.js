@@ -5,7 +5,7 @@
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-async function saveGcalConnection(userId, tokens, email) {
+async function saveGcalConnection(userId, tokens, email, platform = 'google_calendar') {
   if (!userId || !SUPABASE_URL) return false;
   const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
   const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?on_conflict=user_id,platform`, {
@@ -18,7 +18,7 @@ async function saveGcalConnection(userId, tokens, email) {
     },
     body: JSON.stringify({
       user_id:          userId,
-      platform:         'google_calendar',
+      platform,
       access_token:     tokens.access_token,
       // Solo incluir refresh_token si Google lo devolvió (no sobreescribir con null)
       ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
@@ -39,8 +39,11 @@ export default async function handler(req, res) {
   if (error) return res.redirect('https://app.acuarius.app/?gcal_error=access_denied');
   if (!code)  return res.status(400).json({ error: 'Código de autorización faltante' });
 
-  let userId = '';
-  try { userId = JSON.parse(state || '{}').userId || ''; } catch {}
+  let userId = '', nonce = '';
+  try { const s = JSON.parse(state || '{}'); userId = s.userId || ''; nonce = s.nonce || ''; } catch {}
+  // El mismo callback sirve a Calendar y a YouTube: el state dice cuál es.
+  const esYoutube = nonce === 'yt_connect';
+  const plataforma = esYoutube ? 'youtube' : 'google_calendar';
 
   try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -62,9 +65,10 @@ export default async function handler(req, res) {
     });
     const userInfo = await userRes.json();
 
-    const saved = await saveGcalConnection(userId, tokens, userInfo.email);
+    const saved = await saveGcalConnection(userId, tokens, userInfo.email, plataforma);
+    const clave = esYoutube ? 'yt' : 'gcal';
     return res.redirect(
-      `https://app.acuarius.app/?gcal_connected=${saved ? 'true' : 'partial'}&gcal_email=${encodeURIComponent(userInfo.email || '')}`
+      `https://app.acuarius.app/?${clave}_connected=${saved ? 'true' : 'partial'}&${clave}_email=${encodeURIComponent(userInfo.email || '')}`
     );
   } catch (err) {
     console.error('gcal-callback error:', err);

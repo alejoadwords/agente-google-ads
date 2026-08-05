@@ -13,7 +13,9 @@ export default function handler(req, res) {
 
   const params = new URLSearchParams({
     client_id:     clientId,
-    redirect_uri:  'https://app.acuarius.app/api/oauth/yt-callback',
+    // Se reutiliza el redirect de Calendar porque es el que está registrado en
+    // Google Cloud; el flujo se distingue por el nonce del state.
+    redirect_uri:  'https://app.acuarius.app/api/oauth/gcal-callback',
     response_type: 'code',
     scope: [
       'https://www.googleapis.com/auth/youtube.upload',
