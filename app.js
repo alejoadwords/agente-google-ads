@@ -17619,6 +17619,7 @@ function crmOpenAgentModal(agentId) {
     // Show channels section
     const chSect = document.getElementById('ag-channels-section');
     if (chSect) { chSect.style.display = 'block'; agRenderChannels(ag); }
+    calLoad(agentId);
   } else {
     document.getElementById('cag-f-name').value = '';
     document.getElementById('cag-f-persona').value = '';
@@ -17674,6 +17675,7 @@ function agRenderChannels(agent) {
     { key: 'messenger', label: 'Messenger', icon: '💬', color: '#1877F2', desc: 'Conecta una Página de Facebook' },
     { key: 'instagram', label: 'Instagram DMs', icon: '📷', color: '#C13584', desc: 'Conecta una cuenta Instagram Business' },
     { key: 'tiktok', label: 'TikTok DMs', icon: '🎵', color: '#010101', desc: 'Conecta una cuenta TikTok Business' },
+    { key: 'linkedin', label: 'LinkedIn', icon: '💼', color: '#0A66C2', desc: 'Por webhook: LinkedIn no abre su API de mensajes' },
   ];
   list.innerHTML = channels.map(ch => {
     const conn = conns.find(c => c.channel === ch.key && c.is_active);
@@ -17681,10 +17683,15 @@ function agRenderChannels(agent) {
       <div class="crm-channel-icon" style="background:${ch.color}20">${ch.icon}</div>
       <div class="crm-channel-connect-info">
         <div class="crm-channel-connect-name">${ch.label}</div>
-        <div class="crm-channel-connect-status">${conn ? `Conectado: ${esc(conn.channel_name || conn.external_id)}` : ch.desc}</div>
+        <div class="crm-channel-connect-status">${conn
+          ? (ch.key === 'linkedin' ? 'Conectado · usa el botón para copiar la URL' : `Conectado: ${esc(conn.channel_name || conn.external_id)}`)
+          : ch.desc}</div>
       </div>
       ${conn
-        ? `<button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Desconectar</button>`
+        ? (ch.key === 'linkedin'
+            ? `<button class="crm-channel-btn connect" onclick="agCopyInboxHook('${esc(conn.external_id)}')">Copiar URL</button>
+               <button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Quitar</button>`
+            : `<button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Desconectar</button>`)
         : `<button class="crm-channel-btn connect" onclick="agConnectChannel('${esc(ch.key)}','${esc(agent.id)}')">Conectar</button>`
       }
     </div>`;
@@ -17723,6 +17730,8 @@ async function crmSaveAgent() {
       });
       if (!res.ok) throw new Error();
     }
+    // Los criterios viven fuera de chat_agents, así que se guardan aparte
+    if (agEditingId) await calSave(agEditingId);
     crmCloseAgentModal();
     await crmLoadAgents();
   } catch(e) {
@@ -17787,6 +17796,21 @@ async function waConnectSave() {
 }
 
 async function agConnectChannel(channel, agentId) {
+  if (channel === 'linkedin') {
+    // LinkedIn no publica API de mensajes directos, así que el mensaje entra
+    // por una URL propia desde Zapier / Make / n8n y la respuesta vuelve en el
+    // JSON para que la publique esa misma herramienta.
+    const r = await fetchAuth('/api/channel-connections', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, channel: 'linkedin', channel_name: 'LinkedIn' }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { showToast(d.error || 'No se pudo crear la conexión', 'error'); return; }
+    await crmLoadAgents();
+    crmOpenAgentModal(agentId);
+    agCopyInboxHook(d.connection?.external_id);
+    return;
+  }
   if (channel === 'whatsapp') {
     waConnectOpen(agentId);
     return;
@@ -22299,6 +22323,7 @@ const SRC_CHANNEL_META = {
   messenger: { icon: '📘', label: 'Messenger' },
   instagram: { icon: '📸', label: 'Instagram' },
   tiktok: { icon: '🎵', label: 'TikTok' },
+  linkedin: { icon: '💼', label: 'LinkedIn' },
 };
 // Regla de entrada al pipeline por canal: qué hace la plataforma cuando llega
 // una conversación nueva.
@@ -24704,4 +24729,123 @@ async function retSave() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar reglas'; }
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CALIFICACIÓN DE LEADS EN EL INBOX
+// Los criterios son del agente, no del canal: el mismo agente atiende
+// WhatsApp, Messenger, Instagram, TikTok o LinkedIn y califica igual en todos.
+// ══════════════════════════════════════════════════════════════════════════
+
+let calCriterios = [];
+
+function agCopyInboxHook(token) {
+  if (!token) return;
+  const url = 'https://app.acuarius.app/api/webhooks/inbox/' + token;
+  navigator.clipboard.writeText(url);
+  showToast('URL copiada. Pégala en Zapier, Make o n8n como destino de los mensajes', 'success');
+}
+
+async function calLoad(agentId) {
+  calCriterios = [];
+  // El editor se abre desde Chatbots, donde puede que aún no haya etapas
+  if (typeof crmStages === 'undefined' || !crmStages.length) {
+    try { await crmLoadStages(); } catch {}
+  }
+  const cfg = document.getElementById('cal-config');
+  const chk = document.getElementById('cal-activo');
+  if (!chk) return;
+  chk.checked = false;
+  if (cfg) cfg.style.display = 'none';
+  calRenderEtapas();
+  if (!agentId) { calRenderCriterios(); return; }
+  try {
+    const d = await fetchAuth('/api/qualify-rules?agent_id=' + encodeURIComponent(agentId)).then(r => r.json());
+    const r = d.regla || {};
+    calCriterios = (r.criterios || []).map(c => ({ ...c }));
+    chk.checked = !!r.activo;
+    if (cfg) cfg.style.display = r.activo ? 'block' : 'none';
+    document.getElementById('cal-escalar').checked = r.al_calificar?.escalar !== false;
+    document.getElementById('cal-tag-ok').value = r.al_calificar?.etiqueta || '';
+    document.getElementById('cal-tag-no').value = r.al_descartar?.etiqueta || '';
+    calRenderCriterios();
+    document.getElementById('cal-minimo').value = String(r.minimo || 0);
+    if (r.al_calificar?.etapa) document.getElementById('cal-etapa').value = r.al_calificar.etapa;
+  } catch { calRenderCriterios(); }
+}
+
+function calRenderEtapas() {
+  const sel = document.getElementById('cal-etapa');
+  if (!sel) return;
+  const stages = (typeof crmStages !== 'undefined' ? crmStages : [])
+    .filter(st => st.key !== 'ganado' && st.key !== 'perdido');
+  sel.innerHTML = (stages.length ? stages : [{ key: 'calificado', label: 'Calificado' }])
+    .map(st => '<option value="' + esc(st.key) + '">' + esc(st.label) + '</option>').join('');
+}
+
+function calToggle() {
+  const on = document.getElementById('cal-activo').checked;
+  document.getElementById('cal-config').style.display = on ? 'block' : 'none';
+  if (on && !calCriterios.length) calAddCriterio();
+}
+
+function calRenderCriterios() {
+  const box = document.getElementById('cal-criterios');
+  if (!box) return;
+  box.innerHTML = calCriterios.map(function (c, i) {
+    return '<div class="crm-faq-item">' +
+      '<div style="flex:1;display:flex;flex-direction:column;gap:5px">' +
+        '<input class="crm-faq-input" placeholder="Qué averiguar (ej: ¿en qué zona busca?)" value="' + esc(c.pregunta || '') + '" oninput="calCriterios[' + i + '].pregunta=this.value">' +
+        '<input class="crm-faq-input" placeholder="Se considera que cumple si… (ej: Chapinero o Usaquén)" value="' + esc(c.condicion || '') + '" oninput="calCriterios[' + i + '].condicion=this.value">' +
+      '</div>' +
+      '<button class="crm-faq-del" onclick="calRemoveCriterio(' + i + ')">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+      '</button>' +
+    '</div>';
+  }).join('');
+  // El mínimo depende de cuántas preguntas haya
+  const sel = document.getElementById('cal-minimo');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="0">Todas</option>' +
+      calCriterios.map(function (_, i) {
+        const n = i + 1;
+        return n < calCriterios.length ? '<option value="' + n + '">' + n + ' de ' + calCriterios.length + '</option>' : '';
+      }).join('');
+    if (prev && sel.querySelector('option[value="' + prev + '"]')) sel.value = prev;
+  }
+}
+
+function calAddCriterio() {
+  if (calCriterios.length >= 8) { showToast('Ocho preguntas ya son un interrogatorio, no una conversación', 'error'); return; }
+  calCriterios.push({ clave: 'criterio_' + (calCriterios.length + 1), pregunta: '', condicion: '' });
+  calRenderCriterios();
+}
+
+function calRemoveCriterio(i) {
+  calCriterios.splice(i, 1);
+  calRenderCriterios();
+}
+
+// Se guarda aparte del agente porque vive en otra tabla; lo llama crmSaveAgent
+async function calSave(agentId) {
+  if (!agentId || !document.getElementById('cal-activo')) return;
+  const activo = document.getElementById('cal-activo').checked;
+  const regla = {
+    activo,
+    criterios: calCriterios.filter(c => (c.pregunta || '').trim()),
+    minimo: Number(document.getElementById('cal-minimo')?.value || 0),
+    al_calificar: {
+      escalar: document.getElementById('cal-escalar').checked,
+      etapa: document.getElementById('cal-etapa')?.value || 'calificado',
+      etiqueta: document.getElementById('cal-tag-ok').value.trim() || 'calificado',
+    },
+    al_descartar: { etiqueta: document.getElementById('cal-tag-no').value.trim() || 'no-calificado' },
+  };
+  try {
+    await fetchAuth('/api/qualify-rules?agent_id=' + encodeURIComponent(agentId), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ regla }),
+    });
+  } catch {}
 }

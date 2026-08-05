@@ -4165,6 +4165,40 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div id="ag-channels-section" style="display:none">
         <div class="crm-section-divider">Canales conectados</div>
         <div id="ag-channels-list"></div>
+
+        <div class="crm-section-divider">Calificación de leads</div>
+        <div style="font-size:11.5px;color:var(--muted2);margin-bottom:12px;line-height:1.55">
+          El agente averigua esto durante la charla y solo pasa el contacto a un comercial si cumple.
+          Aplica a todos los canales de este agente.
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;margin-bottom:12px">
+          <input type="checkbox" id="cal-activo" onchange="calToggle()"> Calificar antes de pasar al comercial
+        </label>
+        <div id="cal-config" style="display:none">
+          <div id="cal-criterios"></div>
+          <button class="btn-sec sm" style="margin-top:8px" onclick="calAddCriterio()">+ Añadir pregunta</button>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:14px">
+            <span style="flex:1;font-size:12.5px">Califica si cumple al menos</span>
+            <select class="auto-input" id="cal-minimo" style="width:150px;padding:6px 8px;font-size:12px"></select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+            <span style="flex:1;font-size:12.5px">Si califica, pásalo a la etapa</span>
+            <select class="auto-input" id="cal-etapa" style="width:150px;padding:6px 8px;font-size:12px"></select>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;margin-top:10px">
+            <input type="checkbox" id="cal-escalar" checked> Avisar al comercial y dejar de responder automáticamente
+          </label>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted2);margin-bottom:4px">Etiqueta si califica</div>
+              <input class="auto-input" id="cal-tag-ok" style="padding:6px 8px;font-size:12px" placeholder="calificado">
+            </div>
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted2);margin-bottom:4px">Etiqueta si no</div>
+              <input class="auto-input" id="cal-tag-no" style="padding:6px 8px;font-size:12px" placeholder="no-calificado">
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="crm-modal-foot">

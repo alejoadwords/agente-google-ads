@@ -10,6 +10,7 @@
 import { ensureCatalog, enqueueAutomations } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
+import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto } from './_qualify.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -28,6 +29,9 @@ export function cleanForUser(text) {
   return String(text || '')
     .replace(/\[CAPTURA:.*?\]/gs, '')
     .replace(/\[ESCALAR\]/g, '')
+    .replace(/\[CALIFICACION:.*?\]/gs, '')
+    // Si la respuesta se cortó a mitad de un bloque, fuera igual
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR)\b[\s\S]*$/, '')
     .trim();
 }
 
@@ -37,7 +41,7 @@ export function extractCapturedData(text) {
   try { return JSON.parse(match[1]); } catch { return {}; }
 }
 
-export function buildSystemPrompt(agent, capturedData) {
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([, v]) => v)
@@ -66,7 +70,7 @@ ${captured}
 
 Cuando detectes nombre o dato de contacto nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
 [CAPTURA: {"nombre": "...", "celular": "...", "email": "...", "interes": "..."}]
-Solo incluye los campos que tengas. Omite este bloque si no hay datos nuevos.`;
+Solo incluye los campos que tengas. Omite este bloque si no hay datos nuevos.${bloqueDePrompt(reglaCalificacion)}`;
 }
 
 async function callClaude(systemPrompt, messages) {
@@ -75,7 +79,10 @@ async function callClaude(systemPrompt, messages) {
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 300,
+      // Con la calificación activa el mensaje lleva dos bloques ocultos además
+      // del texto; con 300 se truncaba a mitad y el bloque se le escapaba al
+      // contacto.
+      max_tokens: 700,
       system: systemPrompt,
       messages,
     }),
@@ -175,6 +182,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   if (!agent) return { ok: false, reason: 'agente inactivo' };
 
   const policy = await getPolicy(connection.user_id, channel);
+  const reglaCal = await getRegla(connection.user_id, connection.agent_id);
 
   let conv = await fetch(
     `${SUPABASE_URL}/rest/v1/chat_conversations?connection_id=eq.${connection.id}&contact_id=eq.${encodeURIComponent(contactId)}&select=*`,
@@ -233,7 +241,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
 
   const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const reply = await callClaude(
-    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }),
+    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal),
     messages
   );
 
@@ -242,7 +250,18 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: reply }),
   });
 
-  const needsEscalation = reply.includes('[ESCALAR]');
+  // Las respuestas se acumulan: cada mensaje del agente aporta las nuevas y las
+  // anteriores siguen valiendo.
+  const respuestas = {
+    ...extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n')),
+    ...extraerCalificacion(reply),
+  };
+  const veredicto = evaluar(reglaCal, respuestas);
+
+  // Pedir un humano siempre manda: si alguien lo pide, lo pide. Y un lead que
+  // califica pasa al comercial, que es justo el objetivo de calificar.
+  const needsEscalation = reply.includes('[ESCALAR]')
+    || (veredicto.estado === 'calificado' && reglaCal.al_calificar.escalar);
   await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
     method: 'PATCH', headers: sb(),
     body: JSON.stringify({
@@ -255,13 +274,29 @@ export async function processIncoming({ channel, externalId, contactId, contactN
 
   const newCapture = extractCapturedData(reply);
   let leadId = conv.lead_id || null;
-  if (Object.values(newCapture).some(v => v)) {
-    leadId = await upsertLeadFromConversation(connection.user_id, agent.client_id, conv, newCapture, policy).catch(() => leadId);
+  // Un lead que califica entra al pipeline aunque la regla del canal fuese
+  // 'manual': no tiene sentido calificarlo y dejarlo fuera del CRM.
+  const politicaEfectiva = veredicto.estado === 'calificado'
+    ? { ...policy, mode: 'always', stage: reglaCal.al_calificar.etapa || policy.stage }
+    : policy;
+  if (Object.values(newCapture).some(v => v) || veredicto.estado === 'calificado') {
+    leadId = await upsertLeadFromConversation(connection.user_id, agent.client_id, conv, newCapture, politicaEfectiva).catch(() => leadId);
+  }
+
+  if (reglaCal.activo && leadId && (veredicto.estado === 'calificado' || veredicto.estado === 'descartado')) {
+    const lead = await aplicarVeredicto({
+      userId: connection.user_id, leadId, regla: reglaCal, veredicto, respuestas, canal: channel,
+    });
+    // Si califica y todavía no tiene dueño, se reparte ahora: el aviso al
+    // comercial es lo que hace que la calificación sirva de algo.
+    if (veredicto.estado === 'calificado' && lead && !lead.assigned_to) {
+      await asignarLead(connection.user_id, lead, channel).catch(() => {});
+    }
   }
 
   if (typeof send === 'function') {
     try { await send(connection, contactId, cleanForUser(reply)); } catch (e) { console.error('send error', e); }
   }
 
-  return { ok: true, conversationId: conv.id, leadId, reply: cleanForUser(reply), escalated: needsEscalation };
+  return { ok: true, conversationId: conv.id, leadId, reply: cleanForUser(reply), escalated: needsEscalation, calificacion: veredicto };
 }
