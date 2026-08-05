@@ -25,6 +25,15 @@ function sb() {
   };
 }
 
+// En WhatsApp el identificador del contacto ES su número (E.164 sin el +). Si
+// no se aprovecha, el comercial recibe el lead sin teléfono y no tiene por
+// dónde llamarlo, que es justo lo que un negocio de WhatsApp necesita.
+export function telefonoDelCanal(channel, contactId) {
+  if (channel !== 'whatsapp') return null;
+  const d = String(contactId || '').replace(/\D/g, '');
+  return d.length >= 10 && d.length <= 15 ? '+' + d : null;
+}
+
 export function cleanForUser(text) {
   return String(text || '')
     .replace(/\[CAPTURA:.*?\]/gs, '')
@@ -122,7 +131,7 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
     user_id: userId,
     client_id: clientId || null,
     name: captureData.nombre || conv.contact_name || `Contacto ${conv.channel}`,
-    phone: captureData.celular || conv.contact_phone || null,
+    phone: captureData.celular || conv.contact_phone || telefonoDelCanal(conv.channel, conv.contact_id) || null,
     email: captureData.email || conv.contact_email || null,
     stage: pol.stage || 'nuevo',
     stage_position: Date.now(),
@@ -199,6 +208,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         channel,
         contact_id: contactId,
         contact_name: contactName || null,
+        contact_phone: telefonoDelCanal(channel, contactId),
         status: 'bot',
         unread_count: 1,
       }),
