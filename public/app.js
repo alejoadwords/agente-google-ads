@@ -742,6 +742,25 @@ async function agencyInit() {
 
   if (!isAgency && !isPro) return;
   await agencyLoadClients();
+
+  // Restaurar el cliente en el que se estaba trabajando
+  try {
+    const guardado = localStorage.getItem('acuarius_cliente_activo');
+    const c = guardado && agencyClients.find(x => x.id === guardado);
+    if (c) {
+      agencyActiveClientId = c.id;
+      activeClientContext = {
+        clientId: c.id,
+        clientName: c.client_name || c.name || '',
+        clientIndustry: c.client_industry || c.industria || c.business || '',
+        monthlyBudget: c.monthly_budget || c.presupuesto || '',
+        notes: c.notes || c.descripcion || '',
+      };
+      agencyShowContextBar(c);
+    } else if (guardado) {
+      localStorage.removeItem('acuarius_cliente_activo');
+    }
+  } catch (e) {}
   // Si hay clientes, asegurar que están sincronizados en Supabase.
   // Esto repara el caso donde datos viejos sólo quedaron en localStorage del PC.
   if (agencyClients.length > 0) agencyPersistRemote({ silent: true });
@@ -1623,6 +1642,10 @@ async function agencyOpenClient(id) {
 
   // Setear el clientId activo
   agencyActiveClientId = id;
+  // Se recuerda entre recargas: sin esto, al refrescar el navegador la cuenta
+  // volvía a "Mi cuenta" y el CRM mezclaba los leads de todos los clientes sin
+  // avisar — en una agencia eso es trabajar la ficha del cliente equivocado.
+  try { localStorage.setItem('acuarius_cliente_activo', id); } catch (e) {}
 
   // Setear activeClientContext para inyeccion en system prompt
   activeClientContext = {
@@ -1746,6 +1769,7 @@ function agencySaveClientHistory() {
 function agencyExitClientContext() {
   // Limpiar contexto de cliente
   agencyActiveClientId = null;
+  try { localStorage.removeItem('acuarius_cliente_activo'); } catch (e) {}
   const bar = document.getElementById('agency-ctx-bar');
   if (bar) bar.remove();
   // Volver al panel de clientes
