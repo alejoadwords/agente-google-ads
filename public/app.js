@@ -23079,11 +23079,11 @@ const NAV_TABS = {
   crm: ['kanban', 'list', 'tareas', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
-  analisis: ['sales', 'prod', 'mk', 'cv', 'analytics', 'nps'],
+  analisis: ['sales', 'prod', 'equipo', 'mk', 'cv', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', mk: 'analisis', cv: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'mk', 'cv'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -23118,7 +23118,7 @@ const NAV_TAB_LABELS = {
   campaigns: 'Campañas', autos: 'Automatizaciones', sources: 'Fuentes',
   proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
   inbox: 'Inbox', agents: 'Chatbots',
-  sales: 'Ventas', prod: 'Productividad', mk: 'Marketing', cv: 'Conversaciones',
+  sales: 'Ventas', prod: 'Productividad', equipo: 'Por comercial', mk: 'Marketing', cv: 'Conversaciones',
   analytics: 'Resumen', nps: 'Satisfacción', campstats: 'Aperturas',
 };
 // Acciones que no son vistas pero viven en el mismo menú
@@ -24937,6 +24937,9 @@ crmSetView = function (v) {
   const tv = document.getElementById('crm-tareas-view');
   if (tv) tv.style.display = v === 'tareas' ? 'flex' : 'none';
   if (v === 'tareas') tarRender();
+  const ev = document.getElementById('crm-equipo-view');
+  if (ev) ev.style.display = v === 'equipo' ? 'flex' : 'none';
+  if (v === 'equipo') { _eqData = null; eqRender(); }
 };
 
 // ── Regla de seguimiento automático ────────────────────────────────────────
@@ -24981,4 +24984,194 @@ async function segSave() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar seguimiento'; }
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// INFORME POR COMERCIAL
+// Con el reparto y las tareas funcionando ya hay algo que medir por persona:
+// cuántos leads recibió, a cuántos contactó, cuánto tardó y cuántos cerró.
+// Se calcula en el cliente, como el resto de informes del módulo.
+// ══════════════════════════════════════════════════════════════════════════
+
+let _eqRange = 30;
+let _eqData = null;
+
+function eqSetRange(d) { _eqRange = d; _eqData = null; eqRender(); }
+
+async function eqLoad() {
+  const desde = new Date(Date.now() - (_eqRange || 3650) * 86400000).toISOString();
+  const cli = (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId)
+    ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
+  const [inter, equipo] = await Promise.all([
+    fetchAuth('/api/lead-activities?from=' + encodeURIComponent(desde))
+      .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
+    fetchAuth('/api/assign-rules').then(r => r.ok ? r.json() : { equipo: [] }).catch(() => ({ equipo: [] })),
+  ]);
+  if (typeof crmLeads === 'undefined' || !crmLeads.length) { try { await crmLoadLeads(); } catch {} }
+  _eqData = { inter: inter.activities || [], equipo: equipo.equipo || [], cli };
+  return _eqData;
+}
+
+// Qué cuenta como "contactado": una interacción registrada por una persona.
+// Lo que genera el sistema al crear o mover el lead no es haberlo contactado.
+const EQ_SISTEMA = ['creacion', 'stage_change'];
+
+function eqFmtDur(ms) {
+  if (ms === null || !isFinite(ms)) return '—';
+  const h = ms / 3600000;
+  if (h < 1) return Math.max(1, Math.round(ms / 60000)) + ' min';
+  if (h < 48) return (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h';
+  return Math.round(h / 24) + ' días';
+}
+
+function eqMediana(xs) {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+async function eqRender() {
+  const box = document.getElementById('crm-equipo-view');
+  if (!box) return;
+  if (!_eqData) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando actividad…</div>';
+    await eqLoad();
+  }
+  const { inter, equipo } = _eqData;
+  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  const desde = Date.now() - (_eqRange || 3650) * 86400000;
+
+  const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
+    '<div><div style="font-size:var(--fs-lg);font-weight:800">Por comercial</div>' +
+    '<div style="font-size:12px;color:var(--muted)">Qué recibe cada uno, qué tan rápido responde y qué cierra</div></div>' +
+    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
+      '<button class="btn-' + (_eqRange === d ? 'pri' : 'sec') + ' sm" onclick="eqSetRange(' + d + ')">' + t + '</button>').join('') +
+    '</div></div>';
+
+  // Primera interacción humana de cada lead
+  const primera = {};
+  (inter || []).forEach(a => {
+    if (EQ_SISTEMA.includes(a.type) || !a.lead_id) return;
+    const t = new Date(a.created_at).getTime();
+    if (!primera[a.lead_id] || t < primera[a.lead_id]) primera[a.lead_id] = t;
+  });
+
+  const delPeriodo = leads.filter(l => new Date(l.created_at).getTime() >= desde);
+
+  // Una fila por persona. Los que no tienen dueño van juntos: son justo los
+  // que se le escapan a todo el mundo, y esconderlos sería el peor favor.
+  const filas = {};
+  const fila = (id, nombre) => (filas[id] = filas[id] || {
+    id, nombre, recibidos: 0, contactados: 0, tiempos: [], ganados: 0, perdidos: 0, importe: 0,
+  });
+  (equipo || []).forEach(m => fila(m.id, m.nombre));
+
+  delPeriodo.forEach(l => {
+    const f = fila(l.assigned_to || '_sin', l.assigned_name || (l.assigned_to ? 'Comercial' : 'Sin asignar'));
+    f.recibidos++;
+    const p = primera[l.id];
+    if (p) {
+      f.contactados++;
+      f.tiempos.push(p - new Date(l.created_at).getTime());
+    }
+    if (l.stage === 'ganado') { f.ganados++; f.importe += Number(l.value || 0); }
+    if (l.stage === 'perdido') f.perdidos++;
+  });
+
+  const rows = Object.values(filas)
+    .filter(f => f.recibidos > 0 || f.id !== '_sin')
+    .sort((a, b) => b.recibidos - a.recibidos);
+
+  if (!rows.length) {
+    box.innerHTML = html + (typeof emptyAgua === 'function'
+      ? emptyAgua('Todavía no hay nada que comparar', 'Invita a tu equipo y activa el reparto automático en Configuración → Equipo. En cuanto los leads tengan dueño, este informe se llena solo.')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Sin datos.</div>');
+    return;
+  }
+
+  // Totales de la cuenta, para leer cada fila en contexto
+  const tot = rows.reduce((a, f) => ({
+    recibidos: a.recibidos + f.recibidos, contactados: a.contactados + f.contactados,
+    ganados: a.ganados + f.ganados, importe: a.importe + f.importe,
+    tiempos: a.tiempos.concat(f.tiempos),
+  }), { recibidos: 0, contactados: 0, ganados: 0, importe: 0, tiempos: [] });
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
+    salesCard('Leads del periodo', tot.recibidos, rows.length + ' persona' + (rows.length > 1 ? 's' : '')) +
+    salesCard('Contactados', (tot.recibidos ? Math.round(tot.contactados / tot.recibidos * 100) : 0) + '%', tot.contactados + ' de ' + tot.recibidos) +
+    salesCard('1.er contacto (mediana)', eqFmtDur(eqMediana(tot.tiempos)), tot.tiempos.length + ' leads medidos') +
+    salesCard('Cerrados', tot.ganados, (tot.recibidos ? Math.round(tot.ganados / tot.recibidos * 100) : 0) + '% del total') +
+  '</div>';
+
+  const maxR = Math.max(1, ...rows.map(f => f.recibidos));
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px;overflow-x:auto">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Comparativa del equipo</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Leads recibidos en el periodo y qué pasó con ellos</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px">' +
+    '<thead><tr style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em">' +
+      '<th style="text-align:left;padding:0 8px 8px 0">Comercial</th>' +
+      '<th style="text-align:left;padding:0 8px 8px">Recibidos</th>' +
+      '<th style="text-align:right;padding:0 8px 8px">Contactados</th>' +
+      '<th style="text-align:right;padding:0 8px 8px">1.er contacto</th>' +
+      '<th style="text-align:right;padding:0 8px 8px">Cerrados</th>' +
+      '<th style="text-align:right;padding:0 0 8px 8px">Importe</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(f => {
+      const pc = f.recibidos ? Math.round(f.contactados / f.recibidos * 100) : 0;
+      const cierre = f.recibidos ? Math.round(f.ganados / f.recibidos * 100) : 0;
+      const huerfano = f.id === '_sin';
+      return '<tr style="border-top:1px solid var(--border)">' +
+        '<td style="padding:10px 8px 10px 0;font-weight:600' + (huerfano ? ';color:#B45309' : '') + '">' + esc(f.nombre) + '</td>' +
+        '<td style="padding:10px 8px">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<div style="flex:1;min-width:70px;height:8px;background:var(--bg-muted);border-radius:5px;overflow:hidden">' +
+              '<div style="height:100%;width:' + Math.round(f.recibidos / maxR * 100) + '%;background:' + (huerfano ? '#F59E0B' : 'var(--blue)') + ';border-radius:5px"></div>' +
+            '</div>' +
+            '<span style="font-weight:700;width:28px;text-align:right">' + f.recibidos + '</span>' +
+          '</div></td>' +
+        '<td style="text-align:right;padding:10px 8px;color:' + (pc < 60 ? '#B45309' : 'var(--text)') + '">' + pc + '%</td>' +
+        '<td style="text-align:right;padding:10px 8px">' + eqFmtDur(eqMediana(f.tiempos)) + '</td>' +
+        '<td style="text-align:right;padding:10px 8px">' + f.ganados + ' <span style="color:var(--muted2)">(' + cierre + '%)</span></td>' +
+        '<td style="text-align:right;padding:10px 0 10px 8px;font-weight:700">' + (f.importe ? '$' + f.importe.toLocaleString('es') : '—') + '</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div>';
+
+  // Motivos de pérdida: dónde se cae el equipo
+  const perdidos = delPeriodo.filter(l => l.stage === 'perdido');
+  const porMotivo = {};
+  perdidos.forEach(l => { const k = l.close_reason || 'Sin motivo registrado'; porMotivo[k] = (porMotivo[k] || 0) + 1; });
+  const motivos = Object.entries(porMotivo).sort((a, b) => b[1] - a[1]);
+  const maxM = Math.max(1, ...motivos.map(m => m[1]));
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">' +
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+      '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Motivos de pérdida</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + perdidos.length + ' oportunidades perdidas en el periodo</div>' +
+      (motivos.length
+        ? motivos.map(([k, v]) => salesBar(k, v, maxM, '#DC2626', Math.round(v / perdidos.length * 100) + '%')).join('')
+        : '<div style="font-size:12px;color:var(--muted2)">Ninguna pérdida registrada en el periodo</div>') +
+    '</div>';
+
+  // Sin contactar: la lista accionable, no un número
+  const sinContactar = delPeriodo
+    .filter(l => !primera[l.id] && !['ganado', 'perdido'].includes(l.stage))
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(0, 12);
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
+    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Sin contactar todavía</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Los más antiguos primero — aquí es donde se pierde dinero</div>' +
+    (sinContactar.length ? sinContactar.map(l => {
+      const dias = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000);
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="tarAbrirLead(\'' + esc(l.id) + '\')">' + esc(l.name || 'Sin nombre') + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted2)">' + esc(l.assigned_name || 'sin asignar') + '</div>' +
+        '<div style="font-size:11.5px;font-weight:700;color:' + (dias >= 3 ? '#B91C1C' : 'var(--muted)') + ';width:56px;text-align:right">' + (dias ? dias + ' d' : 'hoy') + '</div>' +
+      '</div>';
+    }).join('') : '<div style="font-size:12px;color:var(--muted2)">Todos los leads del periodo tienen al menos un contacto registrado</div>') +
+  '</div></div>';
+
+  box.innerHTML = html;
 }
