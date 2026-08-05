@@ -157,11 +157,9 @@ export function evaluar(regla, respuestas) {
   const cumplidas = claves.filter(k => respuestas?.[k]?.cumple);
   const minimo = regla.minimo > 0 ? regla.minimo : claves.length;
 
-  // En cuanto es imposible llegar al mínimo, no tiene sentido seguir preguntando
-  const posiblesRestantes = cumplidas.length + (claves.length - contestadas.length);
-  if (posiblesRestantes < minimo) {
-    return { estado: 'descartado', cumplidas: cumplidas.length, total: claves.length, minimo };
-  }
+  // Nada de descartar antes de tener todas las respuestas: el modelo a veces
+  // reporta como respondido-y-no-cumple algo que todavía no ha preguntado, y
+  // etiquetar a alguien de "no calificado" por eso es peor que preguntar de más.
   if (contestadas.length < claves.length) {
     return { estado: 'pendiente', cumplidas: cumplidas.length, total: claves.length, minimo };
   }
