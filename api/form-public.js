@@ -59,12 +59,14 @@ export default async function handler(req) {
 
   let body = {};
   try {
-    const ct = req.headers.get('content-type') || '';
-    if (ct.includes('json')) body = await req.json();
-    else {
-      const text = await req.text();
-      body = Object.fromEntries(new URLSearchParams(text));
-    }
+    const text = await req.text();
+    // El conector manda JSON como text/plain a propósito: es el único tipo que
+    // sendBeacon puede usar sin disparar un preflight de CORS (y sendBeacon no
+    // sabe hacer preflight, así que el navegador tiraba el envío en silencio).
+    // Por eso se mira el contenido, no la cabecera.
+    const t = text.trim();
+    if (t.startsWith('{')) body = JSON.parse(t);
+    else body = Object.fromEntries(new URLSearchParams(text));
   } catch { return jsonResp({ error: 'Datos inválidos' }, 400); }
 
   // Honeypot: los bots llenan el campo oculto — responder ok sin crear nada

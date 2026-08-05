@@ -47,9 +47,14 @@
       try {
         var data = harvest(form);
         if (!data.email && !data.phone && !data.name) return;
-        var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+        var cuerpo = JSON.stringify(data);
+        // text/plain a propósito: es de los pocos tipos que no obligan a un
+        // preflight de CORS. Con application/json el navegador exigía preflight,
+        // sendBeacon no sabe hacerlo, descartaba el envío... y aun así devolvía
+        // true, así que el fallback nunca corría y el lead se perdía entero.
+        var blob = new Blob([cuerpo], { type: 'text/plain;charset=UTF-8' });
         if (navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, blob)) return;
-        fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data), keepalive: true });
+        fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: cuerpo, keepalive: true });
       } catch (e) {}
     });
   }
