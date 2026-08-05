@@ -24410,7 +24410,12 @@ function capAvisoCRM() {
 }
 
 // ── Limpieza ───────────────────────────────────────────────────────────────
-function openLimpieza() {
+async function openLimpieza() {
+  // Se puede abrir desde Configuración sin haber pasado por el CRM, y ahí
+  // todavía no hay etapas cargadas.
+  if (typeof crmStages === 'undefined' || !crmStages.length) {
+    try { await crmLoadStages(); } catch {}
+  }
   const stages = (typeof crmStages !== 'undefined' ? crmStages : []).filter(st => st.key !== 'ganado');
   document.getElementById('limpieza-modal')?.remove();
   const ov = document.createElement('div');
