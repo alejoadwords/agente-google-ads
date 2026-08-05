@@ -24614,8 +24614,9 @@ async function papeleraRestaurar(id, btn) {
 // ── Reglas de reparto de leads entre comerciales ───────────────────────────
 const ASG_FUENTES_LABEL = {
   default: 'Cualquier otra fuente', whatsapp: 'WhatsApp', messenger: 'Messenger',
-  instagram: 'Instagram', tiktok: 'TikTok', landing_page: 'Formularios web',
-  webhook: 'Webhook', meta_lead_ads: 'Meta Lead Ads', importacion: 'Importación',
+  instagram: 'Instagram', tiktok: 'TikTok', formulario: 'Formularios web',
+  externa: 'Webhook externo', meta_lead_ads: 'Meta Lead Ads', hotmart: 'Hotmart',
+  importacion: 'Importación', manual: 'Creados a mano',
 };
 let asgData = null;
 

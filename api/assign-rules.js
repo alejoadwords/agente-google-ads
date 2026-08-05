@@ -17,7 +17,11 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Las fuentes que el reparto sabe distinguir hoy
-export const FUENTES = ['default', 'whatsapp', 'messenger', 'instagram', 'tiktok', 'landing_page', 'webhook', 'meta_lead_ads', 'importacion'];
+// OJO: estos valores tienen que ser EXACTAMENTE los que se guardan en
+// leads.source, o la regla que configure el usuario nunca se aplicará. Los
+// formularios guardan 'formulario' (no 'landing_page') y el webhook genérico
+// guarda 'externa' salvo que quien lo llame mande otro.
+export const FUENTES = ['default', 'whatsapp', 'messenger', 'instagram', 'tiktok', 'formulario', 'externa', 'meta_lead_ads', 'hotmart', 'importacion', 'manual'];
 
 function sbHeaders() {
   return { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
