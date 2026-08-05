@@ -17675,7 +17675,6 @@ function agRenderChannels(agent) {
     { key: 'messenger', label: 'Messenger', icon: '💬', color: '#1877F2', desc: 'Conecta una Página de Facebook' },
     { key: 'instagram', label: 'Instagram DMs', icon: '📷', color: '#C13584', desc: 'Conecta una cuenta Instagram Business' },
     { key: 'tiktok', label: 'TikTok DMs', icon: '🎵', color: '#010101', desc: 'Conecta una cuenta TikTok Business' },
-    { key: 'linkedin', label: 'LinkedIn', icon: '💼', color: '#0A66C2', desc: 'Por webhook: LinkedIn no abre su API de mensajes' },
   ];
   list.innerHTML = channels.map(ch => {
     const conn = conns.find(c => c.channel === ch.key && c.is_active);
@@ -17683,15 +17682,10 @@ function agRenderChannels(agent) {
       <div class="crm-channel-icon" style="background:${ch.color}20">${ch.icon}</div>
       <div class="crm-channel-connect-info">
         <div class="crm-channel-connect-name">${ch.label}</div>
-        <div class="crm-channel-connect-status">${conn
-          ? (ch.key === 'linkedin' ? 'Conectado · usa el botón para copiar la URL' : `Conectado: ${esc(conn.channel_name || conn.external_id)}`)
-          : ch.desc}</div>
+        <div class="crm-channel-connect-status">${conn ? `Conectado: ${esc(conn.channel_name || conn.external_id)}` : ch.desc}</div>
       </div>
       ${conn
-        ? (ch.key === 'linkedin'
-            ? `<button class="crm-channel-btn connect" onclick="agCopyInboxHook('${esc(conn.external_id)}')">Copiar URL</button>
-               <button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Quitar</button>`
-            : `<button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Desconectar</button>`)
+        ? `<button class="crm-channel-btn disconnect" onclick="agDisconnectChannel('${esc(conn.id)}','${esc(agent.id)}')">Desconectar</button>`
         : `<button class="crm-channel-btn connect" onclick="agConnectChannel('${esc(ch.key)}','${esc(agent.id)}')">Conectar</button>`
       }
     </div>`;
@@ -17796,21 +17790,6 @@ async function waConnectSave() {
 }
 
 async function agConnectChannel(channel, agentId) {
-  if (channel === 'linkedin') {
-    // LinkedIn no publica API de mensajes directos, así que el mensaje entra
-    // por una URL propia desde Zapier / Make / n8n y la respuesta vuelve en el
-    // JSON para que la publique esa misma herramienta.
-    const r = await fetchAuth('/api/channel-connections', {
-      method: 'POST',
-      body: JSON.stringify({ agent_id: agentId, channel: 'linkedin', channel_name: 'LinkedIn' }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { showToast(d.error || 'No se pudo crear la conexión', 'error'); return; }
-    await crmLoadAgents();
-    crmOpenAgentModal(agentId);
-    agCopyInboxHook(d.connection?.external_id);
-    return;
-  }
   if (channel === 'whatsapp') {
     waConnectOpen(agentId);
     return;
@@ -22323,7 +22302,6 @@ const SRC_CHANNEL_META = {
   messenger: { icon: '📘', label: 'Messenger' },
   instagram: { icon: '📸', label: 'Instagram' },
   tiktok: { icon: '🎵', label: 'TikTok' },
-  linkedin: { icon: '💼', label: 'LinkedIn' },
 };
 // Regla de entrada al pipeline por canal: qué hace la plataforma cuando llega
 // una conversación nueva.
@@ -24738,13 +24716,6 @@ async function retSave() {
 // ══════════════════════════════════════════════════════════════════════════
 
 let calCriterios = [];
-
-function agCopyInboxHook(token) {
-  if (!token) return;
-  const url = 'https://app.acuarius.app/api/webhooks/inbox/' + token;
-  navigator.clipboard.writeText(url);
-  showToast('URL copiada. Pégala en Zapier, Make o n8n como destino de los mensajes', 'success');
-}
 
 async function calLoad(agentId) {
   calCriterios = [];

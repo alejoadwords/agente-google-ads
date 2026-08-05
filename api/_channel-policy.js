@@ -12,7 +12,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 export const POLICY_KEY = '__channel_policy__';
-export const CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'linkedin'];
+export const CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok'];
 export const MODES = ['manual', 'on_contact', 'always'];
 
 // Por defecto se mantiene lo que la plataforma ya hacía: el lead nace cuando el

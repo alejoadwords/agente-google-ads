@@ -35,11 +35,6 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-function nuevoToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-}
-
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const userId = await getUserId(req);
@@ -83,11 +78,7 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { agent_id, channel, access_token, channel_name, avatar_url } = body;
-    // Los canales sin API propia (LinkedIn hoy) entran por webhook: el
-    // external_id es el token secreto de esa URL y lo generamos nosotros, para
-    // que nadie pueda elegirse uno adivinable.
-    const external_id = body.external_id || (channel === 'linkedin' ? nuevoToken() : null);
+    const { agent_id, channel, external_id, access_token, channel_name, avatar_url } = body;
     if (!agent_id || !channel || !external_id) return jsonResp({ error: 'Faltan campos' }, 400);
 
     // Verify agent belongs to user
