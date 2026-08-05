@@ -22846,12 +22846,26 @@ async function xlsxAFilas(buf) {
   return filas.filter((f) => f.some((c) => String(c).trim() !== ''));
 }
 
+// "Presupuesto: 300-500M" es texto, no un importe. Si la columna no trae
+// números limpios, mejor no adivinar: un rango convertido a número entra como
+// un importe inventado y envenena el informe de ventas sin que nadie lo note.
+function impColumnaEsImporte(i) {
+  const muestra = _impRows.slice(0, 40).map(r => String(r[i] || '').trim()).filter(Boolean);
+  if (!muestra.length) return false;
+  const limpios = muestra.filter(v => /^[$\s]*\d{1,3}([.,]?\d{3})*([.,]\d+)?[\s]*$/.test(v));
+  return limpios.length >= muestra.length * 0.8;
+}
+
 function impAutoMap(headers) {
   const map = {};
   headers.forEach((h, i) => {
     const hn = String(h).trim().toLowerCase();
     for (const [field, aliases] of Object.entries(IMP_ALIASES)) {
-      if (aliases.includes(hn) && !Object.values(map).includes(field)) { map[i] = field; return; }
+      if (aliases.includes(hn) && !Object.values(map).includes(field)) {
+        if (field === 'value' && !impColumnaEsImporte(i)) { map[i] = ''; return; }
+        map[i] = field;
+        return;
+      }
     }
     map[i] = '';
   });
@@ -22951,6 +22965,7 @@ function impLoadRows(rows) {
   if (!rows || rows.length < 2) { showToast('Necesito al menos una fila de encabezados y una de datos', 'error'); return; }
   _impHeaders = rows[0];
   _impRows = rows.slice(1);
+  // el mapeo mira las filas para decidir, así que van antes
   _impMap = impAutoMap(_impHeaders);
   _impStep = 2;
   impRender();
@@ -23024,7 +23039,7 @@ async function impRun() {
   const leads = impBuildLeads();
   _impStep = 4; impRender();
 
-  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
+  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, email_invalido: 0, limit_reached: false };
   const BATCH = 250;
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
   const qs = '?action=import' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
@@ -23037,6 +23052,7 @@ async function impRun() {
       if (d.result) {
         totals.created += d.result.created; totals.updated += d.result.updated;
         totals.skipped += d.result.skipped; totals.invalid += d.result.invalid;
+        totals.email_invalido += (d.result.email_invalido || 0);
         if (d.result.limit_reached) totals.limit_reached = true;
       } else if (d.error) { showToast('⚠️ ' + d.error, 'error'); break; }
     } catch (e) { showToast('Error importando el lote ' + (Math.floor(i / BATCH) + 1), 'error'); break; }
@@ -23063,6 +23079,7 @@ async function impRun() {
           (totals.skipped ? '<span style="background:var(--bg-muted);color:var(--muted);padding:5px 12px;border-radius:20px;font-weight:700">' + totals.skipped + ' omitidos</span>' : '') +
           (totals.invalid ? '<span style="background:#FEF3C7;color:#B45309;padding:5px 12px;border-radius:20px;font-weight:700">' + totals.invalid + ' inválidos</span>' : '') +
         '</div>' +
+        (totals.email_invalido ? '<div style="font-size:12px;color:var(--muted);margin-top:10px">' + totals.email_invalido + ' contactos traían el correo mal escrito: se guardaron igual, sin correo.</div>' : '') +
         (totals.limit_reached ? '<div style="font-size:12px;color:#B45309;margin-top:12px">Alcanzaste el límite de leads de tu plan — los restantes no se importaron.</div>' : '') +
         (tags.length && totals.created + totals.updated > 0 ? '<div style="font-size:12px;color:var(--muted);margin-top:12px">Todos quedaron con la etiqueta <b>' + esc(tags.join(', ')) + '</b> — ya puedes crear una campaña dirigida a ella.</div>' : '') +
         '<div style="margin-top:18px"><button class="btn-pri" onclick="document.getElementById(\'imp-overlay\').remove();crmLoadLeads().then(()=>{crmRender();crmLoadTags()})">Ver mis leads</button></div>' +

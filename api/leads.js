@@ -160,6 +160,14 @@ const PLAN_LEADS = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency:
 function limiteDelPlan(plan, extra) {
   return (PLAN_LEADS[plan] || 10) + (parseInt(extra || 0) || 0) * 1000;
 }
+// Los teléfonos de una base real vienen de mil formas: "+57 310 555 1234",
+// "(1) 3105551234", "310-555-1234". Se comparan por los últimos 10 dígitos,
+// que es lo que identifica a la persona sin depender del formato ni del país.
+export function telClave(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  return d.length >= 7 ? d.slice(-10) : '';
+}
+
 async function contarLeads(userId, filtroExtra = '&deleted_at=is.null') {
   const r = await fetch(
     `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${filtroExtra}&select=id&limit=0`,
@@ -378,13 +386,26 @@ export default async function handler(req) {
     const countRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&deleted_at=is.null&select=id&limit=0`, { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } });
     let currentCount = parseInt((countRes.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
 
-    // Emails existentes del scope para dedupe (una consulta por lote)
+    // Duplicados: por correo y TAMBIÉN por teléfono. En una base que viene de
+    // WhatsApp la mitad de la gente no tiene correo, y sin esto cada archivo
+    // que se solape con el anterior vuelve a crear a las mismas personas —
+    // gastando cupo del plan y ensuciando los informes.
     const emails = rows.map(r => String(r.email || '').trim().toLowerCase()).filter(Boolean);
     const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
-    let existingByEmail = {};
+    let existingByEmail = {}, existingByPhone = {};
     if (emails.length) {
       const exRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&email=in.(${emails.map(e => '"' + e.replace(/"/g, '') + '"').join(',')})&select=id,email,tags`, { headers: sbHeaders() });
       ((await exRes.json()) || []).forEach(l => { existingByEmail[(l.email || '').toLowerCase()] = l; });
+    }
+    const telesLote = rows.map(r => telClave(r.phone)).filter(Boolean);
+    if (telesLote.length) {
+      // No se puede filtrar por "últimos 10 dígitos" en PostgREST, así que se
+      // traen los teléfonos del scope y se comparan aquí.
+      const tRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&phone=not.is.null&select=id,phone,email,tags&limit=6000`, { headers: sbHeaders() });
+      ((await tRes.json()) || []).forEach(l => {
+        const k = telClave(l.phone);
+        if (k && !existingByPhone[k]) existingByPhone[k] = l;
+      });
     }
 
     const result = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
@@ -392,15 +413,24 @@ export default async function handler(req) {
     const seenInBatch = new Set();
     for (const r of rows) {
       const name = String(r.name || '').trim().slice(0, 120);
-      const email = String(r.email || '').trim().toLowerCase().slice(0, 200) || null;
-      if (!name && !email) { result.invalid++; continue; }
-      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { result.invalid++; continue; }
+      let email = String(r.email || '').trim().toLowerCase().slice(0, 200) || null;
+      const tel = telClave(r.phone);
+      // Un correo mal escrito no es motivo para tirar el contacto: se descarta
+      // el correo y se queda la persona con su nombre y su teléfono.
+      let correoMalo = false;
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { email = null; correoMalo = true; }
+      if (!name && !email && !tel) { result.invalid++; continue; }
+      if (correoMalo) result.email_invalido = (result.email_invalido || 0) + 1;
       if (email && seenInBatch.has(email)) { result.skipped++; continue; }
       if (email) seenInBatch.add(email);
+      if (!email && tel) {
+        if (seenInBatch.has('t:' + tel)) { result.skipped++; continue; }
+        seenInBatch.add('t:' + tel);
+      }
       const rowTags = [...importTags, ...(Array.isArray(r.tags) ? r.tags : String(r.tags || '').split(','))];
       const cleanTags = await prepareTags(userId, clientId, rowTags, null);
 
-      const existing = email ? existingByEmail[email] : null;
+      const existing = (email ? existingByEmail[email] : null) || (tel ? existingByPhone[tel] : null);
       if (existing) {
         if (dedupe === 'skip') { result.skipped++; continue; }
         const mergedTags = [...new Set([...(existing.tags || []), ...cleanTags])].slice(0, 15);
@@ -420,7 +450,7 @@ export default async function handler(req) {
       if (currentCount + toInsert.length >= planLimit) { result.limit_reached = true; result.skipped++; continue; }
       toInsert.push({
         user_id: userId, client_id: clientId,
-        name: name || email, email,
+        name: name || email || (r.phone ? String(r.phone).trim() : 'Sin nombre'), email,
         phone: r.phone ? String(r.phone).trim().slice(0, 40) : null,
         company: r.company ? String(r.company).trim().slice(0, 120) : null,
         value: r.value ? parseFloat(String(r.value).replace(/[^\d.]/g, '')) || null : null,
