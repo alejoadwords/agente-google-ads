@@ -105,7 +105,7 @@ async function callClaude(systemPrompt, messages) {
 // La regla del canal decide: 'manual' no crea nada (la conversación se queda en
 // el inbox esperando decisión), 'on_contact' crea cuando hay nombre/teléfono/
 // correo, y 'always' crea en cuanto llega el primer mensaje.
-export async function upsertLeadFromConversation(userId, clientId, conv, captureData = {}, policy = null) {
+export async function upsertLeadFromConversation(userId, clientId, conv, captureData = {}, policy = null, esperarCalificacion = false) {
   const pol = policy || { mode: 'on_contact', stage: 'nuevo', tag: conv.channel };
   const hasContact = !!(captureData.nombre || captureData.celular || captureData.email);
 
@@ -165,8 +165,11 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
       metadata: { conversation_id: conv.id, channel: conv.channel },
     }),
   });
-  // Reparto entre comerciales según la regla de la fuente
-  await asignarLead(userId, rows[0], conv.channel).catch(() => {});
+  // Reparto entre comerciales según la regla de la fuente.
+  // Si el agente califica, el reparto espera al veredicto: repartir antes
+  // significaría darle tarea y correo a un comercial por alguien que todavía
+  // no sabemos si sirve — justo lo que la calificación existe para evitar.
+  if (!esperarCalificacion) await asignarLead(userId, rows[0], conv.channel).catch(() => {});
   if (leadPayload.tags.length) await ensureCatalog(userId, clientId || null, leadPayload.tags, channelTag).catch(() => {});
   await enqueueAutomations(userId, rows[0], 'lead_created').catch(() => {});
   if (leadPayload.tags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadPayload.tags).catch(() => {});
@@ -216,7 +219,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     if (!conv) return { ok: false, reason: 'no se pudo crear la conversación' };
     // Regla "siempre": el lead nace con la conversación, sin esperar datos
     if (policy.mode === 'always') {
-      const leadId = await upsertLeadFromConversation(connection.user_id, agent.client_id, conv, {}, policy).catch(() => null);
+      const leadId = await upsertLeadFromConversation(connection.user_id, agent.client_id, conv, {}, policy, reglaCal.activo).catch(() => null);
       if (leadId) conv.lead_id = leadId;
     }
   } else if (conv.status === 'human') {
@@ -290,7 +293,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     ? { ...policy, mode: 'always', stage: reglaCal.al_calificar.etapa || policy.stage }
     : policy;
   if (Object.values(newCapture).some(v => v) || veredicto.estado === 'calificado') {
-    leadId = await upsertLeadFromConversation(connection.user_id, agent.client_id, conv, newCapture, politicaEfectiva).catch(() => leadId);
+    leadId = await upsertLeadFromConversation(
+      connection.user_id, agent.client_id, conv, newCapture, politicaEfectiva,
+      reglaCal.activo && veredicto.estado !== 'calificado'
+    ).catch(() => leadId);
   }
 
   if (reglaCal.activo && leadId && (veredicto.estado === 'calificado' || veredicto.estado === 'descartado')) {
