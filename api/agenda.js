@@ -198,7 +198,12 @@ export default async function handler(req) {
       const lead = t.lead_id ? leadsPorId[t.lead_id] : null;
       // Una tarea de un lead borrado no le sirve a nadie
       if (t.lead_id && (!lead || lead.deleted_at)) continue;
-      if (soloMias && !(lead && lead.assigned_to === yoSoy)) continue;
+      // "Míos" con el mismo criterio que el resumen diario: lo que tiene mi
+      // nombre, y si soy el dueño de la cuenta, además lo que no tiene dueño.
+      if (soloMias) {
+        const esMio = lead?.assigned_to === yoSoy || (yoSoy === userId && !lead?.assigned_to);
+        if (!esMio) continue;
+      }
       const item = {
         ...t,
         lead: lead ? { id: lead.id, name: lead.name, phone: lead.phone, email: lead.email, stage: lead.stage, assigned_name: lead.assigned_name } : null,
