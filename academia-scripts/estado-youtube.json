@@ -1,0 +1,48 @@
+{
+ "subidos": {
+  "Academia - Video 1 - Tour completo de Acuarius.mp4": {
+   "videoId": null,
+   "nota": "ya publicado en el canal",
+   "fecha": "2026-08-05"
+  },
+  "Academia - Video 2 - Tu prueba Pro de 7 dias.mp4": {
+   "videoId": null,
+   "nota": "ya publicado en el canal",
+   "fecha": "2026-08-05"
+  },
+  "Academia - Video 3 - Crea tu primer cliente.mp4": {
+   "videoId": null,
+   "nota": "ya publicado en el canal",
+   "fecha": "2026-08-05"
+  },
+  "Academia - Video 5 - Analiza tus campanas con el agente.mp4": {
+   "videoId": null,
+   "nota": "ya publicado en el canal",
+   "fecha": "2026-08-05"
+  },
+  "Academia - Video 4 - Conecta tus cuentas publicitarias.mp4": {
+   "videoId": "VrvLXCLwUX0",
+   "fecha": "2026-08-05T16:18:02.475Z",
+   "playlist": "Acuarius · Primeros pasos"
+  },
+  "Academia - Video 6 - Detecta perdida de inversion.mp4": {
+   "videoId": "2o_Ls-xkHtE",
+   "fecha": "2026-08-05T16:18:06.237Z",
+   "playlist": "Acuarius · Google Ads, Meta y TikTok"
+  },
+  "Academia - Video 7 - Crea campanas desde el chat.mp4": {
+   "videoId": "qGZFWrDc-CI",
+   "fecha": "2026-08-05T16:18:09.096Z",
+   "playlist": "Acuarius · Google Ads, Meta y TikTok"
+  },
+  "Academia - Video 8 - Optimiza tus palabras clave.mp4": {
+   "videoId": "Ksl8ofNwdYg",
+   "fecha": "2026-08-05T16:18:12.069Z",
+   "playlist": "Acuarius · Google Ads, Meta y TikTok"
+  }
+ },
+ "playlists": {
+  "Acuarius · Primeros pasos": "PLF60NF4YQZ5A",
+  "Acuarius · Google Ads, Meta y TikTok": "PLCByTKUpBqAY"
+ }
+}

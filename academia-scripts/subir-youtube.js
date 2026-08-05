@@ -183,12 +183,18 @@ async function subirSubtitulos(token, videoId, srt) {
 }
 
 async function aPlaylist(token, videoId, listaId) {
-  const r = await fetch('https://www.googleapis.com/youtube/v3/playlistItems?part=snippet', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ snippet: { playlistId: listaId, resourceId: { kind: 'youtube#video', videoId } } }),
-  });
-  return r.ok;
+  // El primer añadido a una playlist recién creada falla por propagación:
+  // se reintenta un par de veces antes de darlo por perdido.
+  for (let intento = 0; intento < 3; intento++) {
+    const r = await fetch('https://www.googleapis.com/youtube/v3/playlistItems?part=snippet', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snippet: { playlistId: listaId, resourceId: { kind: 'youtube#video', videoId } } }),
+    });
+    if (r.ok) return true;
+    await new Promise(res => setTimeout(res, 3000));
+  }
+  return false;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
