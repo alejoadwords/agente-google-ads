@@ -152,6 +152,22 @@ async function enqueueAutomations(userId, lead, triggerType, extra) {
   } catch (e) { console.error('enqueueAutomations:', e.message); }
 }
 
+
+// ── Capacidad del plan ───────────────────────────────────────────────────────
+// Un solo sitio que sepa el límite: lo usan el aviso de la UI, la creación
+// individual y el importador.
+const PLAN_LEADS = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency: 5000, agencia: 5000 };
+function limiteDelPlan(plan, extra) {
+  return (PLAN_LEADS[plan] || 10) + (parseInt(extra || 0) || 0) * 1000;
+}
+async function contarLeads(userId, filtroExtra = '&deleted_at=is.null') {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${filtroExtra}&select=id&limit=0`,
+    { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } }
+  );
+  return parseInt((r.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
@@ -172,6 +188,141 @@ export default async function handler(req) {
   const scopeFilter = clientId
     ? `user_id=eq.${userId}&client_id=eq.${clientId}&deleted_at=is.null`
     : `user_id=eq.${userId}&deleted_at=is.null`;
+
+
+  // Reglas de retención automática (las aplica cron-retention a diario)
+  if (url.searchParams.get('action') === 'retention' && (req.method === 'GET' || req.method === 'PUT')) {
+    const RET_KEY = '__retention_rules__';
+    if (req.method === 'GET') {
+      const rows = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${encodeURIComponent(userId)}&agent_key=eq.${RET_KEY}&select=profile_data&limit=1`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      return jsonResp({ reglas: rows?.[0]?.profile_data || { perdidos_dias: 0, sin_actividad_dias: 0 } });
+    }
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const reglas = {
+      perdidos_dias: Math.max(0, parseInt(body?.perdidos_dias || 0) || 0),
+      sin_actividad_dias: Math.max(0, parseInt(body?.sin_actividad_dias || 0) || 0),
+    };
+    // on_conflict obligatorio o el segundo guardado choca con el índice único
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?on_conflict=user_id,agent_key`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, agent_key: RET_KEY, profile_data: reglas, updated_at: new Date().toISOString() }),
+    });
+    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    return jsonResp({ reglas });
+  }
+
+  // POST ?action=cleanup — limpieza de la base para liberar cupo
+  // Siempre se puede pedir la previsualización (dry_run) antes de borrar: la
+  // idea es que nadie vacíe medio CRM sin ver primero a cuántos afecta.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'cleanup') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const {
+      stages = [],          // etapas a limpiar, ej: ['perdido']
+      sources = [],         // fuentes, ej: ['importacion']
+      dias_sin_actividad,   // sin updated_at reciente
+      creados_antes_de,     // fecha ISO
+      sin_contacto = false, // sin email y sin teléfono
+      dry_run = true,
+      limite = 2000,        // tope de seguridad por ejecución
+    } = body || {};
+
+    let q = `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}&deleted_at=is.null`;
+    if (clientId) q += `&client_id=eq.${encodeURIComponent(clientId)}`;
+    if (Array.isArray(stages) && stages.length) q += `&stage=in.(${stages.map(x => '"' + String(x).replace(/"/g, '') + '"').join(',')})`;
+    if (Array.isArray(sources) && sources.length) q += `&source=in.(${sources.map(x => '"' + String(x).replace(/"/g, '') + '"').join(',')})`;
+    if (creados_antes_de) q += `&created_at=lt.${encodeURIComponent(creados_antes_de)}`;
+    if (dias_sin_actividad) {
+      const corte = new Date(Date.now() - Number(dias_sin_actividad) * 86400000).toISOString();
+      q += `&updated_at=lt.${encodeURIComponent(corte)}`;
+    }
+    if (sin_contacto) q += '&email=is.null&phone=is.null';
+
+    // Nunca se tocan los ganados: son el histórico de facturación
+    q += '&stage=neq.ganado';
+
+    const rows = await fetch(`${q}&select=id,name,stage,source,created_at,updated_at&order=created_at.asc&limit=${Math.min(Number(limite) || 2000, 5000)}`,
+      { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
+    const ids = (rows || []).map(r => r.id);
+
+    if (dry_run !== false) {
+      const porEtapa = {};
+      (rows || []).forEach(r => { porEtapa[r.stage || '—'] = (porEtapa[r.stage || '—'] || 0) + 1; });
+      return jsonResp({
+        dry_run: true, afectados: ids.length, por_etapa: porEtapa,
+        muestra: (rows || []).slice(0, 10).map(r => ({ name: r.name, stage: r.stage, source: r.source, created_at: r.created_at })),
+      });
+    }
+    if (!ids.length) return jsonResp({ borrados: 0 });
+
+    // Borrado lógico: sale del cupo al instante y queda 30 días recuperable
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})`, {
+      method: 'PATCH', headers: sbHeaders(),
+      body: JSON.stringify({ deleted_at: new Date().toISOString() }),
+    });
+    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    return jsonResp({ borrados: ids.length });
+  }
+
+  // GET ?trash=1 — qué hay en la papelera (recuperable 30 días)
+  if (req.method === 'GET' && url.searchParams.get('trash')) {
+    const rows = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}&deleted_at=not.is.null&select=id,name,email,phone,stage,source,deleted_at&order=deleted_at.desc&limit=500`,
+      { headers: sbHeaders() }
+    ).then(r => r.json()).catch(() => []);
+    return jsonResp({ leads: rows || [] });
+  }
+
+  // POST ?action=restore — sacar de la papelera
+  if (req.method === 'POST' && url.searchParams.get('action') === 'restore') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const ids = Array.isArray(body?.ids) ? body.ids.filter(Boolean) : [];
+    if (!ids.length) return jsonResp({ error: 'Sin ids' }, 400);
+    // Restaurar no puede saltarse el cupo del plan
+    const meta = await clerkMeta(userId);
+    const limite = limiteDelPlan(meta.plan || 'free', meta.leads_extra);
+    const usados = await contarLeads(userId);
+    if (usados + ids.length > limite) {
+      return jsonResp({ error: `No caben: tienes ${usados} de ${limite}. Libera espacio antes de restaurar.` }, 409);
+    }
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&user_id=eq.${encodeURIComponent(userId)}`, {
+      method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ deleted_at: null }),
+    });
+    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    return jsonResp({ restaurados: ids.length });
+  }
+
+  // GET ?usage=1 — cupo del plan: usados, límite y papelera
+  if (req.method === 'GET' && url.searchParams.get('usage')) {
+    let plan = 'free', extra = 0;
+    try {
+      const payload = JSON.parse(atob((req.headers.get('Authorization') || '').replace('Bearer ', '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      plan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
+      extra = payload.public_metadata?.leads_extra || payload.publicMetadata?.leads_extra || 0;
+    } catch {}
+    if (plan === 'free') {
+      // El token v2 de Clerk ya no trae el plan: hay que preguntárselo
+      const meta = await clerkMeta(userId);
+      if (meta.plan) plan = meta.plan;
+      if (meta.leads_extra) extra = meta.leads_extra;
+    }
+    const [usados, papelera] = await Promise.all([
+      contarLeads(userId),
+      contarLeads(userId, '&deleted_at=not.is.null'),
+    ]);
+    const limite = limiteDelPlan(plan, extra);
+    return jsonResp({
+      plan, limite, usados, papelera,
+      disponibles: Math.max(0, limite - usados),
+      porcentaje: limite ? Math.round(usados / limite * 100) : 0,
+    });
+  }
 
   // GET — list leads
   if (req.method === 'GET' && !url.searchParams.get('id')) {

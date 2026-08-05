@@ -1,0 +1,84 @@
+// api/assign-rules.js — reglas de reparto de leads entre comerciales
+// GET → { reglas, equipo, fuentes }
+// PUT → { reglas: { whatsapp: {modo:'turnos'}, default: {modo:'fijo', fijo:'user_x'} } }
+//
+// Edge porque importa api/_assign.js.
+
+export const config = { runtime: 'edge' };
+
+import { getReglas, saveReglas, comercialesActivos, MODOS } from './_assign.js';
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+// Las fuentes que el reparto sabe distinguir hoy
+export const FUENTES = ['default', 'whatsapp', 'messenger', 'instagram', 'tiktok', 'landing_page', 'webhook', 'meta_lead_ads', 'importacion'];
+
+function sbHeaders() {
+  return { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+}
+
+async function getUserId(req) {
+  const auth = req.headers.get('Authorization');
+  if (!auth) return null;
+  const token = auth.replace('Bearer ', '');
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const key = jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
+    if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data))) return null;
+    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub || null;
+  } catch { return null; }
+}
+
+function jsonResp(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+}
+
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  let userId = await getUserId(req);
+  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Las reglas son del dueño del workspace, no del miembro
+  let esMiembro = false;
+  try {
+    const tw = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: sbHeaders() }
+    ).then(r => r.json());
+    if (tw?.[0]?.owner_user_id) { userId = tw[0].owner_user_id; esMiembro = true; }
+  } catch {}
+
+  if (req.method === 'GET') {
+    const [reglas, equipo] = await Promise.all([getReglas(userId), comercialesActivos(userId)]);
+    return jsonResp({ reglas, equipo, fuentes: FUENTES, modos: MODOS });
+  }
+
+  if (req.method === 'PUT') {
+    // Un comercial no puede cambiar cómo se reparten los leads
+    if (esMiembro) return jsonResp({ error: 'Solo el dueño de la cuenta puede cambiar el reparto' }, 403);
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    if (!body?.reglas || typeof body.reglas !== 'object') return jsonResp({ error: 'Faltan las reglas' }, 400);
+    const ok = await saveReglas(userId, body.reglas);
+    if (!ok) return jsonResp({ error: 'No se pudo guardar' }, 500);
+    return jsonResp({ reglas: await getReglas(userId) });
+  }
+
+  return jsonResp({ error: 'Método no permitido' }, 405);
+}

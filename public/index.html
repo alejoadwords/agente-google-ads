@@ -3694,6 +3694,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   <div class="view" id="view-crm">
   <div class="crm-wrap">
+    <div id="crm-cap-aviso" style="display:none;margin:12px 20px 0"></div>
     <div class="crm-toolbar">
       
       <div class="crm-title" id="crm-title">CRM</div>
@@ -4316,6 +4317,45 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               </div>
               <button class="cfg-upgrade-btn" id="cfg-upgrade-btn" onclick="openUpgradeFlow()">Mejorar plan</button>
             </div>
+
+            <!-- Capacidad de la base de contactos -->
+            <div class="cfg-section" style="padding:16px;margin-top:12px" id="cfg-cap-card">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+                <div style="font-size:13px;font-weight:700;color:var(--ink)">Capacidad del CRM</div>
+                <div style="font-size:12px;color:var(--muted2)" id="cfg-cap-nums">—</div>
+              </div>
+              <div style="height:8px;border-radius:99px;background:var(--line);overflow:hidden">
+                <div id="cfg-cap-bar" style="height:100%;width:0%;border-radius:99px;background:var(--blue);transition:width .4s var(--ease)"></div>
+              </div>
+              <div style="font-size:11px;color:var(--muted2);margin-top:8px;line-height:1.5" id="cfg-cap-msg"></div>
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" onclick="openLimpieza()">Limpiar base de datos</button>
+                <button class="btn btn-ghost btn-sm" onclick="openPapelera()">Papelera<span id="cfg-cap-trash"></span></button>
+              </div>
+
+              <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:4px">Limpieza automática</div>
+                <div style="font-size:11.5px;color:var(--muted2);margin-bottom:10px;line-height:1.55">Cada noche movemos a la papelera lo que cumpla estas reglas, para que tu base no crezca sola. Los ganados nunca se tocan.</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <span style="flex:1;font-size:12px">Leads perdidos con más de</span>
+                  <select class="auto-input" id="ret-perdidos" style="width:130px;padding:6px 8px;font-size:12px">
+                    <option value="0">Nunca</option><option value="90">90 días</option>
+                    <option value="180">6 meses</option><option value="365">1 año</option>
+                  </select>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="flex:1;font-size:12px">Cualquier lead sin actividad hace</span>
+                  <select class="auto-input" id="ret-inactivos" style="width:130px;padding:6px 8px;font-size:12px">
+                    <option value="0">Nunca</option><option value="365">1 año</option>
+                    <option value="730">2 años</option><option value="1095">3 años</option>
+                  </select>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+                  <button class="btn btn-ghost btn-sm" id="ret-save" onclick="retSave()">Guardar reglas</button>
+                  <span id="ret-msg" style="font-size:11.5px;color:var(--muted2)"></span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -4583,6 +4623,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <input class="auto-input" id="cfg-team-email" type="email" placeholder="email@empresa.com">
             </div>
             <button class="btn-pri sm" id="cfg-team-invite-btn" onclick="teamInvite()">Enviar invitación</button>
+          </div>
+
+          <!-- Reparto automático de leads -->
+          <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:18px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">Reparto automático de leads</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.55">Define quién atiende cada lead nuevo según de dónde llegue. En turnos reparte por orden entre todo el equipo; fijo manda todo a una persona.</div>
+            <div id="cfg-assign-rules"><div style="font-size:12px;color:var(--muted2)">Cargando…</div></div>
           </div>
         </div>
         <div id="cfg-sec-referral" style="display:none">

@@ -14052,6 +14052,7 @@ function openSettings() {
   if (liToken && !sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', liToken);
   if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName);
   // Show first tab
+  capLoad();
   switchSettingsTab('perfil');
 }
 
@@ -16359,6 +16360,7 @@ let crmActivityType = 'nota';
 let crmQuickFilter = '';
 
 async function crmInit() {
+  capLoad();
   if (crmInited) { crmRender(); return; }
   crmInited = true;
   await crmLoadStages();
@@ -22562,6 +22564,7 @@ function teamApplyMemberUI() {
 
 // ── Sección Equipo en Configuración (solo dueño) ─────────────────────────────
 async function teamRenderSettings() {
+  asgRender();
   const list = document.getElementById('cfg-team-list');
   const seatsEl = document.getElementById('cfg-team-seats');
   if (!list) return;
@@ -24346,3 +24349,354 @@ function crmVerTodosLosLeads() {
     });
   };
 })();
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// CAPACIDAD Y LIMPIEZA DE LA BASE DE CONTACTOS
+// El cupo de leads es lo que el cliente paga. Que vea cuánto le queda y que
+// pueda liberarlo él mismo, sin pedirnos nada.
+// ══════════════════════════════════════════════════════════════════════════
+
+let capData = null;
+
+async function capLoad() {
+  try {
+    const r = await fetchAuth('/api/leads?usage=1');
+    if (!r.ok) return null;
+    capData = await r.json();
+    capPaint();
+    retLoad();
+    return capData;
+  } catch { return null; }
+}
+
+function capPaint() {
+  if (!capData) return;
+  const { usados, limite, papelera, porcentaje } = capData;
+  const nums = document.getElementById('cfg-cap-nums');
+  const bar  = document.getElementById('cfg-cap-bar');
+  const msg  = document.getElementById('cfg-cap-msg');
+  const tr   = document.getElementById('cfg-cap-trash');
+  if (nums) nums.textContent = usados.toLocaleString('es') + ' de ' + limite.toLocaleString('es') + ' contactos';
+  if (bar) {
+    bar.style.width = Math.min(100, porcentaje) + '%';
+    bar.style.background = porcentaje >= 95 ? 'var(--danger, #DC2626)' : porcentaje >= 80 ? '#F59E0B' : 'var(--blue)';
+  }
+  if (msg) {
+    msg.textContent = porcentaje >= 95
+      ? 'Estás al límite. Libera espacio o amplía tu plan para seguir capturando leads.'
+      : porcentaje >= 80
+        ? 'Te queda poco espacio (' + (limite - usados).toLocaleString('es') + ' contactos). Buen momento para depurar.'
+        : 'Te quedan ' + (limite - usados).toLocaleString('es') + ' contactos disponibles.';
+  }
+  if (tr) tr.textContent = papelera ? ' (' + papelera + ')' : '';
+  capAvisoCRM();
+}
+
+// Aviso en el CRM cuando la base va llena, para que no se enteren al fallar
+// una importación.
+function capAvisoCRM() {
+  const cont = document.getElementById('crm-cap-aviso');
+  if (!cont || !capData) return;
+  if (capData.porcentaje < 80) { cont.style.display = 'none'; return; }
+  const critico = capData.porcentaje >= 95;
+  cont.style.display = 'flex';
+  cont.style.cssText += ';align-items:center;gap:10px;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-size:12.5px;' +
+    (critico ? 'background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA' : 'background:#FFFBEB;color:#B45309;border:1px solid #FDE68A');
+  cont.innerHTML =
+    '<span style="flex:1">' + (critico ? 'Tu base está llena' : 'Tu base va al ' + capData.porcentaje + '%') +
+    ' — ' + capData.usados.toLocaleString('es') + ' de ' + capData.limite.toLocaleString('es') + ' contactos.</span>' +
+    '<button class="btn btn-ghost btn-sm" onclick="openLimpieza()">Liberar espacio</button>';
+}
+
+// ── Limpieza ───────────────────────────────────────────────────────────────
+function openLimpieza() {
+  const stages = (typeof crmStages !== 'undefined' ? crmStages : []).filter(st => st.key !== 'ganado');
+  document.getElementById('limpieza-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'limpieza-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div class="auto-modal" style="max-width:520px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Limpiar base de datos</div>' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'limpieza-modal\').remove()">✕</button></div>' +
+      '<div class="auto-modal-body">' +
+        '<div style="font-size:12px;color:var(--muted2);margin-bottom:14px;line-height:1.55">' +
+          'Elige qué contactos quieres sacar de tu base. Antes de borrar nada te mostramos a cuántos afecta. ' +
+          'Los leads ganados nunca se tocan, y lo que borres queda 30 días en la papelera.</div>' +
+        '<div class="auto-field"><label class="auto-label">Etapas</label>' +
+          '<div id="lmp-stages" style="display:flex;flex-wrap:wrap;gap:6px">' +
+            (stages.length ? stages : [{key:'perdido',label:'Perdido'}]).map(function(st){
+              return '<label style="display:flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:99px;cursor:pointer">' +
+                '<input type="checkbox" value="' + esc(st.key) + '"' + (st.key === 'perdido' ? ' checked' : '') + '>' + esc(st.label) + '</label>';
+            }).join('') +
+          '</div></div>' +
+        '<div class="auto-field"><label class="auto-label">Sin actividad desde hace</label>' +
+          '<select class="auto-input" id="lmp-dias">' +
+            '<option value="">Sin filtro de antigüedad</option>' +
+            '<option value="90">90 días</option><option value="180" selected>6 meses</option>' +
+            '<option value="365">1 año</option><option value="730">2 años</option>' +
+          '</select></div>' +
+        '<div class="auto-field"><label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer">' +
+          '<input type="checkbox" id="lmp-sincontacto"> Solo los que no tienen ni email ni teléfono</label></div>' +
+        '<div id="lmp-preview" style="margin-top:6px"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border)">' +
+        '<button class="btn-pri" style="flex:1" id="lmp-prev-btn" onclick="limpiezaPreview()">Ver a cuántos afecta</button>' +
+        '<button class="btn-ghost" onclick="document.getElementById(\'limpieza-modal\').remove()">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+function limpiezaFiltros() {
+  const stages = Array.from(document.querySelectorAll('#lmp-stages input:checked')).map(i => i.value);
+  const dias = document.getElementById('lmp-dias')?.value;
+  return {
+    stages,
+    dias_sin_actividad: dias ? Number(dias) : undefined,
+    sin_contacto: !!document.getElementById('lmp-sincontacto')?.checked,
+  };
+}
+
+async function limpiezaPreview() {
+  const btn = document.getElementById('lmp-prev-btn');
+  const box = document.getElementById('lmp-preview');
+  const f = limpiezaFiltros();
+  if (!f.stages.length && !f.dias_sin_actividad && !f.sin_contacto) {
+    box.innerHTML = '<div style="font-size:12px;color:#B91C1C">Elige al menos un filtro: sin filtros esto borraría casi toda tu base.</div>';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Calculando…'; }
+  try {
+    const r = await fetchAuth('/api/leads?action=cleanup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...f, dry_run: true }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    if (!d.afectados) {
+      box.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Ningún contacto coincide con estos filtros.</div>';
+      if (btn) { btn.disabled = false; btn.textContent = 'Ver a cuántos afecta'; }
+      return;
+    }
+    const porEtapa = Object.keys(d.por_etapa || {}).map(k => k + ': ' + d.por_etapa[k]).join(' · ');
+    box.innerHTML =
+      '<div style="padding:12px 14px;border-radius:10px;background:#FFFBEB;border:1px solid #FDE68A">' +
+        '<div style="font-size:13px;font-weight:700;color:#B45309">Se moverán ' + d.afectados.toLocaleString('es') + ' contactos a la papelera</div>' +
+        '<div style="font-size:11.5px;color:#92400E;margin-top:4px">' + esc(porEtapa) + '</div>' +
+        (d.muestra?.length ? '<div style="font-size:11px;color:#92400E;margin-top:8px">Por ejemplo: ' +
+          d.muestra.slice(0, 4).map(m => esc(m.name || 'Sin nombre')).join(', ') + '…</div>' : '') +
+      '</div>';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Borrar ' + d.afectados.toLocaleString('es') + ' contactos';
+      btn.onclick = () => limpiezaEjecutar(d.afectados);
+    }
+  } catch (e) {
+    box.innerHTML = '<div style="font-size:12px;color:#B91C1C">' + esc(e.message) + '</div>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Ver a cuántos afecta'; }
+  }
+}
+
+async function limpiezaEjecutar(cuantos) {
+  if (!confirm('Se moverán ' + cuantos + ' contactos a la papelera. Podrás restaurarlos durante 30 días. ¿Continuar?')) return;
+  const btn = document.getElementById('lmp-prev-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Borrando…'; }
+  try {
+    const r = await fetchAuth('/api/leads?action=cleanup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...limpiezaFiltros(), dry_run: false }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    document.getElementById('limpieza-modal')?.remove();
+    showToast('Liberaste espacio: ' + d.borrados.toLocaleString('es') + ' contactos a la papelera');
+    await capLoad();
+    if (typeof crmLoadLeads === 'function') crmLoadLeads();
+  } catch (e) {
+    alert('No se pudo limpiar: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Reintentar'; }
+  }
+}
+
+// ── Papelera ───────────────────────────────────────────────────────────────
+async function openPapelera() {
+  document.getElementById('papelera-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'papelera-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div class="auto-modal" style="max-width:560px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Papelera</div>' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'papelera-modal\').remove()">✕</button></div>' +
+      '<div class="auto-modal-body" id="pap-body"><div style="font-size:12px;color:var(--muted2)">Cargando…</div></div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  try {
+    const r = await fetchAuth('/api/leads?trash=1');
+    const d = await r.json();
+    const rows = d.leads || [];
+    const body = document.getElementById('pap-body');
+    if (!body) return;
+    if (!rows.length) {
+      body.innerHTML = '<div style="font-size:12px;color:var(--muted2)">La papelera está vacía.</div>';
+      return;
+    }
+    body.innerHTML =
+      '<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.55">' +
+        rows.length + ' contactos borrados. No ocupan cupo de tu plan y se eliminan definitivamente a los 30 días. ' +
+        'Puedes recuperarlos antes si te queda espacio.</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto">' +
+        rows.map(function(l){
+          return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px">' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.name || 'Sin nombre') + '</div>' +
+              '<div style="font-size:11px;color:var(--muted2)">' + esc(l.email || l.phone || '—') + ' · ' + esc(l.stage || '') + '</div>' +
+            '</div>' +
+            '<button class="btn btn-ghost btn-sm" onclick="papeleraRestaurar(\'' + esc(l.id) + '\', this)">Restaurar</button>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+  } catch {
+    const body = document.getElementById('pap-body');
+    if (body) body.innerHTML = '<div style="font-size:12px;color:#B91C1C">No se pudo cargar la papelera.</div>';
+  }
+}
+
+async function papeleraRestaurar(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetchAuth('/api/leads?action=restore', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id] }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    if (btn) btn.closest('div[style*="border"]')?.remove();
+    await capLoad();
+    if (typeof crmLoadLeads === 'function') crmLoadLeads();
+  } catch (e) {
+    alert(e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Restaurar'; }
+  }
+}
+
+
+// ── Reglas de reparto de leads entre comerciales ───────────────────────────
+const ASG_FUENTES_LABEL = {
+  default: 'Cualquier otra fuente', whatsapp: 'WhatsApp', messenger: 'Messenger',
+  instagram: 'Instagram', tiktok: 'TikTok', landing_page: 'Formularios web',
+  webhook: 'Webhook', meta_lead_ads: 'Meta Lead Ads', importacion: 'Importación',
+};
+let asgData = null;
+
+async function asgRender() {
+  const box = document.getElementById('cfg-assign-rules');
+  if (!box) return;
+  try {
+    const r = await fetchAuth('/api/assign-rules');
+    asgData = await r.json();
+    if (!r.ok) throw new Error(asgData.error || 'Error');
+  } catch (e) {
+    box.innerHTML = '<div style="font-size:12px;color:#B91C1C">No se pudieron cargar las reglas.</div>';
+    return;
+  }
+  const equipo = asgData.equipo || [];
+  if (!equipo.length) {
+    box.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Invita a tu equipo primero: el reparto necesita al menos un comercial con la cuenta activa.</div>';
+    return;
+  }
+  const opts = equipo.map(m => '<option value="' + esc(m.id) + '">' + esc(m.nombre) + '</option>').join('');
+  box.innerHTML =
+    (asgData.fuentes || []).map(function(f){
+      const reg = (asgData.reglas || {})[f] || { modo: 'off', fijo: null };
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="flex:1;font-size:12.5px">' + esc(ASG_FUENTES_LABEL[f] || f) + '</div>' +
+        '<select class="auto-input" style="width:120px;padding:6px 8px;font-size:12px" data-asg-modo="' + esc(f) + '" onchange="asgOnModo(\'' + esc(f) + '\')">' +
+          '<option value="off"' + (reg.modo === 'off' ? ' selected' : '') + '>Sin asignar</option>' +
+          '<option value="turnos"' + (reg.modo === 'turnos' ? ' selected' : '') + '>En turnos</option>' +
+          '<option value="fijo"' + (reg.modo === 'fijo' ? ' selected' : '') + '>Fijo</option>' +
+        '</select>' +
+        '<select class="auto-input" style="width:150px;padding:6px 8px;font-size:12px' + (reg.modo === 'fijo' ? '' : ';visibility:hidden') + '" data-asg-fijo="' + esc(f) + '">' +
+          opts + '</select>' +
+      '</div>';
+    }).join('') +
+    '<div style="display:flex;align-items:center;gap:10px;margin-top:14px">' +
+      '<button class="btn-pri sm" id="asg-save" onclick="asgSave()">Guardar reparto</button>' +
+      '<span id="asg-msg" style="font-size:12px;color:var(--muted2)"></span>' +
+    '</div>';
+  // preseleccionar el fijo de cada fuente
+  (asgData.fuentes || []).forEach(function(f){
+    const reg = (asgData.reglas || {})[f];
+    const sel = box.querySelector('[data-asg-fijo="' + f + '"]');
+    if (sel && reg && reg.fijo) sel.value = reg.fijo;
+  });
+}
+
+function asgOnModo(fuente) {
+  const modo = document.querySelector('[data-asg-modo="' + fuente + '"]')?.value;
+  const fijo = document.querySelector('[data-asg-fijo="' + fuente + '"]');
+  if (fijo) fijo.style.visibility = modo === 'fijo' ? 'visible' : 'hidden';
+}
+
+async function asgSave() {
+  const btn = document.getElementById('asg-save');
+  const msg = document.getElementById('asg-msg');
+  const reglas = {};
+  document.querySelectorAll('[data-asg-modo]').forEach(function(sel){
+    const f = sel.dataset.asgModo;
+    const modo = sel.value;
+    reglas[f] = { modo, fijo: modo === 'fijo' ? (document.querySelector('[data-asg-fijo="' + f + '"]')?.value || null) : null };
+  });
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/assign-rules', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reglas }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    if (msg) { msg.textContent = 'Guardado'; setTimeout(() => { if (msg) msg.textContent = ''; }, 2500); }
+  } catch (e) {
+    if (msg) msg.textContent = e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar reparto'; }
+  }
+}
+
+
+// ── Reglas de limpieza automática ──────────────────────────────────────────
+async function retLoad() {
+  try {
+    const d = await fetchAuth('/api/leads?action=retention').then(r => r.json());
+    const p = document.getElementById('ret-perdidos');
+    const i = document.getElementById('ret-inactivos');
+    if (p) p.value = String(d.reglas?.perdidos_dias || 0);
+    if (i) i.value = String(d.reglas?.sin_actividad_dias || 0);
+  } catch {}
+}
+
+async function retSave() {
+  const btn = document.getElementById('ret-save');
+  const msg = document.getElementById('ret-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/leads?action=retention', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        perdidos_dias: Number(document.getElementById('ret-perdidos')?.value || 0),
+        sin_actividad_dias: Number(document.getElementById('ret-inactivos')?.value || 0),
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    if (msg) { msg.textContent = 'Guardado'; setTimeout(() => { if (msg) msg.textContent = ''; }, 2500); }
+  } catch (e) {
+    if (msg) msg.textContent = e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar reglas'; }
+  }
+}

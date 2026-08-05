@@ -9,6 +9,7 @@
 
 import { ensureCatalog, enqueueAutomations } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
+import { asignarLead } from './_assign.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -148,6 +149,8 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
       metadata: { conversation_id: conv.id, channel: conv.channel },
     }),
   });
+  // Reparto entre comerciales según la regla de la fuente
+  await asignarLead(userId, rows[0], conv.channel).catch(() => {});
   if (leadPayload.tags.length) await ensureCatalog(userId, clientId || null, leadPayload.tags, channelTag).catch(() => {});
   await enqueueAutomations(userId, rows[0], 'lead_created').catch(() => {});
   if (leadPayload.tags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadPayload.tags).catch(() => {});
