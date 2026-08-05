@@ -189,7 +189,12 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
       .then(r => r.json()).then(r => r?.[0]);
     if (!lead) return;
 
-    const tags = Array.from(new Set([...(lead.tags || []), etiqueta].filter(Boolean)));
+    // Un veredicto puede cambiar si la persona da un dato mejor más adelante, así
+    // que la etiqueta contraria se quita: nadie debe quedar marcado como las dos.
+    const contraria = califica ? regla.al_descartar.etiqueta : regla.al_calificar.etiqueta;
+    const tags = Array.from(new Set(
+      [...(lead.tags || []).filter(t => t !== contraria), etiqueta].filter(Boolean)
+    ));
     const update = {
       tags,
       custom_fields: {
