@@ -400,12 +400,23 @@ export default async function handler(req) {
     const telesLote = rows.map(r => telClave(r.phone)).filter(Boolean);
     if (telesLote.length) {
       // No se puede filtrar por "últimos 10 dígitos" en PostgREST, así que se
-      // traen los teléfonos del scope y se comparan aquí.
-      const tRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&phone=not.is.null&select=id,phone,email,tags&limit=6000`, { headers: sbHeaders() });
-      ((await tRes.json()) || []).forEach(l => {
-        const k = telClave(l.phone);
-        if (k && !existingByPhone[k]) existingByPhone[k] = l;
-      });
+      // trae el índice de teléfonos del scope y se compara aquí. Va paginado:
+      // Supabase corta cualquier consulta en 1.000 filas aunque se pida más, y
+      // con el índice a medias el importador volvía a crear a gente que ya
+      // estaba en la base.
+      const PAGINA = 1000, MAX_PAGINAS = 12;
+      for (let p = 0; p < MAX_PAGINAS; p++) {
+        const tRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&phone=not.is.null&select=id,phone,email,tags&order=created_at.asc&limit=${PAGINA}&offset=${p * PAGINA}`,
+          { headers: sbHeaders() }
+        );
+        const pagina = (await tRes.json()) || [];
+        pagina.forEach(l => {
+          const k = telClave(l.phone);
+          if (k && !existingByPhone[k]) existingByPhone[k] = l;
+        });
+        if (pagina.length < PAGINA) break;
+      }
     }
 
     const result = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
@@ -422,11 +433,11 @@ export default async function handler(req) {
       if (!name && !email && !tel) { result.invalid++; continue; }
       if (correoMalo) result.email_invalido = (result.email_invalido || 0) + 1;
       if (email && seenInBatch.has(email)) { result.skipped++; continue; }
+      // El mismo teléfono dos veces en el mismo archivo es la misma persona,
+      // tenga correo o no: si solo se mira el correo, las dos copias entran.
+      if (tel && seenInBatch.has('t:' + tel)) { result.skipped++; continue; }
       if (email) seenInBatch.add(email);
-      if (!email && tel) {
-        if (seenInBatch.has('t:' + tel)) { result.skipped++; continue; }
-        seenInBatch.add('t:' + tel);
-      }
+      if (tel) seenInBatch.add('t:' + tel);
       const rowTags = [...importTags, ...(Array.isArray(r.tags) ? r.tags : String(r.tags || '').split(','))];
       const cleanTags = await prepareTags(userId, clientId, rowTags, null);
 
