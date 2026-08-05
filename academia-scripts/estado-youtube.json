@@ -39,10 +39,32 @@
    "videoId": "Ksl8ofNwdYg",
    "fecha": "2026-08-05T16:18:12.069Z",
    "playlist": "Acuarius · Google Ads, Meta y TikTok"
+  },
+  "Academia - Video 2 - Tu prueba Pro de 14 dias.mp4": {
+   "videoId": "Qx7Rr1J6hgg",
+   "fecha": "2026-08-05T21:06:57.498Z",
+   "playlist": "Acuarius · Primeros pasos"
+  },
+  "Academia - Video 12 - Analisis SEO con el agente.mp4": {
+   "videoId": "yY-IbqC4vQ8",
+   "fecha": "2026-08-05T21:07:04.970Z",
+   "playlist": "Acuarius · SEO y visibilidad en IA"
+  },
+  "Academia - Video 13 - Proyecto SEO y reporte GEO.mp4": {
+   "videoId": "d2xCVGA3rq8",
+   "fecha": "2026-08-05T21:07:07.691Z",
+   "playlist": "Acuarius · SEO y visibilidad en IA"
+  },
+  "Academia - Video 14 - Studio de Contenido.mp4": {
+   "videoId": "W6aO-6HFUYs",
+   "fecha": "2026-08-05T21:07:14.363Z",
+   "playlist": "Acuarius · Contenido para redes"
   }
  },
  "playlists": {
   "Acuarius · Primeros pasos": "PLF60NF4YQZ5A",
-  "Acuarius · Google Ads, Meta y TikTok": "PLCByTKUpBqAY"
+  "Acuarius · Google Ads, Meta y TikTok": "PLCByTKUpBqAY",
+  "Acuarius · SEO y visibilidad en IA": "PLZJM9wxW3NX8",
+  "Acuarius · Contenido para redes": "PLZ53XsqB6J38"
  }
 }

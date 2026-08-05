@@ -61,7 +61,7 @@ export default async function handler(req) {
     // Sin lead_id: histórico del usuario por rango, para el informe de productividad
     if (!leadId) {
       const from = url.searchParams.get('from');
-      let q = `${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${userId}&select=id,lead_id,type,created_at&order=created_at.desc&limit=2000`;
+      let q = `${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${userId}&select=id,lead_id,type,created_at,metadata&order=created_at.desc&limit=2000`;
       if (from) q += `&created_at=gte.${encodeURIComponent(from)}`;
       const r = await fetch(q, { headers: sbHeaders() });
       if (!r.ok) return jsonResp({ error: await r.text() }, 500);

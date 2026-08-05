@@ -159,7 +159,7 @@ export async function asignarLead(userId, lead, fuente) {
       body: JSON.stringify({
         lead_id: lead.id, user_id: userId, type: 'nota',
         content: `Asignado automáticamente a ${com.nombre}`,
-        metadata: { asignacion: 'automatica', fuente: fuente || lead.source || null },
+        metadata: { sistema: true, asignacion: 'automatica', fuente: fuente || lead.source || null },
       }),
     }).catch(() => {});
     // La tarea antes del aviso: así el correo llega cuando el pendiente ya

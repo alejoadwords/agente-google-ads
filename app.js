@@ -25054,9 +25054,15 @@ async function eqLoad() {
   return _eqData;
 }
 
-// Qué cuenta como "contactado": una interacción registrada por una persona.
-// Lo que genera el sistema al crear o mover el lead no es haberlo contactado.
+// Qué cuenta como "contactado": una interacción registrada por una PERSONA.
+// Ni la creación, ni el cambio de etapa, ni las notas que escribe la propia
+// plataforma (reparto, veredicto de calificación) cuentan: si contaran, el
+// informe diría que el equipo contactó a todo el mundo en un minuto sin que
+// nadie hubiera levantado el teléfono.
 const EQ_SISTEMA = ['creacion', 'stage_change'];
+function eqEsDelSistema(a) {
+  return EQ_SISTEMA.includes(a.type) || !!(a.metadata && a.metadata.sistema);
+}
 
 function eqFmtDur(ms) {
   if (ms === null || !isFinite(ms)) return '—';
@@ -25095,7 +25101,7 @@ async function eqRender() {
   // Primera interacción humana de cada lead
   const primera = {};
   (inter || []).forEach(a => {
-    if (EQ_SISTEMA.includes(a.type) || !a.lead_id) return;
+    if (eqEsDelSistema(a) || !a.lead_id) return;
     const t = new Date(a.created_at).getTime();
     if (!primera[a.lead_id] || t < primera[a.lead_id]) primera[a.lead_id] = t;
   });

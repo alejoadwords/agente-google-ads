@@ -227,7 +227,7 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
           ? `Calificado por el agente de ${canal} (${veredicto.cumplidas} de ${veredicto.total})`
           : `No calificado por el agente de ${canal} (${veredicto.cumplidas} de ${veredicto.total})`)
           + '\n' + resumenLegible(regla, respuestas),
-        metadata: { calificacion: veredicto.estado, canal },
+        metadata: { sistema: true, calificacion: veredicto.estado, canal },
       }),
     }).catch(() => {});
 
