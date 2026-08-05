@@ -20883,19 +20883,19 @@ function agnScheduleForLead() {
   const AGENT_KEYS = ['google-ads', 'meta-ads', 'tiktok-ads', 'linkedin-ads', 'seo', 'social', 'consultor'];
   // Rutas canónicas v2 (por módulo). Las /leads/* viejas siguen funcionando como alias.
   const CRM_SUB = {
-    kanban: '/crm', list: '/crm/contactos', agenda: '/crm/agenda',
+    kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda',
     campaigns: '/marketing/campanas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
-  const CRM_LEGACY = { '': 'kanban', '/contactos': 'list', '/agentes-ia': 'agents', '/inbox': 'inbox', '/analisis': 'analytics', '/automatizaciones': 'autos', '/agenda': 'agenda', '/campanas': 'campaigns', '/fuentes': 'sources' };
+  const CRM_LEGACY = { '': 'kanban', '/contactos': 'list', '/agentes-ia': 'agents', '/inbox': 'inbox', '/analisis': 'analytics', '/automatizaciones': 'autos', '/agenda': 'agenda', '/tareas': 'tareas', '/campanas': 'campaigns', '/fuentes': 'sources' };
   const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
   const TITLES = {
     '/': 'Acuarius', '/clientes': 'Panel de clientes · Acuarius', '/studio': 'Social Studio · Acuarius',
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', campaigns: 'Campañas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -22568,6 +22568,7 @@ function teamApplyMemberUI() {
 // ── Sección Equipo en Configuración (solo dueño) ─────────────────────────────
 async function teamRenderSettings() {
   asgRender();
+  segLoad();
   const list = document.getElementById('cfg-team-list');
   const seatsEl = document.getElementById('cfg-team-seats');
   if (!list) return;
@@ -23075,14 +23076,14 @@ async function impRun() {
 // re-montaje de navegación. Va AL FINAL del archivo para envolver las
 // versiones ya envueltas de crmSetView/showView (router incluido).
 const NAV_TABS = {
-  crm: ['kanban', 'list', 'agenda'],
+  crm: ['kanban', 'list', 'tareas', 'agenda'],
   marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
   analisis: ['sales', 'prod', 'mk', 'cv', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', mk: 'analisis', cv: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'mk', 'cv'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', mk: 'analisis', cv: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'mk', 'cv'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -23113,7 +23114,7 @@ function navHighlight(key) {
 // Cada módulo despliega sus vistas en el propio menú (al pasar por encima o al
 // entrar al módulo), en lugar de las píldoras que había arriba de cada pantalla.
 const NAV_TAB_LABELS = {
-  kanban: 'Pipeline', list: 'Contactos', agenda: 'Agenda',
+  kanban: 'Pipeline', list: 'Contactos', tareas: 'Tareas', agenda: 'Agenda',
   campaigns: 'Campañas', autos: 'Automatizaciones', sources: 'Fuentes',
   proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
   inbox: 'Inbox', agents: 'Chatbots',
@@ -24819,4 +24820,165 @@ async function calSave(agentId) {
       body: JSON.stringify({ regla }),
     });
   } catch {}
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TAREAS DE SEGUIMIENTO
+// La lista de trabajo del comercial: qué debe hacer hoy y qué se le pasó.
+// No es el calendario — ahí se ve el mes; aquí se ve lo pendiente.
+// ══════════════════════════════════════════════════════════════════════════
+
+let tarSoloMias = false;
+let tarData = null;
+
+async function tarRender() {
+  const view = document.getElementById('crm-tareas-view');
+  if (!view) return;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  try {
+    const cid = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId
+      ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
+    tarData = await fetchAuth('/api/agenda?tareas=1' + (tarSoloMias ? '&mias=1' : '') + cid).then(r => r.json());
+  } catch {
+    view.innerHTML = '<div style="font-size:12.5px;color:#B91C1C">No se pudieron cargar las tareas.</div>';
+    return;
+  }
+
+  const cabecera =
+    '<div class="agn-head">' +
+      '<div class="agn-title">Tareas</div>' +
+      '<button class="' + (tarSoloMias ? 'btn-pri' : 'btn-sec') + ' sm" onclick="tarSoloMias=!tarSoloMias;tarRender()">Míos</button>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-pri" onclick="agnModalOpen()">' + icn('plus', 13) + ' Nueva tarea</button>' +
+    '</div>';
+
+  if (!tarData.total) {
+    view.innerHTML = cabecera + (typeof emptyAgua === 'function'
+      ? emptyAgua('Nada pendiente', tarSoloMias ? 'No tienes tareas a tu nombre.' : 'Cuando llegue un lead nuevo, su tarea de primer contacto aparecerá aquí.')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Nada pendiente.</div>');
+    return;
+  }
+
+  view.innerHTML = cabecera +
+    tarBloque('Vencidas', tarData.vencidas, '#DC2626') +
+    tarBloque('Hoy', tarData.hoy, 'var(--blue)') +
+    tarBloque('Próximas', tarData.proximas, 'var(--muted2)');
+}
+
+function tarBloque(titulo, items, color) {
+  if (!items || !items.length) return '';
+  return '<div style="margin-bottom:22px;max-width:820px">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+      '<span style="width:7px;height:7px;border-radius:99px;background:' + color + '"></span>' +
+      '<span style="font-size:13px;font-weight:800">' + esc(titulo) + '</span>' +
+      '<span style="font-size:12px;color:var(--muted2)">' + items.length + '</span>' +
+    '</div>' +
+    items.map(tarFila).join('') +
+  '</div>';
+}
+
+function tarFila(t) {
+  const cuando = t.due_at ? new Date(t.due_at) : null;
+  const fecha = cuando
+    ? cuando.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ' · ' +
+      cuando.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+    : 'Sin fecha';
+  const lead = t.lead;
+  return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;background:var(--panel)">' +
+    '<input type="checkbox" onchange="tarHecha(\'' + esc(t.id) + '\')" title="Marcar como hecha" style="cursor:pointer">' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(t.title || 'Tarea') + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">' + esc(fecha) +
+        (lead?.assigned_name ? ' · ' + esc(lead.assigned_name) : '') +
+        (lead?.phone ? ' · ' + esc(lead.phone) : '') +
+      '</div>' +
+    '</div>' +
+    (lead ? '<button class="btn-ghost sm" onclick="tarAbrirLead(\'' + esc(lead.id) + '\')">' + esc((lead.name || 'Lead').slice(0, 22)) + '</button>' : '') +
+    '<button class="btn-ghost sm" onclick="tarAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana">Mañana</button>' +
+  '</div>';
+}
+
+function tarAbrirLead(id) {
+  crmSetView('kanban');
+  setTimeout(() => crmOpenDetail(id), 150);
+}
+
+async function tarHecha(id) {
+  try {
+    await fetchAuth('/api/agenda', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, done: true }),
+    });
+    showToast('Tarea completada', 'success');
+    tarRender();
+  } catch { showToast('No se pudo actualizar', 'error'); }
+}
+
+async function tarAplazar(id) {
+  const t = ['vencidas', 'hoy', 'proximas'].flatMap(k => tarData?.[k] || []).find(x => x.id === id);
+  if (!t) return;
+  // Mañana a la misma hora; si no tenía hora, a las 9
+  const base = t.due_at ? new Date(t.due_at) : new Date(new Date().setHours(9, 0, 0, 0));
+  base.setDate(base.getDate() + 1);
+  try {
+    await fetchAuth('/api/agenda', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, due_at: base.toISOString() }),
+    });
+    tarRender();
+  } catch { showToast('No se pudo aplazar', 'error'); }
+}
+
+// Se envuelve al final, después del bloque NAV, para que el tab nuevo se
+// muestre igual que los que ya existían.
+const _crmSetViewSinTareas = crmSetView;
+crmSetView = function (v) {
+  _crmSetViewSinTareas(v);
+  const tv = document.getElementById('crm-tareas-view');
+  if (tv) tv.style.display = v === 'tareas' ? 'flex' : 'none';
+  if (v === 'tareas') tarRender();
+};
+
+// ── Regla de seguimiento automático ────────────────────────────────────────
+async function segLoad() {
+  const chk = document.getElementById('seg-activo');
+  if (!chk) return;
+  try {
+    const d = await fetchAuth('/api/agenda?action=followup').then(r => r.json());
+    const r = d.regla || {};
+    chk.checked = r.primer_contacto !== false;
+    document.getElementById('seg-config').style.display = chk.checked ? 'block' : 'none';
+    document.getElementById('seg-horas').value = String(r.horas || 4);
+    document.getElementById('seg-titulo').value = r.titulo || '';
+    document.getElementById('seg-solo-cal').checked = !!r.solo_calificados;
+  } catch {}
+}
+
+function segToggle() {
+  document.getElementById('seg-config').style.display =
+    document.getElementById('seg-activo').checked ? 'block' : 'none';
+}
+
+async function segSave() {
+  const btn = document.getElementById('seg-save');
+  const msg = document.getElementById('seg-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/agenda?action=followup', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ regla: {
+        primer_contacto: document.getElementById('seg-activo').checked,
+        horas: Number(document.getElementById('seg-horas').value || 4),
+        titulo: document.getElementById('seg-titulo').value.trim() || 'Primer contacto',
+        solo_calificados: document.getElementById('seg-solo-cal').checked,
+      } }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    if (msg) { msg.textContent = 'Guardado'; setTimeout(() => { if (msg) msg.textContent = ''; }, 2500); }
+  } catch (e) {
+    if (msg) msg.textContent = e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar seguimiento'; }
+  }
 }

@@ -3878,6 +3878,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="crm-analytics-view" style="display:none" class="crm-analytics-wrap"></div>
     <div id="crm-autos-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-agenda-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div id="crm-tareas-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-campaigns-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-sources-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-proposals-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
@@ -4664,6 +4665,36 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div style="font-weight:700;font-size:13px;margin-bottom:4px">Reparto automático de leads</div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.55">Define quién atiende cada lead nuevo según de dónde llegue. En turnos reparte por orden entre todo el equipo; fijo manda todo a una persona.</div>
             <div id="cfg-assign-rules"><div style="font-size:12px;color:var(--muted2)">Cargando…</div></div>
+          </div>
+
+          <!-- Seguimiento automático -->
+          <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:18px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">Seguimiento automático</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.55">En cuanto un lead tiene comercial le creamos la tarea de primer contacto, para que no dependa de que alguien se acuerde.</div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;margin-bottom:10px">
+              <input type="checkbox" id="seg-activo" onchange="segToggle()"> Crear la tarea de primer contacto
+            </label>
+            <div id="seg-config" style="display:none">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <span style="flex:1;font-size:12.5px">Plazo para contactarlo</span>
+                <select class="auto-input" id="seg-horas" style="width:150px;padding:6px 8px;font-size:12px">
+                  <option value="1">1 hora</option><option value="2">2 horas</option>
+                  <option value="4">4 horas</option><option value="8">8 horas</option>
+                  <option value="24">24 horas</option><option value="48">2 días</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <span style="flex:1;font-size:12.5px">Título de la tarea</span>
+                <input class="auto-input" id="seg-titulo" style="width:200px;padding:6px 8px;font-size:12px" placeholder="Primer contacto">
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer">
+                <input type="checkbox" id="seg-solo-cal"> Solo para los leads que califican
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+              <button class="btn-pri sm" id="seg-save" onclick="segSave()">Guardar seguimiento</button>
+              <span id="seg-msg" style="font-size:12px;color:var(--muted2)"></span>
+            </div>
           </div>
         </div>
         <div id="cfg-sec-referral" style="display:none">

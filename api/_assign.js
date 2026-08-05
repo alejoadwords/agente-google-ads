@@ -162,6 +162,10 @@ export async function asignarLead(userId, lead, fuente) {
         metadata: { asignacion: 'automatica', fuente: fuente || lead.source || null },
       }),
     }).catch(() => {});
+    // La tarea antes del aviso: así el correo llega cuando el pendiente ya
+    // existe y el comercial lo encuentra al entrar.
+    const { crearTareaPrimerContacto } = await import('./_followup.js');
+    await crearTareaPrimerContacto(userId, lead, com).catch(() => {});
     await avisarComercial(com, lead, fuente || lead.source);
     return com;
   } catch (e) {

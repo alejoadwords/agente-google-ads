@@ -132,6 +132,7 @@ export default async function handler(req) {
 
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const yoSoy = userId; // quién pregunta, antes de resolver el workspace
 
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
   try {
@@ -148,6 +149,67 @@ export default async function handler(req) {
   if (req.method === 'GET' && url.searchParams.get('gcal_status')) {
     const conn = await getGcalToken(userId);
     return jsonResp({ connected: !!conn, email: conn?.email || null });
+  }
+
+  // Reglas de seguimiento automático (GET/PUT ?action=followup)
+  if (url.searchParams.get('action') === 'followup' && (req.method === 'GET' || req.method === 'PUT')) {
+    const { getRegla: getSeg, saveRegla: saveSeg } = await import('./_followup.js');
+    if (req.method === 'GET') return jsonResp({ regla: await getSeg(userId) });
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const ok = await saveSeg(userId, body?.regla || {});
+    if (!ok) return jsonResp({ error: 'No se pudo guardar' }, 500);
+    return jsonResp({ regla: await getSeg(userId) });
+  }
+
+  // GET ?tareas=1 — pendientes repartidos en vencidas, hoy y próximas.
+  // Es la vista de trabajo del comercial: lo que tiene que hacer, no un
+  // calendario. Con mias=1 solo salen las de los leads que son suyos.
+  if (req.method === 'GET' && url.searchParams.get('tareas')) {
+    const soloMias = url.searchParams.get('mias') === '1';
+    const dias = Math.min(Math.max(parseInt(url.searchParams.get('dias') || 14) || 14, 1), 90);
+    const hasta = new Date(Date.now() + dias * 86400000).toISOString();
+
+    // Ojo: aquí no se fuerza client_id=is.null como en el calendario. Es una
+    // lista de trabajo: si no se pide un cliente concreto, se ve todo lo
+    // pendiente, que es lo que el comercial espera.
+    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&done=is.false`
+      + (clientId ? `&client_id=eq.${clientId}` : '')
+      + `&due_at=lte.${encodeURIComponent(hasta)}&select=*&order=due_at.asc&limit=400`;
+    const tareas = await fetch(q, { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+    // No hay FK de activities a leads, así que el lead se resuelve aparte en
+    // vez de con un embed de PostgREST.
+    const ids = Array.from(new Set((tareas || []).map(t => t.lead_id).filter(Boolean)));
+    let leadsPorId = {};
+    if (ids.length) {
+      const leads = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,email,stage,assigned_to,assigned_name,deleted_at`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      (leads || []).forEach(l => { leadsPorId[l.id] = l; });
+    }
+
+    const ahora = Date.now();
+    const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
+    const out = { vencidas: [], hoy: [], proximas: [] };
+
+    for (const t of tareas || []) {
+      const lead = t.lead_id ? leadsPorId[t.lead_id] : null;
+      // Una tarea de un lead borrado no le sirve a nadie
+      if (t.lead_id && (!lead || lead.deleted_at)) continue;
+      if (soloMias && !(lead && lead.assigned_to === yoSoy)) continue;
+      const item = {
+        ...t,
+        lead: lead ? { id: lead.id, name: lead.name, phone: lead.phone, email: lead.email, stage: lead.stage, assigned_name: lead.assigned_name } : null,
+      };
+      const vence = t.due_at ? new Date(t.due_at).getTime() : null;
+      if (vence === null) out.proximas.push(item);
+      else if (vence < ahora) out.vencidas.push(item);
+      else if (vence <= finDeHoy.getTime()) out.hoy.push(item);
+      else out.proximas.push(item);
+    }
+    return jsonResp({ ...out, total: out.vencidas.length + out.hoy.length + out.proximas.length });
   }
 
   // GET ?lead_id= — actividades de un lead
