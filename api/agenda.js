@@ -173,8 +173,10 @@ export default async function handler(req) {
     // Ojo: aquí no se fuerza client_id=is.null como en el calendario. Es una
     // lista de trabajo: si no se pide un cliente concreto, se ve todo lo
     // pendiente, que es lo que el comercial espera.
+    // Con un cliente activo se ven las suyas Y las que no cuelgan de ningún
+    // cliente: una lista de trabajo nunca debe esconder algo pendiente.
     let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&done=is.false`
-      + (clientId ? `&client_id=eq.${clientId}` : '')
+      + (clientId ? `&or=(client_id.eq.${clientId},client_id.is.null)` : '')
       + `&due_at=lte.${encodeURIComponent(hasta)}&select=*&order=due_at.asc&limit=400`;
     const tareas = await fetch(q, { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
 
