@@ -24406,7 +24406,7 @@ function capAvisoCRM() {
   cont.innerHTML =
     '<span style="flex:1">' + (critico ? 'Tu base está llena' : 'Tu base va al ' + capData.porcentaje + '%') +
     ' — ' + capData.usados.toLocaleString('es') + ' de ' + capData.limite.toLocaleString('es') + ' contactos.</span>' +
-    '<button class="btn btn-ghost btn-sm" onclick="openLimpieza()">Liberar espacio</button>';
+    '<button class="btn-sec sm" onclick="openLimpieza()">Liberar espacio</button>';
 }
 
 // ── Limpieza ───────────────────────────────────────────────────────────────
@@ -24556,7 +24556,7 @@ async function openPapelera() {
               '<div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.name || 'Sin nombre') + '</div>' +
               '<div style="font-size:11px;color:var(--muted2)">' + esc(l.email || l.phone || '—') + ' · ' + esc(l.stage || '') + '</div>' +
             '</div>' +
-            '<button class="btn btn-ghost btn-sm" onclick="papeleraRestaurar(\'' + esc(l.id) + '\', this)">Restaurar</button>' +
+            '<button class="btn-sec sm" onclick="papeleraRestaurar(\'' + esc(l.id) + '\', this)">Restaurar</button>' +
           '</div>';
         }).join('') +
       '</div>';
