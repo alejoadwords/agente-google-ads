@@ -107,6 +107,28 @@ export default async function handler(req) {
   let body;
   try { body = await req.json(); } catch { return new Response('Bad request', { status: 400 }); }
 
+  // Simulador, igual que el de TikTok: permite probar WhatsApp, Messenger e
+  // Instagram sin una cuenta real conectada, que es lo que hace falta para
+  // ensayar la puesta en marcha de un cliente antes de tener sus credenciales.
+  // No llama a la API de Meta: la respuesta del agente vuelve en el JSON.
+  const url0 = new URL(req.url);
+  if (url0.searchParams.get('simulate') === '1') {
+    if (!process.env.CRON_SECRET || req.headers.get('x-acuarius-secret') !== process.env.CRON_SECRET) {
+      return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+    const canal = ['whatsapp', 'messenger', 'instagram'].includes(body.channel) ? body.channel : 'whatsapp';
+    const r = await processIncoming({
+      channel: canal,
+      externalId: String(body.external_id || ''),
+      contactId: String(body.contact_id || ''),
+      contactName: body.contact_name || null,
+      text: String(body.text || ''),
+      providerMessageId: String(body.message_id || `${body.contact_id}-${Date.now()}`),
+      send: null,
+    }).catch(e => ({ ok: false, reason: String(e && e.message || e) }));
+    return new Response(JSON.stringify(r), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
   // Responder 200 a Meta inmediatamente para evitar reintentos.
   // Ojo con el nombre: llamar "process" a esta promesa dejaba el objeto global
   // process en zona muerta durante todo el handler, así que la verificación de
