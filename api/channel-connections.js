@@ -120,7 +120,18 @@ export default async function handler(req) {
       headers: { ...sb(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    if (!res.ok) {
+      const detalle = await res.text();
+      // La tabla tiene un CHECK con la lista de canales permitidos; un canal
+      // nuevo necesita esa migración antes de poder conectarse.
+      if (detalle.includes('23514')) {
+        return jsonResp({
+          error: `El canal ${channel} todavía no está habilitado en la base de datos.`,
+          detail: 'Falta ampliar la restricción channel_connections_channel_check.',
+        }, 409);
+      }
+      return jsonResp({ error: detalle }, 500);
+    }
     const rows = await res.json();
     return jsonResp({ connection: rows[0] }, 201);
   }
