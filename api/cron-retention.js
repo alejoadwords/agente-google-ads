@@ -87,10 +87,18 @@ export default async function handler(req, res) {
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     const ids = (viejos || []).map(x => x.id);
     if (ids.length) {
-      // Primero lo que cuelga del lead: sin FK en cascada quedarían huérfanos
-      for (const tabla of ['lead_activities', 'lead_tags', 'nps_responses']) {
+      // Primero lo que cuelga del lead, o el DELETE choca contra las FK.
+      // Lo que solo existe por el lead se va con él…
+      for (const tabla of ['lead_activities', 'activities', 'nps_responses', 'campaign_recipients', 'email_events']) {
         await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?lead_id=in.(${ids.join(',')})`, {
           method: 'DELETE', headers: sb(),
+        }).catch(() => {});
+      }
+      // …y lo que vale por sí mismo (una propuesta firmada, el hilo del inbox)
+      // solo pierde el vínculo.
+      for (const tabla of ['proposals', 'chat_conversations']) {
+        await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?lead_id=in.(${ids.join(',')})`, {
+          method: 'PATCH', headers: sb(), body: JSON.stringify({ lead_id: null }),
         }).catch(() => {});
       }
       const del = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})`, {
