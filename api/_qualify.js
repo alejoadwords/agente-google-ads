@@ -124,9 +124,14 @@ Cómo hacerlo:
 - Si la persona no quiere responder algo, no insistas más de una vez: márcalo como no cumplido y sigue
 - Si ya te dieron el dato antes en la conversación, no lo vuelvas a preguntar
 
-Cuando tengas una respuesta nueva a cualquiera de esos puntos, incluye al final de tu mensaje (invisible para el usuario):
+En CADA mensaje tuyo, incluye al final este bloque (invisible para el usuario):
 [CALIFICACION: {${json}}]
-Incluye solo los puntos que ya tengas respondidos. Marca "cumple" según la condición de cada uno, sin adornar: si la respuesta no llega a lo pedido, es false.`;
+
+Reglas del bloque, importantes:
+- Repite SIEMPRE todos los puntos que ya tengas respondidos, no solo el último. El bloque es la foto completa de lo que sabes hasta ahora
+- Omite únicamente los puntos que todavía no te hayan respondido
+- Si la persona ya te dio el dato en cualquier mensaje anterior, cuenta como respondido aunque no lo hayas preguntado tú
+- Marca "cumple" según la condición de cada punto, sin adornar: si la respuesta no llega a lo pedido, es false`;
 }
 
 export function extraerCalificacion(text) {
