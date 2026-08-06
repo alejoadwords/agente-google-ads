@@ -40,16 +40,29 @@ async function sendMeta(channel, connection, contactId, text) {
 // "Contacto messenger" y el comercial recibe una ficha sin nombre.
 async function nombreDelContacto(connection, contactId) {
   if (!connection?.access_token || !contactId) return null;
-  const d = await fetch(
-    `https://graph.facebook.com/v19.0/${encodeURIComponent(contactId)}?fields=name,username&access_token=${connection.access_token}`
-  ).then(r => r.json()).catch(() => null);
+  // Consultar /{psid} directamente devuelve "Object does not exist" salvo con
+  // acceso avanzado. El nombre sí sale por las conversaciones de la página,
+  // que es lo mismo que ve cualquiera en la bandeja de Meta.
+  const pageId = connection.channel === 'instagram' ? null : connection.external_id;
+  const base = pageId
+    ? `https://graph.facebook.com/v19.0/${pageId}/conversations`
+    : `https://graph.facebook.com/v19.0/me/conversations?platform=instagram`;
+  const url = base + (base.includes('?') ? '&' : '?')
+    + `user_id=${encodeURIComponent(contactId)}&fields=participants&access_token=${connection.access_token}`;
+  const d = await fetch(url).then(r => r.json()).catch(() => null);
   if (!d || d.error) {
     if (d?.error) console.warn('[meta] no se pudo leer el nombre:', String(d.error.message).slice(0, 120));
     return null;
   }
-  // En Instagram a veces solo viene el usuario
-  const n = d.name || (d.username ? '@' + d.username : null);
-  return n ? String(n).slice(0, 120) : null;
+  for (const c of d.data || []) {
+    for (const p of c.participants?.data || []) {
+      // El otro participante es el contacto; la página es la conexión
+      if (String(p.id) !== String(connection.external_id) && p.name) {
+        return String(p.name).slice(0, 120);
+      }
+    }
+  }
+  return null;
 }
 
 const processMessage = args => processIncoming({
