@@ -17831,51 +17831,38 @@ async function agConnectChannel(channel, agentId) {
     window.location.href = '/api/tiktok-auth?userId=' + encodeURIComponent(uid) + '&agentId=' + encodeURIComponent(agentId);
     return;
   } else {
-    // Messenger / Instagram: usar token Meta existente
-    const metaToken = sessionStorage.getItem('metaToken') || localStorage.getItem('meta_access_token');
-    if (!metaToken) {
-      alert('Primero conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads');
+    // Messenger / Instagram. El token de Meta lo resuelve el servidor desde la
+    // conexión guardada: leerlo del almacenamiento del navegador fallaba al
+    // cambiar de equipo o en incógnito, y la app pedía "conecta Meta primero"
+    // con Meta ya conectado. Además así el token nunca pasa por el navegador.
+    const res = await fetchAuth('/api/channel-connections?action=list_pages');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || 'No se pudieron listar tus páginas', 'error'); return; }
+    let pages = data.pages || [];
+    if (channel === 'instagram') pages = pages.filter(p => p.instagram_business_account);
+    if (!pages.length) {
+      showToast(channel === 'instagram'
+        ? 'Ninguna de tus páginas tiene una cuenta de Instagram Business conectada'
+        : 'No se encontraron páginas de Facebook en esta cuenta de Meta', 'error');
       return;
     }
-    const res = await fetchAuth(`/api/channel-connections?action=list_pages&token=${encodeURIComponent(metaToken)}`);
-    if (!res.ok) { alert('Error listando páginas de Meta.'); return; }
-    const data = await res.json();
-    const pages = data.pages || [];
-    if (pages.length === 0) { alert('No se encontraron páginas de Facebook administradas por esta cuenta.'); return; }
+    const lista = pages.map(function (p, i) {
+      const ig = p.instagram_business_account;
+      return (i + 1) + '. ' + (channel === 'instagram' ? '@' + (ig.username || ig.name || p.name) : p.name);
+    }).join('\n');
+    const elegido = prompt('¿Qué cuenta quieres conectar?\n\n' + lista);
+    const idx = parseInt(elegido) - 1;
+    if (isNaN(idx) || !pages[idx]) return;
 
-    let options = '';
-    if (channel === 'messenger') {
-      options = pages.map((p, i) => `${i + 1}. ${p.name} (ID: ${p.id})`).join('\n');
-      const choice = prompt(`Selecciona el número de la página para Messenger:\n\n${options}`);
-      const idx = parseInt(choice) - 1;
-      if (isNaN(idx) || !pages[idx]) return;
-      const page = pages[idx];
-      // Get page access token
-      const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
-      const ptData = await ptRes.json();
-      const pageToken = ptData.access_token;
-      const connRes = await fetchAuth('/api/channel-connections', {
-        method: 'POST',
-        body: JSON.stringify({ agent_id: agentId, channel: 'messenger', external_id: page.id, access_token: pageToken, channel_name: page.name }),
-      });
-      if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
-    } else if (channel === 'instagram') {
-      const igPages = pages.filter(p => p.instagram_business_account);
-      if (igPages.length === 0) { alert('No se encontraron cuentas de Instagram Business conectadas a tus páginas.'); return; }
-      options = igPages.map((p, i) => `${i + 1}. ${p.instagram_business_account.name || p.name}`).join('\n');
-      const choice = prompt(`Selecciona la cuenta de Instagram:\n\n${options}`);
-      const idx = parseInt(choice) - 1;
-      if (isNaN(idx) || !igPages[idx]) return;
-      const page = igPages[idx];
-      const igAcct = page.instagram_business_account;
-      const ptRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=access_token&access_token=${metaToken}`);
-      const ptData = await ptRes.json();
-      const connRes = await fetchAuth('/api/channel-connections', {
-        method: 'POST',
-        body: JSON.stringify({ agent_id: agentId, channel: 'instagram', external_id: igAcct.id, access_token: ptData.access_token, channel_name: igAcct.name || page.name }),
-      });
-      if (connRes.ok) { await crmLoadAgents(); crmOpenAgentModal(agentId); }
-    }
+    const r = await fetchAuth('/api/channel-connections?action=connect_page', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, channel: channel, page_id: pages[idx].id }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { showToast(d.error || 'No se pudo conectar', 'error'); return; }
+    showToast('Conectado: ' + (d.connection && d.connection.channel_name || ''), 'success');
+    await crmLoadAgents();
+    crmOpenAgentModal(agentId);
   }
 }
 

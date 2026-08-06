@@ -35,6 +35,20 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+// El token de Meta vive en platform_connections desde que el usuario conectó
+// Meta Ads. Antes se leía del almacenamiento del navegador, que se pierde al
+// cambiar de equipo o abrir en incógnito — y entonces la app decía "conecta
+// Meta primero" con Meta ya conectado.
+async function metaTokenDe(userId) {
+  try {
+    const rows = await fetch(
+      `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads&select=access_token&limit=1`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : []));
+    return rows?.[0]?.access_token || null;
+  } catch { return null; }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const userId = await getUserId(req);
@@ -44,8 +58,8 @@ export default async function handler(req) {
 
   // GET — list pages from Meta user token (to show which pages to connect)
   if (req.method === 'GET' && url.searchParams.get('action') === 'list_pages') {
-    const metaToken = url.searchParams.get('token');
-    if (!metaToken) return jsonResp({ error: 'Falta token' }, 400);
+    const metaToken = url.searchParams.get('token') || await metaTokenDe(userId);
+    if (!metaToken) return jsonResp({ error: 'Conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads' }, 409);
     const res = await fetch(
       `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,picture,instagram_business_account{id,name,profile_picture_url}&access_token=${metaToken}`
     );
@@ -72,6 +86,61 @@ export default async function handler(req) {
     );
     const rows = await res.json();
     return jsonResp({ connections: rows || [] });
+  }
+
+  // POST ?action=connect_page — conecta Messenger o Instagram resolviendo en el
+  // servidor el token de la página. Así el navegador nunca ve un token de Meta.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'connect_page') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const { agent_id, channel, page_id } = body || {};
+    if (!agent_id || !page_id || !['messenger', 'instagram'].includes(channel)) {
+      return jsonResp({ error: 'Faltan campos' }, 400);
+    }
+    const agente = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agent_id)}&user_id=eq.${encodeURIComponent(userId)}&select=id&limit=1`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (!agente?.length) return jsonResp({ error: 'Agente no encontrado' }, 404);
+
+    const metaToken = await metaTokenDe(userId);
+    if (!metaToken) return jsonResp({ error: 'Conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads' }, 409);
+
+    const pagina = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(page_id)}?fields=name,access_token,instagram_business_account%7Bid,username%7D&access_token=${metaToken}`
+    ).then(r => r.json()).catch(() => null);
+    if (!pagina?.access_token) {
+      return jsonResp({ error: pagina?.error?.message || 'No se pudo obtener el acceso a la página' }, 400);
+    }
+
+    // Instagram cuelga de la página, pero el id que escucha el webhook es el de
+    // la cuenta de Instagram, no el de la página.
+    const ig = pagina.instagram_business_account;
+    if (channel === 'instagram' && !ig?.id) {
+      return jsonResp({ error: 'Esa página no tiene una cuenta de Instagram Business conectada' }, 400);
+    }
+    const externalId = channel === 'instagram' ? String(ig.id) : String(page_id);
+    const nombre = channel === 'instagram' ? ('@' + (ig.username || pagina.name)) : pagina.name;
+
+    // Suscribir la página a la app, o Meta no entrega los mensajes
+    try {
+      await fetch(`https://graph.facebook.com/v19.0/${page_id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${pagina.access_token}`, { method: 'POST' });
+    } catch (e) { console.error('subscribed_apps', e); }
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
+      method: 'POST',
+      headers: { ...sb(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({
+        agent_id, user_id: userId, channel,
+        external_id: externalId,
+        access_token: pagina.access_token,
+        channel_name: nombre,
+        is_active: true,
+      }),
+    });
+    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    const rows = await res.json();
+    return jsonResp({ connection: rows[0] }, 201);
   }
 
   // POST — create/connect a channel
