@@ -132,7 +132,7 @@ export default async function handler(req) {
     if (!sub?.success) {
       const msg = sub?.error?.message || 'No se pudo suscribir la página';
       return jsonResp({
-        error: /pages_manage_metadata/i.test(msg)
+        error: /pages_manage_metadata|pages_messaging/i.test(msg)
           ? 'Falta un permiso de Meta. Ve a Configuración → Integraciones → Meta Ads, desconecta y vuelve a conectar para aceptar los permisos nuevos.'
           : msg,
         detail: msg,
