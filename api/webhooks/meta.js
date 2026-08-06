@@ -35,9 +35,27 @@ async function sendMeta(channel, connection, contactId, text) {
   }
 }
 
+// El evento de Meta trae el id del contacto pero no su nombre: hay que pedirlo
+// aparte con el token de la página. Sin esto el lead nace como
+// "Contacto messenger" y el comercial recibe una ficha sin nombre.
+async function nombreDelContacto(connection, contactId) {
+  if (!connection?.access_token || !contactId) return null;
+  const d = await fetch(
+    `https://graph.facebook.com/v19.0/${encodeURIComponent(contactId)}?fields=name,username&access_token=${connection.access_token}`
+  ).then(r => r.json()).catch(() => null);
+  if (!d || d.error) {
+    if (d?.error) console.warn('[meta] no se pudo leer el nombre:', String(d.error.message).slice(0, 120));
+    return null;
+  }
+  // En Instagram a veces solo viene el usuario
+  const n = d.name || (d.username ? '@' + d.username : null);
+  return n ? String(n).slice(0, 120) : null;
+}
+
 const processMessage = args => processIncoming({
   ...args,
   send: (connection, contactId, text) => sendMeta(args.channel, connection, contactId, text),
+  resolverNombre: nombreDelContacto,
 });
 
 // ── Meta Lead Ads (formularios de anuncios) ──────────────────────────────────
@@ -125,6 +143,7 @@ export default async function handler(req) {
       text: String(body.text || ''),
       providerMessageId: String(body.message_id || `${body.contact_id}-${Date.now()}`),
       send: null,
+      resolverNombre: nombreDelContacto,
     }).catch(e => ({ ok: false, reason: String(e && e.message || e) }));
     return new Response(JSON.stringify(r), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }

@@ -178,7 +178,11 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
 
 // ── Mensaje entrante ──────────────────────────────────────────────────────────
 // send: (connection, contactId, texto) => Promise — lo pone el webhook del canal
-export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send }) {
+// resolverNombre: (connection, contactId) => Promise<string|null> — lo pone el
+// webhook del canal. Meta no manda el nombre en el evento, solo el id, así que
+// sin esto el lead entra como "Contacto messenger" y el comercial recibe una
+// ficha sin nombre.
+export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, resolverNombre }) {
   if (!text || !externalId || !contactId) return { ok: false, reason: 'payload incompleto' };
 
   const connection = await fetch(
@@ -200,6 +204,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     `${SUPABASE_URL}/rest/v1/chat_conversations?connection_id=eq.${connection.id}&contact_id=eq.${encodeURIComponent(contactId)}&select=*`,
     { headers: sb() }
   ).then(r => r.json()).then(r => r?.[0]).catch(() => null);
+
+  if (!conv && !contactName && typeof resolverNombre === 'function') {
+    contactName = await resolverNombre(connection, contactId).catch(() => null);
+  }
 
   if (!conv) {
     conv = await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations`, {
@@ -237,6 +245,17 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       }),
     });
     return { ok: true, escalated: true, conversationId: conv.id };
+  }
+
+  // Conversaciones creadas antes de tener el nombre: se rellena al vuelo
+  if (conv && !conv.contact_name && typeof resolverNombre === 'function') {
+    const n = await resolverNombre(connection, contactId).catch(() => null);
+    if (n) {
+      conv.contact_name = n;
+      await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
+        method: 'PATCH', headers: sb(), body: JSON.stringify({ contact_name: n }),
+      }).catch(() => {});
+    }
   }
 
   const msgRows = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
