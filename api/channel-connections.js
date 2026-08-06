@@ -122,10 +122,22 @@ export default async function handler(req) {
     const externalId = channel === 'instagram' ? String(ig.id) : String(page_id);
     const nombre = channel === 'instagram' ? ('@' + (ig.username || pagina.name)) : pagina.name;
 
-    // Suscribir la página a la app, o Meta no entrega los mensajes
-    try {
-      await fetch(`https://graph.facebook.com/v19.0/${page_id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${pagina.access_token}`, { method: 'POST' });
-    } catch (e) { console.error('subscribed_apps', e); }
+    // Suscribir la página a la app. Si esto falla, la conexión se ve bien en la
+    // UI pero Meta no entrega ni un mensaje — así que no se puede tragar el
+    // error: mejor no crear la conexión y decir por qué.
+    const sub = await fetch(
+      `https://graph.facebook.com/v19.0/${page_id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${pagina.access_token}`,
+      { method: 'POST' }
+    ).then(r => r.json()).catch(e => ({ error: { message: String(e && e.message || e) } }));
+    if (!sub?.success) {
+      const msg = sub?.error?.message || 'No se pudo suscribir la página';
+      return jsonResp({
+        error: /pages_manage_metadata/i.test(msg)
+          ? 'Falta un permiso de Meta. Ve a Configuración → Integraciones → Meta Ads, desconecta y vuelve a conectar para aceptar los permisos nuevos.'
+          : msg,
+        detail: msg,
+      }, 400);
+    }
 
     const res = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
       method: 'POST',

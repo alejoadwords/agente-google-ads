@@ -18,6 +18,10 @@ export default function handler(req, res) {
       'business_management',
       'pages_read_engagement',
       'pages_show_list',
+      // Sin este permiso falla la suscripción de la página a la app y los
+      // mensajes de Messenger e Instagram nunca llegan al webhook.
+      'pages_manage_metadata',
+      'pages_messaging',
       'public_profile',
     ].join(','),
     response_type: 'code',
