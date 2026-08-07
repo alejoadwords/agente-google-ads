@@ -798,7 +798,10 @@ async function agencyInit() {
 // ── CRUD ─────────────────────────────────────────────────────────────────────
 function agencyGetStorageKey() {
   const uid = clerkInstance?.user?.id || 'anon';
-  return `acuarius_agency_clients_${uid}`;
+  // En modo soporte la cartera es la del cliente: si compartiera clave con la
+  // del administrador, una acabaría pisando a la otra.
+  const s = typeof sopEstado === 'function' ? sopEstado() : null;
+  return `acuarius_agency_clients_${s ? 'sop_' + s.cuenta : uid}`;
 }
 
 async function agencyLoadClients() {
@@ -818,6 +821,9 @@ async function agencyLoadClients() {
   } catch(e) {
     console.error('[agency] error de red leyendo la cartera:', e);
   }
+  // En soporte no hay fallback: subir la copia local significaría escribir la
+  // cartera de un administrador dentro de la cuenta de un cliente.
+  if (typeof sopVale === 'function' && sopVale()) { agencyClients = []; return; }
   // Fallback localStorage
   try {
     const raw = localStorage.getItem(agencyGetStorageKey());

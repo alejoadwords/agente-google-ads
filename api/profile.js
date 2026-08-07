@@ -114,12 +114,24 @@ async function convDelete(userId, url) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  const userId = await getUserId(req);
+  let userId = await getUserId(req);
   if (!userId) {
     return new Response(JSON.stringify({ error: 'No autorizado' }), {
       status: 401, headers: { ...CORS, 'Content-Type': 'application/json' }
     });
   }
+
+  // Modo soporte. Sin esto el panel mostraba la cartera del ADMINISTRADOR
+  // mientras el banner decía que estabas en la cuenta del cliente, que es
+  // exactamente la confusión que el banner existe para evitar.
+  try {
+    const { resolverSoporte } = await import('./_soporte.js');
+    const r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
+    const err = (m, c) => new Response(JSON.stringify({ error: m }), { status: c, headers: { ...CORS, 'Content-Type': 'application/json' } });
+    if (r.bloqueado) return err(r.bloqueado, 403);
+    if (r.invalido) return err('La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.', 401);
+    if (r.soporte) userId = r.userId;
+  } catch {}
 
   const url = new URL(req.url);
   const type = url.searchParams.get('type');
