@@ -54,15 +54,6 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
-  // Modo soporte: opera sobre la cuenta del cliente si viene un vale válido de
-  // un administrador. Ver api/_soporte.js.
-  try {
-    const { resolverSoporte } = await import('./_soporte.js');
-    const _r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
-    if (_r.bloqueado) return jsonResp({ error: _r.bloqueado }, 403);
-    if (_r.invalido) return jsonResp({ error: 'La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.' }, 401);
-    if (_r.soporte) userId = _r.userId;
-  } catch {}
 
   const url = new URL(req.url);
 

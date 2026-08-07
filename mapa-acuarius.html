@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acuarius — Mapa Mental</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #1E2BCC;
+    --blue-lt: #EEF0FD;
+    --blue-mid: #3D52E5;
+    --text: #0D0F1C;
+    --text2: #5A607A;
+    --text3: #9DA3BE;
+    --bg: #FFFFFF;
+    --bg2: #F7F8FC;
+    --border: #E4E6F0;
+    --green: #059669;
+    --amber: #D97706;
+    --red: #DC2626;
+    --purple: #7C3AED;
+    --teal: #0891B2;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .header {
+    padding: 16px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+  }
+  .header-logo {
+    width: 32px; height: 32px;
+    background: var(--blue);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .header-logo svg { width: 18px; height: 18px; }
+  .header-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .header-sub { font-size: 12px; color: var(--text3); margin-left: auto; }
+
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 10px 24px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+    position: sticky;
+    top: 53px;
+    background: white;
+    z-index: 9;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all .15s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+
+  .content { padding: 24px; max-width: 900px; margin: 0 auto; }
+
+  /* ── OVERVIEW ── */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .ov-card {
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .ov-card:hover { border-color: var(--blue); background: var(--blue-lt); }
+  .ov-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ov-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .ov-card-title { font-size: 12px; font-weight: 700; color: var(--text); }
+  .ov-count { font-size: 26px; font-weight: 800; color: var(--blue); }
+  .ov-label { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ── PILLS ── */
+  .pill { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .pill-blue { background: var(--blue-lt); color: var(--blue-mid); }
+  .pill-green { background: #D1FAE5; color: var(--green); }
+  .pill-amber { background: #FEF3C7; color: var(--amber); }
+  .pill-purple { background: #EDE9FE; color: var(--purple); }
+  .pill-red { background: #FEE2E2; color: var(--red); }
+  .pill-teal { background: #CFFAFE; color: var(--teal); }
+
+  /* ── AGENTES ── */
+  .agents-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .agent-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 16px; transition: border-color .15s; }
+  .agent-card:hover { border-color: var(--blue); }
+  .agent-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .agent-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .agent-name { font-size: 13px; font-weight: 700; }
+  .agent-const { font-size: 10px; color: var(--text3); font-family: monospace; }
+  .agent-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  /* ── MÓDULOS ── */
+  .modules-list { display: flex; flex-direction: column; gap: 10px; }
+  .mod-card { border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .mod-header { padding: 12px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background .15s; user-select: none; }
+  .mod-header:hover { background: var(--bg2); }
+  .mod-badge { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; margin-left: auto; }
+  .mod-title { font-size: 13px; font-weight: 600; }
+  .mod-id { font-size: 10px; color: var(--text3); font-family: monospace; }
+  .mod-arrow { margin-left: 4px; color: var(--text3); font-size: 12px; transition: transform .2s; }
+  .mod-arrow.open { transform: rotate(90deg); }
+  .mod-body { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .mod-body.open { display: block; }
+  .mod-features { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .mod-func { font-size: 11px; color: var(--text2); padding: 3px 9px; background: var(--bg2); border-radius: 5px; }
+
+  /* ── INTEGRACIONES ── */
+  .integrations-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .int-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 16px; }
+  .int-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .int-icon { font-size: 20px; }
+  .int-name { font-size: 13px; font-weight: 700; }
+  .int-role { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+  .int-endpoints { display: flex; flex-direction: column; gap: 4px; }
+  .int-ep { font-size: 10px; font-family: monospace; color: var(--text3); background: var(--bg2); padding: 3px 7px; border-radius: 4px; }
+
+  /* ── FLUJOS ── */
+  .flows-list { display: flex; flex-direction: column; gap: 12px; }
+  .flow-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 16px; }
+  .flow-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+  .flow-step { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: white; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step-content { font-size: 12px; color: var(--text2); padding-top: 3px; line-height: 1.5; }
+  .step-code { font-family: monospace; color: var(--blue-mid); }
+
+  /* ── DATOS ── */
+  .data-section { margin-bottom: 20px; }
+  .data-section-title { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .data-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .data-card { border: 1.5px solid var(--border); border-radius: 8px; padding: 12px; }
+  .data-key { font-size: 11px; font-family: monospace; color: var(--blue-mid); font-weight: 600; margin-bottom: 4px; }
+  .data-desc { font-size: 11px; color: var(--text2); }
+
+  /* ── BLOQUES ── */
+  .blocks-grid { display: flex; flex-direction: column; gap: 10px; }
+  .block-row { display: flex; align-items: flex-start; gap: 12px; border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .block-tag { font-family: monospace; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+  .block-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .block-desc { font-size: 12px; color: var(--text2); }
+
+  /* ── PLANES ── */
+  .planes-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .plan-card { border: 1.5px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .plan-name { font-size: 12px; font-weight: 700; margin-bottom: 5px; }
+  .plan-desc { font-size: 11px; color: var(--text2); }
+
+  @media (max-width: 640px) {
+    .overview-grid, .agents-grid, .integrations-grid, .data-grid, .planes-grid { grid-template-columns: 1fr; }
+    .content { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">
+    <svg viewBox="0 0 75 75" fill="white" xmlns="http://www.w3.org/2000/svg">
+      <path d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/>
+      <path d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/>
+    </svg>
+  </div>
+  <div>
+    <div class="header-title">Acuarius — Mapa Mental</div>
+  </div>
+  <div class="header-sub">app.js ~7k líneas · index.html ~2.3k líneas</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('overview')">Resumen</div>
+  <div class="tab" onclick="showTab('agentes')">Agentes IA</div>
+  <div class="tab" onclick="showTab('modulos')">Módulos UI</div>
+  <div class="tab" onclick="showTab('integraciones')">Integraciones</div>
+  <div class="tab" onclick="showTab('flujos')">Flujos</div>
+  <div class="tab" onclick="showTab('datos')">Datos</div>
+  <div class="tab" onclick="showTab('bloques')">Bloques especiales</div>
+</div>
+
+<div class="content">
+
+  <!-- ══════════ OVERVIEW ══════════ -->
+  <div id="tab-overview">
+    <div class="overview-grid">
+      <div class="ov-card" onclick="showTab('agentes')">
+        <div class="ov-card-header"><div class="ov-dot" style="background:#1E2BCC"></div><div class="ov-card-title">Agentes IA</div></div>
+        <div class="ov-count">8</div>
+        <div class="ov-label">Google Ads, Meta, TikTok, LinkedIn, SEO, Social, Consultor, General</div>
+      </div>
+      <div class="ov-card" onclick="showTab('modulos')">
+        <div class="ov-card-header"><div class="ov-dot" style="background:#7C3AED"></div><div class="ov-card-title">Módulos UI</div></div>
+        <div class="ov-count">7</div>
+        <div class="ov-label">Home, Chat, Agency, Roadmap, WAR, Variaciones, Academia</div>
+      </div>
+      <div class="ov-card" onclick="showTab('integraciones')">
+        <div class="ov-card-header"><div class="ov-dot" style="background:#059669"></div><div class="ov-card-title">Integraciones</div></div>
+        <div class="ov-count">8</div>
+        <div class="ov-label">Clerk, Google Ads, Meta, LinkedIn, Supabase, fal.ai, Sheets, Anthropic</div>
+      </div>
+      <div class="ov-card" onclick="showTab('flujos')">
+        <div class="ov-card-header"><div class="ov-dot" style="background:#D97706"></div><div class="ov-card-title">Flujos principales</div></div>
+        <div class="ov-count">5</div>
+        <div class="ov-label">Onboarding, Chat, WAR, Parrilla, Generación imágenes</div>
+      </div>
+      <div class="ov-card" onclick="showTab('datos')">
+        <div class="ov-card-header"><div class="ov-dot" style="background:#0891B2"></div><div class="ov-card-title">Persistencia</div></div>
+        <div class="ov-count">2</div>
+        <div class="ov-label">Supabase (remoto) + localStorage (fallback)</div>
+      </div>
+      <div class="ov-card" onclick="showTab('bloques')">
+        <div class="ov-card-header"><div class="ov-dot" style="background:#DC2626"></div><div class="ov-card-title">Bloques especiales</div></div>
+        <div class="ov-count">8</div>
+        <div class="ov-label">GAQL, META_API, GENERAR_IMAGEN, PARRILLA, SUGERENCIAS…</div>
+      </div>
+    </div>
+
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:18px;margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Stack técnico</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;">
+        <span class="pill pill-blue">HTML + CSS + JS Vanilla</span>
+        <span class="pill pill-blue">Sin framework</span>
+        <span class="pill pill-blue">Sin bundler</span>
+        <span class="pill pill-green">Claude claude-sonnet-4-20250514</span>
+        <span class="pill pill-purple">Clerk Auth</span>
+        <span class="pill pill-teal">Supabase</span>
+        <span class="pill pill-amber">SSE Streaming</span>
+        <span class="pill pill-red">fal.ai / Ideogram</span>
+        <span class="pill pill-green">jsPDF export</span>
+      </div>
+    </div>
+
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Planes de usuario</div>
+      <div class="planes-grid">
+        <div class="plan-card"><div class="plan-name" style="color:var(--text3);">FREE</div><div class="plan-desc">Trial 7 días · acceso limitado</div></div>
+        <div class="plan-card"><div class="plan-name" style="color:var(--green);">PRO</div><div class="plan-desc">Todos los agentes · imágenes incluidas</div></div>
+        <div class="plan-card" style="border-color:var(--blue-mid);background:var(--blue-lt)"><div class="plan-name" style="color:var(--blue);">AGENCY</div><div class="plan-desc">Hasta 20 clientes · panel agency · WAR</div></div>
+        <div class="plan-card"><div class="plan-name" style="color:var(--purple);">ADMIN</div><div class="plan-desc">Sin límites · acceso total</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ AGENTES ══════════ -->
+  <div id="tab-agentes" style="display:none">
+    <div class="agents-grid">
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#EEF0FD">🎯</div>
+          <div><div class="agent-name">Google Ads</div><div class="agent-const">SYSTEM</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-blue">GAQL queries</span>
+          <span class="pill pill-blue">RSA 15 títulos</span>
+          <span class="pill pill-blue">Keywords</span>
+          <span class="pill pill-blue">Roadmap 6 etapas</span>
+          <span class="pill pill-green">API Google Ads</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#FEF3C7">📘</div>
+          <div><div class="agent-name">Meta Ads</div><div class="agent-const">SYSTEM_META</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-amber">META_API blocks</span>
+          <span class="pill pill-amber">OAuth Meta</span>
+          <span class="pill pill-amber">Copys video/imagen</span>
+          <span class="pill pill-green">Publicar a Meta</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#FEE2E2">🎵</div>
+          <div><div class="agent-name">TikTok Ads</div><div class="agent-const">SYSTEM_TIKTOK</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-red">Hooks 3 segundos</span>
+          <span class="pill pill-red">In-Feed / TopView</span>
+          <span class="pill pill-red">Guiones de video</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#CFFAFE">💼</div>
+          <div><div class="agent-name">LinkedIn Ads</div><div class="agent-const">SYSTEM_LINKEDIN</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-teal">B2B pipeline</span>
+          <span class="pill pill-teal">Lead Gen Forms</span>
+          <span class="pill pill-teal">Sponsored Content</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#D1FAE5">🔍</div>
+          <div><div class="agent-name">SEO</div><div class="agent-const">SYSTEM_SEO</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-green">Auditoría técnica</span>
+          <span class="pill pill-green">Core Web Vitals</span>
+          <span class="pill pill-green">AEO (ChatGPT/Claude)</span>
+          <span class="pill pill-green">Plan editorial</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#EDE9FE">📱</div>
+          <div><div class="agent-name">Social Media</div><div class="agent-const">SYSTEM_SOCIAL</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-purple">Parrilla mensual</span>
+          <span class="pill pill-purple">Exportar a Sheets</span>
+          <span class="pill pill-purple">Generar imágenes</span>
+          <span class="pill pill-purple">SOCIAL_OPTIONS</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#FFF7ED">🧠</div>
+          <div><div class="agent-name">Consultor Marketing</div><div class="agent-const">SYSTEM_CONSULTOR</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-amber">Estrategia 360°</span>
+          <span class="pill pill-amber">Distribución presupuesto</span>
+          <span class="pill pill-amber">Stack recomendado</span>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:#F0FDF4">💬</div>
+          <div><div class="agent-name">Chat General (Home)</div><div class="agent-const">SYSTEM_GENERAL</div></div>
+        </div>
+        <div class="agent-pills">
+          <span class="pill pill-green">Sin onboarding</span>
+          <span class="pill pill-green">Sugiere agente</span>
+          <span class="pill pill-green">AGENTE_SUGERIDO block</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:18px;margin-top:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Variables de inyección en system prompts</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="background:var(--bg2);border-radius:8px;padding:10px 14px;font-size:11px;">
+          <code style="color:var(--blue-mid);font-size:13px;">{MEMORY}</code>
+          <div style="color:var(--text2);margin-top:4px;">Perfil completo del cliente activo</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:10px 14px;font-size:11px;">
+          <code style="color:var(--blue-mid);font-size:13px;">{STAGE}</code>
+          <div style="color:var(--text2);margin-top:4px;">Etapa del cliente (día 1, semana, mes…)</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:10px 14px;font-size:11px;">
+          <code style="color:var(--blue-mid);font-size:13px;">{AGENT}</code>
+          <div style="color:var(--text2);margin-top:4px;">Nombre del agente activo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ MÓDULOS ══════════ -->
+  <div id="tab-modulos" style="display:none">
+    <div class="modules-list">
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#1E2BCC;flex-shrink:0"></div>
+          <div><div class="mod-title">Home</div><div class="mod-id">#view-home</div></div>
+          <span class="mod-badge" style="background:#EEF0FD;color:#1E2BCC;">todos los planes</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">Grid de 6 agentes clickeables</span>
+            <span class="mod-func">Chat general sin agente (SYSTEM_GENERAL)</span>
+            <span class="mod-func">home-chat-box aparece al escribir</span>
+            <span class="mod-func">Detecta [AGENTE_SUGERIDO] y propone cambiar</span>
+            <span class="mod-func">Quick actions contextuales</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#7C3AED;flex-shrink:0"></div>
+          <div><div class="mod-title">Chat con Agente</div><div class="mod-id">#view-chat</div></div>
+          <span class="mod-badge" style="background:#EDE9FE;color:#7C3AED;">core</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">chat-area con SSE streaming</span>
+            <span class="mod-func">Onboarding 9 pasos por agente</span>
+            <span class="mod-func">mem-card (perfil del cliente en sidebar)</span>
+            <span class="mod-func">cin-area (input + adjuntar imagen)</span>
+            <span class="mod-func">Historial hasta 40 mensajes</span>
+            <span class="mod-func">Social action bar (solo agente Social)</span>
+            <span class="mod-func">Guardar y cargar conversaciones anteriores</span>
+            <span class="mod-func">Bloque [SUGERENCIAS] → botones de follow-up</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#059669;flex-shrink:0"></div>
+          <div><div class="mod-title">Panel de Clientes (Agency)</div><div class="mod-id">#view-agency</div></div>
+          <span class="mod-badge" style="background:#D1FAE5;color:#059669;">plan agency</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">Grid de tarjetas de clientes</span>
+            <span class="mod-func">Brief profesional de 8 pasos</span>
+            <span class="mod-func">Estado de salud: verde / amarillo / rojo / gris</span>
+            <span class="mod-func">Contexto scoped por cliente (historial + perfil)</span>
+            <span class="mod-func">agency-ctx-bar (barra roja de contexto activo)</span>
+            <span class="mod-func">Stats: total · en verde · en alerta</span>
+            <span class="mod-func">Límite 20 clientes (agency) / sin límite (admin)</span>
+            <span class="mod-func">Sync Supabase ↔ localStorage</span>
+            <span class="mod-func">Botón "reporte" por cliente → abre WAR</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#D97706;flex-shrink:0"></div>
+          <div><div class="mod-title">WAR — Weekly Account Review</div><div class="mod-id">#war-preview-wrap</div></div>
+          <span class="mod-badge" style="background:#FEF3C7;color:#D97706;">agency</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">5 pasos: plataforma → KPIs → período → métricas → resumen</span>
+            <span class="mod-func">Plataformas: Google Ads, Meta, LinkedIn, TikTok</span>
+            <span class="mod-func">KPIs personalizables por plataforma</span>
+            <span class="mod-func">URL pública generada en Supabase</span>
+            <span class="mod-func">Copiar al portapapeles / enviar por WhatsApp</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#0891B2;flex-shrink:0"></div>
+          <div><div class="mod-title">Roadmap</div><div class="mod-id">#rm-panel (lateral)</div></div>
+          <span class="mod-badge" style="background:#CFFAFE;color:#0891B2;">panel lateral</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">6 etapas × 8 agentes (contenido en ROADMAP_CONTENT)</span>
+            <span class="mod-func">Checklist de tareas con badges de criticidad</span>
+            <span class="mod-func">Click en tarea → marca como done</span>
+            <span class="mod-func">Botón "preguntar al agente" sobre la etapa</span>
+            <span class="mod-func">Selector de período (día / semana / mes…)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#DC2626;flex-shrink:0"></div>
+          <div><div class="mod-title">Generación de Imágenes</div><div class="mod-id">inline en view-chat</div></div>
+          <span class="mod-badge" style="background:#FEE2E2;color:#DC2626;">pro+</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">Disparado por [GENERAR_IMAGEN] en el output del agente</span>
+            <span class="mod-func">Motor: fal.ai / Ideogram</span>
+            <span class="mod-func">Formatos: square 1:1, vertical 4:5, story 9:16, carrusel</span>
+            <span class="mod-func">1–4 variaciones por generación</span>
+            <span class="mod-func">Descargar / lightbox / publicar a Meta</span>
+            <span class="mod-func">Contador de límite por plan</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-card">
+        <div class="mod-header" onclick="toggleMod(this)">
+          <div style="width:9px;height:9px;border-radius:50%;background:#7C3AED;flex-shrink:0"></div>
+          <div><div class="mod-title">Academia</div><div class="mod-id">#view-academia</div></div>
+          <span class="mod-badge" style="background:#EDE9FE;color:#7C3AED;">contenido</span>
+          <span class="mod-arrow">▶</span>
+        </div>
+        <div class="mod-body">
+          <div class="mod-features">
+            <span class="mod-func">27 videos organizados por categorías</span>
+            <span class="mod-func">Panel CRUD para admin (agregar / editar / eliminar)</span>
+            <span class="mod-func">Videos de YouTube embebidos</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ INTEGRACIONES ══════════ -->
+  <div id="tab-integraciones" style="display:none">
+    <div class="integrations-grid">
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">🔐</div><div class="int-name">Clerk</div></div>
+        <div class="int-role">Autenticación y planes de usuario</div>
+        <div class="int-endpoints">
+          <div class="int-ep">Clerk.load() → initAuth</div>
+          <div class="int-ep">session.getToken() → Bearer</div>
+          <div class="int-ep">publicMetadata.plan → plan</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">🗄️</div><div class="int-name">Supabase</div></div>
+        <div class="int-role">Persistencia remota cross-device</div>
+        <div class="int-endpoints">
+          <div class="int-ep">tabla: conversations</div>
+          <div class="int-ep">tabla: agency_clients</div>
+          <div class="int-ep">tabla: war_reports</div>
+          <div class="int-ep">Fallback → localStorage</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">🤖</div><div class="int-name">Anthropic Claude</div></div>
+        <div class="int-role">Motor de IA — todos los agentes</div>
+        <div class="int-endpoints">
+          <div class="int-ep">POST /api/chat (SSE streaming)</div>
+          <div class="int-ep">claude-sonnet-4-20250514</div>
+          <div class="int-ep">Historial: últimos 40 mensajes</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">📊</div><div class="int-name">Google Ads</div></div>
+        <div class="int-role">GAQL queries sobre cuentas MCC</div>
+        <div class="int-endpoints">
+          <div class="int-ep">GET /api/google-ads-auth (OAuth)</div>
+          <div class="int-ep">POST /api/list-accounts</div>
+          <div class="int-ep">POST /api/google-ads (GAQL)</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">📘</div><div class="int-name">Meta Ads</div></div>
+        <div class="int-role">Facebook / Instagram via Graph API</div>
+        <div class="int-endpoints">
+          <div class="int-ep">GET /api/meta-auth (OAuth)</div>
+          <div class="int-ep">POST /api/meta-list-accounts</div>
+          <div class="int-ep">POST /api/meta-ads (operaciones)</div>
+          <div class="int-ep">POST /api/social-publish</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">💼</div><div class="int-name">LinkedIn</div></div>
+        <div class="int-role">LinkedIn Ads + publicación orgánica</div>
+        <div class="int-endpoints">
+          <div class="int-ep">GET /api/linkedin-auth</div>
+          <div class="int-ep">POST /api/linkedin-ads</div>
+          <div class="int-ep">POST /api/social-publish</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">🖼️</div><div class="int-name">fal.ai / Ideogram</div></div>
+        <div class="int-role">Generación de imágenes para anuncios</div>
+        <div class="int-endpoints">
+          <div class="int-ep">POST /api/generate-image</div>
+          <div class="int-ep">Ideogram Remix (variaciones)</div>
+          <div class="int-ep">Formatos: 1:1 · 4:5 · 9:16 · carrusel</div>
+        </div>
+      </div>
+      <div class="int-card">
+        <div class="int-header"><div class="int-icon">📋</div><div class="int-name">Google Sheets</div></div>
+        <div class="int-role">Exportar parrilla de contenido social</div>
+        <div class="int-endpoints">
+          <div class="int-ep">POST /api/create-sheet</div>
+          <div class="int-ep">Devuelve URL pública del Sheet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ FLUJOS ══════════ -->
+  <div id="tab-flujos" style="display:none">
+    <div class="flows-list">
+      <div class="flow-card">
+        <div class="flow-title">1 — Nuevo usuario / Onboarding</div>
+        <div class="flow-step"><div class="step-num">1</div><div class="step-content"><span class="step-code">initAuth()</span> → carga Clerk, detecta plan del usuario</div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-content">Clic en agente → <span class="step-code">openAgent(key)</span></div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-content">Si no hay perfil guardado → <span class="step-code">renderOb()</span> — 9 preguntas adaptadas por agente</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-content"><span class="step-code">finishOb()</span> → guarda perfil en localStorage / Supabase y abre chat</div></div>
+      </div>
+
+      <div class="flow-card">
+        <div class="flow-title">2 — Chat con agente (turno normal)</div>
+        <div class="flow-step"><div class="step-num">1</div><div class="step-content">Usuario escribe + Enter → <span class="step-code">sendMsg()</span></div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-content"><span class="step-code">callClaude()</span> → POST /api/chat · system prompt con {MEMORY}, {STAGE}, {AGENT}</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-content">SSE stream → tokens en tiempo real → frontend detecta bloques especiales en el output</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-content">Ejecuta acción del bloque (GAQL query, genera imagen, exporta, etc.)</div></div>
+        <div class="flow-step"><div class="step-num">5</div><div class="step-content">Guarda conversación en Supabase / localStorage</div></div>
+      </div>
+
+      <div class="flow-card">
+        <div class="flow-title">3 — WAR (Weekly Account Review)</div>
+        <div class="flow-step"><div class="step-num">1</div><div class="step-content"><span class="step-code">warOpen(clientId)</span> desde el botón "reporte" en la tarjeta del cliente</div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-content">Pasos 1–4: plataforma → KPIs → período → ingreso de métricas</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-content"><span class="step-code">warGenerate()</span> → POST /api/report → genera URL pública en Supabase</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-content">Copiar link o enviar por WhatsApp directo</div></div>
+      </div>
+
+      <div class="flow-card">
+        <div class="flow-title">4 — Parrilla Social → Google Sheets</div>
+        <div class="flow-step"><div class="step-num">1</div><div class="step-content">Agente genera parrilla y emite <span class="step-code">[PARRILLA_LISTA]</span></div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-content">Frontend renderiza 4 botones: Sheets, Imágenes, PDF, Cerrar</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-content"><span class="step-code">exportToSheets()</span> → POST /api/create-sheet → URL del Google Sheet</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-content">Opcional: <span class="step-code">generarImagenesParrilla()</span> → prompt automático para imágenes de posts</div></div>
+      </div>
+
+      <div class="flow-card">
+        <div class="flow-title">5 — Generación de imagen de anuncio</div>
+        <div class="flow-step"><div class="step-num">1</div><div class="step-content">Agente emite <span class="step-code">[GENERAR_IMAGEN: {prompt, format, variations}]</span></div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-content"><span class="step-code">canGenerateImage()</span> valida límite según plan del usuario</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-content">POST /api/generate-image → fal.ai / Ideogram</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-content"><span class="step-code">renderAdImage()</span> → grid horizontal scrolleable con descargar / publicar a Meta</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ DATOS ══════════ -->
+  <div id="tab-datos" style="display:none">
+    <div class="data-section">
+      <div class="data-section-title">localStorage — caché local y fallback</div>
+      <div class="data-grid">
+        <div class="data-card"><div class="data-key">acuarius_profile_[uid]_[agent]</div><div class="data-desc">Perfil del cliente por agente (negocio, objetivo, industria, presupuesto…)</div></div>
+        <div class="data-card"><div class="data-key">acuarius_history_[uid]_[clientId]_[agent]</div><div class="data-desc">Últimos 40 mensajes del historial de chat</div></div>
+        <div class="data-card"><div class="data-key">acuarius_agency_clients_[uid]</div><div class="data-desc">Array de clientes de agencia (backup si Supabase falla)</div></div>
+        <div class="data-card"><div class="data-key">acuarius_image_usage</div><div class="data-desc">{ generated, limit, timestamp } — tracking del límite de imágenes por plan</div></div>
+      </div>
+    </div>
+    <div class="data-section">
+      <div class="data-section-title">Supabase — persistencia remota cross-device</div>
+      <div class="data-grid">
+        <div class="data-card"><div class="data-key">conversations</div><div class="data-desc">id, userId, agentKey, title, messages[], createdAt</div></div>
+        <div class="data-card"><div class="data-key">agency_clients</div><div class="data-desc">id, userId, name, business, health, brief completo del cliente</div></div>
+        <div class="data-card"><div class="data-key">war_reports</div><div class="data-desc">id, clientId, content, reportUrl, createdAt</div></div>
+      </div>
+    </div>
+    <div class="data-section">
+      <div class="data-section-title">Variables globales críticas en runtime</div>
+      <div class="data-grid">
+        <div class="data-card"><div class="data-key">mem</div><div class="data-desc">Perfil del cliente activo (negocio, objetivo, industria, presupuesto…)</div></div>
+        <div class="data-card"><div class="data-key">hist[]</div><div class="data-desc">Array de mensajes del chat actual (role + content)</div></div>
+        <div class="data-card"><div class="data-key">currentAgentCtx</div><div class="data-desc">Agente activo: 'google-ads', 'meta-ads', 'seo', etc.</div></div>
+        <div class="data-card"><div class="data-key">agencyActiveClientId</div><div class="data-desc">ID del cliente en contexto de agencia (null si no hay ninguno)</div></div>
+        <div class="data-card"><div class="data-key">userPlan</div><div class="data-desc">Plan del usuario: free / pro / agency / admin</div></div>
+        <div class="data-card"><div class="data-key">sessionToken</div><div class="data-desc">Bearer token de Clerk para requests autenticados a /api/*</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ BLOQUES ESPECIALES ══════════ -->
+  <div id="tab-bloques" style="display:none">
+    <div class="blocks-grid">
+      <div class="block-row">
+        <span class="block-tag" style="background:#EEF0FD;color:#1E2BCC;">[GAQL_QUERY]</span>
+        <div class="block-info"><div class="block-name">Google Ads Query</div><div class="block-desc">Ejecuta una query GAQL contra la cuenta conectada. El resultado se integra automáticamente en el siguiente turno del agente.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#FEF3C7;color:#D97706;">[META_API]</span>
+        <div class="block-info"><div class="block-name">Meta Ads API</div><div class="block-desc">Llama a la Graph API de Meta con endpoint, method y params. La respuesta vuelve al agente para análisis o acciones.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#FEE2E2;color:#DC2626;">[GENERAR_IMAGEN]</span>
+        <div class="block-info"><div class="block-name">Generar imagen de anuncio</div><div class="block-desc">Dispara POST /api/generate-image con prompt, formato y número de variaciones. Renderiza un grid horizontal con las imágenes.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#EDE9FE;color:#7C3AED;">[PARRILLA_LISTA]</span>
+        <div class="block-info"><div class="block-name">Parrilla lista para exportar</div><div class="block-desc">Activa los botones de exportación: Google Sheets, Generar imágenes, Exportar PDF.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#EDE9FE;color:#7C3AED;">[GENERAR_IMAGENES_PARRILLA]</span>
+        <div class="block-info"><div class="block-name">Imágenes para posts de parrilla</div><div class="block-desc">Prepara un prompt automático para generar una imagen por cada post de la parrilla de contenido.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#EDE9FE;color:#7C3AED;">[SOCIAL_OPTIONS]</span>
+        <div class="block-info"><div class="block-name">Opciones del agente social</div><div class="block-desc">Renderiza 6 botones de acción rápida: diagnóstico, parrilla, estrategia, copys, análisis de rendimiento, viral.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#D1FAE5;color:#059669;">[SUGERENCIAS]</span>
+        <div class="block-info"><div class="block-name">Preguntas sugeridas</div><div class="block-desc">Formato: [SUGERENCIAS: opción1 | opción2 | opción3]. Renderiza 3 botones de follow-up al final de cada respuesta del agente.</div></div>
+      </div>
+      <div class="block-row">
+        <span class="block-tag" style="background:#CFFAFE;color:#0891B2;">[AGENTE_SUGERIDO]</span>
+        <div class="block-info"><div class="block-name">Sugerencia de agente especializado</div><div class="block-desc">Solo en el home chat general. Propone al usuario cambiar al agente especializado: [AGENTE_SUGERIDO: google-ads].</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function showTab(name) {
+    document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
+    document.getElementById('tab-' + name).style.display = 'block';
+    const order = ['overview','agentes','modulos','integraciones','flujos','datos','bloques'];
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', order[i] === name);
+    });
+  }
+  function toggleMod(header) {
+    const body = header.nextElementSibling;
+    const arrow = header.querySelector('.mod-arrow');
+    const open = body.classList.toggle('open');
+    if (arrow) arrow.classList.toggle('open', open);
+  }
+</script>
+</body>
+</html>

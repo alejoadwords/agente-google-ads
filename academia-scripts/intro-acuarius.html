@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Intro — Acuarius</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    width: 100vw;
+    height: 100vh;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  body {
+    width: 100%;
+    height: 100%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    font-family: sans-serif;
+  }
+
+  /* ── Logo ── */
+  .logo-wrap {
+    position: relative;
+    opacity: 0;
+    will-change: transform, opacity, filter;
+  }
+
+  .logo {
+    width: 460px;
+    height: auto;
+    display: block;
+    user-select: none;
+    pointer-events: none;
+    /* White background logo — limpiar el borde blanco si fondo es transparente */
+  }
+
+  /* ── Light sweep ── */
+  .sweep {
+    position: absolute;
+    inset: -60px;
+    background: linear-gradient(
+      112deg,
+      transparent 0%,
+      transparent 30%,
+      rgba(255,255,255,0) 38%,
+      rgba(255,255,255,0.85) 50%,
+      rgba(255,255,255,0) 62%,
+      transparent 70%,
+      transparent 100%
+    );
+    transform: translateX(-300%);
+    pointer-events: none;
+    border-radius: 8px;
+    opacity: 0;
+  }
+
+  /* ── White fade overlay (exit) ── */
+  .fade-out {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* ── UI de control (solo para previsualizar) ── */
+  .controls {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  body:hover .controls { opacity: 1; }
+
+  .btn {
+    padding: 8px 20px;
+    border-radius: 20px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: -apple-system, sans-serif;
+    transition: all 0.15s;
+  }
+  .btn-play  { background: #1A2BCC; color: #fff; }
+  .btn-play:hover { background: #1220a8; }
+  .btn-reset { background: #f0f0f0; color: #333; }
+  .btn-reset:hover { background: #e0e0e0; }
+  .btn-fullscreen { background: #111; color: #fff; }
+  .btn-fullscreen:hover { background: #000; }
+
+  .timer {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: #aaa;
+    font-family: monospace;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  body:hover .timer { opacity: 1; }
+</style>
+</head>
+<body>
+
+  <!-- Logo principal -->
+  <div class="logo-wrap" id="logoWrap">
+    <img class="logo" src="../acuarius meta logo.png" id="logo" alt="Acuarius">
+    <div class="sweep" id="sweep"></div>
+  </div>
+
+  <!-- Overlay fade a blanco -->
+  <div class="fade-out" id="fadeOut"></div>
+
+  <!-- Controles de preview -->
+  <div class="controls">
+    <button class="btn btn-play"  onclick="playIntro()">▶ Reproducir</button>
+    <button class="btn btn-reset" onclick="resetIntro()">↺ Reiniciar</button>
+    <button class="btn btn-fullscreen" onclick="goFullscreen()">⛶ Pantalla completa</button>
+  </div>
+  <div class="timer" id="timer">0.0 s</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+//  TIMELINE (total ~6.5 s)
+//
+//  0.0 s  → Fade-in + scale up + deblur del logo       (1.1 s)
+//  1.8 s  → Logo estático, centrado, perfecto           (1.8 s)
+//  3.2 s  → Breathe: escala sutil 1.0→1.018→1.0        (0.65 s)
+//  3.9 s  → Light sweep de izq a der                   (0.9 s)
+//  5.3 s  → Fade a blanco                               (1.0 s)
+//  6.3 s  → Blanco total — FIN
+// ─────────────────────────────────────────────────────────────────
+
+const logoWrap  = document.getElementById('logoWrap');
+const sweepEl   = document.getElementById('sweep');
+const fadeOutEl = document.getElementById('fadeOut');
+const timerEl   = document.getElementById('timer');
+
+let startTime = null;
+let timerRAF  = null;
+let playing   = false;
+
+function ease(t, type = 'easeOutExpo') {
+  if (type === 'easeOutExpo') return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+  if (type === 'easeInOut')   return t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+  if (type === 'easeIn')      return t * t * t;
+  return t;
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function resetIntro() {
+  playing = false;
+  cancelAnimationFrame(timerRAF);
+  startTime = null;
+
+  logoWrap.style.opacity = '0';
+  logoWrap.style.transform = 'scale(0.88) translateY(12px)';
+  logoWrap.style.filter = 'blur(4px)';
+
+  sweepEl.style.opacity = '0';
+  sweepEl.style.transform = 'translateX(-300%)';
+
+  fadeOutEl.style.opacity = '0';
+  timerEl.textContent = '0.0 s';
+}
+
+function playIntro() {
+  if (playing) return;
+  resetIntro();
+
+  // Pequeño delay antes de arrancar
+  setTimeout(() => {
+    playing = true;
+    startTime = performance.now();
+    animate();
+  }, 80);
+}
+
+function animate() {
+  if (!playing) return;
+
+  const now     = performance.now();
+  const elapsed = (now - startTime) / 1000; // segundos
+
+  timerEl.textContent = elapsed.toFixed(1) + ' s';
+
+  // ── FASE 1: Reveal (0 → 1.1 s) ──────────────────────────────────
+  if (elapsed <= 1.1) {
+    const t = Math.min(elapsed / 1.1, 1);
+    const e = ease(t, 'easeOutExpo');
+
+    const opacity   = lerp(0, 1, e);
+    const scale     = lerp(0.88, 1, e);
+    const translateY = lerp(12, 0, e);
+    const blur      = lerp(4, 0, e);
+
+    logoWrap.style.opacity   = opacity;
+    logoWrap.style.transform = `scale(${scale}) translateY(${translateY}px)`;
+    logoWrap.style.filter    = `blur(${blur}px)`;
+  }
+
+  // ── FASE 2: Hold estático (1.1 → 3.2 s) — no hace nada ─────────
+
+  // ── FASE 3: Breathe (3.2 → 3.85 s) ─────────────────────────────
+  if (elapsed > 3.2 && elapsed <= 3.85) {
+    const t = (elapsed - 3.2) / 0.65;
+    // Sine wave: sube y baja
+    const sine  = Math.sin(t * Math.PI);
+    const scale = 1 + 0.018 * sine;
+    logoWrap.style.transform = `scale(${scale}) translateY(0px)`;
+    logoWrap.style.filter    = 'blur(0px)';
+    logoWrap.style.opacity   = '1';
+  }
+
+  // Asegurar estado limpio después del breathe
+  if (elapsed > 3.85 && elapsed <= 3.9) {
+    logoWrap.style.transform = 'scale(1) translateY(0px)';
+  }
+
+  // ── FASE 4: Light sweep (3.9 → 4.8 s) ───────────────────────────
+  if (elapsed > 3.9 && elapsed <= 4.8) {
+    const t = (elapsed - 3.9) / 0.9;
+    const e = ease(t, 'easeInOut');
+    // De -300% a +300%
+    const tx = lerp(-300, 300, e);
+
+    sweepEl.style.opacity   = '1';
+    sweepEl.style.transform = `translateX(${tx}%)`;
+  }
+
+  if (elapsed > 4.8) {
+    sweepEl.style.opacity   = '0';
+  }
+
+  // ── FASE 5: Fade a blanco (5.3 → 6.3 s) ─────────────────────────
+  if (elapsed > 5.3 && elapsed <= 6.3) {
+    const t = (elapsed - 5.3) / 1.0;
+    const e = ease(t, 'easeIn');
+    fadeOutEl.style.opacity = e.toFixed(4);
+  }
+
+  // ── FIN ──────────────────────────────────────────────────────────
+  if (elapsed >= 6.3) {
+    fadeOutEl.style.opacity = '1';
+    timerEl.textContent = '6.3 s ✓ FIN';
+    playing = false;
+    return;
+  }
+
+  timerRAF = requestAnimationFrame(animate);
+}
+
+// Pantalla completa para grabación
+function goFullscreen() {
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen();
+  }
+}
+
+// Auto-play al cargar si hay ?autoplay en la URL
+if (location.search.includes('autoplay')) {
+  window.addEventListener('load', () => setTimeout(playIntro, 500));
+}
+
+// Estado inicial
+resetIntro();
+</script>
+
+</body>
+</html>

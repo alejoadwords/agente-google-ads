@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinamicas Star — Preview del template Elementor</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  :root{
+    --bg:#050805; --card:#0C110B; --border:rgba(147,226,35,.25);
+    --green:#93E223; --green-dark:#54B70C; --white:#fff; --gray:#C9CFC6; --black:#0A0A0A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);font-family:'Roboto',sans-serif;color:var(--white)}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+  .display{font-family:'Anton',sans-serif;font-weight:400;letter-spacing:1px}
+  .btn{display:inline-block;background:var(--green);color:var(--black);font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:50px;padding:16px 34px;text-decoration:none;font-size:16px;transition:.2s}
+  .btn:hover{background:#A9F03D}
+  /* NAV */
+  nav{display:flex;align-items:center;justify-content:space-between;padding:18px 0;gap:20px}
+  nav .logo{font-family:'Anton',sans-serif;font-size:22px}
+  nav .logo span{color:var(--green)}
+  nav ul{display:flex;list-style:none;gap:22px}
+  nav a{color:#fff;text-decoration:none;font-size:13px}
+  nav a:hover{color:var(--green)}
+  nav .btn{font-size:13px;padding:12px 22px}
+  /* HERO */
+  .hero{padding:60px 0;background:linear-gradient(120deg,var(--bg) 55%,#0B1A06)}
+  .hero .wrap{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+  .badge{display:inline-block;border:1px solid var(--green);color:var(--green);border-radius:50px;padding:10px 22px;font-size:14px;font-weight:700;letter-spacing:1.5px;margin-bottom:18px}
+  .hero h1{font-size:72px;line-height:1.02}
+  .hero h1 span{color:var(--green)}
+  .hero p{color:var(--gray);font-size:18px;line-height:1.5;margin:18px 0}
+  .hero .btn{border-radius:12px;font-size:17px;padding:18px 40px}
+  .trust{display:flex;gap:20px;margin-top:22px;flex-wrap:wrap}
+  .trust span{font-size:12px;font-weight:700}
+  .trust i{color:var(--green);margin-right:8px}
+  .hero img{width:100%;border-radius:16px}
+  /* CARDS */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:30px}
+  .stat{display:flex;gap:14px;align-items:flex-start}
+  .stat i{color:var(--green);font-size:30px}
+  .stat b{font-size:15px;text-transform:uppercase;letter-spacing:.5px;display:block}
+  .stat small{color:var(--gray);font-size:13px}
+  /* CÓMO FUNCIONA */
+  .sec-title{text-align:center;font-size:34px;color:var(--green);padding:40px 0 30px}
+  .sec-title.white{color:#fff;font-size:30px}
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding-bottom:40px;text-align:center}
+  .steps i{color:var(--green);font-size:36px;margin-bottom:14px}
+  .steps b{display:block;font-size:15px;text-transform:uppercase;margin-bottom:8px}
+  .steps small{color:var(--gray);font-size:13px;line-height:1.5}
+  /* PAQUETES */
+  .packs{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;padding:10px 0}
+  .pack{background:linear-gradient(180deg,#AEED3F,var(--green-dark));border-radius:14px;padding:24px 14px;text-align:center;color:var(--black)}
+  .pack .mult{font-weight:800;font-size:18px;color:rgba(10,10,10,.75)}
+  .pack .price{font-family:'Anton',sans-serif;font-size:32px;margin:6px 0}
+  .pack small{color:rgba(10,10,10,.8);font-size:13px;display:block;margin-bottom:14px}
+  .pack a{background:var(--black);color:#fff;border-radius:8px;font-size:13px;font-weight:700;padding:10px 26px;text-decoration:none;display:inline-block}
+  .secure{text-align:center;padding:14px 0 40px;font-size:14px}
+  .secure span{color:var(--green);font-weight:700}
+  /* PREMIOS + SORTEO */
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-bottom:30px}
+  .two h3{font-family:'Anton',sans-serif;color:var(--green);text-align:center;font-size:24px;margin-bottom:20px}
+  .prize{display:flex;justify-content:space-between;font-weight:700;font-size:17px;padding:10px 6px}
+  .prize i{color:var(--green);margin-right:10px}
+  .prize .amt{color:var(--green)}
+  .note{text-align:center;color:var(--gray);font-size:13px;margin-top:14px}
+  .draw-date{font-family:'Anton',sans-serif;text-align:center;font-size:26px;margin-bottom:20px}
+  .count{display:flex;justify-content:center;gap:14px;align-items:flex-start}
+  .count .n{font-family:'Anton',sans-serif;font-size:44px;color:var(--green);line-height:1}
+  .count .l{font-size:11px;color:var(--gray);letter-spacing:1px;margin-top:6px;text-align:center}
+  .count .sep{font-size:34px;color:var(--green);font-family:'Anton',sans-serif}
+  /* CONFIANZA */
+  .trust2{display:grid;grid-template-columns:45fr 55fr;gap:20px;padding-bottom:30px}
+  .video{background:#000;border-radius:12px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+  .video i{font-size:54px;color:var(--green)}
+  .checks{list-style:none;margin:18px 0}
+  .checks li{padding:6px 0;font-size:15px}
+  .checks i{color:var(--green);margin-right:10px}
+  .social{display:flex;gap:12px;margin-top:12px}
+  .social a{width:44px;height:44px;border-radius:50%;background:var(--green);color:var(--black);display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none}
+  /* CTA FINAL */
+  .cta{display:flex;justify-content:space-between;align-items:center;gap:24px;border-color:var(--green)!important;margin-bottom:30px}
+  .cta h3{font-family:'Anton',sans-serif;font-size:24px}
+  .cta p{color:var(--gray);margin-top:8px}
+  .cta p strong{color:var(--green)}
+  /* FOOTER */
+  footer{background:#030503;border-top:1px solid rgba(147,226,35,.15);padding:40px 0 24px}
+  .fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .fgrid h5{font-size:14px;letter-spacing:1px;margin-bottom:14px}
+  .fgrid a{display:block;color:var(--gray);text-decoration:none;font-size:13px;padding:4px 0}
+  .fgrid a:hover{color:var(--green)}
+  .fgrid i{color:var(--green);margin-right:8px}
+  .copy{text-align:center;color:rgba(201,207,198,.5);font-size:12px;margin-top:30px}
+  @media(max-width:900px){
+    .hero .wrap,.two,.trust2{grid-template-columns:1fr}
+    .stats,.steps{grid-template-columns:repeat(2,1fr)}
+    .packs{grid-template-columns:repeat(2,1fr)}
+    .hero h1{font-size:42px}
+    nav ul{display:none}
+    .cta{flex-direction:column;text-align:center}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav>
+    <div class="logo">DINAMICAS <span>STAR</span></div>
+    <ul>
+      <li><a href="#">Inicio</a></li><li><a href="#como">Cómo jugar</a></li>
+      <li><a href="#premios">Premios</a></li><li><a href="#paquetes">Paquetes</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ul>
+    <a class="btn" href="#">🏆 Participar ahora</a>
+  </nav>
+</div>
+
+<div class="hero"><div class="wrap">
+  <div>
+    <span class="badge">🏆 PARTICIPA POR</span>
+    <h1 class="display">20 MILLONES<br><span>EN EFECTIVO</span></h1>
+    <p>Elige tus números, juega todos los días y gana increíbles premios.</p>
+    <a class="btn" href="#">Quiero participar ahora ➜</a>
+    <div class="trust">
+      <span><i class="fas fa-lock"></i>COMPRA SEGURA</span>
+      <span><i class="fas fa-shield-alt"></i>PAGO PROTEGIDO</span>
+      <span><i class="fas fa-star"></i>TRANSPARENCIA TOTAL</span>
+    </div>
+  </div>
+  <img src="https://placehold.co/760x720/06210b/93E223/png?text=ARTE+DINAMICAS+STAR%0A(reemplaza+esta+imagen)" alt="Arte hero">
+</div></div>
+
+<div class="wrap">
+  <div class="card stats">
+    <div class="stat"><i class="fas fa-users"></i><div><b>Más de 500 participantes</b><small>satisfechos</small></div></div>
+    <div class="stat"><i class="fas fa-shield-alt"></i><div><b>Resultados reales</b><small>y verificables</small></div></div>
+    <div class="stat"><i class="fas fa-clock"></i><div><b>Sorteos diarios</b><small>y números siempre disponibles</small></div></div>
+    <div class="stat"><i class="fas fa-trophy"></i><div><b>Premios en efectivo</b><small>entrega garantizada con las 4 de Boyacá</small></div></div>
+  </div>
+
+  <h2 class="sec-title display" id="como">CÓMO FUNCIONA</h2>
+  <div class="steps">
+    <div><i class="fas fa-shopping-cart"></i><b>1 · Elige tu paquete</b><small>Selecciona el paquete que más te guste.</small></div>
+    <div><i class="fas fa-dice"></i><b>2 · Escoge tus números</b><small>Elige uno o más números de dos cifras.</small></div>
+    <div><i class="fas fa-calendar-alt"></i><b>3 · Juega cada día</b><small>Participas automáticamente en el sorteo diario.</small></div>
+    <div><i class="fas fa-trophy"></i><b>4 · Gana premios</b><small>Gana premios en efectivo todos los días.</small></div>
+  </div>
+
+  <h2 class="sec-title white display" id="paquetes">PAQUETES PROMOCIONALES</h2>
+  <div class="packs">
+    <div class="pack"><div class="mult">x5</div><div class="price">$25,000</div><small>Pesos colombianos</small><a href="#">COMPRAR</a></div>
+    <div class="pack"><div class="mult">x8</div><div class="price">$30,000</div><small>Pesos colombianos</small><a href="#">COMPRAR</a></div>
+    <div class="pack"><div class="mult">x10</div><div class="price">$50,000</div><small>Pesos colombianos</small><a href="#">COMPRAR</a></div>
+    <div class="pack"><div class="mult">x15</div><div class="price">$75,000</div><small>Pesos colombianos</small><a href="#">COMPRAR</a></div>
+    <div class="pack"><div class="mult">x20</div><div class="price">$100,000</div><small>Pesos colombianos</small><a href="#">COMPRAR</a></div>
+  </div>
+  <div class="secure">🔒 Compra <span>100% segura y protegida</span></div>
+
+  <div class="two" id="premios">
+    <div class="card">
+      <h3>PREMIOS DIARIOS</h3>
+      <div class="prize"><span><i class="fas fa-clover"></i>2 ÚLTIMAS</span><span class="amt">$550.000</span></div>
+      <div class="prize"><span><i class="fas fa-clover"></i>2 PRIMERAS</span><span class="amt">$100.000</span></div>
+      <div class="prize"><span><i class="fas fa-clover"></i>2 DEL MEDIO</span><span class="amt">$100.000</span></div>
+      <div class="note">Todos los premios se entregan con las 4 de Boyacá.</div>
+    </div>
+    <div class="card">
+      <h3>🔥 PRÓXIMO SORTEO 🔥</h3>
+      <div class="draw-date">SORTEO DE HOY</div>
+      <div class="count" data-hour="22">
+        <div><div class="n">00</div><div class="l">HRS</div></div><div class="sep">:</div>
+        <div><div class="n">00</div><div class="l">MINS</div></div><div class="sep">:</div>
+        <div><div class="n">00</div><div class="l">SECS</div></div>
+      </div>
+      <div class="note">Cada día quedan menos números disponibles.<br><strong style="color:var(--green)">¡No te quedes por fuera!</strong></div>
+    </div>
+  </div>
+
+  <div class="trust2">
+    <div class="card" style="padding:16px"><div class="video"><i class="fas fa-play-circle"></i></div></div>
+    <div class="card">
+      <h3 class="display" style="color:var(--green);text-align:left;font-size:22px">CONFIANZA Y TRANSPARENCIA</h3>
+      <ul class="checks">
+        <li><i class="fas fa-check-circle"></i>Sorteos diarios y transparentes</li>
+        <li><i class="fas fa-check-circle"></i>Números siempre disponibles</li>
+        <li><i class="fas fa-check-circle"></i>Resultados reales y verificables</li>
+        <li><i class="fas fa-check-circle"></i>Más de 500 participantes satisfechos</li>
+      </ul>
+      <b style="letter-spacing:1px;font-size:15px">SÍGUENOS EN REDES</b>
+      <div class="social">
+        <a href="#"><i class="fab fa-instagram"></i></a>
+        <a href="#"><i class="fab fa-whatsapp"></i></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card cta">
+    <div>
+      <h3>🚀 ¡NO PIERDAS LA OPORTUNIDAD DE GANAR!</h3>
+      <p>Participa ahora y sé el próximo ganador de <strong>20 MILLONES EN EFECTIVO.</strong></p>
+    </div>
+    <a class="btn" href="#" style="white-space:nowrap">🏆 Participar ahora</a>
+  </div>
+</div>
+
+<footer id="contacto"><div class="wrap">
+  <div class="fgrid">
+    <div><h5>ENLACES RÁPIDOS</h5><a href="#"><i class="fas fa-angle-right"></i>Inicio</a><a href="#como"><i class="fas fa-angle-right"></i>Cómo jugar</a><a href="#paquetes"><i class="fas fa-angle-right"></i>Paquetes</a></div>
+    <div><h5>INFORMACIÓN</h5><a href="#"><i class="fas fa-angle-right"></i>Términos y condiciones</a><a href="#"><i class="fas fa-angle-right"></i>Política de privacidad</a></div>
+    <div><h5>CONTÁCTANOS</h5><a href="https://wa.me/573011641378"><i class="fab fa-whatsapp"></i>301 164 1378</a></div>
+  </div>
+  <div class="copy">© 2026 Dinamicas Star · Juegos recreativos. Todos los derechos reservados.</div>
+</div></footer>
+
+<script>
+(function(){
+  // Sorteo diario a las 10 PM hora Colombia (UTC-5, sin horario de verano)
+  var w=document.querySelector('.count');
+  var HOUR=parseInt(w.getAttribute('data-hour'),10);
+  var OFF=5*36e5;
+  var els=w.querySelectorAll('.n');
+  var dateEl=document.querySelector('.draw-date');
+  var MESES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  function nextDraw(){
+    var b=new Date(Date.now()-OFF);
+    var t=Date.UTC(b.getUTCFullYear(),b.getUTCMonth(),b.getUTCDate(),HOUR,0,0)+OFF;
+    if(t<=Date.now()){t+=864e5}
+    return t;
+  }
+  function pad(n){return String(n).padStart(2,'0')}
+  function tick(){
+    var t=nextDraw();var d=t-Date.now();
+    var v=[Math.floor(d/36e5),Math.floor(d/6e4)%60,Math.floor(d/1e3)%60];
+    els.forEach(function(e,i){e.textContent=pad(v[i])});
+    var f=new Date(t-OFF);
+    dateEl.textContent='SORTEO '+f.getUTCDate()+' DE '+MESES[f.getUTCMonth()]+' · 10 PM';
+  }
+  tick();setInterval(tick,1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<title>Acuarius — Propuesta de navegación v2</title>
+<style>
+  :root{
+    --blue:#1E2BCC; --blue-hover:#1823A8; --blue-lt:#EEF0FF; --blue-md:#C9CEF5;
+    --bg:#F6F7FB; --panel:#FFFFFF; --sidebar:#FBFBFE;
+    --text:#14162E; --muted:#6B7280; --muted2:#9CA3AF; --border:#E7E8F0;
+    --green:#10B981; --green-bg:#ECFDF5; --amber:#F59E0B; --amber-bg:#FEF7E6; --red:#EF4444;
+    --skel:#EDEEF5; --skel2:#E2E4EF;
+    --shadow:0 1px 3px rgba(20,22,46,.06), 0 8px 24px rgba(20,22,46,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --blue:#7C86F8; --blue-hover:#98A0FA; --blue-lt:#23264A; --blue-md:#3A3F6E;
+      --bg:#101223; --panel:#181B30; --sidebar:#14162A;
+      --text:#EAEBF5; --muted:#9BA0B8; --muted2:#6E7390; --border:#272B47;
+      --green:#34D399; --green-bg:#0E2E24; --amber:#FBBF24; --amber-bg:#332A10;
+      --skel:#222540; --skel2:#2B2F52;
+      --shadow:0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="light"]{
+    --blue:#1E2BCC; --blue-hover:#1823A8; --blue-lt:#EEF0FF; --blue-md:#C9CEF5;
+    --bg:#F6F7FB; --panel:#FFFFFF; --sidebar:#FBFBFE;
+    --text:#14162E; --muted:#6B7280; --muted2:#9CA3AF; --border:#E7E8F0;
+    --green:#10B981; --green-bg:#ECFDF5; --amber:#F59E0B; --amber-bg:#FEF7E6; --red:#EF4444;
+    --skel:#EDEEF5; --skel2:#E2E4EF;
+    --shadow:0 1px 3px rgba(20,22,46,.06), 0 8px 24px rgba(20,22,46,.05);
+  }
+  :root[data-theme="dark"]{
+    --blue:#7C86F8; --blue-hover:#98A0FA; --blue-lt:#23264A; --blue-md:#3A3F6E;
+    --bg:#101223; --panel:#181B30; --sidebar:#14162A;
+    --text:#EAEBF5; --muted:#9BA0B8; --muted2:#6E7390; --border:#272B47;
+    --green:#34D399; --green-bg:#0E2E24; --amber:#FBBF24; --amber-bg:#332A10;
+    --skel:#222540; --skel2:#2B2F52;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Avenir Next","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+
+  .note{background:var(--blue);color:#fff;padding:9px 18px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  :root[data-theme="dark"] .note, [data-dark] .note{color:#fff}
+  .note b{font-weight:700}
+  .note .pill{background:rgba(255,255,255,.18);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600}
+
+  .frame{display:flex;flex-direction:column;height:calc(100vh - 38px);min-height:560px}
+  .topbar{height:52px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 18px;flex-shrink:0}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15.5px;letter-spacing:-.02em}
+  .logo-mark{width:26px;height:26px;border-radius:7px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+  .client-sel{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:9px;padding:5px 11px;font-size:12.5px;color:var(--muted);cursor:pointer;background:var(--bg)}
+  .client-sel b{color:var(--text);font-weight:600}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .kbd{border:1px solid var(--border);background:var(--bg);border-radius:7px;padding:4px 9px;font-size:11.5px;color:var(--muted);font-family:inherit;cursor:pointer}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#4FC3F7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+
+  .body{display:flex;flex:1;min-height:0}
+
+  /* ── Sidebar global: SOLO módulos ── */
+  .sidebar{width:224px;background:var(--sidebar);border-right:1px solid var(--border);padding:14px 10px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;overflow-y:auto}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;border:1px solid transparent;transition:background .12s,color .12s;user-select:none}
+  .nav-item:hover{background:var(--panel);color:var(--text)}
+  .nav-item.on{background:var(--blue-lt);color:var(--blue);border-color:var(--blue-md);font-weight:700}
+  .nav-item .ico{width:17px;text-align:center;font-size:14px;flex-shrink:0}
+  .nav-item .badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:800;border-radius:12px;padding:1px 6px}
+  .nav-item .caret{margin-left:auto;font-size:10px;color:var(--muted2);transition:transform .15s}
+  .nav-item.open .caret{transform:rotate(90deg)}
+  .nav-sep{height:1px;background:var(--border);margin:9px 6px}
+  .nav-label{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted2);padding:10px 12px 4px}
+  .agents-sub{display:none;flex-direction:column;gap:1px;margin:2px 0 4px}
+  .agents-sub.open{display:flex}
+  .agent-row{display:flex;align-items:center;gap:9px;padding:6px 12px 6px 24px;border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--muted)}
+  .agent-row:hover{background:var(--panel);color:var(--text)}
+  .agent-row.on{color:var(--blue);font-weight:700;background:var(--blue-lt)}
+  .agent-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .spacer{flex:1}
+  .foot-note{font-size:10.5px;color:var(--muted2);padding:10px 12px;line-height:1.5}
+  .tour-link{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:11.5px;color:var(--muted2);cursor:pointer;border-radius:9px}
+  .tour-link:hover{color:var(--muted);background:var(--panel)}
+  .referral{display:flex;align-items:center;gap:10px;margin:6px 4px 2px;padding:11px 12px;border-radius:13px;background:var(--blue-lt);border:1px solid var(--blue-md);cursor:pointer;transition:transform .12s}
+  .referral:hover{transform:translateY(-1px)}
+  .referral .gift{width:28px;height:28px;border-radius:8px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  .referral .r-title{font-size:12px;font-weight:800;color:var(--blue);line-height:1.25}
+  .referral .r-sub{font-size:10.5px;color:var(--muted);font-weight:500}
+  .referral .r-arrow{margin-left:auto;color:var(--blue);font-size:12px}
+
+  /* ── Contenido: header de módulo + tabs superiores ── */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .mod-head{padding:18px 26px 0;background:var(--panel);border-bottom:1px solid var(--border)}
+  .mod-title{font-size:19px;font-weight:800;letter-spacing:-.02em}
+  .mod-desc{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .tabs{display:flex;gap:2px;margin-top:14px;overflow-x:auto}
+  .tab{padding:9px 14px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;user-select:none}
+  .tab:hover{color:var(--text)}
+  .tab.on{color:var(--blue);border-bottom-color:var(--blue)}
+  .tab .mini{font-size:9.5px;font-weight:800;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:1px 6px;margin-left:5px;vertical-align:1px}
+
+  .content{flex:1;overflow-y:auto;padding:22px 26px 40px}
+  .origin{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted2);background:var(--panel);border:1px dashed var(--border);border-radius:20px;padding:4px 12px;margin-bottom:16px}
+  .origin b{color:var(--muted);font-weight:600}
+
+  /* Esqueletos representativos */
+  .sk-grid{display:grid;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+  .bar{border-radius:7px;background:var(--skel)}
+  .bar.d{background:var(--skel2)}
+  .row{display:flex;gap:10px;align-items:center}
+  .chip{font-size:10.5px;font-weight:700;border-radius:14px;padding:2px 9px}
+  .kan{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;overflow-x:auto}
+  .kan-col .kan-head{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;gap:6px;align-items:center}
+  .kan-card{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:11px;margin-bottom:8px;box-shadow:var(--shadow)}
+  .stat{font-size:22px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat-lbl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-top:2px}
+  .g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+  @media (max-width:860px){ .sidebar{width:64px} .sidebar .txt,.nav-label,.foot-note,.agents-sub,.nav-item .caret{display:none} .nav-item{justify-content:center;padding:10px} }
+</style>
+
+<div class="note">🧭 <b>Mockup navegable — propuesta de navegación v2.</b> Nada de esto está construido: haz clic en el sidebar y en las pestañas para recorrer la estructura. <span class="pill">Sidebar = módulos</span> <span class="pill">Tabs superiores = secciones del módulo</span> <span class="pill">Las URLs actuales no se rompen</span></div>
+
+<div class="frame">
+  <div class="topbar">
+    <div class="logo"><div class="logo-mark">α</div> <span>cuarius</span></div>
+    <div class="client-sel">🏢 Cliente: <b>SeguroBici</b> ▾</div>
+    <div class="top-right">
+      <button class="kbd" type="button">⌘K &nbsp;Buscar o ir a…</button>
+      <span class="kbd" style="cursor:default">⚙️</span>
+      <div class="avatar">AG</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <nav class="sidebar" id="nav"></nav>
+    <main class="main">
+      <div class="mod-head">
+        <div class="mod-title" id="mod-title"></div>
+        <div class="mod-desc" id="mod-desc"></div>
+        <div class="tabs" id="tabs"></div>
+      </div>
+      <div class="content" id="content"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ── Esqueletos reutilizables ──
+  function bars(spec){ // [[w%, h, dark?]]
+    return spec.map(function(s){ return '<div class="bar'+(s[2]?' d':'')+'" style="width:'+s[0]+'%;height:'+s[1]+'px;margin-bottom:8px"></div>'; }).join('');
+  }
+  function kanban(){
+    var cols=[['NUEVO','#3B82F6',3],['CONTACTADO','#F59E0B',2],['NEGOCIACIÓN','#8B5CF6',2],['GANADO','#10B981',1]];
+    return '<div class="kan">'+cols.map(function(c){
+      var cards='';
+      for(var i=0;i<c[2];i++){
+        cards+='<div class="kan-card"><div class="bar d" style="width:70%;height:10px;margin-bottom:7px"></div><div class="bar" style="width:45%;height:8px;margin-bottom:8px"></div><div class="row"><span class="chip" style="background:'+c[1]+'22;color:'+c[1]+'">etiqueta</span><span class="chip" style="background:var(--skel);color:var(--muted2)">$ —</span></div></div>';
+      }
+      return '<div class="kan-col"><div class="kan-head"><span style="width:8px;height:8px;border-radius:50%;background:'+c[1]+'"></span>'+c[0]+'</div>'+cards+'</div>';
+    }).join('')+'</div>';
+  }
+  function tableSk(rows){
+    var out='<div class="card" style="padding:0;overflow:hidden">';
+    for(var i=0;i<rows;i++){
+      out+='<div class="row" style="padding:12px 16px;border-bottom:1px solid var(--border)"><div style="width:26px;height:26px;border-radius:50%;background:var(--skel2);flex-shrink:0"></div><div style="flex:1.2"><div class="bar d" style="width:60%;height:9px"></div></div><div style="flex:1"><div class="bar" style="width:70%;height:8px"></div></div><span class="chip" style="background:var(--blue-lt);color:var(--blue)">etiqueta</span><div style="flex:.6"><div class="bar" style="width:50%;height:8px"></div></div></div>';
+    }
+    return out+'</div>';
+  }
+  function statCards(items){
+    return '<div class="g4">'+items.map(function(x){ return '<div class="card"><div class="stat" style="color:'+(x[2]||'var(--text)')+'">'+x[0]+'</div><div class="stat-lbl">'+x[1]+'</div></div>'; }).join('')+'</div>';
+  }
+  function listCards(n,chipTxt,chipColor){
+    var out='<div class="sk-grid">';
+    for(var i=0;i<n;i++){
+      out+='<div class="card row"><div style="width:34px;height:34px;border-radius:10px;background:var(--skel2);flex-shrink:0"></div><div style="flex:1"><div class="bar d" style="width:40%;height:10px;margin-bottom:6px"></div><div class="bar" style="width:65%;height:8px;margin-bottom:0"></div></div><span class="chip" style="background:'+(chipColor||'var(--green-bg)')+';color:'+(chipTxt==='Activa'?'var(--green)':'var(--muted)')+'">'+chipTxt+'</span></div>';
+    }
+    return out+'</div>';
+  }
+  function chat(){
+    return '<div style="display:grid;grid-template-columns:minmax(0,640px) 230px;gap:14px;align-items:start"><div>'+chatMain()+'</div><div>'+chatSide()+'</div></div>';
+  }
+  function chatSide(){
+    return '<div class="card" style="margin-bottom:12px"><div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:9px">Perfil del cliente</div>'+['negocio','industria','presupuesto','objetivo','etapa'].map(function(k){return '<div class="row" style="margin-bottom:7px"><span style="font-size:10.5px;color:var(--muted2);width:76px;flex-shrink:0">'+k+'</span><div class="bar" style="flex:1;height:8px;margin:0"></div></div>';}).join('')+'</div>'+
+    '<div class="card"><div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:9px">Chats recientes</div>'+bars([[90,8],[75,8],[82,8]])+'<div style="font-size:10px;color:var(--muted2)">El historial por agente se conserva</div></div>';
+  }
+  function chatMain(){
+    return '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px"><span class="chip" style="background:var(--blue-lt);color:var(--blue);padding:6px 12px;border:1px solid var(--blue-md)">🗺️ Roadmap del cliente</span><span class="chip" style="background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:6px 12px">📋 Crear campaña real</span></div>'+
+    '<div class="card"><div class="row" style="margin-bottom:14px"><div style="width:30px;height:30px;border-radius:9px;background:var(--blue);flex-shrink:0"></div><div style="flex:1">'+bars([[85,9],[70,9],[40,9]])+'</div></div><div class="row" style="flex-direction:row-reverse;margin-bottom:14px"><div style="max-width:55%;background:var(--blue-lt);border-radius:12px;padding:12px;flex:1">'+bars([[90,8],[60,8]])+'</div></div><div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="chip" style="background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:6px 12px">💡 Planear campaña</span><span class="chip" style="background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:6px 12px">🔑 Keyword research</span><span class="chip" style="background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:6px 12px">📊 Analizar mi cuenta</span></div><div class="bar" style="height:42px;border-radius:12px;margin:0"></div><div style="font-size:10.5px;color:var(--muted2);margin-top:8px">↑ Las "acciones" que hoy viven en el sidebar pasan a ser chips de sugerencia dentro del chat</div></div>';
+  }
+
+  // ── Definición de la estructura propuesta ──
+  var AGENTS=[['Consultor','#8B5CF6'],['Google Ads','#4285F4'],['Meta Ads','#0866FF'],['TikTok Ads','#FE2C55'],['LinkedIn Ads','#0A66C2'],['SEO','#10B981'],['Contenido Social','#EC4899']];
+
+  var MODULES={
+    inicio:{ ico:'🏠', name:'Inicio', title:'Pulso', desc:'El estado de todo tu marketing en una pantalla — igual que hoy', tabs:null,
+      render:function(){ return statCards([['24','Leads este mes'],['$8.4M','Pipeline activo'],['3','Campañas corriendo'],['62','NPS','var(--green)']])+'<div style="height:14px"></div><div class="g3"><div class="card">'+bars([[50,10,1],[90,8],[80,8],[60,8]])+'</div><div class="card">'+bars([[45,10,1],[85,8],[75,8],[65,8]])+'</div><div class="card">'+bars([[55,10,1],[70,8],[88,8],[50,8]])+'</div></div>'; } },
+    agentes:{ ico:'🤖', name:'Agentes', title:'Agente Google Ads', desc:'Los 7 expertos, igual que hoy — pero el sidebar solo lista los agentes; sus acciones viven en el chat', tabs:null, origin:'Hoy: sidebar "Agentes" + submenú de acciones por agente',
+      render:chat },
+    crm:{ ico:'👥', name:'CRM', title:'CRM', desc:'Tus contactos y tu día a día comercial', tabs:[
+      ['Pipeline','Hoy: Leads → Pipeline (kanban)', kanban],
+      ['Contactos','Hoy: Leads → Contactos', function(){return tableSk(6);}],
+      ['Agenda','Hoy: Leads → Agenda (sync Google Calendar)', function(){ return '<div class="g3"><div class="card">'+bars([[30,9,1],[80,8],[70,8]])+'</div><div class="card">'+bars([[35,9,1],[75,8],[60,8]])+'</div><div class="card">'+bars([[28,9,1],[82,8],[55,8]])+'</div></div>'; }],
+    ]},
+    marketing:{ ico:'📣', name:'Marketing', title:'Marketing', desc:'Todo lo que sale hacia tus leads y clientes', tabs:[
+      ['Campañas','Hoy: Leads → Campañas (email + WhatsApp masivos)', function(){return listCards(3,'Activa');}],
+      ['Automatizaciones','Hoy: Leads → Automatizaciones (flow builder)', function(){return listCards(3,'Activa');}],
+      ['Fuentes y formularios','Hoy: Leads → Fuentes (formularios, webhook Hotmart, canales)', function(){return listCards(3,'Activo');}],
+      ['Propuestas','Hoy: enterrada dentro del detalle de cada lead — gana entrada propia', function(){return listCards(2,'Enviada','var(--amber-bg)');}],
+      ['Studio Social','Hoy: vista aparte /studio', function(){ return '<div class="g3"><div class="card"><div class="bar d" style="width:100%;height:110px;margin-bottom:8px"></div>'+bars([[70,8]])+'</div><div class="card"><div class="bar d" style="width:100%;height:110px;margin-bottom:8px"></div>'+bars([[60,8]])+'</div><div class="card"><div class="bar d" style="width:100%;height:110px;margin-bottom:8px"></div>'+bars([[75,8]])+'</div></div>'; }],
+      ['Proyecto SEO','Hoy: vista aparte /proyecto-seo', function(){ return statCards([['12','Keywords top 10'],['+8','Posiciones ganadas'],['4','IAs que te citan (GEO)']])+'<div style="height:14px"></div><div class="card">'+bars([[40,9,1],[95,8],[85,8],[90,8],[70,8]])+'</div>'; }],
+    ]},
+    conversaciones:{ ico:'💬', name:'Conversaciones', badge:3, title:'Conversaciones', desc:'Todo lo que entra por chat, en un solo lugar', tabs:[
+      ['Inbox','Hoy: Leads → Inbox (WhatsApp, Messenger, Instagram)', function(){ return '<div style="display:grid;grid-template-columns:240px 1fr;gap:12px"><div class="card" style="padding:8px">'+[1,2,3,4].map(function(i){return '<div class="row" style="padding:9px;border-radius:9px;'+(i===1?'background:var(--blue-lt)':'')+'"><div style="width:28px;height:28px;border-radius:50%;background:var(--skel2);flex-shrink:0"></div><div style="flex:1"><div class="bar d" style="width:60%;height:8px;margin-bottom:5px"></div><div class="bar" style="width:80%;height:7px;margin:0"></div></div>'+(i<3?'<span class="badge" style="background:var(--red);color:#fff;font-size:9px;border-radius:10px;padding:1px 5px;font-weight:800">'+i+'</span>':'')+'</div>';}).join('')+'</div><div class="card">'+bars([[50,9],[70,9],[35,9]])+'<div class="bar" style="height:38px;border-radius:11px;margin-top:60px"></div></div></div>'; }],
+      ['Chatbots','Hoy: Leads → "Agentes IA" — renombrado para no chocar con los agentes expertos', function(){return listCards(2,'Activo');}],
+    ]},
+    analisis:{ ico:'📊', name:'Análisis', title:'Análisis', desc:'Medición unificada: pipeline, campañas, satisfacción y SEO', tabs:[
+      ['Visión general','Hoy: Leads → Análisis (embudo, fuentes, etiquetas)', function(){ return statCards([['24','Leads'],['31%','Tasa de cierre'],['$8.4M','Pipeline'],['$350K','Ticket promedio']])+'<div style="height:14px"></div><div class="card">'+bars([[30,9,1],[95,10],[80,10],[55,10],[30,10]])+'</div>'; }],
+      ['Satisfacción (NPS)','Hoy: dentro de Leads → Análisis — gana pestaña propia', function(){ return statCards([['62','NPS','var(--green)'],['18','Promotores','var(--green)'],['5','Neutros','var(--amber)'],['3','Detractores','var(--red)']])+'<div style="height:14px"></div><div class="card"><div style="font-size:11px;font-weight:800;color:var(--muted2);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Últimos comentarios</div>'+bars([[85,8],[70,8],[78,8]])+'</div>'; }],
+      ['Campañas y aperturas','Hoy: disperso (👀 por campaña) — se consolida aquí', function(){return tableSk(4);}],
+    ]},
+  };
+  var BOTTOM=[['clientes','🏢','Clientes'],['academia','🎓','Academia'],['config','⚙️','Configuración']];
+
+  var state={mod:'crm', tab:0, agent:1, agentsOpen:true};
+
+  function renderNav(){
+    var n='';
+    n+=navItem('inicio');
+    n+='<div class="nav-sep"></div><div class="nav-label">Trabaja</div>';
+    // Agentes (colapsable)
+    n+='<div class="nav-item '+(state.mod==='agentes'?'on':'')+' '+(state.agentsOpen?'open':'')+'" data-mod="agentes"><span class="ico">🤖</span><span class="txt">Agentes</span><span class="caret">▶</span></div>';
+    n+='<div class="agents-sub '+(state.agentsOpen?'open':'')+'">'+AGENTS.map(function(a,i){
+      return '<div class="agent-row '+(state.mod==='agentes'&&state.agent===i?'on':'')+'" data-agent="'+i+'"><span class="agent-dot" style="background:'+a[1]+'"></span>'+a[0]+'</div>';
+    }).join('')+'</div>';
+    n+=navItem('crm')+navItem('marketing')+navItem('conversaciones')+navItem('analisis');
+    n+='<div class="spacer"></div><div class="nav-sep"></div>';
+    n+=BOTTOM.map(function(b){ return '<div class="nav-item" data-static="1"><span class="ico">'+b[1]+'</span><span class="txt">'+b[2]+'</span></div>'; }).join('');
+    n+='<div class="tour-link"><span>ⓘ</span><span class="txt">ver tour de bienvenida</span></div>';
+    n+='<div class="referral"><div class="gift">🎁</div><div class="txt"><div class="r-title">invita y gana</div><div class="r-sub">$5–$10 por referido activo</div></div><span class="r-arrow txt">›</span></div>';
+    n+='<div class="foot-note">6 módulos + utilidades.<br>Cabe sin scroll en cualquier pantalla.</div>';
+    document.getElementById('nav').innerHTML=n;
+  }
+  function navItem(key){
+    var m=MODULES[key];
+    return '<div class="nav-item '+(state.mod===key?'on':'')+'" data-mod="'+key+'"><span class="ico">'+m.ico+'</span><span class="txt">'+m.name+'</span>'+(m.badge?'<span class="badge">'+m.badge+'</span>':'')+'</div>';
+  }
+
+  function renderMain(){
+    var m=MODULES[state.mod];
+    document.getElementById('mod-title').textContent = state.mod==='agentes' ? 'Agente '+AGENTS[state.agent][0] : m.title;
+    document.getElementById('mod-desc').textContent = m.desc;
+    var tabsEl=document.getElementById('tabs');
+    if(m.tabs){
+      tabsEl.innerHTML=m.tabs.map(function(t,i){
+        var isNew=/Propuestas|Satisfacción|Chatbots|aperturas/.test(t[0]);
+        return '<div class="tab '+(i===state.tab?'on':'')+'" data-tab="'+i+'">'+t[0]+(isNew?'<span class="mini">reubicado</span>':'')+'</div>';
+      }).join('');
+    } else tabsEl.innerHTML='';
+    var origin = m.tabs ? m.tabs[state.tab][1] : (m.origin||'');
+    var body = m.tabs ? m.tabs[state.tab][2]() : m.render();
+    document.getElementById('content').innerHTML =
+      (origin?'<div class="origin">📦 <b>'+origin+'</b></div>':'') + body;
+  }
+
+  document.getElementById('nav').addEventListener('click',function(e){
+    var ag=e.target.closest('.agent-row');
+    if(ag){ state.mod='agentes'; state.agent=parseInt(ag.getAttribute('data-agent')); renderNav(); renderMain(); return; }
+    var it=e.target.closest('.nav-item'); if(!it) return;
+    if(it.getAttribute('data-static')) return;
+    var mod=it.getAttribute('data-mod');
+    if(mod==='agentes'){ state.agentsOpen=!state.agentsOpen||state.mod!=='agentes'; state.mod='agentes'; }
+    else state.mod=mod;
+    state.tab=0; renderNav(); renderMain();
+  });
+  document.getElementById('tabs').addEventListener('click',function(e){
+    var t=e.target.closest('.tab'); if(!t) return;
+    state.tab=parseInt(t.getAttribute('data-tab')); renderMain();
+  });
+
+  renderNav(); renderMain();
+})();
+</script>

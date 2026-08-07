@@ -68,20 +68,6 @@ export default async function handler(req) {
     if (tw?.[0]?.owner_user_id) { userId = tw[0].owner_user_id; esMiembro = true; }
   } catch {}
 
-  // Modo soporte: si viene un vale válido de un administrador, se opera sobre
-  // la cuenta del cliente. El vale va firmado y caduca, así que el navegador no
-  // puede fabricarlo. Ver api/_soporte.js.
-  let _sop = null;
-  try {
-    const { resolverSoporte } = await import('./_soporte.js');
-    const r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
-    if (r.bloqueado) return jsonResp({ error: r.bloqueado }, 403);
-    // Un vale caducado o manipulado NO puede degradar en silencio a "opero
-    // sobre mi propia cuenta": el administrador creería seguir en la del
-    // cliente y escribiría en la suya sin enterarse.
-    if (r.invalido) return jsonResp({ error: 'La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.' }, 401);
-    if (r.soporte) { userId = r.userId; _sop = r.soporte; }
-  } catch {}
 
   if (req.method === 'GET') {
     const [reglas, equipo] = await Promise.all([getReglas(userId), comercialesActivos(userId)]);

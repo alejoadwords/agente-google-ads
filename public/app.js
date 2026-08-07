@@ -575,10 +575,6 @@ async function fetchAuth(url, opts = {}) {
 async function _fetchAuthRaw(url, opts = {}) {
   const withAuth = async (fresh) => {
     const headers = await getAuthHeaders({ fresh });
-    // Modo soporte: el vale viaja en cada petición para que el servidor sepa
-    // sobre qué cuenta operar. Va firmado y caduca; el navegador solo lo lleva.
-    const vale = sopVale();
-    if (vale) headers['x-acuarius-soporte'] = vale;
     // Los headers explícitos del llamador mandan sobre los nuestros
     return { ...opts, headers: { ...headers, ...(opts.headers || {}) } };
   };
@@ -798,10 +794,7 @@ async function agencyInit() {
 // ── CRUD ─────────────────────────────────────────────────────────────────────
 function agencyGetStorageKey() {
   const uid = clerkInstance?.user?.id || 'anon';
-  // En modo soporte la cartera es la del cliente: si compartiera clave con la
-  // del administrador, una acabaría pisando a la otra.
-  const s = typeof sopEstado === 'function' ? sopEstado() : null;
-  return `acuarius_agency_clients_${s ? 'sop_' + s.cuenta : uid}`;
+  return `acuarius_agency_clients_${uid}`;
 }
 
 async function agencyLoadClients() {
@@ -821,9 +814,6 @@ async function agencyLoadClients() {
   } catch(e) {
     console.error('[agency] error de red leyendo la cartera:', e);
   }
-  // En soporte no hay fallback: subir la copia local significaría escribir la
-  // cartera de un administrador dentro de la cuenta de un cliente.
-  if (typeof sopVale === 'function' && sopVale()) { agencyClients = []; return; }
   // Fallback localStorage
   try {
     const raw = localStorage.getItem(agencyGetStorageKey());
@@ -18351,9 +18341,6 @@ function cmdkCommands() {
     { group: 'Agentes', icon: '🔍', label: 'Agente SEO',                   kw: 'seo posicionamiento organico',  run: () => openAgent('seo') },
     { group: 'Agentes', icon: '✨', label: 'Contenido para Redes',         kw: 'social contenido parrilla posts', run: () => openAgent('social') },
     { group: 'Agentes', icon: '🧭', label: 'Consultor de Marketing',       kw: 'consultor estrategia plan',     run: () => openAgent('consultor') },
-    // Soporte (solo equipo de Acuarius)
-    ...(isAdminUser() ? [{ group: 'Soporte', icon: '🛟', label: 'Entrar a una cuenta de cliente',
-      kw: 'soporte cliente cuenta impersonar entrar admin', run: () => sopAbrir() }] : []),
     // Ir a
     { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
     { group: 'Ir a', icon: '👥', label: 'CRM · Pipeline',                  kw: 'crm leads pipeline kanban clientes', run: () => navGo('crm') },
@@ -25251,127 +25238,3 @@ async function eqRender() {
   box.innerHTML = html;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// MODO SOPORTE
-// Un administrador de Acuarius abre la cuenta de un cliente para ayudarle.
-// El vale va firmado por el servidor y caduca en 1 h; aquí solo se guarda y
-// se manda en cada petición. Solo lectura salvo que se pida lo contrario.
-// ══════════════════════════════════════════════════════════════════════════
-
-function sopVale() {
-  try {
-    const raw = sessionStorage.getItem('acuarius_soporte');
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!s.vale || !s.hasta || Date.now() > s.hasta) { sessionStorage.removeItem('acuarius_soporte'); return null; }
-    return s.vale;
-  } catch { return null; }
-}
-
-function sopEstado() {
-  try { return sopVale() ? JSON.parse(sessionStorage.getItem('acuarius_soporte')) : null; } catch { return null; }
-}
-
-function sopSalir() {
-  sessionStorage.removeItem('acuarius_soporte');
-  location.href = '/';
-}
-
-// Banner permanente. Sin esto es cuestión de tiempo que alguien edite en la
-// cuenta equivocada creyendo estar en la suya.
-function sopPintarBanner() {
-  const s = sopEstado();
-  document.getElementById('sop-banner')?.remove();
-  if (!s) { document.body.style.paddingTop = ''; return; }
-  const restan = Math.max(0, Math.round((s.hasta - Date.now()) / 60000));
-  const b = document.createElement('div');
-  b.id = 'sop-banner';
-  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;display:flex;align-items:center;gap:12px;'
-    + 'padding:8px 16px;font-family:var(--font);font-size:12.5px;font-weight:600;color:#fff;'
-    + 'background:' + (s.escritura ? '#B91C1C' : '#B45309') + ';box-shadow:0 2px 10px rgba(0,0,0,.2)';
-  b.innerHTML =
-    '<span style="font-size:14px">' + (s.escritura ? '✍️' : '👁️') + '</span>' +
-    '<span style="flex:1">Modo soporte · Estás en la cuenta de <b>' + esc(s.nombre || s.email || s.cuenta) + '</b>' +
-      ' · ' + (s.escritura ? 'EDICIÓN HABILITADA' : 'solo lectura') +
-      ' · quedan ' + restan + ' min</span>' +
-    '<button onclick="sopSalir()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);' +
-      'color:#fff;font-weight:700;font-size:12px;padding:4px 12px;border-radius:7px;cursor:pointer;font-family:var(--font)">Salir</button>';
-  document.body.appendChild(b);
-  document.body.style.paddingTop = b.offsetHeight + 'px';
-}
-
-// Pantalla para elegir cuenta (solo administradores)
-async function sopAbrir() {
-  document.getElementById('sop-modal')?.remove();
-  const ov = document.createElement('div');
-  ov.className = 'auto-modal-overlay';
-  ov.id = 'sop-modal';
-  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  ov.innerHTML =
-    '<div class="auto-modal" style="max-width:560px">' +
-      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Entrar a una cuenta</div>' +
-      '<button class="btn-ghost sm" onclick="document.getElementById(\'sop-modal\').remove()">✕</button></div>' +
-      '<div class="auto-modal-body">' +
-        '<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.55">' +
-          'Vas a ver la cuenta tal como la ve el cliente. El acceso queda registrado con tu correo y la sesión caduca en 1 hora.</div>' +
-        '<input class="auto-input" id="sop-buscar" placeholder="Buscar por nombre o correo" oninput="sopFiltrar()" style="margin-bottom:10px">' +
-        '<div id="sop-lista" style="max-height:300px;overflow:auto"><div style="font-size:12px;color:var(--muted2)">Cargando…</div></div>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(ov);
-  try {
-    const d = await fetchAuth('/api/soporte?action=cuentas').then(r => r.json());
-    if (d.error) throw new Error(d.error);
-    window._sopCuentas = d.cuentas || [];
-    sopFiltrar();
-  } catch (e) {
-    document.getElementById('sop-lista').innerHTML =
-      '<div style="font-size:12px;color:#B91C1C">' + esc(e.message || 'No se pudo cargar') + '</div>';
-  }
-}
-
-function sopFiltrar() {
-  const q = (document.getElementById('sop-buscar')?.value || '').toLowerCase();
-  const box = document.getElementById('sop-lista');
-  if (!box) return;
-  const cuentas = (window._sopCuentas || []).filter(c =>
-    !q || (c.email || '').toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q));
-  if (!cuentas.length) { box.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Sin resultados.</div>'; return; }
-  box.innerHTML = cuentas.slice(0, 40).map(function (c) {
-    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.name || 'Sin nombre') + '</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">' + esc(c.email || '') + ' · ' + esc(c.plan || '—') + '</div>' +
-      '</div>' +
-      '<button class="btn-sec sm" onclick="sopEntrar(\'' + esc(c.id) + '\',false)">Ver</button>' +
-      '<button class="btn-ghost sm" onclick="sopEntrar(\'' + esc(c.id) + '\',true)" title="Permite modificar datos del cliente">Editar</button>' +
-    '</div>';
-  }).join('');
-}
-
-async function sopEntrar(cuenta, escritura) {
-  const motivo = prompt(escritura
-    ? '¿Para qué necesitas EDITAR esta cuenta? (queda en el registro)'
-    : '¿Para qué necesitas ver esta cuenta? (queda en el registro)');
-  if (motivo === null) return;
-  try {
-    const r = await fetchAuth('/api/soporte?action=entrar', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cuenta, escritura, motivo }),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'No se pudo entrar');
-    sessionStorage.setItem('acuarius_soporte', JSON.stringify({
-      vale: d.vale, cuenta, escritura: !!d.escritura,
-      nombre: d.cuenta?.name, email: d.cuenta?.email,
-      hasta: Date.now() + (d.duracion_min || 60) * 60000,
-    }));
-    location.href = '/';
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// El banner se pinta en cuanto carga la app y se refresca el contador
-document.addEventListener('DOMContentLoaded', function () {
-  sopPintarBanner();
-  setInterval(sopPintarBanner, 60000);
-});

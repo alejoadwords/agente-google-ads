@@ -82,13 +82,6 @@ export default async function handler(req) {
       const tw = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() }).then(r => r.json());
       if (tw?.[0]?.owner_user_id) userId = tw[0].owner_user_id;
     } catch {}
-    // Modo soporte (solo lectura aquí, es un GET). Ver api/_soporte.js.
-    try {
-      const { resolverSoporte } = await import('./_soporte.js');
-      const r = await resolverSoporte(req, userId);
-      if (r.invalido) return jsonResp({ error: 'La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.' }, 401);
-      if (r.soporte) userId = r.userId;
-    } catch {}
     const clientId = url.searchParams.get('client_id') || null;
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/nps_responses?user_id=eq.${encodeURIComponent(userId)}${scope}&select=score,comment,responded_at,sent_at,lead_id&order=sent_at.desc&limit=1000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []);
