@@ -18449,7 +18449,11 @@ function cmdkPaint() {
   let lastGroup = '';
   cmdkResults.forEach((c, i) => {
     if (c.group !== lastGroup) { html += '<div class="cmdk-group">' + c.group + '</div>'; lastGroup = c.group; }
-    html += '<div class="cmdk-item' + (i === cmdkSel ? ' sel' : '') + '" data-i="' + i + '" onmouseenter="cmdkSel=' + i + ';cmdkPaint()" onclick="cmdkRun(' + i + ')">' +
+    // Ojo: pasar el ratón NO puede repintar la lista. Reescribir el innerHTML
+    // destruye el elemento que estás pulsando, y si eso ocurre entre el
+    // mousedown y el mouseup el clic se pierde y el comando "no hace nada".
+    // Solo se mueve la clase de selección.
+    html += '<div class="cmdk-item' + (i === cmdkSel ? ' sel' : '') + '" data-i="' + i + '" onmouseenter="cmdkMarcar(' + i + ')" onclick="cmdkRun(' + i + ')">' +
       '<span class="cmdk-ico">' + c.icon + '</span><span>' + esc(c.label) + '</span>' +
       (c.sub ? '<span class="cmdk-sub">' + esc(c.sub) + '</span>' : '') +
     '</div>';
@@ -18457,6 +18461,16 @@ function cmdkPaint() {
   list.innerHTML = html;
   const sel = list.querySelector('.cmdk-item.sel');
   if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+
+// Mueve la selección sin tocar el DOM más que lo imprescindible
+function cmdkMarcar(i) {
+  cmdkSel = i;
+  const list = document.getElementById('cmdk-list');
+  if (!list) return;
+  list.querySelectorAll('.cmdk-item').forEach(el => {
+    el.classList.toggle('sel', Number(el.dataset.i) === i);
+  });
 }
 
 function cmdkRun(i) {
