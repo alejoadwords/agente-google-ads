@@ -27,10 +27,20 @@ async function getUserId(req) {
 }
 
 export default async function handler(req) {
-  const userId = await getUserId(req);
+  let userId = await getUserId(req);
   if (!userId) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
+
+  // Modo soporte. Ver api/_soporte.js.
+  try {
+    const { resolverSoporte } = await import('./_soporte.js');
+    const _r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
+    const _err = (m, c) => new Response(JSON.stringify({ error: m }), { status: c, headers: { 'Content-Type': 'application/json' } });
+    if (_r.bloqueado) return _err(_r.bloqueado, 403);
+    if (_r.invalido) return _err('La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.', 401);
+    if (_r.soporte) userId = _r.userId;
+  } catch {}
 
   const url = new URL(req.url);
   const action = url.searchParams.get('action');

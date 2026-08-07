@@ -163,13 +163,22 @@ async function monthlySent(userId) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  const userId = await getUserId(req);
+  let userId = await getUserId(req);
   if (userId && _lastPlan === 'free') {
     const meta = await clerkMeta(userId);
     if (meta.plan) _lastPlan = meta.plan;
     if (meta.emails_extra) _emailsExtra = parseInt(meta.emails_extra) || 0;
   }
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Modo soporte. Ver api/_soporte.js.
+  try {
+    const { resolverSoporte } = await import('./_soporte.js');
+    const _r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
+    if (_r.bloqueado) return jsonResp({ error: _r.bloqueado }, 403);
+    if (_r.invalido) return jsonResp({ error: 'La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.' }, 401);
+    if (_r.soporte) userId = _r.userId;
+  } catch {}
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;
   const admin = null; // se resuelve solo cuando hace falta (cupo/gate)
