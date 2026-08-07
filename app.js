@@ -9613,6 +9613,13 @@ async function academiaLoad() {
   renderAcademia([]);
 }
 
+// Un id de video dentro de un atributo onclick="…". Los ids son UUID, así que
+// JSON.stringify metía comillas dobles que cortaban el atributo en seco y el
+// botón quedaba con la llamada a medias: hay que usar comillas simples.
+function acadIdJS(id) {
+  return "'" + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;') + "'";
+}
+
 // Videos de una categoría, ya ordenados. El orden manda order_index; el título
 // solo desempata para que dos videos con el mismo número no bailen entre cargas.
 function acadDeCategoria(videos, catId) {
@@ -9751,7 +9758,7 @@ function academiaAdminRenderList() {
     vids.forEach((v, i) => {
       const soon = !v.youtube_id || !v.youtube_id.trim();
       const sel = acAdminSelected && acAdminSelected.id === v.id ? ' selected' : '';
-      const id = JSON.stringify(v.id);
+      const id = acadIdJS(v.id);
       html += '<div class="ac-admin-video-item' + sel + '" onclick="academiaAdminSelect(' + id + ')">'
         + '<div class="ac-admin-video-dot" style="background:' + (soon ? 'var(--border-h)' : '#22c55e') + '"></div>'
         + '<div class="ac-admin-video-name">' + (v.title || 'Sin título') + '</div>'
@@ -9889,7 +9896,7 @@ function academiaAdminRenderForm(v) {
     + '<div class="ac-admin-actions">'
     + '<button class="ac-admin-save-btn" id="acf-save-btn" onclick="academiaAdminSave()">'
     + (isNew ? 'Crear video' : 'Guardar cambios') + '</button>'
-    + (isNew ? '' : '<button class="ac-admin-del-btn" onclick="academiaAdminDelete(' + JSON.stringify(v.id) + ')">Eliminar</button>')
+    + (isNew ? '' : '<button class="ac-admin-del-btn" onclick="academiaAdminDelete(' + acadIdJS(v.id) + ')">Eliminar</button>')
     + '</div>'
     + '</div>';
 }
