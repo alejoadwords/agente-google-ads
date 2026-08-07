@@ -18341,6 +18341,9 @@ function cmdkCommands() {
     { group: 'Agentes', icon: '🔍', label: 'Agente SEO',                   kw: 'seo posicionamiento organico',  run: () => openAgent('seo') },
     { group: 'Agentes', icon: '✨', label: 'Contenido para Redes',         kw: 'social contenido parrilla posts', run: () => openAgent('social') },
     { group: 'Agentes', icon: '🧭', label: 'Consultor de Marketing',       kw: 'consultor estrategia plan',     run: () => openAgent('consultor') },
+    // Solo para el equipo de Acuarius
+    ...(isAdminUser() ? [{ group: 'Soporte', icon: '🩺', label: 'Diagnosticar una cuenta',
+      kw: 'soporte diagnostico cliente cuenta revisar configuracion admin', run: () => dxAbrir() }] : []),
     // Ir a
     { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
     { group: 'Ir a', icon: '👥', label: 'CRM · Pipeline',                  kw: 'crm leads pipeline kanban clientes', run: () => navGo('crm') },
@@ -25238,3 +25241,144 @@ async function eqRender() {
   box.innerHTML = html;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════
+// DIAGNÓSTICO DE CUENTA (solo equipo de Acuarius)
+// Radiografía de solo lectura: cómo tiene configurada su cuenta un cliente y
+// qué está desajustado. No suplanta a nadie ni escribe nada — reemplaza al
+// modo soporte, que se revirtió por tocar la identidad de la sesión.
+// ══════════════════════════════════════════════════════════════════════════
+
+async function dxAbrir() {
+  document.getElementById('dx-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'dx-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML =
+    '<div class="auto-modal" style="max-width:760px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Diagnóstico de cuenta</div>' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'dx-modal\').remove()">✕</button></div>' +
+      '<div class="auto-modal-body" id="dx-body">' +
+        '<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.55">' +
+          'Solo lectura. No se muestran los mensajes ni los datos de contacto de sus leads.</div>' +
+        '<input class="auto-input" id="dx-buscar" placeholder="Buscar por nombre o correo" oninput="dxFiltrar()" style="margin-bottom:10px">' +
+        '<div id="dx-lista"><div style="font-size:12px;color:var(--muted2)">Cargando…</div></div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  try {
+    const d = await fetchAuth('/api/diagnostico?cuentas=1').then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    window._dxCuentas = d.cuentas || [];
+    dxFiltrar();
+  } catch (e) {
+    const l = document.getElementById('dx-lista');
+    if (l) l.innerHTML = '<div style="font-size:12px;color:#B91C1C">' + esc(e.message || 'No se pudo cargar') + '</div>';
+  }
+}
+
+function dxFiltrar() {
+  const q = (document.getElementById('dx-buscar')?.value || '').toLowerCase();
+  const box = document.getElementById('dx-lista');
+  if (!box) return;
+  const cs = (window._dxCuentas || []).filter(c =>
+    !q || (c.email || '').toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q));
+  if (!cs.length) { box.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Sin resultados.</div>'; return; }
+  box.innerHTML = '<div style="max-height:340px;overflow:auto">' + cs.slice(0, 50).map(function (c) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.name || 'Sin nombre') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">' + esc(c.email || '') + ' · ' + esc(c.plan || '—') + '</div>' +
+      '</div>' +
+      '<button class="btn-sec sm" onclick="dxVer(\'' + esc(c.id) + '\')">Diagnosticar</button>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+const DX_NIVEL = { alto: ['#FEF2F2', '#B91C1C', '⛔'], medio: ['#FFFBEB', '#B45309', '⚠️'], info: ['#EFF6FF', '#1D4ED8', 'ℹ️'] };
+
+async function dxVer(cuenta) {
+  const body = document.getElementById('dx-body');
+  if (!body) return;
+  body.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Analizando…</div>';
+  let d;
+  try {
+    d = await fetchAuth('/api/diagnostico?cuenta=' + encodeURIComponent(cuenta)).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+  } catch (e) {
+    body.innerHTML = '<div style="font-size:12px;color:#B91C1C">' + esc(e.message) + '</div>';
+    return;
+  }
+
+  const fila = (k, v) => '<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px">' +
+    '<span style="flex:1;color:var(--muted)">' + k + '</span><span style="font-weight:600;text-align:right">' + v + '</span></div>';
+  const bloque = (titulo, contenido) => '<div style="margin-bottom:18px">' +
+    '<div style="font-size:13px;font-weight:800;margin-bottom:6px">' + titulo + '</div>' + contenido + '</div>';
+
+  const cap = d.capacidad || {};
+  const reglas = d.reglas || {};
+  const repartoTxt = Object.entries(reglas.reparto || {})
+    .filter(([, r]) => r && r.modo && r.modo !== 'off')
+    .map(([f, r]) => f + ': ' + (r.modo === 'turnos' ? 'en turnos' : 'fijo')).join(', ') || 'apagado';
+
+  body.innerHTML =
+    '<button class="btn-ghost sm" onclick="dxAbrir()" style="margin-bottom:12px">← Otra cuenta</button>' +
+    '<div style="font-size:16px;font-weight:800">' + esc(d.cuenta?.name || 'Sin nombre') + '</div>' +
+    '<div style="font-size:12px;color:var(--muted2);margin-bottom:16px">' + esc(d.cuenta?.email || '') +
+      ' · plan ' + esc(d.cuenta?.plan || '—') + '</div>' +
+
+    (d.avisos?.length
+      ? bloque('Qué revisar', d.avisos.map(function (a) {
+          const st = DX_NIVEL[a.nivel] || DX_NIVEL.info;
+          return '<div style="display:flex;gap:8px;padding:9px 11px;border-radius:9px;background:' + st[0] +
+            ';color:' + st[1] + ';font-size:12.5px;margin-bottom:6px;line-height:1.5">' +
+            '<span>' + st[2] + '</span><span>' + esc(a.texto) + '</span></div>';
+        }).join(''))
+      : bloque('Qué revisar', '<div style="font-size:12.5px;color:#059669">Sin desajustes detectados.</div>')) +
+
+    bloque('Base de contactos',
+      fila('Contactos activos', cap.activos + ' de ' + cap.limite + ' (' + cap.porcentaje + '%)') +
+      fila('Sin comercial asignado', cap.sin_asignar) +
+      fila('En papelera', cap.papelera)) +
+
+    bloque('Canales de chat', (d.canales?.length
+      ? d.canales.map(c => fila(c.channel + (c.channel_name ? ' · ' + esc(c.channel_name) : ''),
+          c.is_active ? 'activo' : 'inactivo')).join('')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Ninguno conectado</div>')) +
+
+    bloque('Agentes', (d.agentes?.length
+      ? d.agentes.map(a => fila(esc(a.name) + (a.is_active ? '' : ' (inactivo)'),
+          a.califica ? 'califica · ' + a.criterios + ' criterios' : 'sin calificación')).join('')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Ninguno</div>')) +
+
+    bloque('Equipo', (d.equipo?.length
+      ? d.equipo.map(m => fila(esc(m.member_name || m.member_email), m.status)).join('')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Sin comerciales invitados</div>')) +
+
+    bloque('Reglas',
+      fila('Reparto', esc(repartoTxt)) +
+      fila('Tarea de primer contacto', reglas.seguimiento
+        ? (reglas.seguimiento.primer_contacto === false ? 'apagada' : 'a ' + reglas.seguimiento.horas + ' h')
+        : 'por defecto') +
+      fila('Limpieza automática', reglas.retencion && (reglas.retencion.perdidos_dias || reglas.retencion.sin_actividad_dias)
+        ? 'configurada' : 'apagada')) +
+
+    bloque('Formularios web', (d.formularios?.length
+      ? d.formularios.map(f => fila(esc(f.name) + (f.active ? '' : ' (pausado)'), (f.submissions || 0) + ' envíos')).join('')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Ninguno</div>')) +
+
+    bloque('Integraciones', (d.plataformas?.length
+      ? d.plataformas.map(p => fila(p.platform + (p.account_name ? ' · ' + esc(p.account_name) : ''),
+          p.token_expires_at
+            ? (new Date(p.token_expires_at) < new Date() ? 'VENCIDA' : 'vence ' + p.token_expires_at.slice(0, 10))
+            : 'conectada')).join('')
+      : '<div style="font-size:12.5px;color:var(--muted2)">Ninguna</div>')) +
+
+    bloque('Actividad reciente',
+      fila('Últimos leads', (d.actividad?.ultimos_leads || []).map(l => l.source).join(', ') || '—') +
+      fila('Últimas conversaciones', (d.actividad?.ultimas_conversaciones || []).map(c => c.channel).join(', ') || '—')) +
+
+    '<div style="font-size:11px;color:var(--muted2);text-align:center;margin-top:10px">Generado ' +
+      new Date(d.generado).toLocaleString('es-CO') + ' · solo lectura</div>';
+}
