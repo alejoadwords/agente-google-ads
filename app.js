@@ -18463,7 +18463,20 @@ function cmdkRun(i) {
   const cmd = cmdkResults[i];
   if (!cmd) return;
   closeCmdK();
-  setTimeout(() => { try { cmd.run(); } catch (e) { console.warn('cmdk run error:', e); } }, 60);
+  // Los errores se muestran, no se esconden: un comando que "no hace nada" es
+  // imposible de diagnosticar. Ojo con las funciones async, cuyo rechazo no lo
+  // atrapa el try/catch.
+  setTimeout(() => {
+    try {
+      const r = cmd.run();
+      if (r && typeof r.catch === 'function') {
+        r.catch(e => { console.error('cmdk:', e); if (typeof showToast === 'function') showToast('Falló "' + cmd.label + '": ' + (e && e.message || e), 'error'); });
+      }
+    } catch (e) {
+      console.error('cmdk:', e);
+      if (typeof showToast === 'function') showToast('Falló "' + cmd.label + '": ' + (e && e.message || e), 'error');
+    }
+  }, 60);
 }
 
 window.addEventListener('keydown', e => {
