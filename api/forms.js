@@ -99,6 +99,17 @@ export default async function handler(req) {
     if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
   } catch {}
 
+  // Modo soporte: si viene un vale válido de un administrador, se opera sobre
+  // la cuenta del cliente. El vale va firmado y caduca, así que el navegador no
+  // puede fabricarlo. Ver api/_soporte.js.
+  let _sop = null;
+  try {
+    const { resolverSoporte } = await import('./_soporte.js');
+    const r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
+    if (r.bloqueado) return jsonResp({ error: r.bloqueado }, 403);
+    if (r.soporte) { userId = r.userId; _sop = r.soporte; }
+  } catch {}
+
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;
   const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';

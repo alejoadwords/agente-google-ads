@@ -68,6 +68,17 @@ export default async function handler(req) {
     if (tw?.[0]?.owner_user_id) { userId = tw[0].owner_user_id; esMiembro = true; }
   } catch {}
 
+  // Modo soporte: si viene un vale válido de un administrador, se opera sobre
+  // la cuenta del cliente. El vale va firmado y caduca, así que el navegador no
+  // puede fabricarlo. Ver api/_soporte.js.
+  let _sop = null;
+  try {
+    const { resolverSoporte } = await import('./_soporte.js');
+    const r = await resolverSoporte(req, userId, { escribe: req.method !== 'GET' });
+    if (r.bloqueado) return jsonResp({ error: r.bloqueado }, 403);
+    if (r.soporte) { userId = r.userId; _sop = r.soporte; }
+  } catch {}
+
   if (req.method === 'GET') {
     const [reglas, equipo] = await Promise.all([getReglas(userId), comercialesActivos(userId)]);
     return jsonResp({ reglas, equipo, fuentes: FUENTES, modos: MODOS });
