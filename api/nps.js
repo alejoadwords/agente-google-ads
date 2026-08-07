@@ -86,6 +86,7 @@ export default async function handler(req) {
     try {
       const { resolverSoporte } = await import('./_soporte.js');
       const r = await resolverSoporte(req, userId);
+      if (r.invalido) return jsonResp({ error: 'La sesión de soporte caducó o no es válida. Vuelve a entrar a la cuenta.' }, 401);
       if (r.soporte) userId = r.userId;
     } catch {}
     const clientId = url.searchParams.get('client_id') || null;
