@@ -1626,6 +1626,11 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .ac-admin-video-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .ac-admin-video-name{font-size:12.5px;color:var(--text);line-height:1.35;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .ac-admin-video-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;flex-shrink:0}
+.ac-admin-orden{display:flex;flex-direction:column;gap:2px;flex-shrink:0;opacity:0;transition:opacity .12s}
+.ac-admin-video-item:hover .ac-admin-orden,.ac-admin-video-item.selected .ac-admin-orden{opacity:1}
+.ac-admin-mover{width:20px;height:15px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--bg);border-radius:4px;color:var(--text-2);cursor:pointer;padding:0}
+.ac-admin-mover:hover:not(:disabled){background:var(--blue-lt);color:var(--blue);border-color:var(--blue)}
+.ac-admin-mover:disabled{opacity:.28;cursor:default}
 .ac-admin-form-wrap{flex:1;overflow-y:auto;padding:24px}
 .ac-admin-form-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:20px;display:flex;align-items:center;gap:8px}
 .ac-admin-field{margin-bottom:16px}
@@ -3649,7 +3654,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="academia-hero-sub">Aprende a dominar cada agente y función de la plataforma con tutoriales paso a paso. Desde configurar tu primera cuenta hasta estrategias avanzadas.</div>
       <div class="academia-hero-stats">
         <div><div class="academia-hero-stat-val" id="ac-stat-total">—</div><div class="academia-hero-stat-lbl">videos</div></div>
-        <div><div class="academia-hero-stat-val">7</div><div class="academia-hero-stat-lbl">categorías</div></div>
+        <div><div class="academia-hero-stat-val" id="ac-stat-cats">—</div><div class="academia-hero-stat-lbl">categorías</div></div>
         <div><div class="academia-hero-stat-val" id="ac-stat-available">—</div><div class="academia-hero-stat-lbl">disponibles</div></div>
       </div>
       <!-- Botón admin solo visible para admins -->
@@ -3661,14 +3666,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div class="academia-cats-wrap">
       <div class="academia-cats" id="academia-cats">
+        <!-- Las pestañas las pinta academiaPintarTabs() con las categorías que tienen videos -->
         <button class="academia-cat-btn active" data-cat="all" onclick="academiaFilter('all')">Todos</button>
-        <button class="academia-cat-btn" data-cat="primeros-pasos" onclick="academiaFilter('primeros-pasos')">🚀 Primeros pasos</button>
-        <button class="academia-cat-btn" data-cat="google-ads" onclick="academiaFilter('google-ads')">📊 Google Ads</button>
-        <button class="academia-cat-btn" data-cat="meta-ads" onclick="academiaFilter('meta-ads')">📘 Meta Ads</button>
-        <button class="academia-cat-btn" data-cat="tiktok-ads" onclick="academiaFilter('tiktok-ads')">🎵 TikTok Ads</button>
-        <button class="academia-cat-btn" data-cat="seo" onclick="academiaFilter('seo')">🔍 SEO</button>
-        <button class="academia-cat-btn" data-cat="contenido" onclick="academiaFilter('contenido')">✨ Contenido</button>
-        <button class="academia-cat-btn" data-cat="agencia" onclick="academiaFilter('agencia')">🏢 Panel de Agencia</button>
       </div>
     </div>
 

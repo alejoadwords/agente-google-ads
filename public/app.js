@@ -9551,6 +9551,8 @@ function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classLi
 
 // ── ACADEMIA ─────────────────────────────────────────────────────────────────
 
+// Las categorías siguen el mismo orden del recorrido del producto: primero se
+// configura, luego los agentes, luego el CRM y lo que se construye encima.
 const AC_CATS = [
   { id: 'primeros-pasos', label: '🚀 Primeros pasos',   color: '#1E2BCC', grad: 'linear-gradient(135deg,#1520B0,#3D52E5)', bg: '#EEF0FD', order: 0 },
   { id: 'google-ads',     label: '📊 Google Ads',        color: '#1a73e8', grad: 'linear-gradient(135deg,#1a73e8,#0d47a1)', bg: '#EBF3FE', order: 1 },
@@ -9558,7 +9560,11 @@ const AC_CATS = [
   { id: 'tiktok-ads',     label: '🎵 TikTok Ads',       color: '#010101', grad: 'linear-gradient(135deg,#010101,#2a2a2a)', bg: '#F0F0F0', order: 3 },
   { id: 'seo',            label: '🔍 SEO',               color: '#059669', grad: 'linear-gradient(135deg,#059669,#065f46)', bg: '#ECFDF5', order: 4 },
   { id: 'contenido',      label: '✨ Contenido',          color: '#7c3aed', grad: 'linear-gradient(135deg,#7c3aed,#c026d3)', bg: '#F5F3FF', order: 5 },
-  { id: 'agencia',        label: '🏢 Panel de Agencia',  color: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', bg: '#ECFEFF', order: 6 },
+  { id: 'crm',            label: '👥 CRM',               color: '#0f766e', grad: 'linear-gradient(135deg,#0f766e,#134e4a)', bg: '#ECFDF9', order: 6 },
+  { id: 'marketing',      label: '⚡ Marketing',          color: '#ea580c', grad: 'linear-gradient(135deg,#ea580c,#9a3412)', bg: '#FFF3EA', order: 7 },
+  { id: 'conversaciones', label: '💬 Conversaciones',    color: '#2563eb', grad: 'linear-gradient(135deg,#2563eb,#1e3a8a)', bg: '#EEF4FF', order: 8 },
+  { id: 'analisis',       label: '📈 Análisis',          color: '#be123c', grad: 'linear-gradient(135deg,#be123c,#831843)', bg: '#FFF1F4', order: 9 },
+  { id: 'agencia',        label: '🏢 Panel de Agencia',  color: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', bg: '#ECFEFF', order: 10 },
 ];
 
 // Section headers for each category
@@ -9569,6 +9575,10 @@ const AC_SECTION_META = {
   'tiktok-ads':     { title: 'Agente TikTok Ads',         sub: 'Estrategias y análisis de campañas en TikTok con IA especializada',      icon: '<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>' },
   'seo':            { title: 'Agente SEO',                sub: 'Posiciona tu sitio web en Google con análisis y estrategias de IA',       icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' },
   'contenido':      { title: 'Contenido para Redes',      sub: 'Studio de contenido, parrilla editorial y generación de imágenes con IA', icon: '<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>' },
+  'crm':            { title: 'CRM',                       sub: 'Tablero, fichas de lead, etiquetas y agenda: tu base de contactos viva',  icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>' },
+  'marketing':      { title: 'Marketing y automatización', sub: 'Campañas, flujos automáticos, fuentes de leads, propuestas y NPS',       icon: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>' },
+  'conversaciones': { title: 'Conversaciones',            sub: 'Inbox unificado y chatbots que atienden y califican solos',              icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>' },
+  'analisis':       { title: 'Análisis',                  sub: 'Embudo, campañas, reportes por comercial y satisfacción del cliente',    icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
   'agencia':        { title: 'Panel de Agencia',          sub: 'Gestiona múltiples clientes, reportes y configuraciones avanzadas',       icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
 };
 
@@ -9603,6 +9613,28 @@ async function academiaLoad() {
   renderAcademia([]);
 }
 
+// Videos de una categoría, ya ordenados. El orden manda order_index; el título
+// solo desempata para que dos videos con el mismo número no bailen entre cargas.
+function acadDeCategoria(videos, catId) {
+  return (videos || [])
+    .filter(v => v.category === catId)
+    .sort((a, b) => (a.order_index || 0) - (b.order_index || 0) || String(a.title || '').localeCompare(String(b.title || '')));
+}
+
+// Las pestañas se pintan desde AC_CATS y solo con las categorías que tienen
+// videos: una pestaña que lleva a una sección vacía parece un error.
+function academiaPintarTabs(videos) {
+  const wrap = document.getElementById('academia-cats');
+  if (!wrap) return;
+  const conVideos = AC_CATS.filter(c => (videos || []).some(v => v.category === c.id));
+  const activa = wrap.querySelector('.academia-cat-btn.active')?.dataset.cat || 'all';
+  const sigueViva = activa === 'all' || conVideos.some(c => c.id === activa);
+  wrap.innerHTML = '<button class="academia-cat-btn' + (sigueViva && activa !== 'all' ? '' : ' active') + '" data-cat="all" onclick="academiaFilter(\'all\')">Todos</button>'
+    + conVideos.map(c => '<button class="academia-cat-btn' + (sigueViva && activa === c.id ? ' active' : '') + '" data-cat="' + c.id + '" onclick="academiaFilter(\'' + c.id + '\')">' + c.label + '</button>').join('');
+  const statCats = document.getElementById('ac-stat-cats');
+  if (statCats) statCats.textContent = conVideos.length || '—';
+}
+
 function renderAcademia(videos) {
   const body = document.getElementById('academia-body');
   if (!body) return;
@@ -9614,6 +9646,7 @@ function renderAcademia(videos) {
   const statAvail = document.getElementById('ac-stat-available');
   if (statTotal) statTotal.textContent = total || '—';
   if (statAvail) statAvail.textContent = available || '—';
+  academiaPintarTabs(videos);
 
   if (total === 0) {
     body.innerHTML = '<div style="padding:60px 32px;text-align:center;color:var(--muted)">'
@@ -9627,7 +9660,7 @@ function renderAcademia(videos) {
   // Group by category in defined order
   let html = '';
   AC_CATS.forEach(cat => {
-    const catVideos = videos.filter(v => v.category === cat.id);
+    const catVideos = acadDeCategoria(videos, cat.id);
     if (!catVideos.length) return;
     const meta = AC_SECTION_META[cat.id] || { title: cat.label, sub: '', icon: '' };
     html += '<div class="academia-section" data-cat="' + cat.id + '">'
@@ -9712,20 +9745,93 @@ function academiaAdminRenderList() {
   }
   let html = '';
   AC_CATS.forEach(cat => {
-    const vids = academiaVideos.filter(v => v.category === cat.id);
+    const vids = acadDeCategoria(academiaVideos, cat.id);
     if (!vids.length) return;
     html += '<div class="ac-admin-cat-hdr">' + cat.label + '</div>';
-    vids.forEach(v => {
+    vids.forEach((v, i) => {
       const soon = !v.youtube_id || !v.youtube_id.trim();
       const sel = acAdminSelected && acAdminSelected.id === v.id ? ' selected' : '';
-      html += '<div class="ac-admin-video-item' + sel + '" onclick="academiaAdminSelect(' + JSON.stringify(v.id) + ')">'
+      const id = JSON.stringify(v.id);
+      html += '<div class="ac-admin-video-item' + sel + '" onclick="academiaAdminSelect(' + id + ')">'
         + '<div class="ac-admin-video-dot" style="background:' + (soon ? 'var(--border-h)' : '#22c55e') + '"></div>'
         + '<div class="ac-admin-video-name">' + (v.title || 'Sin título') + '</div>'
         + (soon ? '' : '<div class="ac-admin-video-badge" style="background:#dcfce7;color:#16a34a">Live</div>')
+        + '<div class="ac-admin-orden">'
+        + '<button class="ac-admin-mover" title="Subir"' + (i === 0 ? ' disabled' : '') + ' onclick="event.stopPropagation();academiaAdminMover(' + id + ',-1)">'
+        + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>'
+        + '<button class="ac-admin-mover" title="Bajar"' + (i === vids.length - 1 ? ' disabled' : '') + ' onclick="event.stopPropagation();academiaAdminMover(' + id + ',1)">'
+        + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>'
+        + '</div>'
         + '</div>';
     });
   });
   list.innerHTML = html;
+}
+
+// Reordenar un video dentro de su categoría. Se renumera toda la categoría de
+// 0 en adelante y se guardan solo las filas que cambiaron: los order_index que
+// venían de la carga inicial están repetidos (varios 0 y varios 1), así que
+// intercambiar dos números a ciegas no movería nada.
+let acMoviendo = false;
+async function academiaAdminMover(id, dir) {
+  if (acMoviendo) return;
+  const video = academiaVideos.find(v => v.id === id);
+  if (!video) return;
+  const orden = acadDeCategoria(academiaVideos, video.category);
+  const i = orden.findIndex(v => v.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= orden.length) return;
+  orden.splice(j, 0, orden.splice(i, 1)[0]);
+
+  const catOrder = AC_CATS.findIndex(c => c.id === video.category);
+  const cambios = [];
+  orden.forEach((v, k) => {
+    if (v.order_index !== k || v.category_order !== catOrder) {
+      cambios.push({ id: v.id, order_index: k, category_order: catOrder });
+    }
+  });
+  if (!cambios.length) return;
+
+  const secret = await getAdminSecret();
+  if (!secret) return;
+
+  acMoviendo = true;
+  // Optimista: la lista se mueve ya y se revierte si el guardado falla
+  const previo = cambios.map(c => {
+    const v = academiaVideos.find(x => x.id === c.id);
+    return { id: c.id, order_index: v.order_index, category_order: v.category_order };
+  });
+  cambios.forEach(c => {
+    const v = academiaVideos.find(x => x.id === c.id);
+    if (v) { v.order_index = c.order_index; v.category_order = c.category_order; }
+  });
+  academiaAdminRenderList();
+  renderAcademia(academiaVideos);
+
+  try {
+    for (const c of cambios) {
+      const res = await fetch('/api/academia-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+        body: JSON.stringify(c),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err.error === 'Unauthorized') { sessionStorage.removeItem('ac_admin_secret'); adminSecret = null; }
+        throw new Error(err.error || res.status);
+      }
+    }
+  } catch (e) {
+    previo.forEach(p => {
+      const v = academiaVideos.find(x => x.id === p.id);
+      if (v) { v.order_index = p.order_index; v.category_order = p.category_order; }
+    });
+    academiaAdminRenderList();
+    renderAcademia(academiaVideos);
+    alert('No se pudo guardar el orden: ' + e.message);
+  } finally {
+    acMoviendo = false;
+  }
 }
 
 function academiaAdminSelect(id) {
