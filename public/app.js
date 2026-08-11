@@ -9553,18 +9553,21 @@ function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classLi
 
 // Las categorías siguen el mismo orden del recorrido del producto: primero se
 // configura, luego los agentes, luego el CRM y lo que se construye encima.
+// 'label' es el nombre completo (etiqueta de la tarjeta y cabecera del panel);
+// 'tab' es la versión corta, y solo se usa en la barra de pestañas: con las 11
+// categorías los nombres largos no caben y la barra se iba a scroll lateral.
 const AC_CATS = [
-  { id: 'primeros-pasos', label: '🚀 Primeros pasos',   color: '#1E2BCC', grad: 'linear-gradient(135deg,#1520B0,#3D52E5)', bg: '#EEF0FD', order: 0 },
-  { id: 'google-ads',     label: '📊 Google Ads',        color: '#1a73e8', grad: 'linear-gradient(135deg,#1a73e8,#0d47a1)', bg: '#EBF3FE', order: 1 },
-  { id: 'meta-ads',       label: '📘 Meta Ads',          color: '#1877f2', grad: 'linear-gradient(135deg,#1877f2,#6b2fba)', bg: '#EDF2FF', order: 2 },
-  { id: 'tiktok-ads',     label: '🎵 TikTok Ads',       color: '#010101', grad: 'linear-gradient(135deg,#010101,#2a2a2a)', bg: '#F0F0F0', order: 3 },
-  { id: 'seo',            label: '🔍 SEO',               color: '#059669', grad: 'linear-gradient(135deg,#059669,#065f46)', bg: '#ECFDF5', order: 4 },
-  { id: 'contenido',      label: '✨ Contenido',          color: '#7c3aed', grad: 'linear-gradient(135deg,#7c3aed,#c026d3)', bg: '#F5F3FF', order: 5 },
-  { id: 'crm',            label: '👥 CRM',               color: '#0f766e', grad: 'linear-gradient(135deg,#0f766e,#134e4a)', bg: '#ECFDF9', order: 6 },
-  { id: 'marketing',      label: '⚡ Marketing',          color: '#ea580c', grad: 'linear-gradient(135deg,#ea580c,#9a3412)', bg: '#FFF3EA', order: 7 },
-  { id: 'conversaciones', label: '💬 Conversaciones',    color: '#2563eb', grad: 'linear-gradient(135deg,#2563eb,#1e3a8a)', bg: '#EEF4FF', order: 8 },
-  { id: 'analisis',       label: '📈 Análisis',          color: '#be123c', grad: 'linear-gradient(135deg,#be123c,#831843)', bg: '#FFF1F4', order: 9 },
-  { id: 'agencia',        label: '🏢 Panel de Agencia',  color: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', bg: '#ECFEFF', order: 10 },
+  { id: 'primeros-pasos', label: '🚀 Primeros pasos',   tab: '🚀 Primeros pasos', color: '#1E2BCC', grad: 'linear-gradient(135deg,#1520B0,#3D52E5)', bg: '#EEF0FD', order: 0 },
+  { id: 'google-ads',     label: '📊 Google Ads',        tab: '📊 Google',         color: '#1a73e8', grad: 'linear-gradient(135deg,#1a73e8,#0d47a1)', bg: '#EBF3FE', order: 1 },
+  { id: 'meta-ads',       label: '📘 Meta Ads',          tab: '📘 Meta',           color: '#1877f2', grad: 'linear-gradient(135deg,#1877f2,#6b2fba)', bg: '#EDF2FF', order: 2 },
+  { id: 'tiktok-ads',     label: '🎵 TikTok Ads',       tab: '🎵 TikTok',         color: '#010101', grad: 'linear-gradient(135deg,#010101,#2a2a2a)', bg: '#F0F0F0', order: 3 },
+  { id: 'seo',            label: '🔍 SEO',               tab: '🔍 SEO',            color: '#059669', grad: 'linear-gradient(135deg,#059669,#065f46)', bg: '#ECFDF5', order: 4 },
+  { id: 'contenido',      label: '✨ Contenido',          tab: '✨ Contenido',       color: '#7c3aed', grad: 'linear-gradient(135deg,#7c3aed,#c026d3)', bg: '#F5F3FF', order: 5 },
+  { id: 'crm',            label: '👥 CRM',               tab: '👥 CRM',            color: '#0f766e', grad: 'linear-gradient(135deg,#0f766e,#134e4a)', bg: '#ECFDF9', order: 6 },
+  { id: 'marketing',      label: '⚡ Marketing',          tab: '⚡ Marketing',       color: '#ea580c', grad: 'linear-gradient(135deg,#ea580c,#9a3412)', bg: '#FFF3EA', order: 7 },
+  { id: 'conversaciones', label: '💬 Conversaciones',    tab: '💬 Chats',          color: '#2563eb', grad: 'linear-gradient(135deg,#2563eb,#1e3a8a)', bg: '#EEF4FF', order: 8 },
+  { id: 'analisis',       label: '📈 Análisis',          tab: '📈 Análisis',       color: '#be123c', grad: 'linear-gradient(135deg,#be123c,#831843)', bg: '#FFF1F4', order: 9 },
+  { id: 'agencia',        label: '🏢 Panel de Agencia',  tab: '🏢 Agencia',        color: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#0e7490)', bg: '#ECFEFF', order: 10 },
 ];
 
 // Section headers for each category
@@ -9637,7 +9640,7 @@ function academiaPintarTabs(videos) {
   const activa = wrap.querySelector('.academia-cat-btn.active')?.dataset.cat || 'all';
   const sigueViva = activa === 'all' || conVideos.some(c => c.id === activa);
   wrap.innerHTML = '<button class="academia-cat-btn' + (sigueViva && activa !== 'all' ? '' : ' active') + '" data-cat="all" onclick="academiaFilter(\'all\')">Todos</button>'
-    + conVideos.map(c => '<button class="academia-cat-btn' + (sigueViva && activa === c.id ? ' active' : '') + '" data-cat="' + c.id + '" onclick="academiaFilter(\'' + c.id + '\')">' + c.label + '</button>').join('');
+    + conVideos.map(c => '<button class="academia-cat-btn' + (sigueViva && activa === c.id ? ' active' : '') + '" data-cat="' + c.id + '" onclick="academiaFilter(\'' + c.id + '\')" title="' + c.label.replace(/^[^ ]+ /, '') + '">' + (c.tab || c.label) + '</button>').join('');
   const statCats = document.getElementById('ac-stat-cats');
   if (statCats) statCats.textContent = conVideos.length || '—';
 }
