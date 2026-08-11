@@ -370,8 +370,29 @@ export default async function handler(req, res) {
     const combined = [...nonMccAccounts, ...subAccounts];
 
     // Si hay sub-cuentas, devolverlas; si no, devolver los MCCs como fallback
-    const finalAccounts = combined.length > 0 ? combined : mccAccounts;
+    let finalAccounts = combined.length > 0 ? combined : mccAccounts;
     const hasManager = mccAccounts.length > 0;
+
+    // ── Limpiar la lista antes de mandarla ────────────────────────────────
+    // En un centro de clientes la misma cuenta llega dos veces: una desde
+    // listAccessibleCustomers (a menudo sin nombre, porque consultar sus
+    // detalles directamente da 403) y otra desde customer_client, que sí trae
+    // el nombre. Sin deduplicar, el usuario veía primero cuatro "Cuenta
+    // 6536762727" y tenía que adivinar cuál era la de su cliente.
+    const porId = new Map();
+    for (const a of finalAccounts) {
+      const previo = porId.get(a.id);
+      if (!previo) { porId.set(a.id, a); continue; }
+      // Gana la entrada con nombre real; el fallback solo rellena huecos
+      const mejor = previo._fallback ? a : previo;
+      porId.set(a.id, mejor);
+    }
+    finalAccounts = [...porId.values()].sort((a, b) => {
+      // Primero las que tienen nombre real, y dentro de esas, alfabético
+      if (!!a._fallback !== !!b._fallback) return a._fallback ? 1 : -1;
+      if (a.isManager !== b.isManager) return a.isManager ? 1 : -1;
+      return String(a.name).localeCompare(String(b.name), 'es');
+    });
 
     const response = { accounts: finalAccounts, isMCC: hasManager, total: finalAccounts.length };
     // Include sub-account errors so the UI can show a diagnostic if sub-accounts are missing

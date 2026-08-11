@@ -14740,14 +14740,45 @@ async function loadAdsAccounts() {
   }
 }
 
-function renderAccountSelector() {
+let adsFiltro = '';
+
+function adsFiltrarCuentas(texto) {
+  adsFiltro = String(texto || '').trim().toLowerCase();
+  renderAccountSelector(true);
+}
+
+function renderAccountSelector(soloLista) {
   const container = document.getElementById('adsAccountsContainer');
   const nonManager = adsAccounts.filter(a => !a.isManager);
-  const toShow     = nonManager.length > 0 ? nonManager : adsAccounts;
+  const todas      = nonManager.length > 0 ? nonManager : adsAccounts;
+  // Quien administra un centro de clientes tiene decenas de cuentas: sin buscador
+  // hay que bajar a ciegas por la lista hasta dar con la del cliente.
+  const toShow = adsFiltro
+    ? todas.filter(a => (a.name + ' ' + a.id).toLowerCase().includes(adsFiltro))
+    : todas;
 
   // Ocultar siempre el mensaje de plan — todas las cuentas son seleccionables
   const gateMsg = document.getElementById('adsPlanGateMsg');
   if (gateMsg) gateMsg.style.display = 'none';
+
+  const buscador = document.getElementById('adsAccountsSearch');
+  if (buscador) {
+    buscador.style.display = todas.length > 6 ? 'block' : 'none';
+    const input = document.getElementById('adsAccountsSearchInput');
+    if (input && !soloLista) input.value = '';
+    const cuenta = document.getElementById('adsAccountsCount');
+    if (cuenta) {
+      cuenta.textContent = adsFiltro
+        ? `${toShow.length} de ${todas.length} cuentas`
+        : `${todas.length} cuentas disponibles`;
+    }
+  }
+
+  if (!toShow.length) {
+    container.innerHTML = '<div style="padding:14px;text-align:center;font-size:12px;color:var(--muted)">Ninguna cuenta coincide con «' + esc(adsFiltro) + '»</div>';
+    document.getElementById('adsAccountsList').style.display = 'block';
+    return;
+  }
 
   container.innerHTML = toShow.map((acc) => {
     const isActive = adsActiveAccount?.id === acc.id;

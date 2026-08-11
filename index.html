@@ -4432,6 +4432,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <label style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Tus cuentas</label>
                   <span id="adsPlanGateMsg" style="font-size:10px;color:var(--warning);display:none">Plan individual: 1 cuenta</span>
                 </div>
+                <div id="adsAccountsSearch" style="display:none;margin-bottom:8px">
+                  <input id="adsAccountsSearchInput" type="search" placeholder="Busca por nombre o ID de cuenta"
+                    oninput="adsFiltrarCuentas(this.value)" autocomplete="off"
+                    style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);background:var(--bg);color:var(--text);box-sizing:border-box">
+                  <div id="adsAccountsCount" style="font-size:10px;color:var(--muted);margin-top:5px"></div>
+                </div>
                 <div id="adsAccountsContainer" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
               </div>
               <div id="adsActiveAccount" style="display:none;margin-bottom:12px;padding:10px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:8px">
