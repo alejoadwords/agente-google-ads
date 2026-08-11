@@ -59,12 +59,76 @@
    "videoId": "W6aO-6HFUYs",
    "fecha": "2026-08-05T21:07:14.363Z",
    "playlist": "Acuarius · Contenido para redes"
+  },
+  "Academia - Video 15 - Conoce el CRM.mp4": {
+   "videoId": "uP3cKVEMynU",
+   "fecha": "2026-08-07T14:28:35.526Z",
+   "playlist": "Acuarius · CRM"
+  },
+  "Academia - Video 16 - Etiquetas.mp4": {
+   "videoId": "7vltri_n8S4",
+   "fecha": "2026-08-07T14:28:43.028Z",
+   "playlist": "Acuarius · CRM"
+  },
+  "Academia - Video 17 - Agenda.mp4": {
+   "videoId": "ubVfMIR_Sf4",
+   "fecha": "2026-08-07T14:28:49.095Z",
+   "playlist": "Acuarius · CRM"
+  },
+  "Academia - Video 18 - Campanas de email.mp4": {
+   "videoId": "3HHuvFbBT4Y",
+   "fecha": "2026-08-07T14:28:59.134Z",
+   "playlist": "Acuarius · Marketing y automatización"
+  },
+  "Academia - Video 19 - Automatizaciones.mp4": {
+   "videoId": "GKhK6YGVHlA",
+   "fecha": "2026-08-10T00:46:12.835Z",
+   "playlist": "Acuarius · Marketing y automatización"
+  },
+  "Academia - Video 20 - Fuentes de leads.mp4": {
+   "videoId": "QWg8AXG5yLI",
+   "fecha": "2026-08-10T00:46:16.143Z",
+   "playlist": "Acuarius · Marketing y automatización"
+  },
+  "Academia - Video 21 - Propuestas comerciales.mp4": {
+   "videoId": "GubIReOLhHk",
+   "fecha": "2026-08-10T00:46:19.344Z",
+   "playlist": "Acuarius · Marketing y automatización"
+  },
+  "Academia - Video 22 - Encuestas NPS.mp4": {
+   "videoId": "Edw6fql549A",
+   "fecha": "2026-08-10T00:46:21.748Z",
+   "playlist": "Acuarius · Marketing y automatización"
+  },
+  "Academia - Video 23 - Inbox unificado.mp4": {
+   "videoId": "lgC-zOx77P8",
+   "fecha": "2026-08-11T14:21:19.422Z",
+   "playlist": "Acuarius · Conversaciones"
+  },
+  "Academia - Video 24 - Chatbots.mp4": {
+   "videoId": "C2Uomd9YCRM",
+   "fecha": "2026-08-11T14:21:23.050Z",
+   "playlist": "Acuarius · Conversaciones"
+  },
+  "Academia - Video 25 - Analisis comercial.mp4": {
+   "videoId": "6KRXWuXjK7k",
+   "fecha": "2026-08-11T14:21:30.139Z",
+   "playlist": "Acuarius · Análisis"
+  },
+  "Academia - Video 26 - Analisis de marketing y clientes.mp4": {
+   "videoId": "EmGkQWfJSXU",
+   "fecha": "2026-08-11T14:21:33.325Z",
+   "playlist": "Acuarius · Análisis"
   }
  },
  "playlists": {
   "Acuarius · Primeros pasos": "PLF60NF4YQZ5A",
   "Acuarius · Google Ads, Meta y TikTok": "PLCByTKUpBqAY",
   "Acuarius · SEO y visibilidad en IA": "PLZJM9wxW3NX8",
-  "Acuarius · Contenido para redes": "PLZ53XsqB6J38"
+  "Acuarius · Contenido para redes": "PLZ53XsqB6J38",
+  "Acuarius · CRM": "PLFDpfXtMy36g",
+  "Acuarius · Marketing y automatización": "PLVNu0IlXVBrE",
+  "Acuarius · Conversaciones": "PLZwJqAsKyN90",
+  "Acuarius · Análisis": "PLdPDD7xgKjMA"
  }
 }
