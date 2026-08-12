@@ -17038,42 +17038,10 @@ let _pipeCounts = null; // conteo global de leads por etapa
 // sin dueño y no aparecía en ningún proceso.
 let _pipeDraftPipe = null;
 
-async function pipeOpenEditor() {
-  _pipeDraft = crmStages.map(s => ({ ...s, _new: false, _dirty: false }));
-  _pipeDeleted = [];
-  _pipeDraftPipe = crmPipelineId;
-  // Las etapas son globales del usuario y al borrar una se migran los leads de
-  // todos los clientes, así que el conteo también debe ser global (crmLeads solo
-  // trae los del cliente activo).
-  _pipeCounts = null;
-  try {
-    const r = await fetchAuth('/api/leads');
-    if (r.ok) {
-      const all = (await r.json()).leads || [];
-      _pipeCounts = all.reduce((m, l) => { m[l.stage] = (m[l.stage] || 0) + 1; return m; }, {});
-    }
-  } catch (e) {}
-  const ov = document.createElement('div');
-  ov.className = 'auto-modal-overlay';
-  ov.id = 'pipe-editor';
-  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  ov.innerHTML = '<div class="auto-modal" style="max-width:620px">' +
-    '<div class="auto-modal-head">' +
-      '<div><div style="font-size:var(--fs-md);font-weight:800">Editar pipeline</div>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Agrega, renombra, reordena o elimina etapas</div></div>' +
-      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">✕</button>' +
-    '</div>' +
-    '<div class="auto-modal-body"><div id="pipe-rows"></div>' +
-      '<button class="btn-sec sm" style="width:100%;margin-top:6px" onclick="pipeAdd()">+ Agregar etapa</button>' +
-      '<div id="pipe-msg" style="font-size:12px;margin-top:12px"></div>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
-      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
-      '<button class="btn-pri sm" id="pipe-save" onclick="pipeSave()">Guardar cambios</button>' +
-    '</div></div>';
-  document.body.appendChild(ov);
-  pipeRenderRows();
-}
+// El editor suelto de etapas ("Editar pipeline") se retiró: solo tocaba las del
+// proceso activo y su único acceso era un botón que ya estaba siempre oculto.
+// Ahora las etapas se editan dentro del gestor, junto al proceso al que
+// pertenecen — ver pipeAbrirGestor().
 
 // Probabilidad de cierre por etapa. Si el usuario no la fijó, se estima por la
 // posición dentro del pipeline (las etapas de cierre son 100% y 0%).
@@ -18940,9 +18908,6 @@ function crmSetView(v) {
   if (searchBar) searchBar.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
   const addBtn = document.getElementById('crm-add-btn');
   if (addBtn) addBtn.style.display = (v === 'kanban' || v === 'list') ? 'flex' : 'none';
-  // "Editar pipeline" pasó al submenú del sidebar
-  const pipeBtn = document.getElementById('crm-btn-pipe');
-  if (pipeBtn) pipeBtn.style.display = 'none';
   // el total del pipeline pertenece al tablero: no debe colarse en Marketing ni Análisis
   const pipeTotal = document.getElementById('crm-pipeline-total');
   if (pipeTotal) pipeTotal.style.display = (v === 'kanban' || v === 'list') ? '' : 'none';
@@ -23817,7 +23782,14 @@ const NAV_TAB_LABELS = {
 };
 // Acciones que no son vistas pero viven en el mismo menú
 const NAV_MOD_ACTIONS = {
-  crm: [{ label: 'Editar pipeline', fn: 'pipeOpenEditor()' }],
+  // "Editar pipeline" abria solo las etapas del proceso activo, y desde que hay
+  // varios convivia con el engranaje de la barra, que abre el gestor completo.
+  // Dos puertas a lo mismo y ninguna clara: se deja una, la que hace mas.
+  crm: [{
+    label: 'Procesos de venta',
+    fn: 'pipeAbrirGestor()',
+    icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.2.63.78 1.05 1.44 1.06H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  }],
 };
 let _navHoverTimer = null;
 let _navSwitchTimer = null;
@@ -23836,7 +23808,10 @@ function navBuildSubmenus() {
           esc(NAV_TAB_LABELS[t] || t) + '</div>').join('') +
       ((NAV_MOD_ACTIONS[mod] || []).length ? '<div class="sb-sub-sep"></div>' : '') +
       (NAV_MOD_ACTIONS[mod] || []).map(a =>
-        '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();navCloseSubs();' + a.fn + '">' + esc(a.label) + '</div>').join('');
+        '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();navCloseSubs();' + a.fn + '">' +
+          (a.icon ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round">' + a.icon + '</svg>' : '') +
+          '<span>' + esc(a.label) + '</span></div>').join('');
     // En escritorio cuelga del body para que no lo recorte el scroll del menú;
     // en móvil vive dentro del propio menú, desplegándose bajo el módulo.
     if (window.innerWidth > 768) document.body.appendChild(wrap);
