@@ -16601,35 +16601,43 @@ async function pipeCambiar(id) {
 // ── Gestor de pipelines ─────────────────────────────────────────────────────
 const PIPE_MAX = 10;
 
+// ── Gestor de procesos de venta ─────────────────────────────────────────────
+// Dos paneles, como Clientify: la lista de procesos a la izquierda y, a la
+// derecha, la edición del que esté elegido — nombre, si es el principal, sus
+// etapas y el borrado. El editor de etapas es el mismo de siempre, montado
+// dentro del panel en vez de en su propia ventana.
+let pipeGestorSel = null;   // pipeline que se está editando
+
 function pipeAbrirGestor() {
   document.getElementById('pipe-overlay')?.remove();
+  pipeGestorSel = crmPipelineId || (crmPipelines[0] || {}).id || null;
   const ov = document.createElement('div');
   ov.id = 'pipe-overlay';
   ov.className = 'auto-modal-overlay';
   ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  ov.innerHTML = '<div class="auto-modal" style="max-width:560px">' +
+  ov.innerHTML = '<div class="auto-modal" style="max-width:820px;height:min(88vh,660px)">' +
     '<div class="auto-modal-head">' +
-      '<div><div style="font-size:var(--fs-md);font-weight:800">Pipelines</div>' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Procesos de venta</div>' +
       '<div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="pipe-conteo"></div></div>' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
     '</div>' +
-    '<div class="auto-modal-body">' +
-      '<div id="pipe-lista"></div>' +
-      '<div class="pipe-nuevo">' +
-        '<input type="text" id="pipe-nuevo-nombre" maxlength="60" placeholder="Nombre del nuevo pipeline" ' +
-          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();pipeCrear()}">' +
-        '<button class="btn-sec sm" id="pipe-btn-nuevo" onclick="pipeCrear()">+ Crear</button>' +
+    '<div class="pipe-gestor">' +
+      '<div class="pipe-lat">' +
+        '<div class="pipe-lat-top">' +
+          '<button class="btn-pri sm" style="width:100%" id="pipe-btn-nuevo" onclick="pipeCrear()">+ Crear proceso</button>' +
+        '</div>' +
+        '<div class="pipe-lat-lista" id="pipe-lista"></div>' +
+        '<div class="pipe-lat-cta" id="pipe-lat-cta"></div>' +
       '</div>' +
+      '<div class="pipe-panel" id="pipe-panel"></div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
-      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cerrar</button>' +
+      '<button class="btn-pri sm" id="pipe-save" onclick="pipeSave()">Guardar cambios</button>' +
     '</div></div>';
   document.body.appendChild(ov);
   pipeRenderLista();
 }
-
-const PIPE_ICONO_BORRAR = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-  'stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
 
 function pipeRenderLista() {
   const cont = document.getElementById('pipe-lista');
@@ -16638,38 +16646,90 @@ function pipeRenderLista() {
 
   const conteo = document.getElementById('pipe-conteo');
   if (conteo) conteo.textContent = crmPipelines.length
-    ? crmPipelines.length + ' de ' + PIPE_MAX + ' · cada uno con sus propias etapas'
-    : 'Hasta ' + PIPE_MAX + ' procesos de venta, cada uno con sus propias etapas';
+    ? 'Creados ' + crmPipelines.length + '/' + PIPE_MAX + ' · cada uno con sus propias etapas'
+    : 'Hasta ' + PIPE_MAX + ' procesos, cada uno con sus propias etapas';
 
   if (!crmPipelines.length) {
-    cont.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:4px 0 2px">' +
-      'Aún no hay pipelines. Si acabas de actualizar, puede faltar la migración de la base de datos.</div>';
+    cont.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:10px">' +
+      'Aún no hay procesos.</div>';
   } else {
-    // Solo se puede borrar si no es el principal y queda otro al que mover los leads
-    const puedeBorrar = crmPipelines.length > 1;
+    if (!crmPipelines.some(p => p.id === pipeGestorSel)) pipeGestorSel = crmPipelines[0].id;
     cont.innerHTML = crmPipelines.map(p =>
-      '<div class="pipe-fila' + (p.id === crmPipelineId ? ' act' : '') + '">' +
-        '<input type="text" maxlength="60" value="' + esc(p.name) + '" ' +
-          'onchange="pipeRenombrar(\'' + esc(p.id) + '\', this.value)">' +
-        (p.is_default
-          ? '<span class="pipe-marca" title="Los leads nuevos entran aquí">Principal</span>'
-          : '<button class="btn-ghost sm" onclick="pipePrincipal(\'' + esc(p.id) + '\')">Hacer principal</button>') +
-        (puedeBorrar && !p.is_default
-          ? '<button class="pipe-borrar" title="Borrar pipeline" onclick="pipeBorrar(\'' + esc(p.id) + '\')">' + PIPE_ICONO_BORRAR + '</button>'
-          : '') +
-      '</div>'
+      '<button class="pipe-lat-item' + (p.id === pipeGestorSel ? ' act' : '') + '" ' +
+        'onclick="pipeGestorElegir(\'' + esc(p.id) + '\')">' +
+        '<span>' + esc(p.name) + '</span>' +
+        (p.is_default ? '<i class="pipe-punto" title="Proceso por defecto"></i>' : '') +
+      '</button>'
     ).join('');
   }
 
   const lleno = crmPipelines.length >= PIPE_MAX;
   const btn = document.getElementById('pipe-btn-nuevo');
-  const inp = document.getElementById('pipe-nuevo-nombre');
-  if (btn) { btn.disabled = lleno; btn.textContent = lleno ? 'Máximo ' + PIPE_MAX : '+ Crear'; }
-  if (inp) {
-    inp.disabled = lleno;
-    inp.placeholder = lleno
-      ? 'Llegaste al máximo de ' + PIPE_MAX + '. Borra alguno para crear otro.'
-      : 'Nombre del nuevo pipeline';
+  if (btn) { btn.disabled = lleno; btn.textContent = lleno ? 'Máximo ' + PIPE_MAX : '+ Crear proceso'; }
+  const cta = document.getElementById('pipe-lat-cta');
+  if (cta) cta.textContent = lleno ? 'Llegaste al máximo. Elimina uno para crear otro.' : '';
+
+  pipeRenderPanel();
+}
+
+function pipeGestorElegir(id) {
+  if (id === pipeGestorSel) return;
+  // Cambiar de proceso descarta los cambios de etapas sin guardar del anterior
+  if (_pipeDraft && (_pipeDraft.some(x => x._new || x._dirty) || _pipeDeleted.length) &&
+      !confirm('Tienes cambios sin guardar en las etapas. ¿Descartarlos?')) return;
+  pipeGestorSel = id;
+  pipeRenderLista();
+}
+
+function pipeRenderPanel() {
+  const box = document.getElementById('pipe-panel');
+  if (!box) return;
+  const p = crmPipelines.find(x => x.id === pipeGestorSel);
+  if (!p) { box.innerHTML = '<div style="color:var(--muted);font-size:13px">Elige un proceso a la izquierda.</div>'; return; }
+
+  const unico = crmPipelines.length < 2;
+  box.innerHTML =
+    '<div class="pipe-panel-top">' +
+      '<label class="pipe-def' + (p.is_default ? ' fija' : '') + '">' +
+        '<input type="checkbox"' + (p.is_default ? ' checked disabled' : '') +
+          ' onchange="pipePrincipal(\'' + esc(p.id) + '\')">' +
+        'Proceso por defecto</label>' +
+      '<div style="flex:1"></div>' +
+      (unico || p.is_default ? '' :
+        '<button class="btn-sec sm" style="color:#EF4444;border-color:#FCA5A5" ' +
+          'onclick="pipeBorrar(\'' + esc(p.id) + '\')">Eliminar proceso</button>') +
+    '</div>' +
+    '<label class="auto-label">Nombre del proceso</label>' +
+    '<input class="auto-input" type="text" maxlength="60" value="' + esc(p.name) + '" ' +
+      'onchange="pipeRenombrar(\'' + esc(p.id) + '\', this.value)">' +
+    (p.is_default
+      ? '<div style="font-size:11.5px;color:var(--muted);margin-top:7px">Los leads nuevos entran en este proceso. Para eliminarlo, marca otro como predeterminado.</div>'
+      : '') +
+    '<div class="pipe-sec-tit"><span>Administrar etapas</span>' +
+      '<button class="btn-ghost sm" onclick="pipeAdd()">+ Agregar etapa</button></div>' +
+    '<div id="pipe-rows"></div>' +
+    '<div id="pipe-msg" style="font-size:12px;margin-top:12px"></div>';
+
+  // El editor de etapas trabaja siempre sobre el proceso elegido a la izquierda
+  pipeCargarEtapasDe(p.id);
+}
+
+// Trae las etapas del proceso elegido a un borrador propio, sin tocar las que
+// el tablero está mostrando.
+async function pipeCargarEtapasDe(id) {
+  const box = document.getElementById('pipe-rows');
+  if (box) box.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:8px 0">Cargando etapas…</div>';
+  try {
+    const r = await fetchAuth('/api/pipeline-stages?pipeline_id=' + encodeURIComponent(id));
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+    _pipeDraft = (d.stages || []).map(s => ({ ...s, _new: false, _dirty: false }));
+    _pipeDeleted = [];
+    _pipeDraftPipe = id;
+    pipeRenderRows();
+  } catch (e) {
+    if (box) box.innerHTML = '';
+    pipeMostrarError(e?.message || 'No se pudieron cargar las etapas');
   }
 }
 
@@ -16683,7 +16743,7 @@ async function leerRespuesta(r) {
 // Los errores de base de datos son largos: el toast los corta, asi que se
 // muestran dentro del propio modal, donde se pueden leer y copiar.
 function pipeMostrarError(msg) {
-  const cont = document.getElementById('pipe-lista');
+  const cont = document.getElementById('pipe-panel') || document.getElementById('pipe-lista');
   if (!cont) { showToast(String(msg).slice(0, 120), 'error'); return; }
   document.getElementById('pipe-error')?.remove();
   const d = document.createElement('div');
@@ -16691,23 +16751,22 @@ function pipeMostrarError(msg) {
   d.style.cssText = 'margin-top:12px;padding:10px 12px;border:1px solid #FCA5A5;background:#FEF2F2;' +
     'border-radius:10px;color:#B91C1C;font-size:12px;line-height:1.45;word-break:break-word';
   d.textContent = msg;
-  cont.parentNode.appendChild(d);
+  cont.appendChild(d);
 }
 
 async function pipeCrear() {
-  const inp = document.getElementById('pipe-nuevo-nombre');
-  const nombre = String(inp?.value || '').trim();
-  if (!nombre) { inp?.focus(); return; }
+  const nombre = String(prompt('Nombre del nuevo proceso de venta', '') || '').trim();
+  if (!nombre) return;
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const r = await fetchAuth('/api/pipelines' + qs, { method: 'POST', body: JSON.stringify({ name: nombre }) });
     const d = await leerRespuesta(r);
     if (!r.ok) { pipeMostrarError(d.error || ('Error ' + r.status)); return; }
-    if (inp) inp.value = '';
     await crmLoadPipelines();
+    if (d.pipeline?.id) pipeGestorSel = d.pipeline.id;   // abrirlo ya editado
     pipeRenderLista();
-    showToast('Pipeline creado con sus etapas', 'success');
+    showToast('Proceso creado con sus etapas', 'success');
   } catch (e) { pipeMostrarError(e?.message || 'No se pudo crear el pipeline'); }
 }
 
@@ -16801,10 +16860,14 @@ const PIPE_COLORS = ['#6B7280','#3B82F6','#8B5CF6','#F59E0B','#EF4444','#10B981'
 let _pipeDraft = [];   // copia de trabajo
 let _pipeDeleted = []; // {id, key, moveTo}
 let _pipeCounts = null; // conteo global de leads por etapa
+// A qué pipeline pertenece el borrador. Sin esto, una etapa nueva se guardaba
+// sin dueño y no aparecía en ningún proceso.
+let _pipeDraftPipe = null;
 
 async function pipeOpenEditor() {
   _pipeDraft = crmStages.map(s => ({ ...s, _new: false, _dirty: false }));
   _pipeDeleted = [];
+  _pipeDraftPipe = crmPipelineId;
   // Las etapas son globales del usuario y al borrar una se migran los leads de
   // todos los clientes, así que el conteo también debe ser global (crmLeads solo
   // trae los del cliente activo).
@@ -16859,7 +16922,7 @@ function pipeRenderRows() {
   box.innerHTML = _pipeDraft.map((s, i) => {
     const prot = PIPE_PROTECTED.includes(s.key);
     const n = s._new ? 0 : pipeLeadCount(s.key);
-    return '<div class="auto-step" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+    return '<div class="auto-step pipe-fila-etapa" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
       '<div style="display:flex;flex-direction:column;gap:2px">' +
         '<button class="auto-step-mini" onclick="pipeMove(' + i + ',-1)"' + (i === 0 ? ' disabled style="opacity:.3"' : '') + '>▲</button>' +
         '<button class="auto-step-mini" onclick="pipeMove(' + i + ',1)"' + (i === _pipeDraft.length - 1 ? ' disabled style="opacity:.3"' : '') + '>▼</button>' +
@@ -16942,7 +17005,7 @@ async function pipeSave() {
       if (s._new) {
         const r = await fetchAuth('/api/pipeline-stages', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label: s.label.trim(), color: s.color, probability: Number(s.probability) }),
+          body: JSON.stringify({ label: s.label.trim(), color: s.color, probability: Number(s.probability), pipeline_id: _pipeDraftPipe }),
         });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la etapa');
         const d = await r.json();
@@ -16958,10 +17021,16 @@ async function pipeSave() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order: _pipeDraft.map(s => s.id).filter(Boolean) }),
     });
-    await crmLoadStages();
-    await crmLoadLeads();
-    crmRender();
+    if (!_pipeDraftPipe || _pipeDraftPipe === crmPipelineId) {
+      await crmLoadStages();
+      await crmLoadLeads();
+      crmRender();
+    }
     document.getElementById('pipe-editor')?.remove();
+    // Si se guardó desde el gestor, este sigue abierto: refrescar su borrador.
+    if (document.getElementById('pipe-overlay') && _pipeDraftPipe) {
+      await pipeCargarEtapasDe(_pipeDraftPipe);
+    }
     if (typeof showToast === 'function') showToast('✅ Pipeline actualizado', 'success');
   } catch (e) {
     pipeMsg(e.message || 'No se pudo guardar', true);

@@ -110,8 +110,18 @@ export default async function handler(req) {
 
 async function manejar(req) {
 
-  const userId = await getUserId(req);
+  let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Equipo: si soy miembro activo de un workspace, opero sobre los datos del
+  // dueño. /api/leads ya lo hacía; sin esto aquí, un miembro veía sus propios
+  // pipelines mientras los leads venían del dueño, así que ningún pipeline
+  // mostraba un solo lead y cambiar de uno a otro no hacía nada visible.
+  try {
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _tw = (await _twRes.json())?.[0];
+    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+  } catch {}
 
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;

@@ -96,6 +96,16 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
+  // Equipo: si soy miembro activo de un workspace, opero sobre los datos del
+  // dueño. /api/leads ya lo hacía; sin esto aquí, un miembro veía sus propios
+  // pipelines mientras los leads venían del dueño, así que ningún pipeline
+  // mostraba un solo lead y cambiar de uno a otro no hacía nada visible.
+  try {
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _tw = (await _twRes.json())?.[0];
+    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+  } catch {}
+
   // GET — etapas del pipeline pedido. Sin pipeline_id se comporta como antes
   // (todas las del usuario), para que la app siga funcionando si la migracion
   // aun no se ha corrido.
@@ -204,8 +214,13 @@ export default async function handler(req) {
     const label = String(body.label || '').trim().slice(0, 40);
     if (!label) return jsonResp({ error: 'La etapa necesita un nombre' }, 400);
 
+    // La etapa pertenece a UN pipeline. Sin esto quedaba con pipeline_id nulo,
+    // es decir invisible en todos; y el tope y la unicidad de la clave se
+    // contaban sobre las etapas de la cuenta entera en vez de las del pipeline.
+    const pipelineId = body.pipeline_id || null;
+    const ambito = pipelineId ? `&pipeline_id=eq.${encodeURIComponent(pipelineId)}` : '';
     const existing = await fetch(
-      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}&select=key,position`,
+      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}${ambito}&select=key,position`,
       { headers: sbHeaders() }
     ).then(r => r.json()).catch(() => []);
     if (Array.isArray(existing) && existing.length >= MAX_STAGES) {
@@ -221,6 +236,7 @@ export default async function handler(req) {
       color: /^#[0-9A-Fa-f]{6}$/.test(body.color || '') ? body.color : '#6B7280',
       position: Number.isFinite(body.position) ? body.position : maxPos + 1,
     };
+    if (pipelineId) payload.pipeline_id = pipelineId;
     if (Number.isFinite(body.probability)) payload.probability = Math.max(0, Math.min(100, Math.round(body.probability)));
     let res = await fetch(`${SUPABASE_URL}/rest/v1/pipeline_stages`, {
       method: 'POST', headers: sbHeaders(), body: JSON.stringify(payload),

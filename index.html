@@ -1706,6 +1706,42 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .pipe-nuevo input{flex:1;min-width:0;font-family:inherit;font-size:var(--fs-base);color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 11px}
 .pipe-nuevo input:focus{outline:none;border-color:var(--blue-md)}
 .pipe-nuevo input:disabled{opacity:.55;cursor:not-allowed}
+
+/* Gestor de procesos: lista a la izquierda, edición del elegido a la derecha */
+.pipe-gestor{display:flex;min-height:0;flex:1}
+.pipe-lat{width:210px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg-subtle);border-bottom-left-radius:18px}
+.pipe-lat-top{padding:14px 14px 10px}
+.pipe-lat-lista{flex:1;overflow-y:auto;padding:0 8px 12px}
+.pipe-lat-item{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:9px 10px;border:1px solid transparent;border-radius:9px;background:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;transition:.12s}
+.pipe-lat-item:hover{background:var(--bg)}
+.pipe-lat-item.act{background:var(--bg);border-color:var(--blue-md);color:var(--blue)}
+.pipe-lat-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pipe-lat-item .pipe-punto{width:6px;height:6px;border-radius:50%;background:var(--blue);flex-shrink:0}
+.pipe-lat-cta{font-size:11px;color:var(--muted);padding:0 14px 12px}
+.pipe-panel{flex:1;min-width:0;overflow-y:auto;padding:18px 22px}
+.pipe-panel-top{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.pipe-panel-top .btn-sec{flex-shrink:0}
+.pipe-def{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;user-select:none}
+.pipe-def input{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+.pipe-def.fija{opacity:.55;cursor:default}
+.pipe-sec-tit{font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:18px 0 9px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* En pantallas estrechas los dos paneles no caben lado a lado: la lista pasa
+   arriba en horizontal y la edición se queda con todo el ancho. */
+@media (max-width:700px){
+  .pipe-gestor{flex-direction:column}
+  .pipe-lat{width:auto;border-right:none;border-bottom:1px solid var(--border);border-radius:0;flex-shrink:0}
+  .pipe-lat-top{padding:12px 12px 8px}
+  .pipe-lat-lista{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:0 12px 10px}
+  .pipe-lat-item{width:auto;flex-shrink:0;margin-bottom:0;border-color:var(--border)}
+  .pipe-lat-item span{overflow:visible;max-width:150px;text-overflow:ellipsis}
+  .pipe-lat-cta{padding:0 12px 10px}
+  .pipe-panel{padding:16px 14px}
+  /* La fila de etapa tiene 6 controles: en estrecho el nombre se quedaba sin
+     ancho. Pasa a ocupar su propia línea, arriba, y el resto debajo. */
+  .pipe-fila-etapa{flex-wrap:wrap}
+  .pipe-fila-etapa > input.auto-input{flex:1 0 100% !important;order:-1}
+}
+.pipe-fila-etapa > input.auto-input{min-width:120px}
 .crm-client-tag{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--sidebar);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;color:var(--muted);flex-shrink:0}
 .crm-client-tag span{color:var(--text)}
 
