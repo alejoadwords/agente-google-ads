@@ -16712,7 +16712,7 @@ function pipeRenderSelector() {
     '<option value="' + esc(p.id) + '"' + (p.id === crmPipelineId ? ' selected' : '') + '>' + esc(p.name) + '</option>'
   ).join('');
   const cliente = pipeAmbitoNombre();
-  sel.title = cliente ? 'Procesos de ' + cliente : 'Procesos de la cuenta';
+  sel.title = cliente ? 'Procesos de ' + cliente : 'Procesos sin cliente asignado';
 }
 
 async function pipeCambiar(id) {
@@ -16780,10 +16780,10 @@ function pipeRenderLista() {
   const amb = document.getElementById('pipe-ambito');
   if (amb) {
     const cliente = pipeAmbitoNombre();
-    amb.textContent = cliente ? 'Procesos de ' + cliente : 'Procesos de la cuenta';
+    amb.textContent = cliente ? 'Procesos de ' + cliente : 'Sin cliente';
     amb.title = cliente
-      ? 'Solo se ven aquí los procesos de ' + cliente + '. Los de la cuenta están al quitar el cliente activo.'
-      : 'Procesos de la cuenta, comunes a todos los clientes.';
+      ? 'Cada cliente tiene sus propios procesos, con sus propias etapas.'
+      : 'Estás viendo todos los clientes a la vez. Elige uno para gestionar sus procesos.';
   }
 
   if (!crmPipelines.length) {
@@ -16800,17 +16800,24 @@ function pipeRenderLista() {
     ).join('');
   }
 
+  // Un proceso de venta pertenece a un cliente: cada uno tiene su forma de
+  // vender y sus etapas. Sin cliente activo no se crean nuevos — los que ya
+  // existen se siguen viendo y editando, para no esconder datos de nadie.
+  const cliente = pipeAmbitoNombre();
   const lleno = crmPipelines.length >= PIPE_MAX;
   const btn = document.getElementById('pipe-btn-nuevo');
-  if (btn) { btn.disabled = lleno; btn.textContent = lleno ? 'Máximo ' + PIPE_MAX : '+ Crear proceso'; }
+  if (btn) {
+    btn.disabled = lleno || !cliente;
+    btn.textContent = !cliente ? 'Elige un cliente' : (lleno ? 'Máximo ' + PIPE_MAX : '+ Crear proceso');
+    btn.title = !cliente ? 'Los procesos de venta pertenecen a un cliente' : '';
+  }
   const cta = document.getElementById('pipe-lat-cta');
   if (cta) {
-    const cliente = pipeAmbitoNombre();
-    cta.textContent = lleno
-      ? 'Llegaste al máximo. Elimina uno para crear otro.'
-      : (cliente
-          ? 'Estos procesos son solo de ' + cliente + '. Los informes de Análisis suman todos.'
-          : 'Procesos de la cuenta. Al activar un cliente verás los suyos.');
+    cta.textContent = !cliente
+      ? 'Los procesos pertenecen a un cliente. Elige uno arriba para crear los suyos.'
+      : (lleno
+          ? 'Llegaste al máximo. Elimina uno para crear otro.'
+          : 'Procesos de ' + cliente + '. Otros clientes tienen los suyos; los informes de Análisis suman todos.');
   }
 
   pipeRenderPanel();
@@ -16911,6 +16918,10 @@ function pipeMostrarError(msg) {
 }
 
 async function pipeCrear() {
+  if (!pipeAmbitoNombre()) {
+    pipeMostrarError('Los procesos de venta pertenecen a un cliente. Elige el cliente en la barra de arriba y vuelve a abrir esta ventana.');
+    return;
+  }
   const nombre = String(prompt('Nombre del nuevo proceso de venta', '') || '').trim();
   if (!nombre) return;
   try {
@@ -17000,7 +17011,10 @@ async function crmLoadLeads() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const params = [];
     if (clientId) params.push('client_id=' + encodeURIComponent(clientId));
-    if (crmPipelineId) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
+    // Sin cliente activo esto es una vista de TODOS los clientes. Filtrar por el
+    // pipeline de ese ambito escondia los leads de cada cliente, que viven en
+    // los suyos. Aqui no se filtra: se ve todo.
+    if (crmPipelineId && clientId) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
     const qs = params.length ? '?' + params.join('&') : '';
     const res = await fetchAuth(`/api/leads${qs}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -17194,6 +17208,30 @@ function crmSetView(v) {
   crmRender();
 }
 
+// El tablero solo pinta columnas de SUS etapas. Un lead de otro cliente, con las
+// etapas de su propio proceso, no cabe en ninguna y desapareceria en silencio:
+// se cuenta y se dice, que para eso esta la regla de no callar nada.
+function crmAvisoEtapasAjenas(leads) {
+  const ID = 'crm-aviso-etapas';
+  document.getElementById(ID)?.remove();
+  if (!crmStagesLoaded || !crmStages.length) return;
+  const claves = new Set(crmStages.map(s => s.key));
+  const fuera = leads.filter(l => !claves.has(l.stage)).length;
+  if (!fuera) return;
+  const kanban = document.getElementById('crm-kanban');
+  if (!kanban || !kanban.parentElement) return;
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 20px 6px;padding:10px 14px;background:var(--sidebar);border:1px solid var(--border);' +
+    'border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--muted)';
+  el.innerHTML =
+    '<span>' + fuera + (fuera === 1 ? ' lead está' : ' leads están') + ' en etapas de otro proceso de venta, ' +
+    'así que no ' + (fuera === 1 ? 'aparece' : 'aparecen') + ' en este tablero. ' +
+    'Elige el cliente al que pertenecen para verlos.</span>' +
+    '<button class="btn-sec sm" onclick="crmSetView(\'list\')">Verlos en la lista</button>';
+  kanban.parentElement.insertBefore(el, kanban);
+}
+
 function crmRender() {
   if (crmView === 'kanban') crmRenderKanban();
   else crmRenderList();
@@ -17382,6 +17420,7 @@ function crmRenderKanban() {
   const container = document.getElementById('crm-kanban');
   if (!container) return;
   const filtered = crmGetFilteredLeads();
+  crmAvisoEtapasAjenas(filtered);
 
   // Pipeline total
   const totalValue = filtered.reduce((s, l) => s + (Number(l.value) || 0), 0);
