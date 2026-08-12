@@ -1690,6 +1690,15 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-view-btn{padding:5px 12px;background:none;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap}
 .crm-view-btn.active{background:var(--bg);color:var(--blue);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .crm-view-btn:not(.active):hover{color:var(--text)}
+.pipe-selector{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.pipe-selector select{font-family:inherit;font-size:12px;font-weight:600;color:var(--text);background:var(--sidebar);border:1px solid var(--border);border-radius:20px;padding:5px 26px 5px 12px;cursor:pointer;max-width:190px;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238C90A8' stroke-width='3' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 9px center}
+.pipe-selector select:hover{border-color:var(--blue)}
+.pipe-admin{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid var(--border);background:var(--sidebar);color:var(--muted);border-radius:50%;cursor:pointer;flex-shrink:0;transition:.15s}
+.pipe-admin:hover{border-color:var(--blue);color:var(--blue)}
+.pipe-fila{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
+.pipe-fila:last-child{border-bottom:none}
+.pipe-fila input{flex:1;font-family:inherit;font-size:14px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 11px}
+.pipe-fila .pipe-marca{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);background:var(--blue-lt);border-radius:20px;padding:4px 9px;white-space:nowrap}
 .crm-client-tag{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--sidebar);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;color:var(--muted);flex-shrink:0}
 .crm-client-tag span{color:var(--text)}
 
@@ -3700,6 +3709,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div id="crm-client-tag" style="display:none" class="crm-client-tag">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
         <span id="crm-client-tag-name">cliente</span>
+      </div>
+      <div id="pipe-selector" class="pipe-selector" style="display:none">
+        <select id="pipe-select" onchange="pipeCambiar(this.value)" aria-label="Pipeline"></select>
+        <button class="pipe-admin" onclick="pipeAbrirGestor()" title="Administrar pipelines">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.2.63.78 1.05 1.44 1.06H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
       </div>
       <div class="crm-view-toggle">
         <button class="crm-view-btn active" id="crm-btn-kanban" onclick="crmSetView('kanban')">

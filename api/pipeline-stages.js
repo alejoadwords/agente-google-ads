@@ -96,24 +96,32 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
-
-  // GET — list stages (global per user, not per client)
+  // GET — etapas del pipeline pedido. Sin pipeline_id se comporta como antes
+  // (todas las del usuario), para que la app siga funcionando si la migracion
+  // aun no se ha corrido.
   if (req.method === 'GET') {
+    const url = new URL(req.url);
+    const pipelineId = url.searchParams.get('pipeline_id') || null;
+    const filtro = pipelineId ? `&pipeline_id=eq.${encodeURIComponent(pipelineId)}` : '';
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}&select=*&order=position.asc`,
+      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}${filtro}&select=*&order=position.asc`,
       { headers: sbHeaders() }
     );
     let rows = await res.json();
 
     if (!Array.isArray(rows) || rows.length === 0) {
       // Seed defaults — upsert to avoid duplicates on concurrent requests
-      const seeds = DEFAULT_STAGES.map(s => ({
-        user_id: userId,
-        key: s.key,
-        label: s.label,
-        color: s.color,
-        position: s.position,
-      }));
+      const seeds = DEFAULT_STAGES.map(s => {
+        const fila = {
+          user_id: userId,
+          key: s.key,
+          label: s.label,
+          color: s.color,
+          position: s.position,
+        };
+        if (pipelineId) fila.pipeline_id = pipelineId;
+        return fila;
+      });
       const seedHeaders = {
         ...sbHeaders(),
         'Prefer': 'return=representation,resolution=ignore-duplicates',
@@ -128,7 +136,7 @@ export default async function handler(req) {
         // If upsert returned nothing (all were duplicates), re-fetch
         if (!Array.isArray(rows) || rows.length === 0) {
           const refetch = await fetch(
-            `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}&select=*&order=position.asc`,
+            `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}${filtro}&select=*&order=position.asc`,
             { headers: sbHeaders() }
           );
           rows = await refetch.json();
@@ -237,12 +245,24 @@ export default async function handler(req) {
     const moveTo = url.searchParams.get('move_to');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
 
-    const all = await fetch(
-      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}&select=id,key&order=position.asc`,
+    // Primero la etapa concreta, para saber a que pipeline pertenece
+    const objetivo = await fetch(
+      `${SUPABASE_URL}/rest/v1/pipeline_stages?id=eq.${id}&user_id=eq.${userId}&select=*`,
       { headers: sbHeaders() }
     ).then(r => r.json()).catch(() => []);
-    const target = (all || []).find(s => s.id === id);
+    const target = (objetivo || [])[0];
     if (!target) return jsonResp({ error: 'Etapa no encontrada' }, 404);
+
+    // Las hermanas son las del MISMO pipeline. Sin este filtro, con varios
+    // pipelines se moverian tambien los leads de los demas: dos pipelines
+    // pueden tener una etapa con la misma clave.
+    const mismoPipeline = target.pipeline_id
+      ? `&pipeline_id=eq.${encodeURIComponent(target.pipeline_id)}`
+      : '';
+    const all = await fetch(
+      `${SUPABASE_URL}/rest/v1/pipeline_stages?user_id=eq.${userId}${mismoPipeline}&select=id,key&order=position.asc`,
+      { headers: sbHeaders() }
+    ).then(r => r.json()).catch(() => []);
     if (PROTECTED_KEYS.includes(target.key)) {
       return jsonResp({ error: 'Esta etapa es parte del sistema: puedes renombrarla o moverla, pero no eliminarla.' }, 400);
     }
@@ -252,8 +272,11 @@ export default async function handler(req) {
     const dest = (all || []).find(s => s.key === moveTo && s.id !== id)
               || (all || []).find(s => s.key === 'nuevo' && s.id !== id)
               || (all || []).find(s => s.id !== id);
+    const leadsDelPipeline = target.pipeline_id
+      ? `&pipeline_id=eq.${encodeURIComponent(target.pipeline_id)}`
+      : '';
     const moved = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}&stage=eq.${encodeURIComponent(target.key)}`,
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${leadsDelPipeline}&stage=eq.${encodeURIComponent(target.key)}`,
       {
         method: 'PATCH',
         headers: { ...sbHeaders(), 'Prefer': 'return=representation' },

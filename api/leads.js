@@ -176,6 +176,21 @@ async function contarLeads(userId, filtroExtra = '&deleted_at=is.null') {
   return parseInt((r.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
 }
 
+// Pipeline principal del ambito (cuenta o cliente). Devuelve null si la tabla
+// todavia no existe: en ese caso el lead se crea sin pipeline, como antes.
+async function pipelinePrincipal(userId, clientId) {
+  try {
+    const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/pipelines?user_id=eq.${encodeURIComponent(userId)}${scope}&select=id,is_default&order=position.asc`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) return null;
+    const filas = await r.json();
+    if (!Array.isArray(filas) || !filas.length) return null;
+    return (filas.find(p => p.is_default) || filas[0]).id;
+  } catch { return null; }}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
@@ -336,7 +351,11 @@ export default async function handler(req) {
   // GET — list leads
   if (req.method === 'GET' && !url.searchParams.get('id')) {
     const stage = url.searchParams.get('stage');
+    // Sin pipeline_id devuelve todos, como antes: asi la app sigue viva si la
+    // migracion de pipelines aun no se ha corrido.
+    const pipelineId = url.searchParams.get('pipeline_id');
     let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}&select=*&order=stage_position.asc,created_at.desc`;
+    if (pipelineId) query += `&pipeline_id=eq.${encodeURIComponent(pipelineId)}`;
     if (stage) query += `&stage=eq.${encodeURIComponent(stage)}`;
     const res = await fetch(query, { headers: sbHeaders() });
     const rows = await res.json();
@@ -420,6 +439,10 @@ export default async function handler(req) {
       }
     }
 
+    // Los contactos importados van al pipeline pedido o al principal; sin esto
+    // quedarian sin pipeline y no se verian en ningun tablero.
+    const pipelineImport = body.pipeline_id || await pipelinePrincipal(userId, clientId);
+
     const result = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
     const toInsert = [];
     const seenInBatch = new Set();
@@ -471,6 +494,7 @@ export default async function handler(req) {
         source: 'importacion',
         tags: cleanTags,
         custom_fields: {},
+        ...(pipelineImport ? { pipeline_id: pipelineImport } : {}),
       });
     }
     if (toInsert.length) {
@@ -546,6 +570,9 @@ export default async function handler(req) {
       tags: leadTags,
       custom_fields: custom_fields || {},
     };
+    // El lead cae en el pipeline que pida el cliente o, si no, en el principal
+    const pipeline = body.pipeline_id || await pipelinePrincipal(userId, clientId);
+    if (pipeline) payload.pipeline_id = pipeline;
     const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: 'POST',
       headers: sbHeaders(),

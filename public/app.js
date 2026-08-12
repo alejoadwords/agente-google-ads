@@ -16539,10 +16539,174 @@ async function crmInit() {
   crmUpdateSidebarCount();
 }
 
+// ── Varios pipelines ────────────────────────────────────────────────────────
+// El pipeline activo condiciona qué etapas y qué leads se ven. Si la migración
+// de base de datos aún no se ha corrido, la API devuelve la lista vacía y todo
+// sigue funcionando como con un único pipeline.
+let crmPipelines = [];
+let crmPipelineId = null;
+
+function pipeClave() {
+  const c = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId ? agencyActiveClientId : 'cuenta';
+  return 'acuarius_pipeline_' + c;
+}
+
+async function crmLoadPipelines() {
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetchAuth('/api/pipelines' + qs).then(r => r.json());
+    crmPipelines = d.pipelines || [];
+    // Recordar el último elegido en este ámbito; si ya no existe, al principal
+    let guardado = null;
+    try { guardado = localStorage.getItem(pipeClave()); } catch {}
+    const existe = crmPipelines.some(p => p.id === guardado);
+    crmPipelineId = existe ? guardado
+      : (crmPipelines.find(p => p.is_default) || crmPipelines[0] || {}).id || null;
+    pipeRenderSelector();
+    return true;
+  } catch (e) {
+    console.error('crmLoadPipelines', e);
+    crmPipelines = []; crmPipelineId = null;
+    pipeRenderSelector();
+    return false;
+  }
+}
+
+function pipeRenderSelector() {
+  const cont = document.getElementById('pipe-selector');
+  const sel = document.getElementById('pipe-select');
+  if (!cont || !sel) return;
+  // Con un solo pipeline el selector estorba: solo el engranaje para crear más
+  if (!crmPipelines.length) { cont.style.display = 'none'; return; }
+  cont.style.display = 'flex';
+  sel.style.display = crmPipelines.length > 1 ? '' : 'none';
+  sel.innerHTML = crmPipelines.map(p =>
+    '<option value="' + esc(p.id) + '"' + (p.id === crmPipelineId ? ' selected' : '') + '>' + esc(p.name) + '</option>'
+  ).join('');
+}
+
+async function pipeCambiar(id) {
+  if (!id || id === crmPipelineId) return;
+  crmPipelineId = id;
+  try { localStorage.setItem(pipeClave(), id); } catch {}
+  crmStagesLoaded = false; crmLeadsLoaded = false;
+  await Promise.all([crmLoadStages(), crmLoadLeads()]);
+  crmRender();
+}
+
+// ── Gestor de pipelines ─────────────────────────────────────────────────────
+const PIPE_MAX = 10;
+
+function pipeAbrirGestor() {
+  document.getElementById('pipe-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'pipe-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML =
+    '<div class="auto-modal" style="max-width:540px">' +
+      '<div class="auto-modal-head">' +
+        '<div><div class="auto-modal-title">Pipelines</div>' +
+        '<div class="auto-modal-sub">Hasta ' + PIPE_MAX + ' procesos de venta. Cada uno con sus propias etapas.</div></div>' +
+        '<button class="auto-modal-x" onclick="document.getElementById(\'pipe-overlay\').remove()">&times;</button>' +
+      '</div>' +
+      '<div class="auto-modal-body" id="pipe-lista"></div>' +
+      '<div class="auto-modal-foot">' +
+        '<button class="btn-sec sm" onclick="document.getElementById(\'pipe-overlay\').remove()">Cerrar</button>' +
+        '<button class="btn-pri sm" id="pipe-btn-nuevo" onclick="pipeCrear()">+ Nuevo pipeline</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  pipeRenderLista();
+}
+
+function pipeRenderLista() {
+  const cont = document.getElementById('pipe-lista');
+  if (!cont) return;
+  if (!crmPipelines.length) {
+    cont.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0">' +
+      'Aún no hay pipelines. Si acabas de actualizar, puede faltar la migración de la base de datos.</div>';
+    return;
+  }
+  cont.innerHTML = crmPipelines.map(p =>
+    '<div class="pipe-fila">' +
+      '<input type="text" value="' + esc(p.name) + '" data-id="' + esc(p.id) + '" ' +
+        'onchange="pipeRenombrar(\'' + esc(p.id) + '\', this.value)">' +
+      (p.is_default
+        ? '<span class="pipe-marca">Principal</span>'
+        : '<button class="btn-sec sm" onclick="pipePrincipal(\'' + esc(p.id) + '\')">Hacer principal</button>') +
+      (crmPipelines.length > 1 && !p.is_default
+        ? '<button class="btn-sec sm" style="color:#EF4444;border-color:#FCA5A5" onclick="pipeBorrar(\'' + esc(p.id) + '\')">Borrar</button>'
+        : '') +
+    '</div>'
+  ).join('');
+  const btn = document.getElementById('pipe-btn-nuevo');
+  if (btn) {
+    const lleno = crmPipelines.length >= PIPE_MAX;
+    btn.disabled = lleno;
+    btn.style.opacity = lleno ? '.5' : '';
+    btn.textContent = lleno ? 'Máximo ' + PIPE_MAX + ' pipelines' : '+ Nuevo pipeline';
+  }
+}
+
+async function pipeCrear() {
+  const nombre = prompt('Nombre del nuevo pipeline', 'Nuevo proceso');
+  if (!nombre || !nombre.trim()) return;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const r = await fetchAuth('/api/pipelines' + qs, { method: 'POST', body: JSON.stringify({ name: nombre.trim() }) });
+    const d = await r.json();
+    if (!r.ok) { showToast(d.error || 'No se pudo crear', 'error'); return; }
+    await crmLoadPipelines();
+    pipeRenderLista();
+    showToast('Pipeline creado con sus etapas', 'success');
+  } catch { showToast('No se pudo crear el pipeline', 'error'); }
+}
+
+async function pipeRenombrar(id, nombre) {
+  if (!nombre || !nombre.trim()) { pipeRenderLista(); return; }
+  try {
+    const r = await fetchAuth('/api/pipelines', { method: 'PUT', body: JSON.stringify({ id, name: nombre.trim() }) });
+    if (!r.ok) throw new Error();
+    await crmLoadPipelines();
+    pipeRenderLista();
+  } catch { showToast('No se pudo renombrar', 'error'); }
+}
+
+async function pipePrincipal(id) {
+  try {
+    const r = await fetchAuth('/api/pipelines', { method: 'PUT', body: JSON.stringify({ id, is_default: true }) });
+    if (!r.ok) throw new Error();
+    await crmLoadPipelines();
+    pipeRenderLista();
+    showToast('Los leads nuevos entrarán aquí', 'success');
+  } catch { showToast('No se pudo cambiar el principal', 'error'); }
+}
+
+async function pipeBorrar(id) {
+  const p = crmPipelines.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm('¿Borrar «' + p.name + '»?\n\nSus leads NO se pierden: pasan al pipeline principal.')) return;
+  try {
+    const r = await fetchAuth('/api/pipelines?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) { showToast(d.error || 'No se pudo borrar', 'error'); return; }
+    if (crmPipelineId === id) crmPipelineId = null;
+    await crmLoadPipelines();
+    crmStagesLoaded = false; crmLeadsLoaded = false;
+    await Promise.all([crmLoadStages(), crmLoadLeads()]);
+    crmRender();
+    pipeRenderLista();
+    showToast(d.leads_movidos ? d.leads_movidos + ' leads pasaron al principal' : 'Pipeline borrado', 'success');
+  } catch { showToast('No se pudo borrar el pipeline', 'error'); }
+}
+
 async function crmLoadStages() {
   try {
-    // Stages are global per user (not per client)
-    const res = await fetchAuth('/api/pipeline-stages');
+    const qs = crmPipelineId ? '?pipeline_id=' + encodeURIComponent(crmPipelineId) : '';
+    const res = await fetchAuth('/api/pipeline-stages' + qs);
     if (!res.ok) throw new Error();
     const data = await res.json();
     crmStages = data.stages || [];
@@ -16558,7 +16722,10 @@ async function crmLoadStages() {
 async function crmLoadLeads() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
-    const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+    const params = [];
+    if (clientId) params.push('client_id=' + encodeURIComponent(clientId));
+    if (crmPipelineId) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
+    const qs = params.length ? '?' + params.join('&') : '';
     const res = await fetchAuth(`/api/leads${qs}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
@@ -18418,6 +18585,8 @@ async function crmInit() {
   if (crmInited) { crmRender(); crmEnsureLoaded(); return; }
   crmInited = true;
   crmLeadsLoaded = crmStagesLoaded = crmTagsLoaded = crmAgentsLoaded = false;
+  // Los pipelines primero: las etapas y los leads dependen del activo
+  await crmLoadPipelines();
   await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags()]);
   crmRender(); // garantiza render con todos los datos cargados
   crmRenderTagFilter();
@@ -24467,6 +24636,7 @@ async function crmEnsureLoaded() {
   if (!(typeof clerkInstance !== 'undefined' && clerkInstance && clerkInstance.session)) return;
   _crmEnsureInFlight = true;
   try {
+    if (!crmPipelines.length) { try { await crmLoadPipelines(); } catch {} }
     const jobs = [];
     if (!crmStagesLoaded) jobs.push(crmLoadStages());
     if (!crmLeadsLoaded)  jobs.push(crmLoadLeads());

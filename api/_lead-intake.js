@@ -62,6 +62,19 @@ export function mapExternalPayload(body) {
   return null;
 }
 
+// Los leads que entran por formulario, webhook o inbox tienen que caer en un
+// pipeline concreto; si no, no se verian en ningun tablero. Devuelve null si la
+// tabla 'pipelines' aun no existe (migracion pendiente) y entonces se crea el
+// lead sin pipeline, como antes.
+export async function pipelinePrincipal(userId, clientId) {
+  try {
+    const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+    const filas = await sb(`/pipelines?user_id=eq.${encodeURIComponent(userId)}${scope}&select=id,is_default&order=position.asc`);
+    if (!Array.isArray(filas) || !filas.length) return null;
+    return (filas.find(p => p.is_default) || filas[0]).id;
+  } catch { return null; }
+}
+
 const TAG_PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#14B8A6','#EF4444','#6366F1','#84CC16','#F97316'];
 function colorFor(n) { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return TAG_PALETTE[h % TAG_PALETTE.length]; }
 
@@ -130,6 +143,7 @@ export async function intakeLead(userId, clientId, data) {
   const noteLine = data.note ? `📥 [${data.sourceLabel || 'Fuente externa'}] ` + String(data.note).slice(0, 600) : null;
 
   if (!lead) {
+    const pipeline = await pipelinePrincipal(userId, clientId);
     const rows = await sb('/leads', 'POST', {
       user_id: userId, client_id: clientId,
       name: data.name || 'Lead sin nombre',
@@ -140,6 +154,7 @@ export async function intakeLead(userId, clientId, data) {
       source: data.source || 'externa',
       tags: leadTags,
       notes: noteLine,
+      ...(pipeline ? { pipeline_id: pipeline } : {}),
     });
     const created = rows[0];
     // Reparto entre comerciales antes de disparar automatizaciones, para que
