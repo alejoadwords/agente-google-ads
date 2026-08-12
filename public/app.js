@@ -16603,62 +16603,83 @@ function pipeAbrirGestor() {
   const ov = document.createElement('div');
   ov.id = 'pipe-overlay';
   ov.className = 'auto-modal-overlay';
-  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
-  ov.innerHTML =
-    '<div class="auto-modal" style="max-width:540px">' +
-      '<div class="auto-modal-head">' +
-        '<div><div class="auto-modal-title">Pipelines</div>' +
-        '<div class="auto-modal-sub">Hasta ' + PIPE_MAX + ' procesos de venta. Cada uno con sus propias etapas.</div></div>' +
-        '<button class="auto-modal-x" onclick="document.getElementById(\'pipe-overlay\').remove()">&times;</button>' +
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:560px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Pipelines</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="pipe-conteo"></div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div id="pipe-lista"></div>' +
+      '<div class="pipe-nuevo">' +
+        '<input type="text" id="pipe-nuevo-nombre" maxlength="60" placeholder="Nombre del nuevo pipeline" ' +
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();pipeCrear()}">' +
+        '<button class="btn-sec sm" id="pipe-btn-nuevo" onclick="pipeCrear()">+ Crear</button>' +
       '</div>' +
-      '<div class="auto-modal-body" id="pipe-lista"></div>' +
-      '<div class="auto-modal-foot">' +
-        '<button class="btn-sec sm" onclick="document.getElementById(\'pipe-overlay\').remove()">Cerrar</button>' +
-        '<button class="btn-pri sm" id="pipe-btn-nuevo" onclick="pipeCrear()">+ Nuevo pipeline</button>' +
-      '</div>' +
-    '</div>';
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
   document.body.appendChild(ov);
   pipeRenderLista();
 }
 
+const PIPE_ICONO_BORRAR = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
+
 function pipeRenderLista() {
   const cont = document.getElementById('pipe-lista');
   if (!cont) return;
+
+  const conteo = document.getElementById('pipe-conteo');
+  if (conteo) conteo.textContent = crmPipelines.length
+    ? crmPipelines.length + ' de ' + PIPE_MAX + ' · cada uno con sus propias etapas'
+    : 'Hasta ' + PIPE_MAX + ' procesos de venta, cada uno con sus propias etapas';
+
   if (!crmPipelines.length) {
-    cont.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0">' +
+    cont.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:4px 0 2px">' +
       'Aún no hay pipelines. Si acabas de actualizar, puede faltar la migración de la base de datos.</div>';
-    return;
+  } else {
+    // Solo se puede borrar si no es el principal y queda otro al que mover los leads
+    const puedeBorrar = crmPipelines.length > 1;
+    cont.innerHTML = crmPipelines.map(p =>
+      '<div class="pipe-fila' + (p.id === crmPipelineId ? ' act' : '') + '">' +
+        '<input type="text" maxlength="60" value="' + esc(p.name) + '" ' +
+          'onchange="pipeRenombrar(\'' + esc(p.id) + '\', this.value)">' +
+        (p.is_default
+          ? '<span class="pipe-marca" title="Los leads nuevos entran aquí">Principal</span>'
+          : '<button class="btn-ghost sm" onclick="pipePrincipal(\'' + esc(p.id) + '\')">Hacer principal</button>') +
+        (puedeBorrar && !p.is_default
+          ? '<button class="pipe-borrar" title="Borrar pipeline" onclick="pipeBorrar(\'' + esc(p.id) + '\')">' + PIPE_ICONO_BORRAR + '</button>'
+          : '') +
+      '</div>'
+    ).join('');
   }
-  cont.innerHTML = crmPipelines.map(p =>
-    '<div class="pipe-fila">' +
-      '<input type="text" value="' + esc(p.name) + '" data-id="' + esc(p.id) + '" ' +
-        'onchange="pipeRenombrar(\'' + esc(p.id) + '\', this.value)">' +
-      (p.is_default
-        ? '<span class="pipe-marca">Principal</span>'
-        : '<button class="btn-sec sm" onclick="pipePrincipal(\'' + esc(p.id) + '\')">Hacer principal</button>') +
-      (crmPipelines.length > 1 && !p.is_default
-        ? '<button class="btn-sec sm" style="color:#EF4444;border-color:#FCA5A5" onclick="pipeBorrar(\'' + esc(p.id) + '\')">Borrar</button>'
-        : '') +
-    '</div>'
-  ).join('');
+
+  const lleno = crmPipelines.length >= PIPE_MAX;
   const btn = document.getElementById('pipe-btn-nuevo');
-  if (btn) {
-    const lleno = crmPipelines.length >= PIPE_MAX;
-    btn.disabled = lleno;
-    btn.style.opacity = lleno ? '.5' : '';
-    btn.textContent = lleno ? 'Máximo ' + PIPE_MAX + ' pipelines' : '+ Nuevo pipeline';
+  const inp = document.getElementById('pipe-nuevo-nombre');
+  if (btn) { btn.disabled = lleno; btn.textContent = lleno ? 'Máximo ' + PIPE_MAX : '+ Crear'; }
+  if (inp) {
+    inp.disabled = lleno;
+    inp.placeholder = lleno
+      ? 'Llegaste al máximo de ' + PIPE_MAX + '. Borra alguno para crear otro.'
+      : 'Nombre del nuevo pipeline';
   }
 }
 
 async function pipeCrear() {
-  const nombre = prompt('Nombre del nuevo pipeline', 'Nuevo proceso');
-  if (!nombre || !nombre.trim()) return;
+  const inp = document.getElementById('pipe-nuevo-nombre');
+  const nombre = String(inp?.value || '').trim();
+  if (!nombre) { inp?.focus(); return; }
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const r = await fetchAuth('/api/pipelines' + qs, { method: 'POST', body: JSON.stringify({ name: nombre.trim() }) });
+    const r = await fetchAuth('/api/pipelines' + qs, { method: 'POST', body: JSON.stringify({ name: nombre }) });
     const d = await r.json();
     if (!r.ok) { showToast(d.error || 'No se pudo crear', 'error'); return; }
+    if (inp) inp.value = '';
     await crmLoadPipelines();
     pipeRenderLista();
     showToast('Pipeline creado con sus etapas', 'success');
