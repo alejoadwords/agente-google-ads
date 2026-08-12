@@ -16545,6 +16545,7 @@ async function crmInit() {
 // sigue funcionando como con un único pipeline.
 let crmPipelines = [];
 let crmPipelineId = null;
+let _pipesFallo = false;   // la ultima carga de pipelines fallo: hay que reintentar
 
 function pipeClave() {
   const c = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId ? agencyActiveClientId : 'cuenta';
@@ -16566,11 +16567,16 @@ async function crmLoadPipelines() {
     const existe = crmPipelines.some(p => p.id === guardado);
     crmPipelineId = existe ? guardado
       : (crmPipelines.find(p => p.is_default) || crmPipelines[0] || {}).id || null;
+    _pipesFallo = false;
     pipeRenderSelector();
     return true;
   } catch (e) {
+    // Antes se vaciaba la lista al fallar. Eso escondia el selector y dejaba el
+    // CRM en modo "sin pipelines", que pide etapas y leads SIN filtrar: la
+    // misma pantalla mostraba cosas distintas segun si la peticion habia ido
+    // bien. Ahora un fallo no destruye lo que ya se sabia.
     console.error('crmLoadPipelines', e);
-    crmPipelines = []; crmPipelineId = null;
+    _pipesFallo = true;
     pipeRenderSelector();
     return false;
   }
@@ -24790,7 +24796,7 @@ async function crmEnsureLoaded() {
   if (!(typeof clerkInstance !== 'undefined' && clerkInstance && clerkInstance.session)) return;
   _crmEnsureInFlight = true;
   try {
-    if (!crmPipelines.length) { try { await crmLoadPipelines(); } catch {} }
+    if (!crmPipelines.length || _pipesFallo) { try { await crmLoadPipelines(); } catch {} }
     const jobs = [];
     if (!crmStagesLoaded) jobs.push(crmLoadStages());
     if (!crmLeadsLoaded)  jobs.push(crmLoadLeads());
