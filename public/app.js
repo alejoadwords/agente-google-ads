@@ -16820,12 +16820,24 @@ async function pipeBorrar(id) {
   } catch (e) { pipeMostrarError(e?.message || 'No se pudo borrar el pipeline'); }
 }
 
+// Ámbito de una carga: qué cliente y qué pipeline se estaban pidiendo. Las dos
+// cargas de abajo escriben en variables globales, así que si se solapan dos
+// (cambiar de pipeline mientras la anterior viaja, o la red de seguridad
+// disparando a la vez que la carga inicial) la respuesta más LENTA llegaba la
+// última y pisaba a la buena. De ahí que a veces cargara y a veces no.
+function crmAmbito() {
+  const c = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId ? agencyActiveClientId : '';
+  return c + '|' + (crmPipelineId || '');
+}
+
 async function crmLoadStages() {
+  const mio = crmAmbito();
   try {
     const qs = crmPipelineId ? '?pipeline_id=' + encodeURIComponent(crmPipelineId) : '';
     const res = await fetchAuth('/api/pipeline-stages' + qs);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    if (mio !== crmAmbito()) return false;   // respuesta caducada: descartar
     crmStages = data.stages || [];
     crmStagesLoaded = true;
     crmPopulateStageSelects();
@@ -16837,6 +16849,7 @@ async function crmLoadStages() {
 }
 
 async function crmLoadLeads() {
+  const mio = crmAmbito();
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const params = [];
@@ -16846,6 +16859,7 @@ async function crmLoadLeads() {
     const res = await fetchAuth(`/api/leads${qs}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    if (mio !== crmAmbito()) return false;   // respuesta caducada: descartar
     crmLeads = data.leads || [];
     crmLeadsLoaded = true;
     crmRender();
