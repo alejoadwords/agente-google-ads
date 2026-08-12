@@ -16565,6 +16565,58 @@ function crmAmbitoCliente() {
   return (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) ? agencyActiveClientId : '';
 }
 
+// ── Aviso de carga fallida ──────────────────────────────────────────────────
+// La regla: una carga que no consigue sus datos NO se queda callada. Hasta hoy
+// cada catch escribia en la consola y el CRM seguia pintando lo que tuviera, asi
+// que un tablero incompleto y uno vacio de verdad se veian igual. Ahora sale un
+// aviso con lo que fallo y un boton para reintentar.
+const _crmFallos = new Map();   // clave -> texto de lo que no se pudo cargar
+
+function crmFallo(clave, detalle) {
+  _crmFallos.set(clave, detalle || '');
+  crmPintarAvisoFallo();
+}
+
+function crmFalloResuelto(clave) {
+  if (_crmFallos.delete(clave)) crmPintarAvisoFallo();
+}
+
+function crmPintarAvisoFallo() {
+  const ID = 'crm-aviso-fallo';
+  document.getElementById(ID)?.remove();
+  if (!_crmFallos.size) return;
+  const kanban = document.getElementById('crm-kanban');
+  if (!kanban || !kanban.parentElement) return;
+  const QUE = { pipelines: 'los procesos de venta', etapas: 'las etapas', leads: 'los leads', informes: 'los datos de los informes' };
+  const lista = [..._crmFallos.keys()].map(k => QUE[k] || k);
+  const texto = lista.length === 1 ? lista[0]
+    : lista.slice(0, -1).join(', ') + ' y ' + lista[lista.length - 1];
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 20px 6px;padding:10px 14px;background:#FEF2F2;border:1px solid #FCA5A5;' +
+    'border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:var(--fs-sm);color:#B91C1C';
+  el.innerHTML =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+      'stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16.5v.01"/></svg>' +
+    '<span>No se pudieron cargar <strong>' + esc(texto) + '</strong>. Lo que ves puede estar incompleto.</span>' +
+    '<button class="btn-sec sm" onclick="crmReintentarCarga(this)">Reintentar</button>';
+  kanban.parentElement.insertBefore(el, kanban);
+}
+
+async function crmReintentarCarga(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Reintentando…'; }
+  try {
+    crmStagesLoaded = false; crmLeadsLoaded = false;
+    _pipesFallo = true; _leadsAmbitoDe = null;
+    await crmLoadPipelines();
+    await Promise.all([crmLoadStages(), crmLoadLeads()]);
+    crmRender();
+    if (!_crmFallos.size && typeof showToast === 'function') showToast('Listo, ya está todo cargado', 'success');
+  } finally {
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Reintentar'; }
+  }
+}
+
 // Los informes son del negocio entero, no de un proceso de venta. Si leyeran
 // crmLeads —filtrado por el pipeline activo— las cifras cambiarian segun que
 // pipeline tuvieras abierto, y sin decirlo. Por eso tienen su propia carga, sin
@@ -16585,8 +16637,10 @@ async function crmCargarLeadsAmbito() {
       if (mio !== crmAmbitoCliente()) return crmLeadsAmbito;   // caducada
       crmLeadsAmbito = d.leads || [];
       _leadsAmbitoDe = mio;
+      crmFalloResuelto('informes');
     } catch (e) {
       console.error('crmCargarLeadsAmbito', e);
+      crmFallo('informes');
     } finally {
       _leadsAmbitoEnVuelo = null;
     }
@@ -16624,6 +16678,7 @@ async function crmLoadPipelines() {
     if (mio !== crmAmbitoCliente()) return false;   // el cliente cambió mientras viajaba
     crmPipelines = d.pipelines || [];
     _pipesAmbito = mio;
+    crmFalloResuelto('pipelines');
     // Recordar el último elegido en este ámbito; si ya no existe, al principal
     const guardado = pipeRecordado();
     const existe = crmPipelines.some(p => p.id === guardado);
@@ -16639,6 +16694,7 @@ async function crmLoadPipelines() {
     // bien. Ahora un fallo no destruye lo que ya se sabia.
     console.error('crmLoadPipelines', e);
     _pipesFallo = true;
+    crmFallo('pipelines');
     pipeRenderSelector();
     return false;
   }
@@ -16929,9 +16985,11 @@ async function crmLoadStages() {
     crmStages = data.stages || [];
     crmStagesLoaded = true;
     crmPopulateStageSelects();
+    crmFalloResuelto('etapas');
     return true;
   } catch(e) {
     console.error('crmLoadStages', e);
+    crmFallo('etapas');
     return false;
   }
 }
@@ -16950,10 +17008,12 @@ async function crmLoadLeads() {
     if (mio !== crmAmbito()) return false;   // respuesta caducada: descartar
     crmLeads = data.leads || [];
     crmLeadsLoaded = true;
+    crmFalloResuelto('leads');
     crmRender();
     return true;
   } catch(e) {
     console.error('crmLoadLeads', e);
+    crmFallo('leads');
     return false;
   }
 }
