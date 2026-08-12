@@ -73,7 +73,18 @@ async function sb(path, method = 'GET', body = null, prefer) {
     const txt = await res.text().catch(() => '');
     // 42P01 = relacion inexistente. Es la senal de que falta la migracion.
     if (res.status === 404 || txt.includes('42P01') || txt.includes('does not exist')) return { falta: true };
-    throw new Error(txt || ('HTTP ' + res.status));
+    // El detalle de Postgres (constraint, columna, tipo) es justo lo que hace
+    // falta para diagnosticar: se conserva en vez de perderlo en un 500 opaco.
+    let detalle = txt;
+    try {
+      const j = JSON.parse(txt);
+      detalle = [j.message, j.details, j.hint].filter(Boolean).join(' — ') || txt;
+      if (j.code) detalle = '[' + j.code + '] ' + detalle;
+    } catch {}
+    const err = new Error(detalle || ('HTTP ' + res.status));
+    err.supabase = true;
+    err.ruta = path.split('?')[0];
+    throw err;
   }
   const txt = await res.text();
   return { data: txt ? JSON.parse(txt) : null };
@@ -85,6 +96,19 @@ function ambito(clientId) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  try {
+    return await manejar(req);
+  } catch (e) {
+    // Sin esto, cualquier error de la base salia como un 500 sin cuerpo y el
+    // frontend solo podia decir "no se pudo": imposible de diagnosticar.
+    return jsonResp({
+      error: 'Error en la base de datos: ' + (e?.message || 'desconocido'),
+      ruta: e?.ruta || null,
+    }, 500);
+  }
+}
+
+async function manejar(req) {
 
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
@@ -213,6 +237,19 @@ async function crearPipeline(userId, clientId, nombre, esPrincipal, position) {
     user_id: userId, pipeline_id: pipeline.id,
     key: e.key, label: e.label, color: e.color, position: e.position,
   }));
-  await sb('/pipeline_stages', 'POST', etapas, 'return=minimal,resolution=ignore-duplicates');
+  try {
+    await sb('/pipeline_stages', 'POST', etapas, 'return=minimal,resolution=ignore-duplicates');
+  } catch (e) {
+    // Un pipeline sin etapas no se puede usar: se deshace para no dejar basura.
+    await sb(`/pipelines?id=eq.${pipeline.id}`, 'DELETE', null, 'return=minimal').catch(() => {});
+    const msg = String(e?.message || '');
+    // 23505 = clave duplicada. Casi seguro el indice unico antiguo
+    // (user_id, key), que impide que dos pipelines tengan su propio 'nuevo'.
+    if (msg.includes('23505')) {
+      throw new Error('Falta soltar el índice único antiguo de pipeline_stages ' +
+        '(user_id, key): impide que cada pipeline tenga sus propias etapas. Detalle: ' + msg);
+    }
+    throw e;
+  }
   return { pipeline };
 }

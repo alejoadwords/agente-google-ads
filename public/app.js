@@ -16551,6 +16551,10 @@ function pipeClave() {
   return 'acuarius_pipeline_' + c;
 }
 
+function pipeRecordado() {
+  try { return localStorage.getItem(pipeClave()); } catch { return null; }
+}
+
 async function crmLoadPipelines() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -16558,8 +16562,7 @@ async function crmLoadPipelines() {
     const d = await fetchAuth('/api/pipelines' + qs).then(r => r.json());
     crmPipelines = d.pipelines || [];
     // Recordar el último elegido en este ámbito; si ya no existe, al principal
-    let guardado = null;
-    try { guardado = localStorage.getItem(pipeClave()); } catch {}
+    const guardado = pipeRecordado();
     const existe = crmPipelines.some(p => p.id === guardado);
     crmPipelineId = existe ? guardado
       : (crmPipelines.find(p => p.is_default) || crmPipelines[0] || {}).id || null;
@@ -16631,6 +16634,7 @@ const PIPE_ICONO_BORRAR = '<svg width="13" height="13" viewBox="0 0 24 24" fill=
 function pipeRenderLista() {
   const cont = document.getElementById('pipe-lista');
   if (!cont) return;
+  document.getElementById('pipe-error')?.remove();
 
   const conteo = document.getElementById('pipe-conteo');
   if (conteo) conteo.textContent = crmPipelines.length
@@ -16669,6 +16673,27 @@ function pipeRenderLista() {
   }
 }
 
+// Un 500 de Vercel puede llegar como HTML: pedir .json() a secas lo convertiria
+// en una excepcion y perderiamos el motivo real del fallo.
+async function leerRespuesta(r) {
+  const txt = await r.text().catch(() => '');
+  try { return JSON.parse(txt); } catch { return { error: txt.slice(0, 300) || null }; }
+}
+
+// Los errores de base de datos son largos: el toast los corta, asi que se
+// muestran dentro del propio modal, donde se pueden leer y copiar.
+function pipeMostrarError(msg) {
+  const cont = document.getElementById('pipe-lista');
+  if (!cont) { showToast(String(msg).slice(0, 120), 'error'); return; }
+  document.getElementById('pipe-error')?.remove();
+  const d = document.createElement('div');
+  d.id = 'pipe-error';
+  d.style.cssText = 'margin-top:12px;padding:10px 12px;border:1px solid #FCA5A5;background:#FEF2F2;' +
+    'border-radius:10px;color:#B91C1C;font-size:12px;line-height:1.45;word-break:break-word';
+  d.textContent = msg;
+  cont.parentNode.appendChild(d);
+}
+
 async function pipeCrear() {
   const inp = document.getElementById('pipe-nuevo-nombre');
   const nombre = String(inp?.value || '').trim();
@@ -16677,33 +16702,33 @@ async function pipeCrear() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const r = await fetchAuth('/api/pipelines' + qs, { method: 'POST', body: JSON.stringify({ name: nombre }) });
-    const d = await r.json();
-    if (!r.ok) { showToast(d.error || 'No se pudo crear', 'error'); return; }
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pipeMostrarError(d.error || ('Error ' + r.status)); return; }
     if (inp) inp.value = '';
     await crmLoadPipelines();
     pipeRenderLista();
     showToast('Pipeline creado con sus etapas', 'success');
-  } catch { showToast('No se pudo crear el pipeline', 'error'); }
+  } catch (e) { pipeMostrarError(e?.message || 'No se pudo crear el pipeline'); }
 }
 
 async function pipeRenombrar(id, nombre) {
   if (!nombre || !nombre.trim()) { pipeRenderLista(); return; }
   try {
     const r = await fetchAuth('/api/pipelines', { method: 'PUT', body: JSON.stringify({ id, name: nombre.trim() }) });
-    if (!r.ok) throw new Error();
+    if (!r.ok) throw new Error((await leerRespuesta(r)).error || 'Error ' + r.status);
     await crmLoadPipelines();
     pipeRenderLista();
-  } catch { showToast('No se pudo renombrar', 'error'); }
+  } catch (e) { pipeMostrarError(e?.message || 'No se pudo renombrar'); }
 }
 
 async function pipePrincipal(id) {
   try {
     const r = await fetchAuth('/api/pipelines', { method: 'PUT', body: JSON.stringify({ id, is_default: true }) });
-    if (!r.ok) throw new Error();
+    if (!r.ok) throw new Error((await leerRespuesta(r)).error || 'Error ' + r.status);
     await crmLoadPipelines();
     pipeRenderLista();
     showToast('Los leads nuevos entrarán aquí', 'success');
-  } catch { showToast('No se pudo cambiar el principal', 'error'); }
+  } catch (e) { pipeMostrarError(e?.message || 'No se pudo cambiar el principal'); }
 }
 
 async function pipeBorrar(id) {
@@ -16712,8 +16737,8 @@ async function pipeBorrar(id) {
   if (!confirm('¿Borrar «' + p.name + '»?\n\nSus leads NO se pierden: pasan al pipeline principal.')) return;
   try {
     const r = await fetchAuth('/api/pipelines?id=' + encodeURIComponent(id), { method: 'DELETE' });
-    const d = await r.json();
-    if (!r.ok) { showToast(d.error || 'No se pudo borrar', 'error'); return; }
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pipeMostrarError(d.error || ('Error ' + r.status)); return; }
     if (crmPipelineId === id) crmPipelineId = null;
     await crmLoadPipelines();
     crmStagesLoaded = false; crmLeadsLoaded = false;
@@ -16721,7 +16746,7 @@ async function pipeBorrar(id) {
     crmRender();
     pipeRenderLista();
     showToast(d.leads_movidos ? d.leads_movidos + ' leads pasaron al principal' : 'Pipeline borrado', 'success');
-  } catch { showToast('No se pudo borrar el pipeline', 'error'); }
+  } catch (e) { pipeMostrarError(e?.message || 'No se pudo borrar el pipeline'); }
 }
 
 async function crmLoadStages() {
@@ -18606,9 +18631,17 @@ async function crmInit() {
   if (crmInited) { crmRender(); crmEnsureLoaded(); return; }
   crmInited = true;
   crmLeadsLoaded = crmStagesLoaded = crmTagsLoaded = crmAgentsLoaded = false;
-  // Los pipelines primero: las etapas y los leads dependen del activo
-  await crmLoadPipelines();
-  await Promise.all([crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags()]);
+  // Etapas y leads dependen del pipeline activo, pero esperar a /api/pipelines
+  // antes de pedirlos deja el tablero en blanco un viaje entero de red. Como el
+  // ultimo pipeline elegido esta en localStorage, se arranca con el y todo sale
+  // en paralelo; si al llegar la lista resulta ser otro, se recargan los dos.
+  const recordado = pipeRecordado();
+  crmPipelineId = recordado;
+  await Promise.all([crmLoadPipelines(), crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags()]);
+  if (crmPipelineId !== recordado) {
+    crmStagesLoaded = crmLeadsLoaded = false;
+    await Promise.all([crmLoadStages(), crmLoadLeads()]);
+  }
   crmRender(); // garantiza render con todos los datos cargados
   crmRenderTagFilter();
   crmLoadInbox();
@@ -24664,7 +24697,9 @@ async function crmEnsureLoaded() {
     if (!crmAgentsLoaded) jobs.push(crmLoadAgents());
     if (!crmTagsLoaded)   jobs.push(crmLoadTags());
     await Promise.all(jobs);
-    if (crmLeadsLoaded) {
+    // Antes solo repintaba con los leads dentro. Si llegaban las etapas pero
+    // los leads fallaban, el tablero se quedaba en blanco sin ninguna columna.
+    if (crmLeadsLoaded || crmStagesLoaded) {
       try { crmRender(); } catch {}
       try { crmUpdateSidebarCount(); } catch {}
     }
