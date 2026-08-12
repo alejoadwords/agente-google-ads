@@ -16726,7 +16726,19 @@ async function pipeCargarEtapasDe(id) {
     _pipeDraft = (d.stages || []).map(s => ({ ...s, _new: false, _dirty: false }));
     _pipeDeleted = [];
     _pipeDraftPipe = id;
+    // Los conteos deben ser de ESTE proceso, no del que se ve en el tablero:
+    // al borrar una etapa se decide a dónde migran sus leads, y un conteo del
+    // proceso equivocado haría borrar una etapa creyéndola vacía.
+    _pipeCounts = {};
     pipeRenderRows();
+    try {
+      const rl = await fetchAuth('/api/leads?pipeline_id=' + encodeURIComponent(id));
+      if (rl.ok) {
+        const leads = (await rl.json()).leads || [];
+        _pipeCounts = leads.reduce((m, l) => { m[l.stage] = (m[l.stage] || 0) + 1; return m; }, {});
+        if (_pipeDraftPipe === id) pipeRenderRows();
+      }
+    } catch {}
   } catch (e) {
     if (box) box.innerHTML = '';
     pipeMostrarError(e?.message || 'No se pudieron cargar las etapas');
@@ -17034,7 +17046,12 @@ async function pipeSave() {
     if (typeof showToast === 'function') showToast('✅ Pipeline actualizado', 'success');
   } catch (e) {
     pipeMsg(e.message || 'No se pudo guardar', true);
-    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; }
+  } finally {
+    // Antes solo se restauraba al fallar, porque al guardar bien la ventana se
+    // cerraba. Desde que el gestor sigue abierto, sin esto el botón se quedaba
+    // en "Guardando…" para siempre aunque el guardado hubiera terminado.
+    const b = document.getElementById('pipe-save');
+    if (b) { b.disabled = false; b.textContent = 'Guardar cambios'; }
   }
 }
 
