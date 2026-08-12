@@ -17208,12 +17208,40 @@ function crmSetView(v) {
   crmRender();
 }
 
+// Columnas del tablero. Con un cliente activo son las etapas de su proceso. Sin
+// cliente estas viendo TODOS los clientes a la vez, y cada uno tiene etapas
+// propias: no hay un tablero comun posible salvo por las tres claves que todo
+// proceso comparte por diseño. Asi ninguna oportunidad se queda fuera.
+function crmVistaGlobal() {
+  return !crmAmbitoCliente();
+}
+
+function crmColumnasTablero(leads) {
+  if (!crmVistaGlobal()) {
+    return crmStages.map(s => ({
+      key: s.key, label: s.label, color: s.color,
+      leads: leads.filter(l => l.stage === s.key),
+      soltar: true, agregar: true,
+    }));
+  }
+  const abiertas = leads.filter(l => l.stage !== 'ganado' && l.stage !== 'perdido');
+  return [
+    // No se puede soltar en Abiertas: no sabriamos a que etapa concreta —de que
+    // proceso— mandarla. Ganadas y Perdidas si, porque esas claves existen en
+    // todos los procesos y significan lo mismo en todos.
+    { key: 'nuevo',   label: 'Abiertas', color: '#3B82F6', leads: abiertas, soltar: false, agregar: false },
+    { key: 'ganado',  label: 'Ganadas',  color: '#10B981', leads: leads.filter(l => l.stage === 'ganado'),  soltar: true, agregar: false },
+    { key: 'perdido', label: 'Perdidas', color: '#9CA3AF', leads: leads.filter(l => l.stage === 'perdido'), soltar: true, agregar: false },
+  ];
+}
+
 // El tablero solo pinta columnas de SUS etapas. Un lead de otro cliente, con las
 // etapas de su propio proceso, no cabe en ninguna y desapareceria en silencio:
 // se cuenta y se dice, que para eso esta la regla de no callar nada.
 function crmAvisoEtapasAjenas(leads) {
   const ID = 'crm-aviso-etapas';
   document.getElementById(ID)?.remove();
+  if (crmVistaGlobal()) return;   // ahí todo cae en abiertas/ganadas/perdidas
   if (!crmStagesLoaded || !crmStages.length) return;
   const claves = new Set(crmStages.map(s => s.key));
   const fuera = leads.filter(l => !claves.has(l.stage)).length;
@@ -17436,22 +17464,23 @@ function crmRenderKanban() {
 
   container.innerHTML = '';
   const now = Date.now();
-  crmStages.forEach(stage => {
-    const leads = filtered.filter(l => l.stage === stage.key);
+  crmColumnasTablero(filtered).forEach(c => {
+    const leads = c.leads;
     const stageValue = leads.reduce((s, l) => s + (Number(l.value) || 0), 0);
     const col = document.createElement('div');
     col.className = 'crm-col';
-    col.innerHTML = '<div class="crm-col-head" style="border-left-color:' + esc(stage.color) + '">' +
-      '<div class="crm-col-label">' + esc(stage.label) + '</div>' +
+    col.innerHTML = '<div class="crm-col-head" style="border-left-color:' + esc(c.color) + '">' +
+      '<div class="crm-col-label">' + esc(c.label) + '</div>' +
       '<div style="display:flex;align-items:center;gap:8px">' +
       (stageValue > 0 ? '<div class="crm-col-value">$' + stageValue.toLocaleString('es-CO') + '</div>' : '') +
       '<div class="crm-col-count">' + leads.length + '</div>' +
       '</div></div>' +
-      '<div class="crm-col-body" id="crm-col-' + esc(stage.key) + '" data-stage="' + esc(stage.key) + '">' +
+      '<div class="crm-col-body" id="crm-col-' + esc(c.key) + '" data-stage="' + esc(c.key) + '">' +
       (leads.length === 0 ? '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>' : leads.map(l => crmCardHTML(l, now)).join('')) +
-      '<button class="crm-add-card" onclick="crmOpenModal(\'' + esc(stage.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button></div>';
+      (c.agregar ? '<button class="crm-add-card" onclick="crmOpenModal(\'' + esc(c.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button>' : '') +
+      '</div>';
     container.appendChild(col);
-    crmSetupDrop(col.querySelector('.crm-col-body'), stage.key);
+    if (c.soltar) crmSetupDrop(col.querySelector('.crm-col-body'), c.key);
   });
   container.querySelectorAll('.crm-card').forEach(card => {
     card.draggable = true;
