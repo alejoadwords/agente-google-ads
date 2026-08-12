@@ -16546,6 +16546,15 @@ async function crmInit() {
 let crmPipelines = [];
 let crmPipelineId = null;
 let _pipesFallo = false;   // la ultima carga de pipelines fallo: hay que reintentar
+// Para qué cliente se cargó la lista de pipelines. El cliente activo se
+// restaura DESPUÉS de un viaje de red (agencyLoadClients), así que el CRM puede
+// arrancar sin saberlo todavía y pedir los pipelines de la cuenta en vez de los
+// del cliente. Guardar el ámbito permite darse cuenta y recargar.
+let _pipesAmbito = null;
+
+function crmAmbitoCliente() {
+  return (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) ? agencyActiveClientId : '';
+}
 
 function pipeClave() {
   const c = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId ? agencyActiveClientId : 'cuenta';
@@ -16557,11 +16566,14 @@ function pipeRecordado() {
 }
 
 async function crmLoadPipelines() {
+  const mio = crmAmbitoCliente();
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const d = await fetchAuth('/api/pipelines' + qs).then(r => r.json());
+    if (mio !== crmAmbitoCliente()) return false;   // el cliente cambió mientras viajaba
     crmPipelines = d.pipelines || [];
+    _pipesAmbito = mio;
     // Recordar el último elegido en este ámbito; si ya no existe, al principal
     const guardado = pipeRecordado();
     const existe = crmPipelines.some(p => p.id === guardado);
@@ -18732,11 +18744,28 @@ async function crmCopilotAction(action, btn) {
   copilotLoading = false;
 }
 
+// El cliente activo se restaura tras un viaje de red (agencyLoadClients). Si en
+// el navegador hay uno guardado, sabemos que va a llegar: esperarlo evita pedir
+// los pipelines del ambito equivocado. Tope de intentos, nunca un bucle abierto.
+async function crmEsperarCliente(msMax = 2500) {
+  let guardado = null;
+  try { guardado = localStorage.getItem('acuarius_cliente_activo'); } catch {}
+  if (!guardado) return;
+  for (let i = 0; i < Math.ceil(msMax / 60); i++) {
+    if (crmAmbitoCliente()) return;
+    await new Promise(r => setTimeout(r, 60));
+  }
+}
+
 // crmInit — carga stages + leads + agents en paralelo y renderiza al final
 async function crmInit() {
   if (crmInited) { crmRender(); crmEnsureLoaded(); return; }
   crmInited = true;
   crmLeadsLoaded = crmStagesLoaded = crmTagsLoaded = crmAgentsLoaded = false;
+  // Si hay un cliente guardado, esperar a que se restaure antes de pedir nada:
+  // si no, se piden los pipelines de la cuenta y hay que rehacerlo todo medio
+  // segundo despues, con el parpadeo de ver el tablero equivocado.
+  await crmEsperarCliente();
   // Etapas y leads dependen del pipeline activo, pero esperar a /api/pipelines
   // antes de pedirlos deja el tablero en blanco un viaje entero de red. Como el
   // ultimo pipeline elegido esta en localStorage, se arranca con el y todo sale
@@ -24791,12 +24820,20 @@ var _crmEnsureInFlight = false; // var: se usa antes de esta linea en el arranqu
 
 async function crmEnsureLoaded() {
   if (_crmEnsureInFlight) return;
-  if (crmLeadsLoaded && crmStagesLoaded && crmTagsLoaded && crmAgentsLoaded) return;
+  // Si el cliente activo ya se conoce y no es para el que se pidieron los
+  // pipelines, lo cargado es de otro ámbito: hay que rehacerlo aunque los
+  // flags digan que todo está cargado.
+  const ambitoCambio = _pipesAmbito !== crmAmbitoCliente();
+  if (!ambitoCambio && crmLeadsLoaded && crmStagesLoaded && crmTagsLoaded && crmAgentsLoaded) return;
   // Sin sesión de Clerk la petición saldría otra vez sin Authorization.
   if (!(typeof clerkInstance !== 'undefined' && clerkInstance && clerkInstance.session)) return;
   _crmEnsureInFlight = true;
   try {
-    if (!crmPipelines.length || _pipesFallo) { try { await crmLoadPipelines(); } catch {} }
+    if (ambitoCambio || !crmPipelines.length || _pipesFallo) {
+      try {
+        if (await crmLoadPipelines()) { crmStagesLoaded = false; crmLeadsLoaded = false; }
+      } catch {}
+    }
     const jobs = [];
     if (!crmStagesLoaded) jobs.push(crmLoadStages());
     if (!crmLeadsLoaded)  jobs.push(crmLoadLeads());
@@ -24819,7 +24856,8 @@ async function crmEnsureLoaded() {
     tries++;
     if (tries > 16) { clearInterval(iv); return; }
     if (!crmInited) return; // aún no se entró al CRM: crmInit hará la carga
-    if (crmLeadsLoaded && crmStagesLoaded && crmTagsLoaded && crmAgentsLoaded) { clearInterval(iv); return; }
+    if (crmLeadsLoaded && crmStagesLoaded && crmTagsLoaded && crmAgentsLoaded &&
+        _pipesAmbito === crmAmbitoCliente()) { clearInterval(iv); return; }
     await crmEnsureLoaded();
   }, 2500);
 
