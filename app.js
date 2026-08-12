@@ -16552,8 +16552,58 @@ let _pipesFallo = false;   // la ultima carga de pipelines fallo: hay que reinte
 // del cliente. Guardar el ámbito permite darse cuenta y recargar.
 let _pipesAmbito = null;
 
+// Texto del ambito en el que vives: los procesos de un cliente concreto y los
+// de la cuenta son listas distintas, y no decirlo era la mitad de la confusion.
+function pipeAmbitoNombre() {
+  const id = crmAmbitoCliente();
+  if (!id) return null;
+  const c = (typeof agencyClients !== 'undefined' ? agencyClients : []).find(x => x.id === id);
+  return (c && (c.client_name || c.name)) || 'este cliente';
+}
+
 function crmAmbitoCliente() {
   return (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) ? agencyActiveClientId : '';
+}
+
+// Los informes son del negocio entero, no de un proceso de venta. Si leyeran
+// crmLeads —filtrado por el pipeline activo— las cifras cambiarian segun que
+// pipeline tuvieras abierto, y sin decirlo. Por eso tienen su propia carga, sin
+// filtro de pipeline, del ambito (cuenta o cliente) en el que estas.
+let crmLeadsAmbito = [];
+let _leadsAmbitoDe = null;      // para que cliente se cargo
+let _leadsAmbitoEnVuelo = null; // evita pedirlo N veces mientras viaja
+
+async function crmCargarLeadsAmbito() {
+  if (_leadsAmbitoEnVuelo) return _leadsAmbitoEnVuelo;
+  const mio = crmAmbitoCliente();
+  _leadsAmbitoEnVuelo = (async () => {
+    try {
+      const qs = mio ? '?client_id=' + encodeURIComponent(mio) : '';
+      const r = await fetchAuth('/api/leads' + qs);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      if (mio !== crmAmbitoCliente()) return crmLeadsAmbito;   // caducada
+      crmLeadsAmbito = d.leads || [];
+      _leadsAmbitoDe = mio;
+    } catch (e) {
+      console.error('crmCargarLeadsAmbito', e);
+    } finally {
+      _leadsAmbitoEnVuelo = null;
+    }
+    return crmLeadsAmbito;
+  })();
+  return _leadsAmbitoEnVuelo;
+}
+
+// Devuelve los leads del ambito. Si aun no han llegado, entrega lo que haya
+// para no dejar el informe en blanco, y repinta cuando lleguen.
+function leadsInforme(repintar) {
+  if (_leadsAmbitoDe !== crmAmbitoCliente()) {
+    crmCargarLeadsAmbito().then(() => { try { if (repintar) repintar(); } catch {} });
+  }
+  return _leadsAmbitoDe === crmAmbitoCliente()
+    ? crmLeadsAmbito
+    : (typeof crmLeads !== 'undefined' ? crmLeads : []);
 }
 
 function pipeClave() {
@@ -16605,6 +16655,8 @@ function pipeRenderSelector() {
   sel.innerHTML = crmPipelines.map(p =>
     '<option value="' + esc(p.id) + '"' + (p.id === crmPipelineId ? ' selected' : '') + '>' + esc(p.name) + '</option>'
   ).join('');
+  const cliente = pipeAmbitoNombre();
+  sel.title = cliente ? 'Procesos de ' + cliente : 'Procesos de la cuenta';
 }
 
 async function pipeCambiar(id) {
@@ -16637,6 +16689,8 @@ function pipeAbrirGestor() {
     '<div class="auto-modal-head">' +
       '<div><div style="font-size:var(--fs-md);font-weight:800">Procesos de venta</div>' +
       '<div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="pipe-conteo"></div></div>' +
+      '<div style="flex:1"></div>' +
+      '<span class="pipe-ambito" id="pipe-ambito"></span>' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
     '</div>' +
     '<div class="pipe-gestor">' +
@@ -16667,6 +16721,15 @@ function pipeRenderLista() {
     ? 'Creados ' + crmPipelines.length + '/' + PIPE_MAX + ' · cada uno con sus propias etapas'
     : 'Hasta ' + PIPE_MAX + ' procesos, cada uno con sus propias etapas';
 
+  const amb = document.getElementById('pipe-ambito');
+  if (amb) {
+    const cliente = pipeAmbitoNombre();
+    amb.textContent = cliente ? 'Procesos de ' + cliente : 'Procesos de la cuenta';
+    amb.title = cliente
+      ? 'Solo se ven aquí los procesos de ' + cliente + '. Los de la cuenta están al quitar el cliente activo.'
+      : 'Procesos de la cuenta, comunes a todos los clientes.';
+  }
+
   if (!crmPipelines.length) {
     cont.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:10px">' +
       'Aún no hay procesos.</div>';
@@ -16685,7 +16748,14 @@ function pipeRenderLista() {
   const btn = document.getElementById('pipe-btn-nuevo');
   if (btn) { btn.disabled = lleno; btn.textContent = lleno ? 'Máximo ' + PIPE_MAX : '+ Crear proceso'; }
   const cta = document.getElementById('pipe-lat-cta');
-  if (cta) cta.textContent = lleno ? 'Llegaste al máximo. Elimina uno para crear otro.' : '';
+  if (cta) {
+    const cliente = pipeAmbitoNombre();
+    cta.textContent = lleno
+      ? 'Llegaste al máximo. Elimina uno para crear otro.'
+      : (cliente
+          ? 'Estos procesos son solo de ' + cliente + '. Los informes de Análisis suman todos.'
+          : 'Procesos de la cuenta. Al activar un cliente verás los suyos.');
+  }
 
   pipeRenderPanel();
 }
@@ -18573,31 +18643,32 @@ function crmRenderAnalytics() {
   const container = document.getElementById('crm-analytics-view');
   if (!container) return;
   const now = Date.now();
-  const active = crmLeads.filter(l => l.stage !== 'ganado' && l.stage !== 'perdido');
-  const won = crmLeads.filter(l => l.stage === 'ganado');
-  const total = crmLeads.length;
+  const leads = leadsInforme(crmRenderAnalytics);
+  const active = leads.filter(l => l.stage !== 'ganado' && l.stage !== 'perdido');
+  const won = leads.filter(l => l.stage === 'ganado');
+  const total = leads.length;
   const pipelineValue = active.reduce((s, l) => s + (Number(l.value) || 0), 0);
   const wonValue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
   const avgValue = total > 0 ? Math.round(pipelineValue / Math.max(active.length, 1)) : 0;
   const convRate = total > 0 ? Math.round((won.length / total) * 100) : 0;
-  const maxCount = Math.max(...crmStages.map(s => crmLeads.filter(l => l.stage === s.key).length), 1);
+  const maxCount = Math.max(...crmStages.map(s => leads.filter(l => l.stage === s.key).length), 1);
   const stageFunnel = crmStages.map(s => {
-    const cnt = crmLeads.filter(l => l.stage === s.key).length;
-    const val = crmLeads.filter(l => l.stage === s.key).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+    const cnt = leads.filter(l => l.stage === s.key).length;
+    const val = leads.filter(l => l.stage === s.key).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
     return { label: s.label, color: s.color, key: s.key, count: cnt, value: val, pct: Math.round((cnt / maxCount) * 100) };
   });
   const sourceCounts = {};
-  crmLeads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
+  leads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
   const maxSrc = Math.max(...Object.values(sourceCounts), 1);
   const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Organico', referido: 'Referido', web: 'Web' };
-  const needsAttention = crmLeads.filter(l => {
+  const needsAttention = leads.filter(l => {
     if (l.stage === 'ganado' || l.stage === 'perdido') return false;
     const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
     return Math.floor((now - lastActive) / 86400000) >= 7;
   }).sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)).slice(0, 8);
   // Distribución por etiqueta: conteo + valor de pipeline por tag (top 12)
   const tagStats = {};
-  crmLeads.forEach(l => (l.tags || []).forEach(t => {
+  leads.forEach(l => (l.tags || []).forEach(t => {
     if (!tagStats[t]) tagStats[t] = { count: 0, value: 0 };
     tagStats[t].count++;
     tagStats[t].value += Number(l.value) || 0;
@@ -23991,7 +24062,8 @@ async function mkRender() {
     await mkLoad();
   }
   const { camps, autos, logs } = _mkData;
-  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  await crmCargarLeadsAmbito();
+  const leads = leadsInforme();
   const now = Date.now();
   const from = _mkRange ? now - _mkRange * 86400000 : 0;
   const inR = d => d && new Date(d).getTime() >= from;
@@ -24125,7 +24197,8 @@ async function prodRender() {
     await prodLoad();
   }
   const { acts, inter } = _prodData;
-  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  await crmCargarLeadsAmbito();
+  const leads = leadsInforme();
   const now = Date.now();
   const from = now - (_prodRange || 3650) * 86400000;
 
@@ -24304,7 +24377,7 @@ function salesExportCsv() {
 function salesRender() {
   const box = document.getElementById('crm-sales-view');
   if (!box) return;
-  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  const leads = leadsInforme(salesRender);
   const now = Date.now();
   const from = _salesRange ? now - _salesRange * 86400000 : 0;
   const inRange = d => d && new Date(d).getTime() >= from;
@@ -25621,7 +25694,8 @@ async function eqRender() {
     await eqLoad();
   }
   const { inter, equipo } = _eqData;
-  const leads = (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  await crmCargarLeadsAmbito();
+  const leads = leadsInforme();
   const desde = Date.now() - (_eqRange || 3650) * 86400000;
 
   const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
