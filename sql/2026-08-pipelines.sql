@@ -42,6 +42,10 @@ create index if not exists leads_pipeline_idx           on leads(pipeline_id);
 
 -- Las claves de etapa dejan de ser únicas por usuario para serlo por pipeline:
 -- cada pipeline necesita su propio 'ganado'.
+-- Es una RESTRICCIÓN, no un índice suelto: 'drop index' no la toca. Y el nombre
+-- real es ..._unique, no ..._idx. Se sueltan las dos formas por si alguna base
+-- la tiene de otra manera.
+alter table pipeline_stages drop constraint if exists pipeline_stages_user_key_unique;
 drop index if exists pipeline_stages_user_key_idx;
 create unique index if not exists pipeline_stages_pipeline_key_idx
   on pipeline_stages(pipeline_id, key) where pipeline_id is not null;
