@@ -16587,7 +16587,7 @@ function crmPintarAvisoFallo() {
   if (!_crmFallos.size) return;
   const kanban = document.getElementById('crm-kanban');
   if (!kanban || !kanban.parentElement) return;
-  const QUE = { pipelines: 'los procesos de venta', etapas: 'las etapas', leads: 'los leads', informes: 'los datos de los informes' };
+  const QUE = { pipelines: 'los procesos de venta', etapas: 'las etapas', leads: 'los leads', informes: 'los datos de los informes', fuentes: 'las fuentes de lead' };
   const lista = [..._crmFallos.keys()].map(k => QUE[k] || k);
   const texto = lista.length === 1 ? lista[0]
     : lista.slice(0, -1).join(', ') + ' y ' + lista[lista.length - 1];
@@ -17267,6 +17267,154 @@ function crmRender() {
   crmUpdateSidebarCount();
 }
 
+// ── Fuentes de lead ─────────────────────────────────────────────────────────
+// Las seis de siempre viven aquí y no se borran: otros módulos las usan por su
+// clave (el conector web manda 'web', el importador 'importacion'). Encima de
+// esas, cada cuenta añade las suyas. Si la migración no se ha corrido, la API
+// devuelve solo las de por defecto y todo sigue igual que antes.
+const FUENTES_BASE = [
+  { key: 'manual',     label: 'Manual' },
+  { key: 'meta_ads',   label: 'Meta Ads' },
+  { key: 'google_ads', label: 'Google Ads' },
+  { key: 'organico',   label: 'Orgánico' },
+  { key: 'referido',   label: 'Referido' },
+  { key: 'web',        label: 'Web' },
+];
+let crmSources = FUENTES_BASE.slice();
+let _fuentesDe = null;   // para qué cliente se cargaron
+
+// Un lead puede tener una fuente que ya no está en la lista (importada, de un
+// webhook, o borrada después). Se muestra su clave tal cual antes que un hueco.
+function fuenteLabel(key) {
+  if (!key) return 'Manual';
+  const f = crmSources.find(x => x.key === key);
+  return f ? f.label : String(key).replace(/_/g, ' ');
+}
+
+async function crmLoadSources() {
+  const mio = crmAmbitoCliente();
+  try {
+    const qs = mio ? '?client_id=' + encodeURIComponent(mio) : '';
+    const r = await fetchAuth('/api/lead-sources' + qs);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (mio !== crmAmbitoCliente()) return false;   // caducada
+    crmSources = (d.sources || []).length ? d.sources : FUENTES_BASE.slice();
+    _fuentesDe = mio;
+    crmPintarSelectsFuente();
+    crmFalloResuelto('fuentes');
+    return true;
+  } catch (e) {
+    console.error('crmLoadSources', e);
+    crmFallo('fuentes');
+    return false;
+  }
+}
+
+// Rellena el desplegable del formulario y el del filtro, conservando lo elegido.
+function crmPintarSelectsFuente() {
+  const form = document.getElementById('crm-f-source');
+  if (form) {
+    const antes = form.value;
+    form.innerHTML = crmSources.map(f =>
+      '<option value="' + esc(f.key) + '">' + esc(f.label) + '</option>').join('');
+    if (antes && crmSources.some(f => f.key === antes)) form.value = antes;
+  }
+  const filtro = document.getElementById('crm-filter-source');
+  if (filtro) {
+    const antes = filtro.value;
+    filtro.innerHTML = '<option value="">Todas las fuentes</option>' +
+      crmSources.map(f => '<option value="' + esc(f.key) + '">' + esc(f.label) + '</option>').join('');
+    if (antes && crmSources.some(f => f.key === antes)) filtro.value = antes;
+  }
+}
+
+// ── Gestor de fuentes ───────────────────────────────────────────────────────
+const ICONO_PAPELERA = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
+
+function fuenteAbrirGestor() {
+  document.getElementById('fuente-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'fuente-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.style.zIndex = '9999';   // encima del formulario de lead, que ya es modal
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:460px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Fuentes de lead</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">De dónde llegó cada oportunidad</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div id="fuente-lista"></div>' +
+      '<div class="pipe-nuevo">' +
+        '<input type="text" id="fuente-nueva" maxlength="40" placeholder="Ej. Feria de vivienda" ' +
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();fuenteCrear()}">' +
+        '<button class="btn-sec sm" onclick="fuenteCrear()">+ Crear</button>' +
+      '</div>' +
+      '<div id="fuente-error"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  fuenteRenderLista();
+}
+
+function fuenteRenderLista() {
+  const cont = document.getElementById('fuente-lista');
+  if (!cont) return;
+  cont.innerHTML = crmSources.map(f =>
+    '<div class="fuente-fila"><span>' + esc(f.label) + '</span>' +
+      (f.propia
+        ? '<button class="pipe-borrar" title="Quitar de la lista" onclick="fuenteBorrar(\'' + esc(f.id) + '\')">' + ICONO_PAPELERA + '</button>'
+        : '<span class="fuente-fija" title="Otros módulos la usan por su clave: no se puede quitar">Por defecto</span>') +
+    '</div>').join('');
+}
+
+function fuenteError(msg) {
+  const box = document.getElementById('fuente-error');
+  if (!box) { showToast(String(msg).slice(0, 110), 'error'); return; }
+  box.innerHTML = msg
+    ? '<div style="margin-top:12px;padding:9px 11px;border:1px solid #FCA5A5;background:#FEF2F2;border-radius:9px;' +
+      'color:#B91C1C;font-size:12px;line-height:1.45">' + esc(msg) + '</div>'
+    : '';
+}
+
+async function fuenteCrear() {
+  const inp = document.getElementById('fuente-nueva');
+  const label = String(inp?.value || '').trim();
+  if (!label) { inp?.focus(); return; }
+  fuenteError('');
+  try {
+    const mio = crmAmbitoCliente();
+    const qs = mio ? '?client_id=' + encodeURIComponent(mio) : '';
+    const r = await fetchAuth('/api/lead-sources' + qs, { method: 'POST', body: JSON.stringify({ label }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { fuenteError(d.error || ('Error ' + r.status)); return; }
+    if (inp) inp.value = '';
+    await crmLoadSources();
+    fuenteRenderLista();
+    showToast('Fuente creada', 'success');
+  } catch (e) { fuenteError(e?.message || 'No se pudo crear la fuente'); }
+}
+
+async function fuenteBorrar(id) {
+  const f = crmSources.find(x => x.id === id);
+  if (!f) return;
+  if (!confirm('¿Quitar «' + f.label + '» de la lista?\n\nLos leads que ya la tengan la conservan; solo deja de ofrecerse al crear.')) return;
+  fuenteError('');
+  try {
+    const r = await fetchAuth('/api/lead-sources?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { fuenteError(d.error || ('Error ' + r.status)); return; }
+    await crmLoadSources();
+    fuenteRenderLista();
+    showToast(d.en_uso ? 'Quitada. Los leads que la usaban la conservan.' : 'Fuente quitada', 'success');
+  } catch (e) { fuenteError(e?.message || 'No se pudo quitar la fuente'); }
+}
+
 // ── Etiquetas del CRM ─────────────────────────────────────────────────────────
 // Catálogo en lead_tags (colores, tipo auto/manual); las etiquetas de cada lead
 // viven en leads.tags. Misma normalización y paleta que el backend, así el
@@ -17495,7 +17643,6 @@ function crmRenderKanban() {
 }
 
 function crmCardHTML(lead, now) {
-  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
   const ts = now || Date.now();
   const lastActive = lead.updated_at ? new Date(lead.updated_at).getTime() : new Date(lead.created_at || 0).getTime();
   const daysSince = Math.floor((ts - lastActive) / 86400000);
@@ -17527,7 +17674,7 @@ function crmCardHTML(lead, now) {
     (lead.phone ? '<div class="crm-card-phone"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') +
     ((lead.tags || []).length ? '<div class="crm-card-tags">' + lead.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (lead.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (lead.tags.length - 3) + '</span>' : '') + '</div>' : '') +
     '<div class="crm-card-footer">' +
-    '<div class="crm-card-source">' + esc(sourceLabels[lead.source] || lead.source || 'Manual') +
+    '<div class="crm-card-source">' + esc(fuenteLabel(lead.source)) +
     (lead.assigned_name ? ' <span title="Asignado a ' + esc(lead.assigned_name) + '" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--blue-lt);color:var(--blue);font-size:8.5px;font-weight:800;vertical-align:middle;margin-left:4px">' + esc(lead.assigned_name.slice(0, 2).toUpperCase()) + '</span>' : '') + '</div>' +
     (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
     '</div>' +
@@ -17776,7 +17923,6 @@ function crmSetupDrop(el, stageKey) {
 function crmRenderList() {
   const tbody = document.getElementById('crm-list-body');
   if (!tbody) return;
-  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
   const filtered = crmGetFilteredLeads();
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Sin leads' + (crmSearchQuery || crmFilterSource ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
@@ -17784,7 +17930,7 @@ function crmRenderList() {
   }
   tbody.innerHTML = filtered.map(l => {
     const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' };
-    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + ((l.tags || []).length ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(sourceLabels[l.source] || l.source || 'Manual') + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
+    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + ((l.tags || []).length ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(fuenteLabel(l.source)) + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
   }).join('');
   crmUpdateLeadsStats();
 }
@@ -17909,7 +18055,6 @@ async function crmOpenDetail(leadId) {
   const lead = crmLeads.find(l => l.id === leadId);
   if (!lead) return;
   crmDetailLead = lead;
-  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
   document.getElementById('crm-d-name').textContent = lead.name;
   // Avatar
   const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
@@ -17932,7 +18077,7 @@ async function crmOpenDetail(leadId) {
   document.getElementById('crm-d-email').textContent = lead.email || '—';
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
   document.getElementById('crm-d-company').textContent = lead.company || '—';
-  document.getElementById('crm-d-source').textContent = sourceLabels[lead.source] || lead.source || 'Manual';
+  document.getElementById('crm-d-source').textContent = fuenteLabel(lead.source);
   const valueRow = document.getElementById('crm-d-value-row');
   if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
   crmRenderDetailTags();
@@ -18756,7 +18901,6 @@ function crmRenderAnalytics() {
   const sourceCounts = {};
   leads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
   const maxSrc = Math.max(...Object.values(sourceCounts), 1);
-  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Organico', referido: 'Referido', web: 'Web' };
   const needsAttention = leads.filter(l => {
     if (l.stage === 'ganado' || l.stage === 'perdido') return false;
     const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
@@ -18783,7 +18927,7 @@ function crmRenderAnalytics() {
         '</div>';
       }).join('') + '</div>'
     : '';
-  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div id="crm-nps-section"></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(sourceLabels[src] || src) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
+  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div id="crm-nps-section"></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(fuenteLabel(src)) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
 }
 
 // ── Widget NPS en Análisis (async — se pinta al llegar los datos) ───────────
@@ -18939,7 +19083,7 @@ async function crmInit() {
   // en paralelo; si al llegar la lista resulta ser otro, se recargan los dos.
   const recordado = pipeRecordado();
   crmPipelineId = recordado;
-  await Promise.all([crmLoadPipelines(), crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags()]);
+  await Promise.all([crmLoadPipelines(), crmLoadStages(), crmLoadLeads(), crmLoadAgents(), crmLoadTags(), crmLoadSources()]);
   if (crmPipelineId !== recordado) {
     crmStagesLoaded = crmLeadsLoaded = false;
     await Promise.all([crmLoadStages(), crmLoadLeads()]);
@@ -19855,14 +19999,13 @@ function crmSendLeadToConsultor() {
   const l = crmDetailLead;
   if (!l) return;
   crmCloseDetail();
-  const sourceLabels = { manual: 'Manual', meta_ads: 'Meta Ads', google_ads: 'Google Ads', organico: 'Orgánico', referido: 'Referido', web: 'Web' };
   const parts = [
     'Ayúdame con este lead de mi CRM:',
     'Nombre: ' + (l.name || '—'),
     l.company ? 'Empresa: ' + l.company : '',
     'Etapa: ' + (l.stage || '—'),
     l.value ? 'Valor estimado: $' + Number(l.value).toLocaleString('es-CO') : '',
-    l.source ? 'Fuente: ' + (sourceLabels[l.source] || l.source) : '',
+    l.source ? 'Fuente: ' + fuenteLabel(l.source) : '',
     l.notes ? 'Notas: ' + l.notes : '',
   ].filter(Boolean).join('\n');
   openAgentAndAsk('consultor', parts + '\n\nDame: 1) un diagnóstico rápido del lead, 2) la estrategia de seguimiento con próximos pasos concretos, y 3) un borrador de mensaje de seguimiento listo para enviar por WhatsApp.');
@@ -25015,6 +25158,7 @@ async function crmEnsureLoaded() {
     if (!crmLeadsLoaded)  jobs.push(crmLoadLeads());
     if (!crmAgentsLoaded) jobs.push(crmLoadAgents());
     if (!crmTagsLoaded)   jobs.push(crmLoadTags());
+    if (_fuentesDe !== crmAmbitoCliente()) jobs.push(crmLoadSources());
     await Promise.all(jobs);
     // Antes solo repintaba con los leads dentro. Si llegaban las etapas pero
     // los leads fallaban, el tablero se quedaba en blanco sin ninguna columna.

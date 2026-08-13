@@ -1745,6 +1745,11 @@ textarea.seop-input{resize:vertical;min-height:70px}
   .pipe-fila-etapa > input.auto-input{flex:1 0 100% !important;order:-1}
 }
 .pipe-fila-etapa > input.auto-input{min-width:120px}
+.crm-link-btn{background:none;border:none;padding:0;font-family:inherit;font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;text-transform:none;letter-spacing:0}
+.crm-link-btn:hover{text-decoration:underline}
+.fuente-fila{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:7px;background:var(--bg-subtle);font-size:13px}
+.fuente-fila span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.fuente-fija{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);white-space:nowrap}
 .pipe-ambito{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--bg-subtle);border:1px solid var(--border);border-radius:20px;padding:5px 11px;white-space:nowrap;margin-right:10px}
 @media (max-width:700px){.pipe-ambito{display:none}}
 .crm-client-tag{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--sidebar);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;color:var(--muted);flex-shrink:0}
@@ -4026,7 +4031,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <select id="crm-f-stage"></select>
         </div>
         <div class="crm-field">
-          <label>Fuente</label>
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span>Fuente</span>
+            <button type="button" class="crm-link-btn" onclick="fuenteAbrirGestor()">Administrar</button>
+          </label>
           <select id="crm-f-source">
             <option value="manual">Manual</option>
             <option value="meta_ads">Meta Ads</option>
