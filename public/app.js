@@ -18589,7 +18589,7 @@ function waConnectOpen(agentId) {
   document.getElementById('wa-connect-modal').classList.add('open');
   // La vía directa depende de una configuración en el panel de Meta: si no
   // está, se dice, en vez de dejar un botón que falla al pulsarlo.
-  waCargarCfg().then(cfg => {
+  waPreparar().then(cfg => {
     const btn = document.getElementById('wa-meta-btn');
     const nota = document.getElementById('wa-meta-nota');
     const det = document.getElementById('wa-avanzada');
@@ -18702,6 +18702,14 @@ let _waCfg = null;        // {app_id, config_id, disponible}
 let _waDatos = null;      // waba_id y phone_number_id que manda Meta por evento
 let _waAgente = null;     // quién atenderá el canal
 
+// Deja listos configuración y SDK ANTES de que el usuario pulse, para que el
+// clic pueda abrir la ventana de Meta sin esperar a nada.
+async function waPreparar() {
+  const cfg = await waCargarCfg();
+  if (cfg.disponible) await waCargarSDK(cfg.app_id);
+  return cfg;
+}
+
 async function waCargarCfg() {
   if (_waCfg) return _waCfg;
   try {
@@ -18744,17 +18752,21 @@ function waEscucharMeta() {
   });
 }
 
-async function waConectarConMeta(agentId) {
+// OJO: esta función NO puede ser async ni esperar nada antes de FB.login().
+// FB.login abre una ventana emergente, y el navegador solo la permite si se
+// abre DENTRO del gesto del clic. Con un solo await por delante, el gesto ya se
+// perdió y Safari la bloquea sin decir nada: el botón parecía muerto.
+// Por eso la configuración y el SDK se cargan al ABRIR el modal (waPreparar).
+function waConectarConMeta(agentId) {
   _waAgente = agentId || null;
   _waDatos = null;
-  const cfg = await waCargarCfg();
-  if (!cfg.disponible) {
+  if (!_waCfg || !_waCfg.disponible) {
     showToast('La conexión directa con Meta todavía no está configurada. Usa la opción avanzada.', 'error');
     return;
   }
-  const ok = await waCargarSDK(cfg.app_id);
-  if (!ok || !window.FB) {
-    showToast('No se pudo cargar el conector de Facebook. Revisa si tu navegador bloquea scripts.', 'error');
+  if (!window.FB) {
+    showToast('El conector de Facebook aún se está cargando. Espera un segundo y vuelve a pulsar.', 'error');
+    waPreparar();
     return;
   }
   waEscucharMeta();
@@ -18780,7 +18792,7 @@ async function waConectarConMeta(agentId) {
       canAbrirGestor();
     } catch (e) { showToast('No se pudo completar la conexión', 'error'); }
   }, {
-    config_id: cfg.config_id,
+    config_id: _waCfg.config_id,
     response_type: 'code',
     override_default_response_type: true,
     extras: { setup: {} },
