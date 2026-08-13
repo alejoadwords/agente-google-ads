@@ -19706,7 +19706,7 @@ async function qrAbrir(convId) {
       '<input class="auto-input" id="qr-buscar" placeholder="Buscar…" oninput="qrRender()">' +
       '<div id="qr-lista" style="margin-top:12px"></div>' +
     '</div>' +
-    '<div style="display:flex;gap:8px;justify-content:space-between;padding:14px 22px;border-top:1px solid var(--border)">' +
+    '<div style="display:flex;gap:8px;justify-content:space-between;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
       '<button class="btn-sec sm" onclick="qrCrear()">+ Nueva respuesta</button>' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cerrar</button>' +
     '</div></div>';
