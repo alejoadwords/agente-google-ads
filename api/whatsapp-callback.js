@@ -47,6 +47,20 @@ export default async function handler(req, res) {
   if (!appId || !appSecret) return volver(res, { wa_error: 'Faltan las credenciales de la app de Meta' });
 
   try {
+    // 0. Si quien conecta es un miembro del equipo, el canal es de la cuenta del
+    //    DUEÑO. Sin esto quedaría colgado del miembro y el inbox —que sí
+    //    resuelve al dueño— nunca encontraría la conexión: los mensajes
+    //    entrarían y se descartarían por "canal no conectado".
+    try {
+      const tw = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}` +
+        `&status=eq.active&select=owner_user_id&limit=1`, { headers: sb() });
+      if (!tw.ok) throw new Error('HTTP ' + tw.status);
+      const fila = (await tw.json())?.[0];
+      if (fila && fila.owner_user_id) userId = fila.owner_user_id;
+    } catch {
+      return volver(res, { wa_error: 'No se pudo verificar a qué cuenta pertenece el canal. Reintenta en unos segundos.' });
+    }
+
     // 1. Código → token del negocio
     const tokRes = await fetch(`${GRAPH}/oauth/access_token?` + new URLSearchParams({
       client_id: appId, client_secret: appSecret,
