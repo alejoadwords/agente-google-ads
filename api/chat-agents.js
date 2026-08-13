@@ -40,6 +40,20 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
+  // Equipo: un miembro opera sobre la cuenta del dueño. Sin esto, los canales y
+  // la conexion de Meta se buscaban bajo la identidad del miembro —que no tiene
+  // ninguna—, y la app decia "conecta tu cuenta de Meta" con Meta ya conectado.
+  // Si la comprobacion falla no se sigue: operar con la identidad equivocada
+  // devolveria los canales de otra cuenta.
+  try {
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sb() });
+    if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
+    const _tw = (await _twRes.json())?.[0];
+    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+
 
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;
