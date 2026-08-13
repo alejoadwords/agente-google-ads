@@ -1932,7 +1932,13 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-new-agent-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
 
 /* Modal agente */
-.crm-agent-modal-box{max-width:580px;max-height:88vh;overflow-y:auto}
+/* Dos contenedores con scroll anidados —la caja y el cuerpo— hacían que el
+   contenido se cortara y el pie se montara encima: no se podía llegar a la
+   sección de Calificación. Ahora scroll SOLO en el cuerpo, con el pie fijo. */
+.crm-agent-modal-box{max-width:580px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.crm-agent-modal-box > .crm-modal-body{max-height:none;flex:1;min-height:0;overflow-y:auto}
+.crm-agent-modal-box > .crm-modal-head,
+.crm-agent-modal-box > .crm-modal-foot{flex-shrink:0}
 .crm-faq-item{display:flex;gap:7px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)}
 .crm-faq-item:last-child{border-bottom:none}
 .crm-faq-input{flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none}
