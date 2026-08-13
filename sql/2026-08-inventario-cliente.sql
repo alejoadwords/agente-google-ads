@@ -27,6 +27,13 @@ create table if not exists client_knowledge_sources (
 create unique index if not exists cks_cliente_idx
   on client_knowledge_sources(user_id, client_id);
 
+-- Qué campo de la web es cada cosa. No todas las inmobiliarias llaman igual a
+-- sus campos: una usa 'estado-del-inmueble' para Arriendo/Venta y otra
+-- 'operacion'. Se detecta al conectar y se guarda aquí, así el mismo conector
+-- sirve para cualquier WordPress sin tocar código.
+alter table client_knowledge_sources add column if not exists mapeo jsonb;
+alter table client_knowledge_sources add column if not exists post_type text;
+
 -- ── 2. Las propiedades ──────────────────────────────────────────────────────
 create table if not exists client_properties (
   id           uuid primary key default gen_random_uuid(),

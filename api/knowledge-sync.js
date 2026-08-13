@@ -27,7 +27,86 @@ const UA = { 'User-Agent': 'Acuarius/1.0 (+https://acuarius.app)' };
 // llamada en torno al minuto y medio: cabe de sobra y no castiga la web ajena.
 const LOTE = 40;
 
-const TAXONOMIAS = ['ciudad', 'barrios', 'habitaciones', 'banos', 'estrato', 'tipo-de-inmmueble', 'estado-del-inmueble'];
+// ── Deteccion automatica del sitio ──────────────────────────────────────────
+// El conector no puede estar atado a como llama Certain a sus campos: otra
+// inmobiliaria usara otros nombres. Se inspecciona el sitio, se propone que es
+// cada cosa y el usuario lo confirma. Eso es lo que hace que pegar la URL
+// funcione para cualquier WordPress.
+const NO_SON = new Set(['post','page','attachment','nav_menu_item','wp_block','wp_template','wp_template_part',
+  'wp_global_styles','wp_navigation','wp_font_family','wp_font_face','e-floating-buttons']);
+const PISTAS_TIPO = ['propiedad','inmueble','property','listing','proyecto','apartament','casa'];
+
+// Qué rol juega cada taxonomía, por el nombre y por los valores que contiene
+const ROLES = [
+  { rol: 'operacion',    nombres: ['estado-del-inmueble','operacion','operation','tipo-de-operacion','status'],
+    valores: ['arriendo','venta','alquiler','renta','sale','rent'] },
+  { rol: 'tipo',         nombres: ['tipo-de-inmmueble','tipo-de-inmueble','tipo','property-type','tipo-propiedad'],
+    valores: ['apartamento','casa','local','oficina','lote','bodega','finca'] },
+  { rol: 'ciudad',       nombres: ['ciudad','city','municipio'], valores: [] },
+  { rol: 'barrio',       nombres: ['barrios','barrio','zona','sector','neighborhood'], valores: [] },
+  { rol: 'habitaciones', nombres: ['habitaciones','habitacion','alcobas','cuartos','bedrooms','rooms'], valores: [] },
+  { rol: 'banos',        nombres: ['banos','baños','bathrooms'], valores: [] },
+  { rol: 'estrato',      nombres: ['estrato','stratum'], valores: [] },
+];
+
+const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+async function jsonDe(u) { const r = await fetch(u, { headers: UA }); return r.ok ? r.json() : null; }
+
+async function detectar(base) {
+  base = base.replace(/\/+$/, '');
+  const tipos = await jsonDe(`${base}/wp-json/wp/v2/types`);
+  if (!tipos) return { error: 'No responde la API de WordPress en esa dirección' };
+
+  // 1. Elegir el tipo de contenido: primero por nombre, y si no, el que más registros tenga
+  const candidatos = Object.keys(tipos).filter(k => !NO_SON.has(k) && !k.startsWith('wp_') && !k.startsWith('elementor') && !k.startsWith('jet') && !k.startsWith('elementskit'));
+  const puntuados = [];
+  for (const k of candidatos) {
+    const rb = tipos[k].rest_base || k;
+    const r = await fetch(`${base}/wp-json/wp/v2/${rb}?per_page=1`, { headers: UA }).catch(() => null);
+    if (!r || !r.ok) continue;
+    const total = parseInt(r.headers.get('x-wp-total') || '0', 10) || 0;
+    const porNombre = PISTAS_TIPO.some(p => norm(k).includes(p) || norm(tipos[k].name).includes(p)) ? 1000 : 0;
+    puntuados.push({ clave: k, rest_base: rb, nombre: tipos[k].name, total, punt: porNombre + total });
+  }
+  puntuados.sort((a, b) => b.punt - a.punt);
+  const elegido = puntuados[0];
+  if (!elegido || !elegido.total) return { error: 'No se encontró ningún listado de propiedades publicado' };
+
+  // 2. Qué taxonomías usa, y qué papel juega cada una
+  const muestra = (await jsonDe(`${base}/wp-json/wp/v2/${elegido.rest_base}?per_page=1`))?.[0] || {};
+  const posibles = Object.keys(muestra).filter(k => Array.isArray(muestra[k]) && k !== 'class_list');
+  const taxonomias = await jsonDe(`${base}/wp-json/wp/v2/taxonomies`) || {};
+
+  const campos = [];
+  const crudos = [];
+  for (const k of posibles) {
+    const rb = taxonomias[k]?.rest_base || k;
+    const terms = await jsonDe(`${base}/wp-json/wp/v2/${rb}?per_page=20`) || [];
+    crudos.push({ clave: k, etiqueta: taxonomias[k]?.name || k, terms: terms.map(t => norm(t.name)), ejemplos: terms.slice(0, 4).map(t => t.name) });
+  }
+
+  // Cada rol lo reclama UN solo campo. Primero por nombre, que es la señal
+  // fuerte; el parecido por valores solo desempata, y exige coincidencia
+  // exacta y repetida: con 'incluye' bastaba que un termino como
+  // 'Acceso para camiones' contuviera 'casa' para marcarlo como tipo.
+  const asignado = new Map();
+  for (const r of ROLES) {
+    let elegido = crudos.find(c => !asignado.has(c.clave) && r.nombres.some(n => norm(c.clave) === norm(n)));
+    if (!elegido && r.valores.length) {
+      const conPuntos = crudos
+        .filter(c => !asignado.has(c.clave))
+        .map(c => ({ c, n: r.valores.filter(v => c.terms.includes(v)).length }))
+        .filter(x => x.n >= 2)
+        .sort((a, b) => b.n - a.n);
+      elegido = conPuntos[0]?.c;
+    }
+    if (elegido) asignado.set(elegido.clave, r.rol);
+  }
+  for (const c of crudos) campos.push({ clave: c.clave, etiqueta: c.etiqueta, rol: asignado.get(c.clave) || null, ejemplos: c.ejemplos });
+  return { post_type: elegido.rest_base, nombre_tipo: elegido.nombre, total: elegido.total, campos };
+}
+
 
 function sb() {
   return {
@@ -121,6 +200,15 @@ async function manejar(req) {
 
   const filtroFuente = `user_id=eq.${encodeURIComponent(userId)}&client_id=eq.${encodeURIComponent(clientId)}`;
 
+  // ── Detectar: se mira la web y se propone qué es cada cosa ────────────────
+  if (req.method === 'GET' && url.searchParams.get('action') === 'detectar') {
+    let base = String(url.searchParams.get('base_url') || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) return jsonResp({ error: 'La dirección debe empezar por https://' }, 400);
+    const r = await detectar(base);
+    if (r.error) return jsonResp(r, 400);
+    return jsonResp({ ...r, base_url: base });
+  }
+
   // ── Estado: qué fuente hay y cuántas propiedades ──────────────────────────
   if (req.method === 'GET') {
     const fuente = await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?${filtroFuente}&select=*&limit=1`, { headers: sb() })
@@ -139,22 +227,30 @@ async function manejar(req) {
 
     // Se comprueba ANTES de guardar: una fuente que no responde guardada como
     // buena es una sincronización que fallara cada noche sin que nadie mire.
-    const prueba = await fetch(`${base}/wp-json/wp/v2/propiedades?per_page=1`, { headers: UA }).catch(() => null);
-    if (!prueba || !prueba.ok) {
-      return jsonResp({ error: 'Esa dirección no expone el listado de propiedades de WordPress. ' +
-        'Comprueba que sea el dominio del sitio, sin ruta.' }, 400);
-    }
-    const total = parseInt(prueba.headers.get('x-wp-total') || '0', 10) || 0;
-    if (!total) return jsonResp({ error: 'La web respondió pero no tiene ninguna propiedad publicada.' }, 400);
 
     const previa = await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?${filtroFuente}&select=id&limit=1`, { headers: sb() })
       .then(r => (r.ok ? r.json() : [])).catch(() => []);
-    const fila = { user_id: userId, client_id: clientId, tipo: 'wordpress', base_url: base, activo: true, cursor_pagina: 1 };
+    // El mapeo llega ya confirmado por el usuario. Si no viene, se detecta: asi
+    // el conector no depende de que los campos se llamen como en Certain.
+    let post_type = String(body.post_type || '').trim();
+    let mapeo = body.mapeo && typeof body.mapeo === 'object' ? body.mapeo : null;
+    if (!post_type || !mapeo) {
+      const det = await detectar(base);
+      if (det.error) return jsonResp(det, 400);
+      post_type = post_type || det.post_type;
+      mapeo = mapeo || Object.fromEntries(det.campos.filter(c => c.rol).map(c => [c.rol, c.clave]));
+    }
+    if (!mapeo.operacion) {
+      return jsonResp({ error: 'No se pudo identificar cuál campo dice si es arriendo o venta. ' +
+        'Indícalo a mano antes de guardar.', mapeo_incompleto: true }, 400);
+    }
+    const fila = { user_id: userId, client_id: clientId, tipo: 'wordpress', base_url: base, activo: true,
+      cursor_pagina: 1, post_type, mapeo };
     const res = previa?.[0]?.id
       ? await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${previa[0].id}`, { method: 'PATCH', headers: sb(), body: JSON.stringify(fila) })
       : await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources`, { method: 'POST', headers: sb(), body: JSON.stringify(fila) });
     if (!res.ok) return jsonResp({ error: 'No se pudo guardar: ' + (await res.text()).slice(0, 200) }, 500);
-    return jsonResp({ fuente: (await res.json())?.[0] || null, propiedades_en_web: total });
+    return jsonResp({ fuente: (await res.json())?.[0] || null });
   }
 
   // ── Sincronizar un lote ───────────────────────────────────────────────────
@@ -166,7 +262,9 @@ async function manejar(req) {
     const base = fuente.base_url;
     const pagina = Math.max(1, fuente.cursor_pagina || 1);
 
-    const listado = await fetch(`${base}/wp-json/wp/v2/propiedades?per_page=${LOTE}&page=${pagina}&orderby=modified&order=desc`, { headers: UA });
+    const tipo = fuente.post_type || 'propiedades';
+    const mapeo = fuente.mapeo || {};
+    const listado = await fetch(`${base}/wp-json/wp/v2/${tipo}?per_page=${LOTE}&page=${pagina}&orderby=modified&order=desc`, { headers: UA });
     if (!listado.ok) {
       await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${fuente.id}`, {
         method: 'PATCH', headers: sb(),
@@ -177,9 +275,15 @@ async function manejar(req) {
     const totalPaginas = parseInt(listado.headers.get('x-wp-totalpages') || '1', 10) || 1;
     const props = await listado.json().catch(() => []);
 
+    // Solo se piden las taxonomías que el mapeo dice que sirven
+    const usadas = [...new Set(Object.values(mapeo).filter(Boolean))];
     const mapas = {};
-    for (const t of TAXONOMIAS) mapas[t] = await terminos(base, t);
-    const uno = (tax, arr) => (arr || []).map(id => mapas[tax].get(id)).filter(Boolean)[0] || null;
+    for (const t of usadas) mapas[t] = await terminos(base, t);
+    const uno = (rol, p) => {
+      const tax = mapeo[rol];
+      if (!tax || !mapas[tax]) return null;
+      return (p[tax] || []).map(id => mapas[tax].get(id)).filter(Boolean)[0] || null;
+    };
 
     const filas = [];
     for (const p of props) {
@@ -187,13 +291,13 @@ async function manejar(req) {
       if (!codigo) continue;
       filas.push({
         user_id: userId, client_id: clientId, codigo,
-        operacion: uno('estado-del-inmueble', p['estado-del-inmueble']),
-        tipo: uno('tipo-de-inmmueble', p['tipo-de-inmmueble']),
-        ciudad: uno('ciudad', p.ciudad),
-        barrio: uno('barrios', p.barrios),
-        habitaciones: num(uno('habitaciones', p.habitaciones)),
-        banos: num(uno('banos', p.banos)),
-        estrato: num(uno('estrato', p.estrato)),
+        operacion: uno('operacion', p),
+        tipo: uno('tipo', p),
+        ciudad: uno('ciudad', p),
+        barrio: uno('barrio', p),
+        habitaciones: num(uno('habitaciones', p)),
+        banos: num(uno('banos', p)),
+        estrato: num(uno('estrato', p)),
         precio: await precioDeFicha(p.link),
         url: p.link,
         modificado: p.modified ? new Date(p.modified).toISOString() : null,

@@ -50,7 +50,47 @@ export function extractCapturedData(text) {
   try { return JSON.parse(match[1]); } catch { return {}; }
 }
 
-export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null) {
+// ── Inventario del cliente en el contexto ───────────────────────────────────
+// La regla de "no inventes" solo sirve si el agente tiene donde mirar. Aqui se
+// le pasan las propiedades que encajan con lo que YA sabe de la conversacion.
+// No se le pasan las 485: seria caro, lento y le costaria mas encontrar la
+// buena. Es un filtro, no una busqueda semantica: deterministico y auditable.
+const TOPE_PROPIEDADES = 25;
+
+export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
+  if (!userId) return { lineas: [], total: 0 };
+  let q = `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+    (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
+    `&select=codigo,operacion,tipo,ciudad,barrio,habitaciones,banos,precio,url&limit=${TOPE_PROPIEDADES}`;
+
+  // La operacion sale del enrutado: si el agente ya dedujo 'arriendo', no tiene
+  // sentido ofrecerle ventas. 'Arriendo/Venta' vale para las dos.
+  if (pistas.operacion) {
+    const op = String(pistas.operacion).toLowerCase();
+    if (op.includes('arriend') || op.includes('alquil')) q += '&operacion=in.(Arriendo,"Arriendo/Venta")';
+    else if (op.includes('vent') || op.includes('compr')) q += '&operacion=in.(Venta,"Arriendo/Venta")';
+  }
+  if (pistas.ciudad) q += `&ciudad=ilike.*${encodeURIComponent(pistas.ciudad)}*`;
+  if (pistas.barrio) q += `&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*`;
+  if (pistas.presupuesto) q += `&precio=lte.${Math.round(pistas.presupuesto * 1.15)}`;  // 15% de margen
+  q += '&order=precio.asc';
+
+  try {
+    const filas = await fetch(q, { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const lineas = (filas || []).map(f => [
+      f.codigo,
+      f.operacion,
+      f.tipo,
+      [f.barrio, f.ciudad].filter(Boolean).join(', '),
+      f.habitaciones ? f.habitaciones + ' hab' : null,
+      f.banos ? f.banos + ' baños' : null,
+      f.precio ? '$' + Number(f.precio).toLocaleString('es-CO') : 'precio a confirmar',
+    ].filter(Boolean).join(' · '));
+    return { lineas, total: lineas.length };
+  } catch { return { lineas: [], total: 0 }; }
+}
+
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([, v]) => v)
@@ -80,6 +120,14 @@ LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 - Cuando te pregunten algo asi, di con naturalidad que eso te lo confirma un asesor y ofrece pasarle la conversacion. En ese caso incluye [ESCALAR] al final de tu mensaje
 - Puedes hablar de lo general que si este en tu contexto, y puedes preguntar lo que necesites para entender que busca la persona
 - Vale mucho mas decir "eso te lo confirmo con un asesor" que dar un dato que luego resulte falso: un precio inventado lo tiene que desmentir despues una persona
+
+${propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO (${propiedades.total} opciones que encajan con lo que te dijeron):
+${propiedades.lineas.join('\n')}
+
+Sobre esta lista:
+- Es lo unico que puedes ofrecer. Si te preguntan por algo que no esta aqui, no lo inventes: dilo y ofrece pasar la conversacion a un asesor
+- Menciona como mucho dos o tres opciones por mensaje, con su codigo, y pregunta cual le interesa
+- Los precios son los de la lista, sin redondear ni estimar` : ''}
 
 DATOS CAPTURADOS HASTA AHORA:
 ${captured}
@@ -298,8 +346,18 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   const messages = hist.map(m => ({ role: m.role, content: m.content }));
 
   const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
+  // Pistas: lo que el agente ya dedujo. La operacion sale del enrutado; el resto,
+  // de lo que haya capturado. Sin pistas se le pasan las primeras del inventario.
+  const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
+  const inventario = await propiedadesParaPrompt(connection.user_id, clienteDelCanal, {
+    operacion: previas._ruta || null,
+    ciudad: capturedData.ciudad || null,
+    barrio: capturedData.zona || capturedData.barrio || null,
+    presupuesto: Number(String(capturedData.presupuesto || '').replace(/[^\d]/g, '')) || null,
+  }).catch(() => ({ lineas: [], total: 0 }));
+
   const reply = await callClaude(
-    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal),
+    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario),
     messages
   );
 
