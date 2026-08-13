@@ -324,11 +324,20 @@ async function manejar(req) {
       });
     });
 
-    if (filas.length) {
+    // La web puede repetir el mismo código en dos fichas —en Certain pasa con 15
+    // de 484— y Postgres no deja actualizar dos veces la misma fila en una sola
+    // sentencia: fallaba el lote entero. Se queda la primera, que al venir
+    // ordenado por fecha de modificación es la más reciente.
+    const porCodigo = new Map();
+    for (const f of filas) if (!porCodigo.has(f.codigo)) porCodigo.set(f.codigo, f);
+    const unicas = [...porCodigo.values()];
+    const repetidos = filas.length - unicas.length;
+
+    if (unicas.length) {
       const up = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?on_conflict=user_id,client_id,codigo`, {
         method: 'POST',
         headers: { ...sb(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify(filas),
+        body: JSON.stringify(unicas),
       });
       if (!up.ok) {
         const det = await up.text().catch(() => '');
@@ -353,8 +362,9 @@ async function manejar(req) {
     });
 
     return jsonResp({
-      guardadas: filas.length, pagina, de: totalPaginas, terminado,
-      sin_precio: filas.filter(f => !f.precio).length,
+      guardadas: unicas.length, pagina, de: totalPaginas, terminado,
+      sin_precio: unicas.filter(f => !f.precio).length,
+      codigos_repetidos: repetidos,
     });
   }
 
