@@ -18591,12 +18591,8 @@ function waConnectOpen(agentId) {
   // está, se dice, en vez de dejar un botón que falla al pulsarlo.
   waPreparar().then(cfg => {
     const btn = document.getElementById('wa-meta-btn');
-    const nota = document.getElementById('wa-meta-nota');
     const det = document.getElementById('wa-avanzada');
     if (btn) btn.disabled = !cfg.disponible;
-    if (nota) nota.textContent = cfg.disponible
-      ? 'Necesitas ser administrador de la cuenta de WhatsApp Business en Meta.'
-      : 'La conexión directa aún no está disponible. Usa la opción avanzada.';
     if (det && !cfg.disponible) det.open = true;
   });
 }
@@ -18705,8 +18701,17 @@ let _waAgente = null;     // quién atenderá el canal
 // Deja listos configuración y SDK ANTES de que el usuario pulse, para que el
 // clic pueda abrir la ventana de Meta sin esperar a nada.
 async function waPreparar() {
+  waEstado('Preparando la conexión…');
   const cfg = await waCargarCfg();
-  if (cfg.disponible) await waCargarSDK(cfg.app_id);
+  if (!cfg.disponible) { waEstado('La conexión directa no está configurada. Usa la opción avanzada.', true); return cfg; }
+  const ok = await waCargarSDK(cfg.app_id);
+  if (ok && window.FB) {
+    waEstado('Listo. Necesitas ser administrador de la cuenta de WhatsApp Business en Meta.');
+  } else {
+    waEstado('Tu navegador está bloqueando el conector de Facebook (' + (window._waSdkError || 'desconocido') +
+      '). Suele ser la protección antiseguimiento de Safari: pruébalo en Chrome, o desactívala para este sitio. ' +
+      'Mientras tanto puedes usar la opción avanzada.', true);
+  }
   return cfg;
 }
 
@@ -18719,6 +18724,15 @@ async function waCargarCfg() {
   return _waCfg;
 }
 
+function waEstado(txt, malo) {
+  const el = document.getElementById('wa-meta-nota');
+  if (el) {
+    el.textContent = txt;
+    el.style.color = malo ? '#B91C1C' : 'var(--muted)';
+  }
+  console.log('[whatsapp]', txt);
+}
+
 function waCargarSDK(appId) {
   if (window.FB) return Promise.resolve(true);
   return new Promise((resolve) => {
@@ -18729,10 +18743,13 @@ function waCargarSDK(appId) {
     const sc = document.createElement('script');
     sc.src = 'https://connect.facebook.net/en_US/sdk.js';
     sc.async = true; sc.defer = true; sc.crossOrigin = 'anonymous';
-    sc.onerror = () => resolve(false);
+    sc.onerror = () => { window._waSdkError = 'no se pudo descargar'; resolve(false); };
     document.head.appendChild(sc);
     // Si el SDK no carga (bloqueador, red), no dejar la promesa colgada
-    setTimeout(() => resolve(!!window.FB), 8000);
+    setTimeout(() => {
+      if (!window.FB) window._waSdkError = window._waSdkError || 'tardo mas de 8s';
+      resolve(!!window.FB);
+    }, 8000);
   });
 }
 
@@ -18761,15 +18778,25 @@ function waConectarConMeta(agentId) {
   _waAgente = agentId || null;
   _waDatos = null;
   if (!_waCfg || !_waCfg.disponible) {
-    showToast('La conexión directa con Meta todavía no está configurada. Usa la opción avanzada.', 'error');
+    waEstado('La conexión directa no está configurada. Usa la opción avanzada.', true);
     return;
   }
   if (!window.FB) {
-    showToast('El conector de Facebook aún se está cargando. Espera un segundo y vuelve a pulsar.', 'error');
+    waEstado('El conector de Facebook no está cargado (' + (window._waSdkError || 'aún cargando') +
+      '). Reintentando… si no cambia, tu navegador lo está bloqueando.', true);
     waPreparar();
     return;
   }
+  waEstado('Abriendo la ventana de Meta…');
   waEscucharMeta();
+  // Si la ventana no llega a abrirse, decirlo: el fallo tipico es que el
+  // navegador la bloquee y no ocurra nada visible.
+  setTimeout(() => {
+    if (!_waDatos && !document.querySelector('iframe[name*="fb"]')) {
+      waEstado('Si no se abrió ninguna ventana de Facebook, tu navegador la bloqueó. ' +
+        'Permite las ventanas emergentes para app.acuarius.app, o usa Chrome.', true);
+    }
+  }, 2500);
   window.FB.login(async function (resp) {
     const code = resp?.authResponse?.code;
     if (!code) { showToast('Conexión cancelada', 'error'); return; }
