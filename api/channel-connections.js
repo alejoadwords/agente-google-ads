@@ -71,7 +71,7 @@ export default async function handler(req) {
   // GET ?all=1 — todas las conexiones del usuario (hub Fuentes de leads)
   if (req.method === 'GET' && url.searchParams.get('all')) {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=id,channel,channel_name,is_active&order=created_at.desc&limit=50`,
+      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=id,channel,channel_name,external_id,avatar_url,is_active,agent_id,created_at&order=created_at.desc&limit=50`,
       { headers: sb() }
     );
     return jsonResp({ connections: (await res.json()) || [] });
@@ -95,14 +95,17 @@ export default async function handler(req) {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const { agent_id, channel, page_id } = body || {};
-    if (!agent_id || !page_id || !['messenger', 'instagram'].includes(channel)) {
+    if (!page_id || !['messenger', 'instagram'].includes(channel)) {
       return jsonResp({ error: 'Faltan campos' }, 400);
     }
-    const agente = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agent_id)}&user_id=eq.${encodeURIComponent(userId)}&select=id&limit=1`,
-      { headers: sb() }
-    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-    if (!agente?.length) return jsonResp({ error: 'Agente no encontrado' }, 404);
+    // Sin agente el canal se atiende a mano desde el inbox.
+    if (agent_id) {
+      const agente = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agent_id)}&user_id=eq.${encodeURIComponent(userId)}&select=id&limit=1`,
+        { headers: sb() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      if (!agente?.length) return jsonResp({ error: 'Agente no encontrado' }, 404);
+    }
 
     const metaToken = await metaTokenDe(userId);
     if (!metaToken) return jsonResp({ error: 'Conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads' }, 409);
@@ -214,6 +217,38 @@ export default async function handler(req) {
   }
 
   // DELETE — disconnect a channel
+  // PUT — cambiar quién atiende el canal (un agente o el equipo) o pausarlo
+  if (req.method === 'PUT') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const { id } = body || {};
+    if (!id) return jsonResp({ error: 'Falta el id del canal' }, 400);
+
+    const cambios = {};
+    if (body.agent_id !== undefined) {
+      // null = pasa a gestión manual
+      if (body.agent_id) {
+        const agente = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(body.agent_id)}&user_id=eq.${encodeURIComponent(userId)}&select=id&limit=1`,
+          { headers: sb() }
+        ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+        if (!agente?.length) return jsonResp({ error: 'Agente no encontrado' }, 404);
+      }
+      cambios.agent_id = body.agent_id || null;
+    }
+    if (body.is_active !== undefined) cambios.is_active = !!body.is_active;
+    if (!Object.keys(cambios).length) return jsonResp({ error: 'Nada que cambiar' }, 400);
+
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}`,
+      { method: 'PATCH', headers: sb(), body: JSON.stringify(cambios) }
+    );
+    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    const filas = await res.json().catch(() => []);
+    if (!filas?.length) return jsonResp({ error: 'Canal no encontrado' }, 404);
+    return jsonResp({ connection: filas[0] });
+  }
+
   if (req.method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);

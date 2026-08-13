@@ -1745,6 +1745,28 @@ textarea.seop-input{resize:vertical;min-height:70px}
   .pipe-fila-etapa > input.auto-input{flex:1 0 100% !important;order:-1}
 }
 .pipe-fila-etapa > input.auto-input{min-width:120px}
+/* Gestor de canales */
+.can-tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--border);flex-shrink:0}
+.can-tab{background:none;border:none;border-bottom:2px solid transparent;padding:11px 4px;margin-right:18px;font-family:inherit;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s}
+.can-tab:hover{color:var(--text)}
+.can-tab.act{color:var(--blue);border-bottom-color:var(--blue)}
+.can-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.can-card{border:1px solid var(--border);border-radius:13px;padding:14px;background:var(--bg-subtle);display:flex;flex-direction:column;gap:9px}
+.can-card-top{display:flex;align-items:center;gap:8px}
+.can-card-nombre{font-size:14px;font-weight:800;flex:1;min-width:0}
+.can-card-desc{font-size:12px;color:var(--muted);line-height:1.5;flex:1}
+.can-punto{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.can-chip{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--blue);background:var(--blue-lt);border-radius:20px;padding:3px 8px;white-space:nowrap}
+.can-fila{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--bg-subtle)}
+.can-fila-nombre{font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.can-fila-sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+.can-select{font-family:inherit;font-size:12px;font-weight:600;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 9px;cursor:pointer;max-width:180px;flex-shrink:0}
+.can-select:hover{border-color:var(--blue)}
+@media (max-width:700px){
+  .can-grid{grid-template-columns:1fr}
+  .can-fila{flex-wrap:wrap}
+  .can-select{max-width:none;flex:1 0 100%;order:1}
+}
 .crm-card-ajeno{opacity:.72;cursor:pointer}
 .crm-card-ajeno:hover{opacity:.9}
 .crm-link-btn{background:none;border:none;padding:0;font-family:inherit;font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;text-transform:none;letter-spacing:0}

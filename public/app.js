@@ -18682,6 +18682,171 @@ async function agConnectChannel(channel, agentId) {
   }
 }
 
+// ── Gestor de canales ───────────────────────────────────────────────────────
+// Vive en Marketing → Fuentes, que es donde se busca. Dos pestañas, como el
+// catálogo de Clientify, con una diferencia importante: aquí cada canal decide
+// QUIÉN lo atiende — un agente de IA o el equipo, a mano desde el inbox.
+const CANALES_CATALOGO = [
+  { key: 'whatsapp',  nombre: 'WhatsApp',  desc: 'Tu número de WhatsApp Business API. Ventas y soporte en el canal donde ya te escriben.' },
+  { key: 'messenger', nombre: 'Messenger', desc: 'Los mensajes privados de tu página de Facebook, en el mismo inbox.' },
+  { key: 'instagram', nombre: 'Instagram', desc: 'Los DM de tu cuenta de Instagram Business.' },
+  { key: 'tiktok',    nombre: 'TikTok',    desc: 'Los mensajes directos de tu cuenta de TikTok for Business.' },
+];
+const CANAL_COLOR = { whatsapp: '#25D366', messenger: '#0084FF', instagram: '#E1306C', tiktok: '#000000' };
+
+let canConexiones = [];
+let canTab = 'catalogo';
+
+function canNombreCanal(k) {
+  const c = CANALES_CATALOGO.find(x => x.key === k);
+  return c ? c.nombre : k;
+}
+
+// Quién atiende una conexión, en texto
+function canQuienAtiende(c) {
+  if (!c.agent_id) return 'Mi equipo (manual)';
+  const a = (typeof crmAgents !== 'undefined' ? crmAgents : []).find(x => x.id === c.agent_id);
+  return a ? a.name : 'Un agente';
+}
+
+async function canAbrirGestor() {
+  document.getElementById('can-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'can-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:820px;height:min(88vh,640px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Canales de chat</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Todo lo que te escriben, en un solo inbox. Cada canal decide quién lo atiende.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="can-tabs">' +
+      '<button class="can-tab" id="can-tab-catalogo" onclick="canIrTab(\'catalogo\')">Catálogo</button>' +
+      '<button class="can-tab" id="can-tab-mios" onclick="canIrTab(\'mios\')">Mis canales</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" id="can-cuerpo"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  canRender();
+  await canCargar();
+}
+
+async function canCargar() {
+  try {
+    const r = await fetchAuth('/api/channel-connections?all=1');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    canConexiones = (await r.json()).connections || [];
+  } catch (e) {
+    console.error('canCargar', e);
+    canConexiones = [];
+  }
+  // El desplegable de "quién atiende" necesita los agentes
+  if (typeof crmAgents === 'undefined' || !crmAgents.length) { try { await crmLoadAgents(); } catch {} }
+  canRender();
+}
+
+function canIrTab(t) { canTab = t; canRender(); }
+
+function canRender() {
+  const box = document.getElementById('can-cuerpo');
+  if (!box) return;
+  ['catalogo', 'mios'].forEach(t => {
+    const b = document.getElementById('can-tab-' + (t === 'mios' ? 'mios' : 'catalogo'));
+    if (b) b.classList.toggle('act', canTab === t);
+  });
+  const mios = document.getElementById('can-tab-mios');
+  if (mios) mios.textContent = 'Mis canales' + (canConexiones.length ? ' (' + canConexiones.length + ')' : '');
+
+  box.innerHTML = canTab === 'catalogo' ? canHtmlCatalogo() : canHtmlMios();
+}
+
+function canHtmlCatalogo() {
+  return '<div class="can-grid">' + CANALES_CATALOGO.map(c => {
+    const n = canConexiones.filter(x => x.channel === c.key).length;
+    return '<div class="can-card">' +
+      '<div class="can-card-top">' +
+        '<span class="can-punto" style="background:' + CANAL_COLOR[c.key] + '"></span>' +
+        '<div class="can-card-nombre">' + esc(c.nombre) + '</div>' +
+        (n ? '<span class="can-chip">' + n + (n === 1 ? ' conectado' : ' conectados') + '</span>' : '') +
+      '</div>' +
+      '<div class="can-card-desc">' + esc(c.desc) + '</div>' +
+      '<button class="btn-sec sm" style="width:100%" onclick="canConectar(\'' + c.key + '\')">+ Conectar</button>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function canHtmlMios() {
+  if (!canConexiones.length) {
+    return '<div style="color:var(--muted);font-size:13px;padding:14px 2px">' +
+      'Todavía no hay canales conectados. Ve al catálogo y conecta el primero.</div>';
+  }
+  const agentes = (typeof crmAgents !== 'undefined' ? crmAgents : []);
+  return canConexiones.map(c =>
+    '<div class="can-fila">' +
+      '<span class="can-punto" style="background:' + (CANAL_COLOR[c.channel] || 'var(--muted)') + '"></span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="can-fila-nombre">' + esc(c.channel_name || canNombreCanal(c.channel)) + '</div>' +
+        '<div class="can-fila-sub">' + esc(canNombreCanal(c.channel)) +
+          (c.is_active ? '' : ' · pausado') + '</div>' +
+      '</div>' +
+      '<select class="can-select" onchange="canCambiarQuien(\'' + esc(c.id) + '\', this.value)">' +
+        '<option value=""' + (!c.agent_id ? ' selected' : '') + '>Mi equipo (manual)</option>' +
+        agentes.map(a => '<option value="' + esc(a.id) + '"' + (c.agent_id === a.id ? ' selected' : '') + '>' +
+          esc(a.name) + '</option>').join('') +
+      '</select>' +
+      '<button class="pipe-borrar" title="Desconectar" onclick="canDesconectar(\'' + esc(c.id) + '\')">' + ICONO_PAPELERA + '</button>' +
+    '</div>'
+  ).join('') +
+  '<div style="font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5">' +
+    'Con un agente, contesta solo y te pasa la conversación cuando la califica. ' +
+    'Con «Mi equipo», los mensajes llegan al inbox y responde una persona desde el primer momento.</div>';
+}
+
+// Al conectar se elige primero quién lo atiende: es la decisión que cambia todo
+// lo demás, y dejarla para después es lo que hacía que un canal solo se pudiera
+// conectar desde dentro de un agente.
+async function canConectar(channel) {
+  const agentes = (typeof crmAgents !== 'undefined' ? crmAgents : []);
+  let agentId = null;
+  if (agentes.length) {
+    const lista = agentes.map((a, i) => (i + 1) + '. ' + a.name).join('\n');
+    const r = prompt('¿Quién atiende este canal?\n\n0. Mi equipo — manual desde el inbox\n' + lista +
+      '\n\nEscribe el número:', '0');
+    if (r === null) return;
+    const i = parseInt(r, 10);
+    if (i > 0 && agentes[i - 1]) agentId = agentes[i - 1].id;
+  }
+  document.getElementById('can-overlay')?.remove();
+  await agConnectChannel(channel, agentId);
+}
+
+async function canCambiarQuien(id, agentId) {
+  try {
+    const r = await fetchAuth('/api/channel-connections', {
+      method: 'PUT', body: JSON.stringify({ id, agent_id: agentId || null }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo cambiar', 'error'); await canCargar(); return; }
+    const c = canConexiones.find(x => x.id === id);
+    if (c) c.agent_id = agentId || null;
+    showToast(agentId ? 'Ahora lo atiende el agente' : 'Ahora lo atiende tu equipo, desde el inbox', 'success');
+  } catch (e) { showToast('No se pudo cambiar quién atiende el canal', 'error'); await canCargar(); }
+}
+
+async function canDesconectar(id) {
+  const c = canConexiones.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm('¿Desconectar «' + (c.channel_name || canNombreCanal(c.channel)) + '»?\n\nDejarán de entrar mensajes nuevos por este canal. Las conversaciones que ya tienes se conservan.')) return;
+  try {
+    await fetchAuth('/api/channel-connections?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    await canCargar();
+    showToast('Canal desconectado', 'success');
+  } catch (e) { showToast('No se pudo desconectar', 'error'); }
+}
+
 async function agDisconnectChannel(connId, agentId) {
   if (!confirm('¿Desconectar este canal? El agente dejará de responder mensajes por este canal.')) return;
   await fetchAuth(`/api/channel-connections?id=${encodeURIComponent(connId)}`, {
@@ -23153,7 +23318,7 @@ async function srcRender() {
     '<div style="max-width:860px;margin-bottom:26px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
         '<div style="font-weight:800;font-size:var(--fs-md)">💬 Canales de chat (WhatsApp, Messenger, Instagram, TikTok)</div>' +
-        '<button class="btn-sec sm" onclick="crmSetView(\'agents\')">Configurar canales</button>' +
+        '<button class="btn-sec sm" onclick="canAbrirGestor()">Configurar canales</button>' +
       '</div>' +
       '<div id="src-channels" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando canales…</div>' +
     '</div>' +
