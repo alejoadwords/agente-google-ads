@@ -58,6 +58,22 @@ async function getUserId(req) {
   } catch { return null; }
 }
 
+// Quien puede EDITAR, MOVER o BORRAR un lead. Ver, buscar y filtrar es libre
+// para toda la cuenta; esto solo gobierna los cambios.
+//   · El dueño de la cuenta puede con todo.
+//   · Un lead sin responsable esta libre: cualquiera del equipo lo gestiona.
+//     Sin esto, el dia que se active la regla todos los leads existentes
+//     quedarian bloqueados para el equipo hasta asignarlos uno a uno.
+//   · Con responsable, solo ese responsable o quien lo creo.
+function puedeGestionar(lead, actorId, esMiembro) {
+  if (!esMiembro) return true;
+  if (!lead) return false;
+  if (!lead.assigned_to) return true;
+  if (lead.assigned_to === actorId) return true;
+  if (lead.created_by === actorId) return true;
+  return false;
+}
+
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -198,6 +214,10 @@ export default async function handler(req) {
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
+  // actorId es la PERSONA que hace la peticion; userId pasa a ser la CUENTA.
+  // Hasta ahora se perdia el primero al resolver el dueño, y sin el no hay
+  // forma de saber que leads puede gestionar quien pregunta.
+  const actorId = userId;
   // Si esta consulta falla NO se puede seguir: sin ella un miembro operaria
   // sobre su propia cuenta en vez de la del dueño, y devolveriamos datos de
   // otra cuenta como si fueran los suyos. Mejor un error que el tablero de
@@ -210,6 +230,8 @@ export default async function handler(req) {
   } catch (e) {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
+  // Miembro del equipo: ve todo, pero solo gestiona lo suyo.
+  const esMiembro = actorId !== userId;
 
 
   const url = new URL(req.url);
@@ -251,6 +273,8 @@ export default async function handler(req) {
   // Siempre se puede pedir la previsualización (dry_run) antes de borrar: la
   // idea es que nadie vacíe medio CRM sin ver primero a cuántos afecta.
   if (req.method === 'POST' && url.searchParams.get('action') === 'cleanup') {
+    // Borrado masivo: decision de cuenta, no de un miembro.
+    if (esMiembro) return jsonResp({ error: 'Solo el usuario principal puede hacer limpiezas masivas.', sin_permiso: true }, 403);
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const {
@@ -366,7 +390,7 @@ export default async function handler(req) {
     if (stage) query += `&stage=eq.${encodeURIComponent(stage)}`;
     const res = await fetch(query, { headers: sbHeaders() });
     const rows = await res.json();
-    return jsonResp({ leads: rows || [] });
+    return jsonResp({ leads: rows || [], actor_id: actorId, es_miembro: esMiembro });
   }
 
   // GET single lead
@@ -576,6 +600,7 @@ export default async function handler(req) {
       source: source || 'manual',
       tags: leadTags,
       custom_fields: custom_fields || {},
+      created_by: actorId,
     };
     // El lead cae en el pipeline que pida el cliente o, si no, en el principal
     const pipeline = body.pipeline_id || await pipelinePrincipal(userId, clientId);
@@ -601,6 +626,23 @@ export default async function handler(req) {
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const { id, ...fields } = body;
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
+
+    // ¿Puede esta persona tocar este lead?
+    if (esMiembro) {
+      const act = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=assigned_to,assigned_name,created_by`, { headers: sbHeaders() });
+      const lead = (await act.json().catch(() => []))?.[0];
+      if (!lead) return jsonResp({ error: 'Lead no encontrado' }, 404);
+      if (!puedeGestionar(lead, actorId, esMiembro)) {
+        return jsonResp({
+          error: 'Este lead está asignado a ' + (lead.assigned_name || 'otra persona') + '. Solo esa persona o el usuario principal pueden modificarlo.',
+          sin_permiso: true,
+        }, 403);
+      }
+      // Reasignar es decision del usuario principal, no del equipo
+      if (fields.assigned_to !== undefined || fields.assigned_name !== undefined) {
+        return jsonResp({ error: 'Solo el usuario principal puede cambiar el responsable de un lead.', sin_permiso: true }, 403);
+      }
+    }
 
     // Only allow safe fields
     const allowed = ['name','email','phone','company','stage','stage_position','notes','source','tags','custom_fields','value','assigned_to','assigned_name','close_reason','close_currency','closed_at'];
@@ -648,6 +690,17 @@ export default async function handler(req) {
   if (req.method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
+    if (esMiembro) {
+      const act = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=assigned_to,assigned_name,created_by`, { headers: sbHeaders() });
+      const lead = (await act.json().catch(() => []))?.[0];
+      if (!lead) return jsonResp({ error: 'Lead no encontrado' }, 404);
+      if (!puedeGestionar(lead, actorId, esMiembro)) {
+        return jsonResp({
+          error: 'Este lead está asignado a ' + (lead.assigned_name || 'otra persona') + '. Solo esa persona o el usuario principal pueden eliminarlo.',
+          sin_permiso: true,
+        }, 403);
+      }
+    }
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}`,
       {

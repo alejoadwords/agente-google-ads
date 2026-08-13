@@ -17021,6 +17021,8 @@ async function crmLoadLeads() {
     const data = await res.json();
     if (mio !== crmAmbito()) return false;   // respuesta caducada: descartar
     crmLeads = data.leads || [];
+    if (data.actor_id) crmMiId = data.actor_id;
+    crmSoyMiembro = !!data.es_miembro;
     crmLeadsLoaded = true;
     crmFalloResuelto('leads');
     crmRender();
@@ -17265,6 +17267,27 @@ function crmRender() {
   else crmRenderList();
   crmUpdateClientTag();
   crmUpdateSidebarCount();
+}
+
+// ── Quién puede gestionar cada lead ─────────────────────────────────────────
+// Ver, buscar y filtrar es libre para toda la cuenta. Editar, mover de etapa y
+// borrar, no. La regla vive TAMBIÉN en el servidor (api/leads.js): esto de aquí
+// solo evita ofrecer botones que iban a rebotar con un 403.
+let crmMiId = '';
+let crmSoyMiembro = false;
+
+function puedoGestionar(lead) {
+  if (!crmSoyMiembro) return true;
+  if (!lead) return false;
+  if (!lead.assigned_to) return true;              // sin responsable: libre
+  if (lead.assigned_to === crmMiId) return true;
+  if (lead.created_by === crmMiId) return true;
+  return false;
+}
+
+function motivoSinPermiso(lead) {
+  return 'Asignado a ' + ((lead && lead.assigned_name) || 'otra persona') +
+    '. Puedes verlo, pero solo esa persona o el usuario principal pueden modificarlo.';
 }
 
 // ── Fuentes de lead ─────────────────────────────────────────────────────────
@@ -17631,7 +17654,12 @@ function crmRenderKanban() {
     if (c.soltar) crmSetupDrop(col.querySelector('.crm-col-body'), c.key);
   });
   container.querySelectorAll('.crm-card').forEach(card => {
-    card.draggable = true;
+    const suyo = puedoGestionar(crmLeads.find(l => l.id === card.dataset.id));
+    card.draggable = suyo;
+    if (!suyo) {
+      card.classList.add('crm-card-ajeno');
+      card.title = 'Asignado a otra persona: puedes abrirlo, no moverlo';
+    }
     card.addEventListener('dragstart', e => {
       e.dataTransfer.setData('text/plain', card.dataset.id);
       card.classList.add('dragging');
@@ -18055,6 +18083,7 @@ async function crmOpenDetail(leadId) {
   const lead = crmLeads.find(l => l.id === leadId);
   if (!lead) return;
   crmDetailLead = lead;
+  crmDetalleAplicarPermiso(lead);
   document.getElementById('crm-d-name').textContent = lead.name;
   // Avatar
   const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
@@ -23486,12 +23515,43 @@ async function teamRemove(id) {
   teamRenderSettings();
 }
 
+// Deja el detalle en solo lectura cuando el lead es de otra persona, y lo dice
+// en vez de limitarse a que los botones no hagan nada.
+function crmDetalleAplicarPermiso(lead) {
+  const puedo = puedoGestionar(lead);
+  const del = document.querySelector('.crm-detail-del-btn');
+  if (del) del.style.display = puedo ? '' : 'none';
+  const ID = 'crm-d-sin-permiso';
+  document.getElementById(ID)?.remove();
+  if (puedo) return;
+  const nombre = document.getElementById('crm-d-name');
+  const host = nombre && nombre.closest('.crm-detail-head') || nombre?.parentElement;
+  if (!host || !host.parentElement) return;
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 20px 10px;padding:9px 12px;background:var(--sidebar);border:1px solid var(--border);' +
+    'border-radius:9px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px';
+  el.innerHTML =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+      'style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' +
+    '<span>' + esc(motivoSinPermiso(lead)) + '</span>';
+  host.parentElement.insertBefore(el, host.nextSibling);
+}
+
 // ── Asignación de leads ───────────────────────────────────────────────────────
 function teamPopulateAssign(lead) {
   const wrap = document.getElementById('crm-d-assigned-wrap');
   if (!wrap) return;
   const myId = clerkInstance?.user?.id || '';
   const myName = clerkInstance?.user?.firstName || 'Yo';
+  // Reasignar es decisión del usuario principal. A un miembro se le muestra
+  // quién lo lleva, sin desplegable: ofrecerlo solo serviría para que el
+  // servidor se lo rechazara con un 403.
+  if (crmSoyMiembro) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--muted)">' +
+      esc(lead.assigned_name || (lead.assigned_to ? 'Otra persona' : 'Sin asignar')) + '</span>';
+    return;
+  }
   // Opciones: sin asignar + yo + miembros activos (el dueño ve su equipo; un miembro se ve a sí mismo)
   const opts = [{ id: '', name: 'Sin asignar' }, { id: myId, name: myName + ' (yo)' }];
   if (!window._workspace) {
