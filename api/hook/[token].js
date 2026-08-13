@@ -5,7 +5,7 @@
 // (o reutiliza el existente por email) y encola el flujo.
 // Pensado para formularios de landing, Zapier, Make, Meta Lead Ads, etc.
 
-import { intakeLead, mapExternalPayload, pick as pickIntake } from '../_lead-intake.js';
+import { intakeLead, mapExternalPayload, pick as pickIntake, pipelinePrincipal } from '../_lead-intake.js';
 
 // Edge runtime: los imports de módulos compartidos (_lead-intake) se bundlean
 // sin problema — en el runtime Node de Vercel ese import rompía el build de
@@ -152,12 +152,23 @@ export default async function handler(req) {
       } catch {}
     }
 
-    // 3. Reutilizar lead existente por email (mismo usuario y scope de cliente)
+    // 3. Reutilizar lead existente. Por email y TAMBIÉN por teléfono: un lead
+    //    que llega de WhatsApp casi nunca trae correo, así que deduplicar solo
+    //    por email creaba un lead nuevo en cada mensaje.
+    const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
     let lead = null;
     if (email) {
-      const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
       const found = await sb(`/leads?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&email=eq.${encodeURIComponent(email)}&deleted_at=is.null&select=*&limit=1`);
       lead = found?.[0] || null;
+    }
+    if (!lead && phone) {
+      // Se comparan los últimos 10 dígitos: el mismo número llega unas veces
+      // con indicativo y otras sin él, y +57 300… y 300… son la misma persona.
+      const clave = String(phone).replace(/\D/g, '').slice(-10);
+      if (clave.length >= 7) {
+        const cand = await sb(`/leads?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&phone=not.is.null&deleted_at=is.null&select=*&order=created_at.desc&limit=200`);
+        lead = (cand || []).find(l => String(l.phone || '').replace(/\D/g, '').slice(-10) === clave) || null;
+      }
     }
 
     // 4. Crear el lead si no existe
@@ -171,6 +182,9 @@ export default async function handler(req) {
         source,
         tags: leadTags,
         notes: note ? '📥 [Webhook] ' + note.slice(0, 500) : null,
+        // Sin pipeline el lead no se pinta en ninguna columna del tablero. Es el
+        // mismo agujero que tenían los leads del inbox.
+        pipeline_id: await pipelinePrincipal(auto.user_id, auto.client_id || null),
       });
       lead = rows[0];
       if (leadTags.length) await enqueueTagAdded(auto.user_id, auto.client_id, lead.id, leadTags);
