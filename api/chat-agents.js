@@ -46,7 +46,7 @@ export default async function handler(req) {
   // Si la comprobacion falla no se sigue: operar con la identidad equivocada
   // devolveria los canales de otra cuenta.
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sb() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
     if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
     const _tw = (await _twRes.json())?.[0];
     if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
