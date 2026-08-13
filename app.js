@@ -18460,6 +18460,65 @@ function crmRenderAgents() {
 }
 
 // ── Modal Agente ──────────────────────────────────────────────────────────────
+// ── El agente se configura por pasos ────────────────────────────────────────
+// Todo en una sola ventana obligaba a un scroll larguísimo dentro de otro
+// scroll: el contenido se cortaba y la sección de Calificación era inalcanzable.
+// Cinco pasos cortos evitan el scroll en vez de pelearse con él. Los campos
+// conservan sus identificadores, así que guardar no cambia.
+const AG_PASOS = ['Identidad', 'Respuestas', 'Canales', 'Calificación', 'Proceso'];
+let _agPaso = 1;
+
+// El paso de canales solo existe al editar: un agente recién creado no tiene
+function agPasoExiste(n) {
+  if (n !== 3) return true;
+  const sec = document.getElementById('ag-channels-section');
+  return !!sec && sec.style.display !== 'none';
+}
+
+function agPasosDisponibles() {
+  return AG_PASOS.map((_, i) => i + 1).filter(agPasoExiste);
+}
+
+function agIrAPaso(n) {
+  const disp = agPasosDisponibles();
+  if (!disp.includes(n)) n = disp[0];
+  _agPaso = n;
+  document.querySelectorAll('.ag-paso').forEach(el => {
+    el.style.display = Number(el.dataset.paso) === n ? '' : 'none';
+  });
+  const cuerpo = document.querySelector('.crm-agent-modal-box .crm-modal-body');
+  if (cuerpo) cuerpo.scrollTop = 0;
+
+  const ultimo = disp[disp.length - 1];
+  const primero = disp[0];
+  const atras = document.getElementById('ag-atras');
+  const sig = document.getElementById('ag-siguiente');
+  const guardar = document.getElementById('ag-save-btn');
+  if (atras) atras.style.display = n === primero ? 'none' : '';
+  if (sig) sig.style.display = n === ultimo ? 'none' : '';
+  // Guardar está disponible SIEMPRE, no solo al final: obligar a pasar por
+  // todos los pasos para cambiar el nombre sería peor que el scroll de antes.
+  if (guardar) guardar.style.display = '';
+  agRenderPasos();
+}
+
+function agPaso(delta) {
+  const disp = agPasosDisponibles();
+  const i = disp.indexOf(_agPaso);
+  const destino = disp[Math.min(Math.max(i + delta, 0), disp.length - 1)];
+  agIrAPaso(destino);
+}
+
+function agRenderPasos() {
+  const cont = document.getElementById('ag-pasos');
+  if (!cont) return;
+  const disp = agPasosDisponibles();
+  cont.innerHTML = disp.map(n =>
+    '<button class="' + (n === _agPaso ? 'act' : (n < _agPaso ? 'hecho' : '')) + '" ' +
+      'onclick="agIrAPaso(' + n + ')">' + (disp.indexOf(n) + 1) + '. ' + esc(AG_PASOS[n - 1]) + '</button>'
+  ).join('');
+}
+
 function crmOpenAgentModal(agentId) {
   agEditingId = agentId || null;
   agFaqs = [];
@@ -18491,6 +18550,9 @@ function crmOpenAgentModal(agentId) {
   }
   agRenderFaqs();
   document.getElementById('crm-agent-modal').classList.add('open');
+  // Siempre se entra por el primer paso; el de canales solo aparece al editar,
+  // así que se decide después de haberlo mostrado u ocultado arriba.
+  agIrAPaso(1);
   setTimeout(() => document.getElementById('cag-f-name').focus(), 100);
 }
 

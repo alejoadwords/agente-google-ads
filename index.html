@@ -1935,6 +1935,11 @@ textarea.seop-input{resize:vertical;min-height:70px}
 /* Dos contenedores con scroll anidados —la caja y el cuerpo— hacían que el
    contenido se cortara y el pie se montara encima: no se podía llegar a la
    sección de Calificación. Ahora scroll SOLO en el cuerpo, con el pie fijo. */
+.ag-pasos{display:flex;gap:6px;padding:12px 20px 0;flex-shrink:0}
+.ag-pasos button{flex:1;background:none;border:none;padding:0 0 8px;font-family:inherit;font-size:10.5px;font-weight:700;
+  color:var(--muted2);cursor:pointer;border-bottom:2.5px solid var(--border);text-align:left;transition:.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ag-pasos button.act{color:var(--blue);border-bottom-color:var(--blue)}
+.ag-pasos button.hecho{color:var(--text);border-bottom-color:var(--blue-md)}
 .crm-agent-modal-box{max-width:580px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .crm-agent-modal-box > .crm-modal-body{max-height:none;flex:1;min-height:0;overflow-y:auto}
 .crm-agent-modal-box > .crm-modal-head,
@@ -4230,7 +4235,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
+    <div class="ag-pasos" id="ag-pasos"></div>
     <div class="crm-modal-body">
+      <div class="ag-paso" data-paso="1">
       <div class="crm-field">
         <label>Nombre del agente *</label>
         <input type="text" id="cag-f-name" placeholder="Ej: Laura, Carlos, Sofía..." />
@@ -4257,12 +4264,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <option value="formal">Formal (usted) — para sectores corporativos</option>
         </select>
       </div>
+      </div>
+
+      <div class="ag-paso" data-paso="2" style="display:none">
       <div class="crm-section-divider">Preguntas Frecuentes (FAQs)</div>
+      <div style="font-size:11.5px;color:var(--muted2);margin-bottom:12px;line-height:1.55">
+        Respuestas que el agente dará tal cual, sin improvisar. Puedes dejarlo vacío.
+      </div>
       <div id="ag-faqs-list"></div>
       <button class="crm-add-faq-btn" onclick="agAddFaq()">+ Agregar pregunta frecuente</button>
+      </div>
+
+      <div class="ag-paso" data-paso="3" style="display:none">
       <div id="ag-channels-section" style="display:none">
         <div class="crm-section-divider">Canales conectados</div>
         <div id="ag-channels-list"></div>
+      </div>
+      </div>
+
+      <div class="ag-paso" data-paso="4" style="display:none">
+      <div>
 
         <div class="crm-section-divider">Calificación de leads</div>
         <div style="font-size:11.5px;color:var(--muted2);margin-bottom:12px;line-height:1.55">
@@ -4275,20 +4296,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div id="cal-config" style="display:none">
           <div id="cal-criterios"></div>
           <button class="btn-sec sm" style="margin-top:8px" onclick="calAddCriterio()">+ Añadir pregunta</button>
-          <div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" id="cal-rut-activo" onchange="calRutToggle()" style="width:15px;height:15px;accent-color:var(--blue)">
-              <span style="font-size:12.5px;font-weight:700">Enviar a un proceso de venta según lo que busque</span>
-            </label>
-            <div id="cal-rut-config" style="display:none;margin-top:10px">
-              <label class="auto-label">¿Qué debe averiguar para decidirlo?</label>
-              <input class="auto-input" id="cal-rut-pregunta" placeholder="Ej. Si quiere comprar o arrendar">
-              <div id="cal-rutas" style="margin-top:10px"></div>
-              <button class="btn-sec sm" style="margin-top:8px" onclick="calAddRuta()">+ Añadir opción</button>
-              <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
-                El agente solo reporta cuál de estas opciones encaja; a qué proceso va cada una lo decides tú aquí.
-                Si no lo tiene claro, no la inventa y sigue conversando.</div>
-            </div>
+
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:14px">
             <span style="flex:1;font-size:12.5px">Califica si cumple al menos</span>
@@ -4313,10 +4321,33 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </div>
         </div>
       </div>
+      </div>
+
+      <div class="ag-paso" data-paso="5" style="display:none">
+        <div class="crm-section-divider">A qué proceso de venta entra</div>
+        <div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cal-rut-activo" onchange="calRutToggle()" style="width:15px;height:15px;accent-color:var(--blue)">
+            <span style="font-size:12.5px;font-weight:700">Enviar a un proceso de venta según lo que busque</span>
+          </label>
+          <div id="cal-rut-config" style="display:none;margin-top:10px">
+            <label class="auto-label">¿Qué debe averiguar para decidirlo?</label>
+            <input class="auto-input" id="cal-rut-pregunta" placeholder="Ej. Si quiere comprar o arrendar">
+            <div id="cal-rutas" style="margin-top:10px"></div>
+            <button class="btn-sec sm" style="margin-top:8px" onclick="calAddRuta()">+ Añadir opción</button>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
+              El agente solo reporta cuál de estas opciones encaja; a qué proceso va cada una lo decides tú aquí.
+              Si no lo tiene claro, no la inventa y sigue conversando.</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="crm-modal-foot">
       <button class="crm-btn-cancel" onclick="crmCloseAgentModal()">Cancelar</button>
-      <button class="crm-btn-save" id="ag-save-btn" onclick="crmSaveAgent()">Crear agente</button>
+      <div style="flex:1"></div>
+      <button class="crm-btn-cancel" id="ag-atras" style="display:none" onclick="agPaso(-1)">Atrás</button>
+      <button class="crm-btn-save" id="ag-siguiente" onclick="agPaso(1)">Siguiente</button>
+      <button class="crm-btn-save" id="ag-save-btn" style="display:none" onclick="crmSaveAgent()">Crear agente</button>
     </div>
   </div>
 </div>
