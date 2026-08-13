@@ -191,14 +191,21 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   ).then(r => r.json()).then(r => r?.[0]).catch(() => null);
   if (!connection) return { ok: false, reason: 'canal no conectado' };
 
-  const agent = await fetch(
+  // Un canal puede atenderse de dos formas: con un agente que contesta solo, o
+  // a mano desde el inbox. Sin agente —porque el canal se conecto sin uno o
+  // porque esta desactivado— NO se descarta el mensaje: se guarda y se marca la
+  // conversacion como humana. Antes se devolvia aqui mismo y el mensaje del
+  // cliente se perdia entero: ni conversacion, ni aviso, ni rastro.
+  const agent = connection.agent_id ? await fetch(
     `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${connection.agent_id}&is_active=eq.true&select=*`,
     { headers: sb() }
-  ).then(r => r.json()).then(r => r?.[0]).catch(() => null);
-  if (!agent) return { ok: false, reason: 'agente inactivo' };
+  ).then(r => r.json()).then(r => r?.[0]).catch(() => null) : null;
+  const aMano = !agent;
 
   const policy = await getPolicy(connection.user_id, channel);
-  const reglaCal = await getRegla(connection.user_id, connection.agent_id);
+  const reglaCal = connection.agent_id
+    ? await getRegla(connection.user_id, connection.agent_id)
+    : { activo: false };
 
   let conv = await fetch(
     `${SUPABASE_URL}/rest/v1/chat_conversations?connection_id=eq.${connection.id}&contact_id=eq.${encodeURIComponent(contactId)}&select=*`,
@@ -220,18 +227,21 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         contact_id: contactId,
         contact_name: contactName || null,
         contact_phone: telefonoDelCanal(channel, contactId),
-        status: 'bot',
+        status: aMano ? 'human' : 'bot',
         unread_count: 1,
       }),
     }).then(r => r.json()).then(r => r?.[0]).catch(() => null);
     if (!conv) return { ok: false, reason: 'no se pudo crear la conversación' };
     // Regla "siempre": el lead nace con la conversación, sin esperar datos
     if (policy.mode === 'always') {
-      const leadId = await upsertLeadFromConversation(connection.user_id, agent.client_id, conv, {}, policy, reglaCal.activo).catch(() => null);
+      const leadId = await upsertLeadFromConversation(connection.user_id, agent ? agent.client_id : null, conv, {}, policy, reglaCal.activo).catch(() => null);
       if (leadId) conv.lead_id = leadId;
     }
-  } else if (conv.status === 'human') {
-    // Escalado a una persona: el bot no contesta, solo se guarda el mensaje
+  }
+
+  // A mano, o ya escalado a una persona: se guarda el mensaje y ahi acaba. El
+  // comercial responde desde el inbox.
+  if (aMano || conv.status === 'human') {
     await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
       method: 'POST', headers: sb(),
       body: JSON.stringify({ conversation_id: conv.id, role: 'user', content: text, meta_message_id: providerMessageId }),
@@ -244,7 +254,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         unread_count: (conv.unread_count || 0) + 1,
       }),
     });
-    return { ok: true, escalated: true, conversationId: conv.id };
+    return { ok: true, escalated: true, manual: aMano, conversationId: conv.id };
   }
 
   // Conversaciones creadas antes de tener el nombre: se rellena al vuelo

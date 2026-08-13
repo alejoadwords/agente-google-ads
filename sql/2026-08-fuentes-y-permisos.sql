@@ -43,10 +43,18 @@ create index if not exists leads_created_by_idx on leads(created_by);
 -- no sabemos quién los creó, así que quedan sin dueño y cualquiera del equipo
 -- puede gestionarlos, que es justo lo acordado para los leads sin responsable.
 
--- ── 3. Comprobación ─────────────────────────────────────────────────────────
+-- ── 3. Canales que se atienden a mano ───────────────────────────────────────
+-- Hasta ahora todo canal colgaba de un agente de IA. Un canal sin agente se
+-- atiende manualmente desde el inbox, así que agent_id deja de ser obligatorio.
+alter table channel_connections alter column agent_id drop not null;
+
+-- ── 4. Comprobación ─────────────────────────────────────────────────────────
 -- La primera debe ser 0 (tabla recién creada) y la segunda 1 (la columna
 -- existe). Si 'columna_created_by' sale 0, algo falló arriba.
+-- 'agent_id_opcional' debe salir YES.
 select
   (select count(*) from lead_sources) as fuentes_propias,
   (select count(*) from information_schema.columns
-     where table_name = 'leads' and column_name = 'created_by') as columna_created_by;
+     where table_name = 'leads' and column_name = 'created_by') as columna_created_by,
+  (select is_nullable from information_schema.columns
+     where table_name = 'channel_connections' and column_name = 'agent_id') as agent_id_opcional;

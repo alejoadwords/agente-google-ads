@@ -161,15 +161,19 @@ export default async function handler(req) {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const { agent_id, channel, external_id, access_token, channel_name, avatar_url } = body;
-    if (!agent_id || !channel || !external_id) return jsonResp({ error: 'Faltan campos' }, 400);
+    // agent_id es opcional: un canal sin agente se atiende a mano desde el
+    // inbox. Con agente, el agente contesta y escala cuando toca.
+    if (!channel || !external_id) return jsonResp({ error: 'Faltan campos' }, 400);
 
-    // Verify agent belongs to user
-    const agentCheck = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${agent_id}&user_id=eq.${userId}&select=id`,
-      { headers: sb() }
-    );
-    const agentRows = await agentCheck.json();
-    if (!agentRows?.[0]) return jsonResp({ error: 'Agente no encontrado' }, 404);
+    // Con agente, tiene que ser suyo. Sin agente, el canal es de gestión manual.
+    if (agent_id) {
+      const agentCheck = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${agent_id}&user_id=eq.${userId}&select=id`,
+        { headers: sb() }
+      );
+      const agentRows = await agentCheck.json();
+      if (!agentRows?.[0]) return jsonResp({ error: 'Agente no encontrado' }, 404);
+    }
 
     // For Messenger/Instagram: subscribe page to webhook
     if ((channel === 'messenger' || channel === 'instagram') && access_token) {
@@ -181,7 +185,7 @@ export default async function handler(req) {
     }
 
     const payload = {
-      agent_id, user_id: userId, channel,
+      agent_id: agent_id || null, user_id: userId, channel,
       external_id: String(external_id),
       access_token: access_token || null,
       channel_name: channel_name || null,
