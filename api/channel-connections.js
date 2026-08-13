@@ -182,6 +182,20 @@ export default async function handler(req) {
     // inbox. Con agente, el agente contesta y escala cuando toca.
     if (!channel || !external_id) return jsonResp({ error: 'Faltan campos' }, 400);
 
+    // Uno de prueba por cliente. La comprobación también vive aquí: la del
+    // navegador se salta con dos pestañas abiertas o con un doble clic.
+    if (String(external_id).startsWith('sim_')) {
+      const ya = await fetch(
+        `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${encodeURIComponent(userId)}` +
+        `&external_id=like.sim_*&select=id,client_id`,
+        { headers: sb() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      const mismoCliente = (ya || []).some(c => (c.client_id || '') === (body.client_id || ''));
+      if (mismoCliente) {
+        return jsonResp({ error: 'Ya tienes un canal de prueba para este cliente.', duplicado: true }, 409);
+      }
+    }
+
     // Con agente, tiene que ser suyo. Sin agente, el canal es de gestión manual.
     if (agent_id) {
       const agentCheck = await fetch(

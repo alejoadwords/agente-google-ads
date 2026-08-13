@@ -19018,7 +19018,9 @@ function canHtmlCatalogo() {
     '<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:9px">' +
       '¿Quieres ver cómo funciona sin conectar nada todavía? Un canal de prueba te deja ' +
       'simular mensajes entrantes y recorrer el circuito entero: inbox, respuesta manual y entrada al CRM.</div>' +
-    '<button class="btn-sec sm" onclick="canCrearPrueba()">+ Crear canal de prueba</button>' +
+    (canPruebaDelCliente()
+      ? '<button class="btn-sec sm" disabled style="opacity:.55;cursor:not-allowed">Ya tienes uno para este cliente</button>'
+      : '<button class="btn-sec sm" onclick="canCrearPrueba()">+ Crear canal de prueba</button>') +
   '</div>';
 }
 
@@ -19107,10 +19109,23 @@ function canEsPrueba(c) {
   return String(c.external_id || '').startsWith('sim_');
 }
 
+// Uno por cliente: dos canales de prueba idénticos solo sirven para dudar de
+// cuál estás usando.
+function canPruebaDelCliente() {
+  const cliente = crmAmbitoCliente();
+  return canConexiones.find(c => canEsPrueba(c) && (c.client_id || '') === cliente) || null;
+}
+
 async function canCrearPrueba() {
   const cliente = crmAmbitoCliente();
   if (!cliente) {
     showToast('Activa el cliente al que quieres asociarlo antes de crear el canal de prueba', 'error');
+    return;
+  }
+  if (canPruebaDelCliente()) {
+    canTab = 'mios';
+    canRender();
+    showToast('Ya tienes un canal de prueba para este cliente', 'error');
     return;
   }
   try {
