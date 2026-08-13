@@ -13943,6 +13943,26 @@ let metaActiveAccount = null;
   if (params.get('meta_error')) {
     window.history.replaceState({}, '', window.location.pathname);
   }
+  // Vuelta de la conexión de WhatsApp por redirección. Se dice el resultado y
+  // se limpia la URL, para que recargar no repita el aviso.
+  if (params.get('wa_ok') || params.get('wa_error')) {
+    const ok = params.get('wa_ok');
+    const err = params.get('wa_error');
+    const nombres = params.get('wa_nombres') || '';
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => {
+      if (typeof showToast !== 'function') { if (err) alert(err); return; }
+      if (ok) {
+        const n = parseInt(ok, 10) || 0;
+        showToast(n === 1
+          ? 'WhatsApp conectado' + (nombres ? ': ' + nombres : '')
+          : n + ' números de WhatsApp conectados' + (nombres ? ': ' + nombres : ''), 'success');
+      } else {
+        // Los motivos de Meta son largos: en un toast no se leen enteros
+        alert('No se pudo conectar WhatsApp\n\n' + err);
+      }
+    }, 1200);
+  }
   // Restaurar desde sessionStorage o localStorage (persiste entre sesiones del browser)
   const savedToken   = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
   const savedName    = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
@@ -18701,17 +18721,10 @@ let _waAgente = null;     // quién atenderá el canal
 // Deja listos configuración y SDK ANTES de que el usuario pulse, para que el
 // clic pueda abrir la ventana de Meta sin esperar a nada.
 async function waPreparar() {
-  waEstado('Preparando la conexión…');
   const cfg = await waCargarCfg();
-  if (!cfg.disponible) { waEstado('La conexión directa no está configurada. Usa la opción avanzada.', true); return cfg; }
-  const ok = await waCargarSDK(cfg.app_id);
-  if (ok && window.FB) {
-    waEstado('Listo. Necesitas ser administrador de la cuenta de WhatsApp Business en Meta.');
-  } else {
-    waEstado('Tu navegador está bloqueando el conector de Facebook (' + (window._waSdkError || 'desconocido') +
-      '). Suele ser la protección antiseguimiento de Safari: pruébalo en Chrome, o desactívala para este sitio. ' +
-      'Mientras tanto puedes usar la opción avanzada.', true);
-  }
+  waEstado(cfg.disponible
+    ? 'Necesitas ser administrador de la cuenta de WhatsApp Business en Meta.'
+    : 'La conexión directa no está configurada. Usa la opción avanzada.', !cfg.disponible);
   return cfg;
 }
 
@@ -18769,12 +18782,27 @@ function waEscucharMeta() {
   });
 }
 
+// Conexión por REDIRECCIÓN, como la de Meta Ads. La vía del SDK abría una
+// ventana emergente que Safari bloqueaba incluso con las emergentes permitidas.
+// Redirigiendo la página entera no hay ventana que bloquear.
+function waConectarConMeta(agentId) {
+  const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
+  if (!uid) { waEstado('Vuelve a iniciar sesión para conectar WhatsApp.', true); return; }
+  waEstado('Llevándote a Facebook…');
+  const p = new URLSearchParams({ userId: uid });
+  if (agentId) p.set('agentId', agentId);
+  window.location.href = '/api/whatsapp-auth?' + p.toString();
+}
+
+// ── Vía antigua por SDK, sin usar ───────────────────────────────────────────
+// Se conserva por si algún día conviene volver a la ventana emergente, pero no
+// hay ningún botón que la llame: en Safari no funcionaba.
 // OJO: esta función NO puede ser async ni esperar nada antes de FB.login().
 // FB.login abre una ventana emergente, y el navegador solo la permite si se
 // abre DENTRO del gesto del clic. Con un solo await por delante, el gesto ya se
 // perdió y Safari la bloquea sin decir nada: el botón parecía muerto.
 // Por eso la configuración y el SDK se cargan al ABRIR el modal (waPreparar).
-function waConectarConMeta(agentId) {
+function waConectarConMetaSDK(agentId) {
   _waAgente = agentId || null;
   _waDatos = null;
   if (!_waCfg || !_waCfg.disponible) {
