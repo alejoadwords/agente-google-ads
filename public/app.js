@@ -18587,7 +18587,18 @@ function waConnectOpen(agentId) {
   const btn = document.getElementById('wa-connect-btn');
   if (btn) { btn.disabled = false; btn.textContent = 'Conectar'; }
   document.getElementById('wa-connect-modal').classList.add('open');
-  setTimeout(() => document.getElementById('wa-f-phone-id').focus(), 100);
+  // La vía directa depende de una configuración en el panel de Meta: si no
+  // está, se dice, en vez de dejar un botón que falla al pulsarlo.
+  waCargarCfg().then(cfg => {
+    const btn = document.getElementById('wa-meta-btn');
+    const nota = document.getElementById('wa-meta-nota');
+    const det = document.getElementById('wa-avanzada');
+    if (btn) btn.disabled = !cfg.disponible;
+    if (nota) nota.textContent = cfg.disponible
+      ? 'Necesitas ser administrador de la cuenta de WhatsApp Business en Meta.'
+      : 'La conexión directa aún no está disponible. Usa la opción avanzada.';
+    if (det && !cfg.disponible) det.open = true;
+  });
 }
 
 function waConnectClose() {
@@ -18680,6 +18691,100 @@ async function agConnectChannel(channel, agentId) {
     await crmLoadAgents();
     crmOpenAgentModal(agentId);
   }
+}
+
+// ── WhatsApp por registro insertado de Meta ─────────────────────────────────
+// El camino de antes pedía Phone Number ID y un token de sistema: para eso hay
+// que entrar a Meta for Developers, así que en la práctica nadie lo hacía solo.
+// Con esto el usuario pulsa un botón, elige su número dentro de la ventana de
+// Facebook y ya está. El formulario manual se queda como opción avanzada.
+let _waCfg = null;        // {app_id, config_id, disponible}
+let _waDatos = null;      // waba_id y phone_number_id que manda Meta por evento
+let _waAgente = null;     // quién atenderá el canal
+
+async function waCargarCfg() {
+  if (_waCfg) return _waCfg;
+  try {
+    const r = await fetchAuth('/api/whatsapp-onboard');
+    _waCfg = r.ok ? await r.json() : { disponible: false };
+  } catch { _waCfg = { disponible: false }; }
+  return _waCfg;
+}
+
+function waCargarSDK(appId) {
+  if (window.FB) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    window.fbAsyncInit = function () {
+      window.FB.init({ appId: appId, autoLogAppEvents: true, xfbml: true, version: 'v21.0' });
+      resolve(true);
+    };
+    const sc = document.createElement('script');
+    sc.src = 'https://connect.facebook.net/en_US/sdk.js';
+    sc.async = true; sc.defer = true; sc.crossOrigin = 'anonymous';
+    sc.onerror = () => resolve(false);
+    document.head.appendChild(sc);
+    // Si el SDK no carga (bloqueador, red), no dejar la promesa colgada
+    setTimeout(() => resolve(!!window.FB), 8000);
+  });
+}
+
+// Meta manda el waba_id y el phone_number_id por un mensaje de ventana, no por
+// el callback: hay que escuchar los dos y juntarlos.
+function waEscucharMeta() {
+  if (window._waOyente) return;
+  window._waOyente = true;
+  window.addEventListener('message', (ev) => {
+    if (!String(ev.origin || '').endsWith('facebook.com')) return;
+    try {
+      const d = JSON.parse(ev.data);
+      if (d.type === 'WA_EMBEDDED_SIGNUP' && d.event === 'FINISH') {
+        _waDatos = { waba_id: d.data.waba_id, phone_number_id: d.data.phone_number_id };
+      }
+    } catch {}
+  });
+}
+
+async function waConectarConMeta(agentId) {
+  _waAgente = agentId || null;
+  _waDatos = null;
+  const cfg = await waCargarCfg();
+  if (!cfg.disponible) {
+    showToast('La conexión directa con Meta todavía no está configurada. Usa la opción avanzada.', 'error');
+    return;
+  }
+  const ok = await waCargarSDK(cfg.app_id);
+  if (!ok || !window.FB) {
+    showToast('No se pudo cargar el conector de Facebook. Revisa si tu navegador bloquea scripts.', 'error');
+    return;
+  }
+  waEscucharMeta();
+  window.FB.login(async function (resp) {
+    const code = resp?.authResponse?.code;
+    if (!code) { showToast('Conexión cancelada', 'error'); return; }
+    // El evento con los identificadores puede llegar justo después del callback
+    for (let i = 0; i < 20 && !_waDatos; i++) await new Promise(r => setTimeout(r, 100));
+    if (!_waDatos) {
+      showToast('Meta no devolvió el número elegido. Vuelve a intentarlo.', 'error');
+      return;
+    }
+    showToast('Conectando el número…', 'info');
+    try {
+      const r = await fetchAuth('/api/whatsapp-onboard', {
+        method: 'POST',
+        body: JSON.stringify({ code, agent_id: _waAgente, ..._waDatos }),
+      });
+      const d = await leerRespuesta(r);
+      if (!r.ok) { showToast(d.error || 'No se pudo conectar', 'error'); return; }
+      showToast(d.reconectado ? 'Número actualizado' : 'WhatsApp conectado', 'success');
+      waConnectClose();
+      canAbrirGestor();
+    } catch (e) { showToast('No se pudo completar la conexión', 'error'); }
+  }, {
+    config_id: cfg.config_id,
+    response_type: 'code',
+    override_default_response_type: true,
+    extras: { setup: {} },
+  });
 }
 
 // ── Gestor de canales ───────────────────────────────────────────────────────

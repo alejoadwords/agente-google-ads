@@ -4310,7 +4310,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </button>
     </div>
     <div class="crm-modal-body">
-      <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#1E40AF;line-height:1.6">
+      <div id="wa-meta-bloque" style="text-align:center;padding:6px 0 4px">
+        <div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:14px">
+          Inicia sesión con Facebook y elige tu número de WhatsApp Business.<br>
+          <span style="color:var(--muted)">No hay que copiar identificadores ni tokens.</span>
+        </div>
+        <button class="crm-btn-save" id="wa-meta-btn" style="width:100%;justify-content:center" onclick="waConectarConMeta(_waConnectAgentId)">
+          Conectar con Meta
+        </button>
+        <div id="wa-meta-nota" style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5"></div>
+      </div>
+      <details id="wa-avanzada" style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted)">Opción avanzada — tengo mi Phone Number ID y mi token</summary>
+        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 14px;margin:14px 0 16px;font-size:12px;color:#1E40AF;line-height:1.6">
         <strong>¿Dónde encontrar estos datos?</strong><br>
         Ve a <strong>Meta Business Suite → Configuración → Cuentas de WhatsApp → tu número</strong>.<br>
         El <strong>Phone Number ID</strong> aparece en los detalles del número.<br>
@@ -4332,10 +4344,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">Nombre descriptivo para identificar este canal</div>
       </div>
       <div id="wa-connect-error" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 12px;font-size:12px;color:#991B1B;margin-top:8px"></div>
+      </details>
     </div>
     <div class="crm-modal-foot">
       <button class="crm-btn-cancel" onclick="waConnectClose()">Cancelar</button>
-      <button class="crm-btn-save" id="wa-connect-btn" onclick="waConnectSave()">Conectar</button>
+      <button class="crm-btn-save" id="wa-connect-btn" onclick="waConnectSave()">Conectar con mi token</button>
     </div>
   </div>
 </div>
