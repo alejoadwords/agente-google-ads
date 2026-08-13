@@ -64,14 +64,16 @@ async function getUserId(req) {
 //   · Un lead sin responsable esta libre: cualquiera del equipo lo gestiona.
 //     Sin esto, el dia que se active la regla todos los leads existentes
 //     quedarian bloqueados para el equipo hasta asignarlos uno a uno.
-//   · Con responsable, solo ese responsable o quien lo creo.
+//   · Con responsable, SOLO ese responsable. Quien lo creo no cuenta: si
+//     contara, reasignar no le quitaria el control al creador y reasignar
+//     dejaria de significar traspasar la responsabilidad. Para que "los que yo
+//     creo son mios" siga siendo cierto, un lead que crea un miembro nace
+//     asignado a el — ver el POST.
 function puedeGestionar(lead, actorId, esMiembro) {
   if (!esMiembro) return true;
   if (!lead) return false;
   if (!lead.assigned_to) return true;
-  if (lead.assigned_to === actorId) return true;
-  if (lead.created_by === actorId) return true;
-  return false;
+  return lead.assigned_to === actorId;
 }
 
 function jsonResp(data, status = 200) {
@@ -218,15 +220,16 @@ export default async function handler(req) {
   // Hasta ahora se perdia el primero al resolver el dueño, y sin el no hay
   // forma de saber que leads puede gestionar quien pregunta.
   const actorId = userId;
+  let actorNombre = null;
   // Si esta consulta falla NO se puede seguir: sin ella un miembro operaria
   // sobre su propia cuenta en vez de la del dueño, y devolveriamos datos de
   // otra cuenta como si fueran los suyos. Mejor un error que el tablero de
   // otro. (Un array vacio si es valido: significa que no es miembro.)
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email&limit=1`, { headers: sbHeaders() });
     if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; actorNombre = _tw.member_name || _tw.member_email || null; }
   } catch (e) {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
@@ -602,6 +605,17 @@ export default async function handler(req) {
       custom_fields: custom_fields || {},
       created_by: actorId,
     };
+    // Un lead creado por un miembro nace asignado a el: asi "los que yo creo
+    // son mios" sigue siendo cierto sin que el creador conserve el control tras
+    // una reasignacion. Los del usuario principal nacen sin asignar, para que
+    // pueda repartirlos.
+    if (body.assigned_to) {
+      payload.assigned_to = body.assigned_to;
+      payload.assigned_name = body.assigned_name || null;
+    } else if (esMiembro) {
+      payload.assigned_to = actorId;
+      payload.assigned_name = actorNombre;
+    }
     // El lead cae en el pipeline que pida el cliente o, si no, en el principal
     const pipeline = body.pipeline_id || await pipelinePrincipal(userId, clientId);
     if (pipeline) payload.pipeline_id = pipeline;

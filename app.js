@@ -17280,9 +17280,7 @@ function puedoGestionar(lead) {
   if (!crmSoyMiembro) return true;
   if (!lead) return false;
   if (!lead.assigned_to) return true;              // sin responsable: libre
-  if (lead.assigned_to === crmMiId) return true;
-  if (lead.created_by === crmMiId) return true;
-  return false;
+  return lead.assigned_to === crmMiId;             // reasignar traspasa el control
 }
 
 function motivoSinPermiso(lead) {
