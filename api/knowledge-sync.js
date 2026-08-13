@@ -23,9 +23,25 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const UA = { 'User-Agent': 'Acuarius/1.0 (+https://acuarius.app)' };
 
-// Cuántas fichas se leen por ejecución. Cada una tarda ~2s, así que 40 deja la
-// llamada en torno al minuto y medio: cabe de sobra y no castiga la web ajena.
-const LOTE = 40;
+// Cuántas fichas se leen por ejecución. Cada una tarda ~2s, así que en serie 40
+// serían ~80s y la función se cortaría antes de terminar. Se leen de 5 en 5:
+// ~16s por lote, dentro del límite y sin castigar la web ajena.
+const LOTE = 30;
+const A_LA_VEZ = 5;
+
+// Ejecuta las tareas de A_LA_VEZ en A_LA_VEZ conservando el orden del resultado.
+async function enTandas(items, fn) {
+  const salida = new Array(items.length);
+  let i = 0;
+  async function obrero() {
+    while (i < items.length) {
+      const mio = i++;
+      salida[mio] = await fn(items[mio], mio);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(A_LA_VEZ, items.length) }, obrero));
+  return salida;
+}
 
 // ── Deteccion automatica del sitio ──────────────────────────────────────────
 // El conector no puede estar atado a como llama Certain a sus campos: otra
@@ -285,10 +301,13 @@ async function manejar(req) {
       return (p[tax] || []).map(id => mapas[tax].get(id)).filter(Boolean)[0] || null;
     };
 
+    // Los precios, en paralelo: es lo único lento de todo el proceso
+    const precios = await enTandas(props, (p) => precioDeFicha(p.link));
+
     const filas = [];
-    for (const p of props) {
+    props.forEach((p, idx) => {
       const codigo = String((p.title?.rendered || '')).replace(/<[^>]*>/g, '').trim();
-      if (!codigo) continue;
+      if (!codigo) return;
       filas.push({
         user_id: userId, client_id: clientId, codigo,
         operacion: uno('operacion', p),
@@ -298,12 +317,12 @@ async function manejar(req) {
         habitaciones: num(uno('habitaciones', p)),
         banos: num(uno('banos', p)),
         estrato: num(uno('estrato', p)),
-        precio: await precioDeFicha(p.link),
+        precio: precios[idx] || null,
         url: p.link,
         modificado: p.modified ? new Date(p.modified).toISOString() : null,
         visto_en: new Date().toISOString(),
       });
-    }
+    });
 
     if (filas.length) {
       const up = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?on_conflict=user_id,client_id,codigo`, {

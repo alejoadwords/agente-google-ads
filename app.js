@@ -19085,7 +19085,7 @@ async function kbSincronizar() {
   _kbSincronizando = true;
   const box = document.getElementById('src-kb');
   try {
-    for (let i = 0; i < 30; i++) {   // tope: 30 lotes de 40 = 1.200 propiedades
+    for (let i = 0; i < 60; i++) {   // tope: 60 lotes de 30 = 1.800 propiedades
       if (box) box.innerHTML = '<div style="color:var(--muted)">Sincronizando… lote ' + (i + 1) +
         '. Puedes seguir trabajando; esto continúa en segundo plano.</div>';
       const r = await fetchAuth('/api/knowledge-sync?client_id=' + encodeURIComponent(cliente), { method: 'POST' });
