@@ -298,6 +298,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
 
   await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
     method: 'POST', headers: sb(),
+    // OJO: se guarda la respuesta EN BRUTO, con sus bloques ocultos. No es
+    // descuido: el motor relee esos bloques del historial para acumular lo
+    // capturado y lo calificado entre mensajes. Limpiar aquí haría que la
+    // conversación se quedara 'pendiente' para siempre. Se limpia al MOSTRAR,
+    // en el inbox.
     body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: reply }),
   });
 

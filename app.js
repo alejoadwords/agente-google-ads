@@ -19311,7 +19311,7 @@ async function inboxOpenConv(convId) {
     <div class="crm-inbox-messages" id="inbox-msgs">
       ${messages.map(m => `
         <div class="crm-inbox-bubble-wrap ${m.role}">
-          <div class="crm-inbox-bubble ${m.role}">${esc(m.content.replace(/\[CAPTURA:.*?\]/gs, '').replace(/\[ESCALAR\]/g, '').trim())}</div>
+          <div class="crm-inbox-bubble ${m.role}">${esc(inboxLimpiar(m.content))}</div>
           <div class="crm-inbox-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
         </div>`).join('')}
     </div>
@@ -19417,6 +19417,20 @@ async function inboxToPipelineConfirm(convId) {
     showToast('No se pudo crear el lead', 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Crear lead'; }
   }
+}
+
+// Los bloques ocultos se guardan en bruto a propósito: el motor los relee del
+// historial para acumular lo capturado y lo calificado entre mensajes. Por eso
+// hay que limpiarlos AQUÍ, al mostrar. Debe ir en paralelo con cleanForUser()
+// de api/_inbox-engine.js: si allí se añade un bloque nuevo, aquí también.
+function inboxLimpiar(txt) {
+  return String(txt || '')
+    .replace(/\[CAPTURA:.*?\]/gs, '')
+    .replace(/\[CALIFICACION:.*?\]/gs, '')
+    .replace(/\[ESCALAR\]/g, '')
+    // Si la respuesta se cortó a mitad de un bloque, fuera igual
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR)\b[\s\S]*$/, '')
+    .trim();
 }
 
 async function inboxSendManual(convId) {
