@@ -19170,12 +19170,38 @@ async function canCambiarCliente(id, clientId) {
 async function canDesconectar(id) {
   const c = canConexiones.find(x => x.id === id);
   if (!c) return;
-  if (!confirm('¿Desconectar «' + (c.channel_name || canNombreCanal(c.channel)) + '»?\n\nDejarán de entrar mensajes nuevos por este canal. Las conversaciones que ya tienes se conservan.')) return;
+  const nombre = c.channel_name || canNombreCanal(c.channel);
+  if (!confirm('¿Desconectar «' + nombre + '»?\n\nDejarán de entrar mensajes nuevos por este canal.')) return;
   try {
-    await fetchAuth('/api/channel-connections?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    let r = await fetchAuth('/api/channel-connections?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    let d = await leerRespuesta(r);
+
+    // El canal tiene historial: se pregunta en vez de fallar en silencio
+    if (r.status === 409 && d.requiere_purga) {
+      const n = d.conversaciones || 0;
+      const borrar = confirm('«' + nombre + '» tiene ' + n + (n === 1 ? ' conversación' : ' conversaciones') +
+        '.\n\nAceptar: borra el canal Y esas conversaciones, sin vuelta atrás.\n' +
+        'Cancelar: el canal se desactiva y deja de recibir mensajes, pero conservas el historial.');
+      if (borrar) {
+        r = await fetchAuth('/api/channel-connections?purga=1&id=' + encodeURIComponent(id), { method: 'DELETE' });
+        d = await leerRespuesta(r);
+      } else {
+        r = await fetchAuth('/api/channel-connections', {
+          method: 'PUT', body: JSON.stringify({ id, is_active: false }),
+        });
+        d = await leerRespuesta(r);
+        if (!r.ok) { showToast(d.error || 'No se pudo desactivar', 'error'); return; }
+        await canCargar();
+        showToast('Canal desactivado. Ya no recibe mensajes.', 'success');
+        return;
+      }
+    }
+    if (!r.ok) { showToast(d.error || ('No se pudo desconectar (' + r.status + ')'), 'error'); return; }
     await canCargar();
-    showToast('Canal desconectado', 'success');
-  } catch (e) { showToast('No se pudo desconectar', 'error'); }
+    showToast(d.conversaciones_borradas
+      ? 'Canal y ' + d.conversaciones_borradas + ' conversaciones borrados'
+      : 'Canal desconectado', 'success');
+  } catch (e) { showToast('No se pudo desconectar: ' + (e?.message || 'error'), 'error'); }
 }
 
 async function agDisconnectChannel(connId, agentId) {

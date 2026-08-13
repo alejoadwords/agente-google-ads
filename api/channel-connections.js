@@ -271,11 +271,52 @@ export default async function handler(req) {
   if (req.method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
-    await fetch(
-      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${id}&user_id=eq.${userId}`,
+    // ?purga=1 borra tambien las conversaciones del canal. Sin eso, un canal con
+    // historial NO se borra: las conversaciones dependen de el.
+    const purgar = url.searchParams.get('purga') === '1';
+
+    const mio = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (!mio?.length) return jsonResp({ error: 'Canal no encontrado' }, 404);
+
+    const convs = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_conversations?connection_id=eq.${encodeURIComponent(id)}&select=id`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+    if (convs.length && !purgar) {
+      // Se dice y se deja decidir, en vez de fallar en silencio como hasta ahora
+      return jsonResp({
+        error: 'Este canal tiene ' + convs.length + (convs.length === 1 ? ' conversación' : ' conversaciones') +
+          '. Bórralas también o desactiva el canal para que deje de recibir mensajes sin perder el historial.',
+        conversaciones: convs.length, requiere_purga: true,
+      }, 409);
+    }
+
+    if (purgar && convs.length) {
+      const ids = convs.map(c => c.id);
+      for (let i = 0; i < ids.length; i += 50) {
+        const lote = ids.slice(i, i + 50).join(',');
+        await fetch(`${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=in.(${lote})`,
+          { method: 'DELETE', headers: sb() });
+        await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=in.(${lote})`,
+          { method: 'DELETE', headers: sb() });
+      }
+    }
+
+    const del = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}`,
       { method: 'DELETE', headers: sb() }
     );
-    return jsonResp({ ok: true });
+    if (!del.ok) {
+      // Antes se devolvia {ok:true} pasara lo que pasara: la app decia
+      // 'desconectado' y el canal seguia ahi.
+      const det = await del.text().catch(() => '');
+      return jsonResp({ error: 'La base de datos rechazó el borrado: ' + det.slice(0, 300) }, 500);
+    }
+    return jsonResp({ ok: true, conversaciones_borradas: purgar ? convs.length : 0 });
   }
 
   return jsonResp({ error: 'Método no permitido' }, 405);
