@@ -1935,6 +1935,17 @@ textarea.seop-input{resize:vertical;min-height:70px}
 /* Dos contenedores con scroll anidados —la caja y el cuerpo— hacían que el
    contenido se cortara y el pie se montara encima: no se podía llegar a la
    sección de Calificación. Ahora scroll SOLO en el cuerpo, con el pie fijo. */
+/* Los <select> salían con el estilo nativo del sistema: fondo gris, flecha de
+   macOS y tipografía ajena. Se les da la misma piel que a los <input>, con una
+   flecha propia. Se aplica a los del diseño, no a los del navegador. */
+select.auto-input,select.crm-select,.can-select,.pipe-fila select{
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238C90A8' stroke-width='3' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 10px center;
+  padding-right:30px;cursor:pointer}
+select.auto-input:hover,.can-select:hover{border-color:var(--blue-md)}
+select.auto-input:focus{outline:none;border-color:var(--blue-md)}
+select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .ag-pasos{display:flex;gap:6px;padding:12px 20px 0;flex-shrink:0}
 .ag-pasos button{flex:1;background:none;border:none;padding:0 0 8px;font-family:inherit;font-size:10.5px;font-weight:700;
   color:var(--muted2);cursor:pointer;border-bottom:2.5px solid var(--border);text-align:left;transition:.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

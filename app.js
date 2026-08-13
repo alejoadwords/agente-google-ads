@@ -25780,11 +25780,22 @@ async function crmEnsureLoaded() {
 // Con un cliente de agencia activo el CRM pide ?client_id=X, así que una cuenta
 // con leads propios ve un pipeline vacío sin explicación. El aviso sólo aparece
 // cuando hay leads en otro alcance — si la cuenta está de verdad vacía, no.
+let _avisoAlcanceEnVuelo = false;
+
 async function crmAvisoAlcance() {
   const ID = 'crm-aviso-alcance';
-  document.getElementById(ID)?.remove();
+  // Quitar TODOS: getElementById solo devuelve el primero, así que si alguna vez
+  // se colaron dos, el segundo se quedaba para siempre.
+  document.querySelectorAll('#' + ID).forEach(el => el.remove());
+  // Dos llamadas a la vez comprobaban las dos que no existía y las dos lo
+  // creaban. De ahí el aviso duplicado.
+  if (_avisoAlcanceEnVuelo) return;
   const activo = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
   if (!activo || !crmLeadsLoaded || crmLeads.length) return;
+  // Es un aviso sobre el TABLERO: en el inbox o en los informes no pinta nada.
+  if (typeof crmView !== 'undefined' && crmView !== 'kanban' && crmView !== 'list') return;
+  _avisoAlcanceEnVuelo = true;
+  try {
   let otros = 0;
   try {
     const res = await fetchAuth('/api/leads'); // sin client_id = toda la cuenta
@@ -25806,6 +25817,7 @@ async function crmAvisoAlcance() {
     'Tu cuenta tiene ' + otros + (otros === 1 ? ' lead' : ' leads') + ' en otro alcance.</span>' +
     '<button class="btn-sec sm" onclick="crmVerTodosLosLeads()">Ver todos mis leads</button>';
   kanban.parentElement.insertBefore(el, kanban);
+  } finally { _avisoAlcanceEnVuelo = false; }
 }
 
 // Igual que hdrClientPick(null) pero sin sacar al usuario del CRM
