@@ -18951,7 +18951,13 @@ function canHtmlCatalogo() {
       '<div class="can-card-desc">' + esc(c.desc) + '</div>' +
       '<button class="btn-sec sm" style="width:100%" onclick="canConectar(\'' + c.key + '\')">+ Conectar</button>' +
     '</div>';
-  }).join('') + '</div>';
+  }).join('') + '</div>' +
+  '<div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)">' +
+    '<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:9px">' +
+      '¿Quieres ver cómo funciona sin conectar nada todavía? Un canal de prueba te deja ' +
+      'simular mensajes entrantes y recorrer el circuito entero: inbox, respuesta manual y entrada al CRM.</div>' +
+    '<button class="btn-sec sm" onclick="canCrearPrueba()">+ Crear canal de prueba</button>' +
+  '</div>';
 }
 
 function canHtmlMios() {
@@ -18967,6 +18973,7 @@ function canHtmlMios() {
       '<div style="flex:1;min-width:0">' +
         '<div class="can-fila-nombre">' + esc(c.channel_name || canNombreCanal(c.channel)) + '</div>' +
         '<div class="can-fila-sub">' + esc(canNombreCanal(c.channel)) +
+          (canEsPrueba(c) ? ' · <strong style="color:var(--blue)">prueba</strong>' : '') +
           (c.is_active ? '' : ' · pausado') + '</div>' +
       '</div>' +
       '<select class="can-select" onchange="canCambiarQuien(\'' + esc(c.id) + '\', this.value)">' +
@@ -18982,6 +18989,9 @@ function canHtmlMios() {
         clientes.map(cl => '<option value="' + esc(cl.id) + '"' + (c.client_id === cl.id ? ' selected' : '') + '>' +
           esc(cl.client_name || cl.name || cl.id) + '</option>').join('') +
       '</select>' +
+      (canEsPrueba(c)
+        ? '<button class="btn-sec sm" onclick="canSimular(\'' + esc(c.id) + '\')">Simular mensaje</button>'
+        : '') +
       '<button class="pipe-borrar" title="Desconectar" onclick="canDesconectar(\'' + esc(c.id) + '\')">' + ICONO_PAPELERA + '</button>' +
     '</div>'
   ).join('') +
@@ -19027,6 +19037,58 @@ async function canCambiarQuien(id, agentId) {
     if (c) c.agent_id = agentId || null;
     showToast(agentId ? 'Ahora lo atiende el agente' : 'Ahora lo atiende tu equipo, desde el inbox', 'success');
   } catch (e) { showToast('No se pudo cambiar quién atiende el canal', 'error'); await canCargar(); }
+}
+
+// Un canal de prueba se reconoce por su identificador: 'sim_...' no lo puede
+// producir Meta nunca, así que no colisiona con uno real.
+function canEsPrueba(c) {
+  return String(c.external_id || '').startsWith('sim_');
+}
+
+async function canCrearPrueba() {
+  const cliente = crmAmbitoCliente();
+  if (!cliente) {
+    showToast('Activa el cliente al que quieres asociarlo antes de crear el canal de prueba', 'error');
+    return;
+  }
+  try {
+    const r = await fetchAuth('/api/channel-connections', {
+      method: 'POST',
+      body: JSON.stringify({
+        channel: 'whatsapp',
+        external_id: 'sim_' + Math.random().toString(36).slice(2, 10),
+        channel_name: 'Canal de prueba',
+        client_id: cliente,
+        agent_id: null,          // lo atiende el equipo, a mano
+      }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo crear', 'error'); return; }
+    canTab = 'mios';
+    await canCargar();
+    showToast('Canal de prueba creado. Simula un mensaje para verlo entrar.', 'success');
+  } catch { showToast('No se pudo crear el canal de prueba', 'error'); }
+}
+
+async function canSimular(id) {
+  const texto = prompt('¿Qué escribe el cliente?', 'Hola, vi un apartamento y quiero información');
+  if (texto === null || !texto.trim()) return;
+  const nombre = prompt('¿Cómo se llama?', 'Cliente de prueba');
+  if (nombre === null) return;
+  try {
+    const r = await fetchAuth('/api/inbox-simular', {
+      method: 'POST',
+      body: JSON.stringify({ connection_id: id, text: texto.trim(), contact_name: nombre.trim() || 'Contacto de prueba' }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo simular', 'error'); return; }
+    // El motor dice por qué si no entró: mejor eso que un "listo" que no es cierto
+    const res = d.resultado || {};
+    if (res.ok === false) { showToast('El mensaje no entró: ' + (res.reason || 'sin motivo'), 'error'); return; }
+    document.getElementById('can-overlay')?.remove();
+    showToast('Mensaje recibido. Ábrelo en Conversaciones.', 'success');
+    if (typeof crmLoadInbox === 'function') crmLoadInbox().catch(() => {});
+  } catch { showToast('No se pudo simular el mensaje', 'error'); }
 }
 
 async function canCambiarCliente(id, clientId) {
