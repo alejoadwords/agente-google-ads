@@ -25,6 +25,11 @@ export const DEFAULT_REGLA = {
   minimo: 0,          // cuántos criterios debe cumplir; 0 = todos
   al_calificar: { escalar: true, etapa: 'calificado', etiqueta: 'calificado' },
   al_descartar: { etiqueta: 'no-calificado' },
+  // Enrutado: el agente averigua QUÉ busca la persona y esta tabla lo traduce a
+  // un proceso de venta y, si se quiere, a un comercial. El modelo solo reporta
+  // la clave; la traducción vive aquí, donde se puede auditar y cambiar sin
+  // tocar un prompt.
+  enrutado: { activo: false, pregunta: '', rutas: [] },
 };
 
 function sb() {
@@ -64,6 +69,26 @@ export function normalizarRegla(raw) {
     al_descartar: {
       etiqueta: limpiarTexto(ad.etiqueta, 30).toLowerCase() || 'no-calificado',
     },
+    enrutado: normalizarEnrutado(r.enrutado),
+  };
+}
+
+function normalizarEnrutado(raw) {
+  const e = raw && typeof raw === 'object' ? raw : {};
+  const rutas = (Array.isArray(e.rutas) ? e.rutas : [])
+    .map(r => ({
+      clave: limpiarTexto(r?.clave, 30).toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+      etiqueta: limpiarTexto(r?.etiqueta, 40),
+      pipeline_id: limpiarTexto(r?.pipeline_id, 60) || null,
+      asignar_a: limpiarTexto(r?.asignar_a, 60) || null,
+      asignar_nombre: limpiarTexto(r?.asignar_nombre, 60) || null,
+    }))
+    .filter(r => r.clave && r.pipeline_id)
+    .slice(0, 10);
+  return {
+    activo: !!e.activo && rutas.length > 0,
+    pregunta: limpiarTexto(e.pregunta, 200),
+    rutas,
   };
 }
 
@@ -113,10 +138,21 @@ export function bloqueDePrompt(regla) {
     .map(c => `"${c.clave}": {"valor": "lo que te dijo", "cumple": true|false}`)
     .join(', ');
 
+  const enr = regla.enrutado?.activo ? regla.enrutado : null;
+  const bloqueRuta = enr
+    ? `
+
+TAMBIÉN NECESITAS SABER QUÉ BUSCA LA PERSONA:
+${enr.pregunta || 'Averigua cuál de estas opciones encaja con lo que quiere.'}
+Opciones (usa EXACTAMENTE una de estas claves): ${enr.rutas.map(r => r.clave).join(', ')}
+Si todavía no está claro, no la inventes: omite el campo y sigue conversando.`
+    : '';
+  const campoRuta = enr ? ', "_ruta": "una de las claves de arriba"' : '';
+
   return `
 
 LO QUE NECESITAS AVERIGUAR EN ESTA CONVERSACIÓN:
-${lista}
+${lista}${bloqueRuta}
 
 Cómo hacerlo:
 - Una pregunta a la vez, cuando venga a cuento. Nunca sueltes el cuestionario entero de golpe
@@ -125,7 +161,7 @@ Cómo hacerlo:
 - Si ya te dieron el dato antes en la conversación, no lo vuelvas a preguntar
 
 En CADA mensaje tuyo, incluye al final este bloque (invisible para el usuario):
-[CALIFICACION: {${json}}]
+[CALIFICACION: {${json}${campoRuta}}]
 
 Reglas del bloque, importantes:
 - Repite SIEMPRE todos los puntos que ya tengas respondidos, no solo el último. El bloque es la foto completa de lo que sabes hasta ahora
@@ -142,6 +178,14 @@ export function extraerCalificacion(text) {
     const out = {};
     for (const k of Object.keys(raw || {})) {
       const v = raw[k];
+      // El enrutado viaja como cadena suelta; los criterios como {valor,cumple}.
+      // Quedarse solo con los objetos tiraba la ruta sin que nadie se enterara.
+      if (k === '_ruta') {
+        const cadena = v && typeof v === 'object' ? v.valor : v;
+        const limpia = limpiarTexto(cadena, 30).toLowerCase();
+        if (limpia) out._ruta = limpia;
+        continue;
+      }
       if (v && typeof v === 'object') out[k] = { valor: limpiarTexto(v.valor, 200), cumple: !!v.cumple };
     }
     return out;
@@ -215,6 +259,34 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
     if (califica && regla.al_calificar.etapa && lead.stage === 'nuevo') {
       update.stage = regla.al_calificar.etapa;
     }
+
+    // ── Enrutado: a qué proceso de venta y a quién ──────────────────────────
+    let ruta = null;
+    if (califica && regla.enrutado?.activo) {
+      // El modelo debería reportar una cadena, pero a veces imita la forma de
+      // los criterios y manda {valor, cumple}: se aceptan las dos.
+      const bruto = respuestas?._ruta;
+      const clave = String((bruto && typeof bruto === 'object' ? bruto.valor : bruto) ?? '')
+        .trim().toLowerCase();
+      ruta = regla.enrutado.rutas.find(r => r.clave === clave) || null;
+    }
+    if (ruta && ruta.pipeline_id !== lead.pipeline_id) {
+      update.pipeline_id = ruta.pipeline_id;
+      // La etapa TIENE que existir en el proceso destino. Si no, el lead cae en
+      // una etapa fantasma y no se pinta en ninguna columna: estaría creado y
+      // sería invisible, que es la peor forma de fallar.
+      const claves = await fetch(
+        `${SUPABASE_URL}/rest/v1/pipeline_stages?pipeline_id=eq.${encodeURIComponent(ruta.pipeline_id)}&select=key`,
+        { headers: sb() }
+      ).then(r => (r.ok ? r.json() : [])).then(f => new Set((f || []).map(x => x.key))).catch(() => new Set());
+      const deseada = update.stage || lead.stage;
+      update.stage = claves.has(deseada) ? deseada : 'nuevo';
+    }
+    if (ruta && ruta.asignar_a) {
+      update.assigned_to = ruta.asignar_a;
+      update.assigned_name = ruta.asignar_nombre || null;
+    }
+
     await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`, {
       method: 'PATCH', headers: sb(), body: JSON.stringify(update),
     });
@@ -226,6 +298,8 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
         content: (califica
           ? `Calificado por el agente de ${canal} (${veredicto.cumplidas} de ${veredicto.total})`
           : `No calificado por el agente de ${canal} (${veredicto.cumplidas} de ${veredicto.total})`)
+          + (ruta ? `\nInterés detectado: ${ruta.etiqueta || ruta.clave}` +
+              (ruta.asignar_nombre ? ` · asignado a ${ruta.asignar_nombre}` : '') : '')
           + '\n' + resumenLegible(regla, respuestas),
         metadata: { sistema: true, calificacion: veredicto.estado, canal },
       }),

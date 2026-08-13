@@ -4269,6 +4269,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div id="cal-config" style="display:none">
           <div id="cal-criterios"></div>
           <button class="btn-sec sm" style="margin-top:8px" onclick="calAddCriterio()">+ Añadir pregunta</button>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="cal-rut-activo" onchange="calRutToggle()" style="width:15px;height:15px;accent-color:var(--blue)">
+              <span style="font-size:12.5px;font-weight:700">Enviar a un proceso de venta según lo que busque</span>
+            </label>
+            <div id="cal-rut-config" style="display:none;margin-top:10px">
+              <label class="auto-label">¿Qué debe averiguar para decidirlo?</label>
+              <input class="auto-input" id="cal-rut-pregunta" placeholder="Ej. Si quiere comprar o arrendar">
+              <div id="cal-rutas" style="margin-top:10px"></div>
+              <button class="btn-sec sm" style="margin-top:8px" onclick="calAddRuta()">+ Añadir opción</button>
+              <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
+                El agente solo reporta cuál de estas opciones encaja; a qué proceso va cada una lo decides tú aquí.
+                Si no lo tiene claro, no la inventa y sigue conversando.</div>
+            </div>
+          </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:14px">
             <span style="flex:1;font-size:12.5px">Califica si cumple al menos</span>
             <select class="auto-input" id="cal-minimo" style="width:150px;padding:6px 8px;font-size:12px"></select>

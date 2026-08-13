@@ -26155,6 +26155,15 @@ async function calLoad(agentId) {
     document.getElementById('cal-tag-ok').value = r.al_calificar?.etiqueta || '';
     document.getElementById('cal-tag-no').value = r.al_descartar?.etiqueta || '';
     calRenderCriterios();
+    const enr = r.enrutado || {};
+    calRutas = (enr.rutas || []).map(x => ({ ...x }));
+    const chkRut = document.getElementById('cal-rut-activo');
+    if (chkRut) chkRut.checked = !!enr.activo;
+    const pregRut = document.getElementById('cal-rut-pregunta');
+    if (pregRut) pregRut.value = enr.pregunta || '';
+    const boxRut = document.getElementById('cal-rut-config');
+    if (boxRut) boxRut.style.display = enr.activo ? 'block' : 'none';
+    calRenderRutas();
     document.getElementById('cal-minimo').value = String(r.minimo || 0);
     if (r.al_calificar?.etapa) document.getElementById('cal-etapa').value = r.al_calificar.etapa;
   } catch { calRenderCriterios(); }
@@ -26202,6 +26211,64 @@ function calRenderCriterios() {
   }
 }
 
+// ── Enrutado por interés ────────────────────────────────────────────────────
+let calRutas = [];
+
+function calRutToggle() {
+  const on = document.getElementById('cal-rut-activo')?.checked;
+  const box = document.getElementById('cal-rut-config');
+  if (box) box.style.display = on ? 'block' : 'none';
+  if (on && !calRutas.length) calAddRuta();
+}
+
+function calRenderRutas() {
+  const box = document.getElementById('cal-rutas');
+  if (!box) return;
+  const pipes = (typeof crmPipelines !== 'undefined' ? crmPipelines : []);
+  const equipo = (typeof crmTeam !== 'undefined' ? crmTeam : []).filter(m => m.status === 'active');
+  box.innerHTML = calRutas.map((r, i) =>
+    '<div class="auto-step" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
+      '<input class="auto-input" style="flex:2;min-width:120px" placeholder="Ej. Arriendo" value="' + esc(r.etiqueta || '') + '" ' +
+        'oninput="calSetRuta(' + i + ',\'etiqueta\',this.value)">' +
+      '<select class="auto-input" style="flex:2;min-width:130px" onchange="calSetRuta(' + i + ',\'pipeline_id\',this.value)">' +
+        '<option value="">¿A qué proceso?</option>' +
+        pipes.map(p => '<option value="' + esc(p.id) + '"' + (r.pipeline_id === p.id ? ' selected' : '') + '>' +
+          esc(p.name) + '</option>').join('') +
+      '</select>' +
+      '<select class="auto-input" style="flex:2;min-width:130px" onchange="calSetRuta(' + i + ',\'asignar_a\',this.value)">' +
+        '<option value="">Reparto automático</option>' +
+        equipo.map(m => '<option value="' + esc(m.member_user_id) + '"' + (r.asignar_a === m.member_user_id ? ' selected' : '') + '>' +
+          esc(m.member_name || m.member_email) + '</option>').join('') +
+      '</select>' +
+      '<button class="auto-step-mini" title="Quitar" onclick="calRemoveRuta(' + i + ')">🗑</button>' +
+    '</div>'
+  ).join('');
+}
+
+function calSetRuta(i, campo, val) {
+  if (!calRutas[i]) return;
+  calRutas[i][campo] = val;
+  // La clave que verá el modelo se deriva del nombre visible, una sola vez al
+  // guardar: así renombrar la opción no rompe las conversaciones en curso.
+  if (campo === 'asignar_a') {
+    const m = (typeof crmTeam !== 'undefined' ? crmTeam : []).find(x => x.member_user_id === val);
+    calRutas[i].asignar_nombre = m ? (m.member_name || m.member_email) : null;
+  }
+}
+
+function calAddRuta() {
+  if (calRutas.length >= 10) { showToast('Diez opciones ya son demasiadas para decidir bien', 'error'); return; }
+  calRutas.push({ etiqueta: '', pipeline_id: '', asignar_a: '', asignar_nombre: null });
+  calRenderRutas();
+}
+
+function calRemoveRuta(i) { calRutas.splice(i, 1); calRenderRutas(); }
+
+function calClaveDe(txt) {
+  return String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+}
+
 function calAddCriterio() {
   if (calCriterios.length >= 8) { showToast('Ocho preguntas ya son un interrogatorio, no una conversación', 'error'); return; }
   calCriterios.push({ clave: 'criterio_' + (calCriterios.length + 1), pregunta: '', condicion: '' });
@@ -26227,6 +26294,13 @@ async function calSave(agentId) {
       etiqueta: document.getElementById('cal-tag-ok').value.trim() || 'calificado',
     },
     al_descartar: { etiqueta: document.getElementById('cal-tag-no').value.trim() || 'no-calificado' },
+    enrutado: {
+      activo: !!document.getElementById('cal-rut-activo')?.checked,
+      pregunta: document.getElementById('cal-rut-pregunta')?.value.trim() || '',
+      rutas: calRutas
+        .filter(r => (r.etiqueta || '').trim() && r.pipeline_id)
+        .map(r => ({ ...r, clave: calClaveDe(r.etiqueta) })),
+    },
   };
   try {
     await fetchAuth('/api/qualify-rules?agent_id=' + encodeURIComponent(agentId), {
