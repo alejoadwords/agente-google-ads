@@ -35,8 +35,11 @@ function volver(res, params) {
 export default async function handler(req, res) {
   const { code, state, error, error_description } = req.query;
 
-  let userId = '', agentId = '';
-  try { const s = JSON.parse(state || '{}'); userId = s.userId || ''; agentId = s.agentId || ''; } catch {}
+  let userId = '', agentId = '', clientId = '';
+  try {
+    const s = JSON.parse(state || '{}');
+    userId = s.userId || ''; agentId = s.agentId || ''; clientId = s.clientId || '';
+  } catch {}
 
   if (error) return volver(res, { wa_error: error_description || error });
   if (!code) return volver(res, { wa_error: 'Meta no devolvió el código de autorización' });
@@ -124,6 +127,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               user_id: userId,
               agent_id: agentId || null,   // sin agente = lo atiende el equipo
+              client_id: clientId || null, // de qué cliente son estas conversaciones
               channel: 'whatsapp',
               external_id: String(n.id),
               access_token: token,

@@ -18645,7 +18645,8 @@ async function waConnectSave() {
     btn.textContent = 'Conectando...';
     const res = await fetchAuth('/api/channel-connections', {
       method: 'POST',
-      body: JSON.stringify({ agent_id: _waConnectAgentId, channel: 'whatsapp', external_id: phoneNumberId, access_token: token, channel_name: name }),
+      body: JSON.stringify({ agent_id: _waConnectAgentId, client_id: _canClienteAlConectar || null,
+        channel: 'whatsapp', external_id: phoneNumberId, access_token: token, channel_name: name }),
     });
     if (!res.ok) { showErr('Error guardando la conexión. Verifica los datos e intenta de nuevo.'); return; }
     waConnectClose();
@@ -18699,7 +18700,8 @@ async function agConnectChannel(channel, agentId) {
 
     const r = await fetchAuth('/api/channel-connections?action=connect_page', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_id: agentId, channel: channel, page_id: pages[idx].id }),
+      body: JSON.stringify({ agent_id: agentId, client_id: _canClienteAlConectar || null,
+        channel: channel, page_id: pages[idx].id }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { showToast(d.error || 'No se pudo conectar', 'error'); return; }
@@ -18791,6 +18793,7 @@ function waConectarConMeta(agentId) {
   waEstado('Llevándote a Facebook…');
   const p = new URLSearchParams({ userId: uid });
   if (agentId) p.set('agentId', agentId);
+  if (_canClienteAlConectar) p.set('clientId', _canClienteAlConectar);
   window.location.href = '/api/whatsapp-auth?' + p.toString();
 }
 
@@ -18868,6 +18871,7 @@ const CANAL_COLOR = { whatsapp: '#25D366', messenger: '#0084FF', instagram: '#E1
 
 let canConexiones = [];
 let canTab = 'catalogo';
+let _canClienteAlConectar = null;   // cliente propuesto al conectar un canal
 
 function canNombreCanal(k) {
   const c = CANALES_CATALOGO.find(x => x.key === k);
@@ -18956,6 +18960,7 @@ function canHtmlMios() {
       'Todavía no hay canales conectados. Ve al catálogo y conecta el primero.</div>';
   }
   const agentes = (typeof crmAgents !== 'undefined' ? crmAgents : []);
+  const clientes = (typeof agencyClients !== 'undefined' ? agencyClients : []);
   return canConexiones.map(c =>
     '<div class="can-fila">' +
       '<span class="can-punto" style="background:' + (CANAL_COLOR[c.channel] || 'var(--muted)') + '"></span>' +
@@ -18969,12 +18974,25 @@ function canHtmlMios() {
         agentes.map(a => '<option value="' + esc(a.id) + '"' + (c.agent_id === a.id ? ' selected' : '') + '>' +
           esc(a.name) + '</option>').join('') +
       '</select>' +
+      // De qué cliente son las conversaciones de este canal. Sin esto, sus
+      // leads nacen sin cliente y no aparecen en el tablero de nadie.
+      '<select class="can-select" title="Cliente al que pertenecen estas conversaciones" ' +
+        'onchange="canCambiarCliente(\'' + esc(c.id) + '\', this.value)">' +
+        '<option value=""' + (!c.client_id ? ' selected' : '') + '>Sin cliente</option>' +
+        clientes.map(cl => '<option value="' + esc(cl.id) + '"' + (c.client_id === cl.id ? ' selected' : '') + '>' +
+          esc(cl.client_name || cl.name || cl.id) + '</option>').join('') +
+      '</select>' +
       '<button class="pipe-borrar" title="Desconectar" onclick="canDesconectar(\'' + esc(c.id) + '\')">' + ICONO_PAPELERA + '</button>' +
     '</div>'
   ).join('') +
   '<div style="font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5">' +
     'Con un agente, contesta solo y te pasa la conversación cuando la califica. ' +
-    'Con «Mi equipo», los mensajes llegan al inbox y responde una persona desde el primer momento.</div>';
+    'Con «Mi equipo», los mensajes llegan al inbox y responde una persona desde el primer momento.</div>' +
+  (canConexiones.some(c => !c.client_id) && clientes.length
+    ? '<div style="margin-top:10px;padding:9px 11px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:9px;' +
+      'font-size:11.5px;color:#92400E;line-height:1.5">Los canales sin cliente crean leads que no aparecen en el ' +
+      'tablero de ningún cliente. Asígnales uno.</div>'
+    : '');
 }
 
 // Al conectar se elige primero quién lo atiende: es la decisión que cambia todo
@@ -18992,6 +19010,9 @@ async function canConectar(channel) {
     if (i > 0 && agentes[i - 1]) agentId = agentes[i - 1].id;
   }
   document.getElementById('can-overlay')?.remove();
+  // El canal nace con el cliente que tengas activo: es lo que casi siempre se
+  // quiere, y evita que sus leads nazcan huérfanos.
+  _canClienteAlConectar = crmAmbitoCliente() || null;
   await agConnectChannel(channel, agentId);
 }
 
@@ -19006,6 +19027,20 @@ async function canCambiarQuien(id, agentId) {
     if (c) c.agent_id = agentId || null;
     showToast(agentId ? 'Ahora lo atiende el agente' : 'Ahora lo atiende tu equipo, desde el inbox', 'success');
   } catch (e) { showToast('No se pudo cambiar quién atiende el canal', 'error'); await canCargar(); }
+}
+
+async function canCambiarCliente(id, clientId) {
+  try {
+    const r = await fetchAuth('/api/channel-connections', {
+      method: 'PUT', body: JSON.stringify({ id, client_id: clientId || null }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo cambiar', 'error'); await canCargar(); return; }
+    const c = canConexiones.find(x => x.id === id);
+    if (c) c.client_id = clientId || null;
+    canRender();
+    showToast(clientId ? 'Las conversaciones de este canal irán a ese cliente' : 'Canal sin cliente', 'success');
+  } catch { showToast('No se pudo cambiar el cliente del canal', 'error'); await canCargar(); }
 }
 
 async function canDesconectar(id) {
@@ -19150,6 +19185,16 @@ function inboxToPipeline(convId) {
           '<input class="auto-input" id="ipipe-phone" value="' + esc(conv.contact_phone || '') + '" placeholder="Opcional"></div>' +
         '<div class="auto-field"><label class="auto-label">Email</label>' +
           '<input class="auto-input" id="ipipe-email" value="' + esc(conv.contact_email || '') + '" placeholder="Opcional"></div>' +
+        (crmPipelines.length > 1
+          ? '<div class="auto-field"><label class="auto-label">Proceso de venta</label>' +
+              '<select class="auto-input" id="ipipe-pipeline" onchange="inboxPipeEtapas(this.value)">' +
+                crmPipelines.map(function(p){
+                  return '<option value="' + esc(p.id) + '"' + (p.id === crmPipelineId ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+                }).join('') +
+              '</select>' +
+              '<div style="font-size:11px;color:var(--muted);margin-top:3px">La conversación puede empezar por una cosa y acabar en otra: elige dónde entra.</div>' +
+            '</div>'
+          : '') +
         '<div class="auto-field"><label class="auto-label">Etapa</label>' +
           '<select class="auto-input" id="ipipe-stage">' +
             lista.map(function(st){ return '<option value="' + esc(st.key) + '">' + esc(st.label) + '</option>'; }).join('') +
@@ -19164,6 +19209,21 @@ function inboxToPipeline(convId) {
   document.body.appendChild(ov);
 }
 
+// Al cambiar de proceso hay que traer SUS etapas: cada uno tiene las suyas y
+// ofrecer las del anterior mandaría el lead a una etapa que no existe ahí.
+async function inboxPipeEtapas(pipelineId) {
+  const sel = document.getElementById('ipipe-stage');
+  if (!sel) return;
+  sel.disabled = true;
+  try {
+    const r = await fetchAuth('/api/pipeline-stages?pipeline_id=' + encodeURIComponent(pipelineId));
+    const d = await leerRespuesta(r);
+    const etapas = (d.stages || []).filter(st => st.key !== 'ganado' && st.key !== 'perdido');
+    sel.innerHTML = etapas.map(st => '<option value="' + esc(st.key) + '">' + esc(st.label) + '</option>').join('');
+  } catch { /* se quedan las anteriores; el servidor validará */ }
+  sel.disabled = false;
+}
+
 async function inboxToPipelineConfirm(convId) {
   const btn = document.getElementById('ipipe-save');
   if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
@@ -19172,6 +19232,7 @@ async function inboxToPipelineConfirm(convId) {
       method: 'POST',
       body: JSON.stringify({
         conversation_id: convId,
+        pipeline_id: document.getElementById('ipipe-pipeline')?.value || null,
         stage: document.getElementById('ipipe-stage')?.value || 'nuevo',
         name: document.getElementById('ipipe-name')?.value.trim() || null,
         phone: document.getElementById('ipipe-phone')?.value.trim() || null,

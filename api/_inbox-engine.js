@@ -7,7 +7,7 @@
 // El envío al canal lo pone quien llama (cada plataforma tiene su API), así el
 // motor no sabe nada de Graph ni de TikTok.
 
-import { ensureCatalog, enqueueAutomations } from './_lead-intake.js';
+import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
 import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto } from './_qualify.js';
@@ -105,7 +105,7 @@ async function callClaude(systemPrompt, messages) {
 // La regla del canal decide: 'manual' no crea nada (la conversación se queda en
 // el inbox esperando decisión), 'on_contact' crea cuando hay nombre/teléfono/
 // correo, y 'always' crea en cuanto llega el primer mensaje.
-export async function upsertLeadFromConversation(userId, clientId, conv, captureData = {}, policy = null, esperarCalificacion = false) {
+export async function upsertLeadFromConversation(userId, clientId, conv, captureData = {}, policy = null, esperarCalificacion = false, pipelineId = null) {
   const pol = policy || { mode: 'on_contact', stage: 'nuevo', tag: conv.channel };
   const hasContact = !!(captureData.nombre || captureData.celular || captureData.email);
 
@@ -135,6 +135,10 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
     email: captureData.email || conv.contact_email || null,
     stage: pol.stage || 'nuevo',
     stage_position: Date.now(),
+    // Sin pipeline el lead no se pinta en ninguna columna del tablero, que
+    // filtra por pipeline. Se usa el del canal o, si no, el principal de su
+    // cliente.
+    pipeline_id: pipelineId || await pipelinePrincipal(userId, clientId || null),
     source: conv.channel,
     tags: channelTag.length >= 2 ? [channelTag] : [],
     notes: captureData.interes ? `Interés: ${captureData.interes}` : null,
@@ -202,6 +206,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   ).then(r => r.json()).then(r => r?.[0]).catch(() => null) : null;
   const aMano = !agent;
 
+  // El cliente lo manda el CANAL. El del agente queda de respaldo para los
+  // canales conectados antes de que existiera esta columna.
+  const clienteDelCanal = connection.client_id || (agent ? agent.client_id : null) || null;
+
   const policy = await getPolicy(connection.user_id, channel);
   const reglaCal = connection.agent_id
     ? await getRegla(connection.user_id, connection.agent_id)
@@ -234,7 +242,8 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     if (!conv) return { ok: false, reason: 'no se pudo crear la conversación' };
     // Regla "siempre": el lead nace con la conversación, sin esperar datos
     if (policy.mode === 'always') {
-      const leadId = await upsertLeadFromConversation(connection.user_id, agent ? agent.client_id : null, conv, {}, policy, reglaCal.activo).catch(() => null);
+      const leadId = await upsertLeadFromConversation(connection.user_id, clienteDelCanal, conv, {}, policy,
+        reglaCal.activo, connection.pipeline_id || null).catch(() => null);
       if (leadId) conv.lead_id = leadId;
     }
   }
@@ -323,8 +332,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     : policy;
   if (Object.values(newCapture).some(v => v) || veredicto.estado === 'calificado') {
     leadId = await upsertLeadFromConversation(
-      connection.user_id, agent.client_id, conv, newCapture, politicaEfectiva,
-      reglaCal.activo && veredicto.estado !== 'calificado'
+      connection.user_id, clienteDelCanal, conv, newCapture, politicaEfectiva,
+      reglaCal.activo && veredicto.estado !== 'calificado',
+      connection.pipeline_id || null
     ).catch(() => leadId);
   }
 

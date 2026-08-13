@@ -134,7 +134,7 @@ export default async function handler(req) {
   if (req.method === 'POST' && url.searchParams.get('action') === 'to_pipeline') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { conversation_id, stage, name, phone, email } = body || {};
+    const { conversation_id, stage, name, phone, email, pipeline_id } = body || {};
     if (!conversation_id) return jsonResp({ error: 'Falta conversation_id' }, 400);
 
     const conv = await fetch(
@@ -144,6 +144,12 @@ export default async function handler(req) {
     if (!conv) return jsonResp({ error: 'No autorizado' }, 403);
     if (conv.lead_id) return jsonResp({ lead_id: conv.lead_id, ya_estaba: true });
 
+    // El cliente y el pipeline por defecto salen del CANAL; el agente queda de
+    // respaldo para los canales conectados antes de que el canal los guardara.
+    const conexion = conv.connection_id ? await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${conv.connection_id}&select=client_id,pipeline_id`,
+      { headers: sbHeaders() }
+    ).then(r => r.json()).then(r => r?.[0]).catch(() => null) : null;
     const agent = conv.agent_id ? await fetch(
       `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${conv.agent_id}&select=client_id`,
       { headers: sbHeaders() }
@@ -151,10 +157,14 @@ export default async function handler(req) {
 
     const policy = await getPolicy(userId, conv.channel);
     const leadId = await upsertLeadFromConversation(
-      userId, agent?.client_id || null, conv,
+      userId, conexion?.client_id || agent?.client_id || null, conv,
       { nombre: name || conv.contact_name, celular: phone || conv.contact_phone, email: email || conv.contact_email },
       // 'always' porque la decisión ya la tomó una persona
-      { ...policy, mode: 'always', stage: stage || policy.stage }
+      { ...policy, mode: 'always', stage: stage || policy.stage },
+      false,
+      // Manda lo que elija quien atiende: la conversación puede empezar por
+      // compra y acabar en arriendo, y esa decisión es suya, no del canal.
+      pipeline_id || conexion?.pipeline_id || null
     );
     if (!leadId) return jsonResp({ error: 'No se pudo crear el lead' }, 500);
     return jsonResp({ lead_id: leadId }, 201);

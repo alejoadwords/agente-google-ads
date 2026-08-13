@@ -85,7 +85,7 @@ export default async function handler(req) {
   // GET ?all=1 — todas las conexiones del usuario (hub Fuentes de leads)
   if (req.method === 'GET' && url.searchParams.get('all')) {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=id,channel,channel_name,external_id,avatar_url,is_active,agent_id,created_at&order=created_at.desc&limit=50`,
+      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=id,channel,channel_name,external_id,avatar_url,is_active,agent_id,client_id,pipeline_id,created_at&order=created_at.desc&limit=50`,
       { headers: sb() }
     );
     return jsonResp({ connections: (await res.json()) || [] });
@@ -203,6 +203,8 @@ export default async function handler(req) {
 
     const payload = {
       agent_id: agent_id || null, user_id: userId, channel,
+      client_id: body.client_id || null,
+      pipeline_id: body.pipeline_id || null,
       external_id: String(external_id),
       access_token: access_token || null,
       channel_name: channel_name || null,
@@ -251,6 +253,9 @@ export default async function handler(req) {
       cambios.agent_id = body.agent_id || null;
     }
     if (body.is_active !== undefined) cambios.is_active = !!body.is_active;
+    // De qué cliente es el canal y a qué pipeline entran sus oportunidades.
+    if (body.client_id !== undefined) cambios.client_id = body.client_id || null;
+    if (body.pipeline_id !== undefined) cambios.pipeline_id = body.pipeline_id || null;
     if (!Object.keys(cambios).length) return jsonResp({ error: 'Nada que cambiar' }, 400);
 
     const res = await fetch(

@@ -9,19 +9,22 @@
 // petición — es el mismo mecanismo que usa api/meta-auth.js.
 
 export default function handler(req, res) {
-  const clientId = process.env.META_APP_ID;
+  // 'appId' y no 'clientId': clientId aquí es el cliente de Acuarius, y usar el
+  // mismo nombre para el App ID de Meta hacía que uno pisara al otro.
+  const appId    = process.env.META_APP_ID;
   const configId = process.env.META_WA_CONFIG_ID;
-  if (!clientId) return res.status(500).json({ error: 'META_APP_ID no configurado' });
+  if (!appId) return res.status(500).json({ error: 'META_APP_ID no configurado' });
   if (!configId) return res.status(500).json({ error: 'META_WA_CONFIG_ID no configurado' });
 
-  const userId  = req.query.userId  || '';
-  const agentId = req.query.agentId || '';
+  const userId   = req.query.userId   || '';
+  const agentId  = req.query.agentId  || '';
+  const clientId = req.query.clientId || '';
   if (!userId) return res.status(400).json({ error: 'Falta userId' });
 
-  const state = JSON.stringify({ nonce: 'whatsapp_connect', userId, agentId });
+  const state = JSON.stringify({ nonce: 'whatsapp_connect', userId, agentId, clientId });
 
   const p = new URLSearchParams({
-    client_id: clientId,
+    client_id: appId,
     redirect_uri: 'https://app.acuarius.app/api/whatsapp-callback',
     config_id: configId,
     response_type: 'code',
