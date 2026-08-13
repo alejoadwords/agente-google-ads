@@ -211,8 +211,20 @@ export default async function handler(req) {
 
     // Enviar por el canal que corresponda
     if (conn) {
-      if (conv.channel === 'tiktok') await sendTikTokMessage(conn, conv.contact_id, content);
-      else await sendMetaMessage(conn, conv.contact_id, conv.channel, content);
+      const envio = conv.channel === 'tiktok'
+        ? await sendTikTokMessage(conn, conv.contact_id, content)
+        : await sendMetaMessage(conn, conv.contact_id, conv.channel, content);
+      if (envio && envio.ok === false) {
+        // Si no salio, NO puede quedar en el hilo como enviado: se quita el
+        // mensaje guardado y se devuelve el motivo para que se pueda reintentar.
+        const guardado = (await msgRes.json().catch(() => []))?.[0];
+        if (guardado?.id) {
+          await fetch(`${SUPABASE_URL}/rest/v1/chat_messages?id=eq.${guardado.id}`, {
+            method: 'DELETE', headers: sbHeaders(),
+          }).catch(() => {});
+        }
+        return jsonResp({ error: envio.error, no_enviado: true }, 502);
+      }
     }
 
     return jsonResp({ ok: true }, 201);
@@ -221,32 +233,56 @@ export default async function handler(req) {
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
 
+// Devuelve {ok} o {ok:false, error}. Antes lanzaba la peticion y no miraba la
+// respuesta: si Meta rechazaba el mensaje —fuera de la ventana de 24 horas,
+// token vencido, numero no registrado— el comercial veia su mensaje en el hilo
+// como enviado y el cliente no recibia nada. Es el peor fallo silencioso
+// posible en un inbox: crees que respondiste.
 async function sendMetaMessage(conn, contactId, channel, text) {
   try {
-    if (channel === 'whatsapp') {
-      await fetch(`https://graph.facebook.com/v19.0/${conn.external_id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${conn.access_token}` },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: contactId, type: 'text', text: { body: text } }),
-      });
-    } else {
-      await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${conn.access_token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient: { id: contactId }, message: { text } }),
-      });
-    }
-  } catch(e) { console.error('sendMetaMessage', e); }
+    const res = channel === 'whatsapp'
+      ? await fetch(`https://graph.facebook.com/v19.0/${conn.external_id}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${conn.access_token}` },
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: contactId, type: 'text', text: { body: text } }),
+        })
+      : await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${conn.access_token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient: { id: contactId }, message: { text } }),
+        });
+    if (res.ok) return { ok: true };
+    const cuerpo = await res.json().catch(() => ({}));
+    const msg = cuerpo?.error?.message || ('HTTP ' + res.status);
+    const cod = cuerpo?.error?.code;
+    // 131047: fuera de la ventana de 24 horas. Es el caso mas frecuente y el
+    // que mas confunde, asi que se explica en vez de soltar el mensaje de Meta.
+    const amable = (cod === 131047 || /24 hours|re-engagement/i.test(msg))
+      ? 'Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite escribirle libremente: tiene que escribir él primero, o hay que usar una plantilla aprobada.'
+      : msg;
+    return { ok: false, error: amable };
+  } catch (e) {
+    return { ok: false, error: 'No se pudo contactar con WhatsApp: ' + (e?.message || 'error de red') };
+  }
 }
 
 // TikTok Business Messaging: el envío manual desde el inbox usa el mismo
 // endpoint que el webhook cuando el agente contesta solo.
 async function sendTikTokMessage(conn, contactId, text) {
   try {
-    await fetch(process.env.TIKTOK_SEND_URL || 'https://business-api.tiktok.com/open_api/v1.3/business/message/send/', {
+    const res = await fetch(process.env.TIKTOK_SEND_URL || 'https://business-api.tiktok.com/open_api/v1.3/business/message/send/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Access-Token': conn.access_token },
       body: JSON.stringify({ business_id: conn.external_id, to_user_id: contactId, message: { type: 'text', text } }),
     });
-  } catch (e) { console.error('sendTikTokMessage', e); }
+    if (!res.ok) return { ok: false, error: 'TikTok respondió ' + res.status };
+    // TikTok responde 200 con un codigo de error dentro del cuerpo
+    const cuerpo = await res.json().catch(() => ({}));
+    if (cuerpo && cuerpo.code && cuerpo.code !== 0) {
+      return { ok: false, error: cuerpo.message || ('TikTok devolvió el código ' + cuerpo.code) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: 'No se pudo contactar con TikTok: ' + (e?.message || 'error de red') };
+  }
 }

@@ -19616,17 +19616,45 @@ async function inboxSendManual(convId) {
   if (!input) return;
   const content = input.value.trim();
   if (!content) return;
-  input.value = '';
   const btn = input.nextElementSibling;
   if (btn) btn.disabled = true;
+  // El texto NO se borra hasta saber que salio: si WhatsApp lo rechaza, quien
+  // escribio lo pierde y encima cree que se envio.
   try {
-    await fetchAuth('/api/chat-conversations', {
+    const r = await fetchAuth('/api/chat-conversations', {
       method: 'POST',
       body: JSON.stringify({ conversation_id: convId, content }),
     });
+    const d = await leerRespuesta(r);
+    if (!r.ok) {
+      inboxAvisoEnvio(d.error || 'No se pudo enviar el mensaje');
+      return;   // el texto se queda en la caja para reintentar
+    }
+    input.value = '';
+    inboxAvisoEnvio('');
     await inboxOpenConv(convId);
-  } catch(e) { console.error('inboxSendManual', e); }
-  if (btn) btn.disabled = false;
+  } catch (e) {
+    inboxAvisoEnvio('No se pudo enviar: ' + (e?.message || 'error de red'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// El motivo va sobre la caja de texto y se queda: los avisos flotantes se van
+// antes de que alguien lea por que no salio su mensaje.
+function inboxAvisoEnvio(msg) {
+  const ID = 'inbox-aviso-envio';
+  document.getElementById(ID)?.remove();
+  if (!msg) return;
+  const input = document.getElementById('inbox-reply-input');
+  const zona = input?.parentElement;
+  if (!zona || !zona.parentElement) { showToast(String(msg).slice(0, 110), 'error'); return; }
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 0 8px;padding:9px 12px;background:#FEF2F2;border:1px solid #FCA5A5;' +
+    'border-radius:9px;color:#B91C1C;font-size:12px;line-height:1.5';
+  el.textContent = msg;
+  zona.parentElement.insertBefore(el, zona);
 }
 
 async function inboxCycleStatus(convId, current) {
