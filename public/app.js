@@ -18919,6 +18919,184 @@ function waConectarConMetaSDK(agentId) {
   });
 }
 
+// ── Catálogo del cliente (lo que sabe el agente) ────────────────────────────
+// El agente no puede afirmar lo que no tiene delante. Aquí se conecta la web del
+// cliente y se trae su inventario. La detección propone qué es cada campo; el
+// usuario confirma, porque cada web nombra las cosas a su manera.
+let _kbDeteccion = null;
+const KB_ROLES = [
+  { rol: 'operacion',    etiqueta: 'Arriendo o venta', obligatorio: true },
+  { rol: 'tipo',         etiqueta: 'Tipo de inmueble' },
+  { rol: 'ciudad',       etiqueta: 'Ciudad' },
+  { rol: 'barrio',       etiqueta: 'Barrio o zona' },
+  { rol: 'habitaciones', etiqueta: 'Habitaciones' },
+  { rol: 'banos',        etiqueta: 'Baños' },
+  { rol: 'estrato',      etiqueta: 'Estrato' },
+];
+
+async function kbEstado() {
+  const box = document.getElementById('src-kb');
+  if (!box) return;
+  const cliente = crmAmbitoCliente();
+  if (!cliente) {
+    box.innerHTML = 'El catálogo es de cada cliente. Activa uno arriba para conectarlo.';
+    return;
+  }
+  try {
+    const r = await fetchAuth('/api/knowledge-sync?client_id=' + encodeURIComponent(cliente));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { box.textContent = d.error || 'No se pudo consultar'; return; }
+    if (!d.fuente) {
+      box.innerHTML = 'Sin catálogo conectado. Tu agente solo sabe lo que escribiste en su contexto, ' +
+        'así que ante un precio o una disponibilidad concreta derivará a un asesor.<br>' +
+        '<span style="color:var(--muted2)">Conecta la web del cliente y podrá responder con lo que existe de verdad.</span>';
+      return;
+    }
+    const f = d.fuente;
+    const cuando = f.ultimo_sync ? new Date(f.ultimo_sync).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : 'nunca';
+    const malo = f.ultimo_estado === 'error';
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:200px">' +
+          '<div style="color:var(--text);font-weight:700">' + esc(f.base_url) + '</div>' +
+          '<div style="margin-top:3px">' + d.propiedades + ' propiedades · última sincronización: ' + esc(cuando) +
+          (f.ultimo_estado === 'en_curso' ? ' · <strong>en curso</strong>' : '') + '</div>' +
+        '</div>' +
+        '<button class="btn-sec sm" onclick="kbSincronizar()">Sincronizar ahora</button>' +
+      '</div>' +
+      (malo ? '<div style="margin-top:10px;padding:9px 11px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:9px;color:#B91C1C;line-height:1.5">' +
+        'La última sincronización falló: ' + esc(f.ultimo_error || 'sin detalle') + '</div>' : '') +
+      (d.propiedades === 0 ? '<div style="margin-top:8px;color:var(--muted2)">Todavía no hay propiedades guardadas. Pulsa «Sincronizar ahora».</div>' : '');
+  } catch { box.textContent = 'No se pudo consultar el catálogo'; }
+}
+
+function kbAbrir() {
+  const cliente = crmAmbitoCliente();
+  if (!cliente) { showToast('Activa primero el cliente al que pertenece el catálogo', 'error'); return; }
+  _kbDeteccion = null;
+  document.getElementById('kb-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'kb-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:600px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Conectar catálogo</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">La web del cliente, para que el agente responda con lo que existe</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<label class="auto-label">Dirección de la web</label>' +
+      '<div style="display:flex;gap:8px">' +
+        '<input class="auto-input" id="kb-url" placeholder="https://susitio.com" style="flex:1" ' +
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();kbDetectar()}">' +
+        '<button class="btn-sec sm" id="kb-btn-det" onclick="kbDetectar()">Detectar</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:5px">Solo el dominio, sin rutas. Por ahora funciona con sitios hechos en WordPress.</div>' +
+      '<div id="kb-res" style="margin-top:16px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="kb-btn-guardar" style="display:none" onclick="kbGuardar()">Guardar y sincronizar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('kb-url')?.focus(), 80);
+}
+
+async function kbDetectar() {
+  const url = String(document.getElementById('kb-url')?.value || '').trim();
+  const res = document.getElementById('kb-res');
+  const btn = document.getElementById('kb-btn-det');
+  if (!url) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Mirando…'; }
+  res.innerHTML = '<div style="color:var(--muted);font-size:12.5px">Revisando la web… puede tardar unos segundos.</div>';
+  try {
+    const r = await fetchAuth('/api/knowledge-sync?action=detectar&client_id=' +
+      encodeURIComponent(crmAmbitoCliente()) + '&base_url=' + encodeURIComponent(url));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { res.innerHTML = '<div style="color:#B91C1C;font-size:12.5px;line-height:1.5">' + esc(d.error || 'No se pudo leer esa web') + '</div>'; return; }
+    _kbDeteccion = d;
+    kbRenderMapeo();
+    document.getElementById('kb-btn-guardar').style.display = '';
+  } catch (e) {
+    res.innerHTML = '<div style="color:#B91C1C;font-size:12.5px">No se pudo consultar la web</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Detectar'; }
+  }
+}
+
+function kbRenderMapeo() {
+  const res = document.getElementById('kb-res');
+  if (!res || !_kbDeteccion) return;
+  const campos = _kbDeteccion.campos || [];
+  const opciones = (rolActual) => '<option value="">— ninguno —</option>' +
+    campos.map(c => '<option value="' + esc(c.clave) + '"' + (c.rol === rolActual ? ' selected' : '') + '>' +
+      esc(c.etiqueta) + (c.ejemplos?.length ? ' (' + esc(c.ejemplos.slice(0, 2).join(', ')) + ')' : '') + '</option>').join('');
+  res.innerHTML =
+    '<div style="padding:10px 12px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:10px;font-size:12.5px;color:var(--text);line-height:1.5">' +
+      'Encontré <strong>' + _kbDeteccion.total + '</strong> registros en «' + esc(_kbDeteccion.nombre_tipo || _kbDeteccion.post_type) + '».<br>' +
+      'Comprueba que cada cosa esté bien identificada y corrige lo que haga falta.</div>' +
+    '<div style="margin-top:12px">' +
+      KB_ROLES.map(r =>
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+          '<div style="width:150px;font-size:12.5px;font-weight:600">' + esc(r.etiqueta) +
+            (r.obligatorio ? ' <span style="color:#B91C1C">*</span>' : '') + '</div>' +
+          '<select class="auto-input" id="kb-rol-' + r.rol + '" style="flex:1">' + opciones(r.rol) + '</select>' +
+        '</div>').join('') +
+    '</div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">' +
+      'Sin «Arriendo o venta» el agente no sabría a quién ofrecer qué, así que es obligatorio. ' +
+      'El precio se lee de cada ficha; el área no, porque en las pruebas salía mal.</div>';
+}
+
+async function kbGuardar() {
+  if (!_kbDeteccion) return;
+  const btn = document.getElementById('kb-btn-guardar');
+  const mapeo = {};
+  KB_ROLES.forEach(r => {
+    const v = document.getElementById('kb-rol-' + r.rol)?.value;
+    if (v) mapeo[r.rol] = v;
+  });
+  if (!mapeo.operacion) { showToast('Falta indicar cuál campo dice si es arriendo o venta', 'error'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/knowledge-sync?client_id=' + encodeURIComponent(crmAmbitoCliente()), {
+      method: 'PUT',
+      body: JSON.stringify({ base_url: _kbDeteccion.base_url, post_type: _kbDeteccion.post_type, mapeo }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo guardar', 'error'); return; }
+    document.getElementById('kb-overlay')?.remove();
+    await kbEstado();
+    kbSincronizar();
+  } catch { showToast('No se pudo guardar el catálogo', 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Guardar y sincronizar'; } }
+}
+
+// La sincronización va por lotes: 485 fichas son ~20 minutos. Se encadenan los
+// lotes y se va contando, en vez de dejar al usuario mirando una rueda sin saber
+// si avanza o se colgó.
+let _kbSincronizando = false;
+
+async function kbSincronizar() {
+  if (_kbSincronizando) { showToast('Ya hay una sincronización en marcha', 'error'); return; }
+  const cliente = crmAmbitoCliente();
+  if (!cliente) return;
+  _kbSincronizando = true;
+  const box = document.getElementById('src-kb');
+  try {
+    for (let i = 0; i < 30; i++) {   // tope: 30 lotes de 40 = 1.200 propiedades
+      if (box) box.innerHTML = '<div style="color:var(--muted)">Sincronizando… lote ' + (i + 1) +
+        '. Puedes seguir trabajando; esto continúa en segundo plano.</div>';
+      const r = await fetchAuth('/api/knowledge-sync?client_id=' + encodeURIComponent(cliente), { method: 'POST' });
+      const d = await leerRespuesta(r);
+      if (!r.ok) { showToast(d.error || 'Falló la sincronización', 'error'); break; }
+      if (d.terminado) { showToast('Catálogo actualizado', 'success'); break; }
+    }
+  } catch { showToast('Se interrumpió la sincronización', 'error'); }
+  finally { _kbSincronizando = false; await kbEstado(); }
+}
+
 // ── Gestor de canales ───────────────────────────────────────────────────────
 // Vive en Marketing → Fuentes, que es donde se busca. Dos pestañas, como el
 // catálogo de Clientify, con una diferencia importante: aquí cada canal decide
@@ -23734,6 +23912,13 @@ async function srcRender() {
       '</div>' +
       '<div id="src-channels" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando canales…</div>' +
     '</div>' +
+    '<div style="max-width:860px;margin-bottom:26px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+        '<div style="font-weight:800;font-size:var(--fs-md)">📚 Lo que sabe tu agente</div>' +
+        '<button class="btn-sec sm" onclick="kbAbrir()">Conectar catálogo</button>' +
+      '</div>' +
+      '<div id="src-kb" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando…</div>' +
+    '</div>' +
     '<div style="max-width:860px">' +
       '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">📋 Meta Lead Ads (formularios de anuncios)</div>' +
       '<div style="border:1px dashed var(--border);border-radius:14px;padding:14px 18px;font-size:12.5px;color:var(--muted2)">En preparación — requiere el permiso de la app de Meta que está en trámite. Cuando esté activo, los formularios de tus campañas de clientes potenciales entrarán directo al CRM con su campaña como etiqueta.</div>' +
@@ -23742,6 +23927,7 @@ async function srcRender() {
   view.innerHTML = header + formsSection + rest;
   srcLoadWebhook();
   srcLoadChannels();
+  kbEstado();
 }
 
 async function srcLoadWebhook() {
