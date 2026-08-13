@@ -19441,6 +19441,7 @@ function inboxRenderList() {
       </div>
       <div class="crm-inbox-conv-meta">
         <div class="crm-inbox-conv-time">${time}</div>
+        ${inboxInsigniaVentana(conv)}
         ${conv.unread_count > 0 ? `<div class="crm-inbox-unread">${conv.unread_count}</div>` : ''}
         <div class="crm-inbox-channel-dot ${conv.channel}" title="${conv.channel}"></div>
       </div>
@@ -19493,7 +19494,11 @@ async function inboxOpenConv(convId) {
           <div class="crm-inbox-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
         </div>`).join('')}
     </div>
+    ${inboxAvisoVentana(conv)}
     <div class="crm-inbox-reply">
+      <button class="inbox-accion" title="Respuestas rápidas" onclick="qrAbrir('${esc(convId)}')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>
+      </button>
       <textarea class="crm-inbox-reply-input" id="inbox-reply-input" placeholder="Escribe un mensaje manual..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inboxSendManual('${esc(convId)}')}" rows="1"></textarea>
       <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
     </div>`;
@@ -19638,6 +19643,143 @@ async function inboxSendManual(convId) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+// ── Ventana de 24 horas de WhatsApp ─────────────────────────────────────────
+// Fuera de las 24 horas desde el último mensaje DEL CLIENTE, WhatsApp no deja
+// escribirle libremente. Antes no se veía por ninguna parte: el comercial
+// escribía, Meta lo rechazaba y nadie se enteraba.
+const VENTANA_MS = 24 * 60 * 60 * 1000;
+
+function inboxVentana(conv) {
+  if (!conv || conv.channel !== 'whatsapp') return null;   // solo WhatsApp la tiene
+  const desde = conv.last_inbound_at || conv.last_message_at;
+  if (!desde) return null;
+  const restan = new Date(desde).getTime() + VENTANA_MS - Date.now();
+  return { restan, caducada: restan <= 0, horas: Math.max(0, Math.floor(restan / 3600000)) };
+}
+
+// Insignia para la lista de conversaciones
+function inboxInsigniaVentana(conv) {
+  const v = inboxVentana(conv);
+  if (!v) return '';
+  if (v.caducada) return '<span class="inbox-ventana vencida">Caducó</span>';
+  const apremia = v.restan < 3 * 3600000;
+  return '<span class="inbox-ventana' + (apremia ? ' apremia' : '') + '">' +
+    (v.horas >= 1 ? v.horas + 'h' : Math.max(1, Math.round(v.restan / 60000)) + 'm') + '</span>';
+}
+
+function inboxAvisoVentana(conv) {
+  const v = inboxVentana(conv);
+  if (!v || !v.caducada) return '';
+  return '<div class="inbox-ventana-aviso">' +
+    'Pasaron más de 24 horas desde el último mensaje de esta persona. WhatsApp no permite escribirle ' +
+    'libremente hasta que vuelva a escribir. Si le envías algo ahora, Meta lo rechazará.</div>';
+}
+
+// ── Respuestas rápidas ──────────────────────────────────────────────────────
+let qrLista = [];
+
+async function qrCargar() {
+  const c = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/quick-replies' + (c ? '?client_id=' + encodeURIComponent(c) : ''));
+    const d = await leerRespuesta(r);
+    qrLista = r.ok ? (d.respuestas || []) : [];
+  } catch { qrLista = []; }
+  return qrLista;
+}
+
+async function qrAbrir(convId) {
+  document.getElementById('qr-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'qr-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:560px;height:min(80vh,560px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Respuestas rápidas</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Lo que escribes todos los días, a un clic</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<input class="auto-input" id="qr-buscar" placeholder="Buscar…" oninput="qrRender()">' +
+      '<div id="qr-lista" style="margin-top:12px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:space-between;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-sec sm" onclick="qrCrear()">+ Nueva respuesta</button>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cerrar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  ov.dataset.conv = convId || '';
+  document.getElementById('qr-lista').innerHTML = '<div style="color:var(--muted);font-size:12.5px">Cargando…</div>';
+  await qrCargar();
+  qrRender();
+  setTimeout(() => document.getElementById('qr-buscar')?.focus(), 80);
+}
+
+function qrRender() {
+  const cont = document.getElementById('qr-lista');
+  if (!cont) return;
+  const q = String(document.getElementById('qr-buscar')?.value || '').toLowerCase().trim();
+  const filtradas = qrLista.filter(r =>
+    !q || r.titulo.toLowerCase().includes(q) || r.texto.toLowerCase().includes(q));
+  if (!filtradas.length) {
+    cont.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:8px 2px">' +
+      (qrLista.length ? 'Ninguna coincide con esa búsqueda.' :
+        'Todavía no tienes respuestas guardadas. Crea la primera con el botón de abajo.') + '</div>';
+    return;
+  }
+  cont.innerHTML = filtradas.map(r =>
+    '<div class="qr-fila">' +
+      '<div style="flex:1;min-width:0;cursor:pointer" onclick="qrUsar(\'' + esc(r.id) + '\')">' +
+        '<div class="qr-titulo">' + esc(r.titulo) + '</div>' +
+        '<div class="qr-texto">' + esc(r.texto) + '</div>' +
+      '</div>' +
+      '<button class="pipe-borrar" title="Borrar" onclick="qrBorrar(\'' + esc(r.id) + '\')">' + ICONO_PAPELERA + '</button>' +
+    '</div>').join('');
+}
+
+// Se pega en la caja en vez de enviarse sola: casi siempre hay que ajustar algo
+// antes, y un envío automático por error no se puede deshacer.
+async function qrUsar(id) {
+  const r = qrLista.find(x => x.id === id);
+  if (!r) return;
+  const input = document.getElementById('inbox-reply-input');
+  if (input) {
+    input.value = input.value ? input.value.trimEnd() + '\n' + r.texto : r.texto;
+    input.focus();
+  }
+  document.getElementById('qr-overlay')?.remove();
+  fetchAuth('/api/quick-replies', { method: 'PUT', body: JSON.stringify({ id, usar: true }) }).catch(() => {});
+}
+
+async function qrCrear() {
+  const titulo = String(prompt('¿Cómo la vas a buscar? (ej. horario de atención)', '') || '').trim();
+  if (!titulo) return;
+  const texto = String(prompt('¿Qué debe escribir?', '') || '').trim();
+  if (!texto) return;
+  try {
+    const r = await fetchAuth('/api/quick-replies', {
+      method: 'POST',
+      body: JSON.stringify({ titulo, texto, client_id: crmAmbitoCliente() || null }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo crear', 'error'); return; }
+    await qrCargar(); qrRender();
+    showToast('Respuesta guardada', 'success');
+  } catch { showToast('No se pudo crear la respuesta', 'error'); }
+}
+
+async function qrBorrar(id) {
+  const r = qrLista.find(x => x.id === id);
+  if (!r || !confirm('¿Borrar «' + r.titulo + '»?')) return;
+  try {
+    const res = await fetchAuth('/api/quick-replies?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const d = await leerRespuesta(res);
+    if (!res.ok) { showToast(d.error || 'No se pudo borrar', 'error'); return; }
+    await qrCargar(); qrRender();
+  } catch { showToast('No se pudo borrar', 'error'); }
 }
 
 // El motivo va sobre la caja de texto y se queda: los avisos flotantes se van

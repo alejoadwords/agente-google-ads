@@ -294,6 +294,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         contact_name: contactName || null,
         contact_phone: telefonoDelCanal(channel, contactId),
         status: aMano ? 'human' : 'bot',
+        last_inbound_at: new Date().toISOString(),
         unread_count: 1,
       }),
     }).then(r => r.json()).then(r => r?.[0]).catch(() => null);
@@ -318,6 +319,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       body: JSON.stringify({
         last_message: text.slice(0, 200),
         last_message_at: new Date().toISOString(),
+        // La ventana de 24h se cuenta desde el mensaje del CLIENTE, no desde
+        // el último mensaje a secas: si no, escribirle nosotros la reiniciaría.
+        last_inbound_at: new Date().toISOString(),
         unread_count: (conv.unread_count || 0) + 1,
       }),
     });
@@ -341,6 +345,14 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     body: JSON.stringify({ conversation_id: conv.id, role: 'user', content: text, meta_message_id: providerMessageId }),
   }).then(r => r.json()).catch(() => null);
   if (!msgRows?.[0]) return { ok: true, duplicate: true, conversationId: conv.id };
+
+  // La ventana de 24h se reinicia AQUI, con el mensaje del cliente. Sin esto,
+  // una conversación atendida por el agente parecería caducada aunque el
+  // cliente acabara de escribir.
+  await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
+    method: 'PATCH', headers: sb(),
+    body: JSON.stringify({ last_inbound_at: new Date().toISOString() }),
+  }).catch(() => {});
 
   const hist = await fetch(
     `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content&order=created_at.desc&limit=12`,
@@ -389,7 +401,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
     method: 'PATCH', headers: sb(),
     body: JSON.stringify({
-      last_message: cleanForUser(reply).slice(0, 200),
+      // last_inbound_at NO se toca aquí: esto es nuestra respuesta. Se fijó al
+    // guardar el mensaje del cliente, unas líneas más arriba.
+    last_message: cleanForUser(reply).slice(0, 200),
       last_message_at: new Date().toISOString(),
       unread_count: 0,
       ...(needsEscalation ? { status: 'human' } : {}),
