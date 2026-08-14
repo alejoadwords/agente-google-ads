@@ -319,14 +319,96 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
   return leadId;
 }
 
+// ── Adjuntos que llegan ─────────────────────────────────────────────────────
+// Lo que manda el cliente hay que copiarlo a nuestro almacén: WhatsApp guarda
+// el archivo unos días y detrás de su token, y el CDN de Messenger caduca. Sin
+// copiarlo, en una semana el hilo tendría enlaces muertos.
+const TOPE_ENTRANTE = 12 * 1024 * 1024;   // por encima, la función de Vercel no llega a tiempo
+
+const TIPO_POR_MIME = m => {
+  const x = String(m || '').toLowerCase();
+  if (x.startsWith('image/')) return 'image';
+  if (x.startsWith('video/')) return 'video';
+  if (x.startsWith('audio/')) return 'audio';
+  return 'document';
+};
+
+const EXT_POR_MIME = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'application/pdf': 'pdf', 'video/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3',
+  'audio/amr': 'amr', 'audio/aac': 'aac', 'text/plain': 'txt', 'text/csv': 'csv',
+};
+
+// Devuelve {url,tipo,nombre,mime} o {error} — nunca lanza: que falle el archivo
+// no puede costar el mensaje entero.
+async function espejarAdjunto(connection, media) {
+  try {
+    let bytes, mime = media.mime || null, nombre = media.nombre || null;
+
+    if (media.fuente === 'whatsapp') {
+      // WhatsApp da un id; hay que pedir la URL y luego descargar CON el token.
+      const meta = await fetch(`https://graph.facebook.com/v19.0/${encodeURIComponent(media.id)}`, {
+        headers: { Authorization: `Bearer ${connection.access_token}` },
+      }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      if (!meta?.url) return { error: 'No se pudo localizar el archivo en WhatsApp' };
+      mime = mime || meta.mime_type;
+      if (Number(meta.file_size || 0) > TOPE_ENTRANTE) return { error: 'archivo demasiado grande' };
+      const bin = await fetch(meta.url, { headers: { Authorization: `Bearer ${connection.access_token}` } });
+      if (!bin.ok) return { error: 'No se pudo descargar el archivo de WhatsApp' };
+      bytes = new Uint8Array(await bin.arrayBuffer());
+    } else {
+      // Messenger e Instagram dan una URL directa, pero temporal.
+      if (!media.url) return { error: 'sin url' };
+      const bin = await fetch(media.url);
+      if (!bin.ok) return { error: 'No se pudo descargar el archivo' };
+      mime = mime || bin.headers.get('content-type') || 'application/octet-stream';
+      bytes = new Uint8Array(await bin.arrayBuffer());
+    }
+
+    if (!bytes?.length) return { error: 'archivo vacío' };
+    if (bytes.length > TOPE_ENTRANTE) return { error: 'archivo demasiado grande' };
+
+    const tipo = media.tipo || TIPO_POR_MIME(mime);
+    const ext = EXT_POR_MIME[String(mime).split(';')[0].toLowerCase()] || 'bin';
+    const azar = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    const ruta = `${connection.user_id}/entrantes/${Date.now()}_${azar}.${ext}`;
+
+    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/inbox-adjuntos/${ruta}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${SUPABASE_KEY}`, apikey: SUPABASE_KEY, 'Content-Type': mime },
+      body: bytes,
+    });
+    if (!up.ok) return { error: 'No se pudo guardar el archivo' };
+
+    return {
+      url: `${SUPABASE_URL}/storage/v1/object/public/inbox-adjuntos/${ruta}`,
+      tipo, mime,
+      nombre: nombre || `archivo.${ext}`,
+    };
+  } catch (e) {
+    return { error: 'Error copiando el archivo: ' + (e?.message || 'desconocido') };
+  }
+}
+
+// Lo que el agente lee cuando el mensaje es solo un archivo. Sin esto se le
+// pasaría una cadena vacía y contestaría a ciegas, como si no hubiera llegado
+// nada.
+function textoDeAdjunto(adj, error) {
+  if (error) return '(el contacto envió un archivo que no se pudo recibir)';
+  const q = { image: 'una imagen', video: 'un video', audio: 'una nota de voz' }[adj?.tipo] || 'un archivo';
+  return `(el contacto envió ${q}${adj?.nombre && adj.tipo === 'document' ? ': ' + adj.nombre : ''})`;
+}
+
 // ── Mensaje entrante ──────────────────────────────────────────────────────────
 // send: (connection, contactId, texto) => Promise — lo pone el webhook del canal
 // resolverNombre: (connection, contactId) => Promise<string|null> — lo pone el
 // webhook del canal. Meta no manda el nombre en el evento, solo el id, así que
 // sin esto el lead entra como "Contacto messenger" y el comercial recibe una
 // ficha sin nombre.
-export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, resolverNombre }) {
-  if (!text || !externalId || !contactId) return { ok: false, reason: 'payload incompleto' };
+export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, resolverNombre, media }) {
+  // Un mensaje puede ser solo un archivo, sin una palabra. Exigir texto era lo
+  // que hacía desaparecer las fotos que manda el cliente.
+  if ((!text && !media) || !externalId || !contactId) return { ok: false, reason: 'payload incompleto' };
 
   const connection = await fetch(
     `${SUPABASE_URL}/rest/v1/channel_connections?channel=eq.${encodeURIComponent(channel)}&external_id=eq.${encodeURIComponent(externalId)}&is_active=eq.true&select=*`,
@@ -348,6 +430,21 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // El cliente lo manda el CANAL. El del agente queda de respaldo para los
   // canales conectados antes de que existiera esta columna.
   const clienteDelCanal = connection.client_id || (agent ? agent.client_id : null) || null;
+
+  // El archivo se copia ANTES de guardar el mensaje: así la burbuja nace ya con
+  // su imagen y no aparece un mensaje vacío que luego cambia.
+  let adjunto = null, adjuntoError = null;
+  if (media) {
+    const r = await espejarAdjunto(connection, media);
+    if (r.error) adjuntoError = r.error; else adjunto = r;
+  }
+  // El texto para el agente y para la vista previa. El pie de foto manda si lo
+  // hay; si no, se describe lo que llegó.
+  const textoMensaje = text || textoDeAdjunto(adjunto, adjuntoError);
+  const camposAdjunto = adjunto ? {
+    adjunto_url: adjunto.url, adjunto_tipo: adjunto.tipo,
+    adjunto_nombre: adjunto.nombre, adjunto_mime: adjunto.mime,
+  } : {};
 
   const policy = await getPolicy(connection.user_id, channel);
   const reglaCal = connection.agent_id
@@ -393,12 +490,12 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   if (aMano || conv.status === 'human') {
     await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
       method: 'POST', headers: sb(),
-      body: JSON.stringify({ conversation_id: conv.id, role: 'user', content: text, meta_message_id: providerMessageId }),
+      body: JSON.stringify({ conversation_id: conv.id, role: 'user', content: textoMensaje, meta_message_id: providerMessageId, ...camposAdjunto }),
     });
     await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
       method: 'PATCH', headers: sb(),
       body: JSON.stringify({
-        last_message: text.slice(0, 200),
+        last_message: textoMensaje.slice(0, 200),
         last_message_at: new Date().toISOString(),
         // La ventana de 24h se cuenta desde el mensaje del CLIENTE, no desde
         // el último mensaje a secas: si no, escribirle nosotros la reiniciaría.
@@ -423,7 +520,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   const msgRows = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
     method: 'POST',
     headers: { ...sb(), Prefer: 'resolution=ignore-duplicates,return=representation' },
-    body: JSON.stringify({ conversation_id: conv.id, role: 'user', content: text, meta_message_id: providerMessageId }),
+    body: JSON.stringify({ conversation_id: conv.id, role: 'user', content: textoMensaje, meta_message_id: providerMessageId, ...camposAdjunto }),
   }).then(r => r.json()).catch(() => null);
   if (!msgRows?.[0]) return { ok: true, duplicate: true, conversationId: conv.id };
 

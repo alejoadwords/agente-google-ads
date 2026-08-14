@@ -19689,7 +19689,11 @@ function inboxHilo(messages, notas) {
       '</div>';
     }
     const m = it.d;
-    const texto = esc(inboxLimpiar(m.content));
+    // Cuando el mensaje era solo un archivo, el motor guarda una descripción
+    // para que el agente sepa qué llegó. Ahí está la imagen a la vista, así que
+    // repetir "(el contacto envió una imagen)" debajo sobra.
+    const crudo = inboxLimpiar(m.content);
+    const texto = (m.adjunto_url && /^\(el contacto envió [^)]*\)$/.test(crudo)) ? '' : esc(crudo);
     return '<div class="crm-inbox-bubble-wrap ' + esc(m.role) + '">' +
       '<div class="crm-inbox-bubble ' + esc(m.role) + '">' +
         (m.adjunto_url ? inboxAdjuntoHTML(m) : '') +

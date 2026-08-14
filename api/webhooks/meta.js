@@ -65,6 +65,25 @@ async function nombreDelContacto(connection, contactId) {
   return null;
 }
 
+// WhatsApp no manda el archivo: manda un id con el que hay que ir a buscarlo.
+function mediaDeWhatsApp(msg) {
+  const tipos = { image: 'image', video: 'video', audio: 'audio', voice: 'audio', document: 'document', sticker: 'image' };
+  const tipo = tipos[msg.type];
+  if (!tipo) return null;
+  const d = msg[msg.type];
+  if (!d?.id) return null;
+  return { fuente: 'whatsapp', id: d.id, tipo, mime: d.mime_type || null, nombre: d.filename || null };
+}
+
+// Messenger e Instagram mandan una URL directa, pero temporal: por eso se copia.
+function mediaDeMessenger(message) {
+  const a = (message.attachments || [])[0];
+  const url = a?.payload?.url;
+  if (!url) return null;
+  const tipos = { image: 'image', video: 'video', audio: 'audio', file: 'document' };
+  return { fuente: 'url', url, tipo: tipos[a.type] || 'document', nombre: a.payload?.title || null };
+}
+
 const processMessage = args => processIncoming({
   ...args,
   send: (connection, contactId, text) => sendMeta(args.channel, connection, contactId, text),
@@ -184,6 +203,7 @@ export default async function handler(req) {
                 externalId: String(entry.id),
                 contactId: String(msg.sender.id),
                 text: msg.message.text || '',
+                media: mediaDeMessenger(msg.message),
                 providerMessageId: msg.message.mid,
               });
             }
@@ -199,6 +219,7 @@ export default async function handler(req) {
                 externalId: String(entry.id),
                 contactId: String(msg.sender.id),
                 text: msg.message.text || '',
+                media: mediaDeMessenger(msg.message),
                 providerMessageId: msg.message.mid,
               });
             }
@@ -212,14 +233,20 @@ export default async function handler(req) {
             const val = change.value;
             const phoneNumberId = val.metadata?.phone_number_id;
             for (const msg of val.messages || []) {
-              if (msg.type !== 'text') continue;
+              // Antes: 'if (msg.type !== "text") continue'. Una foto del cliente
+              // se descartaba entera —sin mensaje, sin aviso, sin rastro— y el
+              // comercial no sabía que había llegado algo.
+              const media = mediaDeWhatsApp(msg);
+              if (msg.type !== 'text' && !media) continue;   // estados, reacciones, ubicaciones
               const contact = val.contacts?.find(c => c.wa_id === msg.from);
               await processMessage({
                 channel: 'whatsapp',
                 externalId: String(phoneNumberId),
                 contactId: String(msg.from),
                 contactName: contact?.profile?.name || null,
-                text: msg.text?.body || '',
+                // El pie de foto viaja dentro del adjunto, no en msg.text
+                text: msg.text?.body || msg[msg.type]?.caption || '',
+                media,
                 providerMessageId: msg.id,
               });
             }
