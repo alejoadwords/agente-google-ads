@@ -83,6 +83,10 @@ function sanitize(body) {
     if (f) out.fields = f;
   }
   if ('active' in body) out.active = body.active !== false;
+  // 'conector' = el script que se pega en una web ajena para recoger los envíos
+  // de un formulario que ya existe. No tiene campos ni página propia.
+  if ('tipo' in body) out.tipo = body.tipo === 'conector' ? 'conector' : 'formulario';
+  if ('origen_url' in body) out.origen_url = (body.origen_url && /^https?:\/\//i.test(body.origen_url)) ? String(body.origen_url).slice(0, 300) : null;
   return out;
 }
 
@@ -114,7 +118,10 @@ export default async function handler(req) {
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const s = sanitize(body);
     if (!s.name) return jsonResp({ error: 'El formulario necesita un nombre' }, 400);
-    if (!s.fields) s.fields = [
+    // Un conector recoge lo que ya haya en el formulario ajeno: los campos los
+    // decide esa web, no nosotros.
+    if (s.tipo === 'conector') s.fields = [];
+    else if (!s.fields) s.fields = [
       { key: 'name', label: 'Nombre', type: 'text', required: true },
       { key: 'email', label: 'Email', type: 'email', required: true },
       { key: 'phone', label: 'Teléfono / WhatsApp', type: 'tel', required: false },

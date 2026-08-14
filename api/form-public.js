@@ -41,6 +41,9 @@ export default async function handler(req) {
 
   if (req.method === 'GET') {
     if (!form.active) return jsonResp({ error: 'Este formulario está pausado' }, 410);
+    // Un conector no tiene página propia: solo recoge envíos de una web ajena.
+    // Sin esto, /form/<token> pintaría un formulario vacío con un botón inútil.
+    if (form.tipo === 'conector') return jsonResp({ error: 'Este enlace no es un formulario' }, 404);
     return jsonResp({
       form: {
         title: form.title || form.name,

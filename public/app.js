@@ -24847,7 +24847,9 @@ async function srcRender() {
     '</div>';
 
   // ── Sección Formularios ──
-  const formCards = frmList.map(f => {
+  const soloFormularios = frmList.filter(f => f.tipo !== 'conector');
+  const conectores = frmList.filter(f => f.tipo === 'conector');
+  const formCards = soloFormularios.map(f => {
     const st = f.active ? { label: 'Activo', color: '#10B981' } : { label: 'Pausado', color: '#6b7280' };
     return '<div class="auto-card" style="max-width:860px">' +
       '<div class="auto-ico">📝</div>' +
@@ -24873,7 +24875,39 @@ async function srcRender() {
         '<button class="btn-pri sm" onclick="frmOpen()">' + icn('plus', 12) + ' Nuevo formulario</button>' +
       '</div>' +
       (formCards ||
-        '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted)">Crea un formulario y tienes 3 formas de usarlo: <b>página alojada</b> (link listo para compartir o poner en tu bio), <b>incrustado</b> en tu web, o <b>conectar un formulario que ya tengas</b> con una línea de código. Cada envío crea el lead con su etiqueta y dispara tus automatizaciones.</div>') +
+        '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted)">Crea un formulario y tienes dos formas de usarlo: <b>página alojada</b> (link listo para compartir o poner en tu bio) o <b>incrustado</b> en tu web. Cada envío crea el lead con su etiqueta y dispara tus automatizaciones.</div>') +
+    '</div>';
+
+  // ── Conectores: formularios que ya existen en la web del cliente ──
+  // Vivían escondidos dentro de "Instalar" de un formulario, así que para
+  // conectar un formulario ajeno había que crear antes un formulario propio que
+  // nadie iba a usar. Ahora es una fuente más, con su propia entrada.
+  const conectorCards = conectores.map(c =>
+    '<div class="auto-card" style="max-width:860px">' +
+      '<div class="auto-ico">🔗</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="auto-name">' + esc(c.name) + '</div>' +
+        '<div class="auto-trigger">' + (c.origen_url ? esc(c.origen_url.replace(/^https?:\/\//, '')) : 'Sin web indicada') +
+          ((c.tags || []).length ? ' · etiquetas: ' + c.tags.map(esc).join(', ') : '') + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' + (c.submissions || 0) + ' envíos recogidos' +
+          (c.last_submission_at ? ' · último: ' + new Date(c.last_submission_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '') + '</div>' +
+      '</div>' +
+      '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + (c.active ? '#10B9811A;color:#10B981' : '#6b72801A;color:#6b7280') + ';white-space:nowrap">' + (c.active ? 'Activo' : 'Pausado') + '</span>' +
+      '<div class="auto-actions">' +
+        '<button class="btn-sec sm" onclick="conSnippet(\'' + c.id + '\')">📎 Ver código</button>' +
+        '<button class="btn-ghost sm" title="' + (c.active ? 'Pausar' : 'Activar') + '" onclick="frmToggle(\'' + c.id + '\')">' + (c.active ? '⏸' : '▶') + '</button>' +
+        '<button class="btn-ghost sm" title="Eliminar" onclick="frmDelete(\'' + c.id + '\')">✕</button>' +
+      '</div>' +
+    '</div>').join('');
+
+  const conectoresSection =
+    '<div style="max-width:860px;margin-bottom:26px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+        '<div style="font-weight:800;font-size:var(--fs-md)">🔗 Formularios que ya tienes en tu web</div>' +
+        '<button class="btn-pri sm" onclick="conAbrir()">' + icn('plus', 12) + ' Conectar formulario</button>' +
+      '</div>' +
+      (conectorCards ||
+        '<div style="border:1px dashed var(--border);border-radius:14px;padding:18px;font-size:12.5px;color:var(--muted);line-height:1.6">¿Ya tienes formularios en tu web y no los puedes cambiar? Conéctalos con <b>una línea de código</b> y sus envíos entrarán a Acuarius sin tocar nada de tu página. No hace falta crear ningún formulario aquí.</div>') +
     '</div>';
 
   // ── Webhook de entrada + canales de chat + Meta Lead Ads ──
@@ -24916,7 +24950,7 @@ async function srcRender() {
       '<div style="border:1px dashed var(--border);border-radius:14px;padding:14px 18px;font-size:12.5px;color:var(--muted2)">En preparación — requiere el permiso de la app de Meta que está en trámite. Cuando esté activo, los formularios de tus campañas de clientes potenciales entrarán directo al CRM con su campaña como etiqueta.</div>' +
     '</div>';
 
-  view.innerHTML = header + formsSection + rest;
+  view.innerHTML = header + formsSection + conectoresSection + rest;
   srcLoadWebhook();
   srcLoadChannels();
   kbEstado();
@@ -25115,7 +25149,12 @@ async function frmToggle(id) {
 
 async function frmDelete(id) {
   const f = frmList.find(x => x.id === id);
-  if (!confirm('¿Eliminar el formulario "' + (f?.name || '') + '"? El link público y el conector dejarán de funcionar.')) return;
+  // El mismo botón borra las dos cosas, pero avisar de "el link público" sobre
+  // una conexión que no tiene página confunde más que ayuda.
+  const aviso = f?.tipo === 'conector'
+    ? '¿Eliminar la conexión "' + (f?.name || '') + '"? El código que pegaste en tu web dejará de recoger leads.'
+    : '¿Eliminar el formulario "' + (f?.name || '') + '"? El link público y el incrustado dejarán de funcionar.';
+  if (!confirm(aviso)) return;
   await fetchAuth('/api/forms?id=' + encodeURIComponent(id), { method: 'DELETE' });
   srcRender();
 }
@@ -25127,7 +25166,6 @@ function frmSnippets(id, formObj) {
   const base = 'https://app.acuarius.app';
   const link = base + '/form/' + f.token;
   const iframe = '<iframe src="' + link + '" style="width:100%;max-width:520px;height:640px;border:none;border-radius:16px" loading="lazy"></iframe>';
-  const connector = '<scr' + 'ipt src="' + base + '/f.js" data-token="' + f.token + '" defer></scr' + 'ipt>';
   const block = (title, desc, code, mid) =>
     '<div style="margin-bottom:16px">' +
       '<div style="font-weight:800;font-size:12.5px;margin-bottom:2px">' + title + '</div>' +
@@ -25148,11 +25186,114 @@ function frmSnippets(id, formObj) {
         '<div style="font-size:var(--fs-lg);font-weight:800">Instalar "' + esc(f.name) + '"</div>' +
         '<button class="btn-ghost sm" onclick="document.getElementById(\'frm-overlay\').remove()">✕</button>' +
       '</div>' +
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:18px">Tres formas de usarlo — elige la que te sirva:</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:18px">Dos formas de usarlo — elige la que te sirva:</div>' +
       block('1 · Página lista para compartir', 'Compártela en tu bio, anuncios o QR. <a href="' + link + '" target="_blank" style="color:var(--accent)">Ver mi formulario ↗</a>', link, 'link') +
       block('2 · Incrustar en tu web', 'Pega este código donde quieras que aparezca el formulario.', iframe, 'iframe') +
-      block('3 · Conectar un formulario que ya tienes', 'Pega este código antes de &lt;/body&gt; en tu web: detecta el envío de tus formularios existentes y crea el lead en Acuarius sin cambiar nada de tu página.', connector, 'script') +
+      // El conector se fue a su propia sección: pedirlo aquí obligaba a crear un
+      // formulario que no se iba a usar solo para poder copiar el script.
+      '<div style="font-size:11.5px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px;line-height:1.6">' +
+        '¿Lo que quieres es recoger los envíos de un formulario que <b>ya tienes</b> en tu web? Eso no necesita este formulario: está en <b>Fuentes → Formularios que ya tienes en tu web</b>.</div>' +
     '</div>';
+  document.body.appendChild(ov);
+}
+
+// ── Conectores de formularios ajenos ────────────────────────────────────────
+function conAbrir() {
+  document.getElementById('con-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'con-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Conectar un formulario que ya tienes</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Una línea de código y sus envíos entran a Acuarius</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">¿Qué formulario es?</label>' +
+        '<input class="auto-input" id="con-nombre" maxlength="100" placeholder="Ej. Contacto de certainpezzano.com">' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Solo para que lo reconozcas aquí. El lead se marca con esta fuente.</div>' +
+      '</div>' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">¿En qué web? (opcional)</label>' +
+        '<input class="auto-input" id="con-url" maxlength="300" placeholder="https://certainpezzano.com">' +
+      '</div>' +
+      '<div class="auto-field" style="margin-bottom:0">' +
+        '<label class="auto-label">Etiquetas para estos leads (opcional)</label>' +
+        '<input class="auto-input" id="con-tags" maxlength="200" placeholder="web, contacto">' +
+      '</div>' +
+      '<div id="con-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:12px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="con-crear" onclick="conCrear()">Crear conexión</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('con-nombre')?.focus(), 60);
+}
+
+async function conCrear() {
+  const nombre = String(document.getElementById('con-nombre')?.value || '').trim();
+  const err = document.getElementById('con-error');
+  const mostrar = m => { if (err) { err.textContent = m; err.style.display = m ? 'block' : 'none'; } };
+  if (!nombre) return mostrar('Ponle un nombre para reconocerlo.');
+  mostrar('');
+  const url = String(document.getElementById('con-url')?.value || '').trim();
+  const tags = String(document.getElementById('con-tags')?.value || '')
+    .split(',').map(t => t.trim()).filter(Boolean);
+
+  const btn = document.getElementById('con-crear');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+  try {
+    const c = crmAmbitoCliente();
+    const r = await fetchAuth('/api/forms' + (c ? '?client_id=' + encodeURIComponent(c) : ''), {
+      method: 'POST',
+      body: JSON.stringify({ name: nombre, tipo: 'conector', origen_url: url || null, tags }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { mostrar(d.error || 'No se pudo crear'); return; }
+    document.getElementById('con-overlay')?.remove();
+    await srcRender();
+    // El código es lo que venía a buscar: se le enseña sin tener que pulsar nada más.
+    if (d.form) conSnippet(d.form.id, d.form);
+  } catch (e) {
+    mostrar('No se pudo crear: ' + (e?.message || 'error de red'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear conexión'; }
+  }
+}
+
+function conSnippet(id, obj) {
+  const c = obj || frmList.find(x => x.id === id);
+  if (!c) return;
+  const code = '<scr' + 'ipt src="https://app.acuarius.app/f.js" data-token="' + c.token + '" defer></scr' + 'ipt>';
+  document.getElementById('con-cod-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'con-cod-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:600px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">' + esc(c.name) + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Pega este código en tu web y listo</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div style="display:flex;gap:6px;align-items:stretch;margin-bottom:14px">' +
+        '<code id="con-code" style="flex:1;font-size:10.5px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:10px 11px;overflow-x:auto;white-space:nowrap">' + esc(code) + '</code>' +
+        '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(document.getElementById(\'con-code\').textContent).then(function(){showToast(\'Copiado ✓\',\'success\')})">Copiar</button>' +
+      '</div>' +
+      '<div style="font-size:12.5px;line-height:1.7;color:var(--muted)">' +
+        '<b style="color:var(--text)">Dónde va:</b> justo antes de &lt;/body&gt;, en las páginas que tengan el formulario. En WordPress vale cualquier plugin de «insertar código en el pie».<br><br>' +
+        '<b style="color:var(--text)">Qué hace:</b> detecta cuando alguien envía <i>cualquier</i> formulario de esa página y manda esos datos a Acuarius. Tu formulario sigue funcionando igual que siempre — no cambia nada de lo que ya tienes montado.<br><br>' +
+        '<b style="color:var(--text)">Cómo saber si funciona:</b> envía tu propio formulario una vez y mira si aparece el lead. El contador de envíos de esta tarjeta también sube.' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
   document.body.appendChild(ov);
 }
 
