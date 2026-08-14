@@ -616,6 +616,45 @@ export default async function handler(req) {
       payload.assigned_to = actorId;
       payload.assigned_name = actorNombre;
     }
+    // ── Aviso de duplicado ──────────────────────────────────────────────────
+    // Las fuentes automáticas fusionan por correo o teléfono; el alta a mano no
+    // miraba nada. La misma persona que llama dos veces acababa como dos fichas
+    // en el tablero, cada una con su historia a medias. Aquí no se fusiona —eso
+    // sería decidir por quien escribe— se avisa y se deja elegir.
+    if (!body.forzar && (payload.email || payload.phone)) {
+      const alcance = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+      let ya = null;
+      if (payload.email) {
+        ya = await fetch(
+          `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${alcance}` +
+          `&email=eq.${encodeURIComponent(payload.email)}&deleted_at=is.null&select=id,name,stage,assigned_name&limit=1`,
+          { headers: sbHeaders() }
+        ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+      }
+      if (!ya && payload.phone) {
+        // Por los últimos 10 dígitos: el mismo número se escribe con +57, con
+        // espacios o sin nada, y una comparación literal no encontraría nada.
+        const digitos = String(payload.phone).replace(/\D/g, '');
+        if (digitos.length >= 7) {
+          const cola = digitos.slice(-10);
+          const candidatos = await fetch(
+            `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${alcance}` +
+            `&phone=not.is.null&deleted_at=is.null&select=id,name,stage,assigned_name,phone&order=created_at.desc&limit=500`,
+            { headers: sbHeaders() }
+          ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+          ya = (candidatos || []).find(l => String(l.phone).replace(/\D/g, '').endsWith(cola)) || null;
+        }
+      }
+      if (ya) {
+        return jsonResp({
+          duplicado: {
+            id: ya.id, name: ya.name, stage: ya.stage,
+            assigned_name: ya.assigned_name || null,
+          },
+        }, 409);
+      }
+    }
+
     // El lead cae en el pipeline que pida el cliente o, si no, en el principal
     const pipeline = body.pipeline_id || await pipelinePrincipal(userId, clientId);
     if (pipeline) payload.pipeline_id = pipeline;

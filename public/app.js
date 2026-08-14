@@ -18020,9 +18020,96 @@ function crmOpenModal(defaultStage) {
   if (tagsModalEl) tagsModalEl.value = '';
   crmPopulateStageSelects();
   if (defaultStage) document.getElementById('crm-f-stage').value = defaultStage;
+  crmLlenarResponsable('');
   document.getElementById('crm-save-btn').disabled = false;
   document.getElementById('crm-modal').classList.add('open');
   setTimeout(() => document.getElementById('crm-f-name').focus(), 100);
+}
+
+// Responsable del lead nuevo. Vacío = quien lo crea, que es lo que pasa el 95%
+// de las veces; el desplegable existe para el dueño que da de alta por otro.
+async function crmLlenarResponsable(seleccionado) {
+  const sel = document.getElementById('crm-f-assigned');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Yo</option>';
+  if (crmSoyMiembro) { sel.disabled = true; return; }   // un miembro no reparte
+  sel.disabled = false;
+  await asegurarEquipo();
+  crmTeam.filter(m => m.status === 'active' && m.member_user_id).forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.member_user_id;
+    o.textContent = m.member_name || m.member_email;
+    if (seleccionado === m.member_user_id) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function crmNombreResponsable(id) {
+  if (!id) return null;
+  const m = crmTeam.find(x => x.member_user_id === id);
+  return m ? (m.member_name || m.member_email) : null;
+}
+
+// Aviso de duplicado: quién es, dónde está y tres salidas. Fusionar por nuestra
+// cuenta sería peor — dos personas pueden compartir el teléfono de la oficina.
+function crmAvisoDuplicado(dup, payload, clientId) {
+  document.getElementById('dup-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'dup-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.style.zIndex = '10000';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:460px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Ya tienes a esta persona</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Coincide el correo o el teléfono</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="inbox-adj-pend" style="margin:0;display:block">' +
+        '<div style="font-size:14px;font-weight:800">' + esc(dup.name || 'Sin nombre') + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:3px">' +
+          esc(dup.stage || 'sin etapa') + (dup.assigned_name ? ' · lo lleva ' + esc(dup.assigned_name) : ' · sin responsable') +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:14px">' +
+        'Si es la misma persona, ábrela y registra ahí lo nuevo: así queda toda su historia junta. ' +
+        'Si de verdad son dos —dos hermanos con el mismo teléfono de casa, por ejemplo— créalo igual.' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-wrap:wrap">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Seguir editando</button>' +
+      '<button class="btn-sec sm" id="dup-crear">Crear igual</button>' +
+      '<button class="btn-pri sm" id="dup-abrir">Abrir el que existe</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+
+  document.getElementById('dup-abrir').onclick = () => {
+    ov.remove();
+    crmCloseModal();
+    crmOpenDetail(dup.id);
+  };
+  document.getElementById('dup-crear').onclick = async () => {
+    ov.remove();
+    const btn = document.getElementById('crm-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+    try {
+      const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+      const res = await fetchAuth('/api/leads' + qs, {
+        method: 'POST', body: JSON.stringify({ ...payload, forzar: true }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.lead) crmLeads.push(data.lead);
+      crmCloseModal();
+      crmRender();
+      showToast('Lead creado', 'success');
+    } catch {
+      showToast('No se pudo crear el lead', 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    }
+  };
 }
 
 function crmCloseModal() {
@@ -18046,9 +18133,21 @@ async function crmSaveLead() {
     source: document.getElementById('crm-f-source').value,
     notes: document.getElementById('crm-f-notes').value.trim() || null,
     client_id: clientId,
+    // El pipeline que se está mirando. Sin esto el lead caía en el principal y
+    // desaparecía del tablero desde el que acababas de crearlo.
+    pipeline_id: crmPipelineId || null,
     value: parseFloat(document.getElementById('crm-f-value').value) || null,
     tags: document.getElementById('crm-f-tags') && document.getElementById('crm-f-tags').value.trim() ? document.getElementById('crm-f-tags').value.split(',').map(t => t.trim()).filter(Boolean) : null,
   };
+  // El responsable solo se manda al CREAR. Al editar, el desplegable podría
+  // arrancar vacío y este guardado dejaría al lead sin responsable sin que
+  // nadie lo pidiera; para reasignar está el selector de la ficha, que es donde
+  // el servidor comprueba quién puede hacerlo.
+  if (!crmEditingId) {
+    const quien = document.getElementById('crm-f-assigned')?.value || null;
+    if (quien) { payload.assigned_to = quien; payload.assigned_name = crmNombreResponsable(quien); }
+  }
+
   try {
     if (crmEditingId) {
       payload.id = crmEditingId;
@@ -18068,6 +18167,14 @@ async function crmSaveLead() {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        // Ya hay alguien con ese correo o teléfono. No se decide por el
+        // usuario: se le enseña quién es y elige.
+        if (res.status === 409 && errData.duplicado) {
+          btn.textContent = 'Guardar';
+          btn.disabled = false;
+          crmAvisoDuplicado(errData.duplicado, payload, clientId);
+          return;
+        }
         if (res.status === 403 && errData.limit_reached) {
           btn.textContent = 'Guardar';
           btn.disabled = false;
@@ -18392,6 +18499,7 @@ function crmEditCurrentLead() {
   const tagsEditEl = document.getElementById('crm-f-tags');
   if (tagsEditEl) tagsEditEl.value = (crmDetailLead.tags || []).join(', ');
   crmPopulateStageSelects();
+  crmLlenarResponsable(crmDetailLead.assigned_to || '');
   document.getElementById('crm-f-stage').value = crmDetailLead.stage;
   document.getElementById('crm-save-btn').disabled = false;
   document.getElementById('crm-save-btn').textContent = 'Guardar';
@@ -20991,6 +21099,7 @@ function crmCreateLeadFromConversation(conv) {
   const tagsCLEl = document.getElementById('crm-f-tags');
   if (tagsCLEl) tagsCLEl.value = '';
   crmPopulateStageSelects();
+  crmLlenarResponsable('');
   document.getElementById('crm-f-stage').value = 'nuevo';
   document.getElementById('crm-save-btn').disabled = false;
   document.getElementById('crm-modal').classList.add('open');
