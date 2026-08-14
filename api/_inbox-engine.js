@@ -132,6 +132,10 @@ Sobre esta lista:
 - En cada linea: el barrio, las habitaciones, el precio y el codigo entre parentesis
 - Los precios son los de la lista, sin redondear ni estimar` : ''}
 
+SI TE MANDAN UN PDF:
+- Lo lees. Usa lo que dice para responder: si trae un pago, una cedula, un certificado o una ficha, dilo con sus datos
+- Si el PDF no trae lo que hacia falta, di que falta y que se necesita
+
 SI TE MANDAN UNA FOTO:
 - La ves. Comenta lo que hay en ella con naturalidad, sin decir "veo una imagen"
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
@@ -322,10 +326,26 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
 const IMG_VISIBLES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const TOPE_IMAGENES = 3;   // solo las últimas: cada una cuesta, y las viejas ya se comentaron
 
+// Solo PDF: es el único documento que el modelo sabe leer. Un Word o un Excel
+// llegarían como bytes que no entiende y tumbarían la llamada.
+const TOPE_DOCS = 1;       // un PDF son miles de tokens por página; con el último basta
+
+function mimeDe(m) {
+  return String(m.adjunto_mime || '').split(';')[0].toLowerCase();
+}
+
 function esImagenLegible(m) {
-  return m.adjunto_tipo === 'image'
-    && !!m.adjunto_url
-    && IMG_VISIBLES.includes(String(m.adjunto_mime || '').split(';')[0].toLowerCase());
+  return m.adjunto_tipo === 'image' && !!m.adjunto_url && IMG_VISIBLES.includes(mimeDe(m));
+}
+
+// Solo los que manda el CLIENTE. Los que enviamos nosotros ya sabemos lo que
+// dicen, y releerlos en cada turno se paga por página cada vez.
+function esDocLegible(m) {
+  return m.role === 'user' && !!m.adjunto_url && mimeDe(m) === 'application/pdf';
+}
+
+function llevaAdjuntoLegible(hist) {
+  return hist.some(m => esImagenLegible(m) || esDocLegible(m));
 }
 
 // Convierte el historial en lo que espera la API, metiendo las imágenes como
@@ -335,19 +355,23 @@ function historialParaModelo(hist, conImagenes = true) {
   // Solo las últimas imágenes llevan bloque; de las anteriores queda su texto.
   const conFoto = hist.filter(esImagenLegible);
   const permitidas = new Set(conFoto.slice(-TOPE_IMAGENES).map(m => m.adjunto_url));
+  const conDoc = hist.filter(esDocLegible);
+  const permitidosDoc = new Set(conDoc.slice(-TOPE_DOCS).map(m => m.adjunto_url));
 
   const salida = [];
   for (const m of hist) {
     const pintaImagen = conImagenes && esImagenLegible(m) && permitidas.has(m.adjunto_url);
+    const pintaDoc = conImagenes && esDocLegible(m) && permitidosDoc.has(m.adjunto_url);
     let texto = String(m.content || '').trim();
     // Un adjunto sin texto —una foto que se manda sin pie— se quedaba fuera del
     // historial entero. El modelo no se enteraba de que existió.
-    if (!texto && m.adjunto_url && !pintaImagen) {
+    if (!texto && m.adjunto_url && !pintaImagen && !pintaDoc) {
       const q = { image: 'una imagen', video: 'un video', audio: 'una nota de voz' }[m.adjunto_tipo] || 'un archivo';
       texto = m.role === 'user' ? `(te enviaron ${q})` : `(le enviaste ${q})`;
     }
     const partes = [];
     if (pintaImagen) partes.push({ type: 'image', source: { type: 'url', url: m.adjunto_url } });
+    if (pintaDoc) partes.push({ type: 'document', source: { type: 'url', url: m.adjunto_url } });
     if (texto) partes.push({ type: 'text', text: texto });
     if (!partes.length) continue;
 
@@ -358,17 +382,18 @@ function historialParaModelo(hist, conImagenes = true) {
   return salida;
 }
 
-// Una imagen puede romper la llamada —pesa demasiado, la URL no responde, el
-// formato no es el que dice su mime—. Si pasa, se reintenta SIN imágenes: una
-// respuesta que no vio la foto es mucho mejor que ninguna respuesta.
+// Un adjunto puede romper la llamada —pesa demasiado, la URL no responde, el
+// PDF tiene 400 páginas, el formato no es el que dice su mime—. Si pasa, se
+// reintenta SIN adjuntos: una respuesta que no vio la foto es mucho mejor que
+// ninguna respuesta.
 async function responderViendo(systemPrompt, hist, extra = []) {
-  const conImg = [...historialParaModelo(hist, true), ...extra];
-  if (!conImg.length) throw new Error('No hay nada que responder');
+  const conAdjuntos = [...historialParaModelo(hist, true), ...extra];
+  if (!conAdjuntos.length) throw new Error('No hay nada que responder');
   try {
-    return await callClaude(systemPrompt, conImg);
+    return await callClaude(systemPrompt, conAdjuntos);
   } catch (e) {
-    if (!hist.some(esImagenLegible)) throw e;
-    console.error('reintento sin imágenes:', e?.message);
+    if (!llevaAdjuntoLegible(hist)) throw e;
+    console.error('reintento sin adjuntos:', e?.message);
     return callClaude(systemPrompt, [...historialParaModelo(hist, false), ...extra]);
   }
 }
