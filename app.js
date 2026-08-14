@@ -25215,7 +25215,9 @@ function frmSnippets(id, formObj) {
 // id de Clerk no le dice nada a nadie.
 function fuenteEjecutivoNombre(assignedTo) {
   if (!assignedTo) return null;
-  const miId = window._workspace?.ownerId || clerkInstance?.user?.id || '';
+  // El id de QUIEN MIRA, no el del dueño del espacio: para un miembro,
+  // _workspace.ownerId es su jefe, y usarlo aquí le asignaría los leads a él.
+  const miId = clerkInstance?.user?.id || '';
   if (assignedTo === miId) return clerkInstance?.user?.firstName || 'Yo';
   const m = crmTeam.find(x => x.member_user_id === assignedTo);
   return m ? (m.member_name || m.member_email) : 'Alguien que ya no está en el equipo';
@@ -25231,7 +25233,7 @@ async function fuenteOpcionesEjecutivo(seleccionado) {
     } catch { crmTeam = []; }
   }
   const yo = clerkInstance?.user?.firstName || 'Yo';
-  const miId = window._workspace?.ownerId || clerkInstance?.user?.id || '';
+  const miId = clerkInstance?.user?.id || '';   // ver fuenteEjecutivoNombre
   const opts = [
     { id: '', name: 'Reparto automático' },
     { id: miId, name: yo + ' (yo)' },
