@@ -134,7 +134,7 @@ export default async function handler(req) {
     if (!texto) return jsonResp({ error: 'La nota está vacía' }, 400);
 
     const ck = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}&select=id,lead_id,contact_name,contact_phone`,
       { headers: sbHeaders() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     if (!ck?.[0]) return jsonResp({ error: 'No autorizado' }, 403);
@@ -147,7 +147,22 @@ export default async function handler(req) {
       }),
     });
     if (!res.ok) return jsonResp({ error: (await res.text()).slice(0, 200) }, 500);
-    return jsonResp({ nota: (await res.json())?.[0] || null }, 201);
+    const nota = (await res.json())?.[0] || null;
+
+    // El aviso va DESPUÉS de guardar y no puede tumbar la respuesta: la nota es
+    // el dato, el correo es una cortesía. Se espera para poder decir a cuántos
+    // llegó, que es lo que permite notar que dejó de funcionar.
+    let avisados = 0;
+    try {
+      const { avisarNota } = await import('./_aviso-nota.js');
+      const r = await avisarNota({
+        ownerId: userId, autorId: actorId, autorNombre: actorNombre,
+        conv: ck[0], texto,
+      });
+      avisados = r?.avisados || 0;
+    } catch (e) { console.error('aviso de nota:', e?.message); }
+
+    return jsonResp({ nota, avisados }, 201);
   }
 
   // POST ?action=sugerir — qué contestaría el agente. No guarda ni envía nada.

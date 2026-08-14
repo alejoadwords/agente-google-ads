@@ -19862,6 +19862,11 @@ async function inboxGuardarNota(convId) {
     if (!r.ok) { inboxAvisoEnvio(d.error || 'No se pudo guardar la nota'); return; }
     input.value = '';
     inboxAvisoEnvio('');
+    // Se dice a cuántos llegó el aviso. Callarlo dejaría creer que el equipo se
+    // enteró cuando quizá no había a quién avisar o el correo no salió.
+    if (d.avisados > 0) {
+      showToast(d.avisados === 1 ? 'Nota guardada · avisamos a 1 persona' : `Nota guardada · avisamos a ${d.avisados} personas`, 'success');
+    }
     await inboxOpenConv(convId);   // vuelve a modo mensaje, para no dejar armada la caja
   } catch (e) {
     inboxAvisoEnvio('No se pudo guardar la nota: ' + (e?.message || 'error de red'));
