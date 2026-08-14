@@ -132,7 +132,9 @@ export default async function handler(req) {
 
   // GET — listar mi equipo + asientos
   if (req.method === 'GET') {
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}&select=id,member_email,member_name,role,status,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
+    // member_user_id es imprescindible: sin él, cualquier selector de "quién
+    // atiende" se queda sin equipo que ofrecer y solo muestra al que mira.
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}&select=id,member_user_id,member_email,member_name,role,status,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
     const myEmail = await clerkEmail(userId);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
     const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
