@@ -263,8 +263,13 @@ export default async function handler(req) {
       body: JSON.stringify({ last_message: content.slice(0, 200), last_message_at: new Date().toISOString() }),
     });
 
-    // Enviar por el canal que corresponda
-    if (conn) {
+    // Enviar por el canal que corresponda.
+    // Un canal de prueba no tiene token real de Meta: intentar el envío solo
+    // devolvía «Invalid OAuth access token» y dejaba el circuito manual sin
+    // forma de probarse. El mensaje se guarda y ahí se queda, que es justo lo
+    // que se está ensayando.
+    const esPrueba = String(conn?.external_id || '').startsWith('sim_');
+    if (conn && !esPrueba) {
       const envio = conv.channel === 'tiktok'
         ? await sendTikTokMessage(conn, conv.contact_id, content)
         : await sendMetaMessage(conn, conv.contact_id, conv.channel, content);
@@ -311,13 +316,35 @@ async function sendMetaMessage(conn, contactId, channel, text) {
     const cod = cuerpo?.error?.code;
     // 131047: fuera de la ventana de 24 horas. Es el caso mas frecuente y el
     // que mas confunde, asi que se explica en vez de soltar el mensaje de Meta.
-    const amable = (cod === 131047 || /24 hours|re-engagement/i.test(msg))
-      ? 'Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite escribirle libremente: tiene que escribir él primero, o hay que usar una plantilla aprobada.'
-      : msg;
-    return { ok: false, error: amable };
+    return { ok: false, error: motivoEnEspanol(msg, cod) };
   } catch (e) {
     return { ok: false, error: 'No se pudo contactar con WhatsApp: ' + (e?.message || 'error de red') };
   }
+}
+
+// Meta contesta en inglés y en su jerga. Quien atiende el inbox no tiene por
+// qué saber qué es un OAuth token: necesita saber qué hacer ahora.
+function motivoEnEspanol(msg, cod) {
+  const m = String(msg || '');
+  if (cod === 131047 || /24 hours|re-engagement/i.test(m)) {
+    return 'Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite escribirle libremente: tiene que escribir él primero, o hay que usar una plantilla aprobada.';
+  }
+  if (/parse access token|invalid oauth|malformed/i.test(m)) {
+    return 'La conexión con Meta no es válida. Vuelve a conectar el canal en Marketing → Fuentes → Configurar canales.';
+  }
+  if (cod === 190 || /session has expired|access token.*expired/i.test(m)) {
+    return 'La conexión con Meta caducó. Reconecta el canal en Marketing → Fuentes → Configurar canales.';
+  }
+  if (cod === 131026 || /not.*whatsapp user|recipient.*not/i.test(m)) {
+    return 'Ese número no tiene WhatsApp o no puede recibir mensajes.';
+  }
+  if (cod === 10 || cod === 200 || /permission/i.test(m)) {
+    return 'A la app le falta permiso de Meta para enviar por este canal. Revisa la conexión del canal.';
+  }
+  if (cod === 4 || cod === 613 || /rate limit|too many/i.test(m)) {
+    return 'Meta está limitando los envíos por volumen. Espera unos minutos y reintenta.';
+  }
+  return m;
 }
 
 // TikTok Business Messaging: el envío manual desde el inbox usa el mismo
