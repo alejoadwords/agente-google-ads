@@ -26593,6 +26593,95 @@ async function navUpdateConvBadge() {
 // ── INFORME DE CONVERSACIONES ─────────────────────────────────────────────────
 // Rendimiento del inbox: volumen, canales, estado y tiempo de primera respuesta.
 // Se calcula sobre chat_conversations + chat_messages.
+// ── Rangos de fecha de los informes ─────────────────────────────────────────
+// Un rango es un NÚMERO de días hacia atrás (0 = todo) o, cuando se elige a
+// mano, un objeto {desde, hasta} en milisegundos. Se mantuvo el número para no
+// reescribir los cinco informes: lo que cambia es que ahora todos preguntan por
+// los dos extremos en vez de asumir que el final es «ahora».
+const RANGOS = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
+
+function esRangoLibre(r) { return !!r && typeof r === 'object'; }
+function rangoIni(r, tope) {
+  if (esRangoLibre(r)) return r.desde;
+  return r ? Date.now() - r * 86400000 : (tope ? Date.now() - tope * 86400000 : 0);
+}
+function rangoFin(r) { return esRangoLibre(r) ? r.hasta : Date.now(); }
+// Días que cubre el rango, para las gráficas por día.
+function rangoDias(r, porDefecto) {
+  // 'hasta' son las 23:59:59 del último día, así que la diferencia ya cubre el
+  // día entero: sumarle uno metía una columna de ceros al final de las gráficas.
+  if (esRangoLibre(r)) return Math.max(1, Math.ceil((r.hasta - r.desde) / 86400000));
+  return r || porDefecto;
+}
+function rangoEtiqueta(r) {
+  if (!esRangoLibre(r)) return null;
+  const f = t => new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  return f(r.desde) + ' – ' + f(r.hasta);
+}
+
+// Botonera compartida. 'activo' es el valor actual y 'fn' el nombre de la
+// función que lo cambia, para poder reusarla en los cinco informes.
+function rangoBotones(activo, fn) {
+  return '<div style="display:flex;gap:5px;flex-wrap:wrap">' +
+    RANGOS.map(([d, t]) =>
+      '<button class="btn-' + (activo === d ? 'pri' : 'sec') + ' sm" onclick="' + fn + '(' + d + ')">' + t + '</button>').join('') +
+    '<button class="btn-' + (esRangoLibre(activo) ? 'pri' : 'sec') + ' sm" onclick="rangoAbrir(\'' + fn + '\')">' +
+      (rangoEtiqueta(activo) || 'Elegir fechas') + '</button>' +
+  '</div>';
+}
+
+function rangoValorLocal(fecha) {
+  const p = n => String(n).padStart(2, '0');
+  return fecha.getFullYear() + '-' + p(fecha.getMonth() + 1) + '-' + p(fecha.getDate());
+}
+
+function rangoAbrir(fn) {
+  document.getElementById('rango-overlay')?.remove();
+  const hoy = new Date();
+  const hace30 = new Date(Date.now() - 30 * 86400000);
+  const ov = document.createElement('div');
+  ov.id = 'rango-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:400px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Elegir fechas</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Ambos días quedan incluidos</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-field"><label class="auto-label">Desde</label>' +
+        '<input type="date" class="auto-input" id="rango-desde" value="' + rangoValorLocal(hace30) + '" max="' + rangoValorLocal(hoy) + '"></div>' +
+      '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">Hasta</label>' +
+        '<input type="date" class="auto-input" id="rango-hasta" value="' + rangoValorLocal(hoy) + '" max="' + rangoValorLocal(hoy) + '"></div>' +
+      '<div id="rango-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:12px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" onclick="rangoAplicar(\'' + fn + '\')">Aplicar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function rangoAplicar(fn) {
+  const err = document.getElementById('rango-error');
+  const avisa = m => { if (err) { err.textContent = m; err.style.display = m ? 'block' : 'none'; } };
+  const d = document.getElementById('rango-desde')?.value;
+  const h = document.getElementById('rango-hasta')?.value;
+  if (!d || !h) return avisa('Elige las dos fechas.');
+  // Se leen como fecha local, no UTC: con new Date('2026-08-01') en Colombia
+  // el rango empezaría a las 7 p.m. del día anterior.
+  const [ay, am, ad] = d.split('-').map(Number);
+  const [by, bm, bd] = h.split('-').map(Number);
+  const desde = new Date(ay, am - 1, ad, 0, 0, 0, 0).getTime();
+  const hasta = new Date(by, bm - 1, bd, 23, 59, 59, 999).getTime();
+  if (hasta < desde) return avisa('La fecha final es anterior a la inicial.');
+  avisa('');
+  document.getElementById('rango-overlay')?.remove();
+  const cambiar = window[fn];
+  if (typeof cambiar === 'function') cambiar({ desde, hasta });
+}
+
 let _cvRange = 30;
 let _cvData = null;
 
@@ -26606,7 +26695,7 @@ function cvFmtDur(min) {
 }
 
 async function cvLoad() {
-  const from = new Date(Date.now() - (_cvRange || 3650) * 86400000).toISOString();
+  const from = new Date(rangoIni(_cvRange, 3650)).toISOString();
   try {
     const r = await fetchAuth('/api/chat-conversations?report=1&from=' + encodeURIComponent(from));
     _cvData = r.ok ? await r.json() : { conversations: [], messages: [], channels: [] };
@@ -26624,13 +26713,10 @@ async function cvRender() {
   const { conversations: convs, messages: msgs, channels } = _cvData;
   const now = Date.now();
 
-  const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento del inbox</div>' +
     '<div style="font-size:12px;color:var(--muted)">Volumen, canales y velocidad de respuesta</div></div>' +
-    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
-      '<button class="btn-' + (_cvRange === d ? 'pri' : 'sec') + ' sm" onclick="cvSetRange(' + d + ')">' + t + '</button>').join('') +
-    '</div></div>';
+    rangoBotones(_cvRange, 'cvSetRange') + '</div>';
 
   // Sin canales conectados: estado vacío honesto en vez de un tablero de ceros
   const activos = (channels || []).filter(c => c.is_active);
@@ -26646,7 +26732,8 @@ async function cvRender() {
     return;
   }
 
-  const nuevas = convs.filter(c => !_cvRange || new Date(c.created_at).getTime() >= now - _cvRange * 86400000);
+  const iniCv = rangoIni(_cvRange), finCv = rangoFin(_cvRange);
+  const nuevas = convs.filter(c => { const t = new Date(c.created_at).getTime(); return t >= iniCv && t <= finCv; });
   // El inbox usa bot | human | resolved — abierta es todo lo que no está resuelto
   const abiertas = convs.filter(c => (c.status || 'bot') !== 'resolved');
   const escaladas = convs.filter(c => c.status === 'human');
@@ -26676,7 +26763,7 @@ async function cvRender() {
   '</div>';
 
   // Volumen por día
-  const dias = Math.min(_cvRange || 30, 30) || 30;
+  const dias = Math.min(rangoDias(_cvRange, 30), 30) || 30;
   const dayKey = t => new Date(t).toISOString().slice(0, 10);
   const porDia = {};
   convs.forEach(c => { const k = dayKey(c.created_at); porDia[k] = (porDia[k] || 0) + 1; });
@@ -26748,28 +26835,29 @@ async function mkRender() {
   await crmCargarLeadsAmbito();
   const leads = leadsInforme();
   const now = Date.now();
-  const from = _mkRange ? now - _mkRange * 86400000 : 0;
-  const inR = d => d && new Date(d).getTime() >= from;
+  const from = rangoIni(_mkRange);
+  const hasta = rangoFin(_mkRange);
+  // Con el rango a mano importa también el extremo superior: sin él, «hasta»
+  // no se aplicaría y el informe seguiría llegando hasta hoy.
+  const inR = d => { if (!d) return false; const t = new Date(d).getTime(); return t >= from && t <= hasta; };
 
-  const enviadas = camps.filter(c => c.channel === 'email' && ['sent', 'sending'].includes(c.status) && (!_mkRange || inR(c.sent_at || c.created_at)));
+  const enviadas = camps.filter(c => c.channel === 'email' && ['sent', 'sending'].includes(c.status) && inR(c.sent_at || c.created_at));
   const totalSent = enviadas.reduce((s, c) => s + ((c.stats || {}).sent || 0), 0);
   const totalDeliv = enviadas.reduce((s, c) => s + ((c.stats || {}).delivered || (c.stats || {}).sent || 0), 0);
   const totalOpen = enviadas.reduce((s, c) => s + ((c.stats || {}).opened || 0), 0);
   const openRate = totalDeliv ? Math.round(totalOpen / totalDeliv * 100) : 0;
 
-  const logsR = logs.filter(l => !_mkRange || inR(l.created_at));
+  const logsR = logs.filter(l => inR(l.created_at));
   const impactados = new Set(logsR.map(l => l.lead_id).filter(Boolean)).size;
   const activas = autos.filter(a => a.active).length;
 
-  const nuevos = leads.filter(l => !_mkRange || inR(l.created_at));
+  const nuevos = leads.filter(l => inR(l.created_at));
 
   const ranges = [[30, '30 días'], [90, '90 días'], [365, '12 meses'], [0, 'Todo']];
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Marketing</div>' +
     '<div style="font-size:12px;color:var(--muted)">Campañas, automatizaciones y captación de leads</div></div>' +
-    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
-      '<button class="btn-' + (_mkRange === d ? 'pri' : 'sec') + ' sm" onclick="mkSetRange(' + d + ')">' + t + '</button>').join('') +
-    '</div></div>';
+    rangoBotones(_mkRange, 'mkSetRange') + '</div>';
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
     salesCard('Campañas enviadas', enviadas.length, 'en el periodo') +
@@ -26855,7 +26943,7 @@ let _prodData = null;
 function prodSetRange(d) { _prodRange = d; _prodData = null; prodRender(); }
 
 async function prodLoad() {
-  const fromIso = new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString();
+  const fromIso = new Date(rangoIni(_prodRange, 365)).toISOString();
   const toIso = new Date(Date.now() + 60 * 86400000).toISOString();
   // El cliente activo es obligatorio: api/agenda filtra por client_id y, sin él,
   // solo devuelve lo que se creó sin cliente — el informe salía siempre en cero
@@ -26863,7 +26951,7 @@ async function prodLoad() {
   const cli = (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId)
     ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
   const [acts, inter] = await Promise.all([
-    fetchAuth('/api/agenda?from=' + encodeURIComponent(new Date(Date.now() - (_prodRange || 365) * 86400000).toISOString()) + '&to=' + encodeURIComponent(toIso) + cli)
+    fetchAuth('/api/agenda?from=' + encodeURIComponent(fromIso) + '&to=' + encodeURIComponent(toIso) + cli)
       .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
     fetchAuth('/api/lead-activities?from=' + encodeURIComponent(fromIso))
       .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
@@ -26883,9 +26971,10 @@ async function prodRender() {
   await crmCargarLeadsAmbito();
   const leads = leadsInforme();
   const now = Date.now();
-  const from = now - (_prodRange || 3650) * 86400000;
+  const from = rangoIni(_prodRange, 3650);
+  const hastaP = rangoFin(_prodRange);
 
-  const inRange = a => new Date(a.due_at || a.created_at).getTime() >= from;
+  const inRange = a => { const t = new Date(a.due_at || a.created_at).getTime(); return t >= from && t <= hastaP; };
   const periodo = acts.filter(inRange);
   const vencidas = acts.filter(a => !a.done && a.due_at && new Date(a.due_at).getTime() < now);
   const debidas = periodo.filter(a => a.due_at && new Date(a.due_at).getTime() <= now);
@@ -26905,13 +26994,10 @@ async function prodRender() {
   const cobertura = abiertos.length ? Math.round(cubiertos.length / abiertos.length * 100) : 0;
   const huerfanos = abiertos.filter(l => !conProxima.has(l.id));
 
-  const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Productividad comercial</div>' +
     '<div style="font-size:12px;color:var(--muted)">Qué se agenda, qué se cumple y qué leads se están enfriando</div></div>' +
-    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
-      '<button class="btn-' + (_prodRange === d ? 'pri' : 'sec') + ' sm" onclick="prodSetRange(' + d + ')">' + t + '</button>').join('') +
-    '</div></div>';
+    rangoBotones(_prodRange, 'prodSetRange') + '</div>';
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
     salesCard('Actividades', periodo.length, 'agendadas en el periodo') +
@@ -26922,7 +27008,7 @@ async function prodRender() {
   '</div>';
 
   // Pulso diario
-  const dias = Math.min(_prodRange || 30, 30) || 30;
+  const dias = Math.min(rangoDias(_prodRange, 30), 30) || 30;
   const dayKey = t => new Date(t).toISOString().slice(0, 10);
   const creadas = {}, completadas = {};
   acts.forEach(a => {
@@ -27062,11 +27148,12 @@ function salesRender() {
   if (!box) return;
   const leads = leadsInforme(salesRender);
   const now = Date.now();
-  const from = _salesRange ? now - _salesRange * 86400000 : 0;
-  const inRange = d => d && new Date(d).getTime() >= from;
+  const from = rangoIni(_salesRange);
+  const hastaV = rangoFin(_salesRange);
+  const inRange = d => { if (!d) return false; const t = new Date(d).getTime(); return t >= from && t <= hastaV; };
 
-  const won  = leads.filter(l => l.stage === 'ganado'  && (!_salesRange || inRange(l.closed_at || l.updated_at)));
-  const lost = leads.filter(l => l.stage === 'perdido' && (!_salesRange || inRange(l.closed_at || l.updated_at)));
+  const won  = leads.filter(l => l.stage === 'ganado'  && inRange(l.closed_at || l.updated_at));
+  const lost = leads.filter(l => l.stage === 'perdido' && inRange(l.closed_at || l.updated_at));
   const open = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
   const revenue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
   const pipeline = open.reduce((s, l) => s + (Number(l.value) || 0), 0);
@@ -27081,7 +27168,10 @@ function salesRender() {
   // Periodo anterior de la misma longitud, para la comparativa
   let dRev = null, dCount = null;
   if (_salesRange) {
-    const prevFrom = from - _salesRange * 86400000;
+    // El periodo anterior mide lo mismo que el elegido, sea de 90 días o de
+    // los que abarque un rango a mano.
+    const largo = hastaV - from;
+    const prevFrom = from - largo;
     const prevWon = leads.filter(l => {
       if (l.stage !== 'ganado') return false;
       const t = new Date(l.closed_at || l.updated_at || 0).getTime();
@@ -27096,9 +27186,7 @@ function salesRender() {
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento de ventas</div>' +
     '<div style="font-size:12px;color:var(--muted)">Cómo cerró tu pipeline en el periodo</div></div>' +
-    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
-      '<button class="btn-' + (_salesRange === d ? 'pri' : 'sec') + ' sm" onclick="salesSetRange(' + d + ')">' + t + '</button>').join('') +
-    '</div></div>';
+    rangoBotones(_salesRange, 'salesSetRange') + '</div>';
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
     salesCard('Importe ganado', salesFmtMoney(revenue, cur), won.length + (won.length === 1 ? ' venta' : ' ventas') + (dRev !== null ? ' · vs periodo anterior' : ''), dRev) +
@@ -28437,7 +28525,7 @@ let _eqData = null;
 function eqSetRange(d) { _eqRange = d; _eqData = null; eqRender(); }
 
 async function eqLoad() {
-  const desde = new Date(Date.now() - (_eqRange || 3650) * 86400000).toISOString();
+  const desde = new Date(rangoIni(_eqRange, 3650)).toISOString();
   const cli = (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId)
     ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
   const [inter, equipo] = await Promise.all([
@@ -28485,15 +28573,13 @@ async function eqRender() {
   const { inter, equipo } = _eqData;
   await crmCargarLeadsAmbito();
   const leads = leadsInforme();
-  const desde = Date.now() - (_eqRange || 3650) * 86400000;
+  const desde = rangoIni(_eqRange, 3650);
+  const hastaEq = rangoFin(_eqRange);
 
-  const ranges = [[7, '7 días'], [30, '30 días'], [90, '90 días'], [0, 'Todo']];
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Por comercial</div>' +
     '<div style="font-size:12px;color:var(--muted)">Qué recibe cada uno, qué tan rápido responde y qué cierra</div></div>' +
-    '<div style="display:flex;gap:5px">' + ranges.map(([d, t]) =>
-      '<button class="btn-' + (_eqRange === d ? 'pri' : 'sec') + ' sm" onclick="eqSetRange(' + d + ')">' + t + '</button>').join('') +
-    '</div></div>';
+    rangoBotones(_eqRange, 'eqSetRange') + '</div>';
 
   // Primera interacción humana de cada lead
   const primera = {};
