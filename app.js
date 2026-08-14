@@ -18986,21 +18986,258 @@ function kbAbrir() {
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
     '</div>' +
     '<div class="auto-modal-body">' +
-      '<label class="auto-label">Dirección de la web</label>' +
-      '<div style="display:flex;gap:8px">' +
-        '<input class="auto-input" id="kb-url" placeholder="https://susitio.com" style="flex:1" ' +
-          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();kbDetectar()}">' +
-        '<button class="btn-sec sm" id="kb-btn-det" onclick="kbDetectar()">Detectar</button>' +
+      '<div class="kb-tabs">' +
+        '<button class="kb-tab activo" id="kb-tab-web" onclick="kbPestana(\'web\')">Desde la web</button>' +
+        '<button class="kb-tab" id="kb-tab-archivo" onclick="kbPestana(\'archivo\')">Desde un archivo</button>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--muted);margin-top:5px">Solo el dominio, sin rutas. Por ahora funciona con sitios hechos en WordPress.</div>' +
-      '<div id="kb-res" style="margin-top:16px"></div>' +
+      '<div id="kb-pane-web">' +
+        '<label class="auto-label">Dirección de la web</label>' +
+        '<div style="display:flex;gap:8px">' +
+          '<input class="auto-input" id="kb-url" placeholder="https://susitio.com" style="flex:1" ' +
+            'onkeydown="if(event.key===\'Enter\'){event.preventDefault();kbDetectar()}">' +
+          '<button class="btn-sec sm" id="kb-btn-det" onclick="kbDetectar()">Detectar</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Solo el dominio, sin rutas. Funciona con sitios hechos en WordPress.</div>' +
+        '<div id="kb-res" style="margin-top:16px"></div>' +
+      '</div>' +
+      '<div id="kb-pane-archivo" style="display:none">' +
+        '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">' +
+          'Si la web no es WordPress —o el inventario vive en una hoja de cálculo— súbela aquí. ' +
+          'En Excel: <b>Archivo → Guardar como → CSV UTF-8</b>. En Google Sheets: <b>Archivo → Descargar → .csv</b>.' +
+        '</div>' +
+        '<input type="file" id="kb-file" accept=".csv,.txt,text/csv" style="display:none" onchange="kbLeerArchivo()">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<button class="btn-sec sm" onclick="document.getElementById(\'kb-file\').click()">Elegir archivo CSV</button>' +
+          '<button class="btn-ghost sm" onclick="kbPlantilla()">Descargar plantilla</button>' +
+        '</div>' +
+        '<div id="kb-arch" style="margin-top:16px"></div>' +
+      '</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
       '<button class="btn-pri sm" id="kb-btn-guardar" style="display:none" onclick="kbGuardar()">Guardar y sincronizar</button>' +
+      '<button class="btn-pri sm" id="kb-btn-subir" style="display:none" onclick="kbSubirArchivo()">Cargar inventario</button>' +
     '</div></div>';
   document.body.appendChild(ov);
   setTimeout(() => document.getElementById('kb-url')?.focus(), 80);
+}
+
+// ── Inventario desde una hoja de cálculo ────────────────────────────────────
+// Para clientes cuya web no es WordPress, o que sencillamente no tienen web.
+// Se lee CSV y no .xlsx a propósito: leer Excel de verdad exige una librería
+// externa, y aquí no se meten dependencias. Guardar como CSV son dos clics.
+let _kbFilas = null;      // filas ya parseadas del archivo
+let _kbCols = [];         // cabeceras detectadas
+let _kbMapa = {};         // campo de Acuarius → nombre de columna
+
+const KB_CAMPOS = [
+  { k: 'codigo', l: 'Código', obligatorio: true, pistas: ['codigo', 'código', 'cod', 'ref', 'referencia', 'id'] },
+  { k: 'operacion', l: 'Operación', pistas: ['operacion', 'operación', 'negocio', 'tipo de negocio', 'arriendo', 'venta'] },
+  { k: 'tipo', l: 'Tipo', pistas: ['tipo', 'inmueble', 'clase'] },
+  { k: 'ciudad', l: 'Ciudad', pistas: ['ciudad', 'municipio'] },
+  { k: 'barrio', l: 'Barrio', pistas: ['barrio', 'zona', 'sector', 'ubicacion', 'ubicación'] },
+  { k: 'habitaciones', l: 'Habitaciones', pistas: ['habitacion', 'habitación', 'alcoba', 'cuarto', 'dormitorio', 'hab'] },
+  { k: 'banos', l: 'Baños', pistas: ['bano', 'baño', 'banos', 'baños'] },
+  { k: 'estrato', l: 'Estrato', pistas: ['estrato'] },
+  { k: 'precio', l: 'Precio', pistas: ['precio', 'valor', 'canon', 'monto'] },
+  { k: 'url', l: 'Enlace', pistas: ['url', 'link', 'enlace', 'ficha'] },
+];
+
+// La primera pregunta de cualquiera es «¿qué columnas necesita?». Se responde
+// con un archivo que ya trae las columnas y un ejemplo relleno.
+function kbPlantilla() {
+  const cabecera = KB_CAMPOS.map(c => c.l).join(';');
+  const ejemplo = ['698', 'Arriendo', 'Apartamento', 'Barranquilla', 'El Prado', '2', '1', '4', '1235440', 'https://susitio.com/inmueble/698'].join(';');
+  // Con BOM para que Excel abra las tildes bien; sin él, «Operación» sale rota.
+  const csv = '\uFEFF' + cabecera + '\n' + ejemplo + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'inventario-acuarius.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function kbPestana(cual) {
+  const web = cual === 'web';
+  document.getElementById('kb-pane-web').style.display = web ? '' : 'none';
+  document.getElementById('kb-pane-archivo').style.display = web ? 'none' : '';
+  document.getElementById('kb-tab-web').classList.toggle('activo', web);
+  document.getElementById('kb-tab-archivo').classList.toggle('activo', !web);
+  // Cada pestaña tiene su botón: dejar el otro visible invita a pulsar el que no es.
+  document.getElementById('kb-btn-guardar').style.display = 'none';
+  document.getElementById('kb-btn-subir').style.display = (!web && _kbFilas?.length) ? '' : 'none';
+  if (web && _kbDeteccion) document.getElementById('kb-btn-guardar').style.display = '';
+}
+
+// Un CSV de verdad: comillas, comas dentro de comillas, saltos de línea dentro
+// de una celda y comillas escapadas duplicándolas. Partir por comas se rompe con
+// la primera dirección que lleve una.
+function kbParsearCSV(texto, sep) {
+  const filas = [];
+  let campo = '', fila = [], enComillas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (enComillas) {
+      if (c === '"') {
+        if (texto[i + 1] === '"') { campo += '"'; i++; }
+        else enComillas = false;
+      } else campo += c;
+      continue;
+    }
+    if (c === '"') { enComillas = true; continue; }
+    if (c === sep) { fila.push(campo); campo = ''; continue; }
+    if (c === '\n') { fila.push(campo); filas.push(fila); fila = []; campo = ''; continue; }
+    if (c === '\r') continue;
+    campo += c;
+  }
+  if (campo !== '' || fila.length) { fila.push(campo); filas.push(fila); }
+  return filas;
+}
+
+// Excel en español exporta con punto y coma; en inglés, con coma. Se decide por
+// cuál aparece más en la cabecera, que es la línea más fiable del archivo.
+function kbSeparador(primeraLinea) {
+  const comas = (primeraLinea.match(/,/g) || []).length;
+  const puntoYComa = (primeraLinea.match(/;/g) || []).length;
+  const tabs = (primeraLinea.match(/\t/g) || []).length;
+  if (tabs > comas && tabs > puntoYComa) return '\t';
+  return puntoYComa > comas ? ';' : ',';
+}
+
+function kbNormalizar(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+async function kbLeerArchivo() {
+  const input = document.getElementById('kb-file');
+  const file = input?.files?.[0];
+  const caja = document.getElementById('kb-arch');
+  if (!file || !caja) return;
+  _kbFilas = null; _kbCols = []; _kbMapa = {};
+  document.getElementById('kb-btn-subir').style.display = 'none';
+  caja.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Leyendo ' + esc(file.name) + '…</div>';
+
+  try {
+    let texto = await file.text();
+    if (texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);   // BOM de Excel
+    const corte = texto.indexOf('\n');
+    const sep = kbSeparador(corte > 0 ? texto.slice(0, corte) : texto);
+    const bruto = kbParsearCSV(texto, sep).filter(f => f.some(c => String(c).trim() !== ''));
+    if (bruto.length < 2) {
+      caja.innerHTML = '<div style="font-size:12.5px;color:#b91c1c">El archivo no tiene cabecera y al menos una fila de datos.</div>';
+      return;
+    }
+    _kbCols = bruto[0].map(c => String(c).trim());
+    _kbFilas = bruto.slice(1).map(f => {
+      const o = {};
+      _kbCols.forEach((c, i) => { o[c] = f[i] !== undefined ? String(f[i]).trim() : ''; });
+      return o;
+    });
+
+    // Se adivina el mapeo por el nombre de la columna. Casi siempre acierta, y
+    // cuando no, el desplegable está ahí para corregirlo antes de cargar nada.
+    KB_CAMPOS.forEach(campo => {
+      const hallada = _kbCols.find(col => {
+        const n = kbNormalizar(col);
+        return campo.pistas.some(p => n === p || n.includes(p));
+      });
+      if (hallada) _kbMapa[campo.k] = hallada;
+    });
+    kbRenderArchivo(file.name);
+  } catch (e) {
+    caja.innerHTML = '<div style="font-size:12.5px;color:#b91c1c">No se pudo leer el archivo: ' + esc(e?.message || 'error') + '</div>';
+  } finally {
+    if (input) input.value = '';
+  }
+}
+
+function kbRenderArchivo(nombre) {
+  const caja = document.getElementById('kb-arch');
+  if (!caja || !_kbFilas) return;
+  const opciones = sel => '<option value="">— ninguna —</option>' +
+    _kbCols.map(c => '<option value="' + esc(c) + '"' + (sel === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+
+  caja.innerHTML =
+    '<div style="font-size:12.5px;font-weight:700;margin-bottom:2px">' + esc(nombre) + '</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + _kbFilas.length + ' filas · ' + _kbCols.length + ' columnas</div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Revisa a qué columna corresponde cada dato. El <b>código</b> es obligatorio: es lo que identifica cada propiedad entre una carga y la siguiente.</div>' +
+    KB_CAMPOS.map(c =>
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+        '<span style="flex:0 0 110px;font-size:12px' + (c.obligatorio ? ';font-weight:700' : '') + '">' + c.l + (c.obligatorio ? ' *' : '') + '</span>' +
+        '<select class="auto-input" style="flex:1;padding:6px 8px;font-size:12px" onchange="_kbMapa[\'' + c.k + '\']=this.value;kbVistaPrevia()">' +
+          opciones(_kbMapa[c.k]) + '</select>' +
+      '</div>').join('') +
+    '<div id="kb-previa" style="margin-top:12px"></div>' +
+    '<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:12px;cursor:pointer">' +
+      '<input type="checkbox" id="kb-reemplazar"> Borrar el inventario anterior de este cliente' +
+    '</label>' +
+    '<div style="font-size:11px;color:var(--muted);margin:4px 0 0 24px;line-height:1.5">Márcalo si este archivo es el inventario completo. Sin marcar, se agregan y actualizan las propiedades del archivo y se conservan las demás.</div>';
+
+  document.getElementById('kb-btn-subir').style.display = '';
+  kbVistaPrevia();
+}
+
+// Enseña la primera fila ya interpretada. Es donde se ve de un vistazo si el
+// precio se leyó mal o si el código apunta a la columna equivocada.
+function kbVistaPrevia() {
+  const caja = document.getElementById('kb-previa');
+  if (!caja || !_kbFilas?.length) return;
+  if (!_kbMapa.codigo) {
+    caja.innerHTML = '<div style="font-size:12px;color:#b91c1c">Falta indicar cuál es la columna del código.</div>';
+    return;
+  }
+  const f = _kbFilas[0];
+  const val = k => (_kbMapa[k] ? f[_kbMapa[k]] : '') || '—';
+  caja.innerHTML = '<div class="inbox-adj-pend" style="margin:0;display:block">' +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:5px">Así se leería la primera propiedad</div>' +
+    '<div style="font-size:12.5px;line-height:1.6">' +
+      '<b>' + esc(val('codigo')) + '</b> · ' + esc(val('operacion')) + ' · ' + esc(val('tipo')) + '<br>' +
+      esc(val('barrio')) + ', ' + esc(val('ciudad')) + ' · ' + esc(val('habitaciones')) + ' hab · ' + esc(val('banos')) + ' baños<br>' +
+      'Precio: <b>' + esc(val('precio')) + '</b>' +
+    '</div></div>';
+}
+
+async function kbSubirArchivo() {
+  if (!_kbFilas?.length) return;
+  if (!_kbMapa.codigo) { showToast('Indica cuál es la columna del código', 'error'); return; }
+  const cliente = crmAmbitoCliente();
+  if (!cliente) { showToast('Activa primero el cliente', 'error'); return; }
+
+  const filas = _kbFilas.map(f => {
+    const o = {};
+    KB_CAMPOS.forEach(c => { if (_kbMapa[c.k]) o[c.k] = f[_kbMapa[c.k]]; });
+    return o;
+  });
+
+  const btn = document.getElementById('kb-btn-subir');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cargando…'; }
+  try {
+    const r = await fetchAuth('/api/knowledge-upload', {
+      method: 'POST',
+      body: JSON.stringify({
+        client_id: cliente, filas,
+        reemplazar: !!document.getElementById('kb-reemplazar')?.checked,
+        archivo: 'archivo cargado',
+      }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo cargar', 'error'); return; }
+    document.getElementById('kb-overlay')?.remove();
+    // Lo descartado se dice siempre: un "listo" que esconde 40 filas sin código
+    // deja al agente ofreciendo un catálogo incompleto sin que nadie lo sepa.
+    const avisos = [];
+    if (d.sin_codigo) avisos.push(d.sin_codigo + ' sin código (descartadas)');
+    if (d.repetidos) avisos.push(d.repetidos + ' códigos repetidos');
+    if (d.sin_precio) avisos.push(d.sin_precio + ' sin precio');
+    showToast(d.guardadas + ' propiedades cargadas' + (avisos.length ? ' · ' + avisos.join(' · ') : ''), 'success');
+    kbEstado();
+  } catch (e) {
+    showToast('No se pudo cargar: ' + (e?.message || 'error de red'), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Cargar inventario'; }
+  }
 }
 
 async function kbDetectar() {
