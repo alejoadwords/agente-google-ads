@@ -27755,6 +27755,8 @@ async function segLoad() {
       document.getElementById('seg-ventana-horas').value = String(r.ventana_horas_antes || 4);
       segToggleVentana();
     }
+    const n = document.getElementById('seg-notas');
+    if (n) n.checked = r.avisar_notas !== false;
   } catch {}
 }
 
@@ -27782,6 +27784,7 @@ async function segSave() {
         solo_calificados: document.getElementById('seg-solo-cal').checked,
         ventana_24h: document.getElementById('seg-ventana')?.checked !== false,
         ventana_horas_antes: Number(document.getElementById('seg-ventana-horas')?.value || 4),
+        avisar_notas: document.getElementById('seg-notas')?.checked !== false,
       } }),
     });
     const d = await r.json();

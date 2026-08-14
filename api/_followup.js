@@ -27,6 +27,8 @@ export const DEFAULT_REGLA = {
   // escribir libremente hasta que el cliente vuelva a hablar.
   ventana_24h: true,
   ventana_horas_antes: 4,
+  // Aviso por correo cuando alguien del equipo deja una nota interna.
+  avisar_notas: true,
 };
 
 function sb() {
@@ -49,6 +51,7 @@ export function normalizarRegla(raw) {
     ventana_24h: r.ventana_24h !== false,
     // Entre 1 y 12 horas antes: avisar con 20 no es avisar, es duplicar el inbox
     ventana_horas_antes: Math.min(Math.max(Number(r.ventana_horas_antes) || DEFAULT_REGLA.ventana_horas_antes, 1), 12),
+    avisar_notas: r.avisar_notas !== false,
   };
 }
 

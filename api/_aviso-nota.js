@@ -65,6 +65,12 @@ export async function avisarNota({ ownerId, autorId, autorNombre, conv, texto })
     const key = process.env.RESEND_API_KEY;
     if (!key) return { avisados: 0, motivo: 'sin RESEND_API_KEY' };
 
+    // La regla vive con las demás de seguimiento: una agencia con mucho volumen
+    // puede no querer un correo por cada nota.
+    const { getRegla } = await import('./_followup.js');
+    const regla = await getRegla(ownerId);
+    if (!regla.avisar_notas) return { avisados: 0, motivo: 'apagado' };
+
     const ids = await destinatarios(ownerId, autorId, conv);
     if (!ids.length) return { avisados: 0 };
 
