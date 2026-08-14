@@ -2017,7 +2017,7 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .crm-inbox-bubble-wrap.user{align-items:flex-start}
 .crm-inbox-bubble-wrap.assistant{align-items:flex-end}
 .crm-inbox-bubble-time{font-size:9px;color:var(--muted2);margin-top:2px;padding:0 3px}
-.crm-inbox-reply{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.crm-inbox-reply{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;position:relative}
 .crm-inbox-reply-input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);resize:none;outline:none;min-height:40px;max-height:100px}
 .crm-inbox-reply-input:focus{border-color:var(--blue)}
 .crm-inbox-reply-btn{padding:9px 16px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);align-self:flex-end}
@@ -2064,6 +2064,14 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .inbox-adj-mini{width:34px;height:34px;object-fit:cover;border-radius:6px;flex-shrink:0}
 .inbox-adj-spin{width:13px;height:13px;flex-shrink:0;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:adjGiro .7s linear infinite}
 @keyframes adjGiro{to{transform:rotate(360deg)}}
+
+/* Emoji */
+.emoji-panel{position:absolute;bottom:calc(100% + 8px);left:12px;width:300px;max-height:280px;overflow-y:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);padding:10px 12px;z-index:60}
+.emoji-titulo{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:8px 0 5px}
+.emoji-titulo:first-child{margin-top:0}
+.emoji-rejilla{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.emoji-btn{font-size:19px;line-height:1;background:transparent;border:none;border-radius:7px;padding:5px 0;cursor:pointer;font-family:var(--font)}
+.emoji-btn:hover{background:var(--bg-subtle)}
 .crm-inbox-reply.modo-nota{background:rgba(245,158,11,.07)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-input{border-color:rgba(245,158,11,.5)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-btn{background:#b45309}

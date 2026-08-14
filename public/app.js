@@ -19611,6 +19611,9 @@ async function inboxOpenConv(convId) {
       <button class="inbox-accion" id="inbox-btn-nota" title="Nota interna (no la ve el cliente)" onclick="inboxModoNota()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
       </button>
+      <button class="inbox-accion" id="inbox-btn-emoji" title="Emoji" onclick="emojiAlternar(event)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"/><path d="M9 9.5h.01"/><path d="M15 9.5h.01"/></svg>
+      </button>
       <input type="file" id="inbox-file" style="display:none" onchange="inboxElegirArchivo('${esc(convId)}')">
       <button class="inbox-accion" id="inbox-btn-clip" title="Adjuntar imagen o archivo" onclick="document.getElementById('inbox-file').click()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.2-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
@@ -19624,6 +19627,7 @@ async function inboxOpenConv(convId) {
 
   inboxNotaActiva = false;   // cada conversación se abre en modo mensaje
   inboxAdjunto = null;       // y sin el archivo que quedara colgado en otra
+  document.getElementById('emoji-panel')?.remove();
 
   // Scroll to bottom
   setTimeout(() => {
@@ -19866,6 +19870,81 @@ async function inboxBorrarNota(id, convId) {
     if (!r.ok) { showToast(d.error || 'No se pudo borrar la nota', 'error'); return; }
     await inboxOpenConv(convId);
   } catch { showToast('No se pudo borrar la nota', 'error'); }
+}
+
+// ── Emoji ───────────────────────────────────────────────────────────────────
+// Lista escogida a mano, no el catálogo entero de Unicode: los que de verdad se
+// usan contestando a un cliente. Un panel con 3.700 emojis es más lento de usar
+// que escribir la palabra.
+const EMOJI_GRUPOS = [
+  ['Frecuentes', '😊 👍 🙌 🙏 😀 😃 😄 😁 😉 😍 🥰 😘 🤗 🤝 👌 ✌️ 💪 👏 🎉 ✅ ❤️ 🔥'],
+  ['Caras', '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😋 😛 🤗 🤔 🤨 😐 😑 😶 🙄 😏 😴 😪 😌 🥱 😔 😕 🙁 ☹️ 😲 😳 🥺 😢 😭 😤 😠 😡 🤯 😰 😥 😓 🤥 🤫 🤭 😬 🥳 😎 🤓 🧐'],
+  ['Gestos', '👍 👎 👌 ✌️ 🤞 🤟 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 🙏 💪 🙌 👏 ✍️ 💅 👀 🫶'],
+  ['Trabajo', '📅 📆 🗓️ ⏰ ⏳ 📞 📱 💻 🖥️ 📧 📨 📩 📎 📌 📍 🗂️ 📁 📂 📄 📃 📊 📈 📉 🧾 🖊️ ✏️ 📝 🔎 🔍 ✅ ☑️ ❌ ⚠️ ❗ ❓ 💡 🔔 🔒 🔑'],
+  ['Casa y lugar', '🏠 🏡 🏢 🏬 🏘️ 🏚️ 🛏️ 🛋️ 🚿 🛁 🚗 🚪 🪟 🌳 🌊 🏖️ 🗺️ 📍 🧭 🏗️ 🔨 🧹'],
+  ['Dinero', '💰 💵 💲 💳 🧾 🏦 📊 📈 📉 🤑 🎁 🏷️ 🔖'],
+  ['Ánimo', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💯 🔥 ⭐ 🌟 ✨ 🎉 🎊 🏆 🥇 👑 🚀 💎 ☀️ 🌙 ⛅ 🌧️ ☕ 🍀'],
+];
+const EMOJI_RECIENTES = 'acuarius_emoji_recientes';
+
+function emojiRecientes() {
+  try { return JSON.parse(localStorage.getItem(EMOJI_RECIENTES) || '[]').slice(0, 22); }
+  catch { return []; }
+}
+
+function emojiAlternar(ev) {
+  ev?.stopPropagation();
+  const abierto = document.getElementById('emoji-panel');
+  if (abierto) { abierto.remove(); return; }
+
+  const caja = document.querySelector('.crm-inbox-reply');
+  if (!caja) return;
+  const recientes = emojiRecientes();
+  const grupos = recientes.length
+    ? [['Recientes', recientes.join(' ')], ...EMOJI_GRUPOS.slice(1)]
+    : EMOJI_GRUPOS;
+
+  const panel = document.createElement('div');
+  panel.id = 'emoji-panel';
+  panel.className = 'emoji-panel';
+  panel.addEventListener('mousedown', e => e.preventDefault());   // no robarle el foco a la caja
+  panel.innerHTML = grupos.map(([titulo, lista]) =>
+    '<div class="emoji-titulo">' + esc(titulo) + '</div>' +
+    '<div class="emoji-rejilla">' +
+      lista.split(' ').filter(Boolean).map(e =>
+        '<button class="emoji-btn" onclick="emojiPoner(\'' + e + '\')">' + e + '</button>').join('') +
+    '</div>').join('');
+  caja.appendChild(panel);
+
+  // Un clic fuera lo cierra. Se registra en el siguiente ciclo para que no lo
+  // cierre el mismo clic que lo abrió.
+  setTimeout(() => {
+    const fuera = e => {
+      if (!panel.contains(e.target) && e.target.id !== 'inbox-btn-emoji') {
+        panel.remove();
+        document.removeEventListener('click', fuera);
+      }
+    };
+    document.addEventListener('click', fuera);
+  }, 0);
+}
+
+// Se inserta donde está el cursor, no al final: si alguien vuelve a mitad de la
+// frase a poner una carita, ahí es donde la quiere.
+function emojiPoner(e) {
+  const input = document.getElementById('inbox-reply-input');
+  if (!input) return;
+  const ini = input.selectionStart ?? input.value.length;
+  const fin = input.selectionEnd ?? input.value.length;
+  input.value = input.value.slice(0, ini) + e + input.value.slice(fin);
+  const pos = ini + e.length;
+  input.focus();
+  input.setSelectionRange(pos, pos);
+
+  try {
+    const previos = emojiRecientes().filter(x => x !== e);
+    localStorage.setItem(EMOJI_RECIENTES, JSON.stringify([e, ...previos].slice(0, 22)));
+  } catch {}
 }
 
 // ── Adjuntos ────────────────────────────────────────────────────────────────
