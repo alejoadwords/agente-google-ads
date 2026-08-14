@@ -75,6 +75,10 @@
     {
       "path": "/api/cron-programados",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron-ventana",
+      "schedule": "0 * * * *"
     }
   ]
 }

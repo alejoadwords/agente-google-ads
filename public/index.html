@@ -4929,6 +4929,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <input type="checkbox" id="seg-solo-cal"> Solo para los leads que califican
               </label>
             </div>
+            <!-- Fuera del bloque de arriba a propósito: apagar el primer contacto
+                 no puede apagar de paso el aviso de la ventana. -->
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+              <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;font-weight:700">
+                <input type="checkbox" id="seg-ventana" onchange="segToggleVentana()"> Avisar antes de que se cierre la ventana de WhatsApp
+              </label>
+              <div style="font-size:11.5px;color:var(--muted);margin:5px 0 0 24px;line-height:1.5">
+                Pasadas 24 horas desde el último mensaje del cliente, WhatsApp no deja escribirle libremente.
+                Se crea una tarea sobre el lead antes de que se acabe el plazo.
+              </div>
+              <div id="seg-ventana-cfg" style="display:none;align-items:center;gap:8px;margin:10px 0 0 24px">
+                <span style="flex:1;font-size:12.5px">¿Con cuánta antelación?</span>
+                <select class="auto-input" id="seg-ventana-horas" style="width:150px;padding:6px 8px;font-size:12px">
+                  <option value="2">2 horas antes</option><option value="4">4 horas antes</option>
+                  <option value="6">6 horas antes</option><option value="8">8 horas antes</option>
+                  <option value="12">12 horas antes</option>
+                </select>
+              </div>
+            </div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
               <button class="btn-pri sm" id="seg-save" onclick="segSave()">Guardar seguimiento</button>
               <span id="seg-msg" style="font-size:12px;color:var(--muted2)"></span>

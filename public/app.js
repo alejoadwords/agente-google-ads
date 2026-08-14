@@ -27744,7 +27744,18 @@ async function segLoad() {
     document.getElementById('seg-horas').value = String(r.horas || 4);
     document.getElementById('seg-titulo').value = r.titulo || '';
     document.getElementById('seg-solo-cal').checked = !!r.solo_calificados;
+    const v = document.getElementById('seg-ventana');
+    if (v) {
+      v.checked = r.ventana_24h !== false;
+      document.getElementById('seg-ventana-horas').value = String(r.ventana_horas_antes || 4);
+      segToggleVentana();
+    }
   } catch {}
+}
+
+function segToggleVentana() {
+  const c = document.getElementById('seg-ventana-cfg');
+  if (c) c.style.display = document.getElementById('seg-ventana')?.checked ? 'flex' : 'none';
 }
 
 function segToggle() {
@@ -27764,6 +27775,8 @@ async function segSave() {
         horas: Number(document.getElementById('seg-horas').value || 4),
         titulo: document.getElementById('seg-titulo').value.trim() || 'Primer contacto',
         solo_calificados: document.getElementById('seg-solo-cal').checked,
+        ventana_24h: document.getElementById('seg-ventana')?.checked !== false,
+        ventana_horas_antes: Number(document.getElementById('seg-ventana-horas')?.value || 4),
       } }),
     });
     const d = await r.json();
