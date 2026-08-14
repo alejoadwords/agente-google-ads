@@ -19678,7 +19678,13 @@ function inboxAvisoVentana(conv) {
 }
 
 // ── Respuestas rápidas ──────────────────────────────────────────────────────
+// Todo ocurre dentro del mismo modal: crear, editar y confirmar el borrado. Con
+// prompt() y confirm() del navegador la interfaz saltaba a otro diseño —el del
+// sistema operativo— en mitad de una tarea de Acuarius.
 let qrLista = [];
+let qrVista = 'lista';     // 'lista' | 'form'
+let qrEditando = null;     // id que se está editando, o null si es nueva
+let qrPorBorrar = null;    // id con la confirmación abierta en su fila
 
 async function qrCargar() {
   const c = crmAmbitoCliente();
@@ -19692,30 +19698,66 @@ async function qrCargar() {
 
 async function qrAbrir(convId) {
   document.getElementById('qr-overlay')?.remove();
+  qrVista = 'lista'; qrEditando = null; qrPorBorrar = null;
   const ov = document.createElement('div');
   ov.id = 'qr-overlay';
   ov.className = 'auto-modal-overlay';
   ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  ov.innerHTML = '<div class="auto-modal" style="max-width:560px;height:min(80vh,560px)">' +
+  ov.innerHTML = '<div class="auto-modal" style="max-width:560px;height:min(80vh,580px)">' +
     '<div class="auto-modal-head">' +
-      '<div><div style="font-size:var(--fs-md);font-weight:800">Respuestas rápidas</div>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Lo que escribes todos los días, a un clic</div></div>' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800" id="qr-titulo-modal">Respuestas rápidas</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="qr-sub-modal">Lo que escribes todos los días, a un clic</div></div>' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
     '</div>' +
-    '<div class="auto-modal-body">' +
-      '<input class="auto-input" id="qr-buscar" placeholder="Buscar…" oninput="qrRender()">' +
-      '<div id="qr-lista" style="margin-top:12px"></div>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;justify-content:space-between;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
-      '<button class="btn-sec sm" onclick="qrCrear()">+ Nueva respuesta</button>' +
-      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cerrar</button>' +
-    '</div></div>';
+    '<div class="auto-modal-body" id="qr-cuerpo"></div>' +
+    '<div id="qr-pie" style="display:flex;gap:8px;justify-content:space-between;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0"></div>' +
+  '</div>';
   document.body.appendChild(ov);
   ov.dataset.conv = convId || '';
-  document.getElementById('qr-lista').innerHTML = '<div style="color:var(--muted);font-size:12.5px">Cargando…</div>';
+  document.getElementById('qr-cuerpo').innerHTML = '<div style="color:var(--muted);font-size:12.5px">Cargando…</div>';
   await qrCargar();
+  qrPintar();
+}
+
+function qrPintar() {
+  const cuerpo = document.getElementById('qr-cuerpo');
+  const pie = document.getElementById('qr-pie');
+  if (!cuerpo || !pie) return;
+  const titulo = document.getElementById('qr-titulo-modal');
+  const sub = document.getElementById('qr-sub-modal');
+
+  if (qrVista === 'form') {
+    const r = qrEditando ? qrLista.find(x => x.id === qrEditando) : null;
+    if (titulo) titulo.textContent = r ? 'Editar respuesta' : 'Nueva respuesta';
+    if (sub) sub.textContent = r ? 'Cambia el título o el texto' : 'Guarda algo que escribes muy seguido';
+    cuerpo.innerHTML =
+      '<div class="auto-field">' +
+        '<label class="auto-label">Título</label>' +
+        '<input class="auto-input" id="qr-f-titulo" maxlength="60" placeholder="Ej. Horario de atención" value="' + esc(r?.titulo || '') + '">' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Con esto la vas a buscar. Nadie más lo ve.</div>' +
+      '</div>' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">Mensaje</label>' +
+        '<textarea class="auto-input" id="qr-f-texto" rows="7" maxlength="2000" style="resize:vertical;line-height:1.5" placeholder="Lo que se va a escribir en la conversación">' + esc(r?.texto || '') + '</textarea>' +
+      '</div>' +
+      '<div id="qr-f-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:-6px"></div>';
+    pie.innerHTML =
+      '<button class="btn-ghost sm" onclick="qrVista=\'lista\';qrPintar()">Volver</button>' +
+      '<button class="btn-pri sm" id="qr-f-guardar" onclick="qrGuardar()">Guardar</button>';
+    setTimeout(() => document.getElementById('qr-f-titulo')?.focus(), 60);
+    return;
+  }
+
+  if (titulo) titulo.textContent = 'Respuestas rápidas';
+  if (sub) sub.textContent = 'Lo que escribes todos los días, a un clic';
+  cuerpo.innerHTML =
+    '<input class="auto-input" id="qr-buscar" placeholder="Buscar…" oninput="qrRender()">' +
+    '<div id="qr-lista" style="margin-top:12px"></div>';
+  pie.innerHTML =
+    '<button class="btn-sec sm" onclick="qrNueva()">+ Nueva respuesta</button>' +
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cerrar</button>';
   qrRender();
-  setTimeout(() => document.getElementById('qr-buscar')?.focus(), 80);
+  setTimeout(() => document.getElementById('qr-buscar')?.focus(), 60);
 }
 
 function qrRender() {
@@ -19725,19 +19767,32 @@ function qrRender() {
   const filtradas = qrLista.filter(r =>
     !q || r.titulo.toLowerCase().includes(q) || r.texto.toLowerCase().includes(q));
   if (!filtradas.length) {
-    cont.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:8px 2px">' +
+    cont.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:10px 2px;line-height:1.5">' +
       (qrLista.length ? 'Ninguna coincide con esa búsqueda.' :
         'Todavía no tienes respuestas guardadas. Crea la primera con el botón de abajo.') + '</div>';
     return;
   }
-  cont.innerHTML = filtradas.map(r =>
-    '<div class="qr-fila">' +
-      '<div style="flex:1;min-width:0;cursor:pointer" onclick="qrUsar(\'' + esc(r.id) + '\')">' +
+  cont.innerHTML = filtradas.map(r => {
+    if (qrPorBorrar === r.id) {
+      return '<div class="qr-fila borrando">' +
+        '<div style="flex:1;min-width:0;font-size:12.5px;line-height:1.5">¿Borrar <b>' + esc(r.titulo) + '</b>?</div>' +
+        '<button class="btn-ghost sm" onclick="qrPorBorrar=null;qrRender()">No</button>' +
+        '<button class="btn-dgr sm" onclick="qrBorrar(\'' + esc(r.id) + '\')">Sí, borrar</button>' +
+      '</div>';
+    }
+    return '<div class="qr-fila">' +
+      '<div style="flex:1;min-width:0;cursor:pointer" onclick="qrUsar(\'' + esc(r.id) + '\')" title="Usar en la conversación">' +
         '<div class="qr-titulo">' + esc(r.titulo) + '</div>' +
         '<div class="qr-texto">' + esc(r.texto) + '</div>' +
       '</div>' +
-      '<button class="pipe-borrar" title="Borrar" onclick="qrBorrar(\'' + esc(r.id) + '\')">' + ICONO_PAPELERA + '</button>' +
-    '</div>').join('');
+      '<button class="qr-icono" title="Editar" onclick="qrNueva(\'' + esc(r.id) + '\')">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' +
+      '</button>' +
+      '<button class="qr-icono peligro" title="Borrar" onclick="qrPorBorrar=\'' + esc(r.id) + '\';qrRender()">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
+      '</button>' +
+    '</div>';
+  }).join('');
 }
 
 // Se pega en la caja en vez de enviarse sola: casi siempre hay que ajustar algo
@@ -19754,31 +19809,57 @@ async function qrUsar(id) {
   fetchAuth('/api/quick-replies', { method: 'PUT', body: JSON.stringify({ id, usar: true }) }).catch(() => {});
 }
 
-async function qrCrear() {
-  const titulo = String(prompt('¿Cómo la vas a buscar? (ej. horario de atención)', '') || '').trim();
-  if (!titulo) return;
-  const texto = String(prompt('¿Qué debe escribir?', '') || '').trim();
-  if (!texto) return;
+function qrNueva(id) {
+  qrEditando = id || null;
+  qrPorBorrar = null;
+  qrVista = 'form';
+  qrPintar();
+}
+
+function qrErrorForm(msg) {
+  const e = document.getElementById('qr-f-error');
+  if (!e) return;
+  e.textContent = msg;
+  e.style.display = msg ? 'block' : 'none';
+}
+
+async function qrGuardar() {
+  const titulo = String(document.getElementById('qr-f-titulo')?.value || '').trim();
+  const texto = String(document.getElementById('qr-f-texto')?.value || '').trim();
+  if (!titulo) return qrErrorForm('Ponle un título para poder encontrarla.');
+  if (!texto) return qrErrorForm('Falta el mensaje que se va a escribir.');
+  qrErrorForm('');
+
+  const btn = document.getElementById('qr-f-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
-    const r = await fetchAuth('/api/quick-replies', {
-      method: 'POST',
-      body: JSON.stringify({ titulo, texto, client_id: crmAmbitoCliente() || null }),
-    });
+    const r = qrEditando
+      ? await fetchAuth('/api/quick-replies', { method: 'PUT', body: JSON.stringify({ id: qrEditando, titulo, texto }) })
+      : await fetchAuth('/api/quick-replies', { method: 'POST', body: JSON.stringify({ titulo, texto, client_id: crmAmbitoCliente() || null }) });
     const d = await leerRespuesta(r);
-    if (!r.ok) { showToast(d.error || 'No se pudo crear', 'error'); return; }
-    await qrCargar(); qrRender();
-    showToast('Respuesta guardada', 'success');
-  } catch { showToast('No se pudo crear la respuesta', 'error'); }
+    if (!r.ok) {
+      // El error se queda en el formulario, con lo escrito intacto.
+      qrErrorForm(d.error || 'No se pudo guardar.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+      return;
+    }
+    await qrCargar();
+    qrVista = 'lista'; qrEditando = null;
+    qrPintar();
+  } catch {
+    qrErrorForm('No se pudo guardar. Revisa tu conexión y reintenta.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
 }
 
 async function qrBorrar(id) {
-  const r = qrLista.find(x => x.id === id);
-  if (!r || !confirm('¿Borrar «' + r.titulo + '»?')) return;
   try {
     const res = await fetchAuth('/api/quick-replies?id=' + encodeURIComponent(id), { method: 'DELETE' });
     const d = await leerRespuesta(res);
     if (!res.ok) { showToast(d.error || 'No se pudo borrar', 'error'); return; }
-    await qrCargar(); qrRender();
+    qrPorBorrar = null;
+    await qrCargar();
+    qrRender();
   } catch { showToast('No se pudo borrar', 'error'); }
 }
 
