@@ -18026,6 +18026,75 @@ function crmOpenModal(defaultStage) {
   setTimeout(() => document.getElementById('crm-f-name').focus(), 100);
 }
 
+// ── Teléfono ────────────────────────────────────────────────────────────────
+// Se normaliza al escribirlo, no al guardarlo en silencio: quien lo teclea ve
+// cómo queda y lo corrige si el país no es el suyo. Reescribir por detrás un
+// dato de contacto es de las cosas que más tarde se descubren y peor sientan.
+//
+// Importa porque el número guardado es el que se usa para escribirle por
+// WhatsApp y para reconocer duplicados: sin prefijo, no sirve para lo primero.
+const TEL_PAISES = [
+  { nombre: 'colombia',   cod: '57', movil: 10, empieza: /^3/ },
+  { nombre: 'mexico',     cod: '52', movil: 10 },
+  { nombre: 'peru',       cod: '51', movil: 9,  empieza: /^9/ },
+  { nombre: 'chile',      cod: '56', movil: 9,  empieza: /^9/ },
+  { nombre: 'argentina',  cod: '54', movil: 10 },
+  { nombre: 'ecuador',    cod: '593', movil: 9, empieza: /^9/ },
+  { nombre: 'panama',     cod: '507', movil: 8 },
+  { nombre: 'costa rica', cod: '506', movil: 8 },
+  { nombre: 'guatemala',  cod: '502', movil: 8 },
+  { nombre: 'republica dominicana', cod: '1', movil: 10 },
+  { nombre: 'espana',     cod: '34', movil: 9,  empieza: /^[67]/ },
+  { nombre: 'estados unidos', cod: '1', movil: 10 },
+];
+
+// El país del cliente activo, escrito a mano en su ficha («Colombia», «CO»,
+// «colombia 🇨🇴»). Se busca por coincidencia laxa; si no se reconoce, no se
+// inventa prefijo.
+function telPaisDelCliente() {
+  const id = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const c = id && typeof agencyClients !== 'undefined' ? agencyClients.find(x => x.id === id) : null;
+  const txt = String(c?.pais || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  if (!txt) return null;
+  return TEL_PAISES.find(p => txt.includes(p.nombre))
+    || (/(^|\W)(co|col)(\W|$)/.test(txt) ? TEL_PAISES[0] : null)
+    || (/(^|\W)(mx|mex)(\W|$)/.test(txt) ? TEL_PAISES[1] : null);
+}
+
+// Devuelve el número en formato internacional, o el original si no hay forma de
+// saberlo con certeza. Nunca adivina a medias.
+function telNormalizar(valor, pais) {
+  const bruto = String(valor || '').trim();
+  if (!bruto) return '';
+  let d = bruto.replace(/[^\d+]/g, '');
+
+  if (d.startsWith('00')) d = '+' + d.slice(2);       // marcación internacional
+  if (d.startsWith('+')) {
+    const soloDigitos = d.slice(1).replace(/\D/g, '');
+    return soloDigitos.length >= 8 ? '+' + soloDigitos : bruto;
+  }
+
+  d = d.replace(/\D/g, '');
+  if (!d) return bruto;
+
+  // Ya trae el indicativo delante, sin el '+'
+  if (pais && d.startsWith(pais.cod) && d.length === pais.cod.length + pais.movil) return '+' + d;
+
+  if (pais && d.length === pais.movil && (!pais.empieza || pais.empieza.test(d))) {
+    return '+' + pais.cod + d;
+  }
+  // Sin país conocido o longitud que no encaja: se deja tal cual. Un número mal
+  // "arreglado" es peor que uno sin prefijo, porque parece correcto.
+  return bruto;
+}
+
+function crmNormalizarTelefono(input) {
+  if (!input) return;
+  const antes = input.value;
+  const despues = telNormalizar(antes, telPaisDelCliente());
+  if (despues !== antes) input.value = despues;
+}
+
 // Responsable del lead nuevo. Vacío = quien lo crea, que es lo que pasa el 95%
 // de las veces; el desplegable existe para el dueño que da de alta por otro.
 async function crmLlenarResponsable(seleccionado) {
@@ -18118,6 +18187,9 @@ function crmCloseModal() {
 }
 
 async function crmSaveLead() {
+  // Por si se envía sin salir del campo: el blur no llega a dispararse y el
+  // número se guardaría como se tecleó.
+  crmNormalizarTelefono(document.getElementById('crm-f-phone'));
   const name = document.getElementById('crm-f-name').value.trim();
   if (!name) { document.getElementById('crm-f-name').focus(); return; }
   const btn = document.getElementById('crm-save-btn');
