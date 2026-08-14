@@ -132,6 +132,11 @@ Sobre esta lista:
 - En cada linea: el barrio, las habitaciones, el precio y el codigo entre parentesis
 - Los precios son los de la lista, sin redondear ni estimar` : ''}
 
+SI TE MANDAN UNA FOTO:
+- La ves. Comenta lo que hay en ella con naturalidad, sin decir "veo una imagen"
+- Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
+- Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
+
 DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
@@ -189,27 +194,18 @@ export async function sugerirRespuesta(userId, conversationId) {
   if (!agent) return { ok: false, error: 'El agente de este canal ya no existe.' };
 
   const hist = await fetch(
-    `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content&order=created_at.desc&limit=12`,
+    `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content,adjunto_url,adjunto_tipo,adjunto_mime&order=created_at.desc&limit=12`,
     { headers: sb() }
   ).then(r => (r.ok ? r.json() : [])).then(r => (r || []).reverse()).catch(() => []);
   if (!hist.length) return { ok: false, error: 'Todavía no hay nada que responder en esta conversación.' };
 
-  // Dos mensajes seguidos del mismo lado se juntan: pasa en cuanto alguien
-  // responde a mano después del agente, y la API los rechaza.
-  const messages = [];
-  for (const m of hist) {
-    const ult = messages[messages.length - 1];
-    if (ult && ult.role === m.role) ult.content += '\n\n' + m.content;
-    else messages.push({ role: m.role, content: m.content });
-  }
   // La API continúa el último turno si es del asistente: sin esto la sugerencia
   // saldría como la segunda mitad del mensaje anterior, no como uno nuevo.
-  if (messages[messages.length - 1].role === 'assistant') {
-    messages.push({
-      role: 'user',
-      content: '(Aviso del sistema, no lo escribió el contacto) Redacta el siguiente mensaje que le enviarías a esta persona para retomar la conversación.',
-    });
-  }
+  const ultimo = hist[hist.length - 1];
+  const extra = ultimo?.role === 'assistant' ? [{
+    role: 'user',
+    content: '(Aviso del sistema, no lo escribió el contacto) Redacta el siguiente mensaje que le enviarías a esta persona para retomar la conversación.',
+  }] : [];
 
   const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
@@ -231,7 +227,7 @@ export async function sugerirRespuesta(userId, conversationId) {
   );
 
   try {
-    const bruto = await callClaude(system, messages);
+    const bruto = await responderViendo(system, hist, extra);
     const texto = cleanForUser(bruto).trim();
     if (!texto) return { ok: false, error: 'El agente no devolvió nada. Reintenta.' };
     return { ok: true, texto };
@@ -317,6 +313,64 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
   await enqueueAutomations(userId, rows[0], 'lead_created').catch(() => {});
   if (leadPayload.tags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadPayload.tags).catch(() => {});
   return leadId;
+}
+
+// ── Ver las imágenes ────────────────────────────────────────────────────────
+// Hasta ahora el agente solo sabía que había llegado una foto. Ahora la mira:
+// para una inmobiliaria eso es la diferencia entre «déjame verla» y «ese es el
+// del Prado, código 698».
+const IMG_VISIBLES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const TOPE_IMAGENES = 3;   // solo las últimas: cada una cuesta, y las viejas ya se comentaron
+
+function esImagenLegible(m) {
+  return m.adjunto_tipo === 'image'
+    && !!m.adjunto_url
+    && IMG_VISIBLES.includes(String(m.adjunto_mime || '').split(';')[0].toLowerCase());
+}
+
+// Convierte el historial en lo que espera la API, metiendo las imágenes como
+// bloques. Junta los mensajes seguidos del mismo lado, que la API rechaza y que
+// aparecen en cuanto alguien responde a mano después del agente.
+function historialParaModelo(hist, conImagenes = true) {
+  // Solo las últimas imágenes llevan bloque; de las anteriores queda su texto.
+  const conFoto = hist.filter(esImagenLegible);
+  const permitidas = new Set(conFoto.slice(-TOPE_IMAGENES).map(m => m.adjunto_url));
+
+  const salida = [];
+  for (const m of hist) {
+    const pintaImagen = conImagenes && esImagenLegible(m) && permitidas.has(m.adjunto_url);
+    let texto = String(m.content || '').trim();
+    // Un adjunto sin texto —una foto que se manda sin pie— se quedaba fuera del
+    // historial entero. El modelo no se enteraba de que existió.
+    if (!texto && m.adjunto_url && !pintaImagen) {
+      const q = { image: 'una imagen', video: 'un video', audio: 'una nota de voz' }[m.adjunto_tipo] || 'un archivo';
+      texto = m.role === 'user' ? `(te enviaron ${q})` : `(le enviaste ${q})`;
+    }
+    const partes = [];
+    if (pintaImagen) partes.push({ type: 'image', source: { type: 'url', url: m.adjunto_url } });
+    if (texto) partes.push({ type: 'text', text: texto });
+    if (!partes.length) continue;
+
+    const ult = salida[salida.length - 1];
+    if (ult && ult.role === m.role) ult.content.push(...partes);
+    else salida.push({ role: m.role, content: partes });
+  }
+  return salida;
+}
+
+// Una imagen puede romper la llamada —pesa demasiado, la URL no responde, el
+// formato no es el que dice su mime—. Si pasa, se reintenta SIN imágenes: una
+// respuesta que no vio la foto es mucho mejor que ninguna respuesta.
+async function responderViendo(systemPrompt, hist, extra = []) {
+  const conImg = [...historialParaModelo(hist, true), ...extra];
+  if (!conImg.length) throw new Error('No hay nada que responder');
+  try {
+    return await callClaude(systemPrompt, conImg);
+  } catch (e) {
+    if (!hist.some(esImagenLegible)) throw e;
+    console.error('reintento sin imágenes:', e?.message);
+    return callClaude(systemPrompt, [...historialParaModelo(hist, false), ...extra]);
+  }
 }
 
 // ── Adjuntos que llegan ─────────────────────────────────────────────────────
@@ -542,10 +596,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }).catch(() => {});
 
   const hist = await fetch(
-    `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content&order=created_at.desc&limit=12`,
+    `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content,adjunto_url,adjunto_tipo,adjunto_mime&order=created_at.desc&limit=12`,
     { headers: sb() }
   ).then(r => r.json()).then(r => (r || []).reverse()).catch(() => []);
-  const messages = hist.map(m => ({ role: m.role, content: m.content }));
 
   const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   // Pistas: lo que el agente ya dedujo. La operacion sale del enrutado; el resto,
@@ -558,9 +611,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     presupuesto: Number(String(capturedData.presupuesto || '').replace(/[^\d]/g, '')) || null,
   }).catch(() => ({ lineas: [], total: 0 }));
 
-  const reply = await callClaude(
+  const reply = await responderViendo(
     buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario),
-    messages
+    hist
   );
 
   await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
