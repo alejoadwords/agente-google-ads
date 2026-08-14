@@ -19491,12 +19491,17 @@ async function inboxOpenConv(convId) {
       ${inboxHilo(messages, data.notas || [])}
     </div>
     ${inboxAvisoVentana(conv)}
+    <div id="inbox-adjunto-caja"></div>
     <div class="crm-inbox-reply">
       <button class="inbox-accion" title="Respuestas rápidas" onclick="qrAbrir('${esc(convId)}')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>
       </button>
       <button class="inbox-accion" id="inbox-btn-nota" title="Nota interna (no la ve el cliente)" onclick="inboxModoNota()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+      </button>
+      <input type="file" id="inbox-file" style="display:none" onchange="inboxElegirArchivo('${esc(convId)}')">
+      <button class="inbox-accion" id="inbox-btn-clip" title="Adjuntar imagen o archivo" onclick="document.getElementById('inbox-file').click()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.2-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
       </button>
       <button class="inbox-accion" id="inbox-btn-sug" title="¿Qué contestaría el agente?" onclick="inboxSugerir('${esc(convId)}')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 00-3.6 10.8c.5.4.8 1 .9 1.6l.1.6h5.2l.1-.6c.1-.6.4-1.2.9-1.6A6 6 0 0012 3z"/><path d="M9.5 19h5"/><path d="M10 21.5h4"/></svg>
@@ -19506,6 +19511,7 @@ async function inboxOpenConv(convId) {
     </div>`;
 
   inboxNotaActiva = false;   // cada conversación se abre en modo mensaje
+  inboxAdjunto = null;       // y sin el archivo que quedara colgado en otra
 
   // Scroll to bottom
   setTimeout(() => {
@@ -19625,7 +19631,7 @@ async function inboxSendManual(convId) {
   const input = document.getElementById('inbox-reply-input');
   if (!input) return;
   const content = input.value.trim();
-  if (!content) return;
+  if (!content && !inboxAdjunto) return;
   const btn = input.nextElementSibling;
   if (btn) btn.disabled = true;
   // El texto NO se borra hasta saber que salio: si WhatsApp lo rechaza, quien
@@ -19633,14 +19639,18 @@ async function inboxSendManual(convId) {
   try {
     const r = await fetchAuth('/api/chat-conversations', {
       method: 'POST',
-      body: JSON.stringify({ conversation_id: convId, content }),
+      body: JSON.stringify({ conversation_id: convId, content, adjunto: inboxAdjunto }),
     });
     const d = await leerRespuesta(r);
     if (!r.ok) {
       inboxAvisoEnvio(d.error || 'No se pudo enviar el mensaje');
+      // Si el archivo sí salió y solo falló el texto, quitarlo evita mandarlo
+      // dos veces al reintentar.
+      if (d.parcial) { inboxQuitarAdjunto(); await inboxOpenConv(convId); }
       return;   // el texto se queda en la caja para reintentar
     }
     input.value = '';
+    inboxQuitarAdjunto();
     inboxAvisoEnvio('');
     await inboxOpenConv(convId);
   } catch (e) {
@@ -19679,8 +19689,12 @@ function inboxHilo(messages, notas) {
       '</div>';
     }
     const m = it.d;
+    const texto = esc(inboxLimpiar(m.content));
     return '<div class="crm-inbox-bubble-wrap ' + esc(m.role) + '">' +
-      '<div class="crm-inbox-bubble ' + esc(m.role) + '">' + esc(inboxLimpiar(m.content)) + '</div>' +
+      '<div class="crm-inbox-bubble ' + esc(m.role) + '">' +
+        (m.adjunto_url ? inboxAdjuntoHTML(m) : '') +
+        (texto ? '<div>' + texto + '</div>' : '') +
+      '</div>' +
       '<div class="crm-inbox-bubble-time">' + hora + '</div>' +
     '</div>';
   }).join('');
@@ -19736,6 +19750,91 @@ async function inboxBorrarNota(id, convId) {
     if (!r.ok) { showToast(d.error || 'No se pudo borrar la nota', 'error'); return; }
     await inboxOpenConv(convId);
   } catch { showToast('No se pudo borrar la nota', 'error'); }
+}
+
+// ── Adjuntos ────────────────────────────────────────────────────────────────
+// El archivo va del navegador a Supabase directo, con una URL firmada que da el
+// servidor. Por una función de Vercel no cabe: se queda en ~4,5 MB, y un PDF de
+// una ficha con fotos lo pasa sin esfuerzo.
+let inboxAdjunto = null;   // { url, tipo, nombre, mime } ya subido, esperando envío
+
+function inboxAdjuntoHTML(m) {
+  const url = esc(m.adjunto_url);
+  const nombre = esc(m.adjunto_nombre || 'Archivo');
+  if (m.adjunto_tipo === 'image') {
+    return '<a href="' + url + '" target="_blank" rel="noopener"><img class="inbox-adj-img" src="' + url + '" alt="' + nombre + '"></a>';
+  }
+  if (m.adjunto_tipo === 'video') return '<video class="inbox-adj-img" src="' + url + '" controls></video>';
+  if (m.adjunto_tipo === 'audio') return '<audio src="' + url + '" controls style="width:230px;max-width:100%"></audio>';
+  return '<a class="inbox-adj-doc" href="' + url + '" target="_blank" rel="noopener">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>' +
+    '<span>' + nombre + '</span></a>';
+}
+
+function inboxPesoLegible(b) {
+  return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+}
+
+function inboxPintarAdjunto(estado) {
+  const caja = document.getElementById('inbox-adjunto-caja');
+  if (!caja) return;
+  if (!inboxAdjunto && !estado) { caja.innerHTML = ''; return; }
+  if (estado) {
+    caja.innerHTML = '<div class="inbox-adj-pend"><span class="inbox-adj-spin"></span>' + esc(estado) + '</div>';
+    return;
+  }
+  caja.innerHTML = '<div class="inbox-adj-pend">' +
+    (inboxAdjunto.tipo === 'image'
+      ? '<img class="inbox-adj-mini" src="' + esc(inboxAdjunto.url) + '" alt="">'
+      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>') +
+    '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(inboxAdjunto.nombre) + '</span>' +
+    '<span style="color:var(--muted);font-size:11px">' + esc(inboxAdjunto.peso || '') + '</span>' +
+    '<button class="inbox-nota-x" style="opacity:1" title="Quitar" onclick="inboxQuitarAdjunto()">&#10005;</button>' +
+  '</div>';
+}
+
+function inboxQuitarAdjunto() {
+  inboxAdjunto = null;
+  const f = document.getElementById('inbox-file');
+  if (f) f.value = '';
+  inboxPintarAdjunto(null);
+}
+
+async function inboxElegirArchivo(convId) {
+  const input = document.getElementById('inbox-file');
+  const file = input?.files?.[0];
+  if (!file) return;
+  // Una nota interna no se envía a ninguna parte, así que un adjunto ahí no
+  // tendría dónde ir.
+  if (inboxNotaActiva) inboxModoNota();
+  inboxAvisoEnvio('');
+  inboxAdjunto = null;
+  inboxPintarAdjunto('Subiendo ' + file.name + '…');
+
+  try {
+    const permiso = await fetchAuth('/api/inbox-adjunto', {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: convId, mime: file.type, tamano: file.size, nombre: file.name }),
+    });
+    const d = await leerRespuesta(permiso);
+    if (!permiso.ok) { inboxPintarAdjunto(null); inboxAvisoEnvio(d.error || 'No se pudo subir el archivo'); input.value = ''; return; }
+
+    const subida = await fetch(d.subir_a, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!subida.ok) {
+      inboxPintarAdjunto(null);
+      inboxAvisoEnvio('No se pudo subir el archivo (' + subida.status + '). Reintenta.');
+      input.value = '';
+      return;
+    }
+    inboxAdjunto = { url: d.url, tipo: d.tipo, nombre: file.name, mime: file.type, peso: inboxPesoLegible(file.size) };
+    inboxPintarAdjunto(null);
+    document.getElementById('inbox-reply-input')?.focus();
+  } catch (e) {
+    inboxPintarAdjunto(null);
+    inboxAvisoEnvio('No se pudo subir el archivo: ' + (e?.message || 'error de red'));
+  } finally {
+    if (input) input.value = '';
+  }
 }
 
 // ── Respuesta sugerida ──────────────────────────────────────────────────────

@@ -2054,6 +2054,16 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .inbox-accion.pensando{color:var(--blue);border-color:var(--blue-md)}
 .inbox-accion.pensando svg{animation:sugPulso 1s ease-in-out infinite}
 @keyframes sugPulso{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* Adjuntos */
+.inbox-adj-img{display:block;max-width:230px;max-height:230px;width:auto;border-radius:9px;margin-bottom:5px}
+.inbox-adj-doc{display:flex;align-items:center;gap:7px;text-decoration:none;color:inherit;padding:7px 9px;border-radius:8px;background:rgba(255,255,255,.14);margin-bottom:5px;font-size:12.5px;font-weight:600}
+.crm-inbox-bubble.user .inbox-adj-doc{background:rgba(0,0,0,.05)}
+.inbox-adj-doc:hover{text-decoration:underline}
+.inbox-adj-pend{display:flex;align-items:center;gap:9px;margin:0 16px 8px;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg-subtle);font-size:12.5px;color:var(--text)}
+.inbox-adj-mini{width:34px;height:34px;object-fit:cover;border-radius:6px;flex-shrink:0}
+.inbox-adj-spin{width:13px;height:13px;flex-shrink:0;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:adjGiro .7s linear infinite}
+@keyframes adjGiro{to{transform:rotate(360deg)}}
 .crm-inbox-reply.modo-nota{background:rgba(245,158,11,.07)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-input{border-color:rgba(245,158,11,.5)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-btn{background:#b45309}
