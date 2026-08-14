@@ -19614,6 +19614,9 @@ async function inboxOpenConv(convId) {
       <button class="inbox-accion" id="inbox-btn-emoji" title="Emoji" onclick="emojiAlternar(event)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"/><path d="M9 9.5h.01"/><path d="M15 9.5h.01"/></svg>
       </button>
+      <button class="inbox-accion" id="inbox-btn-mic" title="Grabar nota de voz" onclick="audioAlternar('${esc(convId)}')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg>
+      </button>
       <input type="file" id="inbox-file" style="display:none" onchange="inboxElegirArchivo('${esc(convId)}')">
       <button class="inbox-accion" id="inbox-btn-clip" title="Adjuntar imagen o archivo" onclick="document.getElementById('inbox-file').click()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.2-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
@@ -19628,6 +19631,7 @@ async function inboxOpenConv(convId) {
   inboxNotaActiva = false;   // cada conversación se abre en modo mensaje
   inboxAdjunto = null;       // y sin el archivo que quedara colgado en otra
   document.getElementById('emoji-panel')?.remove();
+  audioDescartar();   // nadie quiere que lo grabado acabe en otra conversación
 
   // Scroll to bottom
   setTimeout(() => {
@@ -19872,6 +19876,129 @@ async function inboxBorrarNota(id, convId) {
   } catch { showToast('No se pudo borrar la nota', 'error'); }
 }
 
+// ── Nota de voz ─────────────────────────────────────────────────────────────
+// El navegador graba en el formato que sabe, y no todos coinciden con lo que
+// WhatsApp acepta. Safari y Chrome nuevo dan MP4, Firefox da OGG/Opus: los tres
+// valen. Chrome viejo solo da WebM, que WhatsApp rechaza — y eso hay que
+// decirlo ANTES de grabar, no después de hablar dos minutos.
+const AUDIO_FORMATOS = ['audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/aac'];
+const AUDIO_MAX_SEG = 300;
+
+let audioRec = null, audioTrozos = [], audioDesde = 0, audioReloj = null, audioTirar = false;
+
+function audioFormato() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  return AUDIO_FORMATOS.find(f => { try { return MediaRecorder.isTypeSupported(f); } catch { return false; } }) || null;
+}
+
+function audioAlternar(convId) {
+  if (audioRec) return audioParar();
+  audioGrabar(convId);
+}
+
+async function audioGrabar(convId) {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    inboxAvisoEnvio('Este navegador no permite grabar audio. Puedes adjuntar un archivo de voz con el clip.');
+    return;
+  }
+  const formato = audioFormato();
+  if (!formato) {
+    // Se avisa aquí, no al enviar: grabar para que Meta lo rechace al final es
+    // el peor momento posible para enterarse.
+    inboxAvisoEnvio('Este navegador solo graba en un formato que WhatsApp no acepta. Usa Safari o Firefox, o adjunta el audio como archivo con el clip.');
+    return;
+  }
+  if (inboxNotaActiva) inboxModoNota();
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    inboxAvisoEnvio(e?.name === 'NotAllowedError'
+      ? 'No diste permiso al micrófono. Actívalo en los ajustes del navegador para este sitio.'
+      : 'No se pudo abrir el micrófono: ' + (e?.message || 'error desconocido'));
+    return;
+  }
+
+  inboxAvisoEnvio('');
+  audioTrozos = [];
+  audioTirar = false;
+  audioDesde = Date.now();
+  try {
+    audioRec = new MediaRecorder(stream, { mimeType: formato });
+  } catch {
+    stream.getTracks().forEach(t => t.stop());
+    inboxAvisoEnvio('No se pudo iniciar la grabación en este navegador.');
+    return;
+  }
+
+  audioRec.ondataavailable = ev => { if (ev.data?.size) audioTrozos.push(ev.data); };
+  audioRec.onstop = async () => {
+    // El micrófono se suelta siempre, salga bien o mal: dejarlo abierto deja el
+    // punto rojo del navegador encendido y asusta, con razón.
+    stream.getTracks().forEach(t => t.stop());
+    clearInterval(audioReloj); audioReloj = null;
+    const seg = Math.round((Date.now() - audioDesde) / 1000);
+    const rec = audioRec; audioRec = null;
+    audioPintarBoton(false);
+    const blob = new Blob(audioTrozos, { type: (rec.mimeType || formato).split(';')[0] });
+    audioTrozos = [];
+    // Si se cambió de conversación mientras grababa, el audio se tira: subirlo
+    // lo colgaría de la conversación que se acaba de dejar.
+    if (audioTirar) { audioTirar = false; inboxPintarAdjunto(null); return; }
+    if (seg < 1 || !blob.size) { inboxPintarAdjunto(null); return; }   // pulsación suelta
+    await audioSubir(convId, blob, seg);
+  };
+
+  audioRec.start();
+  audioPintarBoton(true);
+  audioReloj = setInterval(() => {
+    const seg = Math.round((Date.now() - audioDesde) / 1000);
+    inboxPintarAdjunto('Grabando… ' + audioReloj_txt(seg) + ' · pulsa el micrófono para parar');
+    if (seg >= AUDIO_MAX_SEG) audioParar();
+  }, 500);
+  inboxPintarAdjunto('Grabando… 0:00 · pulsa el micrófono para parar');
+}
+
+function audioReloj_txt(seg) {
+  return Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0');
+}
+
+function audioParar() {
+  try { audioRec?.stop(); } catch { audioRec = null; audioPintarBoton(false); }
+}
+
+function audioDescartar() {
+  if (!audioRec) return;
+  audioTirar = true;
+  audioParar();
+}
+
+function audioPintarBoton(grabando) {
+  document.getElementById('inbox-btn-mic')?.classList.toggle('grabando', !!grabando);
+}
+
+async function audioSubir(convId, blob, seg) {
+  const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'aac';
+  const nombre = 'nota-de-voz-' + audioReloj_txt(seg).replace(':', 'm') + 's.' + ext;
+  inboxPintarAdjunto('Subiendo la nota de voz…');
+  try {
+    const permiso = await fetchAuth('/api/inbox-adjunto', {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: convId, mime: blob.type, tamano: blob.size, nombre }),
+    });
+    const d = await leerRespuesta(permiso);
+    if (!permiso.ok) { inboxPintarAdjunto(null); inboxAvisoEnvio(d.error || 'No se pudo subir la nota de voz'); return; }
+    const subida = await fetch(d.subir_a, { method: 'PUT', headers: { 'Content-Type': blob.type }, body: blob });
+    if (!subida.ok) { inboxPintarAdjunto(null); inboxAvisoEnvio('No se pudo subir la nota de voz (' + subida.status + ')'); return; }
+    inboxAdjunto = { url: d.url, tipo: 'audio', nombre, mime: blob.type, peso: inboxPesoLegible(blob.size), duracion: audioReloj_txt(seg) };
+    inboxPintarAdjunto(null);
+  } catch (e) {
+    inboxPintarAdjunto(null);
+    inboxAvisoEnvio('No se pudo subir la nota de voz: ' + (e?.message || 'error de red'));
+  }
+}
+
 // ── Emoji ───────────────────────────────────────────────────────────────────
 // Lista escogida a mano, no el catálogo entero de Unicode: los que de verdad se
 // usan contestando a un cliente. Un panel con 3.700 emojis es más lento de usar
@@ -19976,6 +20103,16 @@ function inboxPintarAdjunto(estado) {
   if (!inboxAdjunto && !estado) { caja.innerHTML = ''; return; }
   if (estado) {
     caja.innerHTML = '<div class="inbox-adj-pend"><span class="inbox-adj-spin"></span>' + esc(estado) + '</div>';
+    return;
+  }
+  // Una nota de voz se escucha antes de mandarla: es el adjunto que más se
+  // repite por haber quedado mal.
+  if (inboxAdjunto.tipo === 'audio') {
+    caja.innerHTML = '<div class="inbox-adj-pend">' +
+      '<audio src="' + esc(inboxAdjunto.url) + '" controls style="flex:1;min-width:0;height:32px"></audio>' +
+      '<span style="color:var(--muted);font-size:11px">' + esc(inboxAdjunto.duracion || '') + '</span>' +
+      '<button class="inbox-nota-x" style="opacity:1" title="Descartar" onclick="inboxQuitarAdjunto()">&#10005;</button>' +
+    '</div>';
     return;
   }
   caja.innerHTML = '<div class="inbox-adj-pend">' +

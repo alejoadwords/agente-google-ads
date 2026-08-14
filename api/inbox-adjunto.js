@@ -34,8 +34,14 @@ const TIPOS = {
   'text/plain': ['document', 'txt'],
   'text/csv': ['document', 'csv'],
   'video/mp4': ['video', 'mp4'],
+  // Audio: los que WhatsApp acepta. 'audio/mp4' y 'audio/ogg' son además los
+  // dos que saben grabar los navegadores, así que la nota de voz cabe aquí sin
+  // convertir nada.
   'audio/mpeg': ['audio', 'mp3'],
   'audio/ogg': ['audio', 'ogg'],
+  'audio/mp4': ['audio', 'm4a'],
+  'audio/aac': ['audio', 'aac'],
+  'audio/amr': ['audio', 'amr'],
 };
 
 function sb() {
@@ -91,7 +97,9 @@ export default async function handler(req) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const mime = String(body.mime || '').toLowerCase();
+  // El navegador manda el mime con sus parámetros —'audio/ogg;codecs=opus'— y
+  // sin quitarlos no casaría con la lista y toda nota de voz sería rechazada.
+  const mime = String(body.mime || '').toLowerCase().split(';')[0].trim();
   const tamano = Number(body.tamano || 0);
   const convId = body.conversation_id;
   const conexionId = body.connection_id;   // solo para el simulador
