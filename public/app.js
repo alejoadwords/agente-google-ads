@@ -24839,11 +24839,9 @@ async function srcRender() {
   if (!view) return;
   view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
   await frmLoad();
-  // El equipo hace falta para poner nombre a quien atiende cada fuente. Se pide
-  // una vez; si falla, las tarjetas dicen "reparto automático" y no revientan.
-  if (!crmTeam.length && !window._workspace) {
-    try { crmTeam = (await fetchAuth('/api/team').then(r => r.json())).members || []; } catch {}
-  }
+  // El equipo hace falta para poner nombre a quien atiende cada fuente. Si falla,
+  // las tarjetas dicen "reparto automático" y no revientan.
+  await asegurarEquipo();
 
   const header =
     '<div style="margin-bottom:18px;max-width:860px">' +
@@ -25211,6 +25209,15 @@ function frmSnippets(id, formObj) {
   document.body.appendChild(ov);
 }
 
+// crmTeam solo se llenaba al abrir Configuración → Equipo. Cualquier pantalla
+// que ofrezca "quién atiende" tiene que pedirlo por su cuenta o el desplegable
+// sale vacío sin que nada falle.
+async function asegurarEquipo() {
+  if (crmTeam.length || window._workspace) return crmTeam;
+  try { crmTeam = (await fetchAuth('/api/team').then(r => r.json())).members || []; } catch {}
+  return crmTeam;
+}
+
 // Nombre de quien atiende una fuente, para pintarlo en su tarjeta. Enseñar el
 // id de Clerk no le dice nada a nadie.
 function fuenteEjecutivoNombre(assignedTo) {
@@ -25226,12 +25233,7 @@ function fuenteEjecutivoNombre(assignedTo) {
 // Opciones de ejecutivo para una fuente. El equipo puede no estar cargado
 // todavía —crmTeam se llena al abrir Configuración— así que se pide si falta.
 async function fuenteOpcionesEjecutivo(seleccionado) {
-  if (!crmTeam.length && !window._workspace) {
-    try {
-      const d = await fetchAuth('/api/team').then(r => r.json());
-      crmTeam = d.members || [];
-    } catch { crmTeam = []; }
-  }
+  await asegurarEquipo();
   const yo = clerkInstance?.user?.firstName || 'Yo';
   const miId = clerkInstance?.user?.id || '';   // ver fuenteEjecutivoNombre
   const opts = [
@@ -27674,6 +27676,9 @@ async function calLoad(agentId) {
     if (pregRut) pregRut.value = enr.pregunta || '';
     const boxRut = document.getElementById('cal-rut-config');
     if (boxRut) boxRut.style.display = enr.activo ? 'block' : 'none';
+    // Sin esto el desplegable de "a quién se lo asigno" sale vacío en cualquier
+    // sesión donde no se haya abierto antes Configuración → Equipo.
+    await asegurarEquipo();
     calRenderRutas();
     document.getElementById('cal-minimo').value = String(r.minimo || 0);
     if (r.al_calificar?.etapa) document.getElementById('cal-etapa').value = r.al_calificar.etapa;
