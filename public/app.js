@@ -19325,25 +19325,137 @@ async function canCrearPrueba() {
   } catch { showToast('No se pudo crear el canal de prueba', 'error'); }
 }
 
-async function canSimular(id) {
-  const texto = prompt('¿Qué escribe el cliente?', 'Hola, vi un apartamento y quiero información');
-  if (texto === null || !texto.trim()) return;
-  const nombre = prompt('¿Cómo se llama?', 'Cliente de prueba');
-  if (nombre === null) return;
+// El simulador es la única forma de ensayar el circuito entrante mientras Meta
+// no apruebe la app. Con prompt() no cabía elegir un archivo, que es justo lo
+// que hay que poder probar.
+let simAdjunto = null;
+
+function canSimular(id) {
+  document.getElementById('sim-overlay')?.remove();
+  simAdjunto = null;
+  const ov = document.createElement('div');
+  ov.id = 'sim-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Simular un mensaje</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Entra por el mismo camino que uno real</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">¿Cómo se llama?</label>' +
+        '<input class="auto-input" id="sim-nombre" value="Cliente de prueba" maxlength="60">' +
+      '</div>' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">¿Qué escribe?</label>' +
+        '<textarea class="auto-input" id="sim-texto" rows="3" style="resize:vertical;line-height:1.5">Hola, vi un apartamento y quiero información</textarea>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Puedes dejarlo vacío si solo quieres probar el archivo.</div>' +
+      '</div>' +
+      '<div class="auto-field" style="margin-bottom:0">' +
+        '<label class="auto-label">Archivo adjunto (opcional)</label>' +
+        '<input type="file" id="sim-file" style="display:none" onchange="simElegir(\'' + esc(id) + '\')">' +
+        '<div id="sim-adj"></div>' +
+        '<button class="btn-sec sm" id="sim-adj-btn" onclick="document.getElementById(\'sim-file\').click()">Elegir archivo</button>' +
+      '</div>' +
+      '<div id="sim-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:12px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="sim-enviar" onclick="simEnviar(\'' + esc(id) + '\')">Simular</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('sim-texto')?.focus(), 60);
+}
+
+function simError(msg) {
+  const e = document.getElementById('sim-error');
+  if (!e) return;
+  e.textContent = msg;
+  e.style.display = msg ? 'block' : 'none';
+}
+
+function simPintarAdj(estado) {
+  const caja = document.getElementById('sim-adj');
+  const btn = document.getElementById('sim-adj-btn');
+  if (!caja) return;
+  if (estado) {
+    caja.innerHTML = '<div class="inbox-adj-pend" style="margin:0 0 8px"><span class="inbox-adj-spin"></span>' + esc(estado) + '</div>';
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+  if (!simAdjunto) { caja.innerHTML = ''; if (btn) btn.style.display = ''; return; }
+  caja.innerHTML = '<div class="inbox-adj-pend" style="margin:0">' +
+    (simAdjunto.tipo === 'image' ? '<img class="inbox-adj-mini" src="' + esc(simAdjunto.url) + '" alt="">' : '') +
+    '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(simAdjunto.nombre) + '</span>' +
+    '<button class="inbox-nota-x" style="opacity:1" onclick="simQuitar()">&#10005;</button>' +
+  '</div>';
+  if (btn) btn.style.display = 'none';
+}
+
+function simQuitar() {
+  simAdjunto = null;
+  const f = document.getElementById('sim-file');
+  if (f) f.value = '';
+  simPintarAdj(null);
+}
+
+async function simElegir(connId) {
+  const input = document.getElementById('sim-file');
+  const file = input?.files?.[0];
+  if (!file) return;
+  simError('');
+  simPintarAdj('Subiendo ' + file.name + '…');
+  try {
+    const permiso = await fetchAuth('/api/inbox-adjunto', {
+      method: 'POST',
+      body: JSON.stringify({ connection_id: connId, mime: file.type, tamano: file.size, nombre: file.name }),
+    });
+    const d = await leerRespuesta(permiso);
+    if (!permiso.ok) { simAdjunto = null; simPintarAdj(null); simError(d.error || 'No se pudo subir'); return; }
+    const subida = await fetch(d.subir_a, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!subida.ok) { simAdjunto = null; simPintarAdj(null); simError('No se pudo subir el archivo (' + subida.status + ')'); return; }
+    simAdjunto = { url: d.url, tipo: d.tipo, nombre: file.name, mime: file.type };
+    simPintarAdj(null);
+  } catch (e) {
+    simAdjunto = null; simPintarAdj(null);
+    simError('No se pudo subir: ' + (e?.message || 'error de red'));
+  } finally {
+    if (input) input.value = '';
+  }
+}
+
+async function simEnviar(id) {
+  const texto = String(document.getElementById('sim-texto')?.value || '').trim();
+  const nombre = String(document.getElementById('sim-nombre')?.value || '').trim();
+  if (!texto && !simAdjunto) return simError('Escribe algo o adjunta un archivo.');
+  simError('');
+  const btn = document.getElementById('sim-enviar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   try {
     const r = await fetchAuth('/api/inbox-simular', {
       method: 'POST',
-      body: JSON.stringify({ connection_id: id, text: texto.trim(), contact_name: nombre.trim() || 'Contacto de prueba' }),
+      body: JSON.stringify({
+        connection_id: id, text: texto,
+        contact_name: nombre || 'Contacto de prueba',
+        adjunto: simAdjunto,
+      }),
     });
     const d = await leerRespuesta(r);
-    if (!r.ok) { showToast(d.error || 'No se pudo simular', 'error'); return; }
+    if (!r.ok) { simError(d.error || 'No se pudo simular'); return; }
     // El motor dice por qué si no entró: mejor eso que un "listo" que no es cierto
     const res = d.resultado || {};
-    if (res.ok === false) { showToast('El mensaje no entró: ' + (res.reason || 'sin motivo'), 'error'); return; }
+    if (res.ok === false) { simError('El mensaje no entró: ' + (res.reason || 'sin motivo')); return; }
+    document.getElementById('sim-overlay')?.remove();
     document.getElementById('can-overlay')?.remove();
     showToast('Mensaje recibido. Ábrelo en Conversaciones.', 'success');
     if (typeof crmLoadInbox === 'function') crmLoadInbox().catch(() => {});
-  } catch { showToast('No se pudo simular el mensaje', 'error'); }
+  } catch {
+    simError('No se pudo simular el mensaje');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Simular'; }
+  }
 }
 
 async function canCambiarCliente(id, clientId) {

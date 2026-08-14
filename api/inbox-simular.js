@@ -75,9 +75,13 @@ export default async function handler(req) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { connection_id, text, contact_name, contact_id } = body || {};
+    const { connection_id, text, contact_name, contact_id, adjunto } = body || {};
     if (!connection_id) return jsonResp({ error: 'Falta el canal' }, 400);
-    if (!String(text || '').trim()) return jsonResp({ error: 'Escribe el mensaje que quieres simular' }, 400);
+    // Con adjunto no hace falta texto: el caso que más importa probar es
+    // justamente el de la foto sin una palabra.
+    if (!String(text || '').trim() && !adjunto?.url) {
+      return jsonResp({ error: 'Escribe el mensaje o adjunta un archivo' }, 400);
+    }
 
     const con = await fetch(
       `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(connection_id)}` +
@@ -94,7 +98,12 @@ export default async function handler(req) {
       externalId: con.external_id,
       contactId: String(contact_id || 'sim_contacto_1'),
       contactName: contact_name || 'Contacto de prueba',
-      text: String(text).slice(0, 1000),
+      text: String(text || '').slice(0, 1000),
+      // Entra por el mismo camino que un adjunto real de Messenger: se descarga
+      // de la URL y se copia al almacén. Si esto funciona, el de verdad también.
+      media: adjunto?.url
+        ? { fuente: 'url', url: adjunto.url, tipo: adjunto.tipo || null, nombre: adjunto.nombre || null, mime: adjunto.mime || null }
+        : null,
       providerMessageId: 'sim_' + Date.now(),
       send: null,              // no se envía nada a ninguna parte
       resolverNombre: null,

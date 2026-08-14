@@ -335,8 +335,17 @@ const TIPO_POR_MIME = m => {
 
 const EXT_POR_MIME = {
   'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
-  'application/pdf': 'pdf', 'video/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3',
-  'audio/amr': 'amr', 'audio/aac': 'aac', 'text/plain': 'txt', 'text/csv': 'csv',
+  'application/pdf': 'pdf', 'video/mp4': 'mp4', 'video/3gpp': '3gp',
+  'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/amr': 'amr', 'audio/aac': 'aac',
+  'audio/mp4': 'm4a', 'text/plain': 'txt', 'text/csv': 'csv',
+  // Ofimática: sin estas, un .docx se guardaba como .bin y al cliente le bajaba
+  // un archivo que su equipo no sabía abrir.
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 };
 
 // Devuelve {url,tipo,nombre,mime} o {error} — nunca lanza: que falle el archivo

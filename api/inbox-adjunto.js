@@ -94,8 +94,9 @@ export default async function handler(req) {
   const mime = String(body.mime || '').toLowerCase();
   const tamano = Number(body.tamano || 0);
   const convId = body.conversation_id;
+  const conexionId = body.connection_id;   // solo para el simulador
 
-  if (!convId) return jsonResp({ error: 'Falta la conversación' }, 400);
+  if (!convId && !conexionId) return jsonResp({ error: 'Falta la conversación' }, 400);
   const par = TIPOS[mime];
   if (!par) return jsonResp({ error: 'WhatsApp no acepta ese tipo de archivo. Usa imagen (JPG, PNG, WebP), PDF, Word, Excel, PowerPoint, texto, MP4 o audio.' }, 400);
   const [tipo, ext] = par;
@@ -104,15 +105,31 @@ export default async function handler(req) {
     return jsonResp({ error: `WhatsApp no acepta ${tipo === 'image' ? 'imágenes' : 'archivos'} de más de ${TOPES[tipo]} MB.` }, 400);
   }
 
-  // La conversación tiene que ser de esta cuenta. Sin esto, cualquiera con
-  // sesión podría dejar archivos colgando de la conversación de otro.
-  const ck = await fetch(
-    `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
-    { headers: sb() }
-  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-  if (!ck?.[0]) return jsonResp({ error: 'No autorizado' }, 403);
+  // El destino tiene que ser de esta cuenta. Sin esto, cualquiera con sesión
+  // podría dejar archivos colgando de la conversación de otro.
+  let carpeta;
+  if (convId) {
+    const ck = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (!ck?.[0]) return jsonResp({ error: 'No autorizado' }, 403);
+    carpeta = convId;
+  } else {
+    // Simulador: la conversación puede no existir todavía. Se admite solo sobre
+    // un canal de PRUEBA propio, nunca sobre uno real.
+    const con = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(conexionId)}&user_id=eq.${encodeURIComponent(userId)}&select=external_id`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+    if (!con) return jsonResp({ error: 'No autorizado' }, 403);
+    if (!String(con.external_id || '').startsWith('sim_')) {
+      return jsonResp({ error: 'Solo se pueden simular adjuntos en un canal de prueba.' }, 400);
+    }
+    carpeta = 'simulados';
+  }
 
-  const ruta = `${userId}/${convId}/${nombreSeguro(ext)}`;
+  const ruta = `${userId}/${carpeta}/${nombreSeguro(ext)}`;
   const firma = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${ruta}`, {
     method: 'POST', headers: sb(), body: JSON.stringify({}),
   });
