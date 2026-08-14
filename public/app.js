@@ -19920,14 +19920,25 @@ function progPintar(convId) {
   if (!progLista.length) { caja.innerHTML = ''; return; }
   caja.innerHTML = progLista.map(p => {
     const fallo = p.estado === 'fallido';
+    // El cron corre cada 5 minutos, así que un poco de retraso es normal. Pasado
+    // ese margen holgado, algo va mal y hay que decirlo: sin esto la tarjeta se
+    // quedaría diciendo "se enviará" para siempre, que es la peor mentira que
+    // puede contar un inbox.
+    const tarde = !fallo && p.estado !== 'enviando' &&
+      Date.now() - new Date(p.enviar_at).getTime() > 12 * 60000;
+    const raro = fallo || tarde;
     const resumen = p.texto || (p.adjunto_nombre ? '📎 ' + p.adjunto_nombre : 'Adjunto');
-    return '<div class="inbox-prog' + (fallo ? ' fallido' : '') + '">' +
+    return '<div class="inbox-prog' + (raro ? ' fallido' : '') + '">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 6.8V12l3.4 2"/></svg>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="font-weight:700;font-size:11px">' +
-          (fallo ? 'No se pudo enviar' : 'Se enviará ' + esc(progFecha(p.enviar_at))) + '</div>' +
+          (fallo ? 'No se pudo enviar'
+                 : tarde ? 'Debía salir ' + esc(progFecha(p.enviar_at)) + ' y sigue sin salir'
+                 : p.estado === 'enviando' ? 'Enviándose ahora…'
+                 : 'Se enviará ' + esc(progFecha(p.enviar_at))) + '</div>' +
         '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(resumen) + '</div>' +
         (fallo && p.error ? '<div style="font-size:11px;margin-top:2px">' + esc(p.error) + '</div>' : '') +
+        (tarde ? '<div style="font-size:11px;margin-top:2px">Avísale a soporte: el motor de envíos programados no está corriendo.</div>' : '') +
       '</div>' +
       '<button class="inbox-nota-x" style="opacity:1" title="' + (fallo ? 'Descartar' : 'Cancelar') + '" onclick="progCancelar(\'' + esc(p.id) + '\',\'' + esc(convId) + '\')">&#10005;</button>' +
     '</div>';
