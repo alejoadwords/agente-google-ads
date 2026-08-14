@@ -52,6 +52,20 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
+  // Equipo: los leads son del DUEÑO, así que sin esto un miembro no podía
+  // registrar ni ver una sola actividad — la comprobación «este lead es tuyo»
+  // fallaba siempre y devolvía 403. Quien actúa se guarda aparte para poder
+  // firmar la actividad con su nombre.
+  const actorId = userId;
+  let actorNombre = null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email&limit=1`, { headers: sbHeaders() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const tw = (await r.json())?.[0];
+    if (tw && tw.owner_user_id) { userId = tw.owner_user_id; actorNombre = tw.member_name || tw.member_email || null; }
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
 
   const url = new URL(req.url);
 
@@ -107,7 +121,8 @@ export default async function handler(req) {
       user_id: userId,
       type,
       content: content?.trim() || null,
-      metadata: metadata || {},
+      // Quién la registró, para que en la ficha no parezcan todas del dueño.
+      metadata: { ...(metadata || {}), ...(actorNombre ? { actor: actorNombre, actor_id: actorId } : {}) },
     };
     const res = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
       method: 'POST',

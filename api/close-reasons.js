@@ -63,6 +63,18 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
+  // Equipo: el catálogo de motivos es de la cuenta. Sin esto, un miembro veía
+  // uno vacío, se le sembraban los motivos por defecto a su nombre y cerraba
+  // negocios con etiquetas distintas a las del resto — sin que nadie lo notara.
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const tw = (await r.json())?.[0];
+    if (tw && tw.owner_user_id) userId = tw.owner_user_id;
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+
   const url = new URL(req.url);
 
   // GET — lista los motivos; siembra los de por defecto la primera vez

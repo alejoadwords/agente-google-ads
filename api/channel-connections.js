@@ -157,23 +157,39 @@ export default async function handler(req) {
       }, 400);
     }
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
-      method: 'POST',
-      headers: { ...sb(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify({
-        agent_id, user_id: userId, channel,
-        external_id: externalId,
-        access_token: pagina.access_token,
-        channel_name: nombre,
-        is_active: true,
-      }),
+    const res = await guardarConexion(userId, channel, externalId, {
+      agent_id,
+      access_token: pagina.access_token,
+      channel_name: nombre,
+      is_active: true,
     });
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
     return jsonResp({ connection: rows[0] }, 201);
   }
 
-  // POST — create/connect a channel
+  // «merge-duplicates» sin on_conflict no fusiona nada: PostgREST usa la clave
+// primaria y aquí es un uuid generado, así que nunca choca. Reconectar un canal
+// creaba OTRA fila —dos conexiones al mismo número, una muerta— o chocaba con un
+// índice único y devolvía un 409 sin explicación. Se busca antes y se decide.
+async function guardarConexion(userId, channel, externalId, campos) {
+  const previa = await fetch(
+    `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${encodeURIComponent(userId)}` +
+    `&channel=eq.${encodeURIComponent(channel)}&external_id=eq.${encodeURIComponent(externalId)}&select=id&limit=1`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+
+  return previa
+    ? fetch(`${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${previa.id}`, {
+        method: 'PATCH', headers: { ...sb(), Prefer: 'return=representation' }, body: JSON.stringify(campos),
+      })
+    : fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
+        method: 'POST', headers: { ...sb(), Prefer: 'return=representation' },
+        body: JSON.stringify({ user_id: userId, channel, external_id: externalId, ...campos }),
+      });
+}
+
+// POST — create/connect a channel
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
@@ -225,11 +241,8 @@ export default async function handler(req) {
       avatar_url: avatar_url || null,
       is_active: true,
     };
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
-      method: 'POST',
-      headers: { ...sb(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(payload),
-    });
+    const { user_id: _u, channel: _c, external_id: _e, ...resto } = payload;
+    const res = await guardarConexion(userId, channel, payload.external_id, resto);
     if (!res.ok) {
       const detalle = await res.text();
       // La tabla tiene un CHECK con la lista de canales permitidos; un canal
