@@ -143,10 +143,22 @@ async function avisarComercial(com, lead, fuente) {
 
 // Aplica la asignación sobre un lead ya creado. Silencioso a propósito: que
 // falle el reparto no puede tumbar la creación del lead.
-export async function asignarLead(userId, lead, fuente) {
+// forzado: id de un comercial concreto. Lo usan las fuentes que traen dueño
+// propio (un formulario o un conector asignado a alguien). Pasa por aquí y no
+// por un PATCH suelto para que ese comercial reciba igual su correo y su tarea
+// de primer contacto: si no, un lead asignado a dedo entraría mudo.
+export async function asignarLead(userId, lead, fuente, forzado = null) {
   try {
     if (!lead?.id || lead.assigned_to) return null;
-    const com = await siguienteComercial(userId, fuente || lead.source);
+    let com;
+    if (forzado) {
+      com = (await comercialesActivos(userId)).find(m => m.id === forzado) || null;
+      // Si ya no está en el equipo se cae al reparto normal: mejor que dejar el
+      // lead sin dueño porque alguien se fue de la agencia hace meses.
+      if (!com) com = await siguienteComercial(userId, fuente || lead.source);
+    } else {
+      com = await siguienteComercial(userId, fuente || lead.source);
+    }
     if (!com) return null;
     await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}`, {
       method: 'PATCH',

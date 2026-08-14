@@ -96,13 +96,21 @@ export default async function handler(req) {
       company: pick(body, 'company', 'empresa', 'negocio'),
       note: noteParts.join(' · ') || null,
       source: 'formulario',
-      sourceLabel: 'Formulario: ' + form.name,
+      sourceLabel: (form.tipo === 'conector' ? 'Web: ' : 'Formulario: ') + form.name,
       tags: form.tags || [],
+      // Si esta fuente tiene ejecutivo fijo, manda sobre el reparto por turnos.
+      assignedTo: form.assigned_to || null,
     });
     // Contador de envíos — con await: en edge las promesas sueltas mueren al responder
     await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {
       method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ submissions: (form.submissions || 0) + 1, last_submission_at: new Date().toISOString() }),
+      // aviso_silencio_at vuelve a null: si el conector estuvo callado, se avisó
+      // y ahora revive, un segundo apagón tiene que volver a avisar.
+      body: JSON.stringify({
+        submissions: (form.submissions || 0) + 1,
+        last_submission_at: new Date().toISOString(),
+        aviso_silencio_at: null,
+      }),
     }).catch(() => {});
     return jsonResp({ ok: true, created, redirect_url: form.redirect_url || null, success_message: form.success_message || '¡Gracias! Recibimos tus datos y te contactaremos pronto.' });
   } catch (e) {

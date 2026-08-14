@@ -24839,6 +24839,11 @@ async function srcRender() {
   if (!view) return;
   view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
   await frmLoad();
+  // El equipo hace falta para poner nombre a quien atiende cada fuente. Se pide
+  // una vez; si falla, las tarjetas dicen "reparto automático" y no revientan.
+  if (!crmTeam.length && !window._workspace) {
+    try { crmTeam = (await fetchAuth('/api/team').then(r => r.json())).members || []; } catch {}
+  }
 
   const header =
     '<div style="margin-bottom:18px;max-width:860px">' +
@@ -24855,7 +24860,8 @@ async function srcRender() {
       '<div class="auto-ico">📝</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div class="auto-name">' + esc(f.name) + '</div>' +
-        '<div class="auto-trigger">' + (f.fields || []).length + ' campos' + ((f.tags || []).length ? ' · etiquetas: ' + f.tags.map(esc).join(', ') : '') + '</div>' +
+        '<div class="auto-trigger">' + (f.fields || []).length + ' campos' + ((f.tags || []).length ? ' · etiquetas: ' + f.tags.map(esc).join(', ') : '') +
+          ' · ' + (fuenteEjecutivoNombre(f.assigned_to) ? 'atiende ' + esc(fuenteEjecutivoNombre(f.assigned_to)) : 'reparto automático') + '</div>' +
         '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' + (f.submissions || 0) + ' envíos' + (f.last_submission_at ? ' · último: ' + new Date(f.last_submission_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '') + '</div>' +
       '</div>' +
       '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
@@ -24888,13 +24894,15 @@ async function srcRender() {
       '<div style="flex:1;min-width:0">' +
         '<div class="auto-name">' + esc(c.name) + '</div>' +
         '<div class="auto-trigger">' + (c.origen_url ? esc(c.origen_url.replace(/^https?:\/\//, '')) : 'Sin web indicada') +
-          ((c.tags || []).length ? ' · etiquetas: ' + c.tags.map(esc).join(', ') : '') + '</div>' +
+          ((c.tags || []).length ? ' · etiquetas: ' + c.tags.map(esc).join(', ') : '') +
+          ' · ' + (fuenteEjecutivoNombre(c.assigned_to) ? 'atiende ' + esc(fuenteEjecutivoNombre(c.assigned_to)) : 'reparto automático') + '</div>' +
         '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' + (c.submissions || 0) + ' envíos recogidos' +
           (c.last_submission_at ? ' · último: ' + new Date(c.last_submission_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '') + '</div>' +
       '</div>' +
       '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + (c.active ? '#10B9811A;color:#10B981' : '#6b72801A;color:#6b7280') + ';white-space:nowrap">' + (c.active ? 'Activo' : 'Pausado') + '</span>' +
       '<div class="auto-actions">' +
         '<button class="btn-sec sm" onclick="conSnippet(\'' + c.id + '\')">📎 Ver código</button>' +
+        '<button class="btn-ghost sm" title="Editar" onclick="conAbrir(\'' + c.id + '\')">✎</button>' +
         '<button class="btn-ghost sm" title="' + (c.active ? 'Pausar' : 'Activar') + '" onclick="frmToggle(\'' + c.id + '\')">' + (c.active ? '⏸' : '▶') + '</button>' +
         '<button class="btn-ghost sm" title="Eliminar" onclick="frmDelete(\'' + c.id + '\')">✕</button>' +
       '</div>' +
@@ -25065,6 +25073,7 @@ function frmOpen(id) {
         '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px">Color <input type="color" id="frm-accent" value="' + esc((f && f.accent_color) || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer"></label>' +
       '</div>' +
       '<input class="auto-input" id="frm-tags" value="' + esc(f ? (f.tags || []).join(', ') : '') + '" placeholder="Etiquetas para estos leads (separadas por coma)" style="width:100%;margin-bottom:8px">' +
+      '<select class="auto-input" id="frm-ejecutivo" style="width:100%;margin-bottom:8px"><option value="">Reparto automático</option></select>' +
       '<input class="auto-input" id="frm-success" value="' + esc(f ? f.success_message || '' : '') + '" placeholder="Mensaje de gracias (opcional)" style="width:100%;margin-bottom:8px">' +
       '<input class="auto-input" id="frm-redirect" value="' + esc(f ? f.redirect_url || '' : '') + '" placeholder="O redirigir a una URL después de enviar (opcional)" style="width:100%;margin-bottom:16px">' +
       '<div style="display:flex;justify-content:flex-end;gap:8px">' +
@@ -25073,6 +25082,10 @@ function frmOpen(id) {
     '</div>';
   document.body.appendChild(ov);
   frmRenderFields();
+  fuenteOpcionesEjecutivo(f ? f.assigned_to : '').then(html => {
+    const sel = document.getElementById('frm-ejecutivo');
+    if (sel) sel.innerHTML = html;
+  });
 }
 
 const FRM_KEY_OPTS = [
@@ -25119,6 +25132,7 @@ async function frmSave() {
     button_text: document.getElementById('frm-button').value.trim() || null,
     accent_color: document.getElementById('frm-accent').value,
     tags: document.getElementById('frm-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    assigned_to: document.getElementById('frm-ejecutivo')?.value || null,
     success_message: document.getElementById('frm-success').value.trim() || null,
     redirect_url: document.getElementById('frm-redirect').value.trim() || null,
     fields,
@@ -25197,8 +25211,40 @@ function frmSnippets(id, formObj) {
   document.body.appendChild(ov);
 }
 
+// Nombre de quien atiende una fuente, para pintarlo en su tarjeta. Enseñar el
+// id de Clerk no le dice nada a nadie.
+function fuenteEjecutivoNombre(assignedTo) {
+  if (!assignedTo) return null;
+  const miId = window._workspace?.ownerId || clerkInstance?.user?.id || '';
+  if (assignedTo === miId) return clerkInstance?.user?.firstName || 'Yo';
+  const m = crmTeam.find(x => x.member_user_id === assignedTo);
+  return m ? (m.member_name || m.member_email) : 'Alguien que ya no está en el equipo';
+}
+
+// Opciones de ejecutivo para una fuente. El equipo puede no estar cargado
+// todavía —crmTeam se llena al abrir Configuración— así que se pide si falta.
+async function fuenteOpcionesEjecutivo(seleccionado) {
+  if (!crmTeam.length && !window._workspace) {
+    try {
+      const d = await fetchAuth('/api/team').then(r => r.json());
+      crmTeam = d.members || [];
+    } catch { crmTeam = []; }
+  }
+  const yo = clerkInstance?.user?.firstName || 'Yo';
+  const miId = window._workspace?.ownerId || clerkInstance?.user?.id || '';
+  const opts = [
+    { id: '', name: 'Reparto automático' },
+    { id: miId, name: yo + ' (yo)' },
+    ...crmTeam.filter(m => m.status === 'active' && m.member_user_id && m.member_user_id !== miId)
+      .map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email })),
+  ];
+  return opts.map(o => '<option value="' + esc(o.id) + '"' +
+    ((seleccionado || '') === o.id ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('');
+}
+
 // ── Conectores de formularios ajenos ────────────────────────────────────────
-function conAbrir() {
+function conAbrir(id) {
+  const c = id ? frmList.find(x => x.id === id) : null;
   document.getElementById('con-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'con-overlay';
@@ -25206,35 +25252,44 @@ function conAbrir() {
   ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
   ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
     '<div class="auto-modal-head">' +
-      '<div><div style="font-size:var(--fs-md);font-weight:800">Conectar un formulario que ya tienes</div>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Una línea de código y sus envíos entran a Acuarius</div></div>' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">' + (c ? 'Editar la conexión' : 'Conectar un formulario que ya tienes') + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + (c ? 'El código pegado en tu web no cambia' : 'Una línea de código y sus envíos entran a Acuarius') + '</div></div>' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
     '</div>' +
     '<div class="auto-modal-body">' +
       '<div class="auto-field">' +
         '<label class="auto-label">¿Qué formulario es?</label>' +
-        '<input class="auto-input" id="con-nombre" maxlength="100" placeholder="Ej. Contacto de certainpezzano.com">' +
+        '<input class="auto-input" id="con-nombre" maxlength="100" value="' + esc(c ? c.name : '') + '" placeholder="Ej. Contacto de certainpezzano.com">' +
         '<div style="font-size:11px;color:var(--muted);margin-top:5px">Solo para que lo reconozcas aquí. El lead se marca con esta fuente.</div>' +
       '</div>' +
       '<div class="auto-field">' +
         '<label class="auto-label">¿En qué web? (opcional)</label>' +
-        '<input class="auto-input" id="con-url" maxlength="300" placeholder="https://certainpezzano.com">' +
+        '<input class="auto-input" id="con-url" maxlength="300" value="' + esc(c ? (c.origen_url || '') : '') + '" placeholder="https://certainpezzano.com">' +
+      '</div>' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">Etiquetas para estos leads (opcional)</label>' +
+        '<input class="auto-input" id="con-tags" maxlength="200" value="' + esc(c ? (c.tags || []).join(', ') : '') + '" placeholder="web, contacto">' +
       '</div>' +
       '<div class="auto-field" style="margin-bottom:0">' +
-        '<label class="auto-label">Etiquetas para estos leads (opcional)</label>' +
-        '<input class="auto-input" id="con-tags" maxlength="200" placeholder="web, contacto">' +
+        '<label class="auto-label">¿Quién atiende estos leads?</label>' +
+        '<select class="auto-input" id="con-ejecutivo"><option value="">Reparto automático</option></select>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Con <b>reparto automático</b> se sigue la regla de la fuente (por turnos entre el equipo). Si eliges a alguien, todos los leads de esta web van a su nombre.</div>' +
       '</div>' +
       '<div id="con-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:12px"></div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
-      '<button class="btn-pri sm" id="con-crear" onclick="conCrear()">Crear conexión</button>' +
+      '<button class="btn-pri sm" id="con-crear" onclick="conCrear(' + (c ? "'" + c.id + "'" : '') + ')">' + (c ? 'Guardar' : 'Crear conexión') + '</button>' +
     '</div></div>';
   document.body.appendChild(ov);
   setTimeout(() => document.getElementById('con-nombre')?.focus(), 60);
+  fuenteOpcionesEjecutivo(c ? c.assigned_to : '').then(html => {
+    const sel = document.getElementById('con-ejecutivo');
+    if (sel) sel.innerHTML = html;
+  });
 }
 
-async function conCrear() {
+async function conCrear(id) {
   const nombre = String(document.getElementById('con-nombre')?.value || '').trim();
   const err = document.getElementById('con-error');
   const mostrar = m => { if (err) { err.textContent = m; err.style.display = m ? 'block' : 'none'; } };
@@ -25245,23 +25300,29 @@ async function conCrear() {
     .split(',').map(t => t.trim()).filter(Boolean);
 
   const btn = document.getElementById('con-crear');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+  const rotulo = id ? 'Guardar' : 'Crear conexión';
+  if (btn) { btn.disabled = true; btn.textContent = id ? 'Guardando…' : 'Creando…'; }
+  const datos = {
+    name: nombre, tipo: 'conector', origen_url: url || null, tags,
+    assigned_to: document.getElementById('con-ejecutivo')?.value || null,
+  };
   try {
-    const c = crmAmbitoCliente();
-    const r = await fetchAuth('/api/forms' + (c ? '?client_id=' + encodeURIComponent(c) : ''), {
-      method: 'POST',
-      body: JSON.stringify({ name: nombre, tipo: 'conector', origen_url: url || null, tags }),
-    });
+    const cli = crmAmbitoCliente();
+    const r = id
+      ? await fetchAuth('/api/forms', { method: 'PUT', body: JSON.stringify({ id, ...datos }) })
+      : await fetchAuth('/api/forms' + (cli ? '?client_id=' + encodeURIComponent(cli) : ''), {
+          method: 'POST', body: JSON.stringify(datos),
+        });
     const d = await leerRespuesta(r);
-    if (!r.ok) { mostrar(d.error || 'No se pudo crear'); return; }
+    if (!r.ok) { mostrar(d.error || 'No se pudo guardar'); return; }
     document.getElementById('con-overlay')?.remove();
     await srcRender();
-    // El código es lo que venía a buscar: se le enseña sin tener que pulsar nada más.
-    if (d.form) conSnippet(d.form.id, d.form);
+    // Al crear, el código es lo que venía a buscar: se enseña sin pulsar nada más.
+    if (!id && d.form) conSnippet(d.form.id, d.form);
   } catch (e) {
-    mostrar('No se pudo crear: ' + (e?.message || 'error de red'));
+    mostrar('No se pudo guardar: ' + (e?.message || 'error de red'));
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Crear conexión'; }
+    if (btn) { btn.disabled = false; btn.textContent = rotulo; }
   }
 }
 

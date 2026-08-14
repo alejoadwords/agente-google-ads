@@ -79,6 +79,10 @@
     {
       "path": "/api/cron-ventana",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron-conectores",
+      "schedule": "0 14 * * 1-5"
     }
   ]
 }

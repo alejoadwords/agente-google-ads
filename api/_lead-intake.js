@@ -161,7 +161,7 @@ export async function intakeLead(userId, clientId, data) {
     // un flujo que notifique al responsable ya lo encuentre asignado.
     try {
       const { asignarLead } = await import('./_assign.js');
-      await asignarLead(userId, created, created.source);
+      await asignarLead(userId, created, created.source, data.assignedTo || null);
     } catch (e) { console.error('asignar en intake:', e); }
     await enqueueAutomations(userId, created, 'lead_created');
     if (leadTags.length) await enqueueAutomations(userId, created, 'tag_added', leadTags);

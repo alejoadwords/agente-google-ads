@@ -86,6 +86,8 @@ function sanitize(body) {
   // 'conector' = el script que se pega en una web ajena para recoger los envíos
   // de un formulario que ya existe. No tiene campos ni página propia.
   if ('tipo' in body) out.tipo = body.tipo === 'conector' ? 'conector' : 'formulario';
+  // Ejecutivo fijo para los leads de esta fuente. Vacío = reparto normal.
+  if ('assigned_to' in body) out.assigned_to = body.assigned_to ? String(body.assigned_to).slice(0, 60) : null;
   if ('origen_url' in body) out.origen_url = (body.origen_url && /^https?:\/\//i.test(body.origen_url)) ? String(body.origen_url).slice(0, 300) : null;
   return out;
 }
