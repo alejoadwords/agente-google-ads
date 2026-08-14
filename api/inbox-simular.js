@@ -53,6 +53,15 @@ async function getUserId(req) {
   } catch { return null; }
 }
 
+// Un id estable y legible a partir del nombre: sin tildes, sin espacios y
+// acotado, para que quepa donde caben los ids reales de Meta.
+function idDeNombre(nombre) {
+  const base = String(nombre || 'contacto de prueba')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return (base || 'contacto').slice(0, 40);
+}
+
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -96,7 +105,12 @@ export default async function handler(req) {
     const r = await processIncoming({
       channel: con.channel,
       externalId: con.external_id,
-      contactId: String(contact_id || 'sim_contacto_1'),
+      // El contacto sale del NOMBRE. Antes era fijo ('sim_contacto_1'), así que
+      // cambiar el nombre no abría una conversación nueva: todo caía en la
+      // primera y parecía que el simulador ignoraba lo que se escribía. Con el
+      // mismo nombre se sigue la misma conversación, que es lo que se espera
+      // para probar varios turnos seguidos.
+      contactId: String(contact_id || 'sim_' + idDeNombre(contact_name)),
       contactName: contact_name || 'Contacto de prueba',
       text: String(text || '').slice(0, 1000),
       // Entra por el mismo camino que un adjunto real de Messenger: se descarga
