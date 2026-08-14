@@ -2039,6 +2039,21 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .qr-icono{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;background:transparent;border:1px solid transparent;border-radius:7px;color:var(--muted);cursor:pointer;transition:all var(--dur-fast) var(--ease)}
 .qr-icono:hover{color:var(--blue);background:var(--bg-subtle);border-color:var(--border)}
 .qr-icono.peligro:hover{color:var(--danger);background:var(--danger-bg);border-color:transparent}
+
+/* Notas internas: deliberadamente NO parecen un mensaje, para que nadie crea
+   que el cliente las leyó */
+.inbox-nota{margin:10px 0;padding:10px 12px;border-radius:10px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.32);border-left:3px solid #f59e0b}
+.inbox-nota-head{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted);margin-bottom:5px}
+.inbox-nota-etq{font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#b45309}
+.inbox-nota-x{margin-left:auto;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px 4px;border-radius:5px;opacity:0}
+.inbox-nota:hover .inbox-nota-x{opacity:1}
+.inbox-nota-x:hover{color:var(--danger);background:var(--danger-bg)}
+.inbox-nota-txt{font-size:12.5px;line-height:1.5;color:var(--text);white-space:pre-wrap}
+.inbox-accion.activo{color:#b45309;border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.12)}
+.crm-inbox-reply.modo-nota{background:rgba(245,158,11,.07)}
+.crm-inbox-reply.modo-nota .crm-inbox-reply-input{border-color:rgba(245,158,11,.5)}
+.crm-inbox-reply.modo-nota .crm-inbox-reply-btn{background:#b45309}
+.crm-inbox-reply.modo-nota .crm-inbox-reply-btn:hover{background:#92400e}
 .crm-inbox-empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted);font-size:13px}
 .crm-lead-link-btn{font-size:11px;font-weight:600;color:var(--blue);background:none;border:none;cursor:pointer;font-family:var(--font);padding:0;display:flex;align-items:center;gap:3px}
 .crm-lead-link-btn:hover{text-decoration:underline}

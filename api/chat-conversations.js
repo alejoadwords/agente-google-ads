@@ -43,11 +43,16 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
+  // Quién escribe de verdad. Se guarda ANTES de resolver miembro→dueño: si no,
+  // todas las notas del equipo aparecerían firmadas por el dueño de la cuenta.
+  const actorId = userId;
+  let actorNombre = null;
+
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email&limit=1`, { headers: sbHeaders() });
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; actorNombre = _tw.member_name || _tw.member_email || null; }
   } catch {}
 
 
@@ -107,7 +112,56 @@ export default async function handler(req) {
       { headers: sbHeaders() }
     );
     const rows = await res.json();
-    return jsonResp({ messages: rows || [] });
+
+    // Las notas viajan aparte y el frontend las intercala por fecha. Si fallan,
+    // el hilo se muestra igual: perder las notas no puede ocultar la conversación.
+    const notas = await fetch(
+      `${SUPABASE_URL}/rest/v1/conversation_notes?conversation_id=eq.${convId}&user_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.asc`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+    return jsonResp({ messages: rows || [], notas: notas || [] });
+  }
+
+  // POST ?action=nota — nota interna. No sale a ninguna parte: ni al cliente,
+  // ni al canal, ni al historial que ve el agente.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'nota') {
+    const body = await req.json().catch(() => ({}));
+    const convId = body.conversation_id;
+    const texto = String(body.texto || '').trim().slice(0, 2000);
+    if (!convId) return jsonResp({ error: 'Falta la conversación' }, 400);
+    if (!texto) return jsonResp({ error: 'La nota está vacía' }, 400);
+
+    const ck = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (!ck?.[0]) return jsonResp({ error: 'No autorizado' }, 403);
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/conversation_notes`, {
+      method: 'POST', headers: sbHeaders(),
+      body: JSON.stringify({
+        conversation_id: convId, user_id: userId,
+        author_user_id: actorId, author_name: actorNombre, texto,
+      }),
+    });
+    if (!res.ok) return jsonResp({ error: (await res.text()).slice(0, 200) }, 500);
+    return jsonResp({ nota: (await res.json())?.[0] || null }, 201);
+  }
+
+  // POST ?action=nota_borrar — solo quien la escribió puede quitarla
+  if (req.method === 'POST' && url.searchParams.get('action') === 'nota_borrar') {
+    const body = await req.json().catch(() => ({}));
+    if (!body.id) return jsonResp({ error: 'Falta el id' }, 400);
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/conversation_notes?id=eq.${encodeURIComponent(body.id)}` +
+      `&user_id=eq.${encodeURIComponent(userId)}&author_user_id=eq.${encodeURIComponent(actorId)}`,
+      { method: 'DELETE', headers: sbHeaders() }
+    );
+    if (!res.ok) return jsonResp({ error: (await res.text()).slice(0, 200) }, 500);
+    const filas = await res.json().catch(() => []);
+    if (!filas.length) return jsonResp({ error: 'Solo quien escribió la nota puede borrarla.' }, 403);
+    return jsonResp({ ok: true });
   }
 
   // PUT — update conversation status / mark read

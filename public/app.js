@@ -19488,20 +19488,21 @@ async function inboxOpenConv(convId) {
       </div>
     </div>
     <div class="crm-inbox-messages" id="inbox-msgs">
-      ${messages.map(m => `
-        <div class="crm-inbox-bubble-wrap ${m.role}">
-          <div class="crm-inbox-bubble ${m.role}">${esc(inboxLimpiar(m.content))}</div>
-          <div class="crm-inbox-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
-        </div>`).join('')}
+      ${inboxHilo(messages, data.notas || [])}
     </div>
     ${inboxAvisoVentana(conv)}
     <div class="crm-inbox-reply">
       <button class="inbox-accion" title="Respuestas rápidas" onclick="qrAbrir('${esc(convId)}')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>
       </button>
+      <button class="inbox-accion" id="inbox-btn-nota" title="Nota interna (no la ve el cliente)" onclick="inboxModoNota()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+      </button>
       <textarea class="crm-inbox-reply-input" id="inbox-reply-input" placeholder="Escribe un mensaje manual..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inboxSendManual('${esc(convId)}')}" rows="1"></textarea>
       <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
     </div>`;
+
+  inboxNotaActiva = false;   // cada conversación se abre en modo mensaje
 
   // Scroll to bottom
   setTimeout(() => {
@@ -19617,6 +19618,7 @@ function inboxLimpiar(txt) {
 }
 
 async function inboxSendManual(convId) {
+  if (inboxNotaActiva) return inboxGuardarNota(convId);
   const input = document.getElementById('inbox-reply-input');
   if (!input) return;
   const content = input.value.trim();
@@ -19643,6 +19645,94 @@ async function inboxSendManual(convId) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+// ── Notas internas ──────────────────────────────────────────────────────────
+// Lo que el equipo se dice entre sí sobre una conversación: «ya lo llamé»,
+// «pide descuento», «el hermano es el que decide». No sale al cliente, no pasa
+// por el canal y el agente no la lee: viven en su propia tabla, aparte de
+// chat_messages, que es lo que el motor le entrega al modelo.
+let inboxNotaActiva = false;
+
+// Mensajes y notas ordenados juntos por fecha, para que la nota quede donde se
+// escribió y no toda la tanda al final.
+function inboxHilo(messages, notas) {
+  const items = [
+    ...(messages || []).map(m => ({ t: m.created_at, tipo: 'msg', d: m })),
+    ...(notas || []).map(n => ({ t: n.created_at, tipo: 'nota', d: n })),
+  ].sort((a, b) => new Date(a.t || 0) - new Date(b.t || 0));
+
+  return items.map(it => {
+    const hora = it.t ? new Date(it.t).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
+    if (it.tipo === 'nota') {
+      const n = it.d;
+      return '<div class="inbox-nota">' +
+        '<div class="inbox-nota-head">' +
+          '<span class="inbox-nota-etq">Nota interna</span>' +
+          '<span>' + esc(n.author_name || 'Tu equipo') + ' · ' + hora + '</span>' +
+          '<button class="inbox-nota-x" title="Borrar nota" onclick="inboxBorrarNota(\'' + esc(n.id) + '\',\'' + esc(n.conversation_id) + '\')">&#10005;</button>' +
+        '</div>' +
+        '<div class="inbox-nota-txt">' + esc(n.texto) + '</div>' +
+      '</div>';
+    }
+    const m = it.d;
+    return '<div class="crm-inbox-bubble-wrap ' + esc(m.role) + '">' +
+      '<div class="crm-inbox-bubble ' + esc(m.role) + '">' + esc(inboxLimpiar(m.content)) + '</div>' +
+      '<div class="crm-inbox-bubble-time">' + hora + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// La caja de texto es la misma; cambia de color, de texto y de destino. Con dos
+// cajas separadas es cuestión de tiempo escribir la nota en la que sí se envía.
+function inboxModoNota() {
+  inboxNotaActiva = !inboxNotaActiva;
+  const caja = document.querySelector('.crm-inbox-reply');
+  const input = document.getElementById('inbox-reply-input');
+  const btn = document.querySelector('.crm-inbox-reply-btn');
+  const nota = document.getElementById('inbox-btn-nota');
+  if (!caja || !input) return;
+  caja.classList.toggle('modo-nota', inboxNotaActiva);
+  nota?.classList.toggle('activo', inboxNotaActiva);
+  input.placeholder = inboxNotaActiva
+    ? 'Nota para tu equipo. El cliente no la ve.'
+    : 'Escribe un mensaje manual...';
+  if (btn) btn.textContent = inboxNotaActiva ? 'Guardar nota' : 'Enviar';
+  input.focus();
+}
+
+async function inboxGuardarNota(convId) {
+  const input = document.getElementById('inbox-reply-input');
+  const texto = String(input?.value || '').trim();
+  if (!texto) return;
+  const btn = document.querySelector('.crm-inbox-reply-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetchAuth('/api/chat-conversations?action=nota', {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: convId, texto }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { inboxAvisoEnvio(d.error || 'No se pudo guardar la nota'); return; }
+    input.value = '';
+    inboxAvisoEnvio('');
+    await inboxOpenConv(convId);   // vuelve a modo mensaje, para no dejar armada la caja
+  } catch (e) {
+    inboxAvisoEnvio('No se pudo guardar la nota: ' + (e?.message || 'error de red'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function inboxBorrarNota(id, convId) {
+  try {
+    const r = await fetchAuth('/api/chat-conversations?action=nota_borrar', {
+      method: 'POST', body: JSON.stringify({ id }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo borrar la nota', 'error'); return; }
+    await inboxOpenConv(convId);
+  } catch { showToast('No se pudo borrar la nota', 'error'); }
 }
 
 // ── Ventana de 24 horas de WhatsApp ─────────────────────────────────────────
