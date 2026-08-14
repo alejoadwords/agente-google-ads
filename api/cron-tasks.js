@@ -6,6 +6,7 @@
 // Regla de oro: si no hay nada pendiente, no se manda nada. Un correo diario
 // vacío se convierte en un correo que nadie abre.
 
+import { emailHtml } from './_email-layout.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -55,16 +56,13 @@ async function enviar(to, vencidas, hoy) {
       from: 'Acuarius <crm@app.acuarius.app>',
       to,
       subject: `${asunto} — Acuarius`,
-      html: `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-          <h2 style="color:#111;margin-bottom:2px">Tu día en el CRM</h2>
-          <p style="color:#444;margin-top:0">Tienes ${total} pendiente${total > 1 ? 's' : ''}.</p>
-          ${bloque('Vencidas', vencidas, '#B91C1C')}
-          ${bloque('Para hoy', hoy, '#2563eb')}
-          <p style="margin-top:26px">
-            <a href="https://app.acuarius.app/crm/tareas" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">Abrir mis tareas</a>
-          </p>
-        </div>`,
+      html: emailHtml({
+        titulo: 'Tu día en el CRM',
+        intro: `Tienes ${total} pendiente${total > 1 ? 's' : ''}.`,
+        preheader: asunto,
+        cuerpo: bloque('Vencidas', vencidas, '#B91C1C') + bloque('Para hoy', hoy, '#1E2BCC'),
+        cta: { texto: 'Abrir mis tareas', url: 'https://app.acuarius.app/crm/tareas' },
+      }),
     }),
   });
   return res.ok;

@@ -9,6 +9,8 @@
 //
 // El guion bajo evita que Vercel lo publique como endpoint.
 
+import { emailHtml, bloque, esc } from './_email-layout.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -127,16 +129,17 @@ async function avisarComercial(com, lead, fuente) {
       from: 'Acuarius <crm@app.acuarius.app>',
       to: com.email,
       subject: `Nuevo lead para ti: ${nombre}`,
-      html: `
-        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
-          <h2 style="color:#111;margin-bottom:4px">Te asignaron un lead</h2>
-          <p style="color:#444;margin-top:0">Llegó por <strong>${fuente || 'el CRM'}</strong> y quedó a tu nombre.</p>
-          <div style="border:1px solid #e5e5e5;border-radius:10px;padding:14px 16px;margin:16px 0">
-            <div style="font-size:16px;font-weight:700;color:#111">${nombre}</div>
-            <div style="color:#666;font-size:13px;margin-top:4px">${contacto}</div>
-          </div>
-          <a href="https://app.acuarius.app/crm" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">Abrir el CRM</a>
-        </div>`,
+      html: emailHtml({
+        titulo: 'Te asignaron un lead',
+        intro: `Llegó por <strong>${esc(fuente || 'el CRM')}</strong> y quedó a tu nombre.`,
+        preheader: `${esc(nombre)} · ${esc(contacto)}`,
+        cuerpo: bloque(
+          `<div style="font-size:16px;font-weight:800;letter-spacing:-.01em">${esc(nombre)}</div>` +
+          `<div style="color:#5B6072;font-size:13px;margin-top:4px">${esc(contacto)}</div>`
+        ),
+        cta: { texto: 'Abrir el CRM', url: 'https://app.acuarius.app/crm' },
+        pie: 'Los leads atendidos en la primera hora convierten mucho más.',
+      }),
     }),
   }).catch(() => {});
 }

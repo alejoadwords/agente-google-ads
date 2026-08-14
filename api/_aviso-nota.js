@@ -8,6 +8,8 @@
 // Todo aquí es silencioso a propósito: que falle el correo NO puede impedir que
 // la nota se guarde. La nota es el dato; el aviso es una cortesía.
 
+import { emailHtml, bloque, esc } from './_email-layout.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -19,9 +21,7 @@ function sb() {
   };
 }
 
-function escapar(t) {
-  return String(t || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
+
 
 // A quién le importa esta nota: al que tiene el lead. Si no hay lead o no está
 // asignado, al dueño de la cuenta. Nunca a quien la escribió.
@@ -89,14 +89,15 @@ export async function avisarNota({ ownerId, autorId, autorNombre, conv, texto })
           from: 'Acuarius <crm@app.acuarius.app>',
           to,
           subject: `Nota interna sobre ${contacto}`,
-          html: `
-        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
-          <h2 style="color:#111;margin-bottom:4px">${escapar(quien)} dejó una nota</h2>
-          <p style="color:#444;margin-top:0">En la conversación con <strong>${escapar(contacto)}</strong>.</p>
-          <div style="border-left:3px solid #f59e0b;background:#fffbeb;border-radius:8px;padding:14px 16px;margin:16px 0;color:#111;white-space:pre-wrap">${escapar(texto)}</div>
-          <p style="color:#666;font-size:13px">Esta nota es interna: el cliente no la ve.</p>
-          <a href="https://app.acuarius.app/conversaciones" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:700">Abrir la conversación</a>
-        </div>`,
+          html: emailHtml({
+            titulo: `${esc(quien)} dejó una nota`,
+            intro: `En la conversación con <strong>${esc(contacto)}</strong>.`,
+            preheader: String(texto).slice(0, 90),
+            // Ámbar, igual que la nota en el inbox: quien la ve ahí la reconoce aquí.
+            cuerpo: bloque(`<span style="white-space:pre-wrap">${esc(texto)}</span>`, '#F59E0B'),
+            cta: { texto: 'Abrir la conversación', url: 'https://app.acuarius.app/conversaciones' },
+            pie: 'Esta nota es interna: el cliente no la ve.',
+          }),
         }),
       }).catch(() => null);
       if (res?.ok) avisados++;

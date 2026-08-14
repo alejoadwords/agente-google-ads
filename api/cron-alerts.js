@@ -4,6 +4,7 @@
 
 export const config = { runtime: 'nodejs' };
 
+import { emailHtml } from './_email-layout.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CRON_SECRET         = process.env.CRON_SECRET;
@@ -49,21 +50,20 @@ async function sendAlertEmail(userEmail, alerts) {
       from: 'Acuarius <alertas@app.acuarius.app>',
       to: userEmail,
       subject: `⚠️ ${criticalAlerts.length} alerta${criticalAlerts.length > 1 ? 's' : ''} crítica${criticalAlerts.length > 1 ? 's' : ''} en tus campañas — Acuarius`,
-      html: `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-          <h2 style="color:#111">Alertas de campañas</h2>
-          <p style="color:#444">Se detectaron las siguientes alertas críticas en tus campañas:</p>
-          <table style="width:100%;border-collapse:collapse;margin:16px 0">
-            <thead><tr style="background:#f5f5f5">
-              <th style="padding:8px 12px;text-align:left">Alerta</th>
-              <th style="padding:8px 12px;text-align:center">Severidad</th>
-            </tr></thead>
-            <tbody>${alertItems}</tbody>
-          </table>
-          <p><a href="https://app.acuarius.app" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Ver en Acuarius</a></p>
-          <p style="color:#999;font-size:12px;margin-top:24px">Acuarius — Plataforma de marketing con IA para LatAm</p>
-        </div>
-      `,
+      html: emailHtml({
+        titulo: 'Alertas de campañas',
+        intro: 'Se detectaron estas alertas críticas en tus campañas.',
+        preheader: `${criticalAlerts.length} alerta${criticalAlerts.length > 1 ? 's' : ''} crítica${criticalAlerts.length > 1 ? 's' : ''}`,
+        cuerpo:
+          '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0">' +
+            '<thead><tr>' +
+              '<th align="left" style="padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5B6072;border-bottom:1px solid #E4E6F2">Alerta</th>' +
+              '<th align="center" style="padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5B6072;border-bottom:1px solid #E4E6F2">Severidad</th>' +
+            '</tr></thead>' +
+            `<tbody>${alertItems}</tbody>` +
+          '</table>',
+        cta: { texto: 'Ver en Acuarius', url: 'https://app.acuarius.app' },
+      }),
     }),
   });
 }

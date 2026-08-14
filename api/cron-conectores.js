@@ -9,6 +9,8 @@
 // Corre una vez al día (vercel.json).
 export const config = { runtime: 'edge' };
 
+import { emailHtml, pasos, esc } from './_email-layout.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CRON_SECRET  = process.env.CRON_SECRET;
@@ -47,9 +49,7 @@ async function correoDelDueno(ownerId) {
     .catch(() => null);
 }
 
-function escapar(t) {
-  return String(t || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
+
 
 export default async function handler(req) {
   const auth = req.headers.get('authorization');
@@ -81,7 +81,7 @@ export default async function handler(req) {
         if (!correos.has(c.user_id)) correos.set(c.user_id, await correoDelDueno(c.user_id));
         const to = correos.get(c.user_id);
         if (to) {
-          const donde = c.origen_url ? escapar(c.origen_url.replace(/^https?:\/\//, '')) : 'tu web';
+          const donde = c.origen_url ? esc(c.origen_url.replace(/^https?:\/\//, '')) : 'tu web';
           await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -89,22 +89,21 @@ export default async function handler(req) {
               from: 'Acuarius <crm@app.acuarius.app>',
               to,
               subject: `Tu formulario de ${donde} lleva ${dias} días sin traer leads`,
-              html: `
-        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
-          <h2 style="color:#111;margin-bottom:4px">Puede que el código ya no esté en tu web</h2>
-          <p style="color:#444;margin-top:0">La conexión <strong>${escapar(c.name)}</strong> venía recogiendo leads con regularidad y lleva <strong>${dias} días</strong> sin traer ninguno.</p>
-          <p style="color:#444">Suele pasar cuando se rehace la página, se cambia el tema de WordPress o se quita el plugin que insertaba el código en el pie. El script desaparece y los envíos dejan de llegar sin dar ningún error.</p>
-          <div style="border:1px solid #e5e5e5;border-radius:10px;padding:14px 16px;margin:16px 0">
-            <div style="font-size:13px;color:#666">Qué revisar</div>
-            <div style="color:#111;font-size:14px;line-height:1.7;margin-top:4px">
-              1. Abre ${donde} y busca el script de Acuarius antes de &lt;/body&gt;<br>
-              2. Si no está, vuelve a pegarlo desde Fuentes → Formularios que ya tienes en tu web<br>
-              3. Envía tu formulario una vez para comprobar que el lead entra
-            </div>
-          </div>
-          <p style="color:#666;font-size:13px">Si el formulario simplemente no ha tenido visitas, ignora este correo: te avisaremos otra vez solo si vuelve a pasar tras recibir leads.</p>
-          <a href="https://app.acuarius.app/marketing" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:700">Ver mis fuentes</a>
-        </div>`,
+              html: emailHtml({
+                titulo: 'Puede que el código ya no esté en tu web',
+                intro: `La conexión <strong>${esc(c.name)}</strong> venía recogiendo leads con regularidad y lleva <strong>${dias} días</strong> sin traer ninguno.`,
+                preheader: `${donde} lleva ${dias} días sin traer leads`,
+                cuerpo:
+                  '<p style="margin:0 0 4px">Suele pasar cuando se rehace la página, se cambia el tema de WordPress o se quita el plugin que insertaba el código en el pie. El script desaparece y los envíos dejan de llegar sin dar ningún error.</p>' +
+                  '<p style="margin:16px 0 0;font-weight:700">Qué revisar</p>' +
+                  pasos([
+                    `Abre ${donde} y busca el script de Acuarius antes de &lt;/body&gt;`,
+                    'Si no está, vuelve a pegarlo desde Fuentes → Formularios que ya tienes en tu web',
+                    'Envía tu formulario una vez para comprobar que el lead entra',
+                  ]),
+                cta: { texto: 'Ver mis fuentes', url: 'https://app.acuarius.app/marketing' },
+                pie: 'Si el formulario simplemente no ha tenido visitas, ignora este correo: te avisaremos otra vez solo si vuelve a pasar tras recibir leads.',
+              }),
             }),
           }).catch(() => {});
         }
