@@ -2050,6 +2050,10 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .inbox-nota-x:hover{color:var(--danger);background:var(--danger-bg)}
 .inbox-nota-txt{font-size:12.5px;line-height:1.5;color:var(--text);white-space:pre-wrap}
 .inbox-accion.activo{color:#b45309;border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.12)}
+.inbox-accion:disabled{cursor:default;opacity:.7}
+.inbox-accion.pensando{color:var(--blue);border-color:var(--blue-md)}
+.inbox-accion.pensando svg{animation:sugPulso 1s ease-in-out infinite}
+@keyframes sugPulso{0%,100%{opacity:1}50%{opacity:.35}}
 .crm-inbox-reply.modo-nota{background:rgba(245,158,11,.07)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-input{border-color:rgba(245,158,11,.5)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-btn{background:#b45309}

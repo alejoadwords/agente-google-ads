@@ -19498,6 +19498,9 @@ async function inboxOpenConv(convId) {
       <button class="inbox-accion" id="inbox-btn-nota" title="Nota interna (no la ve el cliente)" onclick="inboxModoNota()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
       </button>
+      <button class="inbox-accion" id="inbox-btn-sug" title="¿Qué contestaría el agente?" onclick="inboxSugerir('${esc(convId)}')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 00-3.6 10.8c.5.4.8 1 .9 1.6l.1.6h5.2l.1-.6c.1-.6.4-1.2.9-1.6A6 6 0 0012 3z"/><path d="M9.5 19h5"/><path d="M10 21.5h4"/></svg>
+      </button>
       <textarea class="crm-inbox-reply-input" id="inbox-reply-input" placeholder="Escribe un mensaje manual..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inboxSendManual('${esc(convId)}')}" rows="1"></textarea>
       <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
     </div>`;
@@ -19733,6 +19736,38 @@ async function inboxBorrarNota(id, convId) {
     if (!r.ok) { showToast(d.error || 'No se pudo borrar la nota', 'error'); return; }
     await inboxOpenConv(convId);
   } catch { showToast('No se pudo borrar la nota', 'error'); }
+}
+
+// ── Respuesta sugerida ──────────────────────────────────────────────────────
+// Le pregunta al agente qué diría y lo PEGA en la caja. No lo envía: el agente
+// se equivoca, y un mensaje enviado a un cliente no se recoge.
+async function inboxSugerir(convId) {
+  const btn = document.getElementById('inbox-btn-sug');
+  const input = document.getElementById('inbox-reply-input');
+  if (!input || btn?.disabled) return;
+
+  // Sugerir sobre el modo nota escribiría la respuesta al cliente donde va la
+  // nota interna: se vuelve a modo mensaje antes de pegar nada.
+  if (inboxNotaActiva) inboxModoNota();
+
+  if (btn) { btn.disabled = true; btn.classList.add('pensando'); }
+  inboxAvisoEnvio('');
+  try {
+    const r = await fetchAuth('/api/chat-conversations?action=sugerir', {
+      method: 'POST', body: JSON.stringify({ conversation_id: convId }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { inboxAvisoEnvio(d.error || 'No se pudo pedir la sugerencia'); return; }
+    // Se añade a lo ya escrito en vez de pisarlo: nadie pierde su borrador por
+    // curiosear qué diría el agente.
+    input.value = input.value.trim() ? input.value.trimEnd() + '\n' + d.texto : d.texto;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  } catch (e) {
+    inboxAvisoEnvio('No se pudo pedir la sugerencia: ' + (e?.message || 'error de red'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove('pensando'); }
+  }
 }
 
 // ── Ventana de 24 horas de WhatsApp ─────────────────────────────────────────

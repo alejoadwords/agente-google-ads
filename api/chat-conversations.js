@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-import { upsertLeadFromConversation } from './_inbox-engine.js';
+import { upsertLeadFromConversation, sugerirRespuesta } from './_inbox-engine.js';
 import { getPolicy } from './_channel-policy.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -147,6 +147,15 @@ export default async function handler(req) {
     });
     if (!res.ok) return jsonResp({ error: (await res.text()).slice(0, 200) }, 500);
     return jsonResp({ nota: (await res.json())?.[0] || null }, 201);
+  }
+
+  // POST ?action=sugerir — qué contestaría el agente. No guarda ni envía nada.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'sugerir') {
+    const body = await req.json().catch(() => ({}));
+    if (!body.conversation_id) return jsonResp({ error: 'Falta la conversación' }, 400);
+    const r = await sugerirRespuesta(userId, body.conversation_id);
+    if (!r.ok) return jsonResp({ error: r.error }, 400);
+    return jsonResp({ texto: r.texto });
   }
 
   // POST ?action=nota_borrar — solo quien la escribió puede quitarla

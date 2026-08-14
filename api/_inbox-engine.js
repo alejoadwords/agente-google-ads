@@ -159,6 +159,87 @@ async function callClaude(systemPrompt, messages) {
   return data.content?.find(b => b.type === 'text')?.text || '';
 }
 
+// ── Respuesta sugerida ──────────────────────────────────────────────────────
+// Le pregunta al agente qué contestaría, y devuelve el texto SIN guardarlo y SIN
+// enviarlo. Quien atiende lo lee, lo ajusta y decide. Por eso no toca
+// chat_messages: si se guardara, el agente creería en el siguiente mensaje que
+// ya dijo algo que quizá nunca se envió.
+export async function sugerirRespuesta(userId, conversationId) {
+  const conv = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(conversationId)}&user_id=eq.${encodeURIComponent(userId)}&select=*`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+  if (!conv) return { ok: false, error: 'Conversación no encontrada' };
+
+  const connection = conv.connection_id ? await fetch(
+    `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${conv.connection_id}&select=*`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null) : null;
+
+  // El agente del canal; si el canal es manual, el que quedó ligado a la
+  // conversación cuando se escaló.
+  const agentId = connection?.agent_id || conv.agent_id || null;
+  if (!agentId) {
+    return { ok: false, error: 'Este canal se atiende a mano y no tiene agente, así que no hay a quién preguntarle. Asígnale uno en Marketing → Fuentes → Configurar canales.' };
+  }
+  const agent = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${agentId}&select=*`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+  if (!agent) return { ok: false, error: 'El agente de este canal ya no existe.' };
+
+  const hist = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content&order=created_at.desc&limit=12`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => (r || []).reverse()).catch(() => []);
+  if (!hist.length) return { ok: false, error: 'Todavía no hay nada que responder en esta conversación.' };
+
+  // Dos mensajes seguidos del mismo lado se juntan: pasa en cuanto alguien
+  // responde a mano después del agente, y la API los rechaza.
+  const messages = [];
+  for (const m of hist) {
+    const ult = messages[messages.length - 1];
+    if (ult && ult.role === m.role) ult.content += '\n\n' + m.content;
+    else messages.push({ role: m.role, content: m.content });
+  }
+  // La API continúa el último turno si es del asistente: sin esto la sugerencia
+  // saldría como la segunda mitad del mensaje anterior, no como uno nuevo.
+  if (messages[messages.length - 1].role === 'assistant') {
+    messages.push({
+      role: 'user',
+      content: '(Aviso del sistema, no lo escribió el contacto) Redacta el siguiente mensaje que le enviarías a esta persona para retomar la conversación.',
+    });
+  }
+
+  const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
+  const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
+  const clienteDelCanal = connection?.client_id || agent.client_id || null;
+  const inventario = await propiedadesParaPrompt(userId, clienteDelCanal, {
+    operacion: previas._ruta || null,
+    ciudad: capturedData.ciudad || null,
+    barrio: capturedData.zona || capturedData.barrio || null,
+    presupuesto: Number(String(capturedData.presupuesto || '').replace(/[^\d]/g, '')) || null,
+  }).catch(() => ({ lineas: [], total: 0 }));
+
+  // Sin la regla de calificación: los bloques ocultos solo tienen sentido cuando
+  // el mensaje se guarda, y este no se guarda.
+  const system = buildSystemPrompt(
+    agent,
+    { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) },
+    null,
+    inventario
+  );
+
+  try {
+    const bruto = await callClaude(system, messages);
+    const texto = cleanForUser(bruto).trim();
+    if (!texto) return { ok: false, error: 'El agente no devolvió nada. Reintenta.' };
+    return { ok: true, texto };
+  } catch (e) {
+    return { ok: false, error: 'No se pudo consultar al agente: ' + (e?.message || 'error desconocido') };
+  }
+}
+
 // ── Entrada al pipeline ───────────────────────────────────────────────────────
 // La regla del canal decide: 'manual' no crea nada (la conversación se queda en
 // el inbox esperando decisión), 'on_contact' crea cuando hay nombre/teléfono/
