@@ -19603,6 +19603,7 @@ async function inboxOpenConv(convId) {
       ${inboxHilo(messages, data.notas || [])}
     </div>
     ${inboxAvisoVentana(conv)}
+    <div id="inbox-prog-caja"></div>
     <div id="inbox-adjunto-caja"></div>
     <div class="crm-inbox-reply">
       <button class="inbox-accion" title="Respuestas rápidas" onclick="qrAbrir('${esc(convId)}')">
@@ -19621,6 +19622,9 @@ async function inboxOpenConv(convId) {
       <button class="inbox-accion" id="inbox-btn-clip" title="Adjuntar imagen o archivo" onclick="document.getElementById('inbox-file').click()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.2-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
       </button>
+      <button class="inbox-accion" id="inbox-btn-prog" title="Programar el mensaje" onclick="progAbrir('${esc(convId)}')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 6.8V12l3.4 2"/></svg>
+      </button>
       <button class="inbox-accion" id="inbox-btn-sug" title="¿Qué contestaría el agente?" onclick="inboxSugerir('${esc(convId)}')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 00-3.6 10.8c.5.4.8 1 .9 1.6l.1.6h5.2l.1-.6c.1-.6.4-1.2.9-1.6A6 6 0 0012 3z"/><path d="M9.5 19h5"/><path d="M10 21.5h4"/></svg>
       </button>
@@ -19628,6 +19632,7 @@ async function inboxOpenConv(convId) {
       <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
     </div>`;
 
+  progCargar(convId);        // los que estén esperando salida
   inboxNotaActiva = false;   // cada conversación se abre en modo mensaje
   inboxAdjunto = null;       // y sin el archivo que quedara colgado en otra
   document.getElementById('emoji-panel')?.remove();
@@ -19874,6 +19879,170 @@ async function inboxBorrarNota(id, convId) {
     if (!r.ok) { showToast(d.error || 'No se pudo borrar la nota', 'error'); return; }
     await inboxOpenConv(convId);
   } catch { showToast('No se pudo borrar la nota', 'error'); }
+}
+
+// ── Mensajes programados ────────────────────────────────────────────────────
+// «Escríbele el lunes a las 9». Un cron cada 5 minutos los saca; hasta entonces
+// se ven bajo la conversación y se pueden cancelar.
+let progLista = [];
+
+function progFecha(iso) {
+  const d = new Date(iso);
+  const hoy = new Date();
+  const manana = new Date(hoy.getTime() + 86400000);
+  const mismoDia = (a, b) => a.toDateString() === b.toDateString();
+  const hora = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  if (mismoDia(d, hoy)) return 'hoy a las ' + hora;
+  if (mismoDia(d, manana)) return 'mañana a las ' + hora;
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ' a las ' + hora;
+}
+
+async function progCargar(convId) {
+  const caja = document.getElementById('inbox-prog-caja');
+  if (!caja) return;
+  try {
+    const r = await fetchAuth('/api/scheduled-messages?conversation_id=' + encodeURIComponent(convId));
+    const d = await leerRespuesta(r);
+    // Si mientras tanto se abrió otra conversación, esta respuesta ya no vale:
+    // pintarla mostraría los programados de una conversación en otra.
+    if (inboxActiveConvId !== convId) return;
+    progLista = r.ok ? (d.programados || []) : [];
+  } catch {
+    if (inboxActiveConvId !== convId) return;
+    progLista = [];
+  }
+  progPintar(convId);
+}
+
+function progPintar(convId) {
+  const caja = document.getElementById('inbox-prog-caja');
+  if (!caja) return;
+  if (!progLista.length) { caja.innerHTML = ''; return; }
+  caja.innerHTML = progLista.map(p => {
+    const fallo = p.estado === 'fallido';
+    const resumen = p.texto || (p.adjunto_nombre ? '📎 ' + p.adjunto_nombre : 'Adjunto');
+    return '<div class="inbox-prog' + (fallo ? ' fallido' : '') + '">' +
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 6.8V12l3.4 2"/></svg>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:700;font-size:11px">' +
+          (fallo ? 'No se pudo enviar' : 'Se enviará ' + esc(progFecha(p.enviar_at))) + '</div>' +
+        '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(resumen) + '</div>' +
+        (fallo && p.error ? '<div style="font-size:11px;margin-top:2px">' + esc(p.error) + '</div>' : '') +
+      '</div>' +
+      '<button class="inbox-nota-x" style="opacity:1" title="' + (fallo ? 'Descartar' : 'Cancelar') + '" onclick="progCancelar(\'' + esc(p.id) + '\',\'' + esc(convId) + '\')">&#10005;</button>' +
+    '</div>';
+  }).join('');
+}
+
+async function progCancelar(id, convId) {
+  try {
+    const r = await fetchAuth('/api/scheduled-messages?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo cancelar', 'error'); return; }
+    await progCargar(convId);
+  } catch { showToast('No se pudo cancelar', 'error'); }
+}
+
+// Valor para un <input type="datetime-local">, que quiere hora LOCAL sin zona.
+// Con toISOString() saldría en UTC y en Colombia se programaría 5 horas antes.
+function progValorLocal(fecha) {
+  const p = n => String(n).padStart(2, '0');
+  return `${fecha.getFullYear()}-${p(fecha.getMonth() + 1)}-${p(fecha.getDate())}T${p(fecha.getHours())}:${p(fecha.getMinutes())}`;
+}
+
+function progAbrir(convId) {
+  const input = document.getElementById('inbox-reply-input');
+  const texto = String(input?.value || '').trim();
+  if (!texto && !inboxAdjunto) {
+    inboxAvisoEnvio('Escribe el mensaje (o adjunta un archivo) antes de programarlo.');
+    return;
+  }
+  if (inboxNotaActiva) {
+    inboxAvisoEnvio('Una nota interna no se envía a nadie, así que no hay nada que programar.');
+    return;
+  }
+  document.getElementById('prog-overlay')?.remove();
+
+  const ahora = new Date();
+  const enUnaHora = new Date(ahora.getTime() + 3600000);
+  const manana9 = new Date(ahora); manana9.setDate(manana9.getDate() + 1); manana9.setHours(9, 0, 0, 0);
+  const lunes9 = new Date(ahora);
+  lunes9.setDate(lunes9.getDate() + ((8 - lunes9.getDay()) % 7 || 7)); lunes9.setHours(9, 0, 0, 0);
+
+  const ov = document.createElement('div');
+  ov.id = 'prog-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:480px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Programar el mensaje</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Sale solo a la hora que elijas</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="inbox-adj-pend" style="margin:0 0 16px;align-items:flex-start">' +
+        '<span style="flex:1;min-width:0;white-space:pre-wrap;font-size:12.5px">' +
+          esc(texto || ('📎 ' + (inboxAdjunto?.nombre || 'Adjunto'))) + '</span>' +
+      '</div>' +
+      '<div class="auto-field">' +
+        '<label class="auto-label">¿Cuándo?</label>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+          '<button class="btn-sec sm" onclick="progPoner(\'' + progValorLocal(enUnaHora) + '\')">En 1 hora</button>' +
+          '<button class="btn-sec sm" onclick="progPoner(\'' + progValorLocal(manana9) + '\')">Mañana 9:00</button>' +
+          '<button class="btn-sec sm" onclick="progPoner(\'' + progValorLocal(lunes9) + '\')">Lunes 9:00</button>' +
+        '</div>' +
+        '<input type="datetime-local" class="auto-input" id="prog-cuando" value="' + progValorLocal(manana9) + '" min="' + progValorLocal(ahora) + '">' +
+      '</div>' +
+      '<div id="prog-error" style="display:none;font-size:12px;color:#b91c1c"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="prog-guardar" onclick="progGuardar(\'' + esc(convId) + '\')">Programar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function progPoner(valor) {
+  const i = document.getElementById('prog-cuando');
+  if (i) { i.value = valor; i.focus(); }
+}
+
+async function progGuardar(convId) {
+  const cuando = String(document.getElementById('prog-cuando')?.value || '');
+  const err = document.getElementById('prog-error');
+  const mostrar = m => { if (err) { err.textContent = m; err.style.display = m ? 'block' : 'none'; } };
+  if (!cuando) return mostrar('Elige la fecha y la hora.');
+  const fecha = new Date(cuando);   // se interpreta en la hora local del navegador
+  if (isNaN(fecha.getTime())) return mostrar('Esa fecha no es válida.');
+  mostrar('');
+
+  const input = document.getElementById('inbox-reply-input');
+  const btn = document.getElementById('prog-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Programando…'; }
+  try {
+    const r = await fetchAuth('/api/scheduled-messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversation_id: convId,
+        texto: String(input?.value || '').trim(),
+        adjunto: inboxAdjunto,
+        enviar_at: fecha.toISOString(),
+      }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { mostrar(d.error || 'No se pudo programar'); return; }
+    // Se vacía la caja solo ahora, con el mensaje ya guardado en el servidor.
+    if (input) input.value = '';
+    inboxQuitarAdjunto();
+    inboxAvisoEnvio('');
+    document.getElementById('prog-overlay')?.remove();
+    await progCargar(convId);
+    showToast('Mensaje programado', 'success');
+  } catch (e) {
+    mostrar('No se pudo programar: ' + (e?.message || 'error de red'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Programar'; }
+  }
 }
 
 // ── Nota de voz ─────────────────────────────────────────────────────────────
