@@ -1,4 +1,5 @@
 export const config = { runtime: 'edge' };
+import { registrarUso, cuentaDe } from './_uso-ia.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -130,6 +131,12 @@ Responde SOLO con un JSON válido, sin markdown ni texto adicional:
   if (!claudeRes.ok) return jsonResp({ error: 'Error de IA' }, 500);
   const claudeData = await claudeRes.json();
   const result = claudeData.content?.[0]?.text || '';
+  if (claudeData.usage) {
+    await registrarUso({
+      userId: await cuentaDe(userId), actorId: userId,
+      origen: 'copiloto', modelo: claudeData.model, uso: claudeData.usage,
+    });
+  }
 
   if (action === 'score') {
     try {

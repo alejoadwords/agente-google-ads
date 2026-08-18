@@ -7,6 +7,7 @@
 // automatizaciones); las rutas públicas van por public_token, sin sesión.
 export const config = { runtime: 'edge' };
 
+import { registrarUso } from './_uso-ia.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -342,6 +343,10 @@ export default async function handler(req) {
       const reader = r.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
+      // El consumo llega repartido en dos eventos del stream. Leer el cuerpo
+      // con .json() no vale aquí: esto es SSE, no JSON, y esperar a tenerlo
+      // entero convertiría en bloqueante algo que se escribe a la vista.
+      let uso = null, modeloUsado = null;
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -359,6 +364,13 @@ export default async function handler(req) {
               if (evt.type === 'error') {
                 await writer.write(enc.encode('data: ' + JSON.stringify({ error: evt.error?.message || 'error de la API' }) + '\n\n'));
               }
+              if (evt.type === 'message_start' && evt.message?.usage) {
+                uso = { ...evt.message.usage };
+                modeloUsado = evt.message.model || null;
+              }
+              if (evt.type === 'message_delta' && evt.usage) {
+                uso = { ...(uso || {}), ...evt.usage };
+              }
               if (evt.type === 'message_stop') {
                 await writer.write(enc.encode('data: ' + JSON.stringify({ done: true }) + '\n\n'));
               }
@@ -367,7 +379,12 @@ export default async function handler(req) {
         }
       } catch (err) {
         await writer.write(enc.encode('data: ' + JSON.stringify({ error: err.message }) + '\n\n'));
-      } finally { await writer.close(); }
+      } finally {
+        await writer.close();
+        if (uso) {
+          await registrarUso({ userId, origen: 'propuesta', modelo: modeloUsado, uso });
+        }
+      }
     })();
     return new Response(readable, {
       status: 200,

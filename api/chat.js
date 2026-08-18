@@ -1,5 +1,7 @@
 export const config = { runtime: 'edge' };
 
+import { registrarUso, cuentaDe } from './_uso-ia.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -97,6 +99,21 @@ export default async function handler(req) {
   // Límite de seguridad del system (los prompts completos de los agentes miden
   // hasta ~80k chars + packs). El costo se controla con prompt caching abajo.
   const MAX_SYSTEM_CHARS = 150000;
+// Qué agente es, deducido del prompt. El cliente no manda esa etiqueta y
+// pedírsela obligaría a tocar el frontend; la primera línea del prompt de cada
+// agente ya lo dice. Si no se reconoce, se guarda null y el informe lo agrupa
+// como "otros" en vez de mentir.
+function agenteDe(system) {
+  const t = String(system || '').slice(0, 400).toLowerCase();
+  for (const [clave, patron] of [
+    ['google-ads', /google ads/], ['meta-ads', /meta ads|facebook ads/],
+    ['tiktok-ads', /tiktok/],     ['linkedin-ads', /linkedin/],
+    ['seo', /\bseo\b/],           ['social', /redes sociales|contenido para redes/],
+    ['consultor', /consultor/],
+  ]) if (patron.test(t)) return clave;
+  return null;
+}
+
   const sanitizedSystem = typeof system === 'string'
     ? system.slice(0, MAX_SYSTEM_CHARS)
     : '';
@@ -178,6 +195,11 @@ export default async function handler(req) {
       let buffer = '';
       let fullText = '';
       let stopReason = null;
+      // El consumo llega en dos eventos distintos: los tokens de entrada y de
+      // caché en message_start, los de salida en message_delta. Hay que juntar
+      // los dos o el costo sale a la mitad.
+      let uso = null;
+      let modeloUsado = null;
 
       // Se pone en true al emitir un error terminal: corta el for interno y el
       // while externo, para no mandar dos motivos por el mismo fallo.
@@ -219,8 +241,16 @@ export default async function handler(req) {
               // message_delta trae stop_reason. Si se corta por max_tokens sin
               // haber emitido texto, el cliente necesita saberlo — si no, ve un
               // "error al procesar la respuesta" sin ninguna pista.
+              if (evt.type === 'message_start' && evt.message?.usage) {
+                uso = { ...evt.message.usage };
+                modeloUsado = evt.message.model || null;
+              }
+
               if (evt.type === 'message_delta' && evt.delta?.stop_reason) {
                 stopReason = evt.delta.stop_reason;
+              }
+              if (evt.type === 'message_delta' && evt.usage) {
+                uso = { ...(uso || {}), ...evt.usage };
               }
 
               if (evt.type === 'message_stop') {
@@ -243,6 +273,20 @@ export default async function handler(req) {
         await writer.write(encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`));
       } finally {
         await writer.close();
+        // Se registra DESPUÉS de cerrar el stream: así no le añade ni un
+        // milisegundo a la respuesta que el usuario está leyendo. Y va dentro
+        // del finally para que también quede constancia de lo que se gastó
+        // cuando la conversación acabó en error — que es cuando más interesa.
+        if (uso) {
+          await registrarUso({
+            userId: await cuentaDe(userId),
+            actorId: userId,
+            origen: 'agente',
+            agente: agenteDe(sanitizedSystem),
+            modelo: modeloUsado,
+            uso,
+          });
+        }
       }
     })();
 

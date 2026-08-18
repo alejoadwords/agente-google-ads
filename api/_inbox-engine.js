@@ -11,6 +11,7 @@ import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-in
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
 import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto } from './_qualify.js';
+import { registrarUso } from './_uso-ia.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -161,7 +162,9 @@ Solo incluye los campos que tengas. Omite este bloque si no hay datos nuevos.${b
 // más caro que no cachear.
 const MODELO_WA = process.env.AGENTE_WA_MODELO || 'claude-haiku-4-5-20251001';
 
-async function callClaude(systemPrompt, messages) {
+// Devuelve el texto y, aparte, lo que consumió. El uso se registra donde se
+// sabe de quién es la conversación; aquí solo se recoge.
+async function callClaude(systemPrompt, messages, alRegistrar) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
@@ -177,6 +180,9 @@ async function callClaude(systemPrompt, messages) {
   });
   if (!res.ok) throw new Error(`Claude error: ${res.status}`);
   const data = await res.json();
+  if (data.usage && typeof alRegistrar === 'function') {
+    await alRegistrar(data.usage, data.model || MODELO_WA).catch(() => {});
+  }
   return data.content?.find(b => b.type === 'text')?.text || '';
 }
 
@@ -243,7 +249,7 @@ export async function sugerirRespuesta(userId, conversationId) {
   );
 
   try {
-    const bruto = await responderViendo(system, hist, extra);
+    const bruto = await responderViendo(system, hist, extra, { userId, origen: 'whatsapp' });
     const texto = cleanForUser(bruto).trim();
     if (!texto) return { ok: false, error: 'El agente no devolvió nada. Reintenta.' };
     return { ok: true, texto };
@@ -398,15 +404,18 @@ function historialParaModelo(hist, conImagenes = true) {
 // PDF tiene 400 páginas, el formato no es el que dice su mime—. Si pasa, se
 // reintenta SIN adjuntos: una respuesta que no vio la foto es mucho mejor que
 // ninguna respuesta.
-async function responderViendo(systemPrompt, hist, extra = []) {
+async function responderViendo(systemPrompt, hist, extra = [], quien = null) {
   const conAdjuntos = [...historialParaModelo(hist, true), ...extra];
   if (!conAdjuntos.length) throw new Error('No hay nada que responder');
+  const anotar = quien
+    ? (uso, modelo) => registrarUso({ userId: quien.userId, origen: quien.origen, modelo, uso })
+    : null;
   try {
-    return await callClaude(systemPrompt, conAdjuntos);
+    return await callClaude(systemPrompt, conAdjuntos, anotar);
   } catch (e) {
     if (!llevaAdjuntoLegible(hist)) throw e;
     console.error('reintento sin adjuntos:', e?.message);
-    return callClaude(systemPrompt, [...historialParaModelo(hist, false), ...extra]);
+    return callClaude(systemPrompt, [...historialParaModelo(hist, false), ...extra], anotar);
   }
 }
 
@@ -650,7 +659,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
 
   const reply = await responderViendo(
     buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario),
-    hist
+    hist, [], { userId: connection.user_id, origen: 'whatsapp' }
   );
 
   await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {

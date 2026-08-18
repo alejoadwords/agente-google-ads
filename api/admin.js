@@ -942,6 +942,7 @@ export default async function handler(req, res) {
 
   try {
     // Tickets de soporte, para el panel de admin.acuarius.app
+    if (action === 'uso-ia')           return await handleUsoIA(req, res);
     if (action === 'tickets')          return await handleTickets(req, res);
     if (action === 'ticket-update')    return await handleTicketUpdate(req, res);
     if (action === 'metrics')          return await handleMetrics(req, res);
@@ -1042,4 +1043,62 @@ async function handleTicketUpdate(req, res) {
   }
 
   return res.status(200).json({ ticket: filas[0], avisado });
+}
+
+// ── Consumo de IA ────────────────────────────────────────────────────────────
+// Cuánto gasta cada cuenta y en qué. Es lo que hay que mirar antes de poner
+// cupos: sin esto, cualquier límite sería un número inventado.
+//
+//   GET ?action=uso-ia[&dias=30]  →  { desde, total, por_cuenta: [...], por_origen: {...} }
+async function handleUsoIA(req, res) {
+  const dias = Math.min(parseInt(req.query.dias, 10) || 30, 365);
+  const desde = new Date(Date.now() - dias * 86400000).toISOString();
+
+  // Se piden las filas y se agregan aquí. PostgREST sabe agrupar, pero con una
+  // sola llamada y este volumen sale igual de rápido y se lee mucho mejor.
+  const filas = await fetch(
+    `${SUPABASE_URL}/rest/v1/ai_usage?created_at=gte.${encodeURIComponent(desde)}` +
+    `&select=user_id,origen,agente,modelo,costo,tokens_in,tokens_out,cache_write,cache_read&limit=50000`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+  const cuentas = new Map();
+  const origenes = {};
+  const agentes = {};
+  let total = 0;
+
+  for (const f of filas) {
+    const c = Number(f.costo) || 0;
+    total += c;
+    origenes[f.origen] = (origenes[f.origen] || 0) + c;
+    if (f.agente) agentes[f.agente] = (agentes[f.agente] || 0) + c;
+    const a = cuentas.get(f.user_id) || { user_id: f.user_id, costo: 0, llamadas: 0, por_origen: {} };
+    a.costo += c;
+    a.llamadas += 1;
+    a.por_origen[f.origen] = (a.por_origen[f.origen] || 0) + c;
+    cuentas.set(f.user_id, a);
+  }
+
+  // El correo hace legible la lista: un id de Clerk no le dice nada a nadie.
+  const ids = [...cuentas.keys()];
+  if (ids.length) {
+    const usuarios = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,email,name,plan`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    for (const u of usuarios || []) {
+      const a = cuentas.get(u.id);
+      if (a) { a.email = u.email; a.nombre = u.name; a.plan = u.plan; }
+    }
+  }
+
+  const por_cuenta = [...cuentas.values()].sort((x, y) => y.costo - x.costo);
+  return res.status(200).json({
+    desde, dias,
+    total: Number(total.toFixed(4)),
+    llamadas: filas.length,
+    por_origen: Object.fromEntries(Object.entries(origenes).map(([k, v]) => [k, Number(v.toFixed(4))])),
+    por_agente: Object.fromEntries(Object.entries(agentes).map(([k, v]) => [k, Number(v.toFixed(4))])),
+    por_cuenta: por_cuenta.map(a => ({ ...a, costo: Number(a.costo.toFixed(4)) })),
+  });
 }

@@ -13,6 +13,7 @@
 export const config = { runtime: 'edge' };
 
 import { CONOCIMIENTO } from './_soporte-conocimiento.js';
+import { registrarUso } from './_uso-ia.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -201,7 +202,7 @@ tus palabras, que ya lo estás pasando al equipo y que le responderán por corre
 No uses el bloque para dudas que sí puedes resolver.`;
 }
 
-async function llamarClaude(estable, variable, mensajes) {
+async function llamarClaude(estable, variable, mensajes, quien) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
@@ -217,6 +218,12 @@ async function llamarClaude(estable, variable, mensajes) {
   });
   if (!res.ok) throw new Error('Claude ' + res.status);
   const data = await res.json();
+  if (data.usage && quien) {
+    await registrarUso({
+      userId: quien.userId, actorId: quien.actorId,
+      origen: 'soporte', modelo: data.model, uso: data.usage,
+    });
+  }
   return data.content?.find(b => b.type === 'text')?.text || '';
 }
 
@@ -293,7 +300,7 @@ export default async function handler(req) {
 
     let bruto;
     try {
-      bruto = await llamarClaude(promptEstable(), promptVariable(radio, body.contexto || {}), mensajes);
+      bruto = await llamarClaude(promptEstable(), promptVariable(radio, body.contexto || {}), mensajes, { userId, actorId });
     } catch (e) {
       return jsonResp({ error: 'El asistente no pudo responder ahora mismo. Reintenta en un momento.' }, 502);
     }
