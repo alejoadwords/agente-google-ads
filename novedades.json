@@ -1,0 +1,29 @@
+{
+  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
+  "novedades": [
+    {
+      "id": "2026-08-18-academia",
+      "fecha": "2026-08-18",
+      "tipo": "nuevo",
+      "titulo": "La Academia, completa: 23 videos en 8 categorías",
+      "texto": "Ya están los tutoriales de CRM, Marketing, Conversaciones y Análisis, además de los de agentes y primeros pasos. Todos de menos de 4 minutos y con subtítulos.",
+      "accion": { "texto": "Ver la Academia", "ir": "academia" }
+    },
+    {
+      "id": "2026-08-18-google-cuentas",
+      "fecha": "2026-08-18",
+      "tipo": "mejora",
+      "titulo": "Elegir tu cuenta de Google Ads ya no es una lotería",
+      "texto": "Si administras un centro de clientes, la lista ya no repite cuentas ni las muestra sin nombre: salen ordenadas alfabéticamente y con buscador por nombre o ID.",
+      "accion": { "texto": "Ir a Integraciones", "ir": "integraciones" }
+    },
+    {
+      "id": "2026-08-12-tareas",
+      "fecha": "2026-08-12",
+      "tipo": "nuevo",
+      "titulo": "Tareas de seguimiento que no se te escapan",
+      "texto": "Al asignarse un lead se crea sola la tarea de primer contacto, y cada mañana te llega por correo lo que tienes vencido y lo de hoy.",
+      "accion": { "texto": "Ver mis tareas", "ir": "tareas" }
+    }
+  ]
+}

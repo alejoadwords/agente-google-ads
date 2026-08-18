@@ -4576,6 +4576,9 @@ window.onload = async () => {
   // Usuarios que ya hicieron el tour pero nunca conectaron una plataforma:
   // invitar a la primera conexión (después de restaurar conexiones de Supabase)
   setTimeout(function(){ if (!tourShouldShow()) showWelcomeConnect(); }, 4500);
+  // Novedades desde la última visita. Va después del tour y del modal de
+  // conexión a propósito: novInit() se retira solo si alguno está en pantalla.
+  setTimeout(function(){ novInit(); }, 6000);
   // Actualizar badge de historial
   setTimeout(function(){ updateHistorialBadge(); }, 2000);
   // Restaurar conexiones desde Supabase si no hay token en sessionStorage
@@ -9710,6 +9713,142 @@ function academiaFilter(cat) {
   document.querySelectorAll('.academia-section').forEach(sec => {
     sec.style.display = (cat === 'all' || sec.dataset.cat === cat) ? '' : 'none';
   });
+}
+
+// ── NOVEDADES ─────────────────────────────────────────────────────────────────
+// Aviso de "qué hay de nuevo" al entrar. El contenido está en
+// public/novedades.json, versionado con el código: publicar una novedad es
+// parte del mismo commit que la trae, no un panel aparte que alguien tenga que
+// acordarse de actualizar.
+
+let novLista = [];        // novedades cargadas del JSON
+let novPendientes = [];   // las que este usuario no ha visto
+const NOV_VENTANA_DIAS = 21;  // a quien nunca ha visto nada solo se le muestra lo reciente
+const NOV_MAX = 4;            // nadie quiere leer diez novedades de golpe
+
+async function novCargar() {
+  try {
+    // cache:'no-store' — sin esto el navegador sirve el JSON viejo y la
+    // novedad recién publicada no aparece hasta que caduque la caché.
+    const res = await fetch('/novedades.json?v=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.novedades) ? data.novedades : [];
+  } catch { return []; }
+}
+
+async function novVistoRemoto() {
+  try {
+    const res = await fetchAuth('/api/novedades');
+    if (res.ok) return (await res.json()).visto || null;
+  } catch {}
+  return null;
+}
+
+function novVistoLocal() {
+  try { return localStorage.getItem('acuarius_novedades_visto') || null; } catch { return null; }
+}
+
+async function novMarcarVisto(id) {
+  if (!id) return;
+  try { localStorage.setItem('acuarius_novedades_visto', id); } catch {}
+  try { await fetchAuth('/api/novedades', { method: 'PUT', body: JSON.stringify({ visto: id }) }); } catch {}
+}
+
+// Decide qué mostrar y lo muestra. Se llama al arrancar.
+async function novInit() {
+  try {
+    if (document.getElementById('acuarius-conn-modal')) return;  // no pisar el modal de conexión
+    if (typeof tourShouldShow === 'function' && tourShouldShow()) return; // el usuario nuevo ya tiene el tour
+
+    novLista = await novCargar();
+    if (!novLista.length) return;
+
+    // El marcador del servidor manda; el local solo cubre el hueco mientras
+    // carga la sesión o si el endpoint falla.
+    const visto = (await novVistoRemoto()) || novVistoLocal();
+
+    // Lo pendiente se decide por POSICIÓN en la lista, no comparando ids como
+    // texto: dos novedades del mismo día ordenan por su slug y a quien ya vio
+    // la última le reaparecía la otra ("google-cuentas" > "academia").
+    const idx = visto ? novLista.findIndex(n => String(n.id) === String(visto)) : -1;
+    if (idx >= 0) {
+      novPendientes = novLista.slice(0, idx);
+    } else {
+      // Sin marcador, o marcador de una novedad que ya no existe: no volcarle
+      // el historial entero a nadie, solo lo reciente.
+      const limite = new Date(Date.now() - NOV_VENTANA_DIAS * 86400000).toISOString().slice(0, 10);
+      novPendientes = novLista.filter(n => String(n.fecha || '') >= limite);
+    }
+
+    if (!novPendientes.length) {
+      // Aunque no haya nada que mostrar, dejamos el marcador al día para que la
+      // próxima novedad se compare contra un punto conocido.
+      await novMarcarVisto(novLista[0].id);
+      return;
+    }
+    novPintar(novPendientes.slice(0, NOV_MAX));
+  } catch (e) {
+    console.warn('[novedades] no se pudieron cargar', e);
+  }
+}
+
+function novPintar(items) {
+  const body = document.getElementById('nov-body');
+  const ov = document.getElementById('nov-overlay');
+  if (!body || !ov) return;
+
+  const CHIP = { nuevo: 'Nuevo', mejora: 'Mejora', arreglo: 'Arreglo' };
+  body.innerHTML = items.map(n => {
+    const tipo = CHIP[n.tipo] ? n.tipo : 'nuevo';
+    const cta = n.accion && n.accion.texto && n.accion.ir
+      ? '<button class="nov-item-cta" onclick="novIr(\'' + esc(String(n.accion.ir)) + '\')">' + esc(n.accion.texto) + ' →</button>'
+      : '';
+    return '<div class="nov-item">'
+      + '<span class="nov-chip ' + tipo + '">' + CHIP[tipo] + '</span>'
+      + '<div class="nov-item-title">' + esc(n.titulo || '') + '</div>'
+      + '<div class="nov-item-text">' + esc(n.texto || '') + '</div>'
+      + cta
+      + '</div>';
+  }).join('');
+
+  const t = document.getElementById('nov-title');
+  if (t) t.textContent = items.length === 1 ? 'Qué hay de nuevo en Acuarius' : 'Novedades desde tu última visita';
+
+  ov.classList.add('open');
+}
+
+// Cerrar marca como visto: si el usuario lo cerró, ya lo vio.
+async function novCerrar() {
+  const ov = document.getElementById('nov-overlay');
+  if (ov) ov.classList.remove('open');
+  if (novLista.length) await novMarcarVisto(novLista[0].id);
+}
+
+// Destinos que puede pedir una novedad desde su botón de acción.
+function novIr(destino) {
+  novCerrar();
+  setTimeout(() => {
+    try {
+      switch (destino) {
+        case 'academia':      openAcademia(); break;
+        case 'integraciones': openSettings(); setTimeout(() => { try { switchSettingsTab('integraciones'); } catch {} }, 220); break;
+        case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
+        case 'crm':           navGo('crm'); break;
+        case 'marketing':     navGo('marketing'); break;
+        case 'conversaciones':navGo('conversaciones'); break;
+        case 'analisis':      navGo('analisis'); break;
+        default:              if (destino && destino.startsWith('/')) location.href = destino;
+      }
+    } catch (e) { console.warn('[novedades] destino no válido:', destino, e); }
+  }, 220);
+}
+
+// Abrir a mano las últimas novedades (⌘K → "Novedades")
+async function novAbrirManual() {
+  if (!novLista.length) novLista = await novCargar();
+  if (!novLista.length) { showToast('Aún no hay novedades publicadas', 'info'); return; }
+  novPintar(novLista.slice(0, NOV_MAX));
 }
 
 // ── ACADEMIA ADMIN ────────────────────────────────────────────────────────────
@@ -21378,6 +21517,7 @@ function cmdkCommands() {
     { group: 'Acciones', icon: '💳', label: 'Conectar MercadoPago',        kw: 'mercadopago pagos cobrar propuestas', run: () => connectMercadoPago() },
     { group: 'Acciones', icon: '⭐', label: 'Actualizar plan',             kw: 'upgrade plan pro agency precio pagar', run: () => openUpgradeFlow() },
     { group: 'Acciones', icon: '🌙', label: 'Cambiar tema (claro/oscuro)', kw: 'dark mode modo oscuro tema claro noche', run: () => toggleTheme() },
+    { group: 'Acciones', icon: '🎁', label: 'Novedades',                   kw: 'novedades nuevo cambios changelog actualizaciones que hay de nuevo', run: () => novAbrirManual() },
   ];
   // Clientes de agencia (dinámico)
   try {
