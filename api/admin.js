@@ -941,6 +941,9 @@ export default async function handler(req, res) {
   if (!authCheck(req)) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    // Tickets de soporte, para el panel de admin.acuarius.app
+    if (action === 'tickets')          return await handleTickets(req, res);
+    if (action === 'ticket-update')    return await handleTicketUpdate(req, res);
     if (action === 'metrics')          return await handleMetrics(req, res);
     if (action === 'users')            return await handleUsers(req, res);
     if (action === 'create-test-user') return await handleCreateTestUser(req, res);
@@ -952,4 +955,50 @@ export default async function handler(req, res) {
     console.error('Admin error:', err);
     return res.status(500).json({ error: err.message });
   }
+}
+
+// ── Tickets de soporte ───────────────────────────────────────────────────────
+// Los abre el asistente de soporte de la app cuando no puede resolver algo, con
+// la radiografía de la cuenta ya dentro. Aquí se listan y se cambian de estado
+// para el panel de admin.acuarius.app.
+//
+//   GET  ?action=tickets[&estado=abierto|en_curso|resuelto|cerrado|todos][&limit=]
+//        → { tickets: [...] }
+//   POST ?action=ticket-update  { id, estado?, respuesta? }
+//        → { ticket }
+//
+// Ambas piden la cabecera x-admin-secret, como el resto del panel.
+async function handleTickets(req, res) {
+  const estado = req.query.estado;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 200, 500);
+  const filtro = estado && estado !== 'todos' ? `&estado=eq.${encodeURIComponent(estado)}` : '';
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/support_tickets?select=*${filtro}&order=created_at.desc&limit=${limit}`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+  );
+  if (!r.ok) return res.status(500).json({ error: (await r.text()).slice(0, 300) });
+  return res.status(200).json({ tickets: await r.json() });
+}
+
+async function handleTicketUpdate(req, res) {
+  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  if (!body.id) return res.status(400).json({ error: 'Falta el ticket' });
+  const cambios = { updated_at: new Date().toISOString() };
+  if (body.estado) cambios.estado = String(body.estado).slice(0, 20);
+  if (body.respuesta !== undefined) cambios.respuesta = String(body.respuesta || '').slice(0, 4000) || null;
+
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/support_tickets?id=eq.${encodeURIComponent(body.id)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(cambios),
+  });
+  if (!r.ok) return res.status(500).json({ error: (await r.text()).slice(0, 300) });
+  const filas = await r.json();
+  if (!filas.length) return res.status(404).json({ error: 'No encontrado' });
+  return res.status(200).json({ ticket: filas[0] });
 }

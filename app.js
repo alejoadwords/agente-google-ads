@@ -29018,8 +29018,9 @@ if (typeof clerkReady === 'function') {
 setInterval(sopMostrarBurbuja, 3000);
 
 // ── Tickets de soporte (solo equipo de Acuarius) ───────────────────────────
-// Lo que el asistente no pudo resolver. Cada uno llega con la radiografía de la
-// cuenta dentro, así que se puede empezar a mirar sin escribirle al usuario.
+// Pantalla completa y con icono propio en el encabezado. Estuvo escondido en
+// Cmd+K y ahí no lo encuentra nadie: una bandeja de soporte que hay que
+// recordar cómo abrir es una bandeja que no se mira.
 let _tkLista = [];
 let _tkEstado = 'abierto';
 
@@ -29027,25 +29028,41 @@ const TK_ESTADOS = [
   ['abierto', 'Abiertos'], ['en_curso', 'En curso'],
   ['resuelto', 'Resueltos'], ['todos', 'Todos'],
 ];
+const TK_COLOR = { abierto: '#B45309', en_curso: '#1E2BCC', resuelto: '#047857', cerrado: '#6b7280' };
 
-async function tkAbrir() {
-  document.getElementById('tk-overlay')?.remove();
-  const ov = document.createElement('div');
-  ov.id = 'tk-overlay';
-  ov.className = 'auto-modal-overlay';
-  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  ov.innerHTML = '<div class="auto-modal" style="max-width:760px;height:min(86vh,720px)">' +
-    '<div class="auto-modal-head">' +
-      '<div><div style="font-size:var(--fs-md);font-weight:800">Tickets de soporte</div>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Casos que el asistente pasó al equipo</div></div>' +
-      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
-    '</div>' +
-    '<div class="auto-modal-body">' +
-      '<div id="tk-filtros" style="display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap"></div>' +
-      '<div id="tk-lista"><div style="font-size:12.5px;color:var(--muted)">Cargando…</div></div>' +
-    '</div></div>';
-  document.body.appendChild(ov);
+// El icono solo existe para el equipo. Se comprueba igual que el diagnóstico.
+function tkBotonHeader() {
+  const b = document.getElementById('tk-btn');
+  if (!b) return;
+  const admin = typeof isAdminUser === 'function' && isAdminUser();
+  b.style.display = admin ? 'flex' : 'none';
+  if (admin) tkContar();
+}
+
+// El contador de abiertos en el icono: sin él hay que entrar para saber si hay
+// algo, y entonces se entra poco.
+async function tkContar() {
+  try {
+    const r = await fetchAuth('/api/diagnostico?tickets=1&estado=abierto');
+    const d = await leerRespuesta(r);
+    if (!r.ok) return;
+    const n = (d.tickets || []).length;
+    const badge = document.getElementById('tk-badge');
+    if (badge) {
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.style.display = n ? 'flex' : 'none';
+    }
+  } catch {}
+}
+
+function tkAbrir() {
+  document.getElementById('tk-full')?.classList.add('abierto');
   tkCargar();
+}
+
+function tkCerrar() {
+  document.getElementById('tk-full')?.classList.remove('abierto');
+  tkContar();
 }
 
 function tkFiltros() {
@@ -29061,7 +29078,7 @@ async function tkCargar() {
   tkFiltros();
   const cont = document.getElementById('tk-lista');
   if (!cont) return;
-  cont.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Cargando…</div>';
+  cont.innerHTML = '<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:30px">Cargando…</div>';
   try {
     const r = await fetchAuth('/api/diagnostico?tickets=1&estado=' + encodeURIComponent(_tkEstado));
     const d = await leerRespuesta(r);
@@ -29069,7 +29086,7 @@ async function tkCargar() {
     _tkLista = d.tickets || [];
     tkRender();
   } catch (e) {
-    cont.innerHTML = '<div style="font-size:12.5px;color:#b91c1c">' + esc(e.message || 'No se pudo cargar') + '</div>';
+    cont.innerHTML = '<div style="font-size:12.5px;color:#b91c1c;text-align:center;padding:30px">' + esc(e.message || 'No se pudo cargar') + '</div>';
   }
 }
 
@@ -29077,14 +29094,13 @@ function tkRender() {
   const cont = document.getElementById('tk-lista');
   if (!cont) return;
   if (!_tkLista.length) {
-    cont.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:10px 2px">' +
+    cont.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:40px">' +
       (_tkEstado === 'abierto' ? 'No hay tickets abiertos. Buena señal.' : 'Nada por aquí.') + '</div>';
     return;
   }
-  const color = { abierto: '#B45309', en_curso: '#1E2BCC', resuelto: '#047857', cerrado: '#6b7280' };
   cont.innerHTML = _tkLista.map(t => {
     const ctx = t.contexto || {};
-    // Lo que casi siempre explica el caso, arriba y sin tener que desplegar.
+    // Lo que casi siempre explica el caso, a la vista y sin desplegar nada.
     const resumen = [
       ctx.plan ? 'plan ' + ctx.plan : null,
       typeof ctx.leads === 'number' ? ctx.leads + ' leads' : null,
@@ -29092,23 +29108,23 @@ function tkRender() {
       (ctx.agentes || []).length ? (ctx.agentes || []).length + ' agentes' : 'sin agentes',
       ctx.seccion ? 'estaba en ' + ctx.seccion : null,
     ].filter(Boolean).join(' · ');
-    return '<div class="auto-card" style="align-items:flex-start;max-width:none;margin-bottom:10px">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-          '<span class="auto-name">' + esc(t.asunto) + '</span>' +
-          '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:' + (color[t.estado] || '#6b7280') + '1A;color:' + (color[t.estado] || '#6b7280') + '">' + esc(t.estado) + '</span>' +
-        '</div>' +
-        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' +
-          esc(t.email || t.user_id) + ' · ' + new Date(t.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</div>' +
-        '<div style="font-size:12.5px;line-height:1.6;margin-top:8px;white-space:pre-wrap">' + esc(t.detalle || '') + '</div>' +
-        '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">' + esc(resumen) + '</div>' +
-        '<details style="margin-top:6px"><summary style="font-size:11.5px;cursor:pointer;color:var(--blue)">Ver la cuenta completa</summary>' +
-          '<pre style="font-size:10.5px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px">' + esc(JSON.stringify(ctx, null, 1)) + '</pre></details>' +
-        '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' +
-          (t.estado !== 'en_curso' ? '<button class="btn-sec sm" onclick="tkEstado(\'' + t.id + '\',\'en_curso\')">Tomarlo</button>' : '') +
-          (t.estado !== 'resuelto' ? '<button class="btn-pri sm" onclick="tkEstado(\'' + t.id + '\',\'resuelto\')">Resuelto</button>' : '') +
-          (t.estado !== 'cerrado' ? '<button class="btn-ghost sm" onclick="tkEstado(\'' + t.id + '\',\'cerrado\')">Cerrar</button>' : '') +
-        '</div>' +
+    const col = TK_COLOR[t.estado] || '#6b7280';
+    return '<div class="tk-card' + (t.estado === 'abierto' ? ' abierto' : '') + '">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span class="tk-asunto">' + esc(t.asunto) + '</span>' +
+        '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:' + col + '1A;color:' + col + '">' + esc(t.estado) + '</span>' +
+      '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' +
+        esc(t.email || t.user_id) + ' · ' +
+        new Date(t.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</div>' +
+      '<div style="font-size:13px;line-height:1.6;margin-top:10px;white-space:pre-wrap">' + esc(t.detalle || '') + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:10px">' + esc(resumen) + '</div>' +
+      '<details style="margin-top:6px"><summary style="font-size:11.5px;cursor:pointer;color:var(--blue)">Ver la cuenta completa</summary>' +
+        '<pre class="tk-pre">' + esc(JSON.stringify(ctx, null, 1)) + '</pre></details>' +
+      '<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">' +
+        (t.estado !== 'en_curso' ? '<button class="btn-sec sm" onclick="tkEstado(\'' + t.id + '\',\'en_curso\')">Tomarlo</button>' : '') +
+        (t.estado !== 'resuelto' ? '<button class="btn-pri sm" onclick="tkEstado(\'' + t.id + '\',\'resuelto\')">Resuelto</button>' : '') +
+        (t.estado !== 'cerrado' ? '<button class="btn-ghost sm" onclick="tkEstado(\'' + t.id + '\',\'cerrado\')">Cerrar</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -29122,3 +29138,7 @@ async function tkEstado(id, estado) {
     tkCargar();
   } catch { showToast('No se pudo actualizar', 'error'); }
 }
+
+// El icono depende de saber quién eres, igual que la burbuja de soporte.
+if (typeof clerkReady === 'function') clerkReady().then(tkBotonHeader).catch(() => {});
+setInterval(tkBotonHeader, 60000);

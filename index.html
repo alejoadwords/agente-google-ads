@@ -2089,6 +2089,18 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .kb-tab:hover{color:var(--text)}
 .kb-tab.activo{color:var(--blue);border-bottom-color:var(--blue)}
 
+/* ── Tickets de soporte (equipo) ── */
+#tk-full{position:fixed;inset:0;z-index:9700;background:var(--bg);display:none;flex-direction:column}
+#tk-full.abierto{display:flex}
+.tk-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;background:var(--bg-card)}
+.tk-titulo{font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em}
+.tk-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.tk-body{flex:1;overflow-y:auto;padding:20px 24px}
+.tk-card{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);padding:16px 18px;margin:0 auto 12px;max-width:860px}
+.tk-card.abierto{border-left:3px solid #B45309}
+.tk-asunto{font-size:14px;font-weight:800;letter-spacing:-.01em}
+.tk-pre{font-size:10.5px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px;white-space:pre-wrap}
+
 /* ── Soporte flotante ── */
 #sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease)}
 #sop-burbuja:hover{transform:translateY(-2px)}
@@ -2271,6 +2283,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <button class="hdr-academia-btn" onclick="openAcademia()" style="position:relative;background:none;border:none;cursor:pointer;padding:5px 7px;border-radius:8px;color:var(--muted2);display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;font-family:var(--font);transition:all .18s" onmouseover="this.style.background='var(--blue-lt)';this.style.color='var(--blue)'" onmouseout="this.style.background='none';this.style.color='var(--muted2)'" title="Academia Acuarius">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
       <span class="academia-hdr-label">Academia</span>
+    </button>
+    <!-- Tickets: solo para el equipo de Acuarius. Se muestra desde tkBotonHeader(). -->
+    <button id="tk-btn" onclick="tkAbrir()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Tickets de soporte">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 002-2V6a1 1 0 011-1h12a1 1 0 011 1v1a2 2 0 000 4v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-1a2 2 0 00-2-2z"/><path d="M9 5v14"/></svg>
+      <span id="tk-badge" style="display:none;position:absolute;top:-3px;right:-3px;background:#B45309;color:#fff;font-size:9px;font-weight:700;border-radius:10px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px">0</span>
     </button>
     <button id="alerts-btn" onclick="openAlertsPanel()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Alertas de campañas">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -4148,6 +4165,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script src="/app.js"></script>
 
 <!-- CRM MODAL: crear / editar lead -->
+<!-- Tickets de soporte a pantalla completa. Fuera de las vistas de la app
+     porque no es una pestaña más del producto: es la herramienta del equipo. -->
+<div id="tk-full">
+  <div class="tk-head">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div class="tk-titulo">Tickets de soporte</div>
+        <div class="tk-sub">Casos que el asistente pasó al equipo</div>
+      </div>
+      <div id="tk-filtros" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+    </div>
+    <button class="btn-ghost sm" onclick="tkCerrar()">Cerrar</button>
+  </div>
+  <div class="tk-body"><div id="tk-lista"></div></div>
+</div>
+
 <!-- Soporte: burbuja flotante. Fuera de cualquier vista para que siga ahí
      pase lo que pase en la app — si se rompe una pantalla, el sitio donde pedir
      ayuda no puede romperse con ella. -->
