@@ -2,6 +2,14 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-18-equipo-pipelines",
+      "fecha": "2026-08-18",
+      "tipo": "arreglo",
+      "titulo": "Tu equipo ya ve los mismos clientes y pipelines que tú",
+      "texto": "A los comerciales invitados les llegaba la cartera vacía, así que veían un tablero genérico en vez de tus procesos de venta. Ya ven exactamente lo mismo que el dueño de la cuenta.",
+      "accion": { "texto": "Ir al CRM", "ir": "crm" }
+    },
+    {
       "id": "2026-08-18-academia",
       "fecha": "2026-08-18",
       "tipo": "nuevo",
