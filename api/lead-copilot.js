@@ -40,8 +40,23 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
 
-  const userId = await getUserId(req);
+  let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Un miembro del equipo opera sobre la cuenta del dueño: los datos son de la
+  // cuenta, no de la persona. Sin esto el miembro consulta su propia cuenta
+  // —vacía— y el módulo le sale en blanco sin ningún error a la vista.
+  try {
+    const _tw = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: sbHeaders() }
+    );
+    if (!_tw.ok) throw new Error('HTTP ' + _tw.status);
+    const _fila = (await _tw.json())?.[0];
+    if (_fila?.owner_user_id) userId = _fila.owner_user_id;
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
 
   let body;
   try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }

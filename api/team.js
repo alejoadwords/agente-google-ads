@@ -128,13 +128,32 @@ export default async function handler(req) {
     return jsonResp({ ok: true, owner_name: inv.owner_name });
   }
 
-  // ── Rutas del dueño ────────────────────────────────────────────────────────
+  // ── A partir de aquí se opera sobre la cuenta ──────────────────────────────
+  // Un miembro puede LEER el equipo —lo necesita todo selector de "quién
+  // atiende"—, pero no invitar ni quitar a nadie. Sin esto la lista le llegaba
+  // vacía y no podía asignarle un lead a ningún compañero.
+  let cuenta = userId;
+  let esMiembro = false;
+  try {
+    const _tw = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: sbHeaders() }
+    );
+    if (!_tw.ok) throw new Error('HTTP ' + _tw.status);
+    const _fila = (await _tw.json())?.[0];
+    if (_fila?.owner_user_id) { cuenta = _fila.owner_user_id; esMiembro = true; }
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+  if (esMiembro && req.method !== 'GET') {
+    return jsonResp({ error: 'Solo el dueño de la cuenta puede gestionar el equipo' }, 403);
+  }
 
-  // GET — listar mi equipo + asientos
+  // GET — listar el equipo + asientos
   if (req.method === 'GET') {
     // member_user_id es imprescindible: sin él, cualquier selector de "quién
     // atiende" se queda sin equipo que ofrecer y solo muestra al que mira.
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}&select=id,member_user_id,member_email,member_name,role,status,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,member_name,role,status,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
     const myEmail = await clerkEmail(userId);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
     const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
