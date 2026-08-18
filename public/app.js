@@ -28901,12 +28901,30 @@ function sopSugerir(t) {
   sopEnviar();
 }
 
+// El modelo escribe en markdown y se estaba pintando en crudo: los usuarios
+// veían los asteriscos. Se convierte lo mínimo —negrita, listas y enlaces— y
+// SIEMPRE después de escapar el HTML: el texto viene de un modelo, y aunque hoy
+// no sea hostil, meterlo sin escapar en innerHTML es abrirle la puerta.
+function sopFormato(texto) {
+  const seguro = esc(String(texto || ''));
+  return seguro
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|\n)\s*[-–•]\s+/g, '$1• ')
+    // Solo enlaces de la propia app: un enlace a cualquier sitio salido de un
+    // modelo es justo lo que no se quiere abrir desde un panel de soporte.
+    .replace(/(https:\/\/app\.acuarius\.app[^\s<]*)/g,
+      '<a href="$1" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">$1</a>');
+}
+
 function sopPintar(texto, clase) {
   const hilo = document.getElementById('sop-hilo');
   if (!hilo) return null;
   const el = document.createElement('div');
   el.className = 'sop-msg ' + clase;
-  el.textContent = texto;
+  // Lo que escribe el usuario va como texto plano: no hay razón para
+  // interpretarle formato a su propia frase.
+  if (clase === 'bot') el.innerHTML = sopFormato(texto);
+  else el.textContent = texto;
   hilo.appendChild(el);
   hilo.scrollTop = hilo.scrollHeight;
   return el;
