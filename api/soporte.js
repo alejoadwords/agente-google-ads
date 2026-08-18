@@ -148,13 +148,23 @@ async function guardarHilo(actorId, email, plan, conv, nuevos) {
   } catch { return conv; }
 }
 
-function prompt(radio, contexto) {
+// El prompt va partido en dos bloques a propósito. El primero —quién eres y todo
+// el conocimiento del producto— es idéntico en cada llamada de cada usuario, así
+// que se cachea: son ~2.250 tokens que se pagan al 10% en vez de al 100%.
+// El segundo cambia por persona y por turno, y por eso NO se cachea: escribir
+// una caché que nunca se reutiliza cuesta un 25% más que no cachear.
+//
+// El orden importa: la caché guarda todo lo que va ANTES del punto de corte, así
+// que lo estable tiene que ir primero aunque se lea peor.
+function promptEstable() {
   return `Eres el asistente de soporte de Acuarius. Ayudas a usuarios de la plataforma
 a resolver dudas y a arreglar lo que no les funciona.
 
-${CONOCIMIENTO}
+${CONOCIMIENTO}`;
+}
 
-═══ LA CUENTA DE QUIEN TE ESCRIBE ═══
+function promptVariable(radio, contexto) {
+  return `═══ LA CUENTA DE QUIEN TE ESCRIBE ═══
 Esto es real y está al día. Úsalo para responder con lo que de verdad le pasa a
 esta persona en vez de dar instrucciones genéricas.
 ${JSON.stringify(radio, null, 1)}
@@ -191,11 +201,19 @@ tus palabras, que ya lo estás pasando al equipo y que le responderán por corre
 No uses el bloque para dudas que sí puedes resolver.`;
 }
 
-async function llamarClaude(system, mensajes) {
+async function llamarClaude(estable, variable, mensajes) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 900, system, messages: mensajes }),
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 900,
+      system: [
+        { type: 'text', text: estable, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: variable },
+      ],
+      messages: mensajes,
+    }),
   });
   if (!res.ok) throw new Error('Claude ' + res.status);
   const data = await res.json();
@@ -275,7 +293,7 @@ export default async function handler(req) {
 
     let bruto;
     try {
-      bruto = await llamarClaude(prompt(radio, body.contexto || {}), mensajes);
+      bruto = await llamarClaude(promptEstable(), promptVariable(radio, body.contexto || {}), mensajes);
     } catch (e) {
       return jsonResp({ error: 'El asistente no pudo responder ahora mismo. Reintenta en un momento.' }, 502);
     }

@@ -101,13 +101,21 @@ export default async function handler(req) {
     ? system.slice(0, MAX_SYSTEM_CHARS)
     : '';
 
-  try {
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+  // La caché de 5 minutos se pierde en cuanto el usuario lee, piensa y vuelve a
+  // escribir — que es como se usa un chat. Con el prompt del agente de Google Ads
+  // en 20.572 tokens, cada fallo de caché cuesta 7,6 centavos en vez de 2.
+  // Con una hora, una conversación de seis mensajes sale ~22% más barata.
+  //
+  // Va con reintento porque el TTL largo se pide con una cabecera beta: si
+  // Anthropic la retira o la cambia, el chat de TODOS los agentes se caería.
+  // Antes que eso, se reintenta con la caché corta de siempre.
+  const pedir = (ttlLargo) => fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        ...(ttlLargo ? { 'anthropic-beta': 'extended-cache-ttl-2025-04-11' } : {}),
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
@@ -121,14 +129,30 @@ export default async function handler(req) {
         thinking: { type: 'adaptive' },
         output_config: { effort: 'medium' },
         stream: true,
-        // Prompt caching: el system (grande y estable dentro de una conversación)
-        // se cachea 5 min — los turnos siguientes pagan ~10% del costo de input
+        // Prompt caching: el system se cachea una hora (ver arriba). Los turnos
+        // siguientes pagan ~10% del costo de input en vez del 100%.
         system: sanitizedSystem
-          ? [{ type: 'text', text: sanitizedSystem, cache_control: { type: 'ephemeral' } }]
+          ? [{
+              type: 'text',
+              text: sanitizedSystem,
+              cache_control: ttlLargo ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' },
+            }]
           : undefined,
         messages,
       }),
     });
+
+  try {
+    let claudeRes = await pedir(true);
+    // 400 es lo que devuelve Anthropic cuando no reconoce la beta o el ttl. Se
+    // reintenta sin ellos para no dejar el chat caído por una optimización.
+    if (claudeRes.status === 400) {
+      const detalle = await claudeRes.clone().text().catch(() => '');
+      if (/ttl|cache_control|beta/i.test(detalle)) {
+        console.error('caché de 1h rechazada, se usa la de 5 min:', detalle.slice(0, 200));
+        claudeRes = await pedir(false);
+      }
+    }
 
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();

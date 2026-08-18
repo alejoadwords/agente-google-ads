@@ -149,12 +149,24 @@ Cuando detectes nombre o dato de contacto nuevo en la conversación, incluye al 
 Solo incluye los campos que tengas. Omite este bloque si no hay datos nuevos.${bloqueDePrompt(reglaCalificacion)}`;
 }
 
+// El agente de WhatsApp contesta con un guion cerrado y un inventario delante:
+// no es la tarea que justifica el modelo más caro. Haiku cuesta un 67% menos.
+//
+// Va por variable de entorno para poder volver atrás sin desplegar: si la
+// calidad de la calificación baja, se pone AGENTE_WA_MODELO=claude-sonnet-4-6 en
+// Vercel y vuelve al anterior en el siguiente arranque.
+//
+// Aquí NO se cachea el prompt: su parte estable son ~500 tokens y Anthropic no
+// cachea por debajo de 1.024. Escribir una caché que nunca se usa sale un 25%
+// más caro que no cachear.
+const MODELO_WA = process.env.AGENTE_WA_MODELO || 'claude-haiku-4-5-20251001';
+
 async function callClaude(systemPrompt, messages) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: MODELO_WA,
       // Con la calificación activa el mensaje lleva dos bloques ocultos además
       // del texto; con 300 se truncaba a mitad y el bloque se le escapaba al
       // contacto.
