@@ -21349,7 +21349,7 @@ function cmdkCommands() {
     // Solo para el equipo de Acuarius
     ...(isAdminUser() ? [{ group: 'Soporte', icon: '🩺', label: 'Diagnosticar una cuenta',
       kw: 'soporte diagnostico cliente cuenta revisar configuracion admin', run: () => dxAbrir() },
-    { t: 'Tickets de soporte', s: 'Lo que el asistente no pudo resolver',
+    { group: 'Soporte', icon: '🎫', label: 'Tickets de soporte',
       kw: 'tickets soporte ayuda casos admin', run: () => tkAbrir() }] : []),
     // Ir a
     { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
