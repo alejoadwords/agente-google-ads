@@ -987,6 +987,15 @@ async function handleTicketUpdate(req, res) {
   if (body.estado) cambios.estado = String(body.estado).slice(0, 20);
   if (body.respuesta !== undefined) cambios.respuesta = String(body.respuesta || '').slice(0, 4000) || null;
 
+  // Con quién hablamos y de qué. Se lee ANTES de escribir para saber si la
+  // respuesta es nueva: reenviar el mismo correo cada vez que se toca el estado
+  // sería avisar por avisar.
+  const previo = await fetch(
+    `${SUPABASE_URL}/rest/v1/support_tickets?id=eq.${encodeURIComponent(body.id)}&select=email,asunto,respuesta&limit=1`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+  const respuestaNueva = cambios.respuesta && cambios.respuesta !== (previo?.respuesta || null);
+
   const r = await fetch(`${SUPABASE_URL}/rest/v1/support_tickets?id=eq.${encodeURIComponent(body.id)}`, {
     method: 'PATCH',
     headers: {
@@ -1000,5 +1009,37 @@ async function handleTicketUpdate(req, res) {
   if (!r.ok) return res.status(500).json({ error: (await r.text()).slice(0, 300) });
   const filas = await r.json();
   if (!filas.length) return res.status(404).json({ error: 'No encontrado' });
-  return res.status(200).json({ ticket: filas[0] });
+
+  // El aviso por correo va después de guardar y no puede tumbar la respuesta:
+  // el dato es la respuesta, el correo es la cortesía. Pero se espera y se
+  // devuelve si salió, porque decirle al equipo "enviado" cuando no salió es la
+  // peor forma de fallar aquí.
+  let avisado = false;
+  if (respuestaNueva && previo?.email && process.env.RESEND_API_KEY) {
+    try {
+      const { emailHtml, bloque, esc } = await import('./_email-layout.js');
+      const env = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Acuarius <soporte@app.acuarius.app>',
+          to: previo.email,
+          subject: 'Sobre tu consulta: ' + (previo.asunto || 'soporte'),
+          html: emailHtml({
+            titulo: 'Te respondimos',
+            intro: `Sobre lo que nos contaste: <strong>${esc(previo.asunto || 'tu consulta')}</strong>.`,
+            preheader: String(cambios.respuesta).slice(0, 90),
+            cuerpo: bloque(`<span style="white-space:pre-wrap">${esc(cambios.respuesta)}</span>`),
+            cta: { texto: 'Volver a Acuarius', url: 'https://app.acuarius.app' },
+            pie: 'Si sigue sin funcionarte, respóndenos desde el chat de soporte de la app y seguimos por ahí.',
+          }),
+        }),
+      });
+      avisado = env.ok;
+    } catch (e) {
+      console.error('aviso de ticket:', e?.message);
+    }
+  }
+
+  return res.status(200).json({ ticket: filas[0], avisado });
 }

@@ -1088,13 +1088,38 @@ function tkRender() {
       '<div style="color:var(--muted);font-size:12px;margin-top:10px">' + tkEsc(resumen) + '</div>' +
       '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--blue)">Ver la cuenta completa</summary>' +
         '<pre style="font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px;white-space:pre-wrap">' + tkEsc(JSON.stringify(c, null, 1)) + '</pre></details>' +
-      '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
+      '<div style="margin-top:14px">' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:5px">Respuesta para el usuario' +
+          (t.respuesta ? ' · ya enviada, editarla vuelve a avisarle' : '') + '</div>' +
+        '<textarea id="tk-r-' + t.id + '" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical" ' +
+          'placeholder="Lo que verá en Mis casos y recibirá por correo…">' + tkEsc(t.respuesta || '') + '</textarea>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+        '<button class="btn" onclick="tkResponder(\'' + t.id + '\')">Responder</button>' +
         (t.estado !== 'en_curso' ? '<button class="btn btn-ghost" onclick="tkEstadoSet(\'' + t.id + '\',\'en_curso\')">Tomarlo</button>' : '') +
-        (t.estado !== 'resuelto' ? '<button class="btn" onclick="tkEstadoSet(\'' + t.id + '\',\'resuelto\')">Resuelto</button>' : '') +
+        (t.estado !== 'resuelto' ? '<button class="btn btn-ghost" onclick="tkEstadoSet(\'' + t.id + '\',\'resuelto\')">Resuelto</button>' : '') +
         (t.estado !== 'cerrado' ? '<button class="btn btn-ghost" onclick="tkEstadoSet(\'' + t.id + '\',\'cerrado\')">Cerrar</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+// Responder pasa el ticket a resuelto: en la práctica se responde cuando ya se
+// resolvió, y obligar a pulsar dos botones seguidos solo consigue que el estado
+// se quede viejo.
+async function tkResponder(id) {
+  const ta = document.getElementById('tk-r-' + id);
+  const texto = String(ta?.value || '').trim();
+  if (!texto) { alert('Escribe la respuesta antes de enviarla.'); return; }
+  try {
+    const d = await apiPut('/admin?action=ticket-update', { id, respuesta: texto, estado: 'resuelto' });
+    // Se dice si el correo salió o no: dar por avisado a alguien que no recibió
+    // nada es peor que no responder.
+    alert(d.avisado ? 'Respuesta enviada al usuario por correo.' : 'Respuesta guardada. La verá en Mis casos, pero el correo no salió.');
+    tkCargar();
+  } catch (e) {
+    alert('No se pudo enviar: ' + (e.message || ''));
+  }
 }
 
 async function tkEstadoSet(id, estado) {
