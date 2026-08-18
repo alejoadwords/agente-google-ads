@@ -9,6 +9,19 @@
 // OJO: es un template literal. NUNCA meter acentos graves aquí dentro — rompen
 // el string y tumban el endpoint entero. Para nombres de archivo o código usar
 // comillas simples.
+//
+// ── CÓMO SE COMPLETA ────────────────────────────────────────────────────────
+// Lo que dice [POR COMPLETAR: ...] son cosas que NO están en el código y que
+// solo sabe el negocio: precios reales, tiempos de respuesta, política de
+// cancelación, cómo se explica cada cosa a un cliente.
+//
+// El asistente tiene instrucciones de tratar esos bloques como algo que NO
+// sabe, y de decirlo en vez de improvisar. Así que dejarlos sin rellenar no
+// rompe nada: solo hace que ahí conteste "no lo sé, te paso con el equipo".
+// Cada bloque que completes es una consulta menos que llega al equipo.
+//
+// Al reemplazar un bloque, borra el [POR COMPLETAR: ...] entero y escribe la
+// respuesta en su lugar, con tus palabras.
 
 export const CONOCIMIENTO = `
 ACUARIUS — CÓMO FUNCIONA
@@ -39,6 +52,8 @@ están en otro cliente. Se cambia con el selector y se recuerda al recargar.
   engranaje junto al selector de proceso. Las etapas son libres salvo tres que
   otros módulos usan por clave: nuevo, ganado y perdido. Borrar una etapa migra
   sus leads.
+  [POR COMPLETAR: cuándo conviene tener varios procesos y con qué ejemplo lo
+  explicas. Ej: arriendo y venta llevan pasos distintos, así que van separados.]
 - Nuevo lead: botón arriba a la derecha. El lead se queda en el proceso que
   estés viendo. El teléfono se convierte solo a formato internacional usando el
   país del cliente. Si el correo o el teléfono ya existen, avisa y deja abrir el
@@ -112,14 +127,22 @@ están en otro cliente. Se cambia con el selector y se recuerda al recargar.
 
 ═══ PLANES ═══
 - Free: 50 contactos.
+  [POR COMPLETAR: qué SÍ y qué NO puede hacer alguien en Free, dicho como se lo
+  explicas a un cliente.]
 - Pro: 1.000 contactos, 1 usuario adicional, 2.000 correos de campaña al mes.
 - Agency: 5.000 contactos, 3 usuarios adicionales, 10.000 correos al mes.
 - Al registrarse se activa una prueba de Pro de 14 días.
 - El pago va por Hotmart. Para cambiar o cancelar el plan: Configuración - Plan
   y facturación, o directamente en Hotmart.
+  [POR COMPLETAR: precios reales de Pro y Agency, si hay descuento anual, en qué
+  monedas se cobra y qué pasa con los datos al cancelar o al bajar de plan.]
+  [POR COMPLETAR: qué ocurre exactamente cuando se acaban los 14 días de prueba:
+  ¿se bloquea la cuenta, se pasa a Free, se conservan los contactos de más?]
 
 ═══ ACADEMIA ═══
 Videos de formación organizados por categorías, en el menú lateral.
+[POR COMPLETAR: qué videos existen y para quién es cada uno, para poder mandar
+a la persona al que le sirve en vez de decirle 'mira la Academia'.]
 
 ═══ PROBLEMAS FRECUENTES Y SU CAUSA REAL ═══
 - "No veo mis leads": casi siempre el cliente activo es otro, o el proceso de
@@ -140,6 +163,19 @@ Videos de formación organizados por categorías, en el menú lateral.
   ACTIVO en Configuración - Equipo, es decir haber aceptado la invitación.
 - "Llegué al límite de contactos": es el tope del plan. Se amplía cambiando de
   plan o liberando contactos desde la papelera.
+
+═══ SOPORTE, DATOS Y FACTURACIÓN ═══
+[POR COMPLETAR: en cuánto tiempo responde el equipo a un ticket y en qué horario.]
+[POR COMPLETAR: si hay acompañamiento o puesta en marcha al contratar, y qué incluye.]
+[POR COMPLETAR: cómo se exportan los datos si alguien quiere irse, y qué pasa con
+ellos al cerrar la cuenta.]
+[POR COMPLETAR: si se firman acuerdos de tratamiento de datos, y dónde está la
+política de privacidad.]
+
+═══ LO QUE MÁS PREGUNTAN ═══
+[POR COMPLETAR: las cinco preguntas que os llegan cada semana por WhatsApp o
+correo, con la respuesta tal como se la das tú. Esta es la sección que más
+rinde: cada una que añadas es una consulta que deja de llegar al equipo.]
 
 ═══ ESTADO ACTUAL DEL PRODUCTO ═══
 - WhatsApp, Messenger e Instagram están pendientes de la aprobación de la app
