@@ -4576,9 +4576,10 @@ window.onload = async () => {
   // Usuarios que ya hicieron el tour pero nunca conectaron una plataforma:
   // invitar a la primera conexión (después de restaurar conexiones de Supabase)
   setTimeout(function(){ if (!tourShouldShow()) showWelcomeConnect(); }, 4500);
-  // Novedades desde la última visita. Va después del tour y del modal de
-  // conexión a propósito: novInit() se retira solo si alguno está en pantalla.
-  setTimeout(function(){ novInit(); }, 6000);
+  // Novedades desde la última visita. novInit() se retira solo si el tour de
+  // bienvenida o el modal de conexión están en pantalla, así que no hace falta
+  // esperar a que terminen: basta con dejar respirar a la carga inicial.
+  setTimeout(function(){ novInit(); }, 2000);
   // Actualizar badge de historial
   setTimeout(function(){ updateHistorialBadge(); }, 2000);
   // Restaurar conexiones desde Supabase si no hay token en sessionStorage
