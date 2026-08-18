@@ -2088,6 +2088,38 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .kb-tab{background:transparent;border:none;border-bottom:2px solid transparent;padding:8px 12px;margin-bottom:-1px;font-family:var(--font);font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
 .kb-tab:hover{color:var(--text)}
 .kb-tab.activo{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── Soporte flotante ── */
+#sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease)}
+#sop-burbuja:hover{transform:translateY(-2px)}
+#sop-burbuja.visible{display:flex}
+#sop-panel{position:fixed;right:20px;bottom:20px;z-index:9600;width:min(390px,calc(100vw - 32px));height:min(560px,calc(100vh - 40px));background:var(--bg-card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden}
+#sop-panel.abierto{display:flex}
+.sop-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--blue);color:#fff;flex-shrink:0}
+.sop-titulo{font-size:13.5px;font-weight:800;letter-spacing:-.01em}
+.sop-sub{font-size:11px;opacity:.85;margin-top:1px}
+.sop-x{background:transparent;border:none;color:#fff;font-size:14px;cursor:pointer;padding:2px 4px;border-radius:6px;line-height:1}
+.sop-x:hover{background:rgba(255,255,255,.16)}
+.sop-hilo{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.sop-msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.sop-msg.yo{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.sop-msg.bot{align-self:flex-start;background:var(--bg-subtle);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.sop-msg.error{align-self:stretch;background:var(--danger-bg);color:var(--danger);border:1px solid rgba(220,38,38,.3);text-align:center;font-size:12.5px}
+.sop-ticket{align-self:stretch;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.32);color:#047857;border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.5}
+.sop-sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.sop-sug button{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:6px 11px;font-family:var(--font);font-size:12px;color:var(--text);cursor:pointer}
+.sop-sug button:hover{border-color:var(--blue);color:var(--blue)}
+.sop-caja{display:flex;gap:7px;padding:12px 14px;border-top:1px solid var(--border);flex-shrink:0;align-items:flex-end}
+.sop-caja textarea{flex:1;resize:none;max-height:96px;min-height:38px;padding:9px 11px;border:1.5px solid var(--border);border-radius:10px;font-family:var(--font);font-size:13px;background:var(--bg);color:var(--text);outline:none}
+.sop-caja textarea:focus{border-color:var(--blue)}
+.sop-enviar{width:38px;height:38px;flex-shrink:0;border:none;border-radius:10px;background:var(--blue);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.sop-enviar:disabled{opacity:.5;cursor:default}
+.sop-puntos{align-self:flex-start;display:flex;gap:4px;padding:10px 12px}
+.sop-puntos span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:sopLate 1.1s infinite}
+.sop-puntos span:nth-child(2){animation-delay:.16s}
+.sop-puntos span:nth-child(3){animation-delay:.32s}
+@keyframes sopLate{0%,60%,100%{opacity:.28}30%{opacity:1}}
+@media (max-width:520px){#sop-panel{right:8px;left:8px;bottom:8px;width:auto;height:min(70vh,540px)}}
 .crm-inbox-reply.modo-nota{background:rgba(245,158,11,.07)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-input{border-color:rgba(245,158,11,.5)}
 .crm-inbox-reply.modo-nota .crm-inbox-reply-btn{background:#b45309}
@@ -4116,6 +4148,30 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script src="/app.js"></script>
 
 <!-- CRM MODAL: crear / editar lead -->
+<!-- Soporte: burbuja flotante. Fuera de cualquier vista para que siga ahí
+     pase lo que pase en la app — si se rompe una pantalla, el sitio donde pedir
+     ayuda no puede romperse con ella. -->
+<button id="sop-burbuja" onclick="sopAbrir()" title="¿Necesitas ayuda?" aria-label="Abrir el soporte">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-9 8.4 8.9 8.9 0 01-3.8-.9L3 20.5l1.5-4.4A8.4 8.4 0 0112 3.1a8.4 8.4 0 019 8.4z"/></svg>
+</button>
+<div id="sop-panel" aria-live="polite">
+  <div class="sop-head">
+    <div>
+      <div class="sop-titulo">Soporte de Acuarius</div>
+      <div class="sop-sub">Te responde al momento, todos los días</div>
+    </div>
+    <button class="sop-x" onclick="sopCerrar()" aria-label="Cerrar">&#10005;</button>
+  </div>
+  <div class="sop-hilo" id="sop-hilo"></div>
+  <div class="sop-caja">
+    <textarea id="sop-input" rows="1" placeholder="Cuéntame qué necesitas…"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sopEnviar()}"></textarea>
+    <button class="sop-enviar" id="sop-enviar" onclick="sopEnviar()" aria-label="Enviar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+    </button>
+  </div>
+</div>
+
 <div class="crm-modal-overlay" id="crm-modal">
   <div class="crm-modal-box">
     <div class="crm-modal-head">

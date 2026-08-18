@@ -21348,7 +21348,9 @@ function cmdkCommands() {
     { group: 'Agentes', icon: '🧭', label: 'Consultor de Marketing',       kw: 'consultor estrategia plan',     run: () => openAgent('consultor') },
     // Solo para el equipo de Acuarius
     ...(isAdminUser() ? [{ group: 'Soporte', icon: '🩺', label: 'Diagnosticar una cuenta',
-      kw: 'soporte diagnostico cliente cuenta revisar configuracion admin', run: () => dxAbrir() }] : []),
+      kw: 'soporte diagnostico cliente cuenta revisar configuracion admin', run: () => dxAbrir() },
+    { t: 'Tickets de soporte', s: 'Lo que el asistente no pudo resolver',
+      kw: 'tickets soporte ayuda casos admin', run: () => tkAbrir() }] : []),
     // Ir a
     { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
     { group: 'Ir a', icon: '👥', label: 'CRM · Pipeline',                  kw: 'crm leads pipeline kanban clientes', run: () => navGo('crm') },
@@ -28847,4 +28849,252 @@ async function dxVer(cuenta) {
 
     '<div style="font-size:11px;color:var(--muted2);text-align:center;margin-top:10px">Generado ' +
       new Date(d.generado).toLocaleString('es-CO') + ' · solo lectura</div>';
+}
+
+// ══ SOPORTE ════════════════════════════════════════════════════════════════
+// Chat flotante atendido por IA, con el conocimiento del producto y la
+// radiografía de la propia cuenta. Va al final del archivo, después de todos
+// los wraps de navegación, para que nada de lo anterior lo pise.
+let _sopHilo = [];        // {role, content} tal como los espera la API
+let _sopEnviando = false;
+
+const SOP_SUGERENCIAS = [
+  'No veo mis leads',
+  '¿Cómo conecto WhatsApp?',
+  'El agente no responde',
+  'Quiero hablar con el equipo',
+];
+
+// La burbuja solo aparece con sesión: sin ella el asistente no puede mirar la
+// cuenta y ofrecería un soporte a ciegas.
+function sopMostrarBurbuja() {
+  const b = document.getElementById('sop-burbuja');
+  if (b) b.classList.toggle('visible', !!(typeof clerkInstance !== 'undefined' && clerkInstance?.user));
+}
+
+function sopAbrir() {
+  document.getElementById('sop-panel')?.classList.add('abierto');
+  document.getElementById('sop-burbuja')?.classList.remove('visible');
+  if (!_sopHilo.length) sopBienvenida();
+  setTimeout(() => document.getElementById('sop-input')?.focus(), 90);
+}
+
+function sopCerrar() {
+  document.getElementById('sop-panel')?.classList.remove('abierto');
+  sopMostrarBurbuja();
+}
+
+function sopBienvenida() {
+  const hilo = document.getElementById('sop-hilo');
+  if (!hilo) return;
+  const nombre = clerkInstance?.user?.firstName ? ', ' + esc(clerkInstance.user.firstName) : '';
+  hilo.innerHTML =
+    '<div class="sop-msg bot">Hola' + nombre + '. Soy el soporte de Acuarius y puedo ver cómo está configurada tu cuenta, así que pregúntame directo qué no te está funcionando.</div>' +
+    '<div class="sop-sug">' + SOP_SUGERENCIAS.map(t =>
+      '<button onclick="sopSugerir(\'' + esc(t).replace(/'/g, "\\'") + '\')">' + esc(t) + '</button>').join('') +
+    '</div>';
+}
+
+function sopSugerir(t) {
+  const i = document.getElementById('sop-input');
+  if (i) { i.value = t; i.focus(); }
+  sopEnviar();
+}
+
+function sopPintar(texto, clase) {
+  const hilo = document.getElementById('sop-hilo');
+  if (!hilo) return null;
+  const el = document.createElement('div');
+  el.className = 'sop-msg ' + clase;
+  el.textContent = texto;
+  hilo.appendChild(el);
+  hilo.scrollTop = hilo.scrollHeight;
+  return el;
+}
+
+// En qué parte de la app está. Con esto el asistente responde sobre lo que
+// tiene delante en vez de preguntarle dónde se encuentra.
+function sopContexto() {
+  const mods = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
+  const cli = (typeof agencyActiveClientId !== 'undefined' && typeof agencyClients !== 'undefined')
+    ? agencyClients.find(c => c.id === agencyActiveClientId) : null;
+  return {
+    seccion: mods[window._navMod] || null,
+    cliente: cli ? cli.name : null,
+  };
+}
+
+async function sopEnviar() {
+  if (_sopEnviando) return;
+  const input = document.getElementById('sop-input');
+  const texto = String(input?.value || '').trim();
+  if (!texto) return;
+
+  // Las sugerencias solo valen para empezar; una vez hay conversación estorban.
+  document.querySelector('#sop-hilo .sop-sug')?.remove();
+  sopPintar(texto, 'yo');
+  input.value = '';
+  _sopEnviando = true;
+  const btn = document.getElementById('sop-enviar');
+  if (btn) btn.disabled = true;
+
+  const hilo = document.getElementById('sop-hilo');
+  const puntos = document.createElement('div');
+  puntos.className = 'sop-puntos';
+  puntos.innerHTML = '<span></span><span></span><span></span>';
+  hilo.appendChild(puntos);
+  hilo.scrollTop = hilo.scrollHeight;
+
+  try {
+    const r = await fetchAuth('/api/soporte', {
+      method: 'POST',
+      body: JSON.stringify({
+        mensaje: texto,
+        historial: _sopHilo,
+        plan: typeof userPlan !== 'undefined' ? userPlan : null,
+        contexto: sopContexto(),
+      }),
+    });
+    const d = await leerRespuesta(r);
+    puntos.remove();
+    if (!r.ok) {
+      sopPintar(d.error || 'No pude responder ahora mismo. Reintenta en un momento.', 'error');
+      return;
+    }
+    _sopHilo.push({ role: 'user', content: texto });
+    _sopHilo.push({ role: 'assistant', content: d.respuesta });
+    if (_sopHilo.length > 16) _sopHilo = _sopHilo.slice(-16);
+    sopPintar(d.respuesta, 'bot');
+
+    if (d.ticket) {
+      const aviso = document.createElement('div');
+      aviso.className = d.ticket.creado ? 'sop-ticket' : 'sop-msg error';
+      // Si el ticket no se guardó hay que decirlo: dejarle creer que el equipo
+      // ya lo tiene es la peor forma posible de fallar en soporte.
+      aviso.textContent = d.ticket.creado
+        ? 'Listo, tu caso quedó registrado. El equipo lo revisa y te responde por correo.'
+        : 'No pude registrar tu caso. Escríbenos directamente y cuéntanos lo mismo que me contaste aquí.';
+      hilo.appendChild(aviso);
+      hilo.scrollTop = hilo.scrollHeight;
+    }
+  } catch (e) {
+    puntos.remove();
+    sopPintar('No hay conexión con el soporte. Revisa tu internet y reintenta.', 'error');
+  } finally {
+    _sopEnviando = false;
+    if (btn) btn.disabled = false;
+    input?.focus();
+  }
+}
+
+// Se engancha al arranque y también tras iniciar sesión, porque la burbuja
+// depende de que Clerk ya haya hidratado al usuario.
+document.addEventListener('DOMContentLoaded', sopMostrarBurbuja);
+setTimeout(sopMostrarBurbuja, 1500);
+setTimeout(sopMostrarBurbuja, 4000);
+
+// ── Tickets de soporte (solo equipo de Acuarius) ───────────────────────────
+// Lo que el asistente no pudo resolver. Cada uno llega con la radiografía de la
+// cuenta dentro, así que se puede empezar a mirar sin escribirle al usuario.
+let _tkLista = [];
+let _tkEstado = 'abierto';
+
+const TK_ESTADOS = [
+  ['abierto', 'Abiertos'], ['en_curso', 'En curso'],
+  ['resuelto', 'Resueltos'], ['todos', 'Todos'],
+];
+
+async function tkAbrir() {
+  document.getElementById('tk-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'tk-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:760px;height:min(86vh,720px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Tickets de soporte</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Casos que el asistente pasó al equipo</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div id="tk-filtros" style="display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap"></div>' +
+      '<div id="tk-lista"><div style="font-size:12.5px;color:var(--muted)">Cargando…</div></div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  tkCargar();
+}
+
+function tkFiltros() {
+  const c = document.getElementById('tk-filtros');
+  if (!c) return;
+  c.innerHTML = TK_ESTADOS.map(([k, t]) =>
+    '<button class="btn-' + (_tkEstado === k ? 'pri' : 'sec') + ' sm" onclick="tkFiltrar(\'' + k + '\')">' + t + '</button>').join('');
+}
+
+function tkFiltrar(estado) { _tkEstado = estado; tkCargar(); }
+
+async function tkCargar() {
+  tkFiltros();
+  const cont = document.getElementById('tk-lista');
+  if (!cont) return;
+  cont.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Cargando…</div>';
+  try {
+    const r = await fetchAuth('/api/diagnostico?tickets=1&estado=' + encodeURIComponent(_tkEstado));
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'No se pudo cargar');
+    _tkLista = d.tickets || [];
+    tkRender();
+  } catch (e) {
+    cont.innerHTML = '<div style="font-size:12.5px;color:#b91c1c">' + esc(e.message || 'No se pudo cargar') + '</div>';
+  }
+}
+
+function tkRender() {
+  const cont = document.getElementById('tk-lista');
+  if (!cont) return;
+  if (!_tkLista.length) {
+    cont.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:10px 2px">' +
+      (_tkEstado === 'abierto' ? 'No hay tickets abiertos. Buena señal.' : 'Nada por aquí.') + '</div>';
+    return;
+  }
+  const color = { abierto: '#B45309', en_curso: '#1E2BCC', resuelto: '#047857', cerrado: '#6b7280' };
+  cont.innerHTML = _tkLista.map(t => {
+    const ctx = t.contexto || {};
+    // Lo que casi siempre explica el caso, arriba y sin tener que desplegar.
+    const resumen = [
+      ctx.plan ? 'plan ' + ctx.plan : null,
+      typeof ctx.leads === 'number' ? ctx.leads + ' leads' : null,
+      (ctx.canales || []).length ? (ctx.canales || []).length + ' canales' : 'sin canales',
+      (ctx.agentes || []).length ? (ctx.agentes || []).length + ' agentes' : 'sin agentes',
+      ctx.seccion ? 'estaba en ' + ctx.seccion : null,
+    ].filter(Boolean).join(' · ');
+    return '<div class="auto-card" style="align-items:flex-start;max-width:none;margin-bottom:10px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+          '<span class="auto-name">' + esc(t.asunto) + '</span>' +
+          '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:' + (color[t.estado] || '#6b7280') + '1A;color:' + (color[t.estado] || '#6b7280') + '">' + esc(t.estado) + '</span>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">' +
+          esc(t.email || t.user_id) + ' · ' + new Date(t.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</div>' +
+        '<div style="font-size:12.5px;line-height:1.6;margin-top:8px;white-space:pre-wrap">' + esc(t.detalle || '') + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">' + esc(resumen) + '</div>' +
+        '<details style="margin-top:6px"><summary style="font-size:11.5px;cursor:pointer;color:var(--blue)">Ver la cuenta completa</summary>' +
+          '<pre style="font-size:10.5px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px">' + esc(JSON.stringify(ctx, null, 1)) + '</pre></details>' +
+        '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' +
+          (t.estado !== 'en_curso' ? '<button class="btn-sec sm" onclick="tkEstado(\'' + t.id + '\',\'en_curso\')">Tomarlo</button>' : '') +
+          (t.estado !== 'resuelto' ? '<button class="btn-pri sm" onclick="tkEstado(\'' + t.id + '\',\'resuelto\')">Resuelto</button>' : '') +
+          (t.estado !== 'cerrado' ? '<button class="btn-ghost sm" onclick="tkEstado(\'' + t.id + '\',\'cerrado\')">Cerrar</button>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function tkEstado(id, estado) {
+  try {
+    const r = await fetchAuth('/api/diagnostico', { method: 'POST', body: JSON.stringify({ id, estado }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo actualizar', 'error'); return; }
+    tkCargar();
+  } catch { showToast('No se pudo actualizar', 'error'); }
 }

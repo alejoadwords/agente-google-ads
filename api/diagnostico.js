@@ -69,7 +69,9 @@ const PLAN_LEADS = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency:
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'GET') return jsonResp({ error: 'Método no permitido' }, 405);
+  // POST solo para cambiar el estado de un ticket; todo lo demás sigue siendo
+  // de solo lectura.
+  if (req.method !== 'GET' && req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
 
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
@@ -81,6 +83,33 @@ export default async function handler(req) {
   }
 
   const url = new URL(req.url);
+
+  // ── Tickets de soporte ────────────────────────────────────────────────────
+  // Viven aquí porque comparten puerta: quien puede diagnosticar una cuenta es
+  // quien atiende los tickets. Un endpoint aparte sería otra puerta que vigilar.
+  if (url.searchParams.get('tickets')) {
+    const estado = url.searchParams.get('estado');
+    const filtro = estado && estado !== 'todos' ? `&estado=eq.${encodeURIComponent(estado)}` : '';
+    const rows = await q(`support_tickets?select=*${filtro}&order=created_at.desc&limit=100`);
+    return jsonResp({ tickets: rows || [] });
+  }
+
+  if (req.method === 'POST') {
+    const body = await req.json().catch(() => ({}));
+    if (!body.id) return jsonResp({ error: 'Falta el ticket' }, 400);
+    const cambios = { updated_at: new Date().toISOString() };
+    if (body.estado) cambios.estado = String(body.estado).slice(0, 20);
+    if (body.respuesta !== undefined) cambios.respuesta = String(body.respuesta || '').slice(0, 4000) || null;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/support_tickets?id=eq.${encodeURIComponent(body.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'return=representation' },
+      body: JSON.stringify(cambios),
+    });
+    if (!res.ok) return jsonResp({ error: (await res.text()).slice(0, 200) }, 500);
+    const filas = await res.json().catch(() => []);
+    if (!filas.length) return jsonResp({ error: 'No encontrado' }, 404);
+    return jsonResp({ ticket: filas[0] });
+  }
 
   if (url.searchParams.get('cuentas')) {
     const rows = await q('users?select=id,email,name,plan,status,created_at&order=created_at.desc&limit=200');
