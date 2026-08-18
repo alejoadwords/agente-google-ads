@@ -4193,9 +4193,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="sop-titulo">Soporte de Acuarius</div>
       <div class="sop-sub">Te responde al momento, todos los días</div>
     </div>
-    <button class="sop-x" onclick="sopCerrar()" aria-label="Cerrar">&#10005;</button>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="sop-x" id="sop-casos-btn" onclick="sopVerCasos()" title="Mis casos" style="font-size:11px;font-weight:700;padding:4px 8px">Mis casos</button>
+      <button class="sop-x" onclick="sopCerrar()" aria-label="Cerrar">&#10005;</button>
+    </div>
   </div>
   <div class="sop-hilo" id="sop-hilo"></div>
+  <div class="sop-hilo" id="sop-casos" style="display:none"></div>
   <div class="sop-caja">
     <textarea id="sop-input" rows="1" placeholder="Cuéntame qué necesitas…"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sopEnviar()}"></textarea>

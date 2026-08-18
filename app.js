@@ -28881,6 +28881,8 @@ function sopAbrir() {
 
 function sopCerrar() {
   document.getElementById('sop-panel')?.classList.remove('abierto');
+  // Se vuelve al chat: reabrir el soporte en la lista de casos desconcierta.
+  if (_sopEnCasos) sopVerCasos();
   sopMostrarBurbuja();
 }
 
@@ -28893,6 +28895,65 @@ function sopBienvenida() {
     '<div class="sop-sug">' + SOP_SUGERENCIAS.map(t =>
       '<button onclick="sopSugerir(\'' + esc(t).replace(/'/g, "\\'") + '\')">' + esc(t) + '</button>').join('') +
     '</div>';
+}
+
+// ── Mis casos ───────────────────────────────────────────────────────────────
+// El estado de lo que uno ya reportó. Sin esto, quien abre un ticket no vuelve
+// a saber nada y acaba escribiendo lo mismo tres veces.
+const SOP_ESTADO_TXT = {
+  abierto: 'Recibido, en cola',
+  en_curso: 'El equipo lo está viendo',
+  resuelto: 'Resuelto',
+  cerrado: 'Cerrado',
+};
+const SOP_ESTADO_COLOR = { abierto: '#B45309', en_curso: '#1E2BCC', resuelto: '#047857', cerrado: '#6b7280' };
+let _sopEnCasos = false;
+
+async function sopVerCasos() {
+  const hilo = document.getElementById('sop-hilo');
+  const casos = document.getElementById('sop-casos');
+  const caja = document.querySelector('#sop-panel .sop-caja');
+  const btn = document.getElementById('sop-casos-btn');
+  if (!hilo || !casos) return;
+
+  // El mismo botón lleva y trae: dos botones para ir y volver en un panel de
+  // 390px es una fila de controles para una sola cosa.
+  _sopEnCasos = !_sopEnCasos;
+  hilo.style.display = _sopEnCasos ? 'none' : 'flex';
+  casos.style.display = _sopEnCasos ? 'flex' : 'none';
+  if (caja) caja.style.display = _sopEnCasos ? 'none' : 'flex';
+  if (btn) btn.textContent = _sopEnCasos ? 'Volver' : 'Mis casos';
+  if (!_sopEnCasos) return;
+
+  casos.innerHTML = '<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:20px">Cargando…</div>';
+  try {
+    const r = await fetchAuth('/api/soporte');
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'No se pudieron cargar');
+    const lista = d.tickets || [];
+    if (!lista.length) {
+      casos.innerHTML = '<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:24px;line-height:1.6">' +
+        'Todavía no has reportado nada.<br>Si algo no te funciona, cuéntamelo y lo paso al equipo.</div>';
+      return;
+    }
+    casos.innerHTML = lista.map(t => {
+      const col = SOP_ESTADO_COLOR[t.estado] || '#6b7280';
+      return '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:var(--bg)">' +
+        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">' +
+          '<span style="font-size:12.5px;font-weight:700;flex:1;min-width:0">' + esc(t.asunto) + '</span>' +
+          '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;background:' + col + '1A;color:' + col + '">' +
+            esc(SOP_ESTADO_TXT[t.estado] || t.estado) + '</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:3px">' +
+          new Date(t.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' }) + '</div>' +
+        (t.respuesta
+          ? '<div style="font-size:12px;line-height:1.55;margin-top:8px;padding:8px 10px;background:var(--bg-subtle);border-radius:8px;white-space:pre-wrap">' + esc(t.respuesta) + '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    casos.innerHTML = '<div style="font-size:12.5px;color:#b91c1c;text-align:center;padding:20px">' + esc(e.message || 'No se pudieron cargar') + '</div>';
+  }
 }
 
 function sopSugerir(t) {

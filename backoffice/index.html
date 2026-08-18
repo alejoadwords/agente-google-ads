@@ -286,6 +286,11 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         Facturación
       </div>
+      <div class="nav-item" onclick="showView('tickets')" data-view="tickets">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 002-2V6a1 1 0 011-1h12a1 1 0 011 1v1a2 2 0 000 4v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-1a2 2 0 00-2-2z"/><path d="M9 5v14"/></svg>
+        Soporte
+        <span id="tk-pendientes" class="badge badge-trial" style="margin-left:auto;display:none">0</span>
+      </div>
       <div class="nav-section">Herramientas</div>
       <div class="nav-item" onclick="showView('test-users')" data-view="test-users">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v4M10 13h4"/></svg>
@@ -437,6 +442,11 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
 
 
       <!-- TEST USERS -->
+      <div class="view" id="view-tickets">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px" id="tk-filtros"></div>
+        <div id="tk-lista"><div style="color:var(--muted)">Cargando…</div></div>
+      </div>
+
       <div class="view" id="view-test-users">
         <div class="create-user-form">
           <div class="create-user-title">
@@ -653,12 +663,13 @@ function showView(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
   document.querySelector('[data-view="' + name + '"]').classList.add('active');
-  const titles = { dashboard: 'Dashboard', users: 'Usuarios', plans: 'Planes & Licencias', billing: 'Facturación', 'test-users': 'Usuarios de prueba' };
+  const titles = { dashboard: 'Dashboard', users: 'Usuarios', plans: 'Planes & Licencias', billing: 'Facturación', tickets: 'Soporte', 'test-users': 'Usuarios de prueba' };
   document.getElementById('page-title').textContent = titles[name] || name;
   if (name === 'dashboard') loadDashboard();
   if (name === 'users') loadUsers();
   if (name === 'plans') loadPlans();
   if (name === 'billing') loadBilling();
+  if (name === 'tickets') tkCargar();
   if (name === 'test-users') loadTestUsers();
 }
 
@@ -1006,6 +1017,92 @@ async function createTestUser() {
   } finally {
     btn.disabled = false;
     label.textContent = 'Crear usuario de prueba';
+  }
+}
+
+// ── SOPORTE ──
+// Los tickets los abre el asistente de la app cuando no puede resolver algo.
+// Cada uno trae dentro la radiografía de la cuenta en ese momento, así que se
+// puede empezar a mirar sin escribirle al usuario.
+let tkLista = [];
+let tkEstado = 'abierto';
+
+const TK_ESTADOS = [['abierto','Abiertos'],['en_curso','En curso'],['resuelto','Resueltos'],['todos','Todos']];
+const TK_COLOR = { abierto:'var(--amber)', en_curso:'var(--blue)', resuelto:'var(--green)', cerrado:'var(--muted2)' };
+
+const tkEsc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function tkCargar() {
+  const cont = document.getElementById('tk-lista');
+  document.getElementById('tk-filtros').innerHTML = TK_ESTADOS.map(([k,t]) =>
+    '<button class="btn' + (tkEstado === k ? '' : ' btn-ghost') + '" onclick="tkFiltrar(\'' + k + '\')">' + t + '</button>').join('');
+  cont.innerHTML = '<div style="color:var(--muted)">Cargando…</div>';
+  try {
+    const d = await apiGet('/admin?action=tickets&estado=' + encodeURIComponent(tkEstado));
+    tkLista = d.tickets || [];
+    tkRender();
+    tkPendientes();
+  } catch (e) {
+    cont.innerHTML = '<div style="color:var(--red)">' + tkEsc(e.message || 'No se pudo cargar') + '</div>';
+  }
+}
+
+function tkFiltrar(e) { tkEstado = e; tkCargar(); }
+
+// El contador del menú: sin él hay que entrar para saber si hay algo pendiente,
+// y entonces se entra poco.
+async function tkPendientes() {
+  try {
+    const d = await apiGet('/admin?action=tickets&estado=abierto');
+    const n = (d.tickets || []).length;
+    const b = document.getElementById('tk-pendientes');
+    if (b) { b.textContent = n; b.style.display = n ? '' : 'none'; }
+  } catch {}
+}
+
+function tkRender() {
+  const cont = document.getElementById('tk-lista');
+  if (!tkLista.length) {
+    cont.innerHTML = '<div style="color:var(--muted)">' + (tkEstado === 'abierto' ? 'No hay tickets abiertos.' : 'Nada por aquí.') + '</div>';
+    return;
+  }
+  cont.innerHTML = tkLista.map(t => {
+    const c = t.contexto || {};
+    // Lo que casi siempre explica el caso, sin desplegar nada.
+    const resumen = [
+      c.plan ? 'plan ' + c.plan : null,
+      typeof c.leads === 'number' ? c.leads + ' leads' : null,
+      (c.canales || []).length ? (c.canales || []).length + ' canales' : 'sin canales',
+      (c.agentes || []).length ? (c.agentes || []).length + ' agentes' : 'sin agentes',
+      c.seccion ? 'estaba en ' + c.seccion : null,
+    ].filter(Boolean).join(' · ');
+    const col = TK_COLOR[t.estado] || 'var(--muted2)';
+    return '<div class="card" style="margin-bottom:12px;padding:16px 18px;border-left:3px solid ' + col + '">' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<span style="font-size:15px;font-weight:600">' + tkEsc(t.asunto) + '</span>' +
+        '<span class="badge" style="background:' + col + '22;color:' + col + '">' + tkEsc(t.estado) + '</span>' +
+      '</div>' +
+      '<div style="color:var(--muted);font-size:12px;margin-top:4px">' + tkEsc(t.email || t.user_id) + ' · ' +
+        new Date(t.created_at).toLocaleString('es-CO', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '</div>' +
+      '<div style="margin-top:10px;line-height:1.6;white-space:pre-wrap">' + tkEsc(t.detalle || '') + '</div>' +
+      '<div style="color:var(--muted);font-size:12px;margin-top:10px">' + tkEsc(resumen) + '</div>' +
+      '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--blue)">Ver la cuenta completa</summary>' +
+        '<pre style="font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px;white-space:pre-wrap">' + tkEsc(JSON.stringify(c, null, 1)) + '</pre></details>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
+        (t.estado !== 'en_curso' ? '<button class="btn btn-ghost" onclick="tkEstadoSet(\'' + t.id + '\',\'en_curso\')">Tomarlo</button>' : '') +
+        (t.estado !== 'resuelto' ? '<button class="btn" onclick="tkEstadoSet(\'' + t.id + '\',\'resuelto\')">Resuelto</button>' : '') +
+        (t.estado !== 'cerrado' ? '<button class="btn btn-ghost" onclick="tkEstadoSet(\'' + t.id + '\',\'cerrado\')">Cerrar</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function tkEstadoSet(id, estado) {
+  try {
+    await apiPut('/admin?action=ticket-update', { id, estado });
+    tkCargar();
+  } catch (e) {
+    alert('No se pudo actualizar: ' + (e.message || ''));
   }
 }
 

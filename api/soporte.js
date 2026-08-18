@@ -179,11 +179,30 @@ function extraerTicket(texto) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
+  if (req.method !== 'POST' && req.method !== 'GET') return jsonResp({ error: 'Método no permitido' }, 405);
 
   try {
     const payload = await getPayload(req);
     if (!payload?.sub) return jsonResp({ error: 'No autorizado' }, 401);
+
+    // ── Mis casos ─────────────────────────────────────────────────────────
+    // Abrir un ticket y no volver a saber nada es lo que hace que la gente
+    // escriba tres veces lo mismo. Aquí cada quien ve el estado de los suyos.
+    if (req.method === 'GET') {
+      let duenoId = payload.sub;
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(payload.sub)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sb() });
+        const tw = r.ok ? (await r.json())?.[0] : null;
+        if (tw?.owner_user_id) duenoId = tw.owner_user_id;
+      } catch {}
+      const rows = await fetch(
+        `${SUPABASE_URL}/rest/v1/support_tickets?user_id=eq.${encodeURIComponent(duenoId)}` +
+        `&select=id,asunto,detalle,estado,respuesta,created_at,updated_at&order=created_at.desc&limit=30`,
+        { headers: sb() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      return jsonResp({ tickets: rows || [] });
+    }
+
     if (!ANTHROPIC_KEY) return jsonResp({ error: 'El asistente no está disponible ahora mismo.' }, 503);
 
     const actorId = payload.sub;
