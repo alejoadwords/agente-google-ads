@@ -9724,7 +9724,7 @@ function academiaFilter(cat) {
 
 let novLista = [];        // novedades cargadas del JSON
 let novPendientes = [];   // las que este usuario no ha visto
-const NOV_VENTANA_DIAS = 21;  // a quien nunca ha visto nada solo se le muestra lo reciente
+const NOV_VENTANA_DIAS = 14;  // a quien nunca ha visto nada solo se le muestra lo reciente
 const NOV_MAX = 4;            // nadie quiere leer diez novedades de golpe
 
 async function novCargar() {
