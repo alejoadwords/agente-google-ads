@@ -141,7 +141,27 @@ export default async function handler(req) {
   // Supabase, así que todo guardado fallaba en silencio y la cartera vivía
   // sólo en localStorage. Reutilizamos user_profiles porque ya está creada
   // y tiene el upsert por (user_id, agent_key).
+  //
+  // La cartera es de la CUENTA, no de la persona: un miembro del equipo tiene
+  // que ver los mismos clientes que su dueño. Sin esto la cartera le llegaba
+  // vacía, la app lo dejaba en la vista global —sin cliente activo— y por eso
+  // no veía los pipelines, que cuelgan de un cliente. Si la consulta falla NO
+  // se sigue: devolver la cartera propia (vacía) como si fuera la del dueño es
+  // exactamente el fallo que estamos arreglando.
   if (type === 'agency_clients') {
+    try {
+      const tw = await fetch(
+        `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+        { headers: sbHeaders() }
+      );
+      if (!tw.ok) throw new Error('HTTP ' + tw.status);
+      const fila = (await tw.json())?.[0];
+      if (fila?.owner_user_id) userId = fila.owner_user_id;
+    } catch {
+      return new Response(JSON.stringify({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }), {
+        status: 503, headers: { ...CORS, 'Content-Type': 'application/json' }
+      });
+    }
     if (req.method === 'GET') {
       const res = await fetch(
         // (user_id, agent_key) tiene índice único verificado, así que nunca hay
