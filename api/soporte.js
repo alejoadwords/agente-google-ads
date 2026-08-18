@@ -55,6 +55,20 @@ async function getPayload(req) {
   } catch { return null; }
 }
 
+// El JWT de Clerk no siempre trae el correo, y sin él el ticket nacía sin a
+// quién responder: el equipo escribía y el aviso no salía a ninguna parte.
+async function correoDe(userId, payload) {
+  const enToken = payload?.email || payload?.primary_email_address ||
+    payload?.email_address || payload?.user?.email || null;
+  if (enToken) return enToken;
+  if (!process.env.CLERK_SECRET_KEY) return null;
+  return fetch(`https://api.clerk.com/v1/users/${userId}`, {
+    headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
+  }).then(r => (r.ok ? r.json() : null))
+    .then(u => u?.email_addresses?.[0]?.email_address || null)
+    .catch(() => null);
+}
+
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -112,6 +126,26 @@ async function radiografia(userId, plan) {
       ultimo_envio: f.last_submission_at || null,
     })),
   };
+}
+
+// Una conversación por persona: el soporte no es un historial de sesiones, es
+// un hilo continuo con el equipo.
+async function conversacionDe(actorId) {
+  return fetch(
+    `${SUPABASE_URL}/rest/v1/support_conversations?user_id=eq.${encodeURIComponent(actorId)}&select=*&order=updated_at.desc&limit=1`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0] || null).catch(() => null);
+}
+
+async function guardarHilo(actorId, email, plan, conv, nuevos) {
+  const mensajes = [...(conv?.mensajes || []), ...nuevos].slice(-60);
+  const cuerpo = JSON.stringify({ user_id: actorId, email, plan, mensajes, updated_at: new Date().toISOString() });
+  try {
+    const r = conv
+      ? await fetch(`${SUPABASE_URL}/rest/v1/support_conversations?id=eq.${conv.id}`, { method: 'PATCH', headers: sb(), body: cuerpo })
+      : await fetch(`${SUPABASE_URL}/rest/v1/support_conversations`, { method: 'POST', headers: sb(), body: cuerpo });
+    return r.ok ? (await r.json().catch(() => []))?.[0] || conv : conv;
+  } catch { return conv; }
 }
 
 function prompt(radio, contexto) {
@@ -189,24 +223,30 @@ export default async function handler(req) {
     // Abrir un ticket y no volver a saber nada es lo que hace que la gente
     // escriba tres veces lo mismo. Aquí cada quien ve el estado de los suyos.
     if (req.method === 'GET') {
-      let duenoId = payload.sub;
-      try {
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(payload.sub)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sb() });
-        const tw = r.ok ? (await r.json())?.[0] : null;
-        if (tw?.owner_user_id) duenoId = tw.owner_user_id;
-      } catch {}
+      const conv = await conversacionDe(actorId);
       const rows = await fetch(
-        `${SUPABASE_URL}/rest/v1/support_tickets?user_id=eq.${encodeURIComponent(duenoId)}` +
+        `${SUPABASE_URL}/rest/v1/support_tickets?author_user_id=eq.${encodeURIComponent(actorId)}` +
         `&select=id,asunto,detalle,estado,respuesta,created_at,updated_at&order=created_at.desc&limit=30`,
         { headers: sb() }
       ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-      return jsonResp({ tickets: rows || [] });
+
+      // El hilo tal cual se dejó, MÁS las respuestas del equipo intercaladas por
+      // fecha: la conversación sigue donde empezó en vez de partirse entre el
+      // chat y el correo.
+      const mensajes = [...(conv?.mensajes || [])];
+      for (const t of rows || []) {
+        if (!t.respuesta) continue;
+        mensajes.push({ role: 'equipo', content: t.respuesta, at: t.updated_at, ticket: t.asunto });
+      }
+      mensajes.sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+
+      return jsonResp({ tickets: rows || [], mensajes });
     }
 
     if (!ANTHROPIC_KEY) return jsonResp({ error: 'El asistente no está disponible ahora mismo.' }, 503);
 
     const actorId = payload.sub;
-    const email = payload.email || payload.primary_email_address || null;
+    const email = await correoDe(actorId, payload);
 
     // El soporte es de la persona que escribe, no de la cuenta del dueño: si es
     // miembro de un equipo, su radiografía es la del espacio donde trabaja.
@@ -243,6 +283,14 @@ export default async function handler(req) {
     const { limpio, ticket } = extraerTicket(bruto);
     let ticketId = null;
 
+    // El hilo se guarda para que la respuesta del equipo aparezca aquí después,
+    // y para que el ticket llegue con la conversación completa.
+    const ahora = new Date().toISOString();
+    const conv = await guardarHilo(actorId, email, body.plan || null, await conversacionDe(actorId), [
+      { role: 'user', content: texto, at: ahora },
+      { role: 'assistant', content: limpio, at: ahora },
+    ]);
+
     if (ticket) {
       // El ticket se crea con la radiografía dentro: quien lo atienda no
       // necesita pedirle nada al usuario para empezar a mirar.
@@ -250,6 +298,10 @@ export default async function handler(req) {
         method: 'POST', headers: sb(),
         body: JSON.stringify({
           user_id: userId, email, plan: body.plan || null,
+          // Quién lo abrió, para que en "Mis casos" cada quien vea los suyos
+          // aunque el ticket cuelgue de la cuenta del dueño.
+          author_user_id: actorId,
+          conversation_id: conv?.id || null,
           asunto: ticket.asunto, detalle: ticket.detalle,
           contexto: { ...radio, seccion: body.contexto?.seccion || null, escribe: actorId },
         }),

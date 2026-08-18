@@ -28998,6 +28998,35 @@ async function dxVer(cuenta) {
 // los wraps de navegación, para que nada de lo anterior lo pise.
 let _sopHilo = [];        // {role, content} tal como los espera la API
 let _sopEnviando = false;
+let _sopVistos = 0;       // cuántos mensajes del hilo se han visto ya
+
+// Sin esto, el equipo responde y el usuario no se entera hasta que se le ocurra
+// abrir el chat — que es exactamente lo que pasaba mandándolo al correo.
+function sopMarcarLeido() {
+  try { localStorage.setItem('acuarius_soporte_vistos', String(_sopVistos)); } catch {}
+  document.getElementById('sop-punto')?.remove();
+}
+
+async function sopRevisarRespuestas() {
+  if (!(typeof clerkInstance !== 'undefined' && clerkInstance?.user)) return;
+  if (document.getElementById('sop-panel')?.classList.contains('abierto')) return;
+  try {
+    const r = await fetchAuth('/api/soporte');
+    const d = await leerRespuesta(r);
+    if (!r.ok) return;
+    const total = (d.mensajes || []).length;
+    let vistos = 0;
+    try { vistos = parseInt(localStorage.getItem('acuarius_soporte_vistos') || '0', 10) || 0; } catch {}
+    const hayEquipo = (d.mensajes || []).some(m => m.role === 'equipo');
+    const burbuja = document.getElementById('sop-burbuja');
+    if (!burbuja || !hayEquipo || total <= vistos) return;
+    if (!document.getElementById('sop-punto')) {
+      const p = document.createElement('span');
+      p.id = 'sop-punto';
+      burbuja.appendChild(p);
+    }
+  } catch {}
+}
 
 const SOP_SUGERENCIAS = [
   'No veo mis leads',
@@ -29013,11 +29042,54 @@ function sopMostrarBurbuja() {
   if (b) b.classList.toggle('visible', !!(typeof clerkInstance !== 'undefined' && clerkInstance?.user));
 }
 
-function sopAbrir() {
+async function sopAbrir() {
   document.getElementById('sop-panel')?.classList.add('abierto');
   document.getElementById('sop-burbuja')?.classList.remove('visible');
-  if (!_sopHilo.length) sopBienvenida();
   setTimeout(() => document.getElementById('sop-input')?.focus(), 90);
+  // El hilo vive en el servidor: así la respuesta del equipo aparece aquí
+  // mismo, y la conversación sigue donde empezó aunque se recargue o se cambie
+  // de dispositivo.
+  await sopCargarHilo();
+}
+
+async function sopCargarHilo() {
+  const hilo = document.getElementById('sop-hilo');
+  if (!hilo) return;
+  try {
+    const r = await fetchAuth('/api/soporte');
+    const d = await leerRespuesta(r);
+    const msgs = (r.ok && d.mensajes) ? d.mensajes : [];
+    if (!msgs.length) { sopBienvenida(); return; }
+
+    hilo.innerHTML = '';
+    // Al modelo solo se le reenvía lo suyo y lo del usuario; los mensajes del
+    // equipo son contexto para la persona, no turnos de la conversación con la IA.
+    _sopHilo = msgs
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-16)
+      .map(m => ({ role: m.role, content: m.content }));
+    msgs.forEach(m => {
+      if (m.role === 'equipo') sopPintarEquipo(m);
+      else sopPintar(m.content, m.role === 'user' ? 'yo' : 'bot');
+    });
+    _sopVistos = msgs.length;
+    sopMarcarLeido();
+  } catch {
+    if (!_sopHilo.length) sopBienvenida();
+  }
+}
+
+// La respuesta de una persona se distingue de la del asistente: si se pintan
+// igual, nadie sabe si le contestó el equipo o la IA.
+function sopPintarEquipo(m) {
+  const hilo = document.getElementById('sop-hilo');
+  if (!hilo) return;
+  const el = document.createElement('div');
+  el.className = 'sop-msg equipo';
+  el.innerHTML = '<div class="sop-equipo-tag">Respuesta del equipo' +
+    (m.ticket ? ' · ' + esc(m.ticket) : '') + '</div>' + sopFormato(m.content);
+  hilo.appendChild(el);
+  hilo.scrollTop = hilo.scrollHeight;
 }
 
 function sopCerrar() {
@@ -29183,6 +29255,8 @@ async function sopEnviar() {
     }
     _sopHilo.push({ role: 'user', content: texto });
     _sopHilo.push({ role: 'assistant', content: d.respuesta });
+    _sopVistos += 2;
+    sopMarcarLeido();
     if (_sopHilo.length > 16) _sopHilo = _sopHilo.slice(-16);
     sopPintar(d.respuesta, 'bot');
 
@@ -29211,10 +29285,12 @@ async function sopEnviar() {
 // una hora fija. En vez de adivinar con temporizadores sueltos se usa la misma
 // espera que el resto de la app, que ya existe justo para esto.
 if (typeof clerkReady === 'function') {
-  clerkReady().then(sopMostrarBurbuja).catch(() => {});
+  clerkReady().then(() => { sopMostrarBurbuja(); sopRevisarRespuestas(); }).catch(() => {});
 } else {
   document.addEventListener('DOMContentLoaded', sopMostrarBurbuja);
 }
+// Cada dos minutos: lo justo para enterarse pronto sin castigar al servidor.
+setInterval(sopRevisarRespuestas, 120000);
 // Y una red por si la sesión llega después del timeout de clerkReady: en la
 // pantalla donde se pide ayuda, la ayuda no puede depender de llegar a tiempo.
 setInterval(sopMostrarBurbuja, 3000);
