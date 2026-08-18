@@ -28987,11 +28987,17 @@ async function sopEnviar() {
   }
 }
 
-// Se engancha al arranque y también tras iniciar sesión, porque la burbuja
-// depende de que Clerk ya haya hidratado al usuario.
-document.addEventListener('DOMContentLoaded', sopMostrarBurbuja);
-setTimeout(sopMostrarBurbuja, 1500);
-setTimeout(sopMostrarBurbuja, 4000);
+// La burbuja depende de que Clerk haya hidratado al usuario, y eso no ocurre a
+// una hora fija. En vez de adivinar con temporizadores sueltos se usa la misma
+// espera que el resto de la app, que ya existe justo para esto.
+if (typeof clerkReady === 'function') {
+  clerkReady().then(sopMostrarBurbuja).catch(() => {});
+} else {
+  document.addEventListener('DOMContentLoaded', sopMostrarBurbuja);
+}
+// Y una red por si la sesión llega después del timeout de clerkReady: en la
+// pantalla donde se pide ayuda, la ayuda no puede depender de llegar a tiempo.
+setInterval(sopMostrarBurbuja, 3000);
 
 // ── Tickets de soporte (solo equipo de Acuarius) ───────────────────────────
 // Lo que el asistente no pudo resolver. Cada uno llega con la radiografía de la
