@@ -103,6 +103,72 @@ export default async function handler(req) {
     return jsonResp({ connections: rows || [] });
   }
 
+  // POST ?action=connect_webchat — da de alta el chat de la web del cliente.
+  //
+  // La clave del sitio la genera el SERVIDOR y nunca la elige el navegador: es
+  // lo único que autoriza a escribir en este canal y va a quedar a la vista en
+  // el HTML del cliente, así que tiene que ser imprevisible.
+  //
+  // No entra en el plan Free: un chat público genera muchísimas más
+  // conversaciones que un formulario y cada una consume el agente.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'connect_webchat') {
+    const meta = await fetch('https://api.clerk.com/v1/users/' + encodeURIComponent(userId), {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const plan = meta?.public_metadata?.plan || 'free';
+    const correo = (meta?.email_addresses?.[0]?.email_address || '').toLowerCase();
+    const dePago = ['pro', 'agency', 'agencia', 'individual', 'trial'].includes(plan)
+      || ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'].includes(correo);
+    if (!dePago) {
+      return jsonResp({ error: 'El chat web está disponible desde el plan Pro.', upgrade: true }, 403);
+    }
+
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const { agent_id, client_id, pipeline_id, titulo, saludo, color, posicion, dominios } = body || {};
+
+    if (agent_id) {
+      const agente = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agent_id)}&user_id=eq.${encodeURIComponent(userId)}&select=id&limit=1`,
+        { headers: sb() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      if (!agente?.length) return jsonResp({ error: 'Agente no encontrado' }, 404);
+    }
+
+    const clave = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // La configuración del widget viaja en access_token como JSON: en este canal
+    // esa columna no guarda ningún token y no podemos crear columnas nuevas.
+    const ajustes = {
+      titulo: String(titulo || '').slice(0, 60) || null,
+      saludo: String(saludo || '').slice(0, 200) || null,
+      color: /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '#1E2BCC',
+      posicion: posicion === 'izquierda' ? 'izquierda' : 'derecha',
+      dominios: Array.isArray(dominios)
+        ? dominios.map(d => String(d).trim().slice(0, 120)).filter(Boolean).slice(0, 10)
+        : [],
+    };
+
+    const fila = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
+      method: 'POST', headers: sb(),
+      body: JSON.stringify({
+        user_id: userId,
+        channel: 'webchat',
+        external_id: clave,
+        access_token: JSON.stringify(ajustes),
+        channel_name: ajustes.titulo || 'Chat web',
+        agent_id: agent_id || null,
+        client_id: client_id || null,
+        pipeline_id: pipeline_id || null,
+        is_active: true,
+      }),
+    }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+
+    if (!fila?.[0]) return jsonResp({ error: 'No se pudo crear el canal' }, 500);
+    return jsonResp({ connection: fila[0], clave });
+  }
+
   // POST ?action=connect_page — conecta Messenger o Instagram resolviendo en el
   // servidor el token de la página. Así el navegador nunca ve un token de Meta.
   if (req.method === 'POST' && url.searchParams.get('action') === 'connect_page') {

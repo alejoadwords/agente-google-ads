@@ -128,6 +128,14 @@ export async function sendTikTokMessage(conn, contactId, text) {
 
 // Punto de entrada único: decide el canal y devuelve {ok} o {ok:false,error}.
 export async function enviarPorCanal(conn, channel, contactId, content, adjunto = null) {
+  // El chat web no tiene a dónde empujar: el mensaje ya quedó guardado en
+  // chat_messages y es el navegador del visitante quien lo viene a buscar
+  // sondeando /api/webchat. Devolver ok aquí es la respuesta correcta, no un
+  // parche: no hay envío que pueda fallar.
+  if (channel === 'webchat') {
+    if (adjunto) return { ok: false, error: 'El chat web todavía no admite archivos.' };
+    return { ok: true };
+  }
   // Un canal de prueba no tiene token real: intentar el envío solo devolvía
   // «Invalid OAuth access token» y el circuito no se podía ensayar.
   if (String(conn?.external_id || '').startsWith('sim_')) return { ok: true, simulado: true };
