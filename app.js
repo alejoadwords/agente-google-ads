@@ -17427,6 +17427,9 @@ function crmRender() {
   else crmRenderList();
   crmUpdateClientTag();
   crmUpdateSidebarCount();
+  // No se espera: el desplegable aparece cuando llegue el equipo, sin retrasar
+  // el pintado del tablero.
+  crmPintarFiltroComercial();
 }
 
 // ── Quién puede gestionar cada lead ─────────────────────────────────────────
@@ -17696,6 +17699,8 @@ function crmGetFilteredLeads() {
     );
   }
   if (crmFilterSource) leads = leads.filter(l => l.source === crmFilterSource);
+  if (crmFilterOwner === '_sin') leads = leads.filter(l => !l.assigned_to);
+  else if (crmFilterOwner)       leads = leads.filter(l => l.assigned_to === crmFilterOwner);
   if (crmFilterTags.length) leads = leads.filter(l => crmFilterTags.every(t => (l.tags || []).includes(t)));
   if (crmQuickFilter === 'inactive') {
     const now = Date.now();
@@ -17757,8 +17762,104 @@ function crmSetSearch(q) {
 
 function crmSetFilter(key, val) {
   if (key === 'source') crmFilterSource = val;
+  if (key === 'owner')  crmFilterOwner = val;
   crmRender();
   crmUpdateLeadsStats();
+}
+
+// ── Comercial en la tarjeta ───────────────────────────────────────────────────
+// El chip dice quién lleva el lead y, para el dueño, es el atajo para cambiarlo
+// sin abrir la ficha: con varios comerciales, reasignar de uno en uno abriendo
+// cada lead es inviable. Los sin asignar muestran un hueco pulsable en vez de
+// nada, que es donde se pierden los leads.
+function crmChipComercial(lead) {
+  const puedeReasignar = !crmSoyMiembro && (crmTeam || []).some(m => m.status === 'active' && m.member_user_id);
+  const base = 'display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:8.5px;font-weight:800;vertical-align:middle;margin-left:4px';
+  const click = puedeReasignar
+    ? ' onclick="event.stopPropagation();crmReasignarChip(event,\'' + esc(lead.id) + '\')" style="cursor:pointer;'
+    : ' style="';
+
+  if (lead.assigned_name) {
+    return ' <span title="' + esc(lead.assigned_name) + (puedeReasignar ? ' — clic para reasignar' : '') + '"' + click
+      + base + ';background:var(--blue-lt);color:var(--blue)">' + esc(lead.assigned_name.slice(0, 2).toUpperCase()) + '</span>';
+  }
+  if (!puedeReasignar) return '';
+  return ' <span title="Sin asignar — clic para asignar"' + click
+    + base + ';background:var(--bg-subtle);color:var(--muted2);border:1px dashed var(--border-h)">+</span>';
+}
+
+// Cambia el chip por un desplegable en el sitio. Se cierra al elegir o al salir.
+function crmReasignarChip(ev, leadId) {
+  const chip = ev.currentTarget;
+  const lead = (crmLeads || []).find(l => l.id === leadId);
+  if (!lead || chip.dataset.abierto) return;
+  chip.dataset.abierto = '1';
+
+  const yoId = clerkInstance?.user?.id || '';
+  const opts = [{ id: '', name: 'Sin asignar' }, { id: yoId, name: (clerkInstance?.user?.firstName || 'Yo') + ' (yo)' }]
+    .concat((crmTeam || []).filter(m => m.status === 'active' && m.member_user_id && m.member_user_id !== yoId)
+      .map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email })));
+
+  const sel = document.createElement('select');
+  sel.className = 'crm-filter-select';
+  sel.style.cssText = 'font-size:11px;padding:1px 4px;max-width:150px;margin-left:4px';
+  sel.innerHTML = opts.map(o => '<option value="' + esc(o.id) + '"' + ((lead.assigned_to || '') === o.id ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('');
+  sel.onclick = e => e.stopPropagation();
+  sel.onchange = async e => {
+    e.stopPropagation();
+    const id = sel.value;
+    const nombre = id ? sel.options[sel.selectedIndex].text.replace(' (yo)', '') : null;
+    const antesId = lead.assigned_to, antesNombre = lead.assigned_name;
+    lead.assigned_to = id || null;
+    lead.assigned_name = nombre;
+    crmRender();
+    try {
+      const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+      const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+      const r = await fetchAuth('/api/leads' + qs, { method: 'PUT', body: JSON.stringify({ id: lead.id, assigned_to: lead.assigned_to, assigned_name: nombre }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      showToast(id ? '👤 ' + lead.name + ' ahora lo lleva ' + nombre : lead.name + ' quedó sin asignar', 'success');
+    } catch (err) {
+      // Revertir: dejar la tarjeta mostrando un dueño que el servidor no guardó
+      // es peor que no haber hecho nada.
+      lead.assigned_to = antesId; lead.assigned_name = antesNombre;
+      crmRender();
+      showToast('No se pudo reasignar. Inténtalo otra vez.', 'error');
+    }
+  };
+  sel.onblur = () => { delete chip.dataset.abierto; crmRender(); };
+  chip.replaceWith(sel);
+  sel.focus();
+}
+
+// ── Filtro por ejecutivo comercial ────────────────────────────────────────────
+// '' = todos · '_sin' = sin asignar · cualquier otro = id del comercial.
+let crmFilterOwner = '';
+
+// Llena el desplegable con el equipo. Se llama al pintar el tablero porque
+// crmTeam puede llegar más tarde que los leads: si se pintara una sola vez al
+// arrancar, el dueño vería "Todos los comerciales" y nada más.
+async function crmPintarFiltroComercial() {
+  const sel = document.getElementById('crm-filter-owner');
+  if (!sel) return;
+  await asegurarEquipo();
+  const activos = (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id);
+  // Sin equipo el filtro sobra: ocuparía sitio para no ofrecer nada.
+  if (!activos.length) { sel.style.display = 'none'; return; }
+
+  const yoId = clerkInstance?.user?.id || '';
+  const yoNombre = (clerkInstance?.user?.firstName || 'Yo') + ' (yo)';
+  const opciones = [{ id: '', name: 'Todos los comerciales' }, { id: yoId, name: yoNombre }]
+    .concat(activos.filter(m => m.member_user_id !== yoId).map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email })))
+    .concat([{ id: '_sin', name: 'Sin asignar' }]);
+
+  // Si el filtro apuntaba a alguien que ya no está, volver a "todos" para no
+  // dejar el tablero vacío sin explicación.
+  if (crmFilterOwner && !opciones.some(o => o.id === crmFilterOwner)) crmFilterOwner = '';
+
+  sel.innerHTML = opciones.map(o =>
+    '<option value="' + esc(o.id) + '"' + (crmFilterOwner === o.id ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('');
+  sel.style.display = '';
 }
 
 function crmUpdateLeadsStats() {
@@ -17861,7 +17962,7 @@ function crmCardHTML(lead, now) {
     ((lead.tags || []).length ? '<div class="crm-card-tags">' + lead.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (lead.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (lead.tags.length - 3) + '</span>' : '') + '</div>' : '') +
     '<div class="crm-card-footer">' +
     '<div class="crm-card-source">' + esc(fuenteLabel(lead.source)) +
-    (lead.assigned_name ? ' <span title="Asignado a ' + esc(lead.assigned_name) + '" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--blue-lt);color:var(--blue);font-size:8.5px;font-weight:800;vertical-align:middle;margin-left:4px">' + esc(lead.assigned_name.slice(0, 2).toUpperCase()) + '</span>' : '') + '</div>' +
+    crmChipComercial(lead) + '</div>' +
     (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
     '</div>' +
     ((score !== null || showInactive) ? '<div class="crm-card-badges">' +
