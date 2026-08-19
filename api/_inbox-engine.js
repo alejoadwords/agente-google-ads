@@ -45,6 +45,34 @@ export function cleanForUser(text) {
     .trim();
 }
 
+// Datos de contacto sueltos en lo que escribe el propio cliente. Deliberadamente
+// conservador: correo y teléfono son inequívocos; el nombre solo si lo dice de
+// forma explícita ("soy Laura", "me llamo Laura"). Preferimos no captar un dato
+// a meter basura en el CRM.
+export function datosDelTexto(texto) {
+  const t = String(texto || '');
+  const out = {};
+
+  const correo = t.match(/[^\s<>()[\],;:]+@[^\s<>()[\],;:]+\.[a-z]{2,}/i);
+  if (correo) out.email = correo[0].toLowerCase();
+
+  // 7 a 15 dígitos, admitiendo espacios, guiones y paréntesis. Se descartan los
+  // que vengan pegados a un símbolo de precio o de porcentaje.
+  const tel = t.replace(/[$%]\s?\d[\d.,]*/g, ' ')
+    .match(/(?:\+?\(?\d[\d\s().-]{6,17}\d)/);
+  if (tel) {
+    const digitos = tel[0].replace(/\D/g, '');
+    if (digitos.length >= 7 && digitos.length <= 15) out.phone = tel[0].trim();
+  }
+
+  // El teclado del móvil escribe "Soy" con mayúscula al empezar la frase: sin
+  // contemplarlo, el caso más común se escapaba.
+  const nombre = t.match(/\b(?:[Ss]oy|[Mm]e llamo|[Mm]i nombre es)\s+([A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]+){0,2})/);
+  if (nombre) out.name = nombre[1].trim().slice(0, 80);
+
+  return out;
+}
+
 export function extractCapturedData(text) {
   const match = String(text || '').match(/\[CAPTURA:\s*(\{.*?\})\]/s);
   if (!match) return {};
@@ -612,7 +640,21 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         unread_count: (conv.unread_count || 0) + 1,
       }),
     });
-    return { ok: true, escalated: true, manual: aMano, conversationId: conv.id };
+
+    // El lead nace del bloque [CAPTURA] del agente, pero con la conversación ya
+    // en manos de una persona el agente no vuelve a hablar. En WhatsApp da
+    // igual: el contact_id ES el teléfono. En el chat web el visitante es
+    // anónimo, así que si escala pronto y luego suelta su correo o su celular,
+    // ese contacto se perdía entero. Aquí se rescata de lo que escribe él.
+    const sueltos = datosDelTexto(textoMensaje);
+    if (!conv.lead_id && Object.values(sueltos).some(Boolean)) {
+      const nuevoLead = await upsertLeadFromConversation(
+        connection.user_id, clienteDelCanal, conv, sueltos, policy, false,
+        connection.pipeline_id || null
+      ).catch(() => null);
+      if (nuevoLead) conv.lead_id = nuevoLead;
+    }
+    return { ok: true, escalated: true, manual: aMano, conversationId: conv.id, leadId: conv.lead_id || null };
   }
 
   // Conversaciones creadas antes de tener el nombre: se rellena al vuelo
