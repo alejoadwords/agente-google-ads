@@ -16882,6 +16882,9 @@ function pipeAbrirSelector(btn) {
 async function pipeCambiar(id) {
   if (!id || id === crmPipelineId) return;
   crmPipelineId = id;
+  // El <select> nativo se reetiquetaba solo al elegir; el botón no. Sin esto el
+  // tablero cambiaba de etapas pero arriba seguía leyéndose el proceso anterior.
+  pipeRenderSelector();
   try { localStorage.setItem(pipeClave(), id); } catch {}
   crmStagesLoaded = false; crmLeadsLoaded = false;
   await Promise.all([crmLoadStages(), crmLoadLeads()]);
