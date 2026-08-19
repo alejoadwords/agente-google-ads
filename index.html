@@ -1721,6 +1721,11 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .pipe-selector{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .pipe-selector select{font-family:inherit;font-size:12px;font-weight:600;color:var(--text);background:var(--sidebar);border:1px solid var(--border);border-radius:20px;padding:5px 26px 5px 12px;cursor:pointer;max-width:190px;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238C90A8' stroke-width='3' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 9px center}
 .pipe-selector select:hover{border-color:var(--blue)}
+/* Mismo aspecto de píldora que tenía el select, pero abriendo el desplegable
+   propio en vez de la lista del sistema operativo. */
+.pipe-btn{display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:12px;font-weight:600;color:var(--text);background:var(--sidebar);border:1px solid var(--border);border-radius:20px;padding:5px 12px;cursor:pointer;max-width:190px;transition:all .15s var(--ease)}
+.pipe-btn:hover{border-color:var(--blue)}
+.pipe-btn svg{flex-shrink:0;opacity:.5}
 .pipe-admin{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid var(--border);background:var(--sidebar);color:var(--muted);border-radius:50%;cursor:pointer;flex-shrink:0;transition:.15s}
 .pipe-admin:hover{border-color:var(--blue);color:var(--blue)}
 .pipe-fila{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--bg-subtle)}
@@ -3975,7 +3980,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <span id="crm-client-tag-name">cliente</span>
       </div>
       <div id="pipe-selector" class="pipe-selector" style="display:none">
-        <select id="pipe-select" onchange="pipeCambiar(this.value)" aria-label="Pipeline"></select>
+        <button id="pipe-select" class="pipe-btn" onclick="pipeAbrirSelector(this)" aria-label="Proceso de venta">
+          <span class="dd-btn-txt" id="pipe-select-txt"></span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
         <button class="pipe-admin" onclick="pipeAbrirGestor()" title="Administrar pipelines">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.2.63.78 1.05 1.44 1.06H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </button>

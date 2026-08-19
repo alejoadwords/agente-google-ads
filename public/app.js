@@ -16863,16 +16863,20 @@ async function crmLoadPipelines() {
 function pipeRenderSelector() {
   const cont = document.getElementById('pipe-selector');
   const sel = document.getElementById('pipe-select');
-  if (!cont || !sel) return;
+  const txt = document.getElementById('pipe-select-txt');
+  if (!cont || !sel || !txt) return;
   // Con un solo pipeline el selector estorba: solo el engranaje para crear más
   if (!crmPipelines.length) { cont.style.display = 'none'; return; }
   cont.style.display = 'flex';
-  sel.style.display = crmPipelines.length > 1 ? '' : 'none';
-  sel.innerHTML = crmPipelines.map(p =>
-    '<option value="' + esc(p.id) + '"' + (p.id === crmPipelineId ? ' selected' : '') + '>' + esc(p.name) + '</option>'
-  ).join('');
+  sel.style.display = crmPipelines.length > 1 ? 'inline-flex' : 'none';
+  const actual = crmPipelines.find(p => p.id === crmPipelineId) || crmPipelines[0] || {};
+  txt.textContent = actual.name || '';
   const cliente = pipeAmbitoNombre();
   sel.title = cliente ? 'Procesos de ' + cliente : 'Procesos sin cliente asignado';
+}
+
+function pipeAbrirSelector(btn) {
+  ddAbrir(btn, crmPipelines.map(p => ({ id: p.id, name: p.name })), crmPipelineId, id => pipeCambiar(id));
 }
 
 async function pipeCambiar(id) {
