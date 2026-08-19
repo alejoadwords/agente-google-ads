@@ -2175,6 +2175,22 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .crm-search-input{flex:1;border:none;outline:none;font-size:13px;background:transparent;color:var(--text);font-family:var(--font)}
 .crm-search-input::placeholder{color:var(--muted2)}
 .crm-filter-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;cursor:pointer;max-width:160px}
+
+/* Desplegable propio — el <select> nativo abre la lista del sistema operativo,
+   con su tipografía y su azul, y rompe el aspecto de la app. */
+.dd-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-weight:500;background:var(--bg);color:var(--text);font-family:var(--font);cursor:pointer;transition:all .15s var(--ease);max-width:190px;white-space:nowrap}
+.dd-btn:hover{border-color:var(--border-h);background:var(--bg-subtle)}
+.dd-btn.activo{border-color:var(--blue);background:var(--blue-lt);color:var(--blue);font-weight:650}
+.dd-btn-txt{overflow:hidden;text-overflow:ellipsis}
+.dd-btn svg{flex-shrink:0;opacity:.5}
+.dd-menu{position:fixed;z-index:4000;min-width:190px;max-height:300px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-lg);padding:5px;animation:ddIn .13s var(--ease)}
+@keyframes ddIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.dd-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;font-size:12.5px;color:var(--text);cursor:pointer;line-height:1.3}
+.dd-opt:hover{background:var(--bg-subtle)}
+.dd-opt.sel{background:var(--blue-lt);color:var(--blue);font-weight:650}
+.dd-opt-check{width:13px;flex-shrink:0;opacity:0}
+.dd-opt.sel .dd-opt-check{opacity:1}
+.dd-sep{height:1px;background:var(--border);margin:4px 6px}
 .crm-filter-select:focus{border-color:var(--blue)}
 .crm-leads-stats{font-size:11px;color:var(--muted);white-space:nowrap}
 /* Activity types */
@@ -4049,18 +4065,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--muted2)"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" class="crm-search-input" id="crm-search" placeholder="Buscar leads..." oninput="crmSetSearch(this.value)">
       </div>
-      <select class="crm-filter-select" id="crm-filter-source" onchange="crmSetFilter('source',this.value)">
-        <option value="">Todas las fuentes</option>
-        <option value="manual">Manual</option>
-        <option value="meta_ads">Meta Ads</option>
-        <option value="google_ads">Google Ads</option>
-        <option value="organico">Organico</option>
-        <option value="referido">Referido</option>
-        <option value="web">Web</option>
-      </select>
-      <select class="crm-filter-select" id="crm-filter-owner" style="display:none" onchange="crmSetFilter('owner',this.value)">
-        <option value="">Todos los comerciales</option>
-      </select>
+      <button class="dd-btn" id="crm-filter-source" onclick="crmAbrirFiltroFuente(this)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        <span class="dd-btn-txt" id="crm-filter-source-txt">Todas las fuentes</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="dd-btn" id="crm-filter-owner" style="display:none" onclick="crmAbrirFiltroComercial(this)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="dd-btn-txt" id="crm-filter-owner-txt">Todos los comerciales</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
       <div class="crm-quick-filters" id="crm-quick-filters">
         <button class="crm-qf-pill warn" id="crm-qf-inactive" onclick="crmToggleQuickFilter('inactive')">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -4098,8 +4112,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <thead>
           <tr>
             <th>Nombre</th>
-            <th>Empresa</th>
             <th>Email</th>
+            <th>Teléfono</th>
+            <th>Comercial</th>
             <th>Etapa</th>
             <th>Fuente</th>
             <th>Valor</th>

@@ -6,7 +6,7 @@
       "fecha": "2026-08-19",
       "tipo": "nuevo",
       "titulo": "Filtra el pipeline por comercial y reasigna desde el tablero",
-      "texto": "Elige un ejecutivo en la barra de filtros y verás solo sus leads, en cualquier pipeline. En cada tarjeta, el círculo con sus iniciales abre la lista del equipo para cambiar de responsable sin abrir el lead. Los que no tiene nadie salen con un + para que no se pierdan.",
+      "texto": "Elige un ejecutivo en la barra de filtros y verás solo sus leads, tanto en el tablero como en Contactos, donde además hay una columna con quién lleva cada uno. Pulsa sobre su nombre para cambiar de responsable sin abrir el lead; los que no tiene nadie salen marcados para que no se pierdan.",
       "accion": {
         "texto": "Ir al CRM",
         "ir": "crm"

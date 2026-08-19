@@ -17427,6 +17427,7 @@ function crmRender() {
   else crmRenderList();
   crmUpdateClientTag();
   crmUpdateSidebarCount();
+  crmPintarFiltroFuente();
   // No se espera: el desplegable aparece cuando llegue el equipo, sin retrasar
   // el pintado del tablero.
   crmPintarFiltroComercial();
@@ -17504,13 +17505,9 @@ function crmPintarSelectsFuente() {
       '<option value="' + esc(f.key) + '">' + esc(f.label) + '</option>').join('');
     if (antes && crmSources.some(f => f.key === antes)) form.value = antes;
   }
-  const filtro = document.getElementById('crm-filter-source');
-  if (filtro) {
-    const antes = filtro.value;
-    filtro.innerHTML = '<option value="">Todas las fuentes</option>' +
-      crmSources.map(f => '<option value="' + esc(f.key) + '">' + esc(f.label) + '</option>').join('');
-    if (antes && crmSources.some(f => f.key === antes)) filtro.value = antes;
-  }
+  // El filtro de fuentes ya no es un <select>: lo pinta crmPintarFiltroFuente()
+  // leyendo crmSources cuando se abre.
+  crmPintarFiltroFuente();
 }
 
 // ── Gestor de fuentes ───────────────────────────────────────────────────────
@@ -17767,6 +17764,83 @@ function crmSetFilter(key, val) {
   crmUpdateLeadsStats();
 }
 
+// Las fuentes salen del catálogo de la cuenta (crmSources). Si aún no ha
+// cargado, se recurre a las que aparecen en los leads para no dejar el
+// desplegable con una sola opción.
+function crmOpcionesFuente() {
+  let fuentes = (typeof crmSources !== 'undefined' && crmSources.length)
+    ? crmSources.map(f => ({ id: f.key, name: f.label }))
+    : [...new Set((crmLeads || []).map(l => l.source).filter(Boolean))].sort().map(s => ({ id: s, name: fuenteLabel(s) }));
+  if (crmFilterSource && !fuentes.some(f => f.id === crmFilterSource)) {
+    fuentes = fuentes.concat([{ id: crmFilterSource, name: fuenteLabel(crmFilterSource) }]);
+  }
+  return [{ id: '', name: 'Todas las fuentes' }]
+    .concat(fuentes.length ? [{ sep: true }] : [])
+    .concat(fuentes);
+}
+
+function crmAbrirFiltroFuente(btn) {
+  ddAbrir(btn, crmOpcionesFuente(), crmFilterSource, id => crmSetFilter('source', id));
+}
+
+function crmPintarFiltroFuente() {
+  const btn = document.getElementById('crm-filter-source');
+  const txt = document.getElementById('crm-filter-source-txt');
+  if (!btn || !txt) return;
+  txt.textContent = crmFilterSource ? fuenteLabel(crmFilterSource) : 'Todas las fuentes';
+  btn.classList.toggle('activo', !!crmFilterSource);
+}
+
+// ── Desplegable propio ────────────────────────────────────────────────────────
+// El <select> nativo abre la lista del sistema operativo: otra tipografía, otro
+// azul, otro radio de esquina. Este se pinta con los tokens de la app y va en
+// position:fixed para que no lo recorte el scroll horizontal del tablero.
+let _ddCerrar = null;
+
+function ddAbrir(ancla, opciones, valor, alElegir) {
+  ddCerrarMenu();
+  const menu = document.createElement('div');
+  menu.className = 'dd-menu';
+  menu.innerHTML = opciones.map(o => o.sep
+    ? '<div class="dd-sep"></div>'
+    : '<div class="dd-opt' + (String(o.id) === String(valor) ? ' sel' : '') + '" data-id="' + esc(String(o.id)) + '">'
+      + '<svg class="dd-opt-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      + '<span>' + esc(o.name) + '</span></div>').join('');
+  document.body.appendChild(menu);
+
+  const r = ancla.getBoundingClientRect();
+  menu.style.left = Math.min(r.left, window.innerWidth - menu.offsetWidth - 12) + 'px';
+  // Si no cabe debajo, se abre hacia arriba en vez de salirse de la pantalla
+  const abajo = window.innerHeight - r.bottom;
+  menu.style.top = (abajo > menu.offsetHeight + 12 || abajo > r.top)
+    ? (r.bottom + 6) + 'px'
+    : Math.max(8, r.top - menu.offsetHeight - 6) + 'px';
+
+  menu.addEventListener('mousedown', e => {
+    const op = e.target.closest('.dd-opt');
+    if (!op) return;
+    e.preventDefault(); e.stopPropagation();
+    ddCerrarMenu();
+    alElegir(op.dataset.id);
+  });
+
+  const fuera = e => { if (!menu.contains(e.target) && e.target !== ancla) ddCerrarMenu(); };
+  const tecla = e => { if (e.key === 'Escape') ddCerrarMenu(); };
+  setTimeout(() => {
+    document.addEventListener('mousedown', fuera, true);
+    document.addEventListener('keydown', tecla, true);
+  }, 0);
+  _ddCerrar = () => {
+    document.removeEventListener('mousedown', fuera, true);
+    document.removeEventListener('keydown', tecla, true);
+    menu.remove(); _ddCerrar = null;
+  };
+}
+
+function ddCerrarMenu() { if (_ddCerrar) _ddCerrar(); }
+window.addEventListener('resize', ddCerrarMenu);
+window.addEventListener('scroll', ddCerrarMenu, true);
+
 // ── Comercial en la tarjeta ───────────────────────────────────────────────────
 // El chip dice quién lleva el lead y, para el dueño, es el atajo para cambiarlo
 // sin abrir la ficha: con varios comerciales, reasignar de uno en uno abriendo
@@ -17788,27 +17862,29 @@ function crmChipComercial(lead) {
     + base + ';background:var(--bg-subtle);color:var(--muted2);border:1px dashed var(--border-h)">+</span>';
 }
 
-// Cambia el chip por un desplegable en el sitio. Se cierra al elegir o al salir.
+// En Contactos hay sitio para el nombre completo, no solo las iniciales. Para
+// el dueño es pulsable y reasigna igual que en el tablero.
+function crmCeldaComercial(lead) {
+  const puede = !crmSoyMiembro && (crmTeam || []).some(m => m.status === 'active' && m.member_user_id);
+  const nombre = lead.assigned_name || '';
+  if (!puede) {
+    return nombre
+      ? '<span style="font-size:11.5px;color:var(--text-2)">' + esc(nombre) + '</span>'
+      : '<span style="font-size:11.5px;color:var(--muted2)">—</span>';
+  }
+  const estilo = 'font-size:11.5px;cursor:pointer;padding:3px 8px;border-radius:20px;display:inline-block;'
+    + (nombre ? 'background:var(--blue-lt);color:var(--blue);font-weight:600' : 'color:var(--muted2);border:1px dashed var(--border-h)');
+  return '<span title="Clic para reasignar" style="' + estilo + '" onclick="event.stopPropagation();crmReasignarChip(event,\'' + esc(lead.id) + '\')">'
+    + esc(nombre || 'Asignar') + '</span>';
+}
+
+// Abre la lista del equipo junto al chip y reasigna al elegir.
 function crmReasignarChip(ev, leadId) {
-  const chip = ev.currentTarget;
   const lead = (crmLeads || []).find(l => l.id === leadId);
-  if (!lead || chip.dataset.abierto) return;
-  chip.dataset.abierto = '1';
-
-  const yoId = clerkInstance?.user?.id || '';
-  const opts = [{ id: '', name: 'Sin asignar' }, { id: yoId, name: (clerkInstance?.user?.firstName || 'Yo') + ' (yo)' }]
-    .concat((crmTeam || []).filter(m => m.status === 'active' && m.member_user_id && m.member_user_id !== yoId)
-      .map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email })));
-
-  const sel = document.createElement('select');
-  sel.className = 'crm-filter-select';
-  sel.style.cssText = 'font-size:11px;padding:1px 4px;max-width:150px;margin-left:4px';
-  sel.innerHTML = opts.map(o => '<option value="' + esc(o.id) + '"' + ((lead.assigned_to || '') === o.id ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('');
-  sel.onclick = e => e.stopPropagation();
-  sel.onchange = async e => {
-    e.stopPropagation();
-    const id = sel.value;
-    const nombre = id ? sel.options[sel.selectedIndex].text.replace(' (yo)', '') : null;
+  if (!lead) return;
+  ddAbrir(ev.currentTarget, crmOpcionesComercial(false), lead.assigned_to || '', async id => {
+    const opt = crmOpcionesComercial(false).find(o => String(o.id) === String(id));
+    const nombre = id ? String(opt ? opt.name : '').replace(' (yo)', '') : null;
     const antesId = lead.assigned_to, antesNombre = lead.assigned_name;
     lead.assigned_to = id || null;
     lead.assigned_name = nombre;
@@ -17826,40 +17902,48 @@ function crmReasignarChip(ev, leadId) {
       crmRender();
       showToast('No se pudo reasignar. Inténtalo otra vez.', 'error');
     }
-  };
-  sel.onblur = () => { delete chip.dataset.abierto; crmRender(); };
-  chip.replaceWith(sel);
-  sel.focus();
+  });
 }
 
 // ── Filtro por ejecutivo comercial ────────────────────────────────────────────
 // '' = todos · '_sin' = sin asignar · cualquier otro = id del comercial.
 let crmFilterOwner = '';
 
-// Llena el desplegable con el equipo. Se llama al pintar el tablero porque
-// crmTeam puede llegar más tarde que los leads: si se pintara una sola vez al
-// arrancar, el dueño vería "Todos los comerciales" y nada más.
+// Opciones del filtro: todos · yo · cada comercial · sin asignar.
+function crmOpcionesComercial(conTodos) {
+  const yoId = clerkInstance?.user?.id || '';
+  const activos = (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id);
+  const base = conTodos ? [{ id: '', name: 'Todos los comerciales' }, { sep: true }] : [{ id: '', name: 'Sin asignar' }];
+  return base
+    .concat([{ id: yoId, name: (clerkInstance?.user?.firstName || 'Yo') + ' (yo)' }])
+    .concat(activos.filter(m => m.member_user_id !== yoId).map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email })))
+    .concat(conTodos ? [{ sep: true }, { id: '_sin', name: 'Sin asignar' }] : []);
+}
+
+// Se llama al pintar el tablero porque crmTeam puede llegar más tarde que los
+// leads: pintándolo una sola vez al arrancar, el dueño vería el botón vacío.
 async function crmPintarFiltroComercial() {
-  const sel = document.getElementById('crm-filter-owner');
-  if (!sel) return;
+  const btn = document.getElementById('crm-filter-owner');
+  const txt = document.getElementById('crm-filter-owner-txt');
+  if (!btn || !txt) return;
   await asegurarEquipo();
   const activos = (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id);
   // Sin equipo el filtro sobra: ocuparía sitio para no ofrecer nada.
-  if (!activos.length) { sel.style.display = 'none'; return; }
+  if (!activos.length) { btn.style.display = 'none'; return; }
 
-  const yoId = clerkInstance?.user?.id || '';
-  const yoNombre = (clerkInstance?.user?.firstName || 'Yo') + ' (yo)';
-  const opciones = [{ id: '', name: 'Todos los comerciales' }, { id: yoId, name: yoNombre }]
-    .concat(activos.filter(m => m.member_user_id !== yoId).map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email })))
-    .concat([{ id: '_sin', name: 'Sin asignar' }]);
-
+  const opciones = crmOpcionesComercial(true).filter(o => !o.sep);
   // Si el filtro apuntaba a alguien que ya no está, volver a "todos" para no
   // dejar el tablero vacío sin explicación.
-  if (crmFilterOwner && !opciones.some(o => o.id === crmFilterOwner)) crmFilterOwner = '';
+  if (crmFilterOwner && !opciones.some(o => String(o.id) === String(crmFilterOwner))) crmFilterOwner = '';
 
-  sel.innerHTML = opciones.map(o =>
-    '<option value="' + esc(o.id) + '"' + (crmFilterOwner === o.id ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('');
-  sel.style.display = '';
+  const elegido = opciones.find(o => String(o.id) === String(crmFilterOwner));
+  txt.textContent = elegido ? elegido.name : 'Todos los comerciales';
+  btn.classList.toggle('activo', !!crmFilterOwner);
+  btn.style.display = '';
+}
+
+function crmAbrirFiltroComercial(btn) {
+  ddAbrir(btn, crmOpcionesComercial(true), crmFilterOwner, id => crmSetFilter('owner', id));
 }
 
 function crmUpdateLeadsStats() {
@@ -18212,12 +18296,13 @@ function crmRenderList() {
   if (!tbody) return;
   const filtered = crmGetFilteredLeads();
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Sin leads' + (crmSearchQuery || crmFilterSource ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
+    const hayFiltro = crmSearchQuery || crmFilterSource || crmFilterOwner || crmFilterTags.length || crmQuickFilter;
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">Sin leads' + (hayFiltro ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(l => {
     const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' };
-    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + ((l.tags || []).length ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(fuenteLabel(l.source)) + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
+    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + ((l.tags || []).length ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td>' + crmCeldaComercial(l) + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(fuenteLabel(l.source)) + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
   }).join('');
   crmUpdateLeadsStats();
 }
