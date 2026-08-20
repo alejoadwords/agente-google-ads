@@ -1836,8 +1836,12 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-card-source{font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--sidebar2);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .crm-card-value{font-size:12px;font-weight:700;color:#10B981}
 .crm-card-badges{display:flex;flex-direction:column;gap:3px;margin-top:6px}
-.crm-card-actions{display:flex;align-items:center;gap:5px;padding:7px 10px 8px;border-top:1px solid var(--border);opacity:0;transition:opacity .15s;pointer-events:none}
-.crm-card:hover .crm-card-actions{opacity:1;pointer-events:auto}
+/* Las acciones estaban con opacity:0 pero ocupando su espacio: cada tarjeta
+   mostraba una franja vacía con una línea encima, que es justo lo que parece
+   una tarjeta cortada. Y en pantalla táctil, donde no existe el hover, eran
+   inalcanzables. Ahora se ven siempre, discretas, y se realzan al pasar. */
+.crm-card-actions{display:flex;align-items:center;gap:5px;padding:7px 10px 8px;border-top:1px solid var(--border);opacity:.62;transition:opacity .15s}
+.crm-card:hover .crm-card-actions{opacity:1}
 .crm-card-act-btn{display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:none;font-size:10px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s;flex:1;justify-content:center}
 .crm-card-act-btn:hover{background:var(--sidebar2);color:var(--text)}
 .crm-card-act-btn.wa-btn:hover{background:#DCFCE7;color:#16A34A;border-color:#86EFAC}
