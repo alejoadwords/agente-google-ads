@@ -19856,8 +19856,9 @@ const CANALES_CATALOGO = [
   { key: 'messenger', nombre: 'Messenger', desc: 'Los mensajes privados de tu página de Facebook, en el mismo inbox.' },
   { key: 'instagram', nombre: 'Instagram', desc: 'Los DM de tu cuenta de Instagram Business.' },
   { key: 'tiktok',    nombre: 'TikTok',    desc: 'Los mensajes directos de tu cuenta de TikTok for Business.' },
+  { key: 'webchat',   nombre: 'Chat web',  desc: 'Una burbuja de chat en tu propia web. Se instala pegando una línea y las conversaciones caen en este mismo inbox.' },
 ];
-const CANAL_COLOR = { whatsapp: '#25D366', messenger: '#0084FF', instagram: '#E1306C', tiktok: '#000000' };
+const CANAL_COLOR = { whatsapp: '#25D366', messenger: '#0084FF', instagram: '#E1306C', tiktok: '#000000', webchat: '#7c3aed' };
 
 let canConexiones = [];
 let canTab = 'catalogo';
@@ -19984,6 +19985,9 @@ function canHtmlMios() {
       (canEsPrueba(c)
         ? '<button class="btn-sec sm" onclick="canSimular(\'' + esc(c.id) + '\')">Simular mensaje</button>'
         : '') +
+      (c.channel === 'webchat'
+        ? '<button class="btn-sec sm" onclick="canVerInstalacion(\'' + esc(c.external_id) + '\')">Instalación</button>'
+        : '') +
       '<button class="pipe-borrar" title="Desconectar" onclick="canDesconectar(\'' + esc(c.id) + '\')">' + ICONO_PAPELERA + '</button>' +
     '</div>'
   ).join('') +
@@ -20001,6 +20005,8 @@ function canHtmlMios() {
 // lo demás, y dejarla para después es lo que hacía que un canal solo se pudiera
 // conectar desde dentro de un agente.
 async function canConectar(channel) {
+  // El chat web no pasa por OAuth de nadie: se configura y se instala.
+  if (channel === 'webchat') return canAbrirAltaWeb();
   const agentes = (typeof crmAgents !== 'undefined' ? crmAgents : []);
   let agentId = null;
   if (agentes.length) {
@@ -20016,6 +20022,136 @@ async function canConectar(channel) {
   // quiere, y evita que sus leads nazcan huérfanos.
   _canClienteAlConectar = crmAmbitoCliente() || null;
   await agConnectChannel(channel, agentId);
+}
+
+// ── Alta del chat web ─────────────────────────────────────────────────────────
+// A diferencia del resto, aquí no hay cuenta ajena que autorizar: se elige quién
+// atiende, cómo se ve y en qué dominios puede aparecer, y sale una línea para
+// pegar en la web.
+function canAbrirAltaWeb() {
+  document.getElementById('can-overlay')?.remove();
+  const agentes = (typeof crmAgents !== 'undefined' ? crmAgents : []);
+  const ov = document.createElement('div');
+  ov.id = 'canweb-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:560px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Chat en tu web</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Una línea en tu sitio y las conversaciones caen en este inbox.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" id="canweb-cuerpo">' +
+      '<div class="ac-admin-field"><label class="ac-admin-label">¿Quién atiende?</label>' +
+        '<select class="ac-admin-select" id="cw-agente">' +
+          '<option value="">Mi equipo — manual desde el inbox</option>' +
+          agentes.map(a => '<option value="' + esc(a.id) + '">' + esc(a.name) + '</option>').join('') +
+        '</select></div>' +
+      '<div class="ac-admin-field"><label class="ac-admin-label">Título de la ventana</label>' +
+        '<input class="ac-admin-input" id="cw-titulo" placeholder="Ej: Soporte de Acme" maxlength="60"></div>' +
+      '<div class="ac-admin-field"><label class="ac-admin-label">Primer mensaje</label>' +
+        '<input class="ac-admin-input" id="cw-saludo" value="¡Hola! ¿En qué te puedo ayudar?" maxlength="200"></div>' +
+      '<div style="display:flex;gap:12px">' +
+        '<div class="ac-admin-field" style="flex:0 0 110px"><label class="ac-admin-label">Color</label>' +
+          '<input class="ac-admin-input" id="cw-color" type="color" value="#1E2BCC" style="padding:3px;height:36px"></div>' +
+        '<div class="ac-admin-field" style="flex:1"><label class="ac-admin-label">Posición</label>' +
+          '<select class="ac-admin-select" id="cw-pos"><option value="derecha">Abajo a la derecha</option>' +
+          '<option value="izquierda">Abajo a la izquierda</option></select></div>' +
+      '</div>' +
+      '<div class="ac-admin-field"><label class="ac-admin-label">Dominios donde puede aparecer</label>' +
+        '<input class="ac-admin-input" id="cw-dominios" placeholder="miempresa.com, tienda.miempresa.com">' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5">Separa con comas. ' +
+        'Si lo dejas vacío funcionará en cualquier web donde peguen el código — y cualquiera podría ' +
+        'copiarlo y llenar tu CRM con conversaciones que no son tuyas.</div></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-sec sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="cw-crear" onclick="canCrearWeb()">Crear chat</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+async function canCrearWeb() {
+  const btn = document.getElementById('cw-crear');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+  const dominios = (document.getElementById('cw-dominios')?.value || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const cuerpo = {
+    agent_id: document.getElementById('cw-agente')?.value || null,
+    client_id: crmAmbitoCliente() || null,
+    pipeline_id: (typeof crmPipelineId !== 'undefined' ? crmPipelineId : null),
+    titulo: document.getElementById('cw-titulo')?.value || '',
+    saludo: document.getElementById('cw-saludo')?.value || '',
+    color: document.getElementById('cw-color')?.value || '#1E2BCC',
+    posicion: document.getElementById('cw-pos')?.value || 'derecha',
+    dominios,
+  };
+  try {
+    const r = await fetchAuth('/api/channel-connections?action=connect_webchat', {
+      method: 'POST', body: JSON.stringify(cuerpo),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Crear chat'; }
+      // El 403 del plan no es un error a secas: lleva a la pantalla de mejora.
+      if (d.upgrade && typeof openUpgradeFlow === 'function') {
+        document.getElementById('canweb-overlay')?.remove();
+        openUpgradeFlow(d.error);
+        return;
+      }
+      showToast(d.error || 'No se pudo crear el chat', 'error');
+      return;
+    }
+    document.getElementById('canweb-overlay')?.remove();
+    canVerInstalacion(d.clave);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear chat'; }
+    showToast('No se pudo crear el chat', 'error');
+  }
+}
+
+// El snippet, en su propia pantalla: es lo único que el cliente tiene que
+// llevarse, y se vuelve a abrir desde «Mis canales» cuando lo pierda.
+function canVerInstalacion(clave) {
+  document.getElementById('canweb-overlay')?.remove();
+  const snippet = '<script src="' + location.origin + '/w.js" data-key="' + clave + '" defer><\/script>';
+  const ov = document.createElement('div');
+  ov.id = 'canweb-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:600px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Instalar el chat</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Pega esto antes de &lt;/body&gt; en tu web.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<pre id="cw-snippet" style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:9px;' +
+      'padding:13px;font-size:11.5px;line-height:1.6;overflow-x:auto;white-space:pre-wrap;word-break:break-all;' +
+      'color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace">' + esc(snippet) + '</pre>' +
+      '<button class="btn-sec sm" style="margin-top:10px" onclick="canCopiarSnippet(this)">Copiar código</button>' +
+      '<div style="margin-top:16px;font-size:12px;color:var(--text-2);line-height:1.6">' +
+        '<b>En WordPress:</b> Apariencia → Editor de temas → footer.php, justo antes de <code>&lt;/body&gt;</code>. ' +
+        'O con cualquier plugin de insertar código en el pie.<br>' +
+        '<b>En Shopify:</b> Tienda online → Temas → Editar código → theme.liquid.<br>' +
+        '<b>En Wix o Squarespace:</b> Configuración → Código personalizado, en el pie de todas las páginas.' +
+      '</div>' +
+      '<div style="margin-top:14px;padding:10px 12px;background:var(--blue-lt);border-radius:9px;font-size:11.5px;' +
+      'color:var(--blue);line-height:1.5">La burbuja aparece sola en cuanto guardes. Escríbete un mensaje desde ' +
+      'tu propia web y compruébalo aquí mismo, en Conversaciones.</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function canCopiarSnippet(btn) {
+  const txt = document.getElementById('cw-snippet')?.textContent || '';
+  navigator.clipboard.writeText(txt).then(function () {
+    btn.textContent = '✓ Copiado';
+    setTimeout(function () { btn.textContent = 'Copiar código'; }, 1800);
+  }).catch(function () { showToast('No se pudo copiar. Selecciónalo a mano.', 'error'); });
 }
 
 async function canCambiarQuien(id, agentId) {

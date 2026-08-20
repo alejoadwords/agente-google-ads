@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-20-chat-web",
+      "fecha": "2026-08-20",
+      "tipo": "nuevo",
+      "titulo": "Chat en vivo en tu propia web",
+      "texto": "Pega una línea en tu sitio y aparece una burbuja de chat con tus colores. Quien escriba desde ahí llega al mismo inbox que WhatsApp o Instagram, lo atiende tu agente y entra al CRM cuando deja su contacto. En Conversaciones → Canales → Chat web.",
+      "accion": {
+        "texto": "Ir a Conversaciones",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-08-19-filtro-comercial",
       "fecha": "2026-08-19",
       "tipo": "nuevo",
