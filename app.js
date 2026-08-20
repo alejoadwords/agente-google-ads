@@ -18544,6 +18544,12 @@ async function crmSaveLead() {
     value: parseFloat(document.getElementById('crm-f-value').value) || null,
     tags: document.getElementById('crm-f-tags') && document.getElementById('crm-f-tags').value.trim() ? document.getElementById('crm-f-tags').value.split(',').map(t => t.trim()).filter(Boolean) : null,
   };
+  // La etapa de antes, para saber si este guardado es el que cierra el negocio.
+  const etapaAntes = crmEditingId
+    ? (crmLeads.find(l => l.id === crmEditingId) || {}).stage
+    : null;
+  let leadGuardado = null;   // el lead tal como quedó, para el modal de cierre
+
   // El responsable solo se manda al CREAR. Al editar, el desplegable podría
   // arrancar vacío y este guardado dejaría al lead sin responsable sin que
   // nadie lo pidiera; para reasignar está el selector de la ficha, que es donde
@@ -18564,6 +18570,7 @@ async function crmSaveLead() {
       const data = await res.json();
       const idx = crmLeads.findIndex(l => l.id === crmEditingId);
       if (idx >= 0) crmLeads[idx] = data.lead;
+      leadGuardado = data.lead;
     } else {
       const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
       const res = await fetchAuth(`/api/leads${qs}`, {
@@ -18592,6 +18599,7 @@ async function crmSaveLead() {
       }
       const data = await res.json();
       crmLeads.unshift(data.lead);
+      leadGuardado = data.lead;
       track('crm_lead_created', { source: data.lead.source || 'manual' });
       // log creation activity
       await fetchAuth('/api/lead-activities', {
@@ -18601,6 +18609,19 @@ async function crmSaveLead() {
     }
     crmCloseModal();
     crmRender();
+
+    // Mover un lead a Ganado o Perdido desde ESTE formulario no pedía nada: ni
+    // importe, ni motivo, ni fecha. Arrastrando la tarjeta sí, y por eso los
+    // perdidos tenían motivo y los ganados estaban vacíos — el importe que el
+    // cliente creía estar registrando no se guardaba en ninguna parte.
+    const cierra = leadGuardado && payload.stage !== etapaAntes &&
+      (crmIsWonStage(payload.stage) || crmIsLostStage(payload.stage));
+    if (cierra) {
+      // Sin onCancel: el lead YA está guardado en esa etapa. Cancelar aquí
+      // significa "no quiero registrar el detalle ahora", no deshacer el
+      // movimiento — devolverlo a su etapa anterior sería una sorpresa.
+      closeOpenModal(leadGuardado, payload.stage, etapaAntes, null);
+    }
   } catch(e) {
     console.error('crmSaveLead', e);
     btn.textContent = 'Error — reintentar';
