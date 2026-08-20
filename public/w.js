@@ -39,6 +39,47 @@
     function guardar() { try { localStorage.setItem(LS, JSON.stringify(st)); } catch (e) {} }
 
     var cfg = null, abierto = false, timer = null, enviando = false;
+    var noLeidos = 0, tituloOriginal = document.title, parpadeo = null;
+
+    // Un pitido corto generado al vuelo: no hay archivo que servir ni permiso de
+    // reproducción que pedir, y no ensucia la web del cliente con una descarga.
+    function pitar() {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        var ac = new Ctx();
+        var osc = ac.createOscillator(), vol = ac.createGain();
+        osc.connect(vol); vol.connect(ac.destination);
+        osc.frequency.value = 620;
+        vol.gain.setValueAtTime(0.0001, ac.currentTime);
+        vol.gain.exponentialRampToValueAtTime(0.07, ac.currentTime + 0.02);
+        vol.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.28);
+        osc.start(); osc.stop(ac.currentTime + 0.3);
+        setTimeout(function () { try { ac.close(); } catch (e) {} }, 600);
+      } catch (e) {}
+    }
+
+    // Con la pestaña en segundo plano nadie mira la burbuja: el único sitio
+    // donde se ve que hay respuesta es el título.
+    function avisarPestana() {
+      if (parpadeo || document.visibilityState === 'visible') return;
+      var on = false;
+      parpadeo = setInterval(function () {
+        document.title = on ? tituloOriginal : '(1) ' + (cfg && cfg.titulo ? cfg.titulo : 'Nuevo mensaje');
+        on = !on;
+      }, 1200);
+    }
+    function pararAviso() {
+      if (parpadeo) { clearInterval(parpadeo); parpadeo = null; }
+      document.title = tituloOriginal;
+    }
+
+    function pintarNoLeidos() {
+      var b = q('.no-leidos');
+      if (!b) return;
+      b.textContent = noLeidos > 9 ? '9+' : String(noLeidos);
+      b.classList.toggle('hay', noLeidos > 0);
+    }
 
     // ── Interfaz ────────────────────────────────────────────────────────────
     var host = document.createElement('div');
@@ -75,10 +116,14 @@
         '.pie button:disabled{opacity:.45;cursor:default}' +
         '.err{font-size:11.5px;color:#C0392B;padding:0 14px 8px;background:#fff}' +
         '.hp{position:absolute;left:-9999px;width:1px;height:1px}' +
+        '.no-leidos{position:absolute;top:-3px;right:-3px;min-width:19px;height:19px;border-radius:10px;background:#E5484D;color:#fff;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff}' +
+        '.no-leidos.hay{display:flex}' +
+        '.aviso{background:#FFF7E6;color:#8A5A00;font-size:11.5px;line-height:1.5;padding:9px 14px;border-bottom:1px solid #F2E2C0}' +
         '</style>' +
         '<div class="wrap">' +
         '<div class="panel" part="panel">' +
           '<div class="hdr"><b></b><button class="cerrar" aria-label="Cerrar">&times;</button></div>' +
+          '<div class="aviso" style="display:none"></div>' +
           '<div class="msgs"></div>' +
           '<div class="err" style="display:none"></div>' +
           '<form class="pie">' +
@@ -87,9 +132,10 @@
             '<button type="submit" aria-label="Enviar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>' +
           '</form>' +
         '</div>' +
+        '<div style="position:relative;display:inline-block">' +
         '<button class="burbuja" aria-label="Abrir chat">' +
           '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>' +
-        '</button></div>';
+        '</button><span class="no-leidos"></span></div></div>';
 
       q('.hdr b').textContent = cfg.titulo;
       q('.burbuja').addEventListener('click', alternar);
@@ -129,7 +175,10 @@
     function alternar() {
       abierto = !abierto;
       q('.panel').classList.toggle('abierto', abierto);
-      if (abierto) { pintarMensajes(); q('.pie input').focus(); sondear(); }
+      if (abierto) {
+        noLeidos = 0; pintarNoLeidos(); pararAviso();
+        pintarMensajes(); q('.pie input').focus(); sondear();
+      }
       ritmo();
     }
 
@@ -164,11 +213,19 @@
     }
 
     function recibir(lista) {
+      var nuevos = 0;
       (lista || []).forEach(function (m) {
         if (!m.texto) return;
         st.msgs.push({ de: 'ag', texto: m.texto });
         if (!st.since || m.fecha > st.since) st.since = m.fecha;
+        nuevos++;
       });
+      // Solo molesta si el panel está cerrado: quien ya está leyendo no necesita
+      // un pitido por cada frase.
+      if (nuevos && !abierto) {
+        noLeidos += nuevos;
+        pintarNoLeidos(); pitar(); avisarPestana();
+      }
       st.ultimo = Date.now();
       guardar();
       pintarMensajes();
@@ -201,7 +258,7 @@
     // uno por minuto. Está bien —quien no mira no necesita 4 segundos— pero al
     // volver, la respuesta del asesor tiene que estar ya, no tardar un minuto.
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && cfg) { sondear(); ritmo(); }
+      if (document.visibilityState === 'visible' && cfg) { pararAviso(); sondear(); ritmo(); }
     });
 
     // ── Arranque ────────────────────────────────────────────────────────────
@@ -212,7 +269,13 @@
         cfg = d;
         document.body.appendChild(host);
         pintarBase();
+        if (d.fuera_horario) {
+          var av = q('.aviso');
+          av.textContent = d.aviso_horario;
+          av.style.display = 'block';
+        }
         pintarMensajes();
+        pintarNoLeidos();
         ritmo();
       })
       .catch(function () {});

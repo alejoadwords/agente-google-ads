@@ -76,6 +76,36 @@ function dominioPermitido(origin, dominios) {
   });
 }
 
+// ¿Está cerrada la oficina? Sin horario configurado, nunca: quien no lo declara
+// atiende siempre, que es lo que espera quien no tocó ese campo.
+//   horario = { dias:[1..7], desde:'09:00', hasta:'18:00', zona:'America/Bogota' }
+// dias: 1 = lunes … 7 = domingo.
+function fueraDeHorario(h) {
+  if (!h || !Array.isArray(h.dias) || !h.dias.length || !h.desde || !h.hasta) return false;
+  try {
+    const zona = h.zona || 'America/Bogota';
+    const f = new Intl.DateTimeFormat('en-GB', {
+      timeZone: zona, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date());
+    const parte = t => f.find(p => p.type === t)?.value || '';
+    const dias = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+    const dia = dias[parte('weekday')];
+    if (!dia || !h.dias.includes(dia)) return true;
+
+    const ahora = parseInt(parte('hour'), 10) * 60 + parseInt(parte('minute'), 10);
+    const aMin = s => {
+      const [hh, mm] = String(s).split(':').map(n => parseInt(n, 10));
+      return (hh || 0) * 60 + (mm || 0);
+    };
+    const desde = aMin(h.desde), hasta = aMin(h.hasta);
+    // Turno que cruza la medianoche (22:00 a 06:00): dentro es fuera de los topes
+    return desde <= hasta ? (ahora < desde || ahora >= hasta) : (ahora < desde && ahora >= hasta);
+  } catch {
+    // Una zona horaria inválida no puede dejar el chat cerrado para siempre
+    return false;
+  }
+}
+
 async function canalDe(key) {
   if (!/^[a-f0-9]{32}$/i.test(String(key || ''))) return null;
   const filas = await fetch(
@@ -115,6 +145,12 @@ export default async function handler(req) {
       saludo: cfg.saludo || '¡Hola! ¿En qué te puedo ayudar?',
       color: cfg.color || '#1E2BCC',
       posicion: cfg.posicion === 'izquierda' ? 'izquierda' : 'derecha',
+      // El horario se resuelve AQUÍ, no en el navegador: el reloj del visitante
+      // puede estar en otro huso o sencillamente mal, y quien decide si la
+      // oficina está abierta es la oficina.
+      fuera_horario: fueraDeHorario(cfg.horario),
+      aviso_horario: cfg.horario?.aviso
+        || 'Ahora mismo no hay nadie conectado. Déjanos tu mensaje y tu correo o celular, y te respondemos apenas volvamos.',
     }, 200, origin);
   }
 

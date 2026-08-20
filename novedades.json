@@ -6,7 +6,7 @@
       "fecha": "2026-08-20",
       "tipo": "nuevo",
       "titulo": "Chat en vivo en tu propia web",
-      "texto": "Pega una línea en tu sitio y aparece una burbuja de chat con tus colores. Quien escriba desde ahí llega al mismo inbox que WhatsApp o Instagram, lo atiende tu agente y entra al CRM cuando deja su contacto. En Conversaciones → Canales → Chat web.",
+      "texto": "Pega una línea en tu sitio y aparece una burbuja con tus colores. Quien escriba llega al mismo inbox que WhatsApp o Instagram, lo atiende tu agente y entra al CRM cuando deja su contacto. Puedes fijar horario de atención: fuera de él avisa que nadie está conectado y pide un contacto. En Conversaciones → Canales.",
       "accion": {
         "texto": "Ir a Conversaciones",
         "ir": "conversaciones"

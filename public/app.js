@@ -20084,6 +20084,23 @@ function canAbrirAltaWeb() {
           '<select class="ac-admin-select" id="cw-pos"><option value="derecha">Abajo a la derecha</option>' +
           '<option value="izquierda">Abajo a la izquierda</option></select></div>' +
       '</div>' +
+      '<div class="ac-admin-field"><label class="ac-admin-label">Horario de atención <span style="font-weight:400;color:var(--muted)">— opcional</span></label>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="checkbox" id="cw-hor-on" onchange="cwHorarioToggle(this.checked)"> Solo en horario</label>' +
+          '<span id="cw-hor-campos" style="display:none;gap:6px;align-items:center">' +
+            '<input class="ac-admin-input" id="cw-desde" type="time" value="09:00" style="width:110px">' +
+            '<span style="font-size:12px;color:var(--muted)">a</span>' +
+            '<input class="ac-admin-input" id="cw-hasta" type="time" value="18:00" style="width:110px">' +
+          '</span>' +
+        '</div>' +
+        '<div id="cw-hor-dias" style="display:none;gap:5px;margin-top:8px;flex-wrap:wrap">' +
+          ['L','M','X','J','V','S','D'].map(function(d,i){
+            return '<label style="font-size:11.5px;display:flex;align-items:center;gap:3px;padding:3px 7px;border:1px solid var(--border);border-radius:14px;cursor:pointer">' +
+              '<input type="checkbox" class="cw-dia" value="' + (i+1) + '"' + (i < 5 ? ' checked' : '') + '> ' + d + '</label>';
+          }).join('') +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">Fuera de ese horario el chat sigue abierto, pero avisa de que nadie está conectado y pide un contacto para responder después.</div>' +
+      '</div>' +
       '<div class="ac-admin-field"><label class="ac-admin-label">Dominios donde puede aparecer</label>' +
         '<input class="ac-admin-input" id="cw-dominios" placeholder="miempresa.com, tienda.miempresa.com">' +
         '<div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5">Separa con comas. ' +
@@ -20095,6 +20112,13 @@ function canAbrirAltaWeb() {
       '<button class="btn-pri sm" id="cw-crear" onclick="canCrearWeb()">Crear chat</button>' +
     '</div></div>';
   document.body.appendChild(ov);
+}
+
+function cwHorarioToggle(on) {
+  const campos = document.getElementById('cw-hor-campos');
+  const dias = document.getElementById('cw-hor-dias');
+  if (campos) campos.style.display = on ? 'inline-flex' : 'none';
+  if (dias) dias.style.display = on ? 'flex' : 'none';
 }
 
 async function canCrearWeb() {
@@ -20111,6 +20135,14 @@ async function canCrearWeb() {
     color: document.getElementById('cw-color')?.value || '#1E2BCC',
     posicion: document.getElementById('cw-pos')?.value || 'derecha',
     dominios,
+    horario: document.getElementById('cw-hor-on')?.checked ? {
+      dias: [...document.querySelectorAll('.cw-dia')].filter(c => c.checked).map(c => parseInt(c.value, 10)),
+      desde: document.getElementById('cw-desde')?.value || '09:00',
+      hasta: document.getElementById('cw-hasta')?.value || '18:00',
+      // El huso del navegador de quien configura ES el del negocio; el del
+      // visitante no sirve, puede estar en otro país.
+      zona: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota',
+    } : null,
   };
   try {
     const r = await fetchAuth('/api/channel-connections?action=connect_webchat', {

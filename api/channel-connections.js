@@ -125,7 +125,7 @@ export default async function handler(req) {
 
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { agent_id, client_id, pipeline_id, titulo, saludo, color, posicion, dominios } = body || {};
+    const { agent_id, client_id, pipeline_id, titulo, saludo, color, posicion, dominios, horario } = body || {};
 
     if (agent_id) {
       const agente = await fetch(
@@ -148,6 +148,17 @@ export default async function handler(req) {
       dominios: Array.isArray(dominios)
         ? dominios.map(d => String(d).trim().slice(0, 120)).filter(Boolean).slice(0, 10)
         : [],
+      // Un horario a medias (sin días, o sin horas) dejaría el chat cerrado
+      // siempre: si no viene completo, se guarda como si no lo hubieran puesto.
+      horario: (horario && Array.isArray(horario.dias) && horario.dias.length && horario.desde && horario.hasta)
+        ? {
+            dias: horario.dias.map(n => parseInt(n, 10)).filter(n => n >= 1 && n <= 7),
+            desde: String(horario.desde).slice(0, 5),
+            hasta: String(horario.hasta).slice(0, 5),
+            zona: String(horario.zona || 'America/Bogota').slice(0, 60),
+            aviso: String(horario.aviso || '').slice(0, 300) || null,
+          }
+        : null,
     };
 
     const fila = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
