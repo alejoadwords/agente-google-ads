@@ -18911,22 +18911,27 @@ async function crmAddActivity() {
 
 function crmEditCurrentLead() {
   if (!crmDetailLead) return;
+  // El lead se guarda ANTES de cerrar el panel: crmCloseDetail() pone
+  // crmDetailLead en null, así que la línea siguiente reventaba con un
+  // TypeError y el botón "Editar" no hacía absolutamente nada. Un error dentro
+  // de un onclick muere en silencio: ni aviso, ni consola a la vista.
+  const lead = crmDetailLead;
   crmCloseDetail();
-  crmEditingId = crmDetailLead.id;
+  crmEditingId = lead.id;
   document.getElementById('crm-modal-title').textContent = 'Editar lead';
-  document.getElementById('crm-f-name').value = crmDetailLead.name || '';
-  document.getElementById('crm-f-email').value = crmDetailLead.email || '';
-  document.getElementById('crm-f-phone').value = crmDetailLead.phone || '';
-  document.getElementById('crm-f-company').value = crmDetailLead.company || '';
-  document.getElementById('crm-f-notes').value = crmDetailLead.notes || '';
-  document.getElementById('crm-f-source').value = crmDetailLead.source || 'manual';
+  document.getElementById('crm-f-name').value = lead.name || '';
+  document.getElementById('crm-f-email').value = lead.email || '';
+  document.getElementById('crm-f-phone').value = lead.phone || '';
+  document.getElementById('crm-f-company').value = lead.company || '';
+  document.getElementById('crm-f-notes').value = lead.notes || '';
+  document.getElementById('crm-f-source').value = lead.source || 'manual';
   const valEditEl = document.getElementById('crm-f-value');
-  if (valEditEl) valEditEl.value = crmDetailLead.value || '';
+  if (valEditEl) valEditEl.value = lead.value || '';
   const tagsEditEl = document.getElementById('crm-f-tags');
-  if (tagsEditEl) tagsEditEl.value = (crmDetailLead.tags || []).join(', ');
+  if (tagsEditEl) tagsEditEl.value = (lead.tags || []).join(', ');
   crmPopulateStageSelects();
-  crmLlenarResponsable(crmDetailLead.assigned_to || '');
-  document.getElementById('crm-f-stage').value = crmDetailLead.stage;
+  crmLlenarResponsable(lead.assigned_to || '');
+  document.getElementById('crm-f-stage').value = lead.stage;
   document.getElementById('crm-save-btn').disabled = false;
   document.getElementById('crm-save-btn').textContent = 'Guardar';
   document.getElementById('crm-modal').classList.add('open');
