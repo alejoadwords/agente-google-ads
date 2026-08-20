@@ -129,7 +129,7 @@
     function alternar() {
       abierto = !abierto;
       q('.panel').classList.toggle('abierto', abierto);
-      if (abierto) { pintarMensajes(); q('.pie input').focus(); }
+      if (abierto) { pintarMensajes(); q('.pie input').focus(); sondear(); }
       ritmo();
     }
 
@@ -195,6 +195,13 @@
       document.addEventListener(ev, function () {
         if (!timer && Date.now() - (st.ultimo || 0) > 10 * 60 * 1000) { st.ultimo = Date.now(); ritmo(); }
       }, { passive: true });
+    });
+
+    // El navegador frena los temporizadores de una pestaña en segundo plano a
+    // uno por minuto. Está bien —quien no mira no necesita 4 segundos— pero al
+    // volver, la respuesta del asesor tiene que estar ya, no tardar un minuto.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && cfg) { sondear(); ritmo(); }
     });
 
     // ── Arranque ────────────────────────────────────────────────────────────
