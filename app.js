@@ -18630,8 +18630,12 @@ async function crmSaveLead() {
 }
 
 // ── Panel de detalle ──────────────────────────────────────────────────────────
-async function crmOpenDetail(leadId) {
-  const lead = crmLeads.find(l => l.id === leadId);
+// leadSuelto: un lead que puede NO estar en el tablero cargado. El Pulso cuenta
+// los leads de todo el cliente y el tablero muestra un pipeline a la vez, así
+// que sin esto la mitad de los enlaces de sus listas no abrían nada — y encima
+// en silencio, porque la función se limitaba a volver sin decir palabra.
+async function crmOpenDetail(leadId, leadSuelto) {
+  const lead = crmLeads.find(l => l.id === leadId) || leadSuelto;
   if (!lead) return;
   crmDetailLead = lead;
   crmDetalleAplicarPermiso(lead);
@@ -22313,8 +22317,11 @@ async function pulsoCrmCards() {
         tone: 'warn',
         title: 'CRM · ' + stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
         body: 'Sin contacto hace más de 3 días. Incluye a "' + (top.name || '—') + '"' + (top.stage ? ' (etapa ' + top.stage + ')' : '') + '.',
-        actLabel: 'Ver en el CRM →',
-        act: () => navGo('crm'), // navGo inicializa el modulo; showView solo cambia de vista
+        actLabel: 'Ver cuáles →',
+        act: () => pulsoAbrirLista(
+          stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
+          'Ordenados por tiempo sin contacto. Toca uno para abrir su ficha.',
+          stale, 'antiguos'),
       });
     }
 
@@ -22324,12 +22331,102 @@ async function pulsoCrmCards() {
         tone: 'good',
         title: 'CRM · ' + fresh.length + (fresh.length === 1 ? ' lead nuevo' : ' leads nuevos') + ' hoy',
         body: fresh.slice(0, 2).map(l => l.name).filter(Boolean).join(', ') + (fresh.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
-        actLabel: 'Ver leads →',
-        act: () => navGo('crm'), // navGo inicializa el modulo; showView solo cambia de vista
+        actLabel: 'Ver cuáles →',
+        act: () => pulsoAbrirLista(
+          fresh.length + (fresh.length === 1 ? ' lead nuevo hoy' : ' leads nuevos hoy'),
+          'Los más recientes primero. Contáctalos mientras están calientes.',
+          fresh, 'nuevos'),
       });
     }
     return cards;
   } catch { return []; }
+}
+
+// ── Lista de leads detrás de un aviso del Pulso ─────────────────────────────
+// Un aviso que dice "5 leads sin actividad" y manda al tablero no sirve de
+// nada: hay que adivinar cuáles son. Y no basta con filtrar el CRM, porque el
+// Pulso cuenta todo el cliente y el tablero muestra un pipeline a la vez.
+let _pulsoLista = [];
+
+function pulsoDias(lead) {
+  return Math.floor((Date.now() - new Date(lead.updated_at || lead.created_at).getTime()) / 864e5);
+}
+
+function pulsoEtapaLabel(lead) {
+  const e = (crmStages || []).find(s => s.key === lead.stage);
+  return e ? e.label : (lead.stage || '—');
+}
+
+function pulsoProcesoLabel(lead) {
+  if (!lead.pipeline_id) return null;
+  const p = (crmPipelines || []).find(x => x.id === lead.pipeline_id);
+  // Solo se nombra el proceso cuando NO es el que se está viendo: repetir
+  // "Arriendo" en las diez filas del que ya tienes abierto es ruido.
+  return (p && p.id !== crmPipelineId) ? p.name : null;
+}
+
+function pulsoAbrirLista(titulo, subtitulo, leads, orden) {
+  _pulsoLista = (leads || []).slice();
+  if (orden === 'antiguos') _pulsoLista.sort((a, b) => pulsoDias(b) - pulsoDias(a));
+  else _pulsoLista.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  document.getElementById('pul-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'pul-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:620px;height:min(80vh,620px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">' + esc(titulo) + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + esc(subtitulo) + '</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" id="pul-filas"></div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  pulsoRenderLista();
+}
+
+function pulsoRenderLista() {
+  const caja = document.getElementById('pul-filas');
+  if (!caja) return;
+  if (!_pulsoLista.length) {
+    caja.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Ya no queda ninguno. Buen trabajo.</div>';
+    return;
+  }
+  caja.innerHTML = _pulsoLista.map(l => {
+    const dias = pulsoDias(l);
+    const tel = String(l.phone || '').replace(/\D/g, '');
+    const proceso = pulsoProcesoLabel(l);
+    // El color habla del abandono, no del lead: a más días, más urgente.
+    const col = dias >= 14 ? 'var(--danger)' : dias >= 7 ? '#B45309' : 'var(--muted)';
+    return '<div class="pul-fila">' +
+      '<div style="flex:1;min-width:0;cursor:pointer" onclick="pulsoIrALead(\'' + esc(l.id) + '\')">' +
+        '<div class="pul-nombre">' + esc(l.name || 'Sin nombre') + '</div>' +
+        '<div class="pul-meta">' + esc(pulsoEtapaLabel(l)) +
+          (proceso ? ' · ' + esc(proceso) : '') +
+          (l.company ? ' · ' + esc(l.company) : '') +
+          (l.assigned_name ? ' · ' + esc(l.assigned_name) : ' · sin responsable') +
+        '</div>' +
+      '</div>' +
+      '<span class="pul-dias" style="color:' + col + '">' + dias + 'd</span>' +
+      (tel ? '<button class="pul-accion" title="WhatsApp" onclick="window.open(\'https://wa.me/' + tel + '\',\'_blank\')">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>' +
+      '</button>' : '') +
+      '<button class="pul-accion" title="Abrir la ficha" onclick="pulsoIrALead(\'' + esc(l.id) + '\')">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>' +
+      '</button>' +
+    '</div>';
+  }).join('');
+}
+
+// Se pasa el lead entero, no solo el id: puede pertenecer a otro proceso de
+// venta y no estar entre los que el tablero tiene cargados.
+function pulsoIrALead(id) {
+  const lead = _pulsoLista.find(l => l.id === id);
+  document.getElementById('pul-overlay')?.remove();
+  if (typeof navGo === 'function') navGo('crm');
+  setTimeout(() => crmOpenDetail(id, lead), 60);
 }
 
 function pulsoStudioCards() {

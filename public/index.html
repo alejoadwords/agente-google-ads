@@ -2135,6 +2135,15 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .tk-asunto{font-size:14px;font-weight:800;letter-spacing:-.01em}
 .tk-pre{font-size:10.5px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px;white-space:pre-wrap}
 
+/* ── Lista de leads del Pulso ── */
+.pul-fila{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--bg);transition:border-color var(--dur-fast) var(--ease)}
+.pul-fila:hover{border-color:var(--blue-md)}
+.pul-nombre{font-size:13.5px;font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pul-meta{font-size:11.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pul-dias{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;flex-shrink:0;min-width:34px;text-align:right}
+.pul-accion{display:flex;align-items:center;justify-content:center;width:30px;height:30px;flex-shrink:0;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;transition:all var(--dur-fast) var(--ease)}
+.pul-accion:hover{color:var(--blue);border-color:var(--blue)}
+
 /* ── Soporte flotante ── */
 #sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease)}
 #sop-burbuja:hover{transform:translateY(-2px)}
