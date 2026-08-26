@@ -18079,10 +18079,12 @@ function crmRenderKanban() {
       (stageValue > 0 ? '<div class="crm-col-value">$' + stageValue.toLocaleString('es-CO') + '</div>' : '') +
       '<div class="crm-col-count">' + leads.length + '</div>' +
       '</div></div>' +
-      '<div class="crm-col-body" id="crm-col-' + esc(c.key) + '" data-stage="' + esc(c.key) + '">' +
+      // El boton Agregar va FUERA del cuerpo: el cuerpo se recorta a 3 fichas y
+      // scrollea, y ahi dentro el boton quedaria escondido al fondo de la lista.
+      '<div class="crm-col-body' + (c.agregar ? ' con-pie' : '') + '" id="crm-col-' + esc(c.key) + '" data-stage="' + esc(c.key) + '">' +
       (leads.length === 0 ? '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:20px 0">Sin leads</div>' : leads.map(l => crmCardHTML(l, now)).join('')) +
-      (c.agregar ? '<button class="crm-add-card" onclick="crmOpenModal(\'' + esc(c.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button>' : '') +
-      '</div>';
+      '</div>' +
+      (c.agregar ? '<div class="crm-col-foot"><button class="crm-add-card" onclick="crmOpenModal(\'' + esc(c.key) + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Agregar</button></div>' : '');
     container.appendChild(col);
     if (c.soltar) crmSetupDrop(col.querySelector('.crm-col-body'), c.key);
   });
@@ -18101,7 +18103,39 @@ function crmRenderKanban() {
     card.addEventListener('click', () => crmOpenDetail(card.dataset.id));
   });
   crmUpdateLeadsStats();
+  crmTopeColumnas();
 }
+
+// Cada columna muestra como mucho 3 fichas COMPLETAS y el resto se alcanza con
+// su propio scroll. El tope se mide sobre las fichas de verdad, no con una
+// altura fija: una ficha con telefono y botones mide casi el doble que una sin
+// nada, y un numero a ojo cortaria la tercera por la mitad.
+const CRM_FICHAS_VISIBLES = 3;
+
+function crmTopeColumnas() {
+  document.querySelectorAll('#crm-kanban .crm-col-body').forEach(body => {
+    body.style.maxHeight = '';
+    body.classList.remove('tiene-mas');
+    const fichas = body.querySelectorAll('.crm-card');
+    if (fichas.length <= CRM_FICHAS_VISIBLES) return;
+    const est = getComputedStyle(body);
+    const hueco = parseFloat(est.rowGap || est.gap) || 8;
+    let alto = parseFloat(est.paddingTop) + parseFloat(est.paddingBottom);
+    for (let i = 0; i < CRM_FICHAS_VISIBLES; i++) {
+      alto += fichas[i].getBoundingClientRect().height + (i ? hueco : 0);
+    }
+    body.style.maxHeight = Math.ceil(alto) + 'px';
+    body.classList.add('tiene-mas');
+  });
+}
+
+// Al cambiar el ancho las fichas se reajustan (un nombre pasa a dos lineas) y el
+// tope calculado se queda corto o largo.
+let crmTopeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(crmTopeTimer);
+  crmTopeTimer = setTimeout(crmTopeColumnas, 150);
+});
 
 function crmCardHTML(lead, now) {
   const ts = now || Date.now();

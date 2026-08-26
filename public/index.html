@@ -1838,8 +1838,17 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-col-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:8px;min-height:80px;background:var(--bg);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px}
 .crm-col-body::-webkit-scrollbar{width:3px}
 .crm-col-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+/* Con muchos leads la columna se recorta a 3 fichas: la barra tiene que verse
+   o parece que ahi no hay nada mas. */
+.crm-col-body.tiene-mas::-webkit-scrollbar{width:6px}
+.crm-col-body.tiene-mas::-webkit-scrollbar-thumb{background:var(--muted2);border-radius:3px}
+/* El pie con "Agregar" cierra la columna, asi que el cuerpo pierde su curva. */
+.crm-col-body.con-pie{border-radius:0}
+.crm-col-foot{flex-shrink:0;padding:8px;background:var(--bg);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px}
 .crm-col-body.drag-over{background:var(--blue-lt);border-color:var(--blue)}
-.crm-card{background:var(--bg);border:1px solid var(--border);border-left-width:3px;border-radius:8px;cursor:pointer;transition:box-shadow .15s,transform .15s,border-color .15s;position:relative;overflow:hidden}
+/* flex-shrink:0 no es opcional: sin el, con 18 leads en una columna las fichas
+   se aplastan hasta cortar los nombres en vez de dejar que la columna scrollee. */
+.crm-card{background:var(--bg);border:1px solid var(--border);border-left-width:3px;border-radius:8px;cursor:pointer;transition:box-shadow .15s,transform .15s,border-color .15s;position:relative;overflow:hidden;flex-shrink:0}
 .crm-card:hover{box-shadow:0 4px 18px rgba(0,0,0,.1);transform:translateY(-1px);border-color:rgba(0,0,0,.12)}
 .crm-card.dragging{opacity:.5;transform:rotate(1.5deg)}
 .crm-card-inner{padding:11px 12px 9px}
