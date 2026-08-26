@@ -19157,6 +19157,7 @@ function crmEditCurrentLead() {
   document.getElementById('crm-f-stage').value = lead.stage;
   document.getElementById('crm-save-btn').disabled = false;
   document.getElementById('crm-save-btn').textContent = 'Guardar';
+  fuenteAjustarPermiso();   // el formulario es el mismo que el de alta: hay que reajustarlo
   document.getElementById('crm-modal').classList.add('open');
 }
 
@@ -21943,6 +21944,7 @@ function crmCreateLeadFromConversation(conv) {
   crmLlenarResponsable('');
   document.getElementById('crm-f-stage').value = 'nuevo';
   document.getElementById('crm-save-btn').disabled = false;
+  fuenteAjustarPermiso();
   document.getElementById('crm-modal').classList.add('open');
 }
 
