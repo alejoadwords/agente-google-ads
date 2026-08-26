@@ -106,12 +106,58 @@ export default async function handler(req) {
     return jsonResp({ tag: rows[0] }, 201);
   }
 
+  // DELETE ?id= — quita la etiqueta del catálogo y de los leads que la llevan.
+  //
+  // Las etiquetas viven en DOS sitios: este catálogo y el array `tags` de cada
+  // lead. Borrar solo aquí dejaba la etiqueta pegada a los leads y el filtro la
+  // seguía mostrando —porque une catálogo y etiquetas en uso—, así que el
+  // usuario veía que "no se borró".
+  //
+  // El barrido va por tandas y devuelve cuántos leads quedan: una cuenta con
+  // miles de leads etiquetados no cabe en una sola invocación edge. Quien llama
+  // repite mientras `restantes` sea mayor que cero.
   if (req.method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/lead_tags?id=eq.${id}&user_id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE', headers: sbHeaders() });
+
+    const fila = await fetch(
+      `${SUPABASE_URL}/rest/v1/lead_tags?id=eq.${id}&user_id=eq.${encodeURIComponent(userId)}&select=name&limit=1`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const nombre = fila?.[0]?.name;
+    if (!nombre) return jsonResp({ error: 'Etiqueta no encontrada' }, 404);
+
+    const TANDA = 200;
+    const conLaEtiqueta = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}` +
+      `&tags=cs.{${encodeURIComponent(nombre)}}&select=id,tags&limit=${TANDA}`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+    let limpiados = 0;
+    for (const lead of conLaEtiqueta || []) {
+      const restantes = (lead.tags || []).filter(t => t !== nombre);
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}`, {
+        method: 'PATCH',
+        headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+        body: JSON.stringify({ tags: restantes }),
+      });
+      if (r.ok) limpiados++;
+    }
+
+    // ¿Quedan más? Si la tanda vino llena, es muy probable que sí.
+    const quedan = (conLaEtiqueta || []).length === TANDA;
+    if (quedan) return jsonResp({ ok: false, limpiados, restantes: true });
+
+    // Solo cuando no queda ninguno se retira del catálogo: si se borrara antes y
+    // el barrido fallara a medias, la etiqueta quedaría huérfana en los leads
+    // sin forma de volver a intentarlo desde la interfaz.
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/lead_tags?id=eq.${id}&user_id=eq.${encodeURIComponent(userId)}`,
+      { method: 'DELETE', headers: sbHeaders() }
+    );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
-    return jsonResp({ ok: true });
+    return jsonResp({ ok: true, limpiados, restantes: false });
   }
 
   return jsonResp({ error: 'Método no permitido' }, 405);

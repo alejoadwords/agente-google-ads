@@ -17665,6 +17665,78 @@ async function crmEnsureTag(name) {
   return n;
 }
 
+// ── Gestor de etiquetas ───────────────────────────────────────────────────────
+// Se podían crear pero no quitar, así que una etiqueta mal escrita o de una
+// campaña vieja se quedaba para siempre en el filtro y en el selector.
+async function etAbrirGestor() {
+  document.getElementById('et-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'et-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px;height:min(86vh,560px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Etiquetas</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Las que usas para filtrar, segmentar campañas y disparar automatizaciones.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" id="et-cuerpo"><div style="color:var(--muted);font-size:13px">Cargando…</div></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  await crmLoadTags();
+  etRender();
+}
+
+function etRender() {
+  const box = document.getElementById('et-cuerpo');
+  if (!box) return;
+  // Cuántos leads lleva cada una: sin ese número, borrar es a ciegas.
+  const uso = {};
+  (crmLeads || []).forEach(l => (l.tags || []).forEach(t => { uso[t] = (uso[t] || 0) + 1; }));
+
+  if (!crmTags.length) {
+    box.innerHTML = '<div style="color:var(--muted2);font-size:13px">Todavía no hay etiquetas. Se crean solas al etiquetar un lead.</div>';
+    return;
+  }
+  box.innerHTML = crmTags.slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => {
+    const c = tagColor(t.name);
+    const n = uso[t.name] || 0;
+    return '<div class="mot-fila">' +
+      '<span class="tag-chip" style="background:' + c + '1A;color:' + c + '">' + esc(t.name) + '</span>' +
+      '<span style="flex:1;font-size:11.5px;color:var(--muted2)">' +
+        (n ? n + (n === 1 ? ' lead' : ' leads') : 'sin usar') + '</span>' +
+      '<button class="mot-borrar" title="Quitar etiqueta" onclick="etBorrar(\'' + esc(t.id) + '\',\'' + esc(t.name) + '\',' + n + ')">' + ICONO_PAPELERA + '</button>' +
+    '</div>';
+  }).join('') +
+  '<div style="margin-top:16px;padding-top:13px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--muted);line-height:1.55">' +
+    'Al quitar una etiqueta se le retira también a los leads que la llevan. Las automatizaciones que la usaran dejarán de dispararse.</div>';
+}
+
+async function etBorrar(id, nombre, enUso) {
+  const aviso = enUso
+    ? '¿Quitar «' + nombre + '»?\n\nSe le retirará a ' + enUso + (enUso === 1 ? ' lead' : ' leads') + ' que la llevan.'
+    : '¿Quitar «' + nombre + '»?';
+  if (!confirm(aviso)) return;
+  try {
+    // El servidor limpia por tandas; se repite hasta que no queden leads con ella
+    let vueltas = 0;
+    while (vueltas++ < 40) {
+      const r = await fetchAuth('/api/lead-tags?id=' + encodeURIComponent(id), { method: 'DELETE' });
+      const d = await leerRespuesta(r);
+      if (!r.ok && !d.restantes) throw new Error(d.error || 'fallo');
+      if (!d.restantes) break;
+    }
+    await crmLoadTags();
+    etRender();
+    crmRender();
+    showToast('Etiqueta «' + nombre + '» eliminada', 'success');
+  } catch (e) {
+    showToast('No se pudo quitar la etiqueta', 'error');
+  }
+}
+
 // Filtro por etiquetas: pills clicables junto a los quick filters (AND)
 function crmRenderTagFilter() {
   const wrap = document.getElementById('crm-tag-filter');
@@ -18963,6 +19035,18 @@ async function crmChangeStage(newStage) {
   } catch(e) { console.error('crmChangeStage', e); }
 }
 
+// Una llamada o una nota registrada por error se quedaba en la línea de tiempo
+// para siempre, y esa línea es lo que el comercial usa para saber qué pasó.
+async function actBorrar(id, leadId) {
+  if (!confirm('¿Eliminar esta actividad del historial del lead?')) return;
+  try {
+    const r = await fetchAuth('/api/lead-activities?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw new Error();
+    await crmLoadActivities(leadId);
+    showToast('Actividad eliminada', 'success');
+  } catch (e) { showToast('No se pudo eliminar la actividad', 'error'); }
+}
+
 async function crmLoadActivities(leadId) {
   const list = document.getElementById('crm-activity-list');
   if (!list) return;
@@ -18979,7 +19063,13 @@ async function crmLoadActivities(leadId) {
     const typeColors = { nota: 'var(--blue)', llamada: '#10B981', email: '#6366F1', reunion: '#F59E0B', tarea: '#EF4444', stage_change: '#10B981', creacion: 'var(--muted2)' };
     list.innerHTML = acts.map(a => {
       const dueDate = a.metadata && a.metadata.due_date ? '<div style="font-size:10px;color:#D97706;margin-top:2px">Fecha límite: ' + new Date(a.metadata.due_date).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div>' : '';
-      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (typeColors[a.type] || 'var(--blue)') + '"></div><div class="crm-activity-content"><div class="crm-activity-text"><strong>' + esc(typeLabels[a.type] || a.type) + ':</strong> ' + esc(a.content || '') + '</div>' + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div></div>';
+      // Las de la propia plataforma (creación, cambio de etapa) no se borran:
+      // son el rastro de lo que pasó, no algo que alguien anotó a mano.
+      const borrable = ['nota', 'llamada', 'email', 'reunion', 'tarea'].includes(a.type);
+      const papelera = borrable
+        ? '<button class="mot-borrar act-borrar" title="Eliminar" onclick="actBorrar(\'' + esc(a.id) + '\',\'' + esc(leadId) + '\')">' + ICONO_PAPELERA + '</button>'
+        : '';
+      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (typeColors[a.type] || 'var(--blue)') + '"></div><div class="crm-activity-content"><div class="crm-activity-text"><strong>' + esc(typeLabels[a.type] || a.type) + ':</strong> ' + esc(a.content || '') + '</div>' + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>' + papelera + '</div>';
     }).join('');
   } catch(e) { console.error('crmLoadActivities', e); }
 }
@@ -19084,6 +19174,23 @@ async function crmLoadAgents() {
   } catch(e) { console.error('crmLoadAgents', e); return false; }
 }
 
+// Se podían crear y editar, pero no eliminar: los de prueba se quedaban en la
+// lista y, peor, en el selector de «quién atiende» de cada canal.
+async function agBorrar(id, nombre, canalesActivos) {
+  const aviso = canalesActivos
+    ? '«' + nombre + '» atiende ' + canalesActivos + (canalesActivos === 1 ? ' canal' : ' canales') +
+      '.\n\nSi lo eliminas, esos canales pasan a atenderse a mano desde el inbox. Las conversaciones no se pierden.\n\n¿Eliminarlo?'
+    : '¿Eliminar el chatbot «' + nombre + '»?\n\nLas conversaciones que atendió no se pierden.';
+  if (!confirm(aviso)) return;
+  try {
+    const r = await fetchAuth('/api/chat-agents?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw new Error();
+    await crmLoadAgents();
+    crmRenderAgents();
+    showToast('Chatbot eliminado', 'success');
+  } catch (e) { showToast('No se pudo eliminar el chatbot', 'error'); }
+}
+
 function crmRenderAgents() {
   const list = document.getElementById('crm-agents-list');
   if (!list) return;
@@ -19105,6 +19212,8 @@ function crmRenderAgents() {
         </div>
       </div>
       <div class="crm-agent-status ${ag.is_active ? 'active' : 'inactive'}"></div>
+      <button class="mot-borrar" title="Eliminar chatbot"
+        onclick="event.stopPropagation();agBorrar('${esc(ag.id)}','${esc(ag.name)}',${activeConns.length})">${ICONO_PAPELERA}</button>
     </div>`;
   }).join('');
 }
@@ -27168,6 +27277,10 @@ const NAV_MOD_ACTIONS = {
   // varios convivia con el engranaje de la barra, que abre el gestor completo.
   // Dos puertas a lo mismo y ninguna clara: se deja una, la que hace mas.
   crm: [{
+    label: 'Etiquetas',
+    fn: 'etAbrirGestor()',
+    icon: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  }, {
     label: 'Motivos de cierre',
     fn: 'motAbrirGestor()',
     icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',

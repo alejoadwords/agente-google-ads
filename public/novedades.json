@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-24-borrar-cosas",
+      "fecha": "2026-08-24",
+      "tipo": "mejora",
+      "titulo": "Ya puedes borrar etiquetas, chatbots y actividades",
+      "texto": "Tres cosas que solo se podían crear: las etiquetas (en CRM → Etiquetas, y al quitarlas se les retiran también a los leads que las llevan), los chatbots que ya no usas, y una llamada o nota registrada por error en la ficha del lead.",
+      "accion": {
+        "texto": "Ir al CRM",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-08-24-motivos-cierre",
       "fecha": "2026-08-24",
       "tipo": "mejora",
