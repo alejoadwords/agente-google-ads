@@ -6,7 +6,7 @@
       "fecha": "2026-08-26",
       "tipo": "mejora",
       "titulo": "Las listas de la cuenta las cambia solo quien manda",
-      "texto": "Las fuentes de leads y los motivos de cierre los sigue viendo todo el equipo al crear o cerrar una oportunidad, pero editarlos queda reservado al dueño de la cuenta y a los miembros con rol de administrador. Así nadie cambia por su cuenta unas listas de las que dependen los informes de todos.",
+      "texto": "Las fuentes de leads, los motivos de cierre y las etiquetas los sigue viendo y usando todo el equipo, pero cambiar las listas queda reservado al dueño de la cuenta y a los miembros con rol de administrador. Un comercial pone las etiquetas que existen; crear, renombrar o borrar es cosa de quien manda, porque de esas listas dependen los filtros, las campañas y los informes de todos.",
       "accion": {
         "texto": "Ir al CRM",
         "ir": "crm"

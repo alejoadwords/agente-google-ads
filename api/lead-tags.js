@@ -70,11 +70,19 @@ export default async function handler(req) {
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
+  let esMiembro = false, rolMiembro = null;
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`, { headers: sbHeaders() });
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; esMiembro = true; rolMiembro = _tw.role || null; }
   } catch {}
+
+  // El catálogo es de la cuenta entera: lo ve todo el equipo —lo necesita para
+  // filtrar y etiquetar— pero solo lo cambia quien manda. Renombrar o borrar
+  // una etiqueta afecta a los leads y a los informes de todos los demás.
+  if (esMiembro && rolMiembro !== 'admin' && req.method !== 'GET') {
+    return jsonResp({ error: 'Solo el administrador de la cuenta puede cambiar las etiquetas.' }, 403);
+  }
 
 
   const url = new URL(req.url);

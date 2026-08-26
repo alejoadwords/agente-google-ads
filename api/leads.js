@@ -99,15 +99,25 @@ function tagColorFor(name) {
 
 // Normaliza las etiquetas del lead, agrega la auto-etiqueta de fuente (si
 // aplica) y garantiza que todas existan en el catálogo lead_tags con color.
-async function prepareTags(userId, clientId, tags, source) {
+//
+// `puedeCrear` en false —un miembro que no es administrador— significa que
+// puede PONER etiquetas del catálogo pero no inventarlas: el catálogo lo
+// gobierna quien manda en la cuenta. Las que no existan se devuelven en
+// `ignoradas` para que la interfaz lo diga; descartarlas en silencio dejaría
+// al comercial creyendo que etiquetó.
+//
+// La auto-etiqueta de fuente se salva siempre de esa regla: no la escribe
+// nadie, la pone el sistema, y bloquearla rompería la trazabilidad del origen.
+async function prepareTags(userId, clientId, tags, source, puedeCrear = true) {
   const set = new Set((Array.isArray(tags) ? tags : []).map(normalizeTag).filter(t => t.length >= 2));
   let autoTag = null;
   if (source) {
     autoTag = normalizeTag(String(source).replace(/_/g, ' '));
     if (autoTag.length >= 2) set.add(autoTag);
   }
-  const list = [...set].slice(0, 15);
-  if (!list.length) return [];
+  let list = [...set].slice(0, 15);
+  const ignoradas = [];
+  if (!list.length) return { list: [], ignoradas };
   // Asegurar catálogo (fire-and-forget por etiqueta faltante)
   try {
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
@@ -116,7 +126,16 @@ async function prepareTags(userId, clientId, tags, source) {
       { headers: sbHeaders() }
     );
     const existing = new Set(((await exRes.json()) || []).map(t => t.name));
-    const missing = list.filter(t => !existing.has(t));
+    let missing = list.filter(t => !existing.has(t));
+    if (!puedeCrear) {
+      const vetadas = missing.filter(t => t !== autoTag);
+      if (vetadas.length) {
+        ignoradas.push(...vetadas);
+        const fuera = new Set(vetadas);
+        list = list.filter(t => !fuera.has(t));
+        missing = missing.filter(t => !fuera.has(t));
+      }
+    }
     if (missing.length) {
       await fetch(`${SUPABASE_URL}/rest/v1/lead_tags`, {
         method: 'POST',
@@ -128,7 +147,7 @@ async function prepareTags(userId, clientId, tags, source) {
       });
     }
   } catch {} // el catálogo es best-effort — las etiquetas del lead no se bloquean
-  return list;
+  return { list, ignoradas };
 }
 
 // Encola las automatizaciones que coincidan con el trigger (lead_created /
@@ -221,20 +240,24 @@ export default async function handler(req) {
   // forma de saber que leads puede gestionar quien pregunta.
   const actorId = userId;
   let actorNombre = null;
+  let rolMiembro = null;
   // Si esta consulta falla NO se puede seguir: sin ella un miembro operaria
   // sobre su propia cuenta en vez de la del dueño, y devolveriamos datos de
   // otra cuenta como si fueran los suyos. Mejor un error que el tablero de
   // otro. (Un array vacio si es valido: significa que no es miembro.)
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role&limit=1`, { headers: sbHeaders() });
     if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; actorNombre = _tw.member_name || _tw.member_email || null; }
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; actorNombre = _tw.member_name || _tw.member_email || null; rolMiembro = _tw.role || null; }
   } catch (e) {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
   // Miembro del equipo: ve todo, pero solo gestiona lo suyo.
   const esMiembro = actorId !== userId;
+  // El catálogo de etiquetas es de la cuenta: ponerlas es de todos, inventarlas
+  // no. Ver prepareTags().
+  const puedeCrearEtiquetas = !esMiembro || rolMiembro === 'admin';
 
 
   const url = new URL(req.url);
@@ -497,7 +520,13 @@ export default async function handler(req) {
       if (email) seenInBatch.add(email);
       if (tel) seenInBatch.add('t:' + tel);
       const rowTags = [...importTags, ...(Array.isArray(r.tags) ? r.tags : String(r.tags || '').split(','))];
-      const cleanTags = await prepareTags(userId, clientId, rowTags, null);
+      const _prepImp = await prepareTags(userId, clientId, rowTags, null, puedeCrearEtiquetas);
+      const cleanTags = _prepImp.list;
+      // Importar con etiquetas nuevas sin poder crearlas: se acumulan para
+      // decirlo al final, no se pierden en silencio fila por fila.
+      if (_prepImp.ignoradas.length) {
+        result.tags_ignoradas = [...new Set([...(result.tags_ignoradas || []), ..._prepImp.ignoradas])];
+      }
 
       const existing = (email ? existingByEmail[email] : null) || (tel ? existingByPhone[tel] : null);
       if (existing) {
@@ -550,7 +579,9 @@ export default async function handler(req) {
     if (!name) return jsonResp({ error: 'El nombre es requerido' }, 400);
 
     // Etiquetas: normalizar + auto-tag por fuente + asegurar catálogo
-    const leadTags = await prepareTags(userId, clientId, tags, source || 'manual');
+    const _tagsPrep = await prepareTags(userId, clientId, tags, source || 'manual', puedeCrearEtiquetas);
+    const leadTags = _tagsPrep.list;
+    const tagsIgnoradas = _tagsPrep.ignoradas;
 
     // Plan-based lead limit check
     let userPlan = 'free';
@@ -670,7 +701,7 @@ export default async function handler(req) {
       await enqueueAutomations(userId, rows[0], 'lead_created');
       if (leadTags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadTags);
     }
-    return jsonResp({ lead: rows[0] }, 201);
+    return jsonResp({ lead: rows[0], tags_ignoradas: tagsIgnoradas }, 201);
   }
 
   // PUT — update lead (including stage move)
@@ -704,8 +735,11 @@ export default async function handler(req) {
       if (fields[k] !== undefined) update[k] = fields[k];
     }
     // Etiquetas editadas: normalizar y asegurar catálogo (sin auto-tag de fuente)
+    let tagsIgnoradas = [];
     if (update.tags !== undefined) {
-      update.tags = await prepareTags(userId, clientId, update.tags, null);
+      const _prep = await prepareTags(userId, clientId, update.tags, null, puedeCrearEtiquetas);
+      update.tags = _prep.list;
+      tagsIgnoradas = _prep.ignoradas;
     }
     update.updated_at = new Date().toISOString();
 
@@ -736,7 +770,7 @@ export default async function handler(req) {
       const added = (update.tags || []).filter(t => !prevTags.includes(t));
       if (added.length) await enqueueAutomations(userId, rows[0], 'tag_added', added);
     }
-    return jsonResp({ lead: rows[0] });
+    return jsonResp({ lead: rows[0], tags_ignoradas: tagsIgnoradas });
   }
 
   // DELETE — soft delete

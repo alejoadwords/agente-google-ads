@@ -17662,10 +17662,14 @@ async function crmLoadTags() {
   return false;
 }
 
+// Devuelve la etiqueta normalizada, o null si quien la escribe no puede crear
+// etiquetas nuevas: un comercial pone las del catálogo, no inventa. El aviso lo
+// da quien llama, que es quien sabe en qué pantalla estamos.
 async function crmEnsureTag(name) {
   const n = normalizeTag(name);
   if (n.length < 2) return null;
   if (crmTags.find(t => t.name === n)) return n;
+  if (!(await puedeEditarCatalogos())) return null;
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
@@ -17676,10 +17680,27 @@ async function crmEnsureTag(name) {
   return n;
 }
 
+// El servidor descarta las etiquetas que un comercial intenta inventar. Se
+// guarda igual lo demás —perder el lead entero por una etiqueta sería absurdo—
+// pero se dice, para que nadie crea que etiquetó algo que no quedó puesto.
+function crmAvisarTagsIgnoradas(lista) {
+  if (!Array.isArray(lista) || !lista.length) return;
+  showToast(
+    (lista.length === 1 ? 'La etiqueta «' + lista[0] + '» no se guardó: no está' : 'Estas etiquetas no se guardaron porque no están')
+    + ' en el catálogo de la cuenta y solo un administrador puede crearlas'
+    + (lista.length > 1 ? ': ' + lista.join(', ') : ''),
+    'error'
+  );
+}
+
 // ── Gestor de etiquetas ───────────────────────────────────────────────────────
 // Se podían crear pero no quitar, así que una etiqueta mal escrita o de una
 // campaña vieja se quedaba para siempre en el filtro y en el selector.
 async function etAbrirGestor() {
+  if (!(await puedeEditarCatalogos())) {
+    showToast('Solo el administrador de la cuenta puede cambiar las etiquetas', 'error');
+    return;
+  }
   document.getElementById('et-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'et-overlay';
@@ -18806,6 +18827,7 @@ async function crmSaveLead() {
       const idx = crmLeads.findIndex(l => l.id === crmEditingId);
       if (idx >= 0) crmLeads[idx] = data.lead;
       leadGuardado = data.lead;
+      crmAvisarTagsIgnoradas(data.tags_ignoradas);
     } else {
       const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
       const res = await fetchAuth(`/api/leads${qs}`, {
@@ -18835,6 +18857,7 @@ async function crmSaveLead() {
       const data = await res.json();
       crmLeads.unshift(data.lead);
       leadGuardado = data.lead;
+      crmAvisarTagsIgnoradas(data.tags_ignoradas);
       track('crm_lead_created', { source: data.lead.source || 'manual' });
       // log creation activity
       await fetchAuth('/api/lead-activities', {
@@ -18967,7 +18990,10 @@ async function crmDetailAddTag(name) {
   const tags = crmDetailLead.tags || [];
   if (tags.includes(n)) return;
   if (tags.length >= 15) { showToast('Máximo 15 etiquetas por lead', 'error'); return; }
-  await crmEnsureTag(n);
+  if (!(await crmEnsureTag(n))) {
+    showToast('«' + n + '» no está en las etiquetas de la cuenta y solo un administrador puede crearla', 'error');
+    return;
+  }
   crmDetailSaveTags([...tags, n]);
 }
 
@@ -27256,7 +27282,7 @@ async function impRun() {
   const leads = impBuildLeads();
   _impStep = 4; impRender();
 
-  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, email_invalido: 0, limit_reached: false };
+  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, email_invalido: 0, limit_reached: false, tags_ignoradas: [] };
   const BATCH = 250;
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
   const qs = '?action=import' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
@@ -27271,6 +27297,7 @@ async function impRun() {
         totals.skipped += d.result.skipped; totals.invalid += d.result.invalid;
         totals.email_invalido += (d.result.email_invalido || 0);
         if (d.result.limit_reached) totals.limit_reached = true;
+        if (d.result.tags_ignoradas) totals.tags_ignoradas = [...new Set([...totals.tags_ignoradas, ...d.result.tags_ignoradas])];
       } else if (d.error) { showToast('⚠️ ' + d.error, 'error'); break; }
     } catch (e) { showToast('Error importando el lote ' + (Math.floor(i / BATCH) + 1), 'error'); break; }
     const pct = Math.min(100, Math.round(((i + BATCH) / leads.length) * 100));
@@ -27297,6 +27324,7 @@ async function impRun() {
           (totals.invalid ? '<span style="background:#FEF3C7;color:#B45309;padding:5px 12px;border-radius:20px;font-weight:700">' + totals.invalid + ' inválidos</span>' : '') +
         '</div>' +
         (totals.email_invalido ? '<div style="font-size:12px;color:var(--muted);margin-top:10px">' + totals.email_invalido + ' contactos traían el correo mal escrito: se guardaron igual, sin correo.</div>' : '') +
+        (totals.tags_ignoradas.length ? '<div style="font-size:12px;color:#B45309;margin-top:10px">No se pusieron estas etiquetas porque no están en el catálogo de la cuenta y solo un administrador puede crearlas: ' + esc(totals.tags_ignoradas.join(', ')) + '</div>' : '') +
         (totals.limit_reached ? '<div style="font-size:12px;color:#B45309;margin-top:12px">Alcanzaste el límite de leads de tu plan — los restantes no se importaron.</div>' : '') +
         (tags.length && totals.created + totals.updated > 0 ? '<div style="font-size:12px;color:var(--muted);margin-top:12px">Todos quedaron con la etiqueta <b>' + esc(tags.join(', ')) + '</b> — ya puedes crear una campaña dirigida a ella.</div>' : '') +
         '<div style="margin-top:18px"><button class="btn-pri" onclick="document.getElementById(\'imp-overlay\').remove();crmLoadLeads().then(()=>{crmRender();crmLoadTags()})">Ver mis leads</button></div>' +
@@ -27363,6 +27391,7 @@ const NAV_MOD_ACTIONS = {
   crm: [{
     label: 'Etiquetas',
     fn: 'etAbrirGestor()',
+    soloAdmin: true,
     icon: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   }, {
     label: 'Motivos de cierre',
