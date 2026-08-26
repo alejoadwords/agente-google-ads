@@ -1,7 +1,7 @@
 export const config = { runtime: 'edge' };
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -58,16 +58,85 @@ export default async function handler(req) {
   // firmar la actividad con su nombre.
   const actorId = userId;
   let actorNombre = null;
+  // Quien no es miembro de ningún equipo ES el dueño, y el dueño manda siempre.
+  let actorMandaEnLaCuenta = true;
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email&limit=1`, { headers: sbHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role&limit=1`, { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tw = (await r.json())?.[0];
-    if (tw && tw.owner_user_id) { userId = tw.owner_user_id; actorNombre = tw.member_name || tw.member_email || null; }
+    if (tw && tw.owner_user_id) {
+      userId = tw.owner_user_id;
+      actorNombre = tw.member_name || tw.member_email || null;
+      actorMandaEnLaCuenta = tw.role === 'admin';
+    }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
 
   const url = new URL(req.url);
+
+  // GET ?avisos=1 — las notas que la dirección me dejó y todavía no he visto.
+  // Se filtra por metadata y no por una tabla aparte a propósito: la nota YA es
+  // una actividad del lead, y duplicarla en otro sitio abre la puerta a que las
+  // dos versiones dejen de contar lo mismo.
+  if (req.method === 'GET' && url.searchParams.get('avisos') === '1') {
+    const q = `${SUPABASE_URL}/rest/v1/lead_activities`
+      + `?user_id=eq.${encodeURIComponent(userId)}&type=eq.nota`
+      + `&metadata->>para=eq.${encodeURIComponent(actorId)}`
+      + `&metadata->>leida_at=is.null`
+      + `&select=id,lead_id,content,created_at,metadata&order=created_at.desc&limit=50`;
+    const r = await fetch(q, { headers: sbHeaders() });
+    if (!r.ok) return jsonResp({ error: await r.text() }, 500);
+    const avisos = (await r.json()) || [];
+
+    // El nombre del lead va aparte: sin él el aviso dice «tienes una nota» y no
+    // sobre quién, que es justo lo que hace falta para decidir si abrirla.
+    const ids = [...new Set(avisos.map(a => a.lead_id).filter(Boolean))];
+    let nombres = {};
+    if (ids.length) {
+      const rl = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,company`,
+        { headers: sbHeaders() }
+      );
+      if (rl.ok) (await rl.json() || []).forEach(l => { nombres[l.id] = l; });
+    }
+    return jsonResp({
+      avisos: avisos.map(a => ({
+        id: a.id,
+        lead_id: a.lead_id,
+        lead: nombres[a.lead_id]?.name || null,
+        empresa: nombres[a.lead_id]?.company || null,
+        texto: a.content,
+        autor: a.metadata?.actor || null,
+        created_at: a.created_at,
+      })),
+    });
+  }
+
+  // PATCH ?avisos=1 — marcar como vistas. PostgREST no sabe fusionar un JSON, así
+  // que hay que leer cada metadata y volver a escribirla entera: escribir solo
+  // {leida_at} borraría el actor y el destinatario.
+  if (req.method === 'PATCH' && url.searchParams.get('avisos') === '1') {
+    const q = `${SUPABASE_URL}/rest/v1/lead_activities`
+      + `?user_id=eq.${encodeURIComponent(userId)}&type=eq.nota`
+      + `&metadata->>para=eq.${encodeURIComponent(actorId)}`
+      + `&metadata->>leida_at=is.null`
+      + `&select=id,metadata&limit=50`;
+    const r = await fetch(q, { headers: sbHeaders() });
+    if (!r.ok) return jsonResp({ error: await r.text() }, 500);
+    const filas = (await r.json()) || [];
+    const ahora = new Date().toISOString();
+    let marcadas = 0;
+    for (const f of filas) {
+      const ok = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${f.id}`, {
+        method: 'PATCH',
+        headers: sbHeaders(),
+        body: JSON.stringify({ metadata: { ...(f.metadata || {}), leida_at: ahora } }),
+      }).then(x => x.ok).catch(() => false);
+      if (ok) marcadas++;
+    }
+    return jsonResp({ marcadas });
+  }
 
   // GET — list activities for a lead
   if (req.method === 'GET') {
@@ -102,19 +171,31 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { lead_id, type, content, metadata } = body;
+    const { lead_id, type, content, metadata, avisar } = body;
     if (!lead_id || !type) return jsonResp({ error: 'Faltan campos requeridos' }, 400);
 
     const validTypes = ['nota', 'llamada', 'email', 'reunion', 'tarea', 'stage_change', 'creacion'];
     if (!validTypes.includes(type)) return jsonResp({ error: 'Tipo inválido' }, 400);
 
+    // Avisar al responsable es una herramienta de dirección: el dueño y los
+    // administradores. Se corta aquí y no solo escondiendo el botón, porque un
+    // botón escondido no es un permiso.
+    if (avisar && !actorMandaEnLaCuenta) {
+      return jsonResp({ error: 'Solo el dueño de la cuenta y los administradores pueden avisar al responsable' }, 403);
+    }
+
     // Verify the lead belongs to this user
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&select=id`,
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&select=id,name,company,assigned_to`,
       { headers: sbHeaders() }
     );
     const check = await checkRes.json();
-    if (!check?.[0]) return jsonResp({ error: 'No autorizado' }, 403);
+    const lead = check?.[0];
+    if (!lead) return jsonResp({ error: 'No autorizado' }, 403);
+
+    // A quién va dirigida. Uno no se avisa a sí mismo: si el admin lleva el lead,
+    // la nota se guarda igual pero sin aviso, y se dice por qué.
+    const para = (avisar && lead.assigned_to && lead.assigned_to !== actorId) ? lead.assigned_to : null;
 
     const payload = {
       lead_id,
@@ -122,7 +203,11 @@ export default async function handler(req) {
       type,
       content: content?.trim() || null,
       // Quién la registró, para que en la ficha no parezcan todas del dueño.
-      metadata: { ...(metadata || {}), ...(actorNombre ? { actor: actorNombre, actor_id: actorId } : {}) },
+      metadata: {
+        ...(metadata || {}),
+        ...(actorNombre ? { actor: actorNombre, actor_id: actorId } : {}),
+        ...(para ? { para, avisado_at: new Date().toISOString() } : {}),
+      },
     };
     const res = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
       method: 'POST',
@@ -131,7 +216,33 @@ export default async function handler(req) {
     });
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
-    return jsonResp({ activity: rows[0] }, 201);
+
+    // El correo va DESPUÉS de guardar y nunca tumba la respuesta: la nota es el
+    // dato, el correo es el mensajero. Pero se devuelve qué pasó, para que la
+    // interfaz no diga «avisado» cuando no salió nada.
+    let aviso = null;
+    if (avisar) {
+      if (!lead.assigned_to) {
+        aviso = { enviado: false, motivo: 'este lead no tiene responsable asignado' };
+      } else if (!para) {
+        aviso = { enviado: false, motivo: 'el lead es tuyo, no hay a quién avisar' };
+      } else {
+        try {
+          const { avisarNotaLead } = await import('./_aviso-lead-nota.js');
+          aviso = await avisarNotaLead({
+            ownerId: userId,
+            autorNombre: actorNombre,
+            lead: { id: lead.id, name: lead.name, company: lead.company },
+            texto: content || '',
+            paraId: para,
+          });
+        } catch (e) {
+          aviso = { enviado: false, motivo: 'no se pudo enviar el correo' };
+          console.error('aviso nota lead:', e?.message);
+        }
+      }
+    }
+    return jsonResp({ activity: rows[0], aviso }, 201);
   }
 
   // DELETE — delete activity

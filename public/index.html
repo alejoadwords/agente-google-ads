@@ -1871,6 +1871,15 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-card-act-btn:hover{background:var(--sidebar2);color:var(--text)}
 .crm-card-act-btn.wa-btn:hover{background:#DCFCE7;color:#16A34A;border-color:#86EFAC}
 .crm-card-act-btn.em-btn:hover{background:#EFF6FF;color:#2563EB;border-color:#BFDBFE}
+/* Nota de dirección en la ficha. Se pinta oculta y la revela crmRevelarNotas()
+   solo para el dueño y los administradores. */
+.crm-card-actions.solo-nota{display:none}
+.crm-card-actions.solo-nota .crm-nota-btn{margin-left:auto}
+.crm-nota-btn{position:relative;flex:0 0 30px;padding:4px 0}
+.crm-nota-btn:hover{color:var(--blue);border-color:var(--blue);background:var(--blue-lt)}
+/* Dentro del botón, no asomando: la ficha tiene overflow:hidden y un punto
+   colgado del borde se recorta justo en la columna del extremo. */
+.crm-nota-punto{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
 .crm-add-card{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;background:none;font-family:var(--font);width:100%}
 .crm-add-card:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
 

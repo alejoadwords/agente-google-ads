@@ -4594,7 +4594,10 @@ window.onload = async () => {
   // Mostrar botón Leads (disponible para todos los usuarios autenticados)
   setTimeout(function(){ const b = document.getElementById('sb-leads-btn'); if(b) b.style.display = 'block'; }, 500);
   // Inicializar alertas
-  setTimeout(function(){ initAlertsBadge(); }, 3000);
+  // Las notas de dirección también cuentan en la campana, y hay que pedirlas al
+  // arrancar: si solo se cargaran al abrir el CRM, quien entra a Inicio no vería
+  // el aviso hasta pasar por el tablero, que es justo donde ya no hace falta.
+  setTimeout(function(){ initAlertsBadge(); crmAvisosCargar(); }, 3000);
 };
 
 // ONBOARDING
@@ -7070,16 +7073,27 @@ async function initAlertsBadge() {
   } catch {}
 }
 
+// La campana cuenta dos cosas distintas: las alertas de campañas y las notas que
+// la dirección dejó en mis leads. Dos campanas en el encabezado serían peor, así
+// que se suman aquí y el panel las separa en secciones.
+let _alertasCampanas = 0;
+
 function updateAlertsBadge(count) {
+  _alertasCampanas = count > 0 ? count : 0;
+  refrescarCampana();
+}
+
+function refrescarCampana() {
   const btn   = document.getElementById('alerts-btn');
   const badge = document.getElementById('alerts-badge');
   if (!btn || !badge) return;
-  if (count > 0) {
-    btn.style.display   = 'flex';
+  const notas = (typeof crmAvisos !== 'undefined' && crmAvisos) ? crmAvisos.length : 0;
+  const total = _alertasCampanas + notas;
+  btn.style.display = 'flex';
+  if (total > 0) {
     badge.style.display = 'flex';
-    badge.textContent   = count > 99 ? '99+' : count;
+    badge.textContent   = total > 99 ? '99+' : total;
   } else {
-    btn.style.display   = 'flex';
     badge.style.display = 'none';
   }
 }
@@ -7101,17 +7115,27 @@ async function openAlertsPanel() {
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;padding:16px 18px;border-bottom:1px solid var(--border2);flex-shrink:0">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Alertas de campañas</span>
-      <select id="alerts-filter" onchange="reloadAlerts()" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:2px 6px;background:var(--bg);color:var(--text)">
-        <option value="all">Todas</option>
-        <option value="google_ads">Google Ads</option>
-        <option value="meta_ads">Meta Ads</option>
-      </select>
+      <span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Avisos</span>
       <button onclick="closeAlertsPanel()" style="background:none;border:none;cursor:pointer;color:var(--muted2);font-size:16px;line-height:1;padding:2px">✕</button>
     </div>
-    <div id="alerts-list" style="flex:1;overflow-y:auto;padding:12px"></div>`;
+    <div style="flex:1;overflow-y:auto">
+      <div id="notas-list" style="padding:12px 12px 0"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:14px 14px 6px">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);flex:1">Alertas de campañas</span>
+        <select id="alerts-filter" onchange="reloadAlerts()" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:2px 6px;background:var(--bg);color:var(--text)">
+          <option value="all">Todas</option>
+          <option value="google_ads">Google Ads</option>
+          <option value="meta_ads">Meta Ads</option>
+        </select>
+      </div>
+      <div id="alerts-list" style="padding:0 12px 12px"></div>
+    </div>`;
 
   panel.style.display = 'flex';
+
+  // Las notas se pintan antes de marcarlas leídas: si se marcasen primero, quien
+  // abre el panel las ve desaparecer sin haberlas leído.
+  crmAvisosPanel();
 
   // Marcar como leídas
   if (uid) {
@@ -17172,6 +17196,28 @@ async function crmLoadStages() {
   }
 }
 
+// El correo del aviso enlaza a /crm?lead=<id>. Sin esto el enlace dejaría al
+// comercial en el tablero buscando a mano el lead del que le acaban de hablar.
+let _leadPorUrl = null;
+function crmLeadDeLaUrl() {
+  try {
+    const id = new URLSearchParams(location.search).get('lead');
+    if (!id) return;
+    _leadPorUrl = id;
+    // Se limpia ya: si recarga la página no queremos que vuelva a saltar la ficha.
+    const limpia = location.pathname + location.hash;
+    window.history.replaceState({}, '', limpia);
+  } catch {}
+}
+crmLeadDeLaUrl();
+
+function crmAbrirLeadPendiente() {
+  if (!_leadPorUrl) return;
+  const id = _leadPorUrl;
+  _leadPorUrl = null;
+  setTimeout(() => { try { crmIrALeadODecirlo(id); } catch (e) { console.warn('lead de la url', e); } }, 120);
+}
+
 async function crmLoadLeads() {
   const mio = crmAmbito();
   try {
@@ -17193,6 +17239,9 @@ async function crmLoadLeads() {
     crmLeadsLoaded = true;
     crmFalloResuelto('leads');
     crmRender();
+    // Los avisos llegan después y repintan: el tablero no espera por ellos.
+    crmAvisosCargar().then(() => { if (crmAvisos.length) crmRender(); });
+    crmAbrirLeadPendiente();
     return true;
   } catch(e) {
     console.error('crmLoadLeads', e);
@@ -18125,6 +18174,7 @@ function crmRenderKanban() {
   });
   crmUpdateLeadsStats();
   crmTopeColumnas();
+  crmRevelarNotas();
 }
 
 // Cada columna muestra como mucho 3 fichas COMPLETAS y el resto se alcanza con
@@ -18179,7 +18229,22 @@ function crmCardHTML(lead, now) {
   const phoneBtn = lead.phone ? '<button class="crm-card-act-btn" onclick="event.stopPropagation();window.location.href=\'tel:' + phoneNum + '\'" title="Llamar"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</button>' : '';
   const waBtn = lead.phone ? '<button class="crm-card-act-btn wa-btn" onclick="event.stopPropagation();window.open(\'https://wa.me/' + phoneNum.replace(/\D/g,'') + '\',\'_blank\')" title="WhatsApp"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</button>' : '';
   const emailBtn = lead.email ? '<button class="crm-card-act-btn em-btn" onclick="event.stopPropagation();window.location.href=\'mailto:' + esc(lead.email) + '\'" title="Email"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</button>' : '';
-  const hasActions = lead.phone || lead.email;
+  // La nota de dirección: se pinta siempre y se descubre después si esta persona
+  // puede usarla (crmRevelarNotas). Resolver el permiso aquí obligaría a que el
+  // tablero esperase a una consulta para pintar la primera ficha.
+  const pendientes = crmAvisosPorLead[lead.id] || 0;
+  const notaBtn = '<button class="crm-card-act-btn crm-nota-btn" style="display:none"' +
+    ' onclick="event.stopPropagation();crmNotaAbrir(\'' + esc(lead.id) + '\')"' +
+    ' title="' + (pendientes ? 'Tienes ' + pendientes + ' nota(s) sin leer aquí' : 'Dejar una nota al responsable') + '">' +
+    // Solo el icono: con Llamar, WhatsApp y Email al lado, una cuarta etiqueta
+    // no cabe en 272px y todas se cortan.
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>' +
+    (pendientes ? '<span class="crm-nota-punto"></span>' : '') +
+    '</button>';
+  // Si el lead no tiene ni teléfono ni correo, la fila entera existe solo por la
+  // nota: se oculta también, o a quien no puede escribirlas le quedaría una tira
+  // vacía debajo de cada ficha.
+  const soloNota = !lead.phone && !lead.email;
   return '<div class="crm-card" data-id="' + esc(lead.id) + '" style="border-left-color:' + stageColor + '">' +
     '<div class="crm-card-inner">' +
     '<div class="crm-card-top">' +
@@ -18199,8 +18264,191 @@ function crmCardHTML(lead, now) {
     (showInactive ? '<div class="crm-card-inactive"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + daysSince + ' días sin actividad</div>' : '') +
     '</div>' : '') +
     '</div>' +
-    (hasActions ? '<div class="crm-card-actions">' + phoneBtn + waBtn + emailBtn + '</div>' : '') +
+    '<div class="crm-card-actions' + (soloNota ? ' solo-nota' : '') + '">' + phoneBtn + waBtn + emailBtn + notaBtn + '</div>' +
     '</div>';
+}
+
+// ── NOTAS DE DIRECCIÓN ────────────────────────────────────────────────────────
+// El dueño (o un administrador) deja una nota en un lead y a quien lo lleva le
+// llega un correo y un aviso en la campana. La nota se guarda como una actividad
+// más de la ficha, así que queda en el historial junto a las llamadas.
+
+// Cuántas notas sin leer tengo yo en cada lead, para el puntito de la ficha.
+let crmAvisosPorLead = {};
+let crmAvisos = [];
+
+let _miMembresia;   // undefined = sin preguntar · null = soy el dueño
+async function miMembresia() {
+  if (_miMembresia !== undefined) return _miMembresia;
+  try {
+    const d = await fetchAuth('/api/team?me=1').then(r => r.json());
+    _miMembresia = d.membership || null;
+  } catch {
+    _miMembresia = null;   // ante la duda, el servidor sigue protegiendo
+  }
+  return _miMembresia;
+}
+
+// Quien no es miembro de ningún equipo es el dueño. De los miembros, solo los
+// administradores. Es el mismo criterio que corta el servidor.
+async function soyDireccion() {
+  const m = await miMembresia();
+  return !m || m.role === 'admin';
+}
+
+async function crmRevelarNotas() {
+  if (!(await soyDireccion())) return;
+  document.querySelectorAll('.crm-nota-btn').forEach(b => { b.style.display = ''; });
+  document.querySelectorAll('.crm-card-actions.solo-nota').forEach(f => { f.style.display = 'flex'; });
+}
+
+function crmNotaAbrir(leadId) {
+  const lead = crmLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  const quien = crmNombreResponsable(lead.assigned_to) || 'el responsable';
+
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'nota-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) crmNotaCerrar(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:480px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--blue-lt);color:var(--blue)">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></div>' +
+        '<div><div style="font-size:var(--fs-md);font-weight:800">Nota para el responsable</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + esc(lead.name || '') + '</div></div>' +
+      '</div>' +
+      '<button class="btn-ghost sm" onclick="crmNotaCerrar()">✕</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-field"><label class="auto-label">La nota</label>' +
+        '<textarea class="auto-input" id="nota-texto" rows="4" placeholder="Qué tiene que hacer o saber quien lleva este lead…"></textarea></div>' +
+      // Se dice a quién va ANTES de escribir, no después: si el lead no tiene
+      // responsable hay que enterarse ahora, no cuando ya se pulsó Guardar.
+      '<label style="display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--text);cursor:' + (lead.assigned_to ? 'pointer' : 'default') + '">' +
+        '<input type="checkbox" id="nota-avisar"' + (lead.assigned_to ? ' checked' : ' disabled') + ' style="margin-top:2px">' +
+        '<span>' + (lead.assigned_to
+          ? 'Avisar a <strong>' + esc(quien) + '</strong> por correo y en la app'
+          : '<span style="color:var(--muted)">Este lead no tiene responsable asignado, así que no hay a quién avisar. La nota se guarda igual.</span>') +
+        '</span></label>' +
+      '<div id="nota-msg" style="font-size:12px;margin-top:10px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="crmNotaCerrar()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="nota-guardar" onclick="crmNotaGuardar(\'' + esc(leadId) + '\')">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('nota-texto')?.focus(), 80);
+}
+
+function crmNotaCerrar() { document.getElementById('nota-modal')?.remove(); }
+
+async function crmNotaGuardar(leadId) {
+  const texto = (document.getElementById('nota-texto')?.value || '').trim();
+  const msg = document.getElementById('nota-msg');
+  const btn = document.getElementById('nota-guardar');
+  if (!texto) {
+    if (msg) { msg.style.color = '#B91C1C'; msg.textContent = 'Escribe la nota antes de guardar.'; }
+    return;
+  }
+  const avisar = !!document.getElementById('nota-avisar')?.checked;
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/lead-activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: leadId, type: 'nota', content: texto, avisar }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+
+    // Nunca decir «avisado» sin saberlo: si el correo no salió, se dice aquí
+    // mismo y la nota se queda guardada igual.
+    if (avisar && d.aviso && !d.aviso.enviado) {
+      if (msg) {
+        msg.style.color = '#B45309';
+        msg.textContent = 'La nota quedó guardada, pero el aviso no salió: ' + (d.aviso.motivo || 'motivo desconocido') + '.';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'Cerrar'; btn.onclick = crmNotaCerrar; }
+      return;
+    }
+    crmNotaCerrar();
+    showToast(avisar ? 'Nota guardada y responsable avisado' : 'Nota guardada');
+    if (typeof crmDetailLead !== 'undefined' && crmDetailLead && crmDetailLead.id === leadId) {
+      crmLoadActivities(leadId);
+    }
+  } catch (e) {
+    console.error('crmNotaGuardar', e);
+    if (msg) { msg.style.color = '#B91C1C'; msg.textContent = e.message || 'No se pudo guardar.'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+// ── Avisos que me dejaron a mí ────────────────────────────────────────────────
+async function crmAvisosCargar() {
+  try {
+    const r = await fetchAuth('/api/lead-activities?avisos=1');
+    if (!r.ok) return;
+    const d = await r.json();
+    crmAvisos = d.avisos || [];
+    crmAvisosPorLead = {};
+    crmAvisos.forEach(a => { crmAvisosPorLead[a.lead_id] = (crmAvisosPorLead[a.lead_id] || 0) + 1; });
+    if (typeof refrescarCampana === 'function') refrescarCampana();
+  } catch (e) { console.warn('crmAvisosCargar', e); }
+}
+
+// timeAgo() devuelve «3h», que en una lista de avisos se lee raro sin el «hace».
+function crmHace(iso) {
+  const t = timeAgo(iso);
+  return (t === 'ahora' || String(t).startsWith('hace')) ? t : 'hace ' + t;
+}
+
+function crmAvisosPanel() {
+  const cont = document.getElementById('notas-list');
+  if (!cont) return;
+  if (!crmAvisos.length) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML =
+    '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:2px 2px 8px">Notas para ti</div>' +
+    crmAvisos.map(a =>
+      '<div onclick="crmAvisoAbrir(\'' + esc(a.lead_id) + '\')" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
+        '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px">' +
+          '<span style="font-size:12.5px;font-weight:700;color:var(--text)">' + esc(a.lead || 'Lead') + '</span>' +
+          (a.empresa ? '<span style="font-size:11px;color:var(--muted2)">' + esc(a.empresa) + '</span>' : '') +
+        '</div>' +
+        '<div style="font-size:12.5px;color:var(--text);line-height:1.5;white-space:pre-wrap">' + esc(a.texto || '') + '</div>' +
+        '<div style="font-size:10.5px;color:var(--muted2);margin-top:7px">' +
+          (a.autor ? esc(a.autor) + ' · ' : '') + crmHace(a.created_at) +
+        '</div>' +
+      '</div>'
+    ).join('');
+
+  // Ya las vio: se apaga el contador, pero siguen en pantalla hasta que cierre.
+  crmAvisosMarcarLeidos();
+}
+
+function crmAvisoAbrir(leadId) {
+  closeAlertsPanel();
+  navGo('crm');
+  setTimeout(() => crmIrALeadODecirlo(leadId), 260);
+}
+
+// crmOpenDetail() se calla si el lead no está cargado, y eso pasa de verdad: el
+// aviso puede ser de un lead de OTRO cliente del que no estás viendo ahora. Sin
+// esto, pulsar el aviso no haría absolutamente nada y parecería que se rompió.
+function crmIrALeadODecirlo(leadId) {
+  if (!leadId) return;
+  if (crmLeads.some(l => l.id === leadId)) { crmOpenDetail(leadId); return; }
+  showToast('Ese lead pertenece a otro cliente. Cámbialo en el selector de arriba para abrirlo.', 'info');
+}
+
+async function crmAvisosMarcarLeidos() {
+  const antes = crmAvisos.length;
+  if (!antes) return;
+  crmAvisos = []; crmAvisosPorLead = {};
+  if (typeof refrescarCampana === 'function') refrescarCampana();
+  try { await fetchAuth('/api/lead-activities?avisos=1', { method: 'PATCH' }); } catch {}
 }
 
 // ── CIERRE DE OPORTUNIDAD (ganada / perdida) ──────────────────────────────────
