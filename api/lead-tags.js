@@ -121,15 +121,23 @@ export default async function handler(req) {
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
 
     const fila = await fetch(
-      `${SUPABASE_URL}/rest/v1/lead_tags?id=eq.${id}&user_id=eq.${encodeURIComponent(userId)}&select=name&limit=1`,
+      `${SUPABASE_URL}/rest/v1/lead_tags?id=eq.${id}&user_id=eq.${encodeURIComponent(userId)}&select=name,client_id&limit=1`,
       { headers: sbHeaders() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     const nombre = fila?.[0]?.name;
     if (!nombre) return jsonResp({ error: 'Etiqueta no encontrada' }, 404);
 
+    // El catálogo guarda una fila POR CLIENTE, así que dos clientes de una misma
+    // agencia pueden tener "vip" cada uno. El barrido va limitado al ámbito de
+    // ESTA etiqueta: sin esto, borrarla en un cliente se la quitaba a los leads
+    // del otro.
+    const ambito = fila[0].client_id
+      ? `&client_id=eq.${encodeURIComponent(fila[0].client_id)}`
+      : '&client_id=is.null';
+
     const TANDA = 200;
     const conLaEtiqueta = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}` +
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${ambito}` +
       `&tags=cs.{${encodeURIComponent(nombre)}}&select=id,tags&limit=${TANDA}`,
       { headers: sbHeaders() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
