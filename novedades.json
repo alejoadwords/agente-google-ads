@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-26-catalogos-admin",
+      "fecha": "2026-08-26",
+      "tipo": "mejora",
+      "titulo": "Las listas de la cuenta las cambia solo quien manda",
+      "texto": "Las fuentes de leads y los motivos de cierre los sigue viendo todo el equipo al crear o cerrar una oportunidad, pero editarlos queda reservado al dueño de la cuenta y a los miembros con rol de administrador. Así nadie cambia por su cuenta unas listas de las que dependen los informes de todos.",
+      "accion": {
+        "texto": "Ir al CRM",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-08-24-borrar-cosas",
       "fecha": "2026-08-24",
       "tipo": "mejora",

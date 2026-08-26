@@ -17521,7 +17521,18 @@ function crmPintarSelectsFuente() {
 const ICONO_PAPELERA = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
 
-function fuenteAbrirGestor() {
+// Oculta el enlace «Administrar» de fuentes a quien no puede usarlo.
+async function fuenteAjustarPermiso() {
+  const btn = document.querySelector('button.crm-link-btn[onclick="fuenteAbrirGestor()"]');
+  if (!btn) return;
+  btn.style.display = (await puedeEditarCatalogos()) ? '' : 'none';
+}
+
+async function fuenteAbrirGestor() {
+  if (!(await puedeEditarCatalogos())) {
+    showToast('Solo el administrador de la cuenta puede cambiar las fuentes', 'error');
+    return;
+  }
   document.getElementById('fuente-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'fuente-overlay';
@@ -18164,6 +18175,10 @@ async function closeLoadReasons(force) {
 // El API ya sabía renombrar y borrar; lo que faltaba era esta pantalla.
 
 async function motAbrirGestor() {
+  if (!(await puedeEditarCatalogos())) {
+    showToast('Solo el administrador de la cuenta puede cambiar los motivos de cierre', 'error');
+    return;
+  }
   document.getElementById('mot-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'mot-overlay';
@@ -18307,7 +18322,7 @@ async function closeOpenModal(lead, stageKey, prevStage, onCancel) {
     '<div style="display:flex;gap:8px;align-items:center;padding:14px 22px;border-top:1px solid var(--border)">' +
       // Aquí es donde uno descubre que sobran o faltan motivos: el atajo va donde
       // aparece la necesidad, no escondido en un menú.
-      '<button class="btn-ghost sm" style="font-size:11.5px;color:var(--muted)" onclick="closeCancel();motAbrirGestor()">Editar motivos</button>' +
+      '<button class="btn-ghost sm" id="close-editar-motivos" style="font-size:11.5px;color:var(--muted);display:none" onclick="closeCancel();motAbrirGestor()">Editar motivos</button>' +
       '<div style="flex:1"></div>' +
       '<button class="btn-ghost sm" onclick="closeCancel()">Cancelar</button>' +
       '<button class="btn-pri sm" id="close-confirm" onclick="closeConfirm()">Confirmar</button>' +
@@ -18315,6 +18330,12 @@ async function closeOpenModal(lead, stageKey, prevStage, onCancel) {
   document.body.appendChild(ov);
   closeFilter();
   setTimeout(() => document.getElementById('close-search')?.focus(), 80);
+  // El enlace de editar aparece solo si esta persona puede: se resuelve después
+  // de pintar para no retrasar el modal por una consulta de permisos.
+  puedeEditarCatalogos().then(puede => {
+    const b = document.getElementById('close-editar-motivos');
+    if (b && puede) b.style.display = '';
+  });
 }
 
 function closeFilter() {
@@ -18518,6 +18539,7 @@ function crmUpdateSidebarCount() {
 
 // ── Modal crear/editar ────────────────────────────────────────────────────────
 function crmOpenModal(defaultStage) {
+  fuenteAjustarPermiso();   // el enlace «Administrar» solo para quien puede
   crmEditingId = null;
   document.getElementById('crm-modal-title').textContent = 'Nuevo lead';
   document.getElementById('crm-f-name').value = '';
@@ -26473,6 +26495,32 @@ function frmSnippets(id, formObj) {
 // crmTeam solo se llenaba al abrir Configuración → Equipo. Cualquier pantalla
 // que ofrezca "quién atiende" tiene que pedirlo por su cuenta o el desplegable
 // sale vacío sin que nada falle.
+// ¿Puede esta persona cambiar los catálogos de la cuenta (fuentes, motivos)?
+// Manda el servidor; esto solo evita ofrecer botones que iban a rebotar con un
+// 403. El dueño siempre puede; de los miembros, solo los administradores.
+let _puedeCatalogos = null;
+async function puedeEditarCatalogos() {
+  if (_puedeCatalogos !== null) return _puedeCatalogos;
+  try {
+    const d = await fetchAuth('/api/team?me=1').then(r => r.json());
+    const m = d.membership;
+    _puedeCatalogos = !m || m.role === 'admin';
+  } catch {
+    // Ante la duda no se bloquea la interfaz: el servidor sigue protegiendo, y
+    // dejar al dueño sin sus ajustes por un fallo de red sería peor.
+    _puedeCatalogos = true;
+  }
+  // El submenú del sidebar se arma una vez al arrancar; si el permiso llega
+  // después hay que rehacerlo, o el administrador no vería su entrada.
+  if (_puedeCatalogos === false) {
+    try {
+      document.querySelectorAll('.sb-sub').forEach(el => el.remove());
+      if (typeof navBuildSubmenus === 'function') navBuildSubmenus();
+    } catch {}
+  }
+  return _puedeCatalogos;
+}
+
 async function asegurarEquipo() {
   if (crmTeam.length || window._workspace) return crmTeam;
   try { crmTeam = (await fetchAuth('/api/team').then(r => r.json())).members || []; } catch {}
@@ -27283,6 +27331,7 @@ const NAV_MOD_ACTIONS = {
   }, {
     label: 'Motivos de cierre',
     fn: 'motAbrirGestor()',
+    soloAdmin: true,
     icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
   }, {
     label: 'Procesos de venta',
@@ -27306,7 +27355,7 @@ function navBuildSubmenus() {
         '<div class="sb-sub-item" data-tab="' + t + '" onclick="event.stopPropagation();navGoTab(\'' + mod + '\',\'' + t + '\')">' +
           esc(NAV_TAB_LABELS[t] || t) + '</div>').join('') +
       ((NAV_MOD_ACTIONS[mod] || []).length ? '<div class="sb-sub-sep"></div>' : '') +
-      (NAV_MOD_ACTIONS[mod] || []).map(a =>
+      (NAV_MOD_ACTIONS[mod] || []).filter(a => !a.soloAdmin || _puedeCatalogos !== false).map(a =>
         '<div class="sb-sub-item sb-sub-action" onclick="event.stopPropagation();navCloseSubs();' + a.fn + '">' +
           (a.icon ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
             'stroke-width="2" stroke-linecap="round">' + a.icon + '</svg>' : '') +

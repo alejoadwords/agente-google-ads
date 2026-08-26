@@ -66,13 +66,22 @@ export default async function handler(req) {
   // Equipo: el catálogo de motivos es de la cuenta. Sin esto, un miembro veía
   // uno vacío, se le sembraban los motivos por defecto a su nombre y cerraba
   // negocios con etiquetas distintas a las del resto — sin que nadie lo notara.
+  let esMiembro = false, rolMiembro = null;
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`, { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tw = (await r.json())?.[0];
-    if (tw && tw.owner_user_id) userId = tw.owner_user_id;
+    if (tw && tw.owner_user_id) { userId = tw.owner_user_id; esMiembro = true; rolMiembro = tw.role || 'vendedor'; }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+
+  // Ver el catálogo es de todo el equipo; cambiarlo, no. Un comercial que
+  // renombra o borra una entrada se la cambia a TODA la cuenta y descuadra los
+  // informes de los demás. La regla vive aquí, no solo en la interfaz: ocultar
+  // un botón no impide una llamada directa.
+  if (esMiembro && rolMiembro !== 'admin' && req.method !== 'GET') {
+    return jsonResp({ error: 'Solo el administrador de la cuenta puede cambiar esta lista.' }, 403);
   }
 
   const url = new URL(req.url);
