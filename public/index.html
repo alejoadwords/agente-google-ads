@@ -1734,6 +1734,16 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .pipe-fila input:focus{outline:none;border-color:var(--blue-md)}
 .pipe-fila .pipe-marca{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);background:var(--bg);border:1px solid var(--blue-md);border-radius:20px;padding:4px 9px;white-space:nowrap;flex-shrink:0}
 .pipe-borrar{display:flex;align-items:center;justify-content:center;width:30px;height:30px;flex-shrink:0;border:1px solid var(--border);background:var(--bg);color:var(--muted);border-radius:9px;cursor:pointer;transition:.15s}
+
+/* Motivos de cierre — el renombrado es en línea: un lápiz que abre otro modal
+   para cambiar cuatro palabras sobra. */
+.mot-fila{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.mot-input{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;padding:6px 8px;font-size:12.5px;font-family:var(--font);color:var(--text);transition:all .14s}
+.mot-input:hover{background:var(--bg-subtle)}
+.mot-input:focus{outline:none;background:var(--bg);border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-lt)}
+.mot-borrar{display:flex;align-items:center;justify-content:center;width:26px;height:26px;flex-shrink:0;border:none;background:transparent;color:var(--muted2);border-radius:7px;cursor:pointer;opacity:0;transition:.14s}
+.mot-fila:hover .mot-borrar{opacity:1}
+.mot-borrar:hover{background:#FEE2E2;color:#DC2626}
 .pipe-borrar:hover{border-color:#FCA5A5;color:#EF4444}
 .pipe-nuevo{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)}
 .pipe-nuevo input{flex:1;min-width:0;font-family:inherit;font-size:var(--fs-base);color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 11px}

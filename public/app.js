@@ -18085,6 +18085,109 @@ async function closeLoadReasons(force) {
   return _closeReasons;
 }
 
+// ── Gestor de motivos de cierre ───────────────────────────────────────────────
+// El catálogo se sembraba con motivos genéricos y solo se podía AÑADIR, desde el
+// modal de cierre. Quien no vende software se quedaba con "Eligió a la
+// competencia" para siempre, ensuciando el desplegable y el informe de pérdidas.
+// El API ya sabía renombrar y borrar; lo que faltaba era esta pantalla.
+
+async function motAbrirGestor() {
+  document.getElementById('mot-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'mot-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:680px;height:min(88vh,600px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Motivos de cierre</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Por qué se ganan y por qué se pierden tus oportunidades. Es lo que después lees en el informe de ventas.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" id="mot-cuerpo"><div style="color:var(--muted);font-size:13px">Cargando…</div></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  await closeLoadReasons(true);
+  motRender();
+}
+
+function motRender() {
+  const box = document.getElementById('mot-cuerpo');
+  if (!box) return;
+  const columna = (kind, titulo, color) => {
+    const lista = _closeReasons[kind] || [];
+    return '<div style="flex:1;min-width:0">' +
+      '<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">' +
+        '<span style="width:9px;height:9px;border-radius:50%;background:' + color + '"></span>' +
+        '<div style="font-size:12.5px;font-weight:700;color:var(--text)">' + titulo + '</div>' +
+        '<span style="font-size:11px;color:var(--muted2)">' + lista.length + '</span>' +
+      '</div>' +
+      (lista.length ? lista.map(r =>
+        '<div class="mot-fila" data-id="' + esc(r.id) + '">' +
+          '<input class="mot-input" value="' + esc(r.label) + '" maxlength="60" ' +
+            'onblur="motRenombrar(\'' + esc(r.id) + '\', this)" ' +
+            'onkeydown="if(event.key===\'Enter\')this.blur()">' +
+          '<button class="mot-borrar" title="Quitar del catálogo" onclick="motBorrar(\'' + esc(r.id) + '\',\'' + esc(r.label) + '\')">' + ICONO_PAPELERA + '</button>' +
+        '</div>').join('')
+        : '<div style="font-size:12px;color:var(--muted2);padding:6px 0">Ninguno todavía.</div>') +
+      '<div style="display:flex;gap:6px;margin-top:9px">' +
+        '<input class="ac-admin-input" id="mot-nuevo-' + kind + '" placeholder="Añadir motivo…" maxlength="60" ' +
+          'style="flex:1;font-size:12px" onkeydown="if(event.key===\'Enter\')motAgregar(\'' + kind + '\')">' +
+        '<button class="btn-sec sm" onclick="motAgregar(\'' + kind + '\')">+</button>' +
+      '</div>' +
+    '</div>';
+  };
+  box.innerHTML = '<div style="display:flex;gap:26px;align-items:flex-start">' +
+      columna('won', 'Cuando ganas', '#10B981') +
+      columna('lost', 'Cuando pierdes', '#9CA3AF') +
+    '</div>' +
+    '<div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border);font-size:11.5px;' +
+    'color:var(--muted);line-height:1.55">Quitar un motivo del catálogo no toca las oportunidades ya cerradas: ' +
+    'conservan el motivo con el que se cerraron, así que tus informes no cambian.</div>';
+}
+
+async function motAgregar(kind) {
+  const inp = document.getElementById('mot-nuevo-' + kind);
+  const label = (inp?.value || '').trim();
+  if (!label) return;
+  try {
+    const r = await fetchAuth('/api/close-reasons', { method: 'POST', body: JSON.stringify({ kind, label }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo añadir', 'error'); return; }
+    inp.value = '';
+    await closeLoadReasons(true);
+    motRender();
+  } catch (e) { showToast('No se pudo añadir el motivo', 'error'); }
+}
+
+async function motRenombrar(id, input) {
+  const label = (input.value || '').trim();
+  const lista = [...(_closeReasons.won || []), ...(_closeReasons.lost || [])];
+  const antes = lista.find(r => String(r.id) === String(id));
+  if (!antes || label === antes.label) return;
+  if (!label) { input.value = antes.label; return; }   // vaciarlo no es renombrar
+  try {
+    const r = await fetchAuth('/api/close-reasons', { method: 'PUT', body: JSON.stringify({ id, label }) });
+    if (!r.ok) throw new Error();
+    antes.label = label;
+    showToast('Motivo actualizado', 'success');
+  } catch (e) {
+    input.value = antes.label;    // devolver lo que había: mostrar un cambio que no se guardó es peor
+    showToast('No se pudo renombrar', 'error');
+  }
+}
+
+async function motBorrar(id, label) {
+  if (!confirm('¿Quitar «' + label + '» del catálogo?\n\nLas oportunidades ya cerradas con ese motivo lo conservan.')) return;
+  try {
+    const r = await fetchAuth('/api/close-reasons?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw new Error();
+    await closeLoadReasons(true);
+    motRender();
+  } catch (e) { showToast('No se pudo quitar el motivo', 'error'); }
+}
+
 async function closeOpenModal(lead, stageKey, prevStage, onCancel) {
   const kind = crmIsWonStage(stageKey) ? 'won' : 'lost';
   _closeCtx = { leadId: lead.id, kind, prevStage, stageKey, onCancel };
@@ -18129,7 +18232,11 @@ async function closeOpenModal(lead, stageKey, prevStage, onCancel) {
         '<input class="auto-input" id="close-date" type="date" value="' + today + '"></div>' +
       '<div id="close-msg" style="font-size:12px;color:#B91C1C"></div>' +
     '</div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+    '<div style="display:flex;gap:8px;align-items:center;padding:14px 22px;border-top:1px solid var(--border)">' +
+      // Aquí es donde uno descubre que sobran o faltan motivos: el atajo va donde
+      // aparece la necesidad, no escondido en un menú.
+      '<button class="btn-ghost sm" style="font-size:11.5px;color:var(--muted)" onclick="closeCancel();motAbrirGestor()">Editar motivos</button>' +
+      '<div style="flex:1"></div>' +
       '<button class="btn-ghost sm" onclick="closeCancel()">Cancelar</button>' +
       '<button class="btn-pri sm" id="close-confirm" onclick="closeConfirm()">Confirmar</button>' +
     '</div></div>';
@@ -27061,6 +27168,10 @@ const NAV_MOD_ACTIONS = {
   // varios convivia con el engranaje de la barra, que abre el gestor completo.
   // Dos puertas a lo mismo y ninguna clara: se deja una, la que hace mas.
   crm: [{
+    label: 'Motivos de cierre',
+    fn: 'motAbrirGestor()',
+    icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
+  }, {
     label: 'Procesos de venta',
     fn: 'pipeAbrirGestor()',
     icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.2.63.78 1.05 1.44 1.06H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
