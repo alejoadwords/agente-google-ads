@@ -25594,7 +25594,7 @@ function cmpWStep1() {
   const isEmail = w.channel === 'email';
   const field = (id, label, val, ph, extra) =>
     '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">' + label + '</div>' +
-    '<input class="auto-input" id="' + id + '" value="' + esc(val || '') + '" placeholder="' + ph + '" style="width:100%" oninput="cmpWSyncInbox()"' + (extra || '') + '></div>';
+    '<input class="auto-input" id="' + id + '" value="' + esc(val || '') + '" placeholder="' + ph + '" style="width:100%" oninput="cmpWSyncInbox()"' + (extra || '') + '>' + (id === 'cmpw-subject' ? varsBoton('cmpw-subject') : '') + '</div>';
   return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,400px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
     '<div>' +
       '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Configuración inicial</div>' +
@@ -25678,7 +25678,8 @@ function cmpWStep2() {
         '</div>' +
       '</div>' +
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Mensaje *</div>' +
-      '<textarea class="auto-input" id="cmpw-msg" rows="9" placeholder="Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" style="width:100%;margin-bottom:14px;font-family:var(--font);font-size:12.5px" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
+      '<textarea class="auto-input" id="cmpw-msg" rows="9" placeholder="Escribe el mensaje…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
+      '<div style="margin-bottom:14px">' + varsBoton('cmpw-msg') + '</div>' +
       (isEmail ?
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Imagen de cabecera (opcional)</div>' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="cmpw-img-row">' +
@@ -26125,6 +26126,15 @@ function cmpWValidate(step) {
     if (!w.body) { showToast('Escribe el mensaje (o genera uno con IA)', 'error'); return false; }
     if ((w.cta_text && !w.cta_url) || (!w.cta_text && w.cta_url)) { showToast('El botón CTA necesita texto y link', 'error'); return false; }
     if (w.cta_url && !/^https?:\/\//i.test(w.cta_url)) { showToast('El link del CTA debe empezar con https://', 'error'); return false; }
+  }
+  // En los dos pasos donde se escribe: una variable inventada no falla al
+  // enviar, llega con las llaves puestas a toda la audiencia.
+  if (step === 1 || step === 2) {
+    const malas = varsDesconocidas(step === 1 ? w.subject : w.body);
+    if (malas.length) {
+      showToast('La variable {{' + malas[0] + '}} no existe y se enviaría tal cual', 'error');
+      return false;
+    }
   }
   if (step === 3) {
     if (w.mode === 'list' && !w.list_id) { showToast('Elige una lista guardada (o cambia de modo)', 'error'); return false; }
@@ -30745,9 +30755,11 @@ async function plnEditor(id) {
               '<input class="auto-input" id="pln-cat" value="' + esc(_plnEd.categoria || '') + '" placeholder="ej. Seguimiento"></div>' +
           '</div>' +
           '<div style="margin-bottom:12px"><label class="auto-label">Asunto</label>' +
-            '<input class="auto-input" id="pln-asunto" value="' + esc(_plnEd.asunto || '') + '" placeholder="Variables: {{nombre}} {{empresa}}" oninput="plnEdPrev()"></div>' +
+            '<input class="auto-input" id="pln-asunto" value="' + esc(_plnEd.asunto || '') + '" placeholder="ej. {{nombre}}, tenemos algo para ti" oninput="plnEdPrev()">' +
+            varsBoton('pln-asunto') + '</div>' +
           '<div style="margin-bottom:12px"><label class="auto-label">Mensaje *</label>' +
-            '<textarea class="auto-input" id="pln-body" rows="9" style="font-family:var(--font);font-size:12.5px" placeholder="Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" oninput="plnEdPrev()">' + esc(c.body || '') + '</textarea></div>' +
+            '<textarea class="auto-input" id="pln-body" rows="9" style="font-family:var(--font);font-size:12.5px" placeholder="Escribe el correo…" oninput="plnEdPrev()">' + esc(c.body || '') + '</textarea>' +
+            varsBoton('pln-body') + '</div>' +
           '<label class="auto-label">Botón de acción (opcional)</label>' +
           '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-bottom:12px">' +
             '<input class="auto-input" id="pln-cta-text" value="' + esc(c.cta_text || '') + '" placeholder="Texto: ej. Agendar" oninput="plnEdPrev()">' +
@@ -30821,6 +30833,13 @@ async function plnEdGuardar() {
   // cliente ya lo intentó. Es el mismo aviso que da el auditor de Clientify.
   if (d.contenido.cta_text && !d.contenido.cta_url) {
     return fallo('El botón necesita un enlace, o no hará nada cuando lo pulsen.');
+  }
+  // Una variable que no existe no revienta el envío: llega literal, con llaves y
+  // todo. Se caza aquí porque después ya está en el correo de dos mil personas.
+  const malas = varsDesconocidas((d.asunto || '') + ' ' + d.contenido.body);
+  if (malas.length) {
+    return fallo('Esta variable no existe y se enviaría tal cual: {{' + malas[0] + '}}. ' +
+      'Usa el botón «Insertar variable» para poner una válida.');
   }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
@@ -30949,3 +30968,69 @@ function cmpWGuardarComoPlantilla() {
     if (_cmpW && _cmpW.step === 2 && _cmpW.channel === 'email') cmpWCargarPlantillas();
   };
 })();
+
+// ── VARIABLES DE PERSONALIZACIÓN ──────────────────────────────────────────────
+// Las siete que sustituye de verdad renderVars() en api/cron-campaigns.js. Esta
+// lista TIENE que seguir a aquella: una variable que no exista ahí no falla, se
+// envía literal con las llaves — «Hola {{telefno}}» a dos mil contactos.
+const CAMPO_VARIABLES = [
+  { v: 'nombre',   d: 'Nombre del contacto' },
+  { v: 'empresa',  d: 'Su empresa' },
+  { v: 'email',    d: 'Su correo' },
+  { v: 'telefono', d: 'Su teléfono' },
+  { v: 'etapa',    d: 'Etapa del pipeline' },
+  { v: 'fuente',   d: 'De dónde llegó' },
+  { v: 'valor',    d: 'Valor del deal, ya con formato' },
+];
+
+// Botón + panel de variables para un campo. destinoId es el input o textarea.
+function varsBoton(destinoId) {
+  const pid = 'vars-p-' + destinoId;
+  return '<div style="margin-top:5px">' +
+    '<button type="button" class="btn-ghost sm" style="font-size:11px;padding:3px 8px" onclick="varsToggle(\'' + destinoId + '\')">' +
+      icn('plus', 10) + ' Insertar variable</button>' +
+    '<div id="' + pid + '" style="display:none;margin-top:7px;border:1px solid var(--border);border-radius:10px;padding:9px 10px;background:var(--bg)">' +
+      '<div style="font-size:10.5px;color:var(--muted2);margin-bottom:7px">Se reemplazan por los datos de cada contacto al enviar</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
+        CAMPO_VARIABLES.map(x =>
+          '<button type="button" class="btn-ghost sm" style="font-size:11px;padding:3px 9px" title="' + esc(x.d) + '"' +
+          ' onclick="varsInsertar(\'' + destinoId + '\',\'' + x.v + '\')">{{' + x.v + '}}</button>').join('') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function varsToggle(destinoId) {
+  const p = document.getElementById('vars-p-' + destinoId);
+  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+// Se inserta donde está el cursor, no al final: si alguien escribió «Hola , ¿
+// cómo va todo?» y pone el nombre, tiene que caer en su hueco.
+function varsInsertar(destinoId, nombre) {
+  const el = document.getElementById(destinoId);
+  if (!el) return;
+  const txt = '{{' + nombre + '}}';
+  const ini = el.selectionStart, fin = el.selectionEnd;
+  if (typeof ini === 'number') {
+    el.value = el.value.slice(0, ini) + txt + el.value.slice(fin);
+    const pos = ini + txt.length;
+    el.focus();
+    el.setSelectionRange(pos, pos);
+  } else {
+    el.value += txt;
+    el.focus();
+  }
+  // Sin esto la vista previa se queda con el texto viejo: escuchan 'input', y
+  // cambiar .value a mano no lo dispara.
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Una variable mal escrita no revienta: se envía tal cual. Mejor cazarla antes.
+function varsDesconocidas(texto) {
+  const validas = CAMPO_VARIABLES.map(x => x.v);
+  const halladas = String(texto || '').match(/\{\{\s*\w+\s*\}\}/g) || [];
+  return [...new Set(halladas
+    .map(m => m.replace(/[{}\s]/g, '').toLowerCase())
+    .filter(v => !validas.includes(v)))];
+}
