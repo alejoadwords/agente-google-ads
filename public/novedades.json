@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-27-pagina-gracias",
+      "fecha": "2026-08-27",
+      "tipo": "mejora",
+      "titulo": "La pantalla después de pagar ahora explica qué hacer",
+      "texto": "Quien compra un plan llega a una página que le dice lo único que de verdad importa: que use el mismo correo de la compra para entrar o crear su cuenta, porque el plan se activa cruzando ese dato. Además trae los tres primeros pasos —cuenta, primer cliente, conectar Google Ads— y el acceso directo a la Academia.",
+      "accion": {
+        "texto": "Ver la página",
+        "ir": "/success.html"
+      }
+    },
+    {
       "id": "2026-08-27-privacidad-publicidad",
       "fecha": "2026-08-27",
       "tipo": "mejora",
