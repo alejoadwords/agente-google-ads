@@ -96,6 +96,27 @@ function resolveCountryCode(input) {
   return COUNTRY_NAME_TO_CODE[trimmed.toLowerCase()] || trimmed.toUpperCase().slice(0, 2);
 }
 
+// Los presets last_7d / last_30d de Meta NO incluyen el día de hoy: cubren los
+// N días completos anteriores. Quien lanza una campaña hoy y abre el panel ve
+// ceros y cree que la integración está rota — comprobado el 27-08-2026, con la
+// cuenta gastando de verdad y `last_30d` devolviendo vacío mientras `today`
+// traía 1.391 impresiones y 6.911 COP.
+//
+// Se traduce el preset a un rango explícito que termina HOY. Lo que no está en
+// la tabla (ayer, mes pasado, maximum...) se deja pasar tal cual, porque son
+// periodos cerrados donde el preset ya hace lo correcto.
+const DIAS_PRESET = { today: 0, last_3d: 2, last_7d: 6, last_14d: 13, last_28d: 27, last_30d: 29, last_90d: 89 };
+
+function ventana(datePreset) {
+  const dias = DIAS_PRESET[datePreset];
+  if (dias === undefined) return { date_preset: datePreset };
+  const hoy = new Date();
+  const desde = new Date(hoy);
+  desde.setDate(desde.getDate() - dias);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  return { time_range: JSON.stringify({ since: iso(desde), until: iso(hoy) }) };
+}
+
 // Agrega insights a una lista de objetos (campañas, ad sets, ads)
 async function fetchInsights(ids, level, datePreset, token) {
   const insights = {};
@@ -103,7 +124,7 @@ async function fetchInsights(ids, level, datePreset, token) {
     try {
       const d = await metaGet(`${id}/insights`, {
         fields: 'impressions,clicks,ctr,cpc,cpm,reach,spend,frequency,actions,cost_per_action_type',
-        date_preset: datePreset,
+        ...ventana(datePreset),
         level,
       }, token);
       insights[id] = d.data?.[0] || {};
@@ -190,7 +211,7 @@ export default async function handler(req, res) {
     if (action === 'get-account-overview') {
       const data = await metaGet(`${adAccountId}/insights`, {
         fields: 'impressions,clicks,ctr,cpc,cpm,reach,spend,frequency,actions,cost_per_action_type',
-        date_preset: datePreset,
+        ...ventana(datePreset),
         level: 'account',
       }, token);
       const d = data.data?.[0] || {};
@@ -214,7 +235,7 @@ export default async function handler(req, res) {
     if (action === 'get-daily-series') {
       const data = await metaGet(`${adAccountId}/insights`, {
         fields: 'spend,actions,clicks,impressions',
-        date_preset: datePreset,
+        ...ventana(datePreset),
         level: 'account',
         time_increment: 1,
       }, token);
