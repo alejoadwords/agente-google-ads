@@ -7,6 +7,58 @@ const HOTMART_SECRET = process.env.HOTMART_WEBHOOK_SECRET;
 const CLERK_SECRET  = process.env.CLERK_SECRET_KEY;
 const RESEND_KEY    = process.env.RESEND_API_KEY;
 const ALERTA_A      = process.env.ALERT_EMAIL || 'alejandro.gonzalez.ads@gmail.com';
+const META_PIXEL_ID  = process.env.META_PIXEL_ID;
+const META_CAPI_TOKEN = process.env.META_CAPI_TOKEN;
+
+// ── Conversión a Meta por API de conversiones ───────────────────────────────
+// Por qué desde aquí y no con un píxel en la página de gracias: el checkout
+// ocurre en hotmart.com, no en nuestro dominio, y no todo el que paga vuelve a
+// la página de gracias — cierra la pestaña, o el pago se aprueba horas después.
+// Este webhook es el único sitio que se entera de TODAS las compras.
+//
+// El correo viaja cifrado (SHA-256 sobre el correo en minúsculas y sin
+// espacios): Meta solo puede comprobar si coincide con alguien que ya conoce.
+// Declarado en la sección 6 de la política de privacidad.
+//
+// `event_id` = la transacción de Hotmart. Si algún día se añade también el
+// píxel en el navegador, Meta usará ese id para no contar la compra dos veces.
+//
+// Nunca revienta el webhook: si Meta falla, la compra ya se activó y eso es lo
+// que importa. Se registra en consola y se sigue.
+async function enviarConversionMeta({ email, valor, moneda, transactionId, plan }) {
+  if (!META_PIXEL_ID || !META_CAPI_TOKEN) return { enviado: false, motivo: 'sin configurar' };
+  if (!email) return { enviado: false, motivo: 'sin email' };
+  try {
+    const { createHash } = await import('node:crypto');
+    const hash = (v) => createHash('sha256').update(String(v).trim().toLowerCase()).digest('hex');
+    const evento = {
+      event_name:       'Purchase',
+      event_time:       Math.floor(Date.now() / 1000),
+      event_id:         String(transactionId || ''),
+      action_source:    'website',
+      event_source_url: 'https://app.acuarius.app/success.html',
+      user_data:        { em: [hash(email)] },
+      custom_data:      {
+        value:        Number(valor) || 0,
+        currency:     (moneda || 'USD').toUpperCase(),
+        content_name: plan === 'agency' ? 'Acuarius Agency' : 'Acuarius Pro',
+      },
+    };
+    const r = await fetch(
+      `https://graph.facebook.com/v21.0/${META_PIXEL_ID}/events?access_token=${encodeURIComponent(META_CAPI_TOKEN)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: [evento] }) }
+    );
+    const cuerpo = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      console.error('[hotmart-webhook] Meta CAPI rechazó el evento:', JSON.stringify(cuerpo));
+      return { enviado: false, motivo: cuerpo?.error?.message || ('HTTP ' + r.status) };
+    }
+    return { enviado: true, recibidos: cuerpo.events_received };
+  } catch (e) {
+    console.error('[hotmart-webhook] Meta CAPI error:', e.message);
+    return { enviado: false, motivo: e.message };
+  }
+}
 
 // ── Aviso cuando una compra NO se pudo activar ───────────────────────────────
 // El fallo silencioso es el peor caso del negocio: el cliente paga, no recibe
@@ -542,6 +594,16 @@ export default async function handler(req, res) {
   const vencimiento = new Date(ahora);
   vencimiento.setMonth(vencimiento.getMonth() + (anual ? 12 : 1));
 
+  // Importe real cobrado — se calcula aquí (y no dentro del bloque de billing)
+  // porque la conversión hay que mandarla exista o no la fila en Supabase: lo
+  // que Meta necesita saber es que hubo una compra, no cómo la registramos.
+  const precioPagado = data?.purchase?.price?.value || 0;
+  const monedaPagada = (data?.purchase?.price?.currency_value || '').toUpperCase();
+  const importe = precioPagado > 0 ? precioPagado : (anual ? planAmount * 12 : planAmount);
+  const moneda  = (precioPagado > 0 && monedaPagada) ? monedaPagada : 'USD';
+
+  const capi = await enviarConversionMeta({ email, valor: importe, moneda, transactionId, plan });
+
   if (usuario) {
     // Resetear créditos mensuales de video al renovar
     await sb(
@@ -551,13 +613,8 @@ export default async function handler(req, res) {
       'return=minimal'
     );
 
-    // Importe real cobrado, con su moneda. Antes se guardaba el precio de lista
-    // en USD siempre: una compra anual quedaba registrada como un mes, y una
-    // compra en pesos quedaba etiquetada como dolares.
-    const precioPagado = data?.purchase?.price?.value || 0;
-    const monedaPagada = (data?.purchase?.price?.currency_value || '').toUpperCase();
-    const importe  = precioPagado > 0 ? precioPagado : (anual ? planAmount * 12 : planAmount);
-    const moneda   = (precioPagado > 0 && monedaPagada) ? monedaPagada : 'USD';
+    // Importe real cobrado, con su moneda (calculados arriba, junto a la
+    // conversión de Meta, para que ambos usen exactamente el mismo número).
 
     // Upsert billing (histórico de facturación y sistema de referidos)
     await sb('/billing', 'POST', {
@@ -613,5 +670,5 @@ export default async function handler(req, res) {
     console.warn('[hotmart-webhook] Referral tracking error:', refErr.message);
   }
 
-  return res.status(200).json({ received: true, action: 'activated', plan, amount: planAmount, commission: planCommission, clerkUpdated: clerkOk, email });
+  return res.status(200).json({ received: true, action: 'activated', plan, amount: planAmount, commission: planCommission, clerkUpdated: clerkOk, metaCapi: capi, email });
 }
