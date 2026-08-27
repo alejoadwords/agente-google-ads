@@ -125,7 +125,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   try {
     var params = new URLSearchParams(window.location.search);
     var plan   = (params.get('plan') || '').toLowerCase();
-    var esAgencia = plan === 'agencia' || plan === 'agency';
+    // Hotmart cuelga sus propios parámetros de esta URL y no siempre los une
+    // bien, así que el valor puede llegar como 'agencia?transaction=123'. Se
+    // compara por el principio en vez de exigir igualdad exacta.
+    var esAgencia = plan.indexOf('agenc') === 0;
     if (esAgencia) document.getElementById('plan-badge').textContent = 'Plan Agency';
 
     // Conversión al dataLayer (GTM la reenvía a GA4). La medición fiable de la
