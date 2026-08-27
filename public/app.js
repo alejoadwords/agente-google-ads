@@ -25104,7 +25104,7 @@ function agnScheduleForLead() {
   // Rutas canónicas v2 (por módulo). Las /leads/* viejas siguen funcionando como alias.
   const CRM_SUB = {
     kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda',
-    campaigns: '/marketing/campanas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
+    campaigns: '/marketing/campanas', plantillas: '/marketing/plantillas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
@@ -25115,7 +25115,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -25658,7 +25658,18 @@ function cmpWStep2() {
   return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,420px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
     '<div>' +
       '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Contenido</div>' +
-      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Escríbelo tú o deja que la IA lo redacte con el contexto de tu negocio</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio</div>' +
+      // Partir de una plantilla guardada. Se carga después de pintar para no
+      // retrasar el paso por una consulta que puede fallar.
+      (isEmail ?
+      '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)" id="cmpw-pln-box">' +
+        '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn('file', 12) + ' Partir de una plantilla</div>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<select class="auto-input" id="cmpw-pln-sel" style="flex:1"><option value="">Cargando…</option></select>' +
+          '<button class="btn-sec sm" id="cmpw-pln-btn" onclick="cmpWUsarPlantilla()" disabled>Usar</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Se copia su contenido aquí. Editarlo no cambia la plantilla.</div>' +
+      '</div>' : '') +
       '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
         '<div style="font-size:12px;font-weight:800;margin-bottom:6px">✨ Redactar con IA</div>' +
         '<div style="display:flex;gap:8px">' +
@@ -25686,6 +25697,11 @@ function cmpWStep2() {
           '<input type="color" id="cmpw-accent" value="' + esc(w.accent_color || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer" oninput="cmpWSyncEmail()"></label>' +
         '<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer" title="Los links del email llevan utm_source=acuarius&utm_medium=email para que midas visitas en tu Analytics">' +
           '<input type="checkbox" id="cmpw-utm"' + (w.utm ? ' checked' : '') + '> Medir clics con UTM en mis links</label>' +
+      '</div>' +
+      // Al revés que lo de arriba: rescatar para siempre un correo que acabas de
+      // escribir. Sin esto, el buen contenido se queda encerrado en su campaña.
+      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
+        '<button class="btn-ghost sm" onclick="cmpWGuardarComoPlantilla()">' + icn('plus', 12) + ' Guardar esto como plantilla</button>' +
       '</div>' : '') +
     '</div>' +
     '<div style="position:sticky;top:0">' +
@@ -27587,13 +27603,13 @@ async function impRun() {
 // versiones ya envueltas de crmSetView/showView (router incluido).
 const NAV_TABS = {
   crm: ['kanban', 'list', 'tareas', 'agenda'],
-  marketing: ['campaigns', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
+  marketing: ['campaigns', 'plantillas', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
   analisis: ['sales', 'prod', 'equipo', 'mk', 'cv', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', plantillas: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'plantillas', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -27625,7 +27641,7 @@ function navHighlight(key) {
 // entrar al módulo), en lugar de las píldoras que había arriba de cada pantalla.
 const NAV_TAB_LABELS = {
   kanban: 'Pipeline', list: 'Contactos', tareas: 'Tareas', agenda: 'Agenda',
-  campaigns: 'Campañas', autos: 'Automatizaciones', sources: 'Fuentes',
+  campaigns: 'Campañas', plantillas: 'Plantillas', autos: 'Automatizaciones', sources: 'Fuentes',
   proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
   inbox: 'Inbox', agents: 'Chatbots',
   sales: 'Ventas', prod: 'Productividad', equipo: 'Por comercial', mk: 'Marketing', cv: 'Conversaciones',
@@ -30490,3 +30506,446 @@ async function tkEstado(id, estado) {
 // El icono depende de saber quién eres, igual que la burbuja de soporte.
 if (typeof clerkReady === 'function') clerkReady().then(tkBotonHeader).catch(() => {});
 setInterval(tkBotonHeader, 60000);
+
+// ── PLANTILLAS DE CORREO ──────────────────────────────────────────────────────
+// Sacar el contenido fuera de la campaña. Antes se escribía en el asistente y
+// moría con ella: nadie podía reutilizar un correo que funcionó ni partir de
+// algo ya aprobado por la dirección.
+//
+// Son de la CUENTA: todo el equipo las ve y las usa. Editarlas y borrarlas es de
+// quien las creó, y del dueño o un administrador. El servidor corta igual.
+
+let plnLista = [];
+let plnBusqueda = '';
+let plnCargando = false;
+
+async function plnCargar() {
+  const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const qs = cid ? '?client_id=' + encodeURIComponent(cid) : '';
+  const r = await fetchAuth('/api/email-templates' + qs);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  plnLista = d.plantillas || [];
+  return plnLista;
+}
+
+async function plnRender() {
+  const view = document.getElementById('crm-plantillas-view');
+  if (!view) return;
+  if (plnCargando) return;
+  plnCargando = true;
+  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+
+  try {
+    await plnCargar();
+  } catch (e) {
+    console.error('plnRender', e);
+    view.innerHTML =
+      '<div style="max-width:640px">' +
+      emptyAgua('alert', 'No se pudieron cargar las plantillas',
+        'Puede ser un corte momentáneo. Si sigue pasando, avísanos desde el chat de soporte.',
+        '<button class="btn-pri sm" onclick="plnRender()">Reintentar</button>') +
+      '</div>';
+    plnCargando = false;
+    return;
+  }
+  plnCargando = false;
+
+  const header =
+    '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:260px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Plantillas de correo</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Escríbelo una vez y reutilízalo en todas las campañas que quieras</div>' +
+      '</div>' +
+      '<button class="btn-pri sm" onclick="plnEditor()">' + icn('plus', 13) + ' Nueva plantilla</button>' +
+    '</div>';
+
+  if (!plnLista.length) {
+    view.innerHTML = header +
+      '<div style="max-width:640px">' +
+      emptyAgua('file', 'Todavía no tienes plantillas',
+        'Crea la primera y estará disponible en el asistente de campañas, para ti y para todo tu equipo.',
+        '<button class="btn-pri sm" onclick="plnEditor()">Crear la primera</button>') +
+      '</div>';
+    return;
+  }
+
+  const q = plnBusqueda.trim().toLowerCase();
+  const visibles = q
+    ? plnLista.filter(t => (t.nombre + ' ' + (t.asunto || '') + ' ' + (t.categoria || '')).toLowerCase().includes(q))
+    : plnLista;
+
+  const buscador =
+    '<div style="margin-bottom:14px;max-width:320px">' +
+      '<input class="auto-input" id="pln-buscar" placeholder="Buscar plantilla…" value="' + esc(plnBusqueda) + '" oninput="plnFiltrar(this.value)">' +
+    '</div>';
+
+  const lista = visibles.length
+    ? visibles.map(t => plnTarjeta(t)).join('')
+    : '<div style="font-size:var(--fs-sm);color:var(--muted);padding:20px 2px">Ninguna plantilla coincide con «' + esc(plnBusqueda) + '».</div>';
+
+  view.innerHTML = header + buscador + '<div style="max-width:860px">' + lista + '</div>';
+}
+
+function plnFiltrar(v) {
+  plnBusqueda = v || '';
+  const cont = document.getElementById('crm-plantillas-view');
+  if (!cont) return;
+  const q = plnBusqueda.trim().toLowerCase();
+  const visibles = q
+    ? plnLista.filter(t => (t.nombre + ' ' + (t.asunto || '') + ' ' + (t.categoria || '')).toLowerCase().includes(q))
+    : plnLista;
+  const caja = cont.querySelector('div[style*="max-width:860px"]');
+  if (caja) {
+    caja.innerHTML = visibles.length
+      ? visibles.map(t => plnTarjeta(t)).join('')
+      : '<div style="font-size:var(--fs-sm);color:var(--muted);padding:20px 2px">Ninguna plantilla coincide con «' + esc(plnBusqueda) + '».</div>';
+  }
+}
+
+function plnTarjeta(t) {
+  const suya = t.puedo_editar;
+  const cuando = t.updated_at ? new Date(t.updated_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+  return '<div class="auto-card">' +
+    '<div style="width:38px;height:38px;border-radius:11px;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+      icn('file', 17) + '</div>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:var(--fs-base);font-weight:700">' + esc(t.nombre) + '</span>' +
+        (t.categoria ? '<span class="tag-chip">' + esc(t.categoria) + '</span>' : '') +
+        (t.formato === 'html' ? '<span class="tag-chip">Diseño</span>' : '') +
+        (!t.client_id ? '<span class="tag-chip">General</span>' : '') +
+      '</div>' +
+      (t.asunto ? '<div style="font-size:var(--fs-sm);color:var(--muted);margin-top:3px">Asunto: ' + esc(t.asunto) + '</div>' : '') +
+      '<div style="font-size:11.5px;color:var(--muted2);margin-top:5px">' +
+        (t.creado_por_nombre ? esc(t.creado_por_nombre) + ' · ' : '') + 'editada el ' + cuando +
+        (suya ? '' : ' · <span title="La creó otra persona: puedes duplicarla">solo lectura</span>') +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;flex-shrink:0">' +
+      (suya ? '<button class="btn-ghost sm" onclick="plnEditor(\'' + esc(t.id) + '\')">Editar</button>' : '') +
+      '<button class="btn-ghost sm" onclick="plnDuplicar(\'' + esc(t.id) + '\')">Duplicar</button>' +
+      (suya ? '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="plnBorrar(\'' + esc(t.id) + '\',\'' + esc(t.nombre) + '\')">Borrar</button>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+async function plnDuplicar(id) {
+  try {
+    const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { plantilla } = await r.json();
+    const copia = await plnGuardar({
+      nombre: (plantilla.nombre || 'Plantilla') + ' (copia)',
+      categoria: plantilla.categoria, asunto: plantilla.asunto,
+      descripcion: plantilla.descripcion, formato: plantilla.formato,
+      diseno: plantilla.diseno, html: plantilla.html, contenido: plantilla.contenido,
+      client_id: plantilla.client_id,
+    });
+    showToast('Plantilla duplicada');
+    plnRender();
+    if (copia?.id) plnEditor(copia.id);
+  } catch (e) {
+    console.error('plnDuplicar', e);
+    showToast('No se pudo duplicar la plantilla', 'error');
+  }
+}
+
+function plnBorrar(id, nombre) {
+  confirmarAgua({
+    titulo: '¿Borrar «' + nombre + '»?',
+    texto: 'Las campañas que ya la usaron conservan su contenido: se copió al enviarlas, así que no se les cambia nada.',
+    confirmar: 'Borrar',
+    peligro: true,
+    onOk: async () => {
+      try {
+        const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id), { method: 'DELETE' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
+        showToast('Plantilla borrada');
+        plnRender();
+      } catch (e) {
+        showToast(e.message || 'No se pudo borrar', 'error');
+      }
+    },
+  });
+}
+
+async function plnGuardar(datos, id) {
+  const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const url = '/api/email-templates' + (id ? '?id=' + encodeURIComponent(id) : (cid ? '?client_id=' + encodeURIComponent(cid) : ''));
+  const r = await fetchAuth(url, {
+    method: id ? 'PATCH' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  return d.plantilla;
+}
+
+// Confirmación con nuestra propia cara. El confirm() del navegador rompe el
+// diseño —ya lo sufrimos con las respuestas rápidas— y encima no deja explicar
+// las consecuencias, que es justo lo que hace falta antes de borrar algo.
+function confirmarAgua({ titulo, texto, confirmar, peligro, onOk }) {
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  const cerrar = () => ov.remove();
+  ov.addEventListener('mousedown', e => { if (e.target === ov) cerrar(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:420px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">' + esc(titulo) + '</div>' +
+      '<button class="btn-ghost sm" data-x>✕</button>' +
+    '</div>' +
+    (texto ? '<div class="auto-modal-body"><div style="font-size:12.5px;color:var(--muted);line-height:1.6">' + texto + '</div></div>' : '') +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" data-x>Cancelar</button>' +
+      '<button class="' + (peligro ? 'btn-dgr' : 'btn-pri') + ' sm" data-ok>' + esc(confirmar || 'Confirmar') + '</button>' +
+    '</div></div>';
+  ov.querySelectorAll('[data-x]').forEach(b => b.onclick = cerrar);
+  ov.querySelector('[data-ok]').onclick = async () => { cerrar(); await onOk(); };
+  document.body.appendChild(ov);
+}
+
+// ── Editor de plantilla (formato simple) ──────────────────────────────────────
+// El mismo juego de campos que el paso de Contenido del asistente, para que una
+// plantilla y una campaña escrita a mano sean exactamente la misma cosa.
+let _plnEd = null;
+
+async function plnEditor(id) {
+  let t = { nombre: '', categoria: '', asunto: '', descripcion: '', formato: 'simple', contenido: {} };
+  if (id) {
+    try {
+      const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      t = (await r.json()).plantilla;
+    } catch (e) {
+      showToast('No se pudo abrir la plantilla', 'error');
+      return;
+    }
+  }
+  _plnEd = { id: id || null, ...t, contenido: t.contenido || {} };
+
+  const c = _plnEd.contenido;
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'pln-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) plnEdCerrar(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:900px;width:94vw">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">' + (id ? 'Editar plantilla' : 'Nueva plantilla') + '</div>' +
+      '<button class="btn-ghost sm" onclick="plnEdCerrar()">✕</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" style="max-height:70vh;overflow-y:auto">' +
+      '<div style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(260px,340px);gap:26px">' +
+        '<div>' +
+          '<div style="display:grid;grid-template-columns:1fr 150px;gap:10px;margin-bottom:12px">' +
+            '<div><label class="auto-label">Nombre *</label>' +
+              '<input class="auto-input" id="pln-nombre" value="' + esc(_plnEd.nombre || '') + '" placeholder="ej. Bienvenida a nuevos leads"></div>' +
+            '<div><label class="auto-label">Categoría</label>' +
+              '<input class="auto-input" id="pln-cat" value="' + esc(_plnEd.categoria || '') + '" placeholder="ej. Seguimiento"></div>' +
+          '</div>' +
+          '<div style="margin-bottom:12px"><label class="auto-label">Asunto</label>' +
+            '<input class="auto-input" id="pln-asunto" value="' + esc(_plnEd.asunto || '') + '" placeholder="Variables: {{nombre}} {{empresa}}" oninput="plnEdPrev()"></div>' +
+          '<div style="margin-bottom:12px"><label class="auto-label">Mensaje *</label>' +
+            '<textarea class="auto-input" id="pln-body" rows="9" style="font-family:var(--font);font-size:12.5px" placeholder="Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}" oninput="plnEdPrev()">' + esc(c.body || '') + '</textarea></div>' +
+          '<label class="auto-label">Botón de acción (opcional)</label>' +
+          '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-bottom:12px">' +
+            '<input class="auto-input" id="pln-cta-text" value="' + esc(c.cta_text || '') + '" placeholder="Texto: ej. Agendar" oninput="plnEdPrev()">' +
+            '<input class="auto-input" id="pln-cta-url" value="' + esc(c.cta_url || '') + '" placeholder="https://tu-link.com" oninput="plnEdPrev()">' +
+          '</div>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer">Color de marca ' +
+            '<input type="color" id="pln-accent" value="' + esc(c.accent_color || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer" oninput="plnEdPrev()"></label>' +
+          '<div id="pln-msg" style="font-size:12px;margin-top:12px"></div>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px">Así llega el correo</div>' +
+          '<div id="pln-prev" style="border:1px solid var(--border);border-radius:14px;background:#fff;color:#1a1a2e;padding:20px;box-shadow:var(--shadow-sm);max-height:52vh;overflow-y:auto"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="plnEdCerrar()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="pln-save" onclick="plnEdGuardar()">Guardar plantilla</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  plnEdPrev();
+  setTimeout(() => document.getElementById('pln-nombre')?.focus(), 80);
+}
+
+function plnEdCerrar() { document.getElementById('pln-modal')?.remove(); _plnEd = null; }
+
+function plnEdDatos() {
+  const g = id => document.getElementById(id);
+  return {
+    nombre: (g('pln-nombre')?.value || '').trim(),
+    categoria: (g('pln-cat')?.value || '').trim() || null,
+    asunto: (g('pln-asunto')?.value || '').trim() || null,
+    formato: 'simple',
+    contenido: {
+      body: g('pln-body')?.value || '',
+      cta_text: (g('pln-cta-text')?.value || '').trim() || null,
+      cta_url: (g('pln-cta-url')?.value || '').trim() || null,
+      accent_color: g('pln-accent')?.value || '#2563EB',
+    },
+  };
+}
+
+// La vista previa se arma con la MISMA función que pinta la del asistente, para
+// que lo que ves aquí sea lo que vas a mandar. Si algún día divergen, la
+// plantilla mentiría.
+function plnEdPrev() {
+  const box = document.getElementById('pln-prev');
+  if (!box) return;
+  const d = plnEdDatos();
+  const c = d.contenido;
+  const cuerpo = esc(c.body || 'Escribe el mensaje…').replace(/\n/g, '<br>');
+  box.innerHTML =
+    '<div style="height:4px;background:' + esc(c.accent_color) + ';border-radius:3px;margin-bottom:16px"></div>' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:10px">' + esc(d.asunto || 'Asunto del correo') + '</div>' +
+    '<div style="font-size:13px;line-height:1.65">' + cuerpo + '</div>' +
+    (c.cta_text ? '<div style="margin-top:16px"><span style="display:inline-block;background:' + esc(c.accent_color) + ';color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600">' + esc(c.cta_text) + '</span></div>' : '') +
+    '<div style="margin-top:18px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#888">¿No quieres recibir estos correos? <span style="text-decoration:underline">Darte de baja</span></div>';
+}
+
+async function plnEdGuardar() {
+  const d = plnEdDatos();
+  const msg = document.getElementById('pln-msg');
+  const btn = document.getElementById('pln-save');
+  const fallo = t => { if (msg) { msg.style.color = '#B91C1C'; msg.textContent = t; } };
+  if (!d.nombre) return fallo('Ponle un nombre para poder encontrarla después.');
+  if (!d.contenido.body.trim()) return fallo('Escribe el mensaje del correo.');
+  if (d.contenido.cta_url && !/^https?:\/\//i.test(d.contenido.cta_url)) {
+    return fallo('El enlace del botón tiene que empezar por http:// o https://');
+  }
+  // Un botón sin enlace no hace nada al pulsarlo, y eso no se ve hasta que el
+  // cliente ya lo intentó. Es el mismo aviso que da el auditor de Clientify.
+  if (d.contenido.cta_text && !d.contenido.cta_url) {
+    return fallo('El botón necesita un enlace, o no hará nada cuando lo pulsen.');
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    await plnGuardar(d, _plnEd?.id);
+    plnEdCerrar();
+    showToast('Plantilla guardada');
+    plnRender();
+  } catch (e) {
+    fallo(e.message || 'No se pudo guardar.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar plantilla'; }
+  }
+}
+
+// La vista vive en Marketing, así que se cuelga del último crmSetView envuelto.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const pv = document.getElementById('crm-plantillas-view');
+    if (pv) pv.style.display = v === 'plantillas' ? 'flex' : 'none';
+    document.getElementById('crm-btn-plantillas')?.classList.toggle('active', v === 'plantillas');
+    if (v === 'plantillas') plnRender();
+  };
+})();
+
+// ── Plantillas dentro del asistente de campañas ───────────────────────────────
+let _cmpwPlns = [];
+
+async function cmpWCargarPlantillas() {
+  const sel = document.getElementById('cmpw-pln-sel');
+  if (!sel) return;
+  try {
+    _cmpwPlns = await plnCargar();
+  } catch {
+    // Que falle esto no puede impedir escribir la campaña a mano.
+    const box = document.getElementById('cmpw-pln-box');
+    if (box) box.innerHTML = '<div style="font-size:11.5px;color:var(--muted)">No se pudieron cargar las plantillas. Puedes escribir el correo abajo igualmente.</div>';
+    return;
+  }
+  const btn = document.getElementById('cmpw-pln-btn');
+  if (!_cmpwPlns.length) {
+    sel.innerHTML = '<option value="">Todavía no tienes plantillas</option>';
+    sel.disabled = true;
+    if (btn) btn.disabled = true;
+    const box = document.getElementById('cmpw-pln-box');
+    if (box) box.insertAdjacentHTML('beforeend',
+      '<div style="font-size:11px;margin-top:6px"><a href="#" onclick="event.preventDefault();cmpWClose();navGo(\'marketing\');setTimeout(()=>crmSetView(\'plantillas\'),120)" style="color:var(--blue)">Crear una en Marketing → Plantillas</a></div>');
+    return;
+  }
+  sel.innerHTML = '<option value="">Elige una plantilla…</option>' +
+    _cmpwPlns.map(t => '<option value="' + esc(t.id) + '">' + esc(t.nombre) + (t.categoria ? ' · ' + esc(t.categoria) : '') + '</option>').join('');
+  sel.disabled = false;
+  sel.onchange = () => { if (btn) btn.disabled = !sel.value; };
+  if (btn) btn.disabled = true;
+}
+
+async function cmpWUsarPlantilla() {
+  const sel = document.getElementById('cmpw-pln-sel');
+  const id = sel?.value;
+  if (!id) return;
+  try {
+    const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const t = (await r.json()).plantilla;
+    const c = t.contenido || {};
+    // Se COPIA. La campaña queda independiente: editar la plantilla después no
+    // puede cambiar un correo que ya se revisó o se envió.
+    cmpWCollect();
+    if (t.asunto) _cmpW.subject = t.asunto;
+    if (c.body) _cmpW.body = c.body;
+    if (c.cta_text) _cmpW.cta_text = c.cta_text;
+    if (c.cta_url) _cmpW.cta_url = c.cta_url;
+    if (c.accent_color) _cmpW.accent_color = c.accent_color;
+    _cmpW.template_id = t.id;
+    cmpWRender();
+    showToast('Plantilla aplicada');
+  } catch (e) {
+    console.error('cmpWUsarPlantilla', e);
+    showToast('No se pudo aplicar la plantilla', 'error');
+  }
+}
+
+function cmpWGuardarComoPlantilla() {
+  cmpWCollect();
+  const w = _cmpW;
+  if (!w.body || !w.body.trim()) {
+    showToast('Escribe el mensaje antes de guardarlo como plantilla', 'error');
+    return;
+  }
+  confirmarAgua({
+    titulo: 'Guardar como plantilla',
+    texto: 'Se guardará el asunto, el mensaje y el botón para reutilizarlos. ' +
+           'Escribe abajo con qué nombre quieres encontrarla.' +
+           '<div style="margin-top:12px"><input class="auto-input" id="cmpw-pln-nombre" placeholder="ej. Reactivación de leads fríos"></div>',
+    confirmar: 'Guardar',
+    onOk: async () => {
+      const nombre = (document.getElementById('cmpw-pln-nombre')?.value || '').trim()
+        || (w.subject || 'Plantilla sin nombre').slice(0, 60);
+      try {
+        await plnGuardar({
+          nombre,
+          asunto: w.subject || null,
+          formato: 'simple',
+          contenido: {
+            body: w.body || '',
+            cta_text: w.cta_text || null,
+            cta_url: w.cta_url || null,
+            accent_color: w.accent_color || '#2563EB',
+          },
+        });
+        showToast('Plantilla guardada — ya está en Marketing → Plantillas');
+      } catch (e) {
+        showToast(e.message || 'No se pudo guardar la plantilla', 'error');
+      }
+    },
+  });
+}
+
+// El desplegable se llena tras pintar el paso 2, no antes: pintar es inmediato
+// y la consulta puede tardar o fallar.
+(function () {
+  const _prev = cmpWRender;
+  cmpWRender = function () {
+    _prev();
+    if (_cmpW && _cmpW.step === 2 && _cmpW.channel === 'email') cmpWCargarPlantillas();
+  };
+})();
