@@ -297,7 +297,7 @@ export default async function handler(req) {
       nombre: lead.name || '', empresa: lead.company || '', email: lead.email || '', telefono: lead.phone || '',
       etapa: lead.stage || '', fuente: lead.source || '', valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
     })[k.toLowerCase()] ?? m);
-    const html = campaignHtml(c, render(c.body), 'https://app.acuarius.app/api/unsubscribe?test=1');
+    const html = campaignHtml(c, render(c.body), 'https://app.acuarius.app/api/unsubscribe?test=1', c.html ? render(c.html) : null);
     const payload = {
       from: (c.from_name ? c.from_name.replace(/[<>"]/g, '') : 'Acuarius') + ' <notificaciones@app.acuarius.app>',
       to: [toEmail], subject: '[PRUEBA] ' + render(c.subject), html,
@@ -365,6 +365,11 @@ export default async function handler(req) {
     if ('accent_color' in body) out.accent_color = /^#[0-9a-fA-F]{6}$/.test(body.accent_color || '') ? body.accent_color : null;
     if ('header_image_url' in body) out.header_image_url = (body.header_image_url && /^https?:\/\//i.test(body.header_image_url)) ? String(body.header_image_url).slice(0, 500) : null;
     if ('utm' in body) out.utm = body.utm !== false;
+    // Campaña hecha con el constructor visual: su HTML ya montado y de qué
+    // plantilla salió. Se copia, no se enlaza: editar la plantilla después no
+    // puede cambiar un correo ya revisado.
+    if ('html' in body) out.html = body.html ? String(body.html).slice(0, 400000) : null;
+    if ('template_id' in body) out.template_id = body.template_id || null;
     return out;
   }
 

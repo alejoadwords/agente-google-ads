@@ -41,7 +41,9 @@ function paragraphs(text, { accent, utm, campaignName }) {
 // HTML completo del email de campaña.
 // campaign: {name, preheader, cta_text, cta_url, accent_color, utm}
 // bodyTxt: cuerpo ya personalizado con renderVars; unsubUrl: link de baja del lead.
-export function campaignHtml(campaign, bodyTxt, unsubUrl) {
+// htmlDiseno: cuando la campaña se hizo con el constructor visual, su HTML YA
+// personalizado. Manda sobre el cuerpo de texto — si viene, el body no se usa.
+export function campaignHtml(campaign, bodyTxt, unsubUrl, htmlDiseno) {
   const accent = /^#[0-9a-fA-F]{6}$/.test(campaign.accent_color || '') ? campaign.accent_color : '#2563EB';
   const utm = campaign.utm !== false;
   const pre = campaign.preheader
@@ -55,6 +57,16 @@ export function campaignHtml(campaign, bodyTxt, unsubUrl) {
   const headerImg = /^https?:\/\//i.test(campaign.header_image_url || '')
     ? '<img src="' + campaign.header_image_url + '" alt="" style="display:block;width:100%;max-width:560px;border-radius:10px;margin:0 0 22px">'
     : '<div style="border-top:4px solid ' + accent + ';margin-bottom:22px"></div>';
+  // La baja NO es opcional: va por ley y además la exige la cabecera
+  // List-Unsubscribe que ya mandamos. Por eso se pega fuera del diseño, donde
+  // nadie pueda borrarla arrastrando bloques.
+  const bajaHtml =
+    '<p style="font-family:Arial,Helvetica,sans-serif;margin:26px auto 0;padding-top:14px;border-top:1px solid #eee;' +
+    'font-size:11.5px;color:#9ca3af;max-width:560px;text-align:center">' +
+    '¿No quieres recibir estos correos? <a href="' + unsubUrl + '" style="color:#9ca3af">Darte de baja</a></p>';
+
+  if (htmlDiseno) return pre + htmlDiseno + bajaHtml;
+
   return pre +
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px;margin:0 auto">' +
     headerImg +

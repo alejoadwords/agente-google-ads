@@ -9861,6 +9861,7 @@ function novIr(destino) {
         case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
         case 'crm':           navGo('crm'); break;
         case 'marketing':     navGo('marketing'); break;
+        case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
         default:              if (destino && destino.startsWith('/')) location.href = destino;
@@ -26166,6 +26167,7 @@ async function cmpWSave() {
     cta_text: w.cta_text || null, cta_url: w.cta_url || null,
     accent_color: w.accent_color || null, utm: w.utm,
     header_image_url: w.header_image_url || null,
+    html: w.html || null, template_id: w.template_id || null,
   };
   if (w.id) payload.id = w.id;
   const d = await fetchAuth('/api/campaigns' + qs, {
@@ -30567,15 +30569,20 @@ async function plnRender() {
         '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Plantillas de correo</div>' +
         '<div style="font-size:var(--fs-sm);color:var(--muted)">Escríbelo una vez y reutilízalo en todas las campañas que quieras</div>' +
       '</div>' +
-      '<button class="btn-pri sm" onclick="plnEditor()">' + icn('plus', 13) + ' Nueva plantilla</button>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn-sec sm" onclick="plnEditor()">' + icn('plus', 13) + ' Correo sencillo</button>' +
+        '<button class="btn-pri sm" onclick="plnDisenar()">' + icn('sparkles', 13) + ' Diseñar correo</button>' +
+      '</div>' +
     '</div>';
 
   if (!plnLista.length) {
     view.innerHTML = header +
       '<div style="max-width:640px">' +
       emptyAgua('file', 'Todavía no tienes plantillas',
-        'Crea la primera y estará disponible en el asistente de campañas, para ti y para todo tu equipo.',
-        '<button class="btn-pri sm" onclick="plnEditor()">Crear la primera</button>') +
+        'Crea la primera y estará disponible en el asistente de campañas, para ti y para todo tu equipo. ' +
+        'El correo sencillo es texto con un botón; el diseñado se arma arrastrando bloques.',
+        '<button class="btn-sec sm" onclick="plnEditor()">Correo sencillo</button> ' +
+        '<button class="btn-pri sm" onclick="plnDisenar()">Diseñar correo</button>') +
       '</div>';
     return;
   }
@@ -30633,7 +30640,7 @@ function plnTarjeta(t) {
       '</div>' +
     '</div>' +
     '<div style="display:flex;gap:6px;flex-shrink:0">' +
-      (suya ? '<button class="btn-ghost sm" onclick="plnEditor(\'' + esc(t.id) + '\')">Editar</button>' : '') +
+      (suya ? '<button class="btn-ghost sm" onclick="' + (t.formato === 'html' ? 'plnDisenar' : 'plnEditor') + '(\'' + esc(t.id) + '\')">Editar</button>' : '') +
       '<button class="btn-ghost sm" onclick="plnDuplicar(\'' + esc(t.id) + '\')">Duplicar</button>' +
       (suya ? '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="plnBorrar(\'' + esc(t.id) + '\',\'' + esc(t.nombre) + '\')">Borrar</button>' : '') +
     '</div>' +
@@ -30914,6 +30921,13 @@ async function cmpWUsarPlantilla() {
     if (c.cta_text) _cmpW.cta_text = c.cta_text;
     if (c.cta_url) _cmpW.cta_url = c.cta_url;
     if (c.accent_color) _cmpW.accent_color = c.accent_color;
+    // Plantilla diseñada: su HTML manda sobre el cuerpo de texto al enviar. Se
+    // guarda el cuerpo igual, que es lo que se manda por WhatsApp y lo que lee
+    // quien tenga el correo en texto plano.
+    _cmpW.html = t.formato === 'html' ? (t.html || null) : null;
+    if (t.formato === 'html' && !_cmpW.body) {
+      _cmpW.body = 'Este correo se ve mejor con imágenes activadas.';
+    }
     _cmpW.template_id = t.id;
     cmpWRender();
     showToast('Plantilla aplicada');
@@ -31033,4 +31047,207 @@ function varsDesconocidas(texto) {
   return [...new Set(halladas
     .map(m => m.replace(/[{}\s]/g, '').toLowerCase())
     .filter(v => !validas.includes(v)))];
+}
+
+// ── CONSTRUCTOR VISUAL DE CORREOS (GrapesJS) ──────────────────────────────────
+// GrapesJS pesa 1,1 MB. Se carga SOLO al abrir el constructor: cargarlo en el
+// arranque le cobraría ese peso a todo el mundo, incluido quien nunca hace una
+// campaña. Por eso todo lo de aquí es perezoso.
+
+const GJS_VER = '0.23.6';
+const GJS_PRESET_VER = '1.0.2';
+let _gjsPromesa = null;
+let _gjsEs = null;   // mensajes en español, si se pudieron cargar
+
+function plnCargarGrapes() {
+  if (_gjsPromesa) return _gjsPromesa;
+  _gjsPromesa = new Promise((ok, mal) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdn.jsdelivr.net/npm/grapesjs@' + GJS_VER + '/dist/css/grapes.min.css';
+    document.head.appendChild(css);
+
+    const script = (src) => new Promise((r, e) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = r;
+      s.onerror = () => e(new Error('No se pudo cargar ' + src));
+      document.head.appendChild(s);
+    });
+
+    script('https://cdn.jsdelivr.net/npm/grapesjs@' + GJS_VER + '/dist/grapes.min.js')
+      .then(() => Promise.all([
+        script('https://cdn.jsdelivr.net/npm/grapesjs-preset-newsletter@' + GJS_PRESET_VER + '/dist/index.js'),
+        // El fichero de idioma es CommonJS: con <script> normal revienta con
+        // «exports is not defined» y con import() directo también. El sufijo
+        // /+esm de jsdelivr lo convierte. Si falla, se sigue en inglés antes
+        // que dejar sin constructor.
+        import('https://cdn.jsdelivr.net/npm/grapesjs@' + GJS_VER + '/locale/es.js/+esm')
+          .then(m => { _gjsEs = (m.default && m.default.default) || m.default || m; })
+          .catch(e => console.warn('constructor en inglés:', e?.message)),
+      ]))
+      .then(ok).catch(mal);
+  }).catch(e => {
+    // Si falla, que el siguiente intento vuelva a probar en vez de quedarse
+    // pegado a una promesa rota para siempre.
+    _gjsPromesa = null;
+    throw e;
+  });
+  return _gjsPromesa;
+}
+
+let _gjsEditor = null;
+let _gjsCtx = null;   // { id, nombre, categoria, asunto }
+
+async function plnDisenar(id) {
+  let t = { nombre: '', categoria: '', asunto: '', diseno: null, html: null };
+  if (id) {
+    try {
+      const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      t = (await r.json()).plantilla;
+    } catch {
+      showToast('No se pudo abrir la plantilla', 'error');
+      return;
+    }
+  }
+  _gjsCtx = { id: id || null, nombre: t.nombre || '', categoria: t.categoria || '', asunto: t.asunto || '' };
+
+  const ov = document.createElement('div');
+  ov.id = 'gjs-overlay';
+  // Por encima de la burbuja de soporte (9500) y del resto del cromo, por debajo
+  // de los modales (9998): el constructor ocupa la pantalla entera y una burbuja
+  // flotando sobre el lienzo tapa justo donde se sueltan los bloques.
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9700;background:var(--bg);display:flex;flex-direction:column';
+  ov.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--panel)">' +
+      '<input class="auto-input" id="gjs-nombre" value="' + esc(_gjsCtx.nombre) + '" placeholder="Nombre de la plantilla *" style="max-width:260px">' +
+      '<input class="auto-input" id="gjs-asunto" value="' + esc(_gjsCtx.asunto) + '" placeholder="Asunto del correo" style="max-width:300px">' +
+      '<div id="gjs-vars" style="flex:1"></div>' +
+      '<span id="gjs-estado" style="font-size:11.5px;color:var(--muted2)"></span>' +
+      '<button class="btn-ghost sm" onclick="plnDisenarCerrar()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="gjs-save" onclick="plnDisenarGuardar()">Guardar plantilla</button>' +
+    '</div>' +
+    '<div id="gjs" style="flex:1;min-height:0"></div>';
+  document.body.appendChild(ov);
+
+  const estado = document.getElementById('gjs-estado');
+  estado.textContent = 'Cargando el constructor…';
+
+  try {
+    await plnCargarGrapes();
+  } catch (e) {
+    console.error('grapesjs', e);
+    estado.textContent = '';
+    document.getElementById('gjs').innerHTML =
+      '<div style="padding:40px;max-width:520px;margin:0 auto">' +
+      emptyAgua('alert', 'No se pudo cargar el constructor',
+        'Depende de un recurso externo y ahora mismo no responde. Puedes cerrar y usar el editor sencillo, que no necesita internet de terceros.',
+        '<button class="btn-pri sm" onclick="plnDisenarCerrar()">Cerrar</button>') + '</div>';
+    return;
+  }
+  estado.textContent = '';
+
+  _gjsEditor = window.grapesjs.init({
+    container: '#gjs',
+    height: '100%',
+    fromElement: false,
+    // Sin almacenamiento propio: guarda nuestro botón, contra nuestra API. El
+    // suyo escribiría en localStorage y tendríamos dos verdades distintas.
+    storageManager: false,
+    // Sin messages, poner locale:'es' no traduce nada y el panel sale en inglés.
+    i18n: { locale: 'es', localeFallback: 'en', messages: _gjsEs ? { es: _gjsEs } : {} },
+    plugins: ['grapesjs-preset-newsletter'],
+    pluginsOpts: {
+      'grapesjs-preset-newsletter': {
+        modalTitleImport: 'Pegar HTML',
+        modalTitleExport: 'HTML del correo',
+        // Se quita el botón de importar del preset: pegar HTML suelto es la vía
+        // más rápida a un correo roto en Outlook, y no la necesitamos.
+        importPlaceholder: '',
+      },
+    },
+  });
+
+  // El panel de variables se cuelga de la barra: dentro del lienzo no hay dónde.
+  document.getElementById('gjs-vars').innerHTML = varsBotonGjs();
+
+  if (t.diseno) {
+    try { _gjsEditor.loadProjectData(t.diseno); }
+    catch (e) { console.warn('diseño no legible, se empieza en blanco', e); }
+  } else if (t.html) {
+    _gjsEditor.setComponents(t.html);
+  }
+}
+
+function plnDisenarCerrar() {
+  try { _gjsEditor?.destroy(); } catch {}
+  _gjsEditor = null; _gjsCtx = null;
+  document.getElementById('gjs-overlay')?.remove();
+}
+
+// Las variables no se pueden insertar en el cursor de un lienzo de bloques, así
+// que se copian: el usuario las pega donde quiera dentro del texto.
+function varsBotonGjs() {
+  return '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
+    '<span style="font-size:11px;color:var(--muted2)">Variables (clic para copiar):</span>' +
+    CAMPO_VARIABLES.map(x =>
+      '<button type="button" class="btn-ghost sm" style="font-size:10.5px;padding:2px 7px" title="' + esc(x.d) + '"' +
+      ' onclick="varsCopiar(\'' + x.v + '\')">{{' + x.v + '}}</button>').join('') +
+  '</div>';
+}
+
+function varsCopiar(v) {
+  const txt = '{{' + v + '}}';
+  navigator.clipboard?.writeText(txt)
+    .then(() => showToast('Copiado ' + txt + ' — pégalo dentro del texto'))
+    .catch(() => showToast('Copia a mano: ' + txt, 'info'));
+}
+
+async function plnDisenarGuardar() {
+  const nombre = (document.getElementById('gjs-nombre')?.value || '').trim();
+  const asunto = (document.getElementById('gjs-asunto')?.value || '').trim() || null;
+  const btn = document.getElementById('gjs-save');
+  if (!nombre) { showToast('Ponle un nombre a la plantilla', 'error'); return; }
+  if (!_gjsEditor) return;
+
+  // El HTML con los estilos ya metidos en cada etiqueta. Gmail y Outlook tiran
+  // las hojas de estilo: sin esto el correo llega sin diseño ninguno.
+  let html = '';
+  try {
+    html = _gjsEditor.runCommand('gjs-get-inlined-html') || '';
+  } catch (e) {
+    console.error('inline', e);
+    showToast('No se pudo preparar el HTML del correo', 'error');
+    return;
+  }
+  if (!html.trim()) { showToast('El correo está vacío: arrastra algún bloque antes de guardar', 'error'); return; }
+  // Viene envuelto en <body>, y ese HTML se pega DENTRO del correo: un <body>
+  // anidado es inválido. Se convierte en <div> conservando sus estilos, que son
+  // los que puso el usuario en el panel Cuerpo.
+  html = html
+    .replace(/<body([^>]*)>/i, '<div$1>')
+    .replace(/<\/body>/i, '</div>');
+
+  const malas = varsDesconocidas(html + ' ' + (asunto || ''));
+  if (malas.length) {
+    showToast('La variable {{' + malas[0] + '}} no existe y se enviaría tal cual', 'error');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    await plnGuardar({
+      nombre, asunto,
+      categoria: _gjsCtx.categoria || null,
+      formato: 'html',
+      html,
+      diseno: _gjsEditor.getProjectData(),
+    }, _gjsCtx.id);
+    plnDisenarCerrar();
+    showToast('Plantilla guardada');
+    plnRender();
+  } catch (e) {
+    showToast(e.message || 'No se pudo guardar', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar plantilla'; }
+  }
 }

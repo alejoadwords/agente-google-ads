@@ -54,7 +54,9 @@ async function sendEmail(campaign, lead) {
   const subject = renderVars(campaign.subject, lead);
   const bodyTxt = renderVars(campaign.body, lead);
   const unsub = unsubLink(lead.id);
-  const html = campaignHtml(campaign, bodyTxt, unsub);
+  // El diseño también lleva variables: sin esto llegaría con las llaves puestas.
+  const htmlDiseno = campaign.html ? renderVars(campaign.html, lead) : null;
+  const html = campaignHtml(campaign, bodyTxt, unsub, htmlDiseno);
   const from = (campaign.from_name ? campaign.from_name.replace(/[<>"]/g, '') : 'Acuarius') + ' <notificaciones@app.acuarius.app>';
   const payload = {
     from, to: [lead.email], subject, html,
