@@ -25662,15 +25662,15 @@ function cmpWStep2() {
       '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio</div>' +
       // Partir de una plantilla guardada. Se carga después de pintar para no
       // retrasar el paso por una consulta que puede fallar.
-      (isEmail ?
       '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)" id="cmpw-pln-box">' +
-        '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn('file', 12) + ' Partir de una plantilla</div>' +
+        '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn(isEmail ? 'file' : 'chat', 12) + ' ' +
+          (isEmail ? 'Partir de una plantilla' : 'Partir de una respuesta guardada') + '</div>' +
         '<div style="display:flex;gap:8px;align-items:center">' +
           '<select class="auto-input" id="cmpw-pln-sel" style="flex:1"><option value="">Cargando…</option></select>' +
           '<button class="btn-sec sm" id="cmpw-pln-btn" onclick="cmpWUsarPlantilla()" disabled>Usar</button>' +
         '</div>' +
-        '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Se copia su contenido aquí. Editarlo no cambia la plantilla.</div>' +
-      '</div>' : '') +
+        '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Se copia su contenido aquí. Editarlo no cambia el original.</div>' +
+      '</div>' +
       '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
         '<div style="font-size:12px;font-weight:800;margin-bottom:6px">✨ Redactar con IA</div>' +
         '<div style="display:flex;gap:8px">' +
@@ -25702,9 +25702,11 @@ function cmpWStep2() {
       '</div>' +
       // Al revés que lo de arriba: rescatar para siempre un correo que acabas de
       // escribir. Sin esto, el buen contenido se queda encerrado en su campaña.
-      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
-        '<button class="btn-ghost sm" onclick="cmpWGuardarComoPlantilla()">' + icn('plus', 12) + ' Guardar esto como plantilla</button>' +
       '</div>' : '') +
+      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
+        '<button class="btn-ghost sm" onclick="cmpWGuardarComoPlantilla()">' + icn('plus', 12) + ' ' +
+          (isEmail ? 'Guardar esto como plantilla' : 'Guardar esto como respuesta') + '</button>' +
+      '</div>' +
     '</div>' +
     '<div style="position:sticky;top:0">' +
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Así llega el ' + (isEmail ? 'email' : 'WhatsApp') + '</div>' +
@@ -30530,6 +30532,9 @@ setInterval(tkBotonHeader, 60000);
 let plnLista = [];
 let plnBusqueda = '';
 let plnCargando = false;
+let plnCanal = 'email';
+
+function plnSetCanal(c) { plnCanal = c; plnRender(); }
 
 async function plnCargar() {
   const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -30548,10 +30553,19 @@ function plnCabecera() {
         '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Plantillas de correo</div>' +
         '<div style="font-size:var(--fs-sm);color:var(--muted)">Escríbelo una vez y reutilízalo en todas las campañas que quieras</div>' +
       '</div>' +
-      '<div style="display:flex;gap:8px">' +
-        '<button class="btn-sec sm" onclick="plnEditor()">' + icn('plus', 13) + ' Correo sencillo</button>' +
-        '<button class="btn-pri sm" onclick="plnDisenar()">' + icn('sparkles', 13) + ' Diseñar correo</button>' +
-      '</div>' +
+      (plnCanal === 'email'
+        ? '<div style="display:flex;gap:8px">' +
+            '<button class="btn-sec sm" onclick="plnEditor()">' + icn('plus', 13) + ' Correo sencillo</button>' +
+            '<button class="btn-pri sm" onclick="plnDisenar()">' + icn('sparkles', 13) + ' Diseñar correo</button>' +
+          '</div>'
+        : '<button class="btn-pri sm" onclick="qrNuevaDesdePlantillas()">' + icn('plus', 13) + ' Nueva respuesta</button>') +
+    '</div>' +
+    // Dos canales, un solo sitio. Las de WhatsApp son las MISMAS respuestas
+    // guardadas del inbox: duplicarlas en otra tabla haría que el comercial
+    // escribiera una versión y la dirección otra distinta.
+    '<div class="flow-estado" style="margin-bottom:16px">' +
+      '<button class="' + (plnCanal === 'email' ? 'on pub' : '') + '" onclick="plnSetCanal(\'email\')">📧 Correo</button>' +
+      '<button class="' + (plnCanal === 'whatsapp' ? 'on pub' : '') + '" onclick="plnSetCanal(\'whatsapp\')">💬 WhatsApp</button>' +
     '</div>';
 }
 
@@ -30567,7 +30581,7 @@ async function plnRender() {
     '<div style="font-size:12px;color:var(--muted2);margin-top:10px">Cargando tus plantillas…</div>';
 
   try {
-    await plnCargar();
+    await (plnCanal === 'whatsapp' ? qrCargar() : plnCargar());
   } catch (e) {
     console.error('plnRender', e);
     view.innerHTML =
@@ -30582,6 +30596,8 @@ async function plnRender() {
   plnCargando = false;
 
   const header = plnCabecera();
+
+  if (plnCanal === 'whatsapp') { plnRenderWhatsapp(view, header); return; }
 
   if (!plnLista.length) {
     view.innerHTML = header +
@@ -30887,25 +30903,28 @@ let _cmpwPlns = [];
 async function cmpWCargarPlantillas() {
   const sel = document.getElementById('cmpw-pln-sel');
   if (!sel) return;
+  const esWa = _cmpW && _cmpW.channel === 'whatsapp';
   try {
-    _cmpwPlns = await plnCargar();
+    _cmpwPlns = esWa
+      ? (await qrCargar()).map(r => ({ id: r.id, nombre: r.titulo, categoria: null, _wa: true, texto: r.texto }))
+      : await plnCargar();
   } catch {
     // Que falle esto no puede impedir escribir la campaña a mano.
     const box = document.getElementById('cmpw-pln-box');
-    if (box) box.innerHTML = '<div style="font-size:11.5px;color:var(--muted)">No se pudieron cargar las plantillas. Puedes escribir el correo abajo igualmente.</div>';
+    if (box) box.innerHTML = '<div style="font-size:11.5px;color:var(--muted)">No se pudo cargar la lista. Puedes escribir el mensaje abajo igualmente.</div>';
     return;
   }
   const btn = document.getElementById('cmpw-pln-btn');
   if (!_cmpwPlns.length) {
-    sel.innerHTML = '<option value="">Todavía no tienes plantillas</option>';
+    sel.innerHTML = '<option value="">' + (esWa ? 'Todavía no tienes respuestas guardadas' : 'Todavía no tienes plantillas') + '</option>';
     sel.disabled = true;
     if (btn) btn.disabled = true;
     const box = document.getElementById('cmpw-pln-box');
     if (box) box.insertAdjacentHTML('beforeend',
-      '<div style="font-size:11px;margin-top:6px"><a href="#" onclick="event.preventDefault();cmpWClose();navGo(\'marketing\');setTimeout(()=>crmSetView(\'plantillas\'),120)" style="color:var(--blue)">Crear una en Marketing → Plantillas</a></div>');
+      '<div style="font-size:11px;margin-top:6px"><a href="#" onclick="event.preventDefault();cmpWClose();navGo(\'marketing\');setTimeout(()=>{plnCanal=\'' + (esWa ? 'whatsapp' : 'email') + '\';crmSetView(\'plantillas\')},120)" style="color:var(--blue)">Crear una en Marketing → Plantillas</a></div>');
     return;
   }
-  sel.innerHTML = '<option value="">Elige una plantilla…</option>' +
+  sel.innerHTML = '<option value="">' + (esWa ? 'Elige una respuesta…' : 'Elige una plantilla…') + '</option>' +
     _cmpwPlns.map(t => '<option value="' + esc(t.id) + '">' + esc(t.nombre) + (t.categoria ? ' · ' + esc(t.categoria) : '') + '</option>').join('');
   sel.disabled = false;
   sel.onchange = () => { if (btn) btn.disabled = !sel.value; };
@@ -30916,6 +30935,16 @@ async function cmpWUsarPlantilla() {
   const sel = document.getElementById('cmpw-pln-sel');
   const id = sel?.value;
   if (!id) return;
+  // WhatsApp: la respuesta guardada ya viene entera en la lista, no hace falta
+  // ir a buscarla otra vez.
+  const guardada = (_cmpwPlns || []).find(x => String(x.id) === String(id) && x._wa);
+  if (guardada) {
+    cmpWCollect();
+    _cmpW.body = guardada.texto || '';
+    cmpWRender();
+    showToast('Respuesta aplicada');
+    return;
+  }
   try {
     const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id));
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -30949,7 +30978,31 @@ function cmpWGuardarComoPlantilla() {
   cmpWCollect();
   const w = _cmpW;
   if (!w.body || !w.body.trim()) {
-    showToast('Escribe el mensaje antes de guardarlo como plantilla', 'error');
+    showToast('Escribe el mensaje antes de guardarlo', 'error');
+    return;
+  }
+  // WhatsApp no tiene asunto ni botón: se guarda como respuesta reutilizable,
+  // la misma que usa el comercial en el inbox.
+  if (w.channel === 'whatsapp') {
+    confirmarAgua({
+      titulo: 'Guardar como respuesta',
+      texto: 'Quedará disponible al responder en el inbox y en futuras campañas de WhatsApp.' +
+             '<div style="margin-top:12px"><input class="auto-input" id="cmpw-pln-nombre" placeholder="ej. Precio y formas de pago"></div>',
+      confirmar: 'Guardar',
+      onOk: async () => {
+        const titulo = (document.getElementById('cmpw-pln-nombre')?.value || '').trim() || (w.name || 'Respuesta').slice(0, 60);
+        try {
+          const r = await fetchAuth('/api/quick-replies', {
+            method: 'POST',
+            body: JSON.stringify({ titulo, texto: w.body, client_id: crmAmbitoCliente() || null }),
+          });
+          if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo guardar');
+          showToast('Respuesta guardada — ya está en Marketing → Plantillas y en el inbox');
+        } catch (e) {
+          showToast(e.message || 'No se pudo guardar', 'error');
+        }
+      },
+    });
     return;
   }
   confirmarAgua({
@@ -30987,7 +31040,7 @@ function cmpWGuardarComoPlantilla() {
   const _prev = cmpWRender;
   cmpWRender = function () {
     _prev();
-    if (_cmpW && _cmpW.step === 2 && _cmpW.channel === 'email') cmpWCargarPlantillas();
+    if (_cmpW && _cmpW.step === 2) cmpWCargarPlantillas();
   };
 })();
 
@@ -31318,4 +31371,142 @@ async function plnDisenarGuardar() {
     showToast(e.message || 'No se pudo guardar', 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar plantilla'; }
   }
+}
+
+// ── Respuestas guardadas de WhatsApp ──────────────────────────────────────────
+// NO son una tabla nueva: son las mismas respuestas rápidas que el comercial usa
+// en el inbox (quick_replies). Tenerlas en dos sitios distintos acabaría con la
+// dirección escribiendo una versión y el comercial otra.
+//
+// Y no son plantillas HSM de Meta: esas hay que enviarlas a aprobación y seguimos
+// bloqueados hasta el App Review. Estas sirven para escribir rápido y para las
+// campañas de WhatsApp, que solo alcanzan a quien ya tiene conversación abierta.
+
+function plnRenderWhatsapp(view, header) {
+  const lista = (typeof qrLista !== 'undefined' ? qrLista : []) || [];
+
+  const aviso =
+    '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:9px 13px;margin-bottom:16px;max-width:860px">' +
+      'Son textos reutilizables, no plantillas aprobadas por Meta. Sirven para responder rápido en el inbox y para campañas de WhatsApp, ' +
+      'que solo llegan a quien ya tiene una conversación abierta contigo.' +
+    '</div>';
+
+  if (!lista.length) {
+    view.innerHTML = header + aviso +
+      '<div style="max-width:640px">' +
+      emptyAgua('chat', 'Todavía no tienes respuestas guardadas',
+        'Guarda los mensajes que tu equipo escribe una y otra vez. Aparecen en el inbox al responder y en el asistente de campañas de WhatsApp.',
+        '<button class="btn-pri sm" onclick="qrNuevaDesdePlantillas()">Crear la primera</button>') +
+      '</div>';
+    return;
+  }
+
+  const q = plnBusqueda.trim().toLowerCase();
+  const visibles = q ? lista.filter(r => (r.titulo + ' ' + r.texto).toLowerCase().includes(q)) : lista;
+
+  view.innerHTML = header + aviso +
+    '<div style="margin-bottom:14px;max-width:320px">' +
+      '<input class="auto-input" placeholder="Buscar respuesta…" value="' + esc(plnBusqueda) + '" oninput="plnBusqueda=this.value;plnRender()">' +
+    '</div>' +
+    '<div style="max-width:860px">' +
+      (visibles.length ? visibles.map(r => plnTarjetaWa(r)).join('')
+        : '<div style="font-size:var(--fs-sm);color:var(--muted);padding:20px 2px">Ninguna coincide con «' + esc(plnBusqueda) + '».</div>') +
+    '</div>';
+}
+
+function plnTarjetaWa(r) {
+  const usos = Number(r.usos || 0);
+  return '<div class="auto-card">' +
+    '<div style="width:38px;height:38px;border-radius:11px;background:#DCFCE7;color:#16A34A;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+      icn('chat', 17) + '</div>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:var(--fs-base);font-weight:700">' + esc(r.titulo) + '</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-top:3px;white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">' + esc(r.texto) + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted2);margin-top:5px">' +
+        (usos ? 'Usada ' + usos + (usos === 1 ? ' vez' : ' veces') : 'Todavía sin usar') + '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;flex-shrink:0">' +
+      '<button class="btn-ghost sm" onclick="qrEditarDesdePlantillas(\'' + esc(r.id) + '\')">Editar</button>' +
+      '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="qrBorrarDesdePlantillas(\'' + esc(r.id) + '\',\'' + esc(r.titulo) + '\')">Borrar</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// El editor del inbox vive dentro de su panel. Aquí hace falta uno propio, pero
+// escribiendo contra la MISMA API para que no haya dos verdades.
+function qrEditorPlantillas(r) {
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'qrp-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">' + (r ? 'Editar respuesta' : 'Nueva respuesta guardada') + '</div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">✕</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-field"><label class="auto-label">Título *</label>' +
+        '<input class="auto-input" id="qrp-titulo" value="' + esc(r?.titulo || '') + '" placeholder="ej. Precio y formas de pago"></div>' +
+      '<div class="auto-field"><label class="auto-label">Mensaje *</label>' +
+        '<textarea class="auto-input" id="qrp-texto" rows="6" placeholder="Lo que se va a escribir…">' + esc(r?.texto || '') + '</textarea>' +
+        varsBoton('qrp-texto') + '</div>' +
+      '<div id="qrp-msg" style="font-size:12px;margin-top:8px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="qrp-save" onclick="qrGuardarDesdePlantillas(' + (r ? '\'' + esc(r.id) + '\'' : 'null') + ')">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('qrp-titulo')?.focus(), 80);
+}
+
+function qrNuevaDesdePlantillas() { qrEditorPlantillas(null); }
+
+function qrEditarDesdePlantillas(id) {
+  const r = (qrLista || []).find(x => String(x.id) === String(id));
+  if (r) qrEditorPlantillas(r);
+}
+
+async function qrGuardarDesdePlantillas(id) {
+  const titulo = (document.getElementById('qrp-titulo')?.value || '').trim();
+  const texto = (document.getElementById('qrp-texto')?.value || '').trim();
+  const msg = document.getElementById('qrp-msg');
+  const btn = document.getElementById('qrp-save');
+  const fallo = t => { if (msg) { msg.style.color = '#B91C1C'; msg.textContent = t; } };
+  if (!titulo) return fallo('Ponle un título para poder encontrarla.');
+  if (!texto) return fallo('Falta el mensaje que se va a escribir.');
+  const malas = varsDesconocidas(texto);
+  if (malas.length) return fallo('La variable {{' + malas[0] + '}} no existe y se enviaría tal cual.');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = id
+      ? await fetchAuth('/api/quick-replies', { method: 'PUT', body: JSON.stringify({ id, titulo, texto }) })
+      : await fetchAuth('/api/quick-replies', { method: 'POST', body: JSON.stringify({ titulo, texto, client_id: crmAmbitoCliente() || null }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No se pudo guardar');
+    document.getElementById('qrp-modal')?.remove();
+    showToast('Respuesta guardada');
+    plnRender();
+  } catch (e) {
+    fallo(e.message || 'No se pudo guardar.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+function qrBorrarDesdePlantillas(id, titulo) {
+  confirmarAgua({
+    titulo: '¿Borrar «' + titulo + '»?',
+    texto: 'Dejará de aparecer también en el inbox al responder una conversación.',
+    confirmar: 'Borrar',
+    peligro: true,
+    onOk: async () => {
+      try {
+        const r = await fetchAuth('/api/quick-replies?id=' + encodeURIComponent(id), { method: 'DELETE' });
+        if (!r.ok) throw new Error();
+        showToast('Respuesta borrada');
+        plnRender();
+      } catch { showToast('No se pudo borrar', 'error'); }
+    },
+  });
 }

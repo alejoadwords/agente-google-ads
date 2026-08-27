@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-27-respuestas-whatsapp",
+      "fecha": "2026-08-27",
+      "tipo": "mejora",
+      "titulo": "Tus respuestas de WhatsApp, también fuera del inbox",
+      "texto": "Las respuestas rápidas que tu equipo usa al contestar una conversación ahora se administran desde Marketing → Plantillas, en la pestaña de WhatsApp: crear, editar, buscar y ver cuántas veces se ha usado cada una. Y aparecen en el asistente al montar una campaña de WhatsApp, donde también puedes guardar como respuesta lo que acabas de escribir. Son las mismas de siempre, no una copia: lo que cambies aquí lo ve el comercial en el inbox.",
+      "accion": {
+        "texto": "Ir a Plantillas",
+        "ir": "plantillas"
+      }
+    },
+    {
       "id": "2026-08-27-plantillas-correo",
       "fecha": "2026-08-27",
       "tipo": "nuevo",
