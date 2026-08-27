@@ -6,7 +6,7 @@
       "fecha": "2026-08-27",
       "tipo": "nuevo",
       "titulo": "Plantillas de correo, con constructor visual",
-      "texto": "Nueva sección en Marketing → Plantillas. Escribe un correo una vez y reutilízalo en todas las campañas que quieras: puedes hacerlo sencillo —texto, botón y color— o diseñarlo arrastrando bloques, columnas, imágenes y botones. En el asistente de campañas ahora eliges una plantilla guardada o guardas como plantilla lo que acabas de escribir. Y bajo el asunto y el mensaje hay un botón que despliega las siete variables disponibles y las mete donde tengas el cursor.",
+      "texto": "Nueva sección en Marketing → Plantillas. Escribe un correo una vez y reutilízalo en todas las campañas que quieras. Al diseñar arrancas eligiendo entre seis bases —bienvenida, promoción, seguimiento, novedades, invitación y envío de propuesta— con su estructura, sus huecos de imagen y textos de ejemplo que cambias a tu gusto; o empiezas en blanco y arrastras bloques, columnas, imágenes y botones. En el asistente de campañas eliges una plantilla guardada o guardas como plantilla lo que acabas de escribir. Y bajo el asunto y el mensaje hay un botón que despliega las siete variables disponibles y las mete donde tengas el cursor.",
       "accion": {
         "texto": "Ir a Plantillas",
         "ir": "plantillas"

@@ -30541,12 +30541,30 @@ async function plnCargar() {
   return plnLista;
 }
 
+
+function plnCabecera() {
+  return '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:260px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Plantillas de correo</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Escríbelo una vez y reutilízalo en todas las campañas que quieras</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn-sec sm" onclick="plnEditor()">' + icn('plus', 13) + ' Correo sencillo</button>' +
+        '<button class="btn-pri sm" onclick="plnDisenar()">' + icn('sparkles', 13) + ' Diseñar correo</button>' +
+      '</div>' +
+    '</div>';
+}
+
 async function plnRender() {
   const view = document.getElementById('crm-plantillas-view');
   if (!view) return;
   if (plnCargando) return;
   plnCargando = true;
-  view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
+  // La cabecera se pinta ANTES de pedir nada. El endpoint es nuevo y arranca en
+  // frío: esperar callado deja una pantalla que parece rota.
+  view.innerHTML = plnCabecera() +
+    '<div class="pulso-skel" style="max-width:640px"></div>' +
+    '<div style="font-size:12px;color:var(--muted2);margin-top:10px">Cargando tus plantillas…</div>';
 
   try {
     await plnCargar();
@@ -30563,17 +30581,7 @@ async function plnRender() {
   }
   plnCargando = false;
 
-  const header =
-    '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;flex-wrap:wrap">' +
-      '<div style="flex:1;min-width:260px">' +
-        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Plantillas de correo</div>' +
-        '<div style="font-size:var(--fs-sm);color:var(--muted)">Escríbelo una vez y reutilízalo en todas las campañas que quieras</div>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px">' +
-        '<button class="btn-sec sm" onclick="plnEditor()">' + icn('plus', 13) + ' Correo sencillo</button>' +
-        '<button class="btn-pri sm" onclick="plnDisenar()">' + icn('sparkles', 13) + ' Diseñar correo</button>' +
-      '</div>' +
-    '</div>';
+  const header = plnCabecera();
 
   if (!plnLista.length) {
     view.innerHTML = header +
@@ -31077,6 +31085,9 @@ function plnCargarGrapes() {
     script('https://cdn.jsdelivr.net/npm/grapesjs@' + GJS_VER + '/dist/grapes.min.js')
       .then(() => Promise.all([
         script('https://cdn.jsdelivr.net/npm/grapesjs-preset-newsletter@' + GJS_PRESET_VER + '/dist/index.js'),
+        // Nuestros diseños de arranque. Van aparte de app.js porque son texto
+        // pesado que no le sirve a quien nunca hace una campaña.
+        script('/plantillas-base.js').catch(e => console.warn('sin diseños base:', e?.message)),
         // El fichero de idioma es CommonJS: con <script> normal revienta con
         // «exports is not defined» y con import() directo también. El sufijo
         // /+esm de jsdelivr lo convierte. Si falla, se sigue en inglés antes
@@ -31127,7 +31138,7 @@ async function plnDisenar(id) {
       '<button class="btn-ghost sm" onclick="plnDisenarCerrar()">Cancelar</button>' +
       '<button class="btn-pri sm" id="gjs-save" onclick="plnDisenarGuardar()">Guardar plantilla</button>' +
     '</div>' +
-    '<div id="gjs" style="flex:1;min-height:0"></div>';
+    '<div id="gjs" style="flex:1;min-height:0;position:relative"></div>';
   document.body.appendChild(ov);
 
   const estado = document.getElementById('gjs-estado');
@@ -31168,6 +31179,18 @@ async function plnDisenar(id) {
     },
   });
 
+  // El preset trae los bloques en inglés y no acepta traducirlos por opciones,
+  // así que se renombran uno a uno después de arrancar.
+  const ETIQUETAS = {
+    sect100: '1 columna', sect50: '2 columnas', sect30: '3 columnas', sect37: 'Dos anchos',
+    button: 'Botón', divider: 'Separador', text: 'Texto', 'text-sect': 'Título y texto',
+    image: 'Imagen', quote: 'Cita', link: 'Enlace', 'link-block': 'Bloque enlazado',
+    'grid-items': 'Rejilla', 'list-items': 'Lista',
+  };
+  Object.keys(ETIQUETAS).forEach(id => {
+    try { _gjsEditor.BlockManager.get(id)?.set('label', ETIQUETAS[id]); } catch {}
+  });
+
   // El panel de variables se cuelga de la barra: dentro del lienzo no hay dónde.
   document.getElementById('gjs-vars').innerHTML = varsBotonGjs();
 
@@ -31176,7 +31199,52 @@ async function plnDisenar(id) {
     catch (e) { console.warn('diseño no legible, se empieza en blanco', e); }
   } else if (t.html) {
     _gjsEditor.setComponents(t.html);
+  } else {
+    // Nueva: un lienzo en blanco no le dice a nadie por dónde empezar.
+    plnElegirBase();
   }
+}
+
+// Selector de diseño de arranque. Se abre sobre el constructor ya montado, así
+// que elegir es instantáneo: no hay que volver a cargar nada.
+function plnElegirBase() {
+  const bases = window.PLANTILLAS_BASE || [];
+  if (!bases.length) return;   // si no cargaron, se empieza en blanco y ya
+
+  const ov = document.createElement('div');
+  ov.id = 'gjs-bases';
+  ov.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--bg);overflow-y:auto;padding:28px';
+  ov.innerHTML =
+    '<div style="max-width:900px;margin:0 auto">' +
+      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">¿Por dónde empezamos?</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:20px">Elige una base y cámbiale lo que quieras: textos, colores, bloques e imágenes.</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">' +
+        bases.map(b =>
+          '<div onclick="plnUsarBase(\'' + esc(b.id) + '\')" style="cursor:pointer;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--panel);transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'var(--border)\'">' +
+            '<div style="height:130px;overflow:hidden;background:#f5f6fa;position:relative">' +
+              '<div style="transform:scale(.34);transform-origin:top left;width:294%;pointer-events:none">' + b.html + '</div>' +
+            '</div>' +
+            '<div style="padding:11px 13px">' +
+              '<div style="font-size:13px;font-weight:700">' + esc(b.nombre) + '</div>' +
+              '<div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:3px">' + esc(b.descripcion) + '</div>' +
+            '</div>' +
+          '</div>').join('') +
+        '<div onclick="plnUsarBase(null)" style="cursor:pointer;border:1px dashed var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--muted);font-size:13px;text-align:center;padding:16px">' +
+          'Empezar en blanco' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('gjs')?.appendChild(ov);
+}
+
+function plnUsarBase(id) {
+  document.getElementById('gjs-bases')?.remove();
+  if (!id || !_gjsEditor) return;
+  const b = (window.PLANTILLAS_BASE || []).find(x => x.id === id);
+  if (!b) return;
+  _gjsEditor.setComponents(b.html);
+  // La categoría de la base se hereda: es una pista útil y se puede cambiar.
+  if (_gjsCtx && !_gjsCtx.categoria) _gjsCtx.categoria = b.categoria || '';
 }
 
 function plnDisenarCerrar() {
