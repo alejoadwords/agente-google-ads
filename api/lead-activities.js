@@ -217,6 +217,29 @@ export default async function handler(req) {
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
 
+    // Trabajar el lead ES actividad. Todo lo que mide inactividad —el Pulso, el
+    // badge de la tarjeta, el filtro «Sin actividad» y el disparador
+    // lead_inactive de las automatizaciones— lee leads.updated_at, que solo se
+    // movía al EDITAR la ficha. Registrar una llamada no la editaba, así que el
+    // Pulso anunciaba como abandonado un lead atendido el día anterior, y las
+    // automatizaciones de reactivación escribían a clientes recién atendidos.
+    //
+    // stage_change y creacion no están: esas ya vienen con una escritura de la
+    // fila, y contarlas aquí sería tocar updated_at dos veces por lo mismo.
+    if (['llamada', 'email', 'reunion', 'nota', 'tarea'].includes(type)) {
+      const ok = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${encodeURIComponent(userId)}`,
+        {
+          method: 'PATCH',
+          headers: sbHeaders(),
+          body: JSON.stringify({ updated_at: new Date().toISOString() }),
+        }
+      ).then(r => r.ok).catch(() => false);
+      // La actividad ya está guardada: esto no puede tumbar la respuesta. Pero
+      // si falla, el lead seguirá saliendo como inactivo y hay que poder verlo.
+      if (!ok) console.error('[actividad] no se pudo refrescar updated_at del lead', lead_id);
+    }
+
     // El correo va DESPUÉS de guardar y nunca tumba la respuesta: la nota es el
     // dato, el correo es el mensajero. Pero se devuelve qué pasó, para que la
     // interfaz no diga «avisado» cuando no salió nada.
