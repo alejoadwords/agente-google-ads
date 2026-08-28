@@ -17483,6 +17483,7 @@ function crmAvisoEtapasAjenas(leads) {
 function crmRender() {
   if (crmView === 'kanban') crmRenderKanban();
   else crmRenderList();
+  crmPintarVistaSw();
   crmUpdateClientTag();
   crmUpdateSidebarCount();
   crmPintarFiltroFuente();
@@ -18120,13 +18121,12 @@ function crmUpdateLeadsStats() {
   }
 }
 
-function crmRenderKanban() {
+// El total del pipeline se pinta desde las DOS vistas. Antes solo lo calculaba
+// el tablero, así que al filtrar dentro de la lista seguía viéndose el importe
+// de la vez anterior — un número equivocado que no avisaba de serlo.
+function crmPintarTotal(filtered) {
   const container = document.getElementById('crm-kanban');
   if (!container) return;
-  const filtered = crmGetFilteredLeads();
-  crmAvisoEtapasAjenas(filtered);
-
-  // Pipeline total
   const totalValue = filtered.reduce((s, l) => s + (Number(l.value) || 0), 0);
   let totalEl = document.getElementById('crm-pipeline-total');
   if (!totalEl) {
@@ -18137,6 +18137,15 @@ function crmRenderKanban() {
   }
   totalEl.style.display = totalValue > 0 ? 'flex' : 'none';
   if (totalValue > 0) totalEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> Pipeline total: $' + totalValue.toLocaleString('es-CO');
+}
+
+function crmRenderKanban() {
+  const container = document.getElementById('crm-kanban');
+  if (!container) return;
+  const filtered = crmGetFilteredLeads();
+  crmAvisoEtapasAjenas(filtered);
+
+  crmPintarTotal(filtered);
 
   container.innerHTML = '';
   const now = Date.now();
@@ -18803,20 +18812,302 @@ function crmSetupDrop(el, stageKey) {
   });
 }
 
+// ══ VISTA DE LISTA ═══════════════════════════════════════════════════════════
+// El mismo conjunto de leads que el tablero —mismos filtros, mismo alcance de
+// cliente— visto en tabla. No es otra pantalla: el conmutador Tablero/Lista de
+// la barra de herramientas cambia entre las dos.
+//
+// Las columnas las elige cada cuenta. El catálogo es fijo salvo los campos
+// propios (custom_fields), que se descubren de los leads cargados: no hay
+// catálogo de campos personalizados en ningún sitio, así que el único sitio
+// donde consta qué campos existen son los datos mismos.
+
+const CRM_COLS_BASE = [
+  { key: 'name',          label: 'Nombre', fijo: true },
+  { key: 'company',       label: 'Empresa' },
+  { key: 'email',         label: 'Email' },
+  { key: 'phone',         label: 'Teléfono' },
+  { key: 'assigned_name', label: 'Comercial' },
+  { key: 'stage',         label: 'Etapa' },
+  { key: 'estado',        label: 'Estado' },
+  { key: 'source',        label: 'Fuente' },
+  { key: 'value',         label: 'Importe', num: true },
+  { key: 'tags',          label: 'Etiquetas' },
+  { key: 'score',         label: 'Score', num: true },
+  { key: 'created_at',    label: 'Creación' },
+  { key: 'updated_at',    label: 'Última actividad' },
+  { key: 'closed_at',     label: 'Fecha de cierre' },
+  { key: 'close_reason',  label: 'Motivo de cierre' },
+  { key: 'notes',         label: 'Notas' },
+];
+
+const CRM_COLS_DEFECTO = ['name', 'email', 'phone', 'assigned_name', 'stage', 'source', 'value'];
+const CRM_COLS_LS = 'crm_cols_lista';
+
+let crmOrden = { col: '', dir: 1 };
+
+// Catálogo completo = base + los campos propios que de verdad tienen algún lead.
+function crmColsCatalogo() {
+  const propios = new Set();
+  (crmLeads || []).forEach(l => {
+    const cf = l.custom_fields;
+    if (cf && typeof cf === 'object') {
+      Object.keys(cf).forEach(k => {
+        // score ya tiene columna con formato propio; no se ofrece dos veces
+        if (k !== 'score' && (typeof cf[k] !== 'object' || cf[k] === null)) propios.add(k);
+      });
+    }
+  });
+  return CRM_COLS_BASE.concat(
+    [...propios].sort().map(k => ({ key: 'cf:' + k, label: k.replace(/_/g, ' '), propio: true }))
+  );
+}
+
+function crmColsSel() {
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem(CRM_COLS_LS) || 'null'); } catch { g = null; }
+  const validas = new Set(crmColsCatalogo().map(c => c.key));
+  // Una columna guardada puede haber desaparecido (campo propio que ya no usa
+  // nadie). Se cae sola en vez de pintar una columna de guiones.
+  const sel = Array.isArray(g) ? g.filter(k => validas.has(k)) : CRM_COLS_DEFECTO.slice();
+  if (!sel.includes('name')) sel.unshift('name');
+  return sel.length ? sel : CRM_COLS_DEFECTO.slice();
+}
+
+function crmColsGuardar(sel) {
+  try { localStorage.setItem(CRM_COLS_LS, JSON.stringify(sel)); } catch {}
+}
+
+// Estado comercial del lead, el equivalente a la columna «Estado» de Clientify:
+// se calcula igual que el aviso de la ficha del tablero (7 días sin tocar).
+function crmEstadoLead(l) {
+  if (l.stage === 'ganado')  return { txt: 'Ganada',  color: '#10B981', orden: 4 };
+  if (l.stage === 'perdido') return { txt: 'Perdida', color: '#9CA3AF', orden: 1 };
+  const ref = l.updated_at || l.created_at;
+  const dias = ref ? Math.floor((Date.now() - new Date(ref).getTime()) / 86400000) : 0;
+  if (dias >= 7) return { txt: 'Sin actividad · ' + dias + ' d', color: '#F59E0B', orden: 2 };
+  return { txt: 'Activa', color: '#3B82F6', orden: 3 };
+}
+
+function crmFecha(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// Valor plano de una celda: sirve para ordenar y para saber si la columna está
+// vacía en toda la cartera.
+function crmColValor(l, key) {
+  if (key.slice(0, 3) === 'cf:') {
+    const v = (l.custom_fields || {})[key.slice(3)];
+    return v == null ? '' : v;
+  }
+  switch (key) {
+    case 'stage':  return (crmStages.find(s => s.key === l.stage) || {}).label || l.stage || '';
+    case 'source': return fuenteLabel(l.source);
+    case 'value':  return Number(l.value) || 0;
+    case 'tags':   return (l.tags || []).join(', ');
+    case 'estado': return crmEstadoLead(l).orden;
+    case 'score':  return l.custom_fields && l.custom_fields.score != null ? Number(l.custom_fields.score) : '';
+    case 'created_at': case 'updated_at': case 'closed_at':
+      return l[key] ? new Date(l[key]).getTime() : 0;
+    default: return l[key] == null ? '' : l[key];
+  }
+}
+
+function crmColCelda(l, key, sel) {
+  const suave = 'font-size:12px;color:var(--muted)';
+  if (key.slice(0, 3) === 'cf:') {
+    const v = crmColValor(l, key);
+    return '<td style="' + suave + '">' + (v === '' ? '—' : esc(String(v))) + '</td>';
+  }
+  switch (key) {
+    case 'name': {
+      // El nombre absorbe empresa y etiquetas SOLO mientras no tengan columna
+      // propia: con las dos puestas, se veía todo duplicado.
+      const emp = (!sel.includes('company') && l.company)
+        ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '';
+      const tags = (!sel.includes('tags') && (l.tags || []).length)
+        ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') +
+          (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '';
+      return '<td style="font-weight:600">' + esc(l.name || '—') + emp + tags + '</td>';
+    }
+    case 'assigned_name': return '<td>' + crmCeldaComercial(l) + '</td>';
+    case 'stage': {
+      const s = crmStages.find(x => x.key === l.stage) || { label: l.stage || '—', color: 'var(--muted)' };
+      return '<td><span class="crm-stage-pill" style="background:' + esc(s.color) + '20;color:' + esc(s.color) + '">' + esc(s.label) + '</span></td>';
+    }
+    case 'estado': {
+      const e = crmEstadoLead(l);
+      return '<td><span class="crm-stage-pill" style="background:' + e.color + '20;color:' + e.color + '">' + esc(e.txt) + '</span></td>';
+    }
+    case 'value':
+      return '<td style="' + suave + ';text-align:right;white-space:nowrap">' +
+        (Number(l.value) ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td>';
+    case 'score': {
+      const v = crmColValor(l, 'score');
+      if (v === '') return '<td style="' + suave + ';text-align:right">—</td>';
+      const c = v >= 8 ? '#10B981' : v >= 5 ? '#F59E0B' : '#EF4444';
+      return '<td style="text-align:right;font-size:12px;font-weight:700;color:' + c + '">' + v + '</td>';
+    }
+    case 'tags':
+      return '<td>' + ((l.tags || []).length
+        ? '<div class="crm-card-tags">' + l.tags.slice(0, 4).map(t => tagChipHtml(t)).join('') +
+          (l.tags.length > 4 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 4) + '</span>' : '') + '</div>'
+        : '<span style="color:var(--muted2)">—</span>') + '</td>';
+    case 'created_at': case 'updated_at': case 'closed_at':
+      return '<td style="' + suave + ';white-space:nowrap">' + (crmFecha(l[key]) || '—') + '</td>';
+    case 'notes':
+      return '<td style="' + suave + ';max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"' +
+        (l.notes ? ' title="' + esc(l.notes) + '"' : '') + '>' + esc(l.notes || '—') + '</td>';
+    default: {
+      const v = crmColValor(l, key);
+      return '<td style="' + suave + '">' + (v === '' ? '—' : esc(String(v))) + '</td>';
+    }
+  }
+}
+
 function crmRenderList() {
-  const tbody = document.getElementById('crm-list-body');
-  if (!tbody) return;
-  const filtered = crmGetFilteredLeads();
+  const cont = document.getElementById('crm-list-view');
+  if (!cont) return;
+  const sel = crmColsSel();
+  const cat = crmColsCatalogo();
+  const filtered = crmGetFilteredLeads().slice();
+
+  if (crmOrden.col && sel.includes(crmOrden.col)) {
+    const k = crmOrden.col, d = crmOrden.dir;
+    filtered.sort((a, b) => {
+      const va = crmColValor(a, k), vb = crmColValor(b, k);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * d;
+      return String(va).localeCompare(String(vb), 'es', { numeric: true, sensitivity: 'base' }) * d;
+    });
+  }
+
+  crmPintarTotal(filtered);
+  const cols = sel.map(k => cat.find(c => c.key === k)).filter(Boolean);
+  const flecha = k => crmOrden.col !== k ? ''
+    : '<span class="ord-flecha">' + (crmOrden.dir === 1 ? '↑' : '↓') + '</span>';
+
+  const thead = '<thead><tr>' + cols.map(c =>
+    '<th class="ord"' + (c.num ? ' style="text-align:right"' : '') + ' onclick="crmOrdenarPor(\'' + esc(c.key) + '\')">' +
+    esc(c.label) + flecha(c.key) + '</th>').join('') + '</tr></thead>';
+
+  let cuerpo;
   if (filtered.length === 0) {
     const hayFiltro = crmSearchQuery || crmFilterSource || crmFilterOwner || crmFilterTags.length || crmQuickFilter;
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">Sin leads' + (hayFiltro ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
-    return;
+    cuerpo = '<tr><td colspan="' + cols.length + '" style="text-align:center;color:var(--muted);padding:40px">Sin leads' +
+      (hayFiltro ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
+  } else {
+    cuerpo = filtered.map(l =>
+      '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')">' + sel.map(k => crmColCelda(l, k, sel)).join('') + '</tr>'
+    ).join('');
   }
-  tbody.innerHTML = filtered.map(l => {
-    const stage = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' };
-    return '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><td style="font-weight:600">' + esc(l.name) + (l.company ? '<div style="font-size:11px;color:var(--muted);font-weight:400">' + esc(l.company) + '</div>' : '') + ((l.tags || []).length ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td><td style="color:var(--muted)">' + esc(l.email || '—') + '</td><td style="color:var(--muted)">' + esc(l.phone || '—') + '</td><td>' + crmCeldaComercial(l) + '</td><td><span class="crm-stage-pill" style="background:' + esc(stage.color) + '20;color:' + esc(stage.color) + '">' + esc(stage.label) + '</span></td><td style="font-size:11px;color:var(--muted)">' + esc(fuenteLabel(l.source)) + '</td><td style="font-size:11px;color:var(--muted2)">' + (l.value ? '$' + Number(l.value).toLocaleString('es-CO') : '—') + '</td></tr>';
-  }).join('');
+
+  cont.innerHTML =
+    '<div class="crm-list-tools">' +
+      '<button class="dd-btn" id="crm-cols-btn" onclick="crmColsAbrir(this)" title="Elegir qué columnas se ven">' +
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">' +
+      '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>' +
+      '<span class="dd-btn-txt">Columnas</span></button>' +
+    '</div>' +
+    '<table class="crm-list-table">' + thead + '<tbody>' + cuerpo + '</tbody></table>';
+
   crmUpdateLeadsStats();
+}
+
+function crmOrdenarPor(key) {
+  crmOrden = (crmOrden.col === key) ? { col: key, dir: -crmOrden.dir } : { col: key, dir: 1 };
+  crmRenderList();
+}
+
+// ── Selector de columnas ─────────────────────────────────────────────────────
+// No usa ddAbrir() porque ese cierra al elegir: aquí se marcan varias seguidas.
+function crmColsAbrir(btn) {
+  const abierto = document.getElementById('crm-cols-pop');
+  document.getElementById('crm-cols-pop')?.remove();
+  if (abierto) return;
+
+  const pop = document.createElement('div');
+  pop.id = 'crm-cols-pop';
+  pop.className = 'dd-menu';
+  pop.style.minWidth = '258px';
+  pop.style.maxHeight = '440px';
+  crmColsPintar(pop);
+  document.body.appendChild(pop);
+
+  const r = btn.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 12)) + 'px';
+  const abajo = window.innerHeight - r.bottom;
+  pop.style.top = (abajo > pop.offsetHeight + 12 || abajo > r.top)
+    ? (r.bottom + 6) + 'px'
+    : Math.max(8, r.top - pop.offsetHeight - 6) + 'px';
+
+  pop.addEventListener('mousedown', e => {
+    e.preventDefault();
+    // Sin esto el panel se cerraba al primer clic: repintarlo aquí desengancha
+    // del DOM al elemento pulsado, y el vigilante de «clic fuera» que corre
+    // después ya no encontraba el panel como su ancestro.
+    e.stopPropagation();
+    const op = e.target.closest('[data-col]');
+    if (op) {
+      const k = op.dataset.col;
+      if (k === 'name') return;                 // el nombre es el ancla de la fila
+      const sel = crmColsSel();
+      const i = sel.indexOf(k);
+      if (i >= 0) sel.splice(i, 1); else sel.push(k);
+      // Se guarda en el orden del catálogo, no en el de marcado: así la tabla
+      // no baila de sitio cada vez que se añade una columna.
+      const orden = crmColsCatalogo().map(c => c.key);
+      crmColsGuardar(orden.filter(x => sel.includes(x)));
+      crmColsPintar(pop);
+      crmRenderList();
+      return;
+    }
+    if (e.target.closest('#crm-cols-reset')) {
+      crmColsGuardar(CRM_COLS_DEFECTO.slice());
+      crmColsPintar(pop);
+      crmRenderList();
+    }
+  });
+
+  setTimeout(() => {
+    const fuera = ev => {
+      if (ev.target.closest('#crm-cols-pop') || ev.target.closest('#crm-cols-btn')) return;
+      pop.remove();
+      document.removeEventListener('mousedown', fuera);
+    };
+    document.addEventListener('mousedown', fuera);
+  }, 0);
+}
+
+function crmColsPintar(pop) {
+  const sel = crmColsSel();
+  const leads = crmLeads || [];
+  pop.innerHTML =
+    '<div style="padding:7px 9px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Columnas de la lista</div>' +
+    crmColsCatalogo().map(c => {
+      // Ofrecerla igual y decir que está vacía es mejor que esconderla: quien
+      // acaba de crear el campo lo busca aquí y si no aparece cree que se perdió.
+      const conDatos = leads.some(l => crmColValor(l, c.key) !== '' && crmColValor(l, c.key) !== 0);
+      return '<div class="dd-opt' + (sel.includes(c.key) ? ' sel' : '') + '" data-col="' + esc(c.key) + '"' +
+        (c.key === 'name' ? ' style="opacity:.6;cursor:default" title="El nombre siempre se muestra"' : '') + '>' +
+        '<svg class="dd-opt-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+        '<span style="text-transform:' + (c.propio ? 'capitalize' : 'none') + '">' + esc(c.label) + '</span>' +
+        (conDatos ? '' : '<span class="crm-cols-vacia">sin datos</span>') + '</div>';
+    }).join('') +
+    '<div class="dd-sep"></div>' +
+    '<div class="dd-opt" id="crm-cols-reset"><span style="color:var(--muted)">Restablecer las de siempre</span></div>';
+}
+
+// El conmutador Tablero/Lista se pinta desde crmRender(), que corre para las dos
+// vistas: así no hay que tocar las cuatro capas de envoltorio de crmSetView.
+function crmPintarVistaSw() {
+  const sw = document.getElementById('crm-vista-sw');
+  if (!sw) return;
+  const v = typeof crmView !== 'undefined' ? crmView : 'kanban';
+  sw.style.display = (v === 'kanban' || v === 'list') ? 'inline-flex' : 'none';
+  document.getElementById('crm-vista-kanban')?.classList.toggle('activa', v === 'kanban');
+  document.getElementById('crm-vista-list')?.classList.toggle('activa', v === 'list');
 }
 
 function crmUpdateClientTag() {
