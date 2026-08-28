@@ -65,6 +65,10 @@ export function campaignHtml(campaign, bodyTxt, unsubUrl, htmlDiseno) {
     'font-size:11.5px;color:#9ca3af;max-width:560px;text-align:center">' +
     '¿No quieres recibir estos correos? <a href="' + unsubUrl + '" style="color:#9ca3af">Darte de baja</a></p>';
 
+  // El diseño manda y descarta cuerpo, imagen de cabecera y botón: dentro de él
+  // esas cosas ya existen como bloques. El asistente esconde esos campos cuando
+  // hay diseño precisamente por esto — antes seguían visibles y quien subía una
+  // imagen la perdía sin que nada se lo dijera.
   if (htmlDiseno) return pre + htmlDiseno + bajaHtml;
 
   return pre +

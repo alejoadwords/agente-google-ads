@@ -25674,12 +25674,23 @@ function cmpWSyncInbox() {
 function cmpWStep2() {
   const w = _cmpW;
   const isEmail = w.channel === 'email';
+  // Con un diseño aplicado, el mensaje, la imagen de cabecera, el botón y el
+  // color NO se envían: campaignHtml() usa el diseño y descarta todo lo demás.
+  // Antes seguían ahí, editables, y quien subía una imagen la perdía sin que
+  // nada se lo dijera. Ahora se esconden y se explica por qué.
+  const conDiseno = isEmail && !!w.html;
+
   return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,420px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
     '<div>' +
       '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Contenido</div>' +
-      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio</div>' +
-      // Partir de una plantilla guardada. Se carga después de pintar para no
-      // retrasar el paso por una consulta que puede fallar.
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">' +
+        (conDiseno
+          ? 'Este correo usa un diseño. Edítalo con el constructor o vuelve al correo sencillo.'
+          : 'Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio') +
+      '</div>' +
+
+      (conDiseno ? cmpWTarjetaDiseno(w) :
+      // ── Correo sencillo (se conserva entero) ──────────────────────────────
       '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)" id="cmpw-pln-box">' +
         '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn(isEmail ? 'file' : 'chat', 12) + ' ' +
           (isEmail ? 'Partir de una plantilla' : 'Partir de una respuesta guardada') + '</div>' +
@@ -25715,16 +25726,19 @@ function cmpWStep2() {
       '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">' +
         '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer">Color de marca ' +
           '<input type="color" id="cmpw-accent" value="' + esc(w.accent_color || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer" oninput="cmpWSyncEmail()"></label>' +
+      '</div>' : '')) +
+
+      // El UTM y el guardar-como valen para los dos modos.
+      (isEmail ?
+      '<div style="margin-top:14px">' +
         '<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer" title="Los links del email llevan utm_source=acuarius&utm_medium=email para que midas visitas en tu Analytics">' +
           '<input type="checkbox" id="cmpw-utm"' + (w.utm ? ' checked' : '') + '> Medir clics con UTM en mis links</label>' +
-      '</div>' +
-      // Al revés que lo de arriba: rescatar para siempre un correo que acabas de
-      // escribir. Sin esto, el buen contenido se queda encerrado en su campaña.
       '</div>' : '') +
+      (conDiseno ? '' :
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
         '<button class="btn-ghost sm" onclick="cmpWGuardarComoPlantilla()">' + icn('plus', 12) + ' ' +
           (isEmail ? 'Guardar esto como plantilla' : 'Guardar esto como respuesta') + '</button>' +
-      '</div>' +
+      '</div>') +
     '</div>' +
     '<div style="position:sticky;top:0">' +
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Así llega el ' + (isEmail ? 'email' : 'WhatsApp') + '</div>' +
@@ -25733,9 +25747,37 @@ function cmpWStep2() {
   '</div>';
 }
 
+// La tarjeta que sustituye a los campos del correo sencillo. Dice de dónde
+// viene el contenido y ofrece las dos salidas: retocarlo o volver a lo simple.
+function cmpWTarjetaDiseno(w) {
+  const nombre = w.template_nombre || 'Diseño aplicado';
+  return '<div style="border:1px solid var(--blue-md);border-radius:12px;padding:14px;background:var(--blue-lt);margin-bottom:14px">' +
+    '<div style="display:flex;align-items:flex-start;gap:12px">' +
+      '<div style="width:36px;height:36px;border-radius:10px;background:#fff;color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icn('file', 16) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--blue)">' + esc(nombre) + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5">' +
+          'El contenido sale de este diseño. Las imágenes y los botones se ponen dentro de él, no aquí abajo.' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+      '<button class="btn-sec sm" onclick="cmpWEditarDiseno()">' + icn('edit', 12) + ' Editar el diseño</button>' +
+      '<button class="btn-ghost sm" onclick="cmpWCambiarPlantilla()">Cambiar de plantilla</button>' +
+      '<button class="btn-ghost sm" onclick="cmpWQuitarDiseno()">Volver al correo sencillo</button>' +
+    '</div>' +
+  '</div>';
+}
+
 function cmpWSyncEmail() {
   const box = document.getElementById('cmpw-mailprev');
   if (!box) return;
+  // Con diseño, la vista previa tiene que ser el diseño. Enseñar el cuerpo de
+  // texto aquí sería enseñar algo que no se va a enviar.
+  if (_cmpW && _cmpW.channel === 'email' && _cmpW.html) {
+    box.innerHTML = _cmpW.html;
+    return;
+  }
   const g = id => document.getElementById(id);
   const sample = { nombre: 'Ana', empresa: 'Empresa Demo', etapa: 'contactado', valor: '$1.200.000', email: 'ana@demo.com', telefono: '+57 300 000 0000', fuente: 'importación' };
   const render = t => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => sample[k.toLowerCase()] !== undefined ? sample[k.toLowerCase()] : m);
@@ -26144,6 +26186,11 @@ function cmpWValidate(step) {
     if (w.reply_to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(w.reply_to)) { showToast('El email de "Responder a" no es válido', 'error'); return false; }
   }
   if (step === 2) {
+    // Con diseño el cuerpo de texto no se envía, así que exigirlo no tiene sentido.
+    if (w.channel === 'email' && w.html) {
+      if (!String(w.html).trim()) { showToast('El diseño está vacío', 'error'); return false; }
+      return true;
+    }
     if (!w.body) { showToast('Escribe el mensaje (o genera uno con IA)', 'error'); return false; }
     if ((w.cta_text && !w.cta_url) || (!w.cta_text && w.cta_url)) { showToast('El botón CTA necesita texto y link', 'error'); return false; }
     if (w.cta_url && !/^https?:\/\//i.test(w.cta_url)) { showToast('El link del CTA debe empezar con https://', 'error'); return false; }
@@ -30980,6 +31027,13 @@ async function cmpWUsarPlantilla() {
     // guarda el cuerpo igual, que es lo que se manda por WhatsApp y lo que lee
     // quien tenga el correo en texto plano.
     _cmpW.html = t.formato === 'html' ? (t.html || null) : null;
+    _cmpW.diseno_campana = t.formato === 'html' ? (t.diseno || null) : null;
+    _cmpW.template_nombre = t.nombre || null;
+    if (t.formato === 'html') {
+      _cmpW.header_image_url = null;
+      _cmpW.cta_text = null;
+      _cmpW.cta_url = null;
+    }
     if (t.formato === 'html' && !_cmpW.body) {
       _cmpW.body = 'Este correo se ve mejor con imágenes activadas.';
     }
@@ -31180,9 +31234,14 @@ function plnCargarGrapes() {
 let _gjsEditor = null;
 let _gjsCtx = null;   // { id, nombre, categoria, asunto }
 
-async function plnDisenar(id) {
+// opciones.alGuardar(html, diseno) → modo campaña: no guarda plantilla, devuelve
+// el diseño a quien lo abrió. Sin esto, editar el correo de una campaña obligaba
+// a crear una plantilla nueva por cada retoque.
+async function plnDisenar(id, opciones) {
+  const modoCampana = !!(opciones && opciones.alGuardar);
   let t = { nombre: '', categoria: '', asunto: '', diseno: null, html: null };
-  if (id) {
+  if (modoCampana) { t.html = opciones.html || null; t.diseno = opciones.diseno || null; }
+  if (id && !modoCampana) {
     try {
       const r = await fetchAuth('/api/email-templates?id=' + encodeURIComponent(id));
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -31192,7 +31251,8 @@ async function plnDisenar(id) {
       return;
     }
   }
-  _gjsCtx = { id: id || null, nombre: t.nombre || '', categoria: t.categoria || '', asunto: t.asunto || '' };
+  _gjsCtx = { id: id || null, nombre: t.nombre || '', categoria: t.categoria || '', asunto: t.asunto || '',
+              alGuardar: modoCampana ? opciones.alGuardar : null };
 
   const ov = document.createElement('div');
   ov.id = 'gjs-overlay';
@@ -31202,12 +31262,16 @@ async function plnDisenar(id) {
   ov.style.cssText = 'position:fixed;inset:0;z-index:9700;background:var(--bg);display:flex;flex-direction:column';
   ov.innerHTML =
     '<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--panel)">' +
-      '<input class="auto-input" id="gjs-nombre" value="' + esc(_gjsCtx.nombre) + '" placeholder="Nombre de la plantilla *" style="max-width:260px">' +
-      '<input class="auto-input" id="gjs-asunto" value="' + esc(_gjsCtx.asunto) + '" placeholder="Asunto del correo" style="max-width:300px">' +
+      (modoCampana
+        ? '<div style="font-size:13px;font-weight:700;white-space:nowrap">Diseño de la campaña</div>' +
+          '<div style="font-size:11.5px;color:var(--muted);white-space:nowrap">Se guarda en esta campaña, no en tus plantillas</div>'
+        : '<input class="auto-input" id="gjs-nombre" value="' + esc(_gjsCtx.nombre) + '" placeholder="Nombre de la plantilla *" style="max-width:260px">' +
+          '<input class="auto-input" id="gjs-asunto" value="' + esc(_gjsCtx.asunto) + '" placeholder="Asunto del correo" style="max-width:300px">') +
       '<div id="gjs-vars" style="flex:1"></div>' +
       '<span id="gjs-estado" style="font-size:11.5px;color:var(--muted2)"></span>' +
       '<button class="btn-ghost sm" onclick="plnDisenarCerrar()">Cancelar</button>' +
-      '<button class="btn-pri sm" id="gjs-save" onclick="plnDisenarGuardar()">Guardar plantilla</button>' +
+      '<button class="btn-pri sm" id="gjs-save" onclick="plnDisenarGuardar()">' +
+        (modoCampana ? 'Guardar en la campaña' : 'Guardar plantilla') + '</button>' +
     '</div>' +
     '<div id="gjs" style="flex:1;min-height:0;position:relative"></div>';
   document.body.appendChild(ov);
@@ -31343,10 +31407,11 @@ function varsCopiar(v) {
 }
 
 async function plnDisenarGuardar() {
+  const modoCampana = !!_gjsCtx?.alGuardar;
   const nombre = (document.getElementById('gjs-nombre')?.value || '').trim();
   const asunto = (document.getElementById('gjs-asunto')?.value || '').trim() || null;
   const btn = document.getElementById('gjs-save');
-  if (!nombre) { showToast('Ponle un nombre a la plantilla', 'error'); return; }
+  if (!modoCampana && !nombre) { showToast('Ponle un nombre a la plantilla', 'error'); return; }
   if (!_gjsEditor) return;
 
   // El HTML con los estilos ya metidos en cada etiqueta. Gmail y Outlook tiran
@@ -31370,6 +31435,14 @@ async function plnDisenarGuardar() {
   const malas = varsDesconocidas(html + ' ' + (asunto || ''));
   if (malas.length) {
     showToast('La variable {{' + malas[0] + '}} no existe y se enviaría tal cual', 'error');
+    return;
+  }
+
+  if (modoCampana) {
+    const devolver = _gjsCtx.alGuardar;
+    const diseno = _gjsEditor.getProjectData();
+    plnDisenarCerrar();
+    devolver(html, diseno);
     return;
   }
 
@@ -31526,5 +31599,48 @@ function qrBorrarDesdePlantillas(id, titulo) {
         plnRender();
       } catch { showToast('No se pudo borrar', 'error'); }
     },
+  });
+}
+
+// ── Acciones de la tarjeta de diseño ──────────────────────────────────────────
+
+function cmpWEditarDiseno() {
+  cmpWCollect();
+  const w = _cmpW;
+  plnDisenar(null, {
+    html: w.html,
+    diseno: w.diseno_campana || null,
+    alGuardar: (html, diseno) => {
+      _cmpW.html = html;
+      _cmpW.diseno_campana = diseno;   // para poder volver a editarlo sin perder bloques
+      cmpWRender();
+      showToast('Diseño actualizado en esta campaña');
+    },
+  });
+}
+
+function cmpWCambiarPlantilla() {
+  cmpWQuitarDiseno(true);
+}
+
+function cmpWQuitarDiseno(silencioso) {
+  cmpWCollect();
+  const seguir = () => {
+    _cmpW.html = null;
+    _cmpW.diseno_campana = null;
+    _cmpW.template_id = null;
+    _cmpW.template_nombre = null;
+    // El cuerpo que pusimos de relleno al aplicar la plantilla no sirve de nada
+    // sin el diseño: se limpia para que no aparezca como si lo hubiera escrito
+    // el usuario.
+    if (_cmpW.body === 'Este correo se ve mejor con imágenes activadas.') _cmpW.body = '';
+    cmpWRender();
+  };
+  if (silencioso) return seguir();
+  confirmarAgua({
+    titulo: '¿Volver al correo sencillo?',
+    texto: 'Se quita el diseño de esta campaña. La plantilla original no se toca, así que puedes volver a aplicarla cuando quieras.',
+    confirmar: 'Quitar el diseño',
+    onOk: seguir,
   });
 }

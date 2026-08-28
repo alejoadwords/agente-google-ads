@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-campana-con-diseno",
+      "fecha": "2026-08-28",
+      "tipo": "arreglo",
+      "titulo": "Al usar una plantilla diseñada, la campaña ya no pierde lo que subes",
+      "texto": "Si aplicabas una plantilla diseñada, el asistente seguía mostrando el mensaje, la imagen de cabecera y el botón — pero esos campos ya no se enviaban, porque el diseño manda. Quien subía una imagen ahí la perdía sin que nada se lo dijera. Ahora, al aplicar un diseño, esos campos desaparecen y en su lugar aparece una tarjeta que dice de qué plantilla sale el contenido, con tres salidas: editar el diseño ahí mismo con el constructor, cambiar de plantilla o volver al correo sencillo de siempre. El correo de prueba y todo lo demás siguen igual.",
+      "accion": {
+        "texto": "Ir a Campañas",
+        "ir": "marketing"
+      }
+    },
+    {
       "id": "2026-08-28-nota-en-la-ficha",
       "fecha": "2026-08-28",
       "tipo": "mejora",
