@@ -34,7 +34,7 @@ function getWeekLabel() {
   return `${fmt(lastMonday)} – ${fmt(lastSunday)}`;
 }
 
-async function generateWeeklyAnalysis(platform, metrics, prevMetrics) {
+async function generateWeeklyAnalysis(platform, metrics, prevMetrics, userId) {
   if (!ANTHROPIC_API_KEY) return { summary: 'Análisis no disponible.', recommendations: [] };
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -64,6 +64,8 @@ Responde en español. Sé específico con números. Formato JSON exacto:
       }),
     });
     const data = await res.json();
+    await apuntaIA({ userId, origen: 'reporte-semanal', agente: platform,
+      modelo: 'claude-haiku-4-5-20251001', uso: data.usage });
     const text = data.content?.[0]?.text || '{}';
     const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}');
     return {
@@ -316,7 +318,7 @@ async function processUser(user) {
 
       if (!currentMetrics || currentMetrics.error) continue;
 
-      const analysis = await generateWeeklyAnalysis(conn.platform, currentMetrics, prevMetrics || {});
+      const analysis = await generateWeeklyAnalysis(conn.platform, currentMetrics, prevMetrics || {}, user.id);
 
       // Save snapshot
       await supabaseReq('/performance_snapshots', 'POST', {
@@ -349,6 +351,38 @@ async function processUser(user) {
   }
 
   return snapshotsSaved;
+}
+
+// ── Registro de consumo de IA (copia corta de api/_uso-ia.js) ────────────────
+// No se importa el módulo compartido: importar ESM desde una función Node rompe
+// SU build en silencio (despliegue READY, ruta muerta).
+const _TARIFAS_IA = {
+  'claude-sonnet-5':           { in: 3, out: 15, cw: 3.75, cr: 0.30 },
+  'claude-haiku-4-5':          { in: 1, out: 5,  cw: 1.25, cr: 0.10 },
+  'claude-haiku-4-5-20251001': { in: 1, out: 5,  cw: 1.25, cr: 0.10 },
+};
+async function apuntaIA({ userId, origen, agente, modelo, uso }) {
+  try {
+    if (!userId || !uso) return;
+    const t = _TARIFAS_IA[modelo] || _TARIFAS_IA['claude-sonnet-5'];
+    const costo = ((uso.input_tokens || 0) * t.in + (uso.output_tokens || 0) * t.out +
+      (uso.cache_creation_input_tokens || 0) * t.cw + (uso.cache_read_input_tokens || 0) * t.cr) / 1e6;
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_usage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: process.env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id: userId, actor_id: null, origen, agente: agente || null, modelo: modelo || null,
+        tokens_in: uso.input_tokens || 0, tokens_out: uso.output_tokens || 0,
+        cache_write: uso.cache_creation_input_tokens || 0, cache_read: uso.cache_read_input_tokens || 0,
+        costo: Number(costo.toFixed(6)),
+      }),
+    });
+  } catch (e) { console.error('apuntaIA:', e?.message); }
 }
 
 export default async function handler(req, res) {

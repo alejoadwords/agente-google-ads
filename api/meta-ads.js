@@ -140,6 +140,51 @@ function parseActions(actions, type) {
 }
 
 // ── Handler principal ────────────────────────────────────────
+// ── Registro de consumo de IA (copia corta de api/_uso-ia.js) ────────────────
+// No se importa el módulo compartido a propósito: importar ESM desde una
+// función Node rompe SU build en silencio (despliegue READY, ruta muerta).
+const _TARIFAS_IA = {
+  'claude-sonnet-5':           { in: 3, out: 15, cw: 3.75, cr: 0.30 },
+  'claude-sonnet-4-6':         { in: 3, out: 15, cw: 3.75, cr: 0.30 },
+  'claude-haiku-4-5':          { in: 1, out: 5,  cw: 1.25, cr: 0.10 },
+  'claude-haiku-4-5-20251001': { in: 1, out: 5,  cw: 1.25, cr: 0.10 },
+};
+// A quién se le imputa el gasto. OJO: esto NO es una comprobación de permisos
+// — lee el token sin verificar la firma y solo sirve para atribuir el costo.
+// No lo copies para decidir si alguien puede hacer algo.
+function _usuarioIA(req) {
+  try {
+    const t = (req.headers.authorization || '').replace('Bearer ', '');
+    const p = t.split('.')[1];
+    if (!p) return null;
+    return JSON.parse(Buffer.from(p.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')).sub || null;
+  } catch { return null; }
+}
+
+async function apuntaIA({ userId, origen, agente, modelo, uso }) {
+  try {
+    if (!userId || !uso) return;
+    const t = _TARIFAS_IA[modelo] || _TARIFAS_IA['claude-sonnet-5'];
+    const costo = ((uso.input_tokens || 0) * t.in + (uso.output_tokens || 0) * t.out +
+      (uso.cache_creation_input_tokens || 0) * t.cw + (uso.cache_read_input_tokens || 0) * t.cr) / 1e6;
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_usage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: process.env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id: userId, actor_id: userId, origen, agente: agente || null, modelo: modelo || null,
+        tokens_in: uso.input_tokens || 0, tokens_out: uso.output_tokens || 0,
+        cache_write: uso.cache_creation_input_tokens || 0, cache_read: uso.cache_read_input_tokens || 0,
+        costo: Number(costo.toFixed(6)),
+      }),
+    });
+  } catch (e) { console.error('apuntaIA:', e?.message); }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -422,6 +467,9 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
         return res.status(500).json({ error: `Error IA (HTTP ${aiRes.status})` });
       }
       const aiData = await aiRes.json();
+      // Si el modelo respondió, Anthropic ya lo cobró: se apunta antes de
+      // mirar si el JSON viene bien.
+      await apuntaIA({ userId: _usuarioIA(req), origen: 'agente', agente: 'meta-ads-copy', modelo: 'claude-sonnet-5', uso: aiData.usage });
       if (aiData.error) {
         console.error('Anthropic API error:', JSON.stringify(aiData.error));
         return res.status(500).json({ error: aiData.error.message || 'Error de la IA' });

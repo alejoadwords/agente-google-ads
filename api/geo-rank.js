@@ -12,14 +12,38 @@ const MAX_QUERIES = 10;
 const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 
+// ── Verificación real del token ──────────────────────────────────────────────
+// Antes solo se decodificaba el contenido del JWT y se le creía. Un JWT no
+// verificado no prueba nada: cualquiera se escribe uno que diga plan 'agency'
+// y gasta nuestras consultas. Aquí se comprueba la FIRMA contra las claves
+// públicas de Clerk, que se cachean diez minutos.
+let _jwks = null, _jwksExp = 0;
+async function verificarFirma(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const b64 = x => Buffer.from(x.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const header = JSON.parse(b64(hB64).toString('utf8'));
+    if (!_jwks || _jwksExp < Date.now()) {
+      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+      _jwksExp = Date.now() + 600000;
+    }
+    const key = _jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const payload = JSON.parse(b64(pB64).toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+
 async function isPaidOrAdmin(req) {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
-  const parts = token.split('.');
-  if (parts.length !== 3) return { ok: false, plan: 'free' };
-  let payload = {};
-  try {
-    payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
-  } catch { return { ok: false, plan: 'free' }; }
+  const payload = await verificarFirma(token);
+  if (!payload) return { ok: false, plan: 'free' };
   const plan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
   if (PAID_PLANS.includes(plan)) return { ok: true, plan };
   // Bypass admin: verificar email real via Clerk (el JWT no siempre lo trae)

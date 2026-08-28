@@ -1,6 +1,37 @@
 export const config = { runtime: 'edge' };
 
-import { registrarUso, cuentaDe } from './_uso-ia.js';
+import { registrarUso, cuentaDe, consumoDelMes } from './_uso-ia.js';
+
+// ── Cupo mensual de mensajes ─────────────────────────────────────────────────
+// El tope del plan Free vivía SOLO en el navegador (app.js). Cualquiera con la
+// sesión abierta podía saltárselo, y el chat es el rubro que más cuesta de toda
+// la plataforma. Aquí es donde tiene que estar.
+//
+// Los planes de pago llevan un techo alto: no es un límite comercial, es un
+// freno de emergencia para que una automatización en bucle o una cuenta
+// compartida no se lleven el margen del mes sin que nadie se entere.
+const CUPO_MENSAJES = { free: 50, trial: 1500, individual: 1500, pro: 1500, agency: 4000, agencia: 4000 };
+
+// Clerk dejó de mandar public_metadata en el token de sesión (v2), así que el
+// plan se le pregunta a Clerk y se cachea un minuto.
+const _planCache = new Map();
+async function planDe(userId) {
+  const hit = _planCache.get(userId);
+  if (hit && hit.exp > Date.now()) return hit.plan;
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    const u = await r.json();
+    const plan = u?.public_metadata?.plan || 'free';
+    _planCache.set(userId, { plan, exp: Date.now() + 60000 });
+    return plan;
+  } catch {
+    // Si no se puede saber el plan, se trata como de pago: dejar sin chat a un
+    // cliente porque Clerk tardó es peor que regalar unos mensajes.
+    return 'pro';
+  }
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -56,6 +87,26 @@ export default async function handler(req) {
     return new Response(
       JSON.stringify({ error: 'API key no configurada en el servidor.' }),
       { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // El cupo se mira contra la CUENTA, no contra quien escribe: los mensajes de
+  // un miembro del equipo gastan del bote del dueño, igual que se le imputan.
+  const cuenta = await cuentaDe(userId);
+  const plan = await planDe(cuenta);
+  const tope = CUPO_MENSAJES[plan] ?? CUPO_MENSAJES.free;
+  const gastados = await consumoDelMes(cuenta, 'agente');
+  // gastados === null significa que la consulta falló, no que sean cero.
+  if (gastados !== null && gastados >= tope) {
+    return new Response(
+      JSON.stringify({
+        error: plan === 'free'
+          ? `Usaste tus ${tope} mensajes gratuitos de este mes. El plan Pro los quita.`
+          : `Llegaste a ${tope} mensajes este mes. Escríbenos y te ampliamos el cupo.`,
+        upgrade: plan === 'free',
+        cupo: { plan, limite: tope, usados: gastados },
+      }),
+      { status: 429, headers: { ...CORS, 'Content-Type': 'application/json' } }
     );
   }
 

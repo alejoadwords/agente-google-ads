@@ -57,6 +57,7 @@ async function claude(system, user) {
     body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 3000, system, messages: [{ role: 'user', content: user }] }),
   });
   const d = await r.json();
+  await apuntaIA({ origen: 'conocimiento', agente: 'packs', modelo: 'claude-sonnet-5', uso: d.usage });
   if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + JSON.stringify(d).slice(0, 200));
   return d.content?.find(b => b.type === 'text')?.text || '';
 }
@@ -85,6 +86,41 @@ Formato de respuesta (si hay cambios):
 CHANGELOG: una línea por cambio realizado (máximo 5 líneas, empieza cada una con - )
 ---PACK---
 (el bloque completo actualizado)`;
+
+// ── Registro de consumo de IA (copia corta de api/_uso-ia.js) ────────────────
+// No se importa el módulo compartido: importar ESM desde una función Node rompe
+// SU build en silencio (despliegue READY, ruta muerta).
+//
+// Este cron NO es de ningún cliente: refresca los paquetes de conocimiento de
+// los agentes para toda la plataforma. Se apunta a la cuenta ficticia
+// '_plataforma' para que su costo no se le impute a nadie y siga contando en el
+// total — si se dejara fuera, el gasto del mes no cuadraría con la factura.
+const CUENTA_PLATAFORMA = '_plataforma';
+async function apuntaIA({ origen, agente, modelo, uso }) {
+  try {
+    if (!uso) return;
+    const t = modelo && modelo.includes('haiku')
+      ? { in: 1, out: 5, cw: 1.25, cr: 0.10 }
+      : { in: 3, out: 15, cw: 3.75, cr: 0.30 };
+    const costo = ((uso.input_tokens || 0) * t.in + (uso.output_tokens || 0) * t.out +
+      (uso.cache_creation_input_tokens || 0) * t.cw + (uso.cache_read_input_tokens || 0) * t.cr) / 1e6;
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_usage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: process.env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id: CUENTA_PLATAFORMA, actor_id: null, origen, agente: agente || null, modelo: modelo || null,
+        tokens_in: uso.input_tokens || 0, tokens_out: uso.output_tokens || 0,
+        cache_write: uso.cache_creation_input_tokens || 0, cache_read: uso.cache_read_input_tokens || 0,
+        costo: Number(costo.toFixed(6)),
+      }),
+    });
+  } catch (e) { console.error('apuntaIA:', e?.message); }
+}
 
 export default async function handler(req, res) {
   const authHeader = req.headers['authorization'];

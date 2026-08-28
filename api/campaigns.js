@@ -30,6 +30,8 @@ async function clerkMeta(userId) {
   } catch { return {}; }
 }
 
+import { registrarUso, cuentaDe } from './_uso-ia.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -321,6 +323,12 @@ export default async function handler(req) {
       }),
     });
     const d = await r.json();
+    // El costo se apunta pase lo que pase con el JSON: si el modelo respondió,
+    // Anthropic ya lo cobró aunque el texto venga mal formado.
+    if (d.usage) {
+      await registrarUso({ userId: await cuentaDe(userId), actorId: userId,
+        origen: 'campana', agente: 'copy-' + (channel || 'email'), modelo: 'claude-sonnet-5', uso: d.usage });
+    }
     if (!r.ok) return jsonResp({ error: 'Error generando: ' + (d.error?.message || r.status) }, 502);
     let text = (d.content?.find(b => b.type === 'text')?.text || '').trim().replace(/^```(json)?|```$/g, '').trim();
     // Por si acompaña el JSON con alguna frase: nos quedamos con el objeto.

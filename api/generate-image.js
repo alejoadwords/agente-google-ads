@@ -3,8 +3,134 @@
 // Modo DESIGN: Ideogram V3 genera el anuncio COMPLETO con texto integrado (style: DESIGN)
 // Modo PHOTO:  Flux 2 Pro para fondos lifestyle sin texto (cuando no hay hasDesign)
 // Body: { prompt, format, variations, hasText, designMode, adCopy, brandColors, productImageBase64 }
+//
+// Este endpoint NO pedía credenciales de ninguna clase y gasta dinero real en
+// fal.ai: cualquiera con la URL podía generar imágenes contra nuestra cuenta.
+// El tope de 60 vivía solo en localStorage, o sea que se saltaba borrando un
+// dato del navegador. Ahora la sesión se verifica de verdad (firma incluida) y
+// el cupo se cuenta en el servidor.
+//
+// La verificación va copiada aquí en vez de importada de api/_guard: importar
+// un módulo ESM compartido desde una función Node rompe SU build en silencio
+// (el despliegue queda READY y la ruta desaparece), y esta función no puede ser
+// edge porque generar una imagen tarda más que el límite de edge.
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+// Costo aproximado de una imagen en fal.ai. No es para facturar: es para que el
+// gasto de cada cuenta quede en un solo sitio (ai_usage) junto al de los
+// modelos, y se pueda responder «cuánto me cuesta este cliente» con una consulta.
+const COSTO_IMAGEN = 0.06;
+
+// Techo mensual por plan. El de los planes de pago es un freno de emergencia,
+// no el límite comercial: está muy por encima de cualquier uso real para que un
+// bucle o una cuenta compartida no se lleven el margen del mes en silencio.
+const CUPO_IMAGENES = { free: 3, trial: 60, individual: 60, pro: 60, agency: 500, agencia: 500 };
+
+// Verifica la FIRMA del token, no solo su contenido. Decodificar el payload y
+// creerle es lo mismo que no pedir nada: cualquiera se escribe un token que
+// diga plan 'agency'.
+async function usuarioDelToken(req) {
+  try {
+    const auth = req.headers.authorization || req.headers.Authorization || '';
+    const token = auth.replace('Bearer ', '').trim();
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const b64 = s => Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const header = JSON.parse(b64(hB64).toString('utf8'));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const key = jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const cryptoKey = await crypto.subtle.importKey(
+      'jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
+    );
+    const valid = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5', cryptoKey, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`)
+    );
+    if (!valid) return null;
+    const payload = JSON.parse(b64(pB64).toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub || null;
+  } catch { return null; }
+}
+
+const sbCab = () => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
+
+// El gasto se le imputa a la cuenta (el dueño), no al miembro que lo hizo.
+async function cuentaDe(actorId) {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(actorId)}` +
+      `&status=eq.active&select=owner_user_id&limit=1`, { headers: sbCab() });
+    const tw = r.ok ? (await r.json())?.[0] : null;
+    return tw?.owner_user_id || actorId;
+  } catch { return actorId; }
+}
+
+async function planDe(userId) {
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    const u = await r.json();
+    return u?.public_metadata?.plan || 'free';
+  } catch { return 'pro'; }   // ante la duda, no se le corta a un cliente
+}
+
+// Imágenes generadas este mes, contadas sobre ai_usage. Devuelve null si la
+// consulta falla: cero y "no lo sé" no son lo mismo.
+async function imagenesDelMes(userId) {
+  try {
+    const d = new Date();
+    const desde = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/ai_usage?user_id=eq.${encodeURIComponent(userId)}&origen=eq.imagen` +
+      `&created_at=gte.${encodeURIComponent(desde)}&select=id&limit=1`,
+      { headers: { ...sbCab(), Prefer: 'count=exact' } });
+    if (!r.ok) return null;
+    const total = parseInt((r.headers.get('content-range') || '').split('/')[1], 10);
+    return Number.isFinite(total) ? total : null;
+  } catch { return null; }
+}
+
+async function apuntarImagenes(userId, actorId, cuantas, detalle) {
+  try {
+    const filas = Array.from({ length: cuantas }, () => ({
+      user_id: userId, actor_id: actorId, origen: 'imagen',
+      agente: detalle, modelo: detalle,
+      tokens_in: 0, tokens_out: 0, cache_write: 0, cache_read: 0,
+      costo: COSTO_IMAGEN,
+    }));
+    await fetch(`${SUPABASE_URL}/rest/v1/ai_usage`, {
+      method: 'POST',
+      headers: { ...sbCab(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(filas),
+    });
+  } catch (e) { console.error('apuntarImagenes:', e?.message); }
+}
 
 export default async function handler(req, res) {
+  // GET ?action=cupo — cuánto le queda a esta cuenta. Existe para que el
+  // navegador no lleve su propio contador: había uno en localStorage que
+  // decidía por su cuenta, y dos contadores que pueden discrepar son peor que
+  // ninguno. Aquí se pregunta y punto.
+  if (req.method === 'GET' && (req.query?.action === 'cupo')) {
+    const quien = await usuarioDelToken(req);
+    if (!quien) return res.status(401).json({ error: 'No autorizado.' });
+    const suCuenta = await cuentaDe(quien);
+    const suPlan = await planDe(suCuenta);
+    const suTope = CUPO_IMAGENES[suPlan] ?? CUPO_IMAGENES.free;
+    const yaUsadas = await imagenesDelMes(suCuenta);
+    return res.status(200).json({
+      plan: suPlan, limite: suTope,
+      usadas: yaUsadas === null ? 0 : yaUsadas,
+      // Que el navegador sepa cuándo el dato es dudoso en vez de creérselo.
+      exacto: yaUsadas !== null,
+    });
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const {
@@ -28,6 +154,38 @@ export default async function handler(req, res) {
   } = req.body;
 
   if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
+
+  // ── Puerta ────────────────────────────────────────────────────────────────
+  const actorId = await usuarioDelToken(req);
+  if (!actorId) return res.status(401).json({ error: 'No autorizado.' });
+
+  const cuenta = await cuentaDe(actorId);
+  const plan = await planDe(cuenta);
+  const tope = CUPO_IMAGENES[plan] ?? CUPO_IMAGENES.free;
+  const usadas = await imagenesDelMes(cuenta);
+  const pedidas = Math.min(Math.max(1, variations), 5);
+
+  // usadas === null: la consulta falló. Se deja pasar en vez de bloquear a un
+  // cliente por un mal minuto de Supabase, pero queda en el log.
+  if (usadas === null) {
+    console.error('[generate-image] no se pudo leer el cupo de', cuenta, '— se deja pasar');
+  } else if (usadas + pedidas > tope) {
+    return res.status(429).json({
+      error: usadas >= tope
+        ? `Usaste tus ${tope} imágenes de este mes.`
+        : `Te quedan ${tope - usadas} imágenes este mes y pediste ${pedidas}.`,
+      upgrade: plan === 'free',
+      cupo: { plan, limite: tope, usadas },
+    });
+  }
+
+  // Cada salida con éxito apunta lo generado. Va aquí y no en cada rama para
+  // que una rama nueva no se olvide de contar — que es como se abrió el agujero.
+  const entregar = async (payload) => {
+    const n = Array.isArray(payload.images) ? payload.images.length : 0;
+    if (n > 0) await apuntarImagenes(cuenta, actorId, n, 'fal:' + (payload.mode || format));
+    return res.status(200).json(payload);
+  };
 
   const falKey = process.env.FAL_API_KEY;
   if (!falKey) return res.status(500).json({ error: 'FAL_API_KEY no configurado' });
@@ -111,7 +269,7 @@ export default async function handler(req, res) {
 
       const imgRes    = await fetch(imageUrl);
       const imgBuffer = await imgRes.arrayBuffer();
-      return res.status(200).json({
+      return entregar({
         images: [{
           index: 1, format: spec.label, size: `${spec.w}x${spec.h}`,
           base64:    Buffer.from(imgBuffer).toString('base64'),
@@ -160,7 +318,7 @@ export default async function handler(req, res) {
       }
       if (results.length >= totalVariations) break;
     }
-    return res.status(200).json({ images: results, format: spec, mode: 'remix' });
+    return entregar({ images: results, format: spec, mode: 'remix' });
   }
 
   try {
@@ -315,7 +473,7 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({ images: results, format: spec });
+    return entregar({ images: results, format: spec });
 
   } catch (err) {
     console.error('generate-image error:', err);

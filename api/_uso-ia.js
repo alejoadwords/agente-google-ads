@@ -7,6 +7,12 @@
 //
 // Nunca lanza: que falle el registro no puede tumbar la respuesta que el usuario
 // está esperando. Un dato de consumo perdido cuesta mucho menos que un chat roto.
+//
+// OJO: este módulo solo lo pueden importar funciones con runtime 'edge'.
+// Importar un módulo ESM compartido desde una función Node rompe SU build en
+// silencio: el despliegue queda READY y la ruta desaparece. Por eso las
+// funciones Node (generate-image, video-gen, geo-rank…) llevan su propia copia
+// corta de estas dos cosas en vez de importarlas.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -80,5 +86,67 @@ export async function registrarUso({ userId, actorId, origen, agente, modelo, us
     });
   } catch (e) {
     console.error('registrarUso:', e?.message);
+  }
+}
+
+// ── Gasto que no se mide en tokens ───────────────────────────────────────────
+// Una imagen de fal.ai o un video de BytePlus cuestan dinero igual que un
+// mensaje, y hasta ahora no quedaban registrados en ningún sitio. Van a la
+// misma tabla a propósito: el costo de una cuenta es UN número, no tres
+// consultas a tres sitios distintos. Los tokens quedan en cero y el costo se
+// escribe tal cual, porque aquí no hay tarifa por token que aplicar.
+export async function registrarGasto({ userId, actorId, origen, detalle, costo }) {
+  try {
+    if (!userId) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/ai_usage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        actor_id: actorId || null,
+        origen,
+        agente: detalle || null,
+        modelo: detalle || null,
+        tokens_in: 0, tokens_out: 0, cache_write: 0, cache_read: 0,
+        costo: Number((costo || 0).toFixed(6)),
+      }),
+    });
+  } catch (e) {
+    console.error('registrarGasto:', e?.message);
+  }
+}
+
+// ── Consumo del mes en curso ─────────────────────────────────────────────────
+// Cuenta filas de ai_usage desde el día 1. Es la fuente de los cupos: el mismo
+// registro que sirve para saber cuánto cuesta una cuenta sirve para frenarla,
+// así que no hay dos contadores que puedan discrepar.
+//
+// Devuelve null si la consulta falla. Quien llame DEBE distinguir "cero" de
+// "no lo sé": frenar a un cliente porque Supabase tuvo un mal minuto es peor
+// que dejar pasar un mensaje de más.
+export async function consumoDelMes(userId, origen) {
+  try {
+    if (!userId) return null;
+    const d = new Date();
+    const desde = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+    const filtro = origen ? `&origen=eq.${encodeURIComponent(origen)}` : '';
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/ai_usage?user_id=eq.${encodeURIComponent(userId)}${filtro}` +
+      `&created_at=gte.${encodeURIComponent(desde)}&select=id&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'count=exact' } }
+    );
+    if (!r.ok) return null;
+    // PostgREST devuelve el total en Content-Range: "0-0/37"
+    const rango = r.headers.get('content-range') || '';
+    const total = parseInt(rango.split('/')[1], 10);
+    return Number.isFinite(total) ? total : null;
+  } catch (e) {
+    console.error('consumoDelMes:', e?.message);
+    return null;
   }
 }

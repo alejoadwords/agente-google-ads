@@ -5,6 +5,30 @@
 
 export const config = { runtime: 'edge' };
 
+import { registrarUso, cuentaDe } from './_uso-ia.js';
+
+// Este endpoint llamaba a Claude sin pedir credenciales de ninguna clase.
+async function usuarioDelToken(req) {
+  try {
+    const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const bin = x => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const txt = x => new TextDecoder().decode(bin(x));
+    const header = JSON.parse(txt(hB64));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const key = jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, bin(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const payload = JSON.parse(txt(pB64));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub || null;
+  } catch { return null; }
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -59,6 +83,11 @@ export default async function handler(req) {
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
+  }
+
+  const actorId = await usuarioDelToken(req);
+  if (!actorId) {
+    return new Response(JSON.stringify({ error: 'No autorizado.' }), { status: 401, headers: CORS });
   }
 
   let body;
@@ -176,6 +205,10 @@ export default async function handler(req) {
   }
 
   const claudeData = await claudeRes.json();
+  if (claudeData.usage) {
+    await registrarUso({ userId: await cuentaDe(actorId), actorId, origen: 'extract-brand',
+      agente: 'extract-brand', modelo: 'claude-haiku-4-5', uso: claudeData.usage });
+  }
   const rawText = claudeData?.content?.[0]?.text || '';
 
   let parsed;

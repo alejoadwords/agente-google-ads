@@ -12,6 +12,8 @@ const MCC_ID              = process.env.GOOGLE_ADS_MCC_ID;
 const META_BASE           = 'https://graph.facebook.com/v19.0';
 const CACHE_TTL_MS        = 60 * 60 * 1000; // 60 minutes
 
+import { registrarUso, cuentaDe } from './_uso-ia.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -371,7 +373,7 @@ async function fetchMetaAdsData(userId, accountId, dateFrom, dateTo) {
 }
 
 // ── AI Insights ───────────────────────────────────────────────────────────────
-async function generateInsights(platformsData, period, clientName) {
+async function generateInsights(platformsData, period, clientName, userId) {
   if (!ANTHROPIC_KEY) return null;
 
   const summary = platformsData.map(p => {
@@ -407,6 +409,10 @@ Sé específico, usa los números reales. Máximo 2 oraciones por punto.`;
   });
 
   const data = await res.json();
+  if (data.usage && userId) {
+    await registrarUso({ userId: await cuentaDe(userId), actorId: userId, origen: 'dashboard',
+      agente: 'insights', modelo: 'claude-haiku-4-5-20251001', uso: data.usage });
+  }
   const text = data.content?.[0]?.text || '';
   try {
     const match = text.match(/\{[\s\S]*\}/);
@@ -526,7 +532,7 @@ async function handleGet(url) {
 
     // Generate insights if platforms have data
     if (platformsData.length > 0 && insightsAge > CACHE_TTL_MS) {
-      insights = await generateInsights(platformsData, dash.period, dash.client_name).catch(() => null);
+      insights = await generateInsights(platformsData, dash.period, dash.client_name, dash.user_id).catch(() => null);
     }
 
     // Save to cache

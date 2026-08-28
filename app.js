@@ -27,6 +27,22 @@ function isAdminUser() {
 }
 
 // Funciones de límites
+//
+// El cupo de imágenes lo lleva el SERVIDOR (api/generate-image). Aquí solo se
+// consulta y se guarda para pintarlo. Antes se contaba en localStorage: se
+// saltaba borrando un dato del navegador, y desde que el servidor también
+// cuenta, dos contadores que discrepan son peor que ninguno.
+async function refrescarCupoImagenes() {
+  try {
+    const r = await fetchAuth('/api/generate-image?action=cupo');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (typeof d.limite !== 'number') return;
+    imageUsage = { generated: d.usadas || 0, limit: d.limite, timestamp: Date.now(), servidor: true };
+    saveImageUsage();
+  } catch (e) { console.error('refrescarCupoImagenes', e); }
+}
+
 function loadImageUsage() {
   if (userPlan === 'agency' || isAdminUser()) {
     imageUsage = { generated: 0, limit: 9999 }; // Ilimitado para Agency y Admin
@@ -78,6 +94,7 @@ function saveImageUsage() {
 
 function canGenerateImage() {
   loadImageUsage();
+  refrescarCupoImagenes();
   return isAdminUser() || imageUsage.generated < imageUsage.limit;
 }
 
@@ -86,6 +103,8 @@ function incrementImageUsage() {
     imageUsage.generated++;
     saveImageUsage();
   }
+  // Y se resincroniza con el servidor, que es quien manda.
+  refrescarCupoImagenes();
 }
 
 // Contador mensual de mensajes para plan Free (50/mes)
@@ -1140,9 +1159,10 @@ async function autoExtractBrand() {
   if (label) label.textContent = 'Analizando sitio...';
 
   try {
-    const res = await fetch('/api/extract-brand', {
+    // fetchAuth y no fetch: el endpoint ya exige sesión (antes no pedía nada
+    // y cualquiera podía gastar nuestro saldo de Anthropic con él).
+    const res = await fetchAuth('/api/extract-brand', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: urlToAnalyze }),
     });
     const data = await res.json();
@@ -4546,6 +4566,7 @@ window.onload = async () => {
 
   // Inicializar límites de imágenes
   loadImageUsage();
+  refrescarCupoImagenes();
 
   // Vista inicial: panel de clientes para agencia/admin, home para el resto
   const isAgencyOnLoad = userPlan === 'agency' || isAdminUser();
@@ -7272,7 +7293,25 @@ function renderSocialOptions() {
   area.scrollTop = area.scrollHeight;
 }
 
-function showLimitBanner(d){const a=document.getElementById('chat-area');const el=document.createElement('div');el.className='limit-banner';el.innerHTML=`<strong>límite diario alcanzado</strong> — usaste tus ${d.limit} mensajes gratuitos de hoy.<br><span style="font-size:12px;color:var(--muted)">actualiza a Pro ($39/mes) para mensajes ilimitados.</span><br><a href="/pricing.html">ver planes →</a>`;a.appendChild(el);a.scrollTop=a.scrollHeight}
+// El cupo lo decide el servidor (api/chat.js), que manda el detalle en 'cupo'.
+// Decía «límite diario» y leía un campo que el servidor nunca envió, así que
+// salía «usaste tus undefined mensajes» — y encima el cupo es mensual.
+function showLimitBanner(d){
+  const c = (d && d.cupo) || {};
+  const a = document.getElementById('chat-area');
+  if (!a) return;
+  const el = document.createElement('div');
+  el.className = 'limit-banner';
+  const cuerpo = d && d.error
+    ? esc(d.error)
+    : 'Llegaste al cupo de mensajes de este mes' + (c.limite ? ' (' + c.limite + ')' : '') + '.';
+  el.innerHTML = '<strong>Cupo del mes alcanzado</strong> — ' + cuerpo +
+    (d && d.upgrade
+      ? '<br><span style="font-size:12px;color:var(--muted)">El plan Pro ($39/mes) no tiene este límite.</span><br><a href="/pricing.html">Ver planes →</a>'
+      : '<br><span style="font-size:12px;color:var(--muted)">Escríbenos por el chat de soporte y te ampliamos el cupo.</span>');
+  a.appendChild(el);
+  a.scrollTop = a.scrollHeight;
+}
 
 function exportToPDF(txt, filename) {
   // Exporta el contenido con diseño de DOCUMENTO (estilo reporte profesional):
@@ -13346,6 +13385,7 @@ var designQData = {};
 
 function showDesignQuestionnaire() {
   loadImageUsage();
+  refrescarCupoImagenes();
   if (!canGenerateImage()) { showImageLimitReached(); return; }
 
   // Pre-cargar datos del cliente activo si existe
@@ -15581,6 +15621,7 @@ const HDW_CATEGORY_TEMPLATES = {
 
 function showHtmlDesignWizard() {
   loadImageUsage();
+  refrescarCupoImagenes();
   if (!canGenerateImage()) { showImageLimitReached(); return; }
 
   const isAdmin = isAdminUser();
