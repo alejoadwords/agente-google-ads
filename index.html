@@ -1875,7 +1875,10 @@ textarea.seop-input{resize:vertical;min-height:70px}
    solo para el dueño y los administradores. */
 .crm-card-actions.solo-nota{display:none}
 .crm-card-actions.solo-nota .crm-nota-btn{margin-left:auto}
-.crm-nota-btn{position:relative;flex:0 0 30px;padding:4px 0}
+/* El compacto es SOLO el de la tarjeta del tablero: ahí va sin etiqueta. El de
+   la ficha lleva texto y con estas medidas se aplastaría a 30px. */
+.crm-card-act-btn.crm-nota-btn{position:relative;flex:0 0 30px;padding:4px 0}
+.crm-nota-btn{position:relative}
 .crm-nota-btn:hover{color:var(--blue);border-color:var(--blue);background:var(--blue-lt)}
 /* Dentro del botón, no asomando: la ficha tiene overflow:hidden y un punto
    colgado del borde se recorta justo en la columna del extremo. */
@@ -4458,7 +4461,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </button>
       </div>
       <div class="crm-activity-input-wrap">
-        <textarea class="crm-activity-input" id="crm-activity-input" placeholder="Escribe una nota sobre este lead..."></textarea>
+        <textarea class="crm-activity-input" id="crm-activity-input" placeholder="Queda en el historial, sin avisar a nadie…"></textarea>
         <div id="crm-act-due-wrap" style="display:none;margin-top:-4px">
           <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Fecha limite</label>
           <input type="datetime-local" id="crm-act-due" class="crm-act-due-input">

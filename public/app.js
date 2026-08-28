@@ -19163,7 +19163,15 @@ async function crmOpenDetail(leadId, leadSuelto) {
       (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '') +
       '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>' +
       '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font)" onclick="agnScheduleForLead()" title="Crear tarea o reunión con este lead (sincroniza con Google Calendar)">📅 Agendar</button>' +
-      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font);border-color:#A7F3D0;background:#ECFDF5;color:#059669" onclick="prpOpenForLead()" title="Generar y enviar una propuesta comercial con link de pago">📄 Propuesta</button>';
+      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font);border-color:#A7F3D0;background:#ECFDF5;color:#059669" onclick="prpOpenForLead()" title="Generar y enviar una propuesta comercial con link de pago">📄 Propuesta</button>' +
+      // Se pinta oculto y lo revela crmRevelarNotas() solo para el dueño y los
+      // administradores, igual que en la tarjeta del tablero.
+      '<button class="crm-qa-btn crm-nota-btn" style="display:none;cursor:pointer;font-family:var(--font);border-color:var(--blue-md);background:var(--blue-lt);color:var(--blue)"' +
+      ' onclick="crmNotaAbrir(\'' + esc(lead.id) + '\')"' +
+      ' title="Deja una instrucción a quien lleva este lead: le llega por correo y en la campana">' +
+      '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg> Nota al responsable</button>';
+    // El permiso llega por consulta: se revela cuando se sepa, sin frenar la ficha.
+    crmRevelarNotas();
   }
   document.getElementById('crm-d-email').textContent = lead.email || '—';
   document.getElementById('crm-d-phone').textContent = lead.phone || '—';
@@ -19400,7 +19408,17 @@ async function crmLoadActivities(leadId) {
       const papelera = borrable
         ? '<button class="mot-borrar act-borrar" title="Eliminar" onclick="actBorrar(\'' + esc(a.id) + '\',\'' + esc(leadId) + '\')">' + ICONO_PAPELERA + '</button>'
         : '';
-      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (typeColors[a.type] || 'var(--blue)') + '"></div><div class="crm-activity-content"><div class="crm-activity-text"><strong>' + esc(typeLabels[a.type] || a.type) + ':</strong> ' + esc(a.content || '') + '</div>' + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>' + papelera + '</div>';
+      // Una nota dirigida (la que avisó al responsable) se ve distinta de una
+      // nota suelta: si no, dos meses después nadie sabe cuál llevó aviso.
+      const dirigida = a.type === 'nota' && a.metadata && a.metadata.para;
+      const etiqueta = dirigida
+        ? '<strong style="color:var(--blue)">Nota al responsable:</strong>'
+        : '<strong>' + esc(typeLabels[a.type] || a.type) + ':</strong>';
+      const quienAviso = dirigida && a.metadata.actor
+        ? '<div style="font-size:10px;color:var(--muted2);margin-top:2px">Avisado por ' + esc(a.metadata.actor) +
+          (a.metadata.leida_at ? ' · visto' : ' · sin ver todavía') + '</div>'
+        : '';
+      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (dirigida ? 'var(--blue)' : (typeColors[a.type] || 'var(--blue)')) + '"></div><div class="crm-activity-content"><div class="crm-activity-text">' + etiqueta + ' ' + esc(a.content || '') + '</div>' + quienAviso + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>' + papelera + '</div>';
     }).join('');
   } catch(e) { console.error('crmLoadActivities', e); }
 }
@@ -19411,7 +19429,7 @@ function crmSetActType(type, btn) {
   if (btn) btn.classList.add('active');
   const dueWrap = document.getElementById('crm-act-due-wrap');
   if (dueWrap) dueWrap.style.display = type === 'tarea' ? 'block' : 'none';
-  const placeholders = { nota: 'Escribe una nota sobre este lead...', llamada: 'Resultado de la llamada...', email: 'Resumen del email enviado o recibido...', reunion: 'Puntos clave de la reunión...', tarea: 'Describe la tarea pendiente...' };
+  const placeholders = { nota: 'Queda en el historial, sin avisar a nadie…', llamada: 'Resultado de la llamada...', email: 'Resumen del email enviado o recibido...', reunion: 'Puntos clave de la reunión...', tarea: 'Describe la tarea pendiente...' };
   const input = document.getElementById('crm-activity-input');
   if (input) input.placeholder = placeholders[type] || '';
 }
