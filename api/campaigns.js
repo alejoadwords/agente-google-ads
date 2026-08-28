@@ -140,14 +140,76 @@ async function leadsByIds(userId, clientId, ids, channel, select) {
   return out;
 }
 
+// Correos que NUNCA deben recibir otra campaña. Resend nos avisa de los rebotes
+// duros y de las quejas de spam, y los guardábamos en email_events sin que nadie
+// los leyera nunca: seguíamos escribiendo a buzones muertos. Eso no es solo
+// inútil, quema la reputación del dominio — y el dominio es el mismo para TODOS
+// los clientes, así que el descuido de uno se lo come el resto.
+// OJO: NO se filtra por user_id. api/resend-webhook.js guarda estos eventos sin
+// él —solo resend_id, event y to_email— así que filtrar por cuenta no devolvería
+// absolutamente nada y la supresión no haría nada, en silencio.
+//
+// Y además es lo correcto: el dominio remitente es compartido, así que un rebote
+// duro es un hecho del BUZÓN, no de la cuenta. Solo se comprueba contra las
+// direcciones de la propia audiencia, así que nadie ve datos de nadie.
+async function correosQuemados() {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/email_events?event=in.(bounced,complained)&select=to_email&limit=20000`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) return new Set();
+    const filas = await r.json();
+    return new Set((filas || []).map(f => String(f.to_email || '').toLowerCase()).filter(Boolean));
+  } catch { return new Set(); }
+}
+
+// Los ids que hay que sacar: los de las listas de exclusión y los de las
+// etiquetas excluidas. Una lista dinámica se resuelve a sus leads en el momento,
+// para que excluir «clientes actuales» siga funcionando cuando entren nuevos.
+async function idsExcluidos(userId, clientId, audience) {
+  const a = audience || {};
+  const listas = Array.isArray(a.exclude_list_ids) ? a.exclude_list_ids.slice(0, 20) : [];
+  const etiquetas = Array.isArray(a.exclude_tags) ? a.exclude_tags.slice(0, 20) : [];
+  if (!listas.length && !etiquetas.length) return new Set();
+  const fuera = new Set();
+
+  for (const lid of listas) {
+    const sub = await normalizeAudience(userId, { list_id: lid });
+    let filas = [];
+    if (Array.isArray(sub.lead_ids) && sub.lead_ids.length) {
+      filas = await leadsByIds(userId, clientId, sub.lead_ids, null, 'id');
+    } else if (Object.keys(sub).length) {
+      filas = await fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, sub, null)}&select=id&limit=10000`,
+        { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
+    }
+    (filas || []).forEach(l => fuera.add(l.id));
+  }
+
+  if (etiquetas.length) {
+    const q = audienceQuery(userId, clientId, { tags: etiquetas }, null);
+    const filas = await fetch(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id&limit=10000`,
+      { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
+    (filas || []).forEach(l => fuera.add(l.id));
+  }
+  return fuera;
+}
+
 async function resolveAudience(userId, clientId, audience, channel) {
   const a = await normalizeAudience(userId, audience);
+  let base;
   if (Array.isArray(a.lead_ids) && a.lead_ids.length) {
-    return leadsByIds(userId, clientId, a.lead_ids, channel, 'id,name,email,phone');
+    base = await leadsByIds(userId, clientId, a.lead_ids, channel, 'id,name,email,phone');
+  } else {
+    const q = audienceQuery(userId, clientId, a, channel);
+    base = await fetch(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone&limit=10000`, { headers: sbHeaders() }).then(r => r.json()) || [];
   }
-  const q = audienceQuery(userId, clientId, a, channel);
-  const rows = await fetch(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone&limit=10000`, { headers: sbHeaders() }).then(r => r.json());
-  return rows || [];
+  // Las exclusiones se aplican sobre la audiencia YA resuelta, no dentro de la
+  // consulta: mezclarlas en el filtro haría imposible contar cuántos se quitan y
+  // por qué, que es justo lo que hay que enseñar antes de enviar.
+  const fuera = await idsExcluidos(userId, clientId, audience);
+  const quemados = channel === 'email' ? await correosQuemados() : new Set();
+  return base.filter(l => !fuera.has(l.id) && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase())));
 }
 
 // Emails de campaña enviados este mes (para el cupo)
@@ -190,11 +252,15 @@ export default async function handler(req) {
         ? leadsByIds(userId, clientId, a.lead_ids, null, 'id,email,phone,tags')
         : fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, a, null)}&select=id,email,phone,tags&limit=10000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []),
     ]);
-    const breakdown = { matched: all.length, unsubscribed: 0, missing: 0 };
+    const breakdown = { matched: all.length, unsubscribed: 0, missing: 0, excluidos: 0, rebotados: 0 };
+    const fuera = await idsExcluidos(userId, clientId, audience);
+    const quemados = channel === 'email' ? await correosQuemados() : new Set();
     for (const l of all) {
+      if (fuera.has(l.id)) { breakdown.excluidos++; continue; }
       if (channel === 'email') {
         if ((l.tags || []).includes('no-email')) breakdown.unsubscribed++;
         else if (!l.email) breakdown.missing++;
+        else if (quemados.has(String(l.email).toLowerCase())) breakdown.rebotados++;
       } else if (!l.phone) breakdown.missing++;
     }
     return jsonResp({ count: leads.length, sample: leads.slice(0, 5).map(l => l.name), breakdown });

@@ -9862,6 +9862,7 @@ function novIr(destino) {
         case 'crm':           navGo('crm'); break;
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
+        case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
         default:              if (destino && destino.startsWith('/')) location.href = destino;
@@ -24168,6 +24169,17 @@ const AUTO_STEP_META = {
 
 const AUTO_TEMPLATES = [
   {
+    // Cierra el circuito con las listas: la etiqueta que pone esta
+    // automatización es la misma por la que se define la lista «No contactar»,
+    // y esa lista se excluye en las campañas. Tres piezas que ya existían y
+    // nadie iba a conectar por su cuenta.
+    name: 'No volver a contactar a los perdidos',
+    trigger: { type: 'stage_changed', stage: 'perdido' },
+    steps: [
+      { type: 'add_tag', tag: 'no-contactar' },
+    ],
+  },
+  {
     name: 'Bienvenida a lead nuevo',
     trigger: { type: 'lead_created' },
     steps: [
@@ -25123,7 +25135,7 @@ function agnScheduleForLead() {
   // Rutas canónicas v2 (por módulo). Las /leads/* viejas siguen funcionando como alias.
   const CRM_SUB = {
     kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda',
-    campaigns: '/marketing/campanas', plantillas: '/marketing/plantillas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
+    campaigns: '/marketing/campanas', plantillas: '/marketing/plantillas', listas: '/marketing/listas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
@@ -25134,7 +25146,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -25604,6 +25616,7 @@ function cmpWRender() {
     cmpWLoadLists().then(() => { if (_cmpW && _cmpW.step === 3 && _cmpW.mode === 'list') cmpWAudRender(); });
     cmpWManualEnsureLeads();
   }
+  if (w.step === 3) cmpWCargarListas().then(cmpWExcluirPintar);
   if (w.step === 4) { cmpWPintarChecks(); cmpWPintarDestinatarios(); cmpWSyncEmail(); }
 }
 
@@ -25889,6 +25902,7 @@ function cmpWStep3() {
       tab('filters', '🎯 Por filtros') + tab('list', '📋 Lista guardada') + tab('manual', '☝️ Elegir uno a uno') +
     '</div>' +
     '<div id="cmpw-aud-box"></div>' +
+    '<div id="cmpw-excluir" style="margin-top:18px"></div>' +
     '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted);margin-top:14px">Calculando audiencia…</div>' +
     (w.channel === 'email' ?
     '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:18px;background:var(--panel)">' +
@@ -26047,12 +26061,19 @@ function cmpToggleTag(name) {
 }
 
 function cmpAudience() {
-  if (_cmpW && _cmpW.mode === 'manual') return { lead_ids: _cmpW.lead_ids };
-  if (_cmpW && _cmpW.mode === 'list') return _cmpW.list_id ? { list_id: _cmpW.list_id } : { lead_ids: [] };
+  // Las exclusiones valen para los tres modos: se elija la audiencia como se
+  // elija, «a esta gente no» se respeta igual.
+  const fuera = {
+    exclude_list_ids: (_cmpW && _cmpW.exclude_list_ids) || [],
+    exclude_tags: (_cmpW && _cmpW.exclude_tags) || [],
+  };
+  if (_cmpW && _cmpW.mode === 'manual') return { lead_ids: _cmpW.lead_ids, ...fuera };
+  if (_cmpW && _cmpW.mode === 'list') return _cmpW.list_id ? { list_id: _cmpW.list_id, ...fuera } : { lead_ids: [], ...fuera };
   return {
     tags: _cmpAudTags,
     stage: document.getElementById('cmp-stage')?.value || (_cmpW ? _cmpW.stage : null) || null,
     source: document.getElementById('cmp-source')?.value || (_cmpW ? _cmpW.source : null) || null,
+    ...fuera,
   };
 }
 
@@ -26235,6 +26256,10 @@ async function cmpWPintarDestinatarios() {
         '<span>Le llega a</span><span>' + Number(d.count || 0).toLocaleString('es-CO') + '</span></div>' +
       (b.missing ? linea('No le llega', b.missing, w.channel === 'email' ? '· sin correo' : '· sin teléfono') : '') +
       (b.unsubscribed ? linea('No le llega', b.unsubscribed, '· se dio de baja') : '') +
+      (b.excluidos ? linea('No le llega', b.excluidos, '· en tus listas de exclusión') : '') +
+      // Los rebotados no los eligió nadie: se apartan solos y hay que decirlo, o
+      // el número baja sin explicación y parece un fallo.
+      (b.rebotados ? linea('No le llega', b.rebotados, '· su correo rebotó o marcó spam') : '') +
       (restante !== null
         ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;' + (pasado ? 'color:#B91C1C;font-weight:700' : 'color:var(--muted2)') + '">' +
           (pasado
@@ -27830,13 +27855,13 @@ async function impRun() {
 // versiones ya envueltas de crmSetView/showView (router incluido).
 const NAV_TABS = {
   crm: ['kanban', 'list', 'tareas', 'agenda'],
-  marketing: ['campaigns', 'plantillas', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
+  marketing: ['campaigns', 'plantillas', 'listas', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
   analisis: ['sales', 'prod', 'equipo', 'mk', 'cv', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', plantillas: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'plantillas', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', plantillas: 'marketing', listas: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'plantillas', 'listas', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -27868,7 +27893,7 @@ function navHighlight(key) {
 // entrar al módulo), en lugar de las píldoras que había arriba de cada pantalla.
 const NAV_TAB_LABELS = {
   kanban: 'Pipeline', list: 'Contactos', tareas: 'Tareas', agenda: 'Agenda',
-  campaigns: 'Campañas', plantillas: 'Plantillas', autos: 'Automatizaciones', sources: 'Fuentes',
+  campaigns: 'Campañas', plantillas: 'Plantillas', listas: 'Listas', autos: 'Automatizaciones', sources: 'Fuentes',
   proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
   inbox: 'Inbox', agents: 'Chatbots',
   sales: 'Ventas', prod: 'Productividad', equipo: 'Por comercial', mk: 'Marketing', cv: 'Conversaciones',
@@ -31864,3 +31889,277 @@ async function plnRescatarIncrustadas(html) {
   }
   return { html: salida, subidas };
 }
+
+// ── LISTAS DE EXCLUSIÓN ───────────────────────────────────────────────────────
+// No hay entidad nueva: una lista es una lista. Lo que cambia es cómo se usa —
+// incluir o excluir. Crear un tipo aparte habría obligado a mantener dos
+// gestores, dos formularios y dos formas de contar lo mismo.
+
+function cmpWExcluirPintar() {
+  const cont = document.getElementById('cmpw-excluir');
+  if (!cont) return;
+  const w = _cmpW;
+  const listas = w.exclude_list_ids || [];
+  const etiquetas = w.exclude_tags || [];
+  const nombreLista = id => (_cmpLists.find(l => l.id === id) || {}).name || 'Lista';
+
+  const chips =
+    listas.map(id => '<span class="tag-chip">📋 ' + esc(nombreLista(id)) +
+      ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'lista\',\'' + esc(id) + '\')">×</span></span>').join('') +
+    etiquetas.map(t => '<span class="tag-chip">🏷️ ' + esc(t) +
+      ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'tag\',\'' + esc(t) + '\')">×</span></span>').join('');
+
+  const disponibles = _cmpLists.filter(l => !listas.includes(l.id));
+  const tagsDisponibles = (typeof crmTags !== 'undefined' ? crmTags : []).map(t => t.name || t).filter(t => !etiquetas.includes(t));
+
+  cont.innerHTML =
+    '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--panel)">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+        '<div style="font-size:12px;font-weight:800">🚫 No enviar a</div>' +
+        '<div style="font-size:11px;color:var(--muted2)">Se descuentan de la audiencia, la elijas como la elijas</div>' +
+      '</div>' +
+      (chips ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">' + chips + '</div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
+        (disponibles.length
+          ? '<select class="auto-input" style="flex:1;min-width:170px" onchange="cmpWExcluirAdd(\'lista\',this.value);this.value=\'\'">' +
+            '<option value="">Excluir una lista…</option>' +
+            disponibles.map(l => '<option value="' + esc(l.id) + '">' + esc(l.name) + '</option>').join('') + '</select>'
+          : '') +
+        (tagsDisponibles.length
+          ? '<select class="auto-input" style="flex:1;min-width:170px" onchange="cmpWExcluirAdd(\'tag\',this.value);this.value=\'\'">' +
+            '<option value="">Excluir una etiqueta…</option>' +
+            tagsDisponibles.map(t => '<option value="' + esc(t) + '">' + esc(t) + '</option>').join('') + '</select>'
+          : '') +
+      '</div>' +
+      '<button class="btn-ghost sm" style="font-size:11px;margin-top:8px" onclick="lstCrear(null, () => { cmpWCargarListas().then(cmpWExcluirPintar); })">' +
+        icn('plus', 11) + ' Crear una lista nueva</button>' +
+    '</div>';
+}
+
+function cmpWExcluirAdd(tipo, valor) {
+  if (!valor) return;
+  const w = _cmpW;
+  if (tipo === 'lista') {
+    w.exclude_list_ids = [...new Set([...(w.exclude_list_ids || []), valor])];
+  } else {
+    w.exclude_tags = [...new Set([...(w.exclude_tags || []), valor])];
+  }
+  cmpWExcluirPintar();
+  cmpPreview();
+}
+
+function cmpWExcluirQuitar(tipo, valor) {
+  const w = _cmpW;
+  if (tipo === 'lista') w.exclude_list_ids = (w.exclude_list_ids || []).filter(x => x !== valor);
+  else w.exclude_tags = (w.exclude_tags || []).filter(x => x !== valor);
+  cmpWExcluirPintar();
+  cmpPreview();
+}
+
+async function cmpWCargarListas() {
+  try {
+    const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const d = await fetchAuth('/api/lead-lists' + (cid ? '?client_id=' + encodeURIComponent(cid) : '')).then(r => r.json());
+    _cmpLists = d.lists || [];
+  } catch { /* sin listas se sigue: excluir es opcional */ }
+  return _cmpLists;
+}
+
+// ── SECCIÓN LISTAS ────────────────────────────────────────────────────────────
+// Las mismas lead_lists que ya usaban las campañas, ahora con casa propia. Una
+// lista sirve para enviar A ella o para NO enviar a ella: no son cosas distintas.
+
+let lstLista = [];
+
+async function lstRender() {
+  const view = document.getElementById('crm-listas-view');
+  if (!view) return;
+
+  const header =
+    '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:260px">' +
+        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Listas de contactos</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">Grupos que puedes usar para enviarles una campaña — o para dejarlos fuera de una</div>' +
+      '</div>' +
+      '<button class="btn-pri sm" onclick="lstCrear()">' + icn('plus', 13) + ' Nueva lista</button>' +
+    '</div>';
+
+  view.innerHTML = header + '<div class="pulso-skel" style="max-width:640px"></div>';
+
+  try {
+    const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const d = await fetchAuth('/api/lead-lists' + (cid ? '?client_id=' + encodeURIComponent(cid) : '')).then(r => r.json());
+    lstLista = d.lists || [];
+  } catch {
+    view.innerHTML = header + '<div style="max-width:640px">' +
+      emptyAgua('alert', 'No se pudieron cargar las listas', 'Puede ser un corte momentáneo.',
+        '<button class="btn-pri sm" onclick="lstRender()">Reintentar</button>') + '</div>';
+    return;
+  }
+
+  if (!lstLista.length) {
+    view.innerHTML = header + '<div style="max-width:640px">' +
+      emptyAgua('users', 'Todavía no tienes listas',
+        'Una lista agrupa contactos por etiqueta, etapa o fuente. Sirve para mandarles una campaña, y también para excluirlos de otras — por ejemplo, una lista «No contactar».',
+        '<button class="btn-pri sm" onclick="lstCrear()">Crear la primera</button>') + '</div>';
+    return;
+  }
+
+  view.innerHTML = header + '<div style="max-width:860px">' + lstLista.map(lstTarjeta).join('') + '</div>';
+  lstLista.forEach(l => lstContar(l.id));
+}
+
+function lstTarjeta(l) {
+  const dinamica = l.kind !== 'static';
+  const f = l.filters || {};
+  const criterio = dinamica
+    ? [f.tags?.length ? 'Etiquetas: ' + f.tags.map(esc).join(', ') : '', f.stage ? 'Etapa: ' + esc(f.stage) : '', f.source ? 'Fuente: ' + esc(f.source) : '']
+        .filter(Boolean).join(' · ') || 'Todos los contactos'
+    : (l.lead_ids || []).length + ' contactos elegidos a mano';
+  return '<div class="auto-card">' +
+    '<div style="width:38px;height:38px;border-radius:11px;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+      icn('users', 17) + '</div>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:var(--fs-base);font-weight:700">' + esc(l.name) + '</span>' +
+        '<span class="tag-chip">' + (dinamica ? 'Se actualiza sola' : 'Fija') + '</span>' +
+      '</div>' +
+      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-top:3px">' + criterio + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted2);margin-top:5px" id="lst-n-' + esc(l.id) + '">Contando…</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;flex-shrink:0">' +
+      '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="lstBorrar(\'' + esc(l.id) + '\',\'' + esc(l.name) + '\')">Borrar</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// El número de contactos se pide aparte y por lista: una lista dinámica no tiene
+// un tamaño guardado, se calcula sobre los leads de ahora.
+async function lstContar(id) {
+  const el = document.getElementById('lst-n-' + id);
+  if (!el) return;
+  try {
+    const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = '?preview=1&channel=email&audience=' + encodeURIComponent(JSON.stringify({ list_id: id })) + (cid ? '&client_id=' + encodeURIComponent(cid) : '');
+    const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
+    const b = d.breakdown || {};
+    el.textContent = (b.matched || 0).toLocaleString('es-CO') + ' contactos · ' + (d.count || 0).toLocaleString('es-CO') + ' con correo válido';
+  } catch { el.textContent = 'No se pudo contar'; }
+}
+
+// alGuardar: quien la abre desde el asistente necesita recargar su desplegable.
+function lstCrear(_ignorado, alGuardar) {
+  const tags = (typeof crmTags !== 'undefined' ? crmTags : []).map(t => t.name || t);
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'lst-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:480px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">Nueva lista</div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">✕</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-field"><label class="auto-label">Nombre *</label>' +
+        '<input class="auto-input" id="lst-nombre" placeholder="ej. No contactar"></div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">' +
+        'La lista se arma sola con quien cumpla estas condiciones. Si entran contactos nuevos que las cumplen, entran también a la lista.</div>' +
+      // Las tres piezas ya existían por separado; esto es lo único que las une.
+      '<div style="font-size:11.5px;color:var(--muted);background:var(--blue-lt);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.55">' +
+        'Truco: una automatización puede poner la etiqueta sola —por ejemplo al marcar un lead como perdido— y así la lista se llena sin que nadie la mantenga. ' +
+        'En Marketing → Automatizaciones, con el paso «Añadir etiqueta».</div>' +
+      '<div class="auto-field"><label class="auto-label">Etiquetas</label>' +
+        (tags.length
+          ? '<div id="lst-tags" style="display:flex;flex-wrap:wrap;gap:5px">' +
+            tags.map(t => '<button type="button" class="btn-ghost sm" style="font-size:11px" data-tag="' + esc(t) + '" onclick="lstToggleTag(this)">' + esc(t) + '</button>').join('') + '</div>'
+          : '<div style="font-size:12px;color:var(--muted2)">Todavía no tienes etiquetas.</div>') +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div><label class="auto-label">Etapa</label>' +
+          '<select class="auto-input" id="lst-stage"><option value="">Cualquiera</option>' + autoStageOptions('') + '</select></div>' +
+        '<div><label class="auto-label">Fuente</label>' +
+          '<select class="auto-input" id="lst-source"><option value="">Cualquiera</option>' +
+          ['manual','webhook','landing_page','meta_ads','google_ads','referido','importacion'].map(x => '<option value="' + x + '">' + x.replace('_',' ') + '</option>').join('') + '</select></div>' +
+      '</div>' +
+      '<div id="lst-msg" style="font-size:12px;margin-top:10px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="lst-save" onclick="lstGuardar()">Crear lista</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  ov._alGuardar = alGuardar || null;
+  setTimeout(() => document.getElementById('lst-nombre')?.focus(), 80);
+}
+
+function lstToggleTag(btn) {
+  const on = btn.dataset.on === '1';
+  btn.dataset.on = on ? '' : '1';
+  btn.style.background = on ? '' : 'var(--blue-lt)';
+  btn.style.borderColor = on ? '' : 'var(--blue)';
+  btn.style.color = on ? '' : 'var(--blue)';
+}
+
+async function lstGuardar() {
+  const ov = document.getElementById('lst-modal');
+  const nombre = (document.getElementById('lst-nombre')?.value || '').trim();
+  const msg = document.getElementById('lst-msg');
+  const btn = document.getElementById('lst-save');
+  const fallo = t => { if (msg) { msg.style.color = '#B91C1C'; msg.textContent = t; } };
+  if (nombre.length < 2) return fallo('Ponle un nombre para poder encontrarla.');
+
+  const tags = [...document.querySelectorAll('#lst-tags [data-on="1"]')].map(b => b.dataset.tag);
+  const stage = document.getElementById('lst-stage')?.value || null;
+  const source = document.getElementById('lst-source')?.value || null;
+  // Una lista sin ninguna condición es «todos los contactos». Como lista de
+  // exclusión eso deja la campaña en cero, así que se avisa antes de crearla.
+  if (!tags.length && !stage && !source) {
+    return fallo('Elige al menos una condición, o la lista incluiría a todos tus contactos.');
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+  try {
+    const cid = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const d = await fetchAuth('/api/lead-lists' + (cid ? '?client_id=' + encodeURIComponent(cid) : ''), {
+      method: 'POST',
+      body: JSON.stringify({ name: nombre, filters: { tags, stage, source } }),
+    }).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    const cb = ov?._alGuardar;
+    ov?.remove();
+    showToast('Lista creada');
+    if (cb) cb(d.list); else lstRender();
+  } catch (e) {
+    fallo(e.message || 'No se pudo crear la lista.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear lista'; }
+  }
+}
+
+function lstBorrar(id, nombre) {
+  confirmarAgua({
+    titulo: '¿Borrar la lista «' + nombre + '»?',
+    texto: 'Los contactos no se tocan: solo desaparece la agrupación. Si alguna campaña la usaba para excluir, deja de excluir a partir de ahora.',
+    confirmar: 'Borrar',
+    peligro: true,
+    onOk: async () => {
+      try {
+        const r = await fetchAuth('/api/lead-lists?id=' + encodeURIComponent(id), { method: 'DELETE' });
+        if (!r.ok) throw new Error();
+        showToast('Lista borrada');
+        lstRender();
+      } catch { showToast('No se pudo borrar', 'error'); }
+    },
+  });
+}
+
+// La vista vive en Marketing.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const lv = document.getElementById('crm-listas-view');
+    if (lv) lv.style.display = v === 'listas' ? 'flex' : 'none';
+    document.getElementById('crm-btn-listas')?.classList.toggle('active', v === 'listas');
+    if (v === 'listas') lstRender();
+  };
+})();

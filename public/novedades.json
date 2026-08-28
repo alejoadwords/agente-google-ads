@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-listas-exclusion",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "Listas de contactos, y a quién no enviarle",
+      "texto": "Nueva sección en Marketing → Listas. Agrupa contactos por etiqueta, etapa o fuente, y la lista se mantiene sola: si entra un contacto que cumple, entra a la lista. En el asistente de campañas hay ahora un bloque «No enviar a» donde excluyes listas o etiquetas enteras —y puedes crear la lista ahí mismo sin salir—. Además, quien haya rebotado o marcado tu correo como spam queda fuera de todos los envíos automáticamente: seguir escribiéndoles quemaba la reputación del remitente. En el resumen previo verás cuántos quedaron fuera y por qué motivo.",
+      "accion": {
+        "texto": "Ir a Listas",
+        "ir": "listas"
+      }
+    },
+    {
       "id": "2026-08-28-imagenes-correo",
       "fecha": "2026-08-28",
       "tipo": "arreglo",
