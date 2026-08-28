@@ -26177,6 +26177,10 @@ function cmpWComprobar() {
     if (/0\.000\.000|00 de mes|Escribe aquí|Primer punto de lo que incluye/i.test(w.html)) {
       avisos.push('Quedan textos de ejemplo de la plantilla sin cambiar.');
     }
+    // Gmail no muestra imágenes incrustadas: se vería un recuadro vacío.
+    if (/data:image\//i.test(w.html)) {
+      graves.push('Hay una imagen incrustada en el correo. Gmail no las muestra: llegaría un recuadro vacío. Vuelve a insertarla desde el panel de imágenes del constructor.');
+    }
     const kb = new Blob([w.html]).size / 1024;
     if (kb > 100) avisos.push('El correo pesa ' + Math.round(kb) + ' KB: Gmail lo recorta por encima de 102 KB y esconde el final.');
   }
@@ -31446,6 +31450,25 @@ async function plnDisenar(id, opciones) {
     storageManager: false,
     // Sin messages, poner locale:'es' no traduce nada y el panel sale en inglés.
     i18n: { locale: 'es', localeFallback: 'en', messages: _gjsEs ? { es: _gjsEs } : {} },
+    // Sin esto GrapesJS incrusta las imágenes como data:base64 dentro del HTML,
+    // y GMAIL NO MUESTRA IMÁGENES INCRUSTADAS: llegan como un recuadro vacío.
+    // Tienen que ser URLs públicas de verdad.
+    assetManager: {
+      upload: false,
+      uploadName: 'files',
+      autoAdd: true,
+      uploadFile: async (ev) => {
+        const files = ev.dataTransfer ? ev.dataTransfer.files : ev.target.files;
+        for (const f of files) {
+          try {
+            const url = await plnSubirImagen(f);
+            if (url) _gjsEditor.AssetManager.add(url);
+          } catch (e) {
+            showToast(e.message || 'No se pudo subir la imagen', 'error');
+          }
+        }
+      },
+    },
     plugins: ['grapesjs-preset-newsletter'],
     pluginsOpts: {
       'grapesjs-preset-newsletter': {
@@ -31569,6 +31592,19 @@ async function plnDisenarGuardar() {
     return;
   }
   if (!html.trim()) { showToast('El correo está vacío: arrastra algún bloque antes de guardar', 'error'); return; }
+
+  // Antes de nada, sacar del HTML cualquier imagen incrustada: llegan rotas.
+  if (/data:image\//i.test(html)) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Subiendo imágenes…'; }
+    const r = await plnRescatarIncrustadas(html);
+    html = r.html;
+    if (btn) { btn.disabled = false; btn.textContent = modoCampana ? 'Guardar en la campaña' : 'Guardar plantilla'; }
+    if (/data:image\//i.test(html)) {
+      showToast('Hay una imagen que no se pudo subir. Bórrala y vuelve a insertarla desde el panel de imágenes.', 'error');
+      return;
+    }
+    if (r.subidas) showToast('Se subieron ' + r.subidas + ' ' + (r.subidas === 1 ? 'imagen' : 'imágenes'));
+  }
   // Viene envuelto en <body>, y ese HTML se pega DENTRO del correo: un <body>
   // anidado es inválido. Se convierte en <div> conservando sus estilos, que son
   // los que puso el usuario en el panel Cuerpo.
@@ -31787,4 +31823,44 @@ function cmpWQuitarDiseno(silencioso) {
     confirmar: 'Quitar el diseño',
     onOk: seguir,
   });
+}
+
+// ── Imágenes del constructor ──────────────────────────────────────────────────
+// Sube al bucket público y devuelve una URL https de verdad. El correo no puede
+// llevar la imagen dentro: Gmail bloquea los data: y deja un hueco vacío.
+async function plnSubirImagen(file) {
+  if (!file || !/^image\//.test(file.type || '')) throw new Error('Eso no es una imagen');
+  if (file.size > 2 * 1024 * 1024) throw new Error('La imagen pesa más de 2 MB. Comprímela e inténtalo otra vez.');
+  const dataUrl = await new Promise((ok, mal) => {
+    const r = new FileReader();
+    r.onload = () => ok(r.result);
+    r.onerror = () => mal(new Error('No se pudo leer el archivo'));
+    r.readAsDataURL(file);
+  });
+  const d = await fetchAuth('/api/upload-image', {
+    method: 'POST',
+    body: JSON.stringify({ data: dataUrl, type: file.type }),
+  }).then(r => r.json());
+  if (d.error) throw new Error(d.error);
+  return d.url;
+}
+
+// Red de seguridad: si por lo que sea quedó una imagen incrustada —pegada desde
+// el portapapeles, arrastrada, o una plantilla vieja— se sube antes de guardar y
+// se cambia por su URL. Sin esto el correo se guarda «bien» y llega roto.
+async function plnRescatarIncrustadas(html) {
+  const encontradas = [...new Set(html.match(/data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/gi) || [])];
+  if (!encontradas.length) return { html, subidas: 0 };
+  let salida = html, subidas = 0;
+  for (const dato of encontradas) {
+    try {
+      const tipo = (dato.match(/^data:(image\/[a-z+]+);/i) || [])[1] || 'image/png';
+      const d = await fetchAuth('/api/upload-image', {
+        method: 'POST',
+        body: JSON.stringify({ data: dato, type: tipo }),
+      }).then(r => r.json());
+      if (d.url) { salida = salida.split(dato).join(d.url); subidas++; }
+    } catch (e) { console.warn('no se pudo rescatar una imagen incrustada', e); }
+  }
+  return { html: salida, subidas };
 }

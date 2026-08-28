@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-imagenes-correo",
+      "fecha": "2026-08-28",
+      "tipo": "arreglo",
+      "titulo": "Las imágenes del constructor ya llegan al correo",
+      "texto": "Las imágenes que ponías en un correo diseñado se guardaban dentro del propio HTML, y Gmail no muestra imágenes incrustadas: llegaba un recuadro vacío. Ahora se suben y el correo lleva su enlace, que es lo que sí se ve. Si en un diseño viejo quedó alguna incrustada, se sube sola al volver a guardarlo, y si algo falla el revisor previo frena el envío en vez de dejarte mandar un correo con un hueco. Formatos: PNG, JPG, WebP o GIF, hasta 2 MB.",
+      "accion": {
+        "texto": "Ir a Plantillas",
+        "ir": "plantillas"
+      }
+    },
+    {
       "id": "2026-08-28-revision-envio",
       "fecha": "2026-08-28",
       "tipo": "mejora",
