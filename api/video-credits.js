@@ -2,9 +2,30 @@
 // GET  → devuelve créditos disponibles del usuario autenticado
 // POST action=deduct → descuenta 1 crédito (después de generación exitosa)
 
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+// Acceso a Supabase por su API REST, como el resto de api/. Este fichero usaba
+// el SDK oficial, que NUNCA estuvo instalado: package.json no tiene
+// dependencias. La función reventaba al cargar y la ruta llevaba caída desde
+// abril de 2026 — o sea que el cupo de videos no ha existido nunca.
+const SB_URL = process.env.SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+const sbCab = (extra) => ({
+  'Content-Type': 'application/json',
+  apikey: SB_KEY,
+  Authorization: `Bearer ${SB_KEY}`,
+  ...(extra || {}),
+});
+async function sbUsuario(userId, campos) {
+  const r = await fetch(
+    `${SB_URL}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=${campos}&limit=1`,
+    { headers: sbCab() });
+  if (!r.ok) return null;
+  return (await r.json())?.[0] || null;
+}
+async function sbActualizaUsuario(userId, cambios) {
+  await fetch(`${SB_URL}/rest/v1/users?id=eq.${encodeURIComponent(userId)}`, {
+    method: 'PATCH', headers: sbCab({ Prefer: 'return=minimal' }), body: JSON.stringify(cambios),
+  });
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -64,11 +85,7 @@ export default async function handler(req, res) {
   if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
   // ── Obtener datos del usuario ──────────────────────────────────────────────
-  const { data: user } = await supabase
-    .from('users')
-    .select('id, plan, video_credits_used, video_credits_extra, video_credits_reset_at')
-    .eq('id', userId)
-    .single();
+  const user = await sbUsuario(userId, 'id,plan,video_credits_used,video_credits_extra,video_credits_reset_at');
 
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
@@ -92,10 +109,10 @@ export default async function handler(req, res) {
   }
 
   if (needsReset) {
-    await supabase.from('users').update({
+    await sbActualizaUsuario(userId, {
       video_credits_used:     used,
       video_credits_reset_at: new Date().toISOString(),
-    }).eq('id', userId);
+    });
     resetAt = new Date();
   }
 
@@ -131,7 +148,7 @@ export default async function handler(req, res) {
     } else {
       updates.video_credits_extra = extra - 1;
     }
-    await supabase.from('users').update(updates).eq('id', userId);
+    await sbActualizaUsuario(userId, updates);
 
     return res.json({
       ok:        true,
