@@ -18557,8 +18557,9 @@ function crmChipCierre(lead) {
   if (!f) return '';
   const vencida = crmCierreVencido(lead);
   const [a, m, d] = f.split('-');
-  const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  const txt = Number(d) + ' ' + (MES[Number(m) - 1] || '') + ' ' + a;
+  // Mismo formato numerico que la linea de la proxima tarea, y con etiqueta:
+  // dos fechas seguidas sin decir de que son se confunden entre si.
+  const txt = 'Cierre: ' + d + '/' + m + '/' + a.slice(2);
   // Vencida: triángulo de alerta en vez del calendario. El color por sí solo no
   // basta —hay quien no distingue el rojo— y de un vistazo el icono canta más.
   const icono = vencida

@@ -5,8 +5,8 @@
       "id": "2026-08-28-proxima-tarea-tarjeta",
       "fecha": "2026-08-28",
       "tipo": "nuevo",
-      "titulo": "Cada tarjeta del pipeline dice cuándo es su próxima tarea",
-      "texto": "Bajo el nombre del lead aparece «Próxima tarea: 14/08/26» con la más cercana que tenga pendiente, la lleve quien la lleve. Si ya se pasó de fecha, sale en rojo y con un triángulo de alerta. Los leads sin tareas pendientes no muestran nada, para no llenar el tablero de líneas vacías. Se actualiza sola al completar o aplazar una tarea.",
+      "titulo": "Cada tarjeta del pipeline dice su cierre y su próxima tarea",
+      "texto": "Bajo el nombre del lead aparecen dos líneas: «Cierre: 14/08/26», la fecha esperada de cierre, y «Próxima tarea: 14/08/26», la tarea pendiente más cercana que tenga, la lleve quien la lleve. Las dos van etiquetadas y con el mismo formato para que no se confundan entre sí. Si alguna ya se pasó de fecha, sale en rojo y con un triángulo de alerta. Lo que no existe no se muestra, para no llenar el tablero de líneas vacías. La de tareas se actualiza sola al completar o aplazar una.",
       "accion": {
         "texto": "Ir al pipeline",
         "ir": "crm"
