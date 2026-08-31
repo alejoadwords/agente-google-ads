@@ -138,6 +138,83 @@ async function actionSendNps(step, lead, auto) {
   return { result: 'sent', detail: 'Encuesta NPS a ' + lead.email };
 }
 
+// ── Pedir reseña en Google ──────────────────────────────────────────────────
+// El enlace que recibe el cliente es NUESTRO y redirige a Google (api/resenas.js).
+// Así el clic queda en la ficha del lead y se puede medir cuántos de los que
+// compraron fueron de verdad a dejar la reseña.
+//
+// La firma se replica aquí a propósito en vez de importar api/resenas.js: ese
+// es un endpoint edge y este un cron Node, y mezclar los dos entornos ya nos
+// costó caro con los _*.js. El formato manda en resenas.js; si cambia allí,
+// cambia aquí.
+const LINK_SECRET = process.env.LINK_SECRET || process.env.CRON_SECRET || '';
+
+async function tokenResena(userId, leadId, clientId) {
+  const { createHmac } = await import('node:crypto');
+  const datos = [userId, leadId, clientId || ''].join('|');
+  const firma = createHmac('sha256', LINK_SECRET).update(datos).digest('hex').slice(0, 32);
+  return encodeURIComponent(datos) + '.' + firma;
+}
+
+async function configResenas(userId, clientId) {
+  const filas = await sb(`/user_profiles?user_id=eq.${encodeURIComponent(userId)}&agent_key=eq.__resenas__&select=profile_data&limit=1`);
+  const todo = filas?.[0]?.profile_data || {};
+  return todo[clientId || '_cuenta'] || null;
+}
+
+// Una sola vez por lead: insistir con quien ya dejó la reseña es la forma más
+// rápida de que un cliente contento deje de estarlo.
+async function yaSePidio(leadId) {
+  const previas = await sb(`/lead_activities?lead_id=eq.${leadId}&metadata->>resena=eq.pedida&select=id&limit=1`);
+  return Array.isArray(previas) && previas.length > 0;
+}
+
+async function actionPedirResena(step, lead, auto) {
+  const cfg = await configResenas(auto.user_id, auto.client_id || lead.client_id || null);
+  if (!cfg?.url) return { result: 'skipped', detail: 'Sin enlace de reseñas configurado para este cliente' };
+  if (await yaSePidio(lead.id)) return { result: 'skipped', detail: 'A este lead ya se le pidió la reseña' };
+
+  const enlace = 'https://app.acuarius.app/api/resenas?t=' + (await tokenResena(auto.user_id, lead.id, auto.client_id || lead.client_id || null));
+  const texto = renderVars(step.mensaje || cfg.mensaje ||
+    'Hola {{nombre}}, gracias por confiar en nosotros. ¿Nos ayudas con una reseña? Te toma 30 segundos:', lead);
+
+  const canal = step.canal === 'whatsapp' ? 'whatsapp' : 'email';
+  let envio;
+  if (canal === 'whatsapp') {
+    envio = await actionSendWhatsapp({ ...step, message: texto + '\n' + enlace }, lead);
+  } else {
+    if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
+    if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
+    const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
+      '<p style="margin:0 0 18px">' + texto.replace(/\n/g, '<br>') + '</p>' +
+      '<p style="margin:0 0 18px"><a href="' + enlace + '" style="display:inline-block;background:#1E2BCC;color:#fff;' +
+      'padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Dejar mi reseña</a></p>' +
+      '<p style="margin:0;font-size:12px;color:#9ca3af">Si el botón no funciona, copia este enlace: ' + enlace + '</p></div>';
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Acuarius <notificaciones@app.acuarius.app>',
+        to: [lead.email],
+        subject: renderVars(step.asunto || '¿Nos dejas una reseña?', lead),
+        html,
+      }),
+    });
+    if (!r.ok) return { result: 'failed', detail: 'Resend: ' + (await r.text()).slice(0, 200) };
+    envio = { result: 'sent', detail: 'Reseña pedida a ' + lead.email };
+  }
+  if (envio.result !== 'sent') return envio;
+
+  // La marca de "ya pedida" vive en el historial del lead, que es donde el
+  // comercial la va a buscar, y de paso es lo que lee yaSePidio().
+  await sb('/lead_activities', 'POST', {
+    user_id: auto.user_id, lead_id: lead.id, type: 'nota',
+    content: 'Se le pidió una reseña en Google por ' + (canal === 'whatsapp' ? 'WhatsApp' : 'correo') + '.',
+    metadata: { resena: 'pedida', canal },
+  }, 'return=minimal');
+  return envio;
+}
+
 async function actionSendWhatsapp(step, lead) {
   if (!lead.phone) return { result: 'skipped', detail: 'El lead no tiene teléfono' };
   const digits = String(lead.phone).replace(/\D/g, '');
@@ -399,7 +476,7 @@ async function processJobs() {
         const step = steps[i];
 
         // Ventana horaria: los mensajes al lead esperan la próxima hora hábil
-        if ((step.type === 'send_email' || step.type === 'send_whatsapp' || step.type === 'send_nps') && !inSendWindow(auto.trigger?.window)) {
+        if ((step.type === 'send_email' || step.type === 'send_whatsapp' || step.type === 'send_nps' || step.type === 'pedir_resena') && !inSendWindow(auto.trigger?.window)) {
           const runAt = nextWindowStart(auto.trigger.window);
           await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
           await log(auto.id, job.user_id, lead.id, i, 'window', 'scheduled', 'Fuera del horario de envío (' + auto.trigger.window.start + ':00–' + auto.trigger.window.end + ':00) — continúa a las ' + auto.trigger.window.start + ':00');
@@ -450,6 +527,12 @@ async function processJobs() {
         if (step.type === 'send_email') {
           const r = await actionSendEmail(step, lead, auto, job);
           await log(auto.id, job.user_id, lead.id, i, 'send_email', r.result, r.detail);
+          i++; continue;
+        }
+
+        if (step.type === 'pedir_resena') {
+          const r = await actionPedirResena(step, lead, auto);
+          await log(auto.id, job.user_id, lead.id, i, 'pedir_resena', r.result, r.detail);
           i++; continue;
         }
 

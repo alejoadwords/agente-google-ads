@@ -17787,6 +17787,84 @@ function crmAvisarTagsIgnoradas(lista) {
   );
 }
 
+// ── Reseñas de Google ───────────────────────────────────────────────────────
+// El enlace es por cliente: cada negocio tiene su propia ficha en Google. En
+// una cuenta sin cartera se guarda bajo '_cuenta'.
+let _resConfig = null;
+
+async function resAbrirGestor() {
+  if (!(await puedeEditarCatalogos())) {
+    showToast('Solo el administrador de la cuenta puede cambiar el enlace de reseñas', 'error');
+    return;
+  }
+  document.getElementById('res-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'res-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.style.zIndex = '9999';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:560px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Reseñas de Google</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">El enlace al que mandas a tus clientes cuando les pides una reseña</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body" id="res-cuerpo"><div style="color:var(--muted);font-size:13px">Cargando…</div></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-pri sm" onclick="resGuardar()">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  try {
+    _resConfig = await fetchAuth('/api/resenas').then(r => r.json()).then(d => d.config || {});
+  } catch { _resConfig = {}; }
+  resRender();
+}
+
+function resClaveActiva() {
+  return (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) ? agencyActiveClientId : '_cuenta';
+}
+
+function resRender() {
+  const c = document.getElementById('res-cuerpo');
+  if (!c) return;
+  const clave = resClaveActiva();
+  const actual = (_resConfig || {})[clave] || {};
+  const nombreCliente = clave === '_cuenta'
+    ? 'tu cuenta'
+    : ((typeof agencyClients !== 'undefined' ? agencyClients : []).find(x => x.id === clave)?.name || 'este cliente');
+  c.innerHTML =
+    '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Configurando el enlace de <b style="color:var(--text)">' + esc(nombreCliente) + '</b>. ' +
+      'Si trabajas varios clientes, cambia de cliente arriba y cada uno guarda el suyo.</div>' +
+    '<div class="auto-field"><label class="auto-label">Enlace para dejar reseña</label>' +
+      '<input class="auto-input" id="res-url" value="' + esc(actual.url || '') + '" placeholder="https://g.page/r/.../review">' +
+      '<div class="auto-vars-hint" style="margin-top:8px">Lo sacas de tu <b>Perfil de Empresa de Google</b>: entra a tu ficha → <i>Pedir reseñas</i> → copia el enlace corto. ' +
+      'También vale el de <i>Maps</i> (<code>maps.app.goo.gl</code>). Solo se aceptan enlaces de Google, para que nadie mande a tus clientes a otro sitio por error.</div></div>' +
+    '<div class="auto-field"><label class="auto-label">Mensaje por defecto</label>' +
+      '<textarea class="auto-input" id="res-msg" rows="3" placeholder="Hola {{nombre}}, gracias por confiar en nosotros. ¿Nos ayudas con una reseña? Te toma 30 segundos:">' + esc(actual.mensaje || '') + '</textarea>' +
+      '<div class="auto-vars-hint">Se usa cuando el paso de la automatización no trae uno propio. Puedes usar <b>{{nombre}}</b> y <b>{{empresa}}</b>.</div></div>' +
+    '<div id="res-error" style="font-size:12.5px;color:#B91C1C;margin-top:4px"></div>';
+}
+
+async function resGuardar() {
+  const url = (document.getElementById('res-url') || {}).value || '';
+  const mensaje = (document.getElementById('res-msg') || {}).value || '';
+  const err = document.getElementById('res-error');
+  if (err) err.textContent = '';
+  try {
+    const r = await fetchAuth('/api/resenas', {
+      method: 'PUT',
+      body: JSON.stringify({ client_id: resClaveActiva() === '_cuenta' ? null : resClaveActiva(), url: url.trim(), mensaje }),
+    });
+    const d = await r.json();
+    if (!r.ok) { if (err) err.textContent = d.error || 'No se pudo guardar'; return; }
+    _resConfig = d.config || {};
+    showToast(url.trim() ? 'Enlace de reseñas guardado' : 'Enlace de reseñas quitado');
+    document.getElementById('res-overlay')?.remove();
+  } catch {
+    if (err) err.textContent = 'No se pudo guardar. Reintenta.';
+  }
+}
+
 // ── Gestor de etiquetas ───────────────────────────────────────────────────────
 // Se podían crear pero no quitar, así que una etiqueta mal escrita o de una
 // campaña vieja se quedaba para siempre en el filtro y en el selector.
@@ -24830,6 +24908,7 @@ const ICN_PATHS = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
   split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
+  star:     '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
 };
 
@@ -24868,9 +24947,21 @@ const AUTO_STEP_META = {
   add_tag:       { label: 'Añadir etiqueta',     icon: 'tag' },
   remove_tag:    { label: 'Quitar etiqueta',     icon: 'tag' },
   send_nps:      { label: 'Encuesta NPS',        icon: 'trend' },
+  pedir_resena:  { label: 'Pedir reseña',        icon: 'star' },
 };
 
 const AUTO_TEMPLATES = [
+  {
+    // La reseña se pide DESPUÉS de un par de días, no al minuto de cerrar: en
+    // caliente el cliente todavía no ha usado lo que compró y la reseña sale
+    // tibia — o directamente no la deja.
+    name: 'Pedir reseña al ganar el negocio',
+    trigger: { type: 'stage_changed', stage: 'ganado' },
+    steps: [
+      { type: 'wait', hours: 48 },   // el paso wait cuenta HORAS, no días
+      { type: 'pedir_resena', canal: 'email', asunto: '¿Nos dejas una reseña?', mensaje: '' },
+    ],
+  },
   {
     // Cierra el circuito con las listas: la etiqueta que pone esta
     // automatización es la misma por la que se define la lista «No contactar»,
@@ -25073,6 +25164,7 @@ const FLOW_TYPE_STYLE = {
   add_tag:       { bg: 'var(--success-bg)', fg: 'var(--success)', icon: 'tag' },
   remove_tag:    { bg: 'var(--bg-muted)', fg: 'var(--text-2)', icon: 'tag' },
   send_nps:      { bg: 'var(--warning-bg)', fg: 'var(--warning)', icon: 'trend' },
+  pedir_resena:  { bg: 'var(--warning-bg)', fg: 'var(--warning)', icon: 'star' },
 };
 
 // ── Rutas anidadas del canvas ────────────────────────────────────────────────
@@ -25187,6 +25279,17 @@ function autoStepFields(s, path) {
       '<div class="auto-field"><label class="auto-label">Mensaje de intro (opcional)</label><textarea class="auto-input" rows="3" placeholder="Hola {{nombre}}, tu opinión nos ayuda a mejorar…" oninput="' + U + '\'message\',this.value)">' + esc(s.message || '') + '</textarea>' +
       '<div class="auto-vars-hint">El lead recibe la escala 0-10 en el email. Al responder queda etiquetado como <b>nps promotor</b> (9-10), <b>nps neutro</b> (7-8) o <b>nps detractor</b> (0-6) — usa esas etiquetas como lanzador de otras automatizaciones (ej: detractor → notificarme + crear tarea). Los resultados se ven en Análisis.</div></div>';
   }
+  if (s.type === 'pedir_resena') {
+    return '<div class="auto-field"><label class="auto-label">Por dónde</label>' +
+      '<select class="auto-input" onchange="' + U + '\'canal\',this.value);autoRefreshNodes()">' +
+      '<option value="email"' + (s.canal !== 'whatsapp' ? ' selected' : '') + '>Correo</option>' +
+      '<option value="whatsapp"' + (s.canal === 'whatsapp' ? ' selected' : '') + '>WhatsApp</option>' +
+      '</select></div>' +
+      (s.canal === 'whatsapp' ? '' :
+        '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.asunto || '') + '" placeholder="¿Nos dejas una reseña?" oninput="' + U + '\'asunto\',this.value)"></div>') +
+      '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="3" placeholder="Hola {{nombre}}, gracias por confiar en nosotros. ¿Nos ayudas con una reseña?…" oninput="' + U + '\'mensaje\',this.value)">' + esc(s.mensaje || '') + '</textarea>' +
+      '<div class="auto-vars-hint">El cliente recibe un enlace <b>tuyo</b> que lo lleva a tu ficha de Google, así queda registrado en su historial quién fue de verdad a dejar la reseña. Se pide <b>una sola vez por lead</b>. Configura el enlace en <a href="#" onclick="resAbrirGestor();return false">CRM → Reseñas</a>.</div></div>';
+  }
   if (s.type === 'branch') {
     const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email'],['has_tag','Tiene la etiqueta']];
     const ops = [['eq','es'],['neq','no es'],['contains','contiene'],['gte','≥'],['lte','≤']];
@@ -25236,6 +25339,7 @@ function autoNodeSummary(s) {
   if (s.type === 'add_tag') return s.tag ? '+ "' + s.tag + '"' : 'Sin etiqueta todavía';
   if (s.type === 'remove_tag') return s.tag ? '− "' + s.tag + '"' : 'Sin etiqueta todavía';
   if (s.type === 'send_nps') return s.question ? s.question.slice(0, 60) : 'Escala 0-10 por email';
+  if (s.type === 'pedir_resena') return (s.canal === 'whatsapp' ? 'Por WhatsApp' : 'Por correo') + ' · enlace a tu ficha de Google';
   return '';
 }
 
@@ -25321,6 +25425,7 @@ function autoBuilderRender() {
       branch: 'Divide el flujo en carriles Sí / No',
       add_tag: 'Etiqueta al lead por comportamiento', remove_tag: 'Quita una etiqueta del lead',
       send_nps: 'Escala 0-10 por email · etiqueta al lead según su respuesta',
+      pedir_resena: 'Manda tu enlace de Google al cliente · una sola vez por lead',
     }[type];
     return '<div class="flow-block" onclick="autoStepAdd(\'' + type + '\')">' +
       '<span class="flow-block-ico" style="background:' + st.bg + ';color:' + st.fg + '">' + icn(st.icon, 14) + '</span>' +
@@ -25329,7 +25434,7 @@ function autoBuilderRender() {
   };
   const palette =
     '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
-    ['send_email', 'send_whatsapp', 'send_nps', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
+    ['send_email', 'send_whatsapp', 'pedir_resena', 'send_nps', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
     '<div class="flow-palette-title">Control del flujo</div>' +
     ['branch', 'wait', 'condition'].map(paletteBlock).join('') +
     '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
@@ -25471,6 +25576,7 @@ function autoStepAdd(type) {
     add_tag: { type, tag: '' },
     remove_tag: { type, tag: '' },
     send_nps: { type, subject: '', question: '', message: '' },
+    pedir_resena: { type, canal: 'email', asunto: '', mensaje: '' },
   };
   const arr = autoLaneArr(lane);
   arr.push(defaults[type] || { type });
@@ -28612,6 +28718,11 @@ const NAV_MOD_ACTIONS = {
     fn: 'etAbrirGestor()',
     soloAdmin: true,
     icon: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  }, {
+    label: 'Reseñas de Google',
+    fn: 'resAbrirGestor()',
+    soloAdmin: true,
+    icon: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
   }, {
     label: 'Motivos de cierre',
     fn: 'motAbrirGestor()',

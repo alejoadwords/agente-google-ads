@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-resenas-google",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "Pide reseñas de Google solo, cuando ganas un negocio",
+      "texto": "En CRM → Reseñas de Google pegas el enlace de tu ficha —uno por cliente si trabajas varios— y en el constructor de automatizaciones aparece un paso nuevo, «Pedir reseña», que se lo manda al cliente por correo o WhatsApp. Hay una plantilla lista: cuando un negocio pasa a Ganado, espera 48 horas y lo pide. El enlace que recibe el cliente es tuyo y lo lleva a Google, así que en su ficha queda registrado quién fue de verdad a dejar la reseña. Se pide una sola vez por lead.",
+      "accion": {
+        "texto": "Ir a Automatizaciones",
+        "ir": "marketing"
+      }
+    },
+    {
       "id": "2026-08-28-enlaces-en-notas",
       "fecha": "2026-08-28",
       "tipo": "nuevo",
