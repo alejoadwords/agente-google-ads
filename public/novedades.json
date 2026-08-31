@@ -17,7 +17,7 @@
       "fecha": "2026-08-28",
       "tipo": "nuevo",
       "titulo": "Panel de filtros en el pipeline y fecha esperada de cierre",
-      "texto": "Los filtros salieron de la barra y viven ahora en un panel propio: fuente, comercial, etiquetas, estado y —lo nuevo— rangos de fecha. Puedes ver qué leads entraron hoy, en los últimos 7 o 30 días, este mes, o entre dos fechas cualesquiera. El botón Filtros muestra cuántos tienes puestos y se limpian todos de un golpe. Además, al crear o editar un lead puedes fijarle una fecha esperada de cierre: aparece en la tarjeta y se pone en rojo si se pasó, y también se puede filtrar por ella —las vencidas o las que cierran este mes—.",
+      "texto": "Los filtros salieron de la barra y viven ahora en un panel propio: fuente, comercial, etiquetas, estado y —lo nuevo— rangos de fecha. Puedes ver qué leads entraron hoy, en los últimos 7 o 30 días, este mes, o entre dos fechas cualesquiera. El botón Filtros muestra cuántos tienes puestos y se limpian todos de un golpe. Además, cada lead puede llevar una fecha esperada de cierre. Se ve en su tarjeta del tablero y en la ficha, donde se cambia con un clic sin abrir el formulario. Si la fecha ya pasó y el negocio sigue abierto, sale en rojo y con un triángulo de alerta, en la tarjeta, en la ficha y en la lista. Y se puede filtrar por ella: las vencidas o las que cierran este mes.",
       "accion": {
         "texto": "Ir al pipeline",
         "ir": "crm"

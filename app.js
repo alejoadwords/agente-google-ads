@@ -18516,14 +18516,69 @@ function crmCardHTML(lead, now) {
 function crmChipCierre(lead) {
   const f = lead.expected_close_date;
   if (!f) return '';
-  const cerrado = lead.stage === 'ganado' || lead.stage === 'perdido';
-  const vencida = !cerrado && f < crmFechaLocal(new Date());
+  const vencida = crmCierreVencido(lead);
   const [a, m, d] = f.split('-');
   const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const txt = Number(d) + ' ' + (MES[Number(m) - 1] || '') + ' ' + a;
-  return '<div class="crm-card-cierre' + (vencida ? ' vencida' : '') + '" title="Fecha esperada de cierre">' +
-    '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-    txt + '</div>';
+  // Vencida: triángulo de alerta en vez del calendario. El color por sí solo no
+  // basta —hay quien no distingue el rojo— y de un vistazo el icono canta más.
+  const icono = vencida
+    ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    : '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  const titulo = vencida ? 'Se pasó la fecha esperada de cierre' : 'Fecha esperada de cierre';
+  return '<div class="crm-card-cierre' + (vencida ? ' vencida' : '') + '" title="' + titulo + '">' +
+    icono + txt + '</div>';
+}
+
+// La fecha esperada de cierre en la ficha: se ve siempre —aunque esté vacía,
+// para que se pueda poner desde aquí— y se guarda al cambiarla, sin pasar por
+// el modal de edición. Vencida y con el negocio aún abierto: rojo y triángulo.
+function crmPintarCierre(lead) {
+  const input  = document.getElementById('crm-d-cierre');
+  const alerta = document.getElementById('crm-d-cierre-alerta');
+  if (!input) return;
+  input.value = lead.expected_close_date || '';
+  const vencida = crmCierreVencido(lead);
+  input.classList.toggle('vencida', vencida);
+  if (alerta) alerta.style.display = vencida ? 'inline-flex' : 'none';
+}
+
+// Una fecha pasada solo es un problema si el negocio sigue vivo: en uno ganado
+// o perdido la fecha es historia, no un aviso.
+function crmCierreVencido(lead) {
+  if (!lead || !lead.expected_close_date) return false;
+  if (leadCerrado(lead)) return false;
+  return lead.expected_close_date < crmFechaLocal(new Date());
+}
+
+async function crmGuardarCierre(valor) {
+  if (!crmDetailLead) return;
+  const lead = crmDetailLead;
+  const antes = lead.expected_close_date || null;
+  const nuevo = valor || null;
+  if (antes === nuevo) return;
+  lead.expected_close_date = nuevo;   // optimista: la ficha responde al instante
+  crmPintarCierre(lead);
+  try {
+    const res = await fetchAuth('/api/leads', {
+      method: 'PUT',
+      body: JSON.stringify({ id: lead.id, expected_close_date: nuevo }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (d.lead) {
+      const i = crmLeads.findIndex(l => l.id === lead.id);
+      if (i >= 0) crmLeads[i] = d.lead;
+      crmDetailLead = d.lead;
+      crmPintarCierre(d.lead);
+    }
+    crmRender();
+    showToast(nuevo ? 'Fecha de cierre guardada' : 'Fecha de cierre quitada');
+  } catch (e) {
+    lead.expected_close_date = antes;   // deshacer: nunca dejar la ficha mintiendo
+    crmPintarCierre(lead);
+    showToast('No se pudo guardar la fecha', 'error');
+  }
 }
 
 // ── NOTAS DE DIRECCIÓN ────────────────────────────────────────────────────────
@@ -19212,11 +19267,11 @@ function crmColCelda(l, key, sel) {
       return '<td style="' + suave + ';white-space:nowrap">' + (crmFecha(l[key]) || '—') + '</td>';
     case 'expected_close_date': {
       if (!l.expected_close_date) return '<td style="' + suave + '">—</td>';
-      const cerrado = l.stage === 'ganado' || l.stage === 'perdido';
-      const venc = !cerrado && l.expected_close_date < crmFechaLocal(new Date());
+      const venc = crmCierreVencido(l);
       const [aa, mm, dd] = l.expected_close_date.split('-');
+      const av = venc ? '<span title="Se pasó la fecha esperada de cierre">⚠ </span>' : '';
       return '<td style="' + (venc ? 'font-size:12px;color:#DC2626;font-weight:600' : suave) + ';white-space:nowrap">' +
-        dd + '/' + mm + '/' + aa + '</td>';
+        av + dd + '/' + mm + '/' + aa + '</td>';
     }
     case 'notes':
       return '<td style="' + suave + ';max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"' +
@@ -19736,18 +19791,7 @@ async function crmOpenDetail(leadId, leadSuelto) {
   document.getElementById('crm-d-source').textContent = fuenteLabel(lead.source);
   const valueRow = document.getElementById('crm-d-value-row');
   if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
-  const cierreRow = document.getElementById('crm-d-cierre-row');
-  if (cierreRow) {
-    cierreRow.style.display = lead.expected_close_date ? 'flex' : 'none';
-    const cEl = document.getElementById('crm-d-cierre');
-    if (cEl && lead.expected_close_date) {
-      const [aa, mm, dd] = lead.expected_close_date.split('-');
-      const MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-      cEl.textContent = Number(dd) + ' de ' + (MES[Number(mm) - 1] || '') + ' de ' + aa;
-      const cerrado = lead.stage === 'ganado' || lead.stage === 'perdido';
-      cEl.style.color = (!cerrado && lead.expected_close_date < crmFechaLocal(new Date())) ? '#DC2626' : '';
-    }
-  }
+  crmPintarCierre(lead);
   crmRenderDetailTags();
   teamEnsureLoaded().then(() => teamPopulateAssign(lead));
   const notesSection = document.getElementById('crm-d-notes-section');

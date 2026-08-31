@@ -1711,6 +1711,9 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
 .crm-toolbar{display:flex;align-items:center;gap:10px;padding:14px 20px 10px;flex-shrink:0;border-bottom:1px solid var(--border)}
 /* ── Panel de filtros del CRM ────────────────────────────────────────────── */
+.crm-d-cierre-input{border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;font-family:var(--font);font-size:12.5px;background:var(--bg);color:var(--text);outline:none;max-width:150px}
+.crm-d-cierre-input:focus{border-color:var(--blue)}
+.crm-d-cierre-input.vencida{border-color:#DC2626;color:#DC2626;font-weight:600}
 .crm-card-cierre{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--muted);margin-top:6px}
 .crm-card-cierre.vencida{color:#DC2626;font-weight:600}
 .crm-btn-filtros.active,#crm-btn-filtros.active{border-color:var(--blue);color:var(--blue)}
@@ -4513,7 +4516,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Empresa</span><span class="crm-detail-row-val" id="crm-d-company">—</span></div>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Fuente</span><span class="crm-detail-row-val" id="crm-d-source">—</span></div>
       <div class="crm-detail-row" id="crm-d-value-row" style="display:none"><span class="crm-detail-row-label">Valor</span><span class="crm-detail-row-val" id="crm-d-value">—</span></div>
-      <div class="crm-detail-row" id="crm-d-cierre-row" style="display:none"><span class="crm-detail-row-label">Cierre esperado</span><span class="crm-detail-row-val" id="crm-d-cierre">—</span></div>
+      <div class="crm-detail-row" id="crm-d-cierre-row"><span class="crm-detail-row-label" style="white-space:nowrap">Cierre esperado</span><span class="crm-detail-row-val" style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><span id="crm-d-cierre-alerta" style="display:none" title="La fecha de cierre ya pasó"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><input type="date" id="crm-d-cierre" class="crm-d-cierre-input" onchange="crmGuardarCierre(this.value)"></span></div>
       <div class="crm-detail-row" id="crm-d-tags-row" style="display:none"><span class="crm-detail-row-label">Etiquetas</span><span class="crm-detail-row-val" id="crm-d-tags">—</span></div>
       <div class="crm-detail-row" id="crm-d-assigned-row"><span class="crm-detail-row-label">Asignado a</span><span class="crm-detail-row-val" id="crm-d-assigned-wrap">—</span></div>
     </div>
