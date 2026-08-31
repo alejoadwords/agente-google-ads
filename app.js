@@ -33410,6 +33410,7 @@ async function lpAbrir(id) {
       '</div>' +
       '<div class="lp-ed-acc">' +
         '<span id="lp-ed-estado" class="lp-ed-estado"></span>' +
+        '<button class="btn-ghost sm" id="lp-ed-form" onclick="lpElegirFormulario()" title="A qué formulario llegan los datos">Formulario</button>' +
         '<button class="btn-ghost sm" onclick="lpVistaPrevia()">Ver</button>' +
         '<button class="btn-ghost sm" onclick="lpGuardar(false)">Guardar</button>' +
         '<button class="btn-pri sm" onclick="lpGuardar(true)">' + (completa.published ? 'Guardar y publicar' : 'Publicar') + '</button>' +
@@ -33420,6 +33421,7 @@ async function lpAbrir(id) {
   document.body.appendChild(ov);
   _lpActual = completa;
   lpPintarUrl();
+  lpPintarFormulario();
 
   try { await lpCargarGrapesWeb(); }
   catch (e) {
@@ -33483,6 +33485,44 @@ async function lpAbrir(id) {
   });
 }
 
+// ── A qué formulario llegan los datos ───────────────────────────────────────
+// Al publicar se crea uno solo si no había ninguno (lo hace el servidor), pero
+// muchas veces conviene reusar el que ya existe: así los leads de la landing y
+// los de la web caen en el mismo sitio y las automatizaciones no se duplican.
+async function lpElegirFormulario() {
+  if (!_lpActual) return;
+  let forms = [];
+  try { forms = await fetchAuth('/api/forms').then(r => r.json()).then(d => d.forms || []); } catch {}
+  // ddAbrir espera {id, name}: un conector no vale aquí porque no tiene página
+  // propia, recoge de un formulario ajeno.
+  const opciones = forms
+    .filter(f => f.tipo !== 'conector')
+    .map(f => ({ id: f.token, name: f.name }));
+
+  if (!opciones.length) {
+    showToast('Al publicar se creará un formulario para esta página');
+    return;
+  }
+  ddAbrir(document.getElementById('lp-ed-form'), opciones, _lpActual.form_token || '', async (token) => {
+    try {
+      const r = await fetchAuth('/api/landings', { method: 'PUT', body: JSON.stringify({ id: _lpActual.id, form_token: token }) });
+      if (!r.ok) throw new Error();
+      _lpActual.form_token = token;
+      lpPintarFormulario();
+      showToast('Formulario cambiado');
+    } catch { showToast('No se pudo cambiar el formulario', 'error'); }
+  });
+}
+
+function lpPintarFormulario() {
+  const b = document.getElementById('lp-ed-form');
+  if (!b || !_lpActual) return;
+  b.textContent = _lpActual.form_token ? 'Formulario ✓' : 'Formulario';
+  b.title = _lpActual.form_token
+    ? 'Los datos entran a un formulario de tu cuenta. Toca para cambiarlo.'
+    : 'Al publicar se creará un formulario para esta página. Toca para usar uno existente.';
+}
+
 function lpPintarUrl() {
   const u = document.getElementById('lp-ed-url');
   if (!u || !_lpActual) return;
@@ -33508,6 +33548,7 @@ async function lpGuardar(publicar) {
     if (!r.ok) throw new Error(d.error || 'error');
     _lpActual = { ..._lpActual, ...d.pagina };
     lpPintarUrl();
+    lpPintarFormulario();
     if (estado) { estado.textContent = 'Guardado'; estado.className = 'lp-ed-estado ok'; }
     if (publicar) showToast('Página publicada — ya puedes usar su enlace');
   } catch (e) {

@@ -128,6 +128,37 @@ export default async function handler(req) {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     if (!body?.id) return jsonResp({ error: 'Falta id' }, 400);
+
+    // Al publicar, si la página no tiene formulario todavía, se le crea uno
+    // solo. Publicar una landing cuyo formulario no guarda nada es el peor
+    // fallo posible aquí: el cliente paga anuncios y los leads se pierden sin
+    // que nadie se entere. Se puede cambiar después por otro existente.
+    if (body.published === true && !body.form_token) {
+      const actual = await fetch(
+        `${SUPABASE_URL}/rest/v1/landings?id=eq.${body.id}&user_id=eq.${encodeURIComponent(userId)}&select=form_token,title,client_id`,
+        { headers: sbHeaders() }
+      ).then((r) => (r.ok ? r.json() : [])).then((f) => f?.[0]);
+      if (actual && !actual.form_token) {
+        try {
+          const token = crypto.randomUUID().replace(/-/g, '');
+          const nuevo = await fetch(`${SUPABASE_URL}/rest/v1/lead_forms`, {
+            method: 'POST', headers: sbHeaders(),
+            body: JSON.stringify({
+              user_id: userId, client_id: actual.client_id || null, token, active: true, submissions: 0,
+              name: 'Página: ' + (body.title || actual.title || 'sin título'),
+              fields: [
+                { key: 'nombre', label: 'Nombre', type: 'text', required: true },
+                { key: 'email', label: 'Email', type: 'email', required: false },
+                { key: 'telefono', label: 'Teléfono / WhatsApp', type: 'tel', required: false },
+                { key: 'mensaje', label: 'Mensaje', type: 'textarea', required: false },
+              ],
+            }),
+          });
+          if (nuevo.ok) body.form_token = token;
+        } catch (e) { console.error('[landings] no se pudo crear el formulario:', e.message); }
+      }
+    }
+
     const campos = {};
     for (const k of ['title', 'html', 'css', 'form_token', 'published', 'plantilla']) {
       if (body[k] !== undefined) campos[k] = body[k];
