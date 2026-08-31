@@ -44,7 +44,21 @@ async function correoDe(ownerId, quienId) {
   return null;
 }
 
-export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId }) {
+export // Una nota puede llevar enlaces escritos como [texto](url) — ver actTexto() en
+// public/app.js. Aqui se pintan igual, o el comercial recibe por correo los
+// corchetes en crudo. Mismo orden y misma regla: escapar primero, y solo
+// http/https, nunca javascript:.
+function conEnlaces(txt) {
+  let out = esc(String(txt || ''));
+  out = out.replace(/\[([^\]\n]{1,120})\]\((\S{1,500}?)\)/g, (todo, etiqueta, url) => {
+    const u = url.replace(/&amp;/g, '&').trim();
+    if (!/^https?:\/\//i.test(u)) return todo;
+    return `<a href="${esc(u)}" style="color:#1E2BCC">${etiqueta}</a>`;
+  });
+  return out;
+}
+
+async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId }) {
   try {
     if (!paraId) return { enviado: false, motivo: 'el lead no tiene responsable' };
 
@@ -71,7 +85,7 @@ export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId
           preheader: String(texto).slice(0, 90),
           // Azul de marca, no el ámbar de las notas internas del inbox: aquella
           // es contexto entre pares, esta viene de arriba y se lee distinto.
-          cuerpo: bloque(`<span style="white-space:pre-wrap">${esc(texto)}</span>`),
+          cuerpo: bloque(`<span style="white-space:pre-wrap">${conEnlaces(texto)}</span>`),
           cta: {
             texto: 'Abrir la ficha del lead',
             url: `https://app.acuarius.app/crm?lead=${encodeURIComponent(lead?.id || '')}`,

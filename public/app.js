@@ -18621,6 +18621,54 @@ async function crmGuardarCierre(valor) {
   }
 }
 
+// ── Enlaces dentro de las notas ─────────────────────────────────────────────
+// El comercial escribe «se le recomendó la propiedad 121513436» y quiere que
+// ese código lleve a la ficha de la propiedad. Se guarda como [texto](url) —
+// texto plano, sin columnas nuevas ni editor enriquecido— y se pinta como
+// enlace al mostrarlo.
+//
+// SEGURIDAD: esto convierte texto escrito por un usuario en HTML. El orden es
+// innegociable: primero se escapa TODO, y solo despues se reconocen los
+// enlaces sobre el texto ya escapado. Y solo http/https: un `javascript:` en
+// un href seria ejecutar codigo en la sesion de quien lea la nota.
+function actUrlSegura(u) {
+  const limpia = String(u || '').trim();
+  return /^https?:\/\//i.test(limpia) ? limpia : null;
+}
+
+function actTexto(txt) {
+  let out = esc(String(txt || ''));
+  out = out.replace(/\[([^\]\n]{1,120})\]\((\S{1,500}?)\)/g, (todo, etiqueta, url) => {
+    const segura = actUrlSegura(url.replace(/&amp;/g, '&'));
+    if (!segura) return todo;   // no es un enlace usable: se deja el texto tal cual
+    return '<a href="' + esc(segura) + '" target="_blank" rel="noopener noreferrer">' + etiqueta + '</a>';
+  });
+  out = out.replace(/(^|[\s(])(https?:\/\/[^\s<)]{4,400})/g, (todo, antes, url) =>
+    antes + '<a href="' + esc(url.replace(/&amp;/g, '&')) + '" target="_blank" rel="noopener noreferrer">' + url + '</a>');
+  return out;
+}
+
+// Envuelve lo que el comercial tenga seleccionado en el cuadro de la actividad.
+// Sin seleccion se pide tambien el texto, para no obligar a nadie a recordar
+// la sintaxis.
+function actInsertarEnlace() {
+  const ta = document.getElementById('crm-activity-input');
+  if (!ta) return;
+  const ini = ta.selectionStart, fin = ta.selectionEnd;
+  let etiqueta = ta.value.slice(ini, fin).trim();
+  if (!etiqueta) {
+    etiqueta = (prompt('¿Qué texto quieres que quede como enlace?') || '').trim();
+    if (!etiqueta) return;
+  }
+  const url = (prompt('Pega el enlace para «' + etiqueta + '»:', 'https://') || '').trim();
+  if (!url) return;
+  if (!actUrlSegura(url)) { showToast('El enlace tiene que empezar por http:// o https://', 'error'); return; }
+  const trozo = '[' + etiqueta + '](' + url + ')';
+  ta.value = ta.value.slice(0, ini) + trozo + ta.value.slice(fin);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = ini + trozo.length;
+}
+
 // ── NOTAS DE DIRECCIÓN ────────────────────────────────────────────────────────
 // El dueño (o un administrador) deja una nota en un lead y a quien lo lleva le
 // llega un correo y un aviso en la campana. La nota se guarda como una actividad
@@ -20071,7 +20119,7 @@ async function crmLoadActivities(leadId) {
         ? '<div style="font-size:10px;color:var(--muted2);margin-top:2px">Avisado por ' + esc(a.metadata.actor) +
           (a.metadata.leida_at ? ' · visto' : ' · sin ver todavía') + '</div>'
         : '';
-      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (dirigida ? 'var(--blue)' : (typeColors[a.type] || 'var(--blue)')) + '"></div><div class="crm-activity-content"><div class="crm-activity-text">' + etiqueta + ' ' + esc(a.content || '') + '</div>' + quienAviso + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>' + papelera + '</div>';
+      return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (dirigida ? 'var(--blue)' : (typeColors[a.type] || 'var(--blue)')) + '"></div><div class="crm-activity-content"><div class="crm-activity-text">' + etiqueta + ' ' + actTexto(a.content || '') + '</div>' + quienAviso + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>' + papelera + '</div>';
     }).join('');
   } catch(e) { console.error('crmLoadActivities', e); }
 }
