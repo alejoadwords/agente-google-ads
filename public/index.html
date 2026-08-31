@@ -1752,6 +1752,55 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .pwa-x{background:none;border:0;color:var(--muted2);font-size:15px;cursor:pointer;padding:2px 4px;flex-shrink:0}
 .pwa-x:hover{color:var(--text)}
 @media(max-width:520px){.pwa-barra{flex-wrap:wrap}.pwa-txt{flex:1 1 100%;order:2}}
+/* ── Páginas de aterrizaje ───────────────────────────────────────────────── */
+.lp-lista{display:flex;flex-direction:column;gap:10px}
+.lp-item{display:flex;align-items:center;gap:14px;background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px}
+.lp-item-main{flex:1;min-width:0}
+.lp-item-tit{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700;margin-bottom:3px}
+.lp-chip{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--bg-muted);color:var(--muted)}
+.lp-chip-on{background:var(--success-bg);color:var(--success)}
+.lp-item-url{font-size:12px;color:var(--blue);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-item-url:hover{text-decoration:underline}
+.lp-item-num{text-align:center;flex-shrink:0;padding:0 10px}
+.lp-item-num b{display:block;font-size:17px;font-weight:800}
+.lp-item-num span{font-size:10.5px;color:var(--muted2)}
+.lp-item-acc{display:flex;gap:6px;flex-shrink:0}
+.lp-plantillas{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.lp-plantilla{background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:12px;cursor:pointer;font-family:var(--font);text-align:left;transition:border-color .15s,transform .15s}
+.lp-plantilla:hover{border-color:var(--blue);transform:translateY(-2px)}
+.lp-plantilla-vp{height:96px;border-radius:9px;overflow:hidden;margin-bottom:10px}
+.lp-plantilla-tit{font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:3px}
+.lp-plantilla-sub{font-size:11.5px;color:var(--muted);line-height:1.45}
+.lp-mini{height:100%;padding:11px;display:flex;gap:8px}
+.lp-mini span{display:block;height:6px;border-radius:3px}
+.lp-mini .lp-mini-col{flex:1;display:flex;flex-direction:column;gap:6px;justify-content:center}
+.lp-mini .lp-mini-col span:first-child{width:45%;height:9px}
+.lp-mini .lp-mini-caja{width:38%;background:#fff;border-radius:6px;box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.lp-mini-captura{background:linear-gradient(160deg,#101433,#1E2BCC)}
+.lp-mini-guia{background:#FAFAF9}
+.lp-mini-cita{background:#0F766E;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.lp-mini-cita span{width:62%}
+.lp-mini-cita span:first-child{height:9px}
+.lp-mini-cita i{display:block;width:44%;height:14px;background:#fff;border-radius:5px;margin:3px 0}
+.lp-mini-cita .lp-mini-row{display:flex;gap:5px;width:70%}
+.lp-mini-cita .lp-mini-row span{flex:1;width:auto}
+.lp-ed-overlay{position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;flex-direction:column}
+.lp-ed-barra{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.lp-ed-tit{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lp-ed-tit input{border:0;background:none;font-family:var(--font);font-size:15px;font-weight:800;color:var(--text);outline:none;padding:2px 0;min-width:200px}
+.lp-ed-tit input:focus{border-bottom:1.5px solid var(--blue)}
+.lp-ed-url{font-size:11.5px;color:var(--muted)}
+.lp-ed-url a{color:var(--blue);text-decoration:none}
+.lp-ed-acc{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.lp-ed-estado{font-size:11.5px;color:var(--muted);min-width:74px;text-align:right}
+.lp-ed-estado.sucio{color:var(--warning);font-weight:600}
+.lp-ed-estado.ok{color:var(--success);font-weight:600}
+.lp-ed-lienzo{flex:1;min-height:0;overflow:hidden}
+@media(max-width:760px){
+  .lp-plantillas{grid-template-columns:1fr}
+  .lp-item{flex-wrap:wrap}
+  .lp-item-acc{width:100%;justify-content:flex-end}
+}
 .crm-filtros-badge{background:var(--blue);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;margin-left:2px}
 .crm-filtros-overlay{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:1200;display:none}
 .crm-filtros-overlay.open{display:block}
@@ -4155,6 +4204,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>
           Campañas
         </button>
+        <button class="crm-view-btn" id="crm-btn-paginas" style="display:none" onclick="crmSetView('paginas')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          Páginas
+        </button>
         <button class="crm-view-btn" id="crm-btn-sources" onclick="crmSetView('sources')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1.5"/></svg>
           Fuentes
@@ -4357,6 +4410,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="crm-campaigns-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-sources-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-plantillas-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div id="crm-paginas-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-listas-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-proposals-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-sales-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>

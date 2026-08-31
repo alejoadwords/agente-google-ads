@@ -26165,7 +26165,7 @@ function agnScheduleForLead() {
   const AGENT_KEYS = ['google-ads', 'meta-ads', 'tiktok-ads', 'linkedin-ads', 'seo', 'social', 'consultor'];
   // Rutas canónicas v2 (por módulo). Las /leads/* viejas siguen funcionando como alias.
   const CRM_SUB = {
-    kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda',
+    kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda', paginas: '/marketing/paginas',
     campaigns: '/marketing/campanas', plantillas: '/marketing/plantillas', listas: '/marketing/listas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
@@ -26177,7 +26177,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -28886,13 +28886,13 @@ async function impRun() {
 // versiones ya envueltas de crmSetView/showView (router incluido).
 const NAV_TABS = {
   crm: ['kanban', 'list', 'tareas', 'agenda'],
-  marketing: ['campaigns', 'plantillas', 'listas', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
+  marketing: ['campaigns', 'plantillas', 'paginas', 'listas', 'autos', 'sources', 'proposals', 'studio', 'seoproj'],
   conversaciones: ['inbox', 'agents'],
   analisis: ['sales', 'prod', 'equipo', 'mk', 'cv', 'analytics', 'nps'],
 };
 const NAV_DEFAULT = { crm: 'kanban', marketing: 'campaigns', conversaciones: 'inbox', analisis: 'analytics' };
-const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', plantillas: 'marketing', listas: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
-const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'plantillas', 'listas', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
+const NAV_TAB2MOD = { kanban: 'crm', list: 'crm', tareas: 'crm', agenda: 'crm', campaigns: 'marketing', plantillas: 'marketing', paginas: 'marketing', listas: 'marketing', autos: 'marketing', sources: 'marketing', proposals: 'marketing', inbox: 'conversaciones', agents: 'conversaciones', analytics: 'analisis', nps: 'analisis', campstats: 'analisis', sales: 'analisis', prod: 'analisis', equipo: 'analisis', mk: 'analisis', cv: 'analisis' };
+const NAV_ALL_TABS = ['kanban', 'list', 'tareas', 'agents', 'inbox', 'analytics', 'autos', 'agenda', 'campaigns', 'plantillas', 'paginas', 'listas', 'sources', 'proposals', 'nps', 'campstats', 'studio', 'seoproj', 'sales', 'prod', 'equipo', 'mk', 'cv'];
 const NAV_MOD_LABELS = { crm: 'CRM', marketing: 'Marketing', conversaciones: 'Conversaciones', analisis: 'Análisis' };
 window._navMod = 'crm';
 
@@ -28924,7 +28924,7 @@ function navHighlight(key) {
 // entrar al módulo), en lugar de las píldoras que había arriba de cada pantalla.
 const NAV_TAB_LABELS = {
   kanban: 'Pipeline', list: 'Contactos', tareas: 'Tareas', agenda: 'Agenda',
-  campaigns: 'Campañas', plantillas: 'Plantillas', listas: 'Listas', autos: 'Automatizaciones', sources: 'Fuentes',
+  campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', autos: 'Automatizaciones', sources: 'Fuentes',
   proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
   inbox: 'Inbox', agents: 'Chatbots',
   sales: 'Ventas', prod: 'Productividad', equipo: 'Por comercial', mk: 'Marketing', cv: 'Conversaciones',
@@ -33199,5 +33199,352 @@ function lstBorrar(id, nombre) {
     if (lv) lv.style.display = v === 'listas' ? 'flex' : 'none';
     document.getElementById('crm-btn-listas')?.classList.toggle('active', v === 'listas');
     if (v === 'listas') lstRender();
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PÁGINAS DE ATERRIZAJE
+// ═══════════════════════════════════════════════════════════════════════════
+// Módulo autocontenido: si se decide que sobra, se borra este bloque, la vista
+// del HTML, api/landings.js, public/landing.html y la tabla. Nada más lo toca.
+
+let lpPaginas = [];
+let _lpEditor = null;      // instancia de GrapesJS
+let _lpActual = null;      // página que se está editando
+let _lpBasePromesa = null;
+
+function lpUrlPublica(slug) { return 'https://app.acuarius.app/l/' + slug; }
+
+// Los diseños viven en /landings-base.js: texto pesado que no le sirve a quien
+// nunca crea una página, así que no viaja dentro de app.js.
+function lpCargarBase() {
+  if (window.LANDINGS_BASE) return Promise.resolve(window.LANDINGS_BASE);
+  if (_lpBasePromesa) return _lpBasePromesa;
+  _lpBasePromesa = new Promise((ok, mal) => {
+    const s = document.createElement('script');
+    s.src = '/landings-base.js';
+    s.onload = () => ok(window.LANDINGS_BASE || []);
+    s.onerror = () => { _lpBasePromesa = null; mal(new Error('No se pudieron cargar los diseños')); };
+    document.head.appendChild(s);
+  });
+  return _lpBasePromesa;
+}
+
+async function lpCargar() {
+  const cid = (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) ? '?client_id=' + encodeURIComponent(agencyActiveClientId) : '';
+  try {
+    lpPaginas = await fetchAuth('/api/landings' + cid).then(r => r.json()).then(d => d.paginas || []);
+    return true;
+  } catch { lpPaginas = []; return false; }
+}
+
+async function lpRender() {
+  const v = document.getElementById('crm-paginas-view');
+  if (!v) return;
+  v.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando…</div>';
+  await lpCargar();
+
+  const cabecera =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">' +
+      '<div><div style="font-size:var(--fs-lg);font-weight:800">Páginas de aterrizaje</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">Páginas para tus anuncios. Quien las llena entra directo a tu CRM.</div></div>' +
+      '<button class="btn-pri sm" onclick="lpElegirPlantilla()">+ Nueva página</button>' +
+    '</div>';
+
+  if (!lpPaginas.length) {
+    v.innerHTML = cabecera + emptyAgua('Aún no tienes páginas',
+      'Crea una desde un diseño listo, cámbiale los textos y publícala. El enlace lo pegas en tu anuncio de Google o Meta.',
+      '<button class="btn-pri sm" onclick="lpElegirPlantilla()">Crear la primera</button>');
+    return;
+  }
+
+  v.innerHTML = cabecera + '<div class="lp-lista">' + lpPaginas.map(p => {
+    const url = lpUrlPublica(p.slug);
+    return '<div class="lp-item">' +
+      '<div class="lp-item-main">' +
+        '<div class="lp-item-tit">' + esc(p.title) +
+          (p.published
+            ? '<span class="lp-chip lp-chip-on">Publicada</span>'
+            : '<span class="lp-chip">Borrador</span>') +
+        '</div>' +
+        (p.published
+          ? '<a class="lp-item-url" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url.replace('https://', '')) + '</a>'
+          : '<div class="lp-item-url" style="color:var(--muted2)">Sin publicar todavía</div>') +
+      '</div>' +
+      '<div class="lp-item-num"><b>' + (p.visits || 0) + '</b><span>visitas</span></div>' +
+      '<div class="lp-item-acc">' +
+        (p.published ? '<button class="btn-ghost sm" onclick="lpCopiar(\'' + esc(p.slug) + '\')">Copiar enlace</button>' : '') +
+        '<button class="btn-ghost sm" onclick="lpAbrir(\'' + esc(p.id) + '\')">Editar</button>' +
+        '<button class="btn-ghost sm" onclick="lpBorrar(\'' + esc(p.id) + '\',\'' + esc(p.title) + '\')" title="Borrar">' + ICONO_PAPELERA + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function lpCopiar(slug) {
+  const url = lpUrlPublica(slug);
+  navigator.clipboard.writeText(url).then(
+    () => showToast('Enlace copiado'),
+    () => showToast(url, 'success')
+  );
+}
+
+async function lpBorrar(id, titulo) {
+  if (!confirm('¿Borrar la página «' + titulo + '»? Si estaba publicada, su enlace dejará de funcionar.')) return;
+  try {
+    await fetchAuth('/api/landings?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    showToast('Página borrada');
+    lpRender();
+  } catch { showToast('No se pudo borrar', 'error'); }
+}
+
+// ── Elegir diseño ───────────────────────────────────────────────────────────
+// Se arranca SIEMPRE desde un diseño, nunca de un lienzo en blanco: una página
+// vacía delante de alguien que no es diseñador termina en una página fea o en
+// una página que nunca se publica.
+async function lpElegirPlantilla() {
+  let base;
+  try { base = await lpCargarBase(); }
+  catch { showToast('No se pudieron cargar los diseños', 'error'); return; }
+
+  document.getElementById('lp-sel-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'lp-sel-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:720px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">¿Qué quieres conseguir?</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Elige el diseño que más se parezca. Todo se puede cambiar después.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body"><div class="lp-plantillas">' +
+      base.map(p =>
+        '<button class="lp-plantilla" onclick="lpCrear(\'' + esc(p.id) + '\')">' +
+          '<div class="lp-plantilla-vp">' + lpMiniatura(p.id) + '</div>' +
+          '<div class="lp-plantilla-tit">' + esc(p.nombre) + '</div>' +
+          '<div class="lp-plantilla-sub">' + esc(p.descripcion) + '</div>' +
+        '</button>').join('') +
+    '</div></div></div>';
+  document.body.appendChild(ov);
+}
+
+// Miniaturas dibujadas, no capturas: una imagen real habría que generarla y
+// alojarla, y se vuelve mentira en cuanto alguien retoca el diseño.
+function lpMiniatura(id) {
+  const b = (c) => '<span style="background:' + c + '"></span>';
+  if (id === 'cita') {
+    return '<div class="lp-mini lp-mini-cita">' + b('rgba(255,255,255,.85)') + b('rgba(255,255,255,.5)') +
+      '<i></i><div class="lp-mini-row">' + b('rgba(15,118,110,.25)') + b('rgba(15,118,110,.25)') + b('rgba(15,118,110,.25)') + '</div></div>';
+  }
+  if (id === 'guia') {
+    return '<div class="lp-mini lp-mini-guia"><div class="lp-mini-col">' + b('#D97706') + b('#57534E') + b('rgba(87,83,78,.45)') + b('rgba(87,83,78,.45)') +
+      '</div><div class="lp-mini-caja"></div></div>';
+  }
+  return '<div class="lp-mini lp-mini-captura"><div class="lp-mini-col">' + b('rgba(255,255,255,.75)') + b('rgba(255,255,255,.45)') + b('rgba(255,255,255,.45)') +
+    '</div><div class="lp-mini-caja"></div></div>';
+}
+
+async function lpCrear(plantillaId) {
+  const base = (await lpCargarBase()).find(p => p.id === plantillaId);
+  if (!base) return;
+  const titulo = (prompt('¿Cómo quieres llamar a esta página?', base.nombre) || '').trim();
+  if (!titulo) return;
+  document.getElementById('lp-sel-overlay')?.remove();
+  try {
+    const r = await fetchAuth('/api/landings', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: titulo, html: base.html, css: base.css, plantilla: base.id,
+        client_id: (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'error');
+    await lpRender();
+    lpAbrir(d.pagina.id);
+  } catch (e) { showToast('No se pudo crear la página', 'error'); }
+}
+
+// ── Editor ──────────────────────────────────────────────────────────────────
+// Se reutiliza GrapesJS, que ya se carga para las plantillas de correo, pero
+// con el preset de PÁGINA WEB en vez del de newsletter: una landing no vive
+// dentro de Outlook y no tiene por qué renunciar a CSS moderno.
+const GJS_WEB_VER = '1.0.3';
+let _lpGrapesPromesa = null;
+
+function lpCargarGrapesWeb() {
+  if (_lpGrapesPromesa) return _lpGrapesPromesa;
+  _lpGrapesPromesa = plnCargarGrapes()   // núcleo, CSS e idioma ya resueltos ahí
+    .then(() => new Promise((ok, mal) => {
+      if (window.grapesjsPresetWebpage) return ok();
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/grapesjs-preset-webpage@' + GJS_WEB_VER + '/dist/index.js';
+      s.onload = ok;
+      s.onerror = () => mal(new Error('No se pudo cargar el editor de páginas'));
+      document.head.appendChild(s);
+    }))
+    .catch(e => { _lpGrapesPromesa = null; throw e; });
+  return _lpGrapesPromesa;
+}
+
+async function lpAbrir(id) {
+  const p = lpPaginas.find(x => x.id === id);
+  if (!p) return;
+  // La lista no trae el html/css (pesan): se piden al abrir.
+  let completa = p;
+  try {
+    const d = await fetchAuth('/api/landings').then(r => r.json());
+    completa = (d.paginas || []).find(x => x.id === id) || p;
+  } catch {}
+
+  document.getElementById('lp-ed-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'lp-ed-overlay';
+  ov.className = 'lp-ed-overlay';
+  ov.innerHTML =
+    '<div class="lp-ed-barra">' +
+      '<div class="lp-ed-tit">' +
+        '<input id="lp-ed-titulo" value="' + esc(completa.title) + '" title="Nombre de la página">' +
+        '<span class="lp-ed-url" id="lp-ed-url"></span>' +
+      '</div>' +
+      '<div class="lp-ed-acc">' +
+        '<span id="lp-ed-estado" class="lp-ed-estado"></span>' +
+        '<button class="btn-ghost sm" onclick="lpVistaPrevia()">Ver</button>' +
+        '<button class="btn-ghost sm" onclick="lpGuardar(false)">Guardar</button>' +
+        '<button class="btn-pri sm" onclick="lpGuardar(true)">' + (completa.published ? 'Guardar y publicar' : 'Publicar') + '</button>' +
+        '<button class="btn-ghost sm" onclick="lpCerrarEditor()">Cerrar</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="lp-gjs" class="lp-ed-lienzo"><div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">Cargando el editor…</div></div>';
+  document.body.appendChild(ov);
+  _lpActual = completa;
+  lpPintarUrl();
+
+  try { await lpCargarGrapesWeb(); }
+  catch (e) {
+    document.getElementById('lp-gjs').innerHTML =
+      '<div style="padding:50px 20px">' + emptyAgua('alert', 'No se pudo cargar el editor',
+        'Depende de un recurso externo que ahora no responde. Tu página no se ha tocado; vuelve a intentarlo en un momento.',
+        '<button class="btn-pri sm" onclick="lpCerrarEditor()">Cerrar</button>') + '</div>';
+    return;
+  }
+
+  document.getElementById('lp-gjs').innerHTML = '';
+  _lpEditor = window.grapesjs.init({
+    container: '#lp-gjs',
+    height: '100%',
+    fromElement: false,
+    storageManager: false,     // guarda nuestro botón, contra nuestra API
+    i18n: { locale: 'es', localeFallback: 'en', messages: _gjsEs ? { es: _gjsEs } : {} },
+    components: completa.html || '',
+    style: completa.css || '',
+    // Mismo criterio que en los correos: nada de imágenes incrustadas en base64.
+    // Aquí no es por Gmail, es por peso: una landing con tres fotos en base64
+    // pesa megas y tarda en abrir justo en el móvil de quien vio el anuncio.
+    assetManager: {
+      upload: false, uploadName: 'files', autoAdd: true,
+      uploadFile: async (ev) => {
+        const files = ev.dataTransfer ? ev.dataTransfer.files : ev.target.files;
+        for (const f of files) {
+          try {
+            const url = await plnSubirImagen(f);
+            if (url) _lpEditor.AssetManager.add(url);
+          } catch (e) { showToast(e.message || 'No se pudo subir la imagen', 'error'); }
+        }
+      },
+    },
+    plugins: ['gjs-preset-webpage'],
+    pluginsOpts: {
+      'gjs-preset-webpage': {
+        // Fuera el importador de HTML: pegar código suelto es la vía rápida a
+        // una página rota, y quien la usa no sabrá arreglarla.
+        showStylesOnChange: true,
+        modalImportTitle: '',
+        modalImportButton: '',
+      },
+    },
+  });
+
+  const ETIQ = {
+    'sect100': '1 columna', 'sect50': '2 columnas', 'sect30': '3 columnas', 'sect37': 'Dos anchos',
+    text: 'Texto', link: 'Enlace', image: 'Imagen', video: 'Video', map: 'Mapa',
+    'link-block': 'Bloque enlazado', quote: 'Cita', 'text-sect': 'Título y texto',
+  };
+  Object.keys(ETIQ).forEach(id => {
+    try { _lpEditor.BlockManager.get(id)?.set('label', ETIQ[id]); } catch {}
+  });
+
+  // Aviso de cambios sin guardar: cerrar el editor y perder media hora de
+  // trabajo es el peor recuerdo posible de una función nueva.
+  _lpEditor.on('update', () => {
+    const e = document.getElementById('lp-ed-estado');
+    if (e) { e.textContent = 'Sin guardar'; e.className = 'lp-ed-estado sucio'; }
+  });
+}
+
+function lpPintarUrl() {
+  const u = document.getElementById('lp-ed-url');
+  if (!u || !_lpActual) return;
+  u.innerHTML = _lpActual.published
+    ? '<a href="' + esc(lpUrlPublica(_lpActual.slug)) + '" target="_blank" rel="noopener">' + esc(lpUrlPublica(_lpActual.slug).replace('https://', '')) + '</a>'
+    : 'Se publicará en /l/' + esc(_lpActual.slug);
+}
+
+async function lpGuardar(publicar) {
+  if (!_lpEditor || !_lpActual) return;
+  const estado = document.getElementById('lp-ed-estado');
+  if (estado) { estado.textContent = 'Guardando…'; estado.className = 'lp-ed-estado'; }
+  try {
+    const cuerpo = {
+      id: _lpActual.id,
+      title: (document.getElementById('lp-ed-titulo') || {}).value || _lpActual.title,
+      html: _lpEditor.getHtml(),
+      css: _lpEditor.getCss(),
+    };
+    if (publicar) cuerpo.published = true;
+    const r = await fetchAuth('/api/landings', { method: 'PUT', body: JSON.stringify(cuerpo) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'error');
+    _lpActual = { ..._lpActual, ...d.pagina };
+    lpPintarUrl();
+    if (estado) { estado.textContent = 'Guardado'; estado.className = 'lp-ed-estado ok'; }
+    if (publicar) showToast('Página publicada — ya puedes usar su enlace');
+  } catch (e) {
+    if (estado) { estado.textContent = 'No se pudo guardar'; estado.className = 'lp-ed-estado sucio'; }
+    showToast('No se pudo guardar la página', 'error');
+  }
+}
+
+function lpVistaPrevia() {
+  if (!_lpEditor) return;
+  const html = _lpEditor.getHtml();
+  const css = _lpEditor.getCss();
+  const w = window.open('', '_blank');
+  if (!w) { showToast('El navegador bloqueó la ventana', 'error'); return; }
+  w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1"><title>Vista previa</title>' +
+    '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0}img{max-width:100%}' + css + '</style></head><body>' + html + '</body></html>');
+  w.document.close();
+}
+
+function lpCerrarEditor() {
+  const sucio = document.getElementById('lp-ed-estado')?.classList.contains('sucio');
+  if (sucio && !confirm('Tienes cambios sin guardar. ¿Cerrar de todas formas?')) return;
+  try { _lpEditor?.destroy(); } catch {}
+  _lpEditor = null; _lpActual = null;
+  document.getElementById('lp-ed-overlay')?.remove();
+  lpRender();
+}
+
+// La vista se cuelga al final, como la de Plantillas: sin tocar crmSetView.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const pv = document.getElementById('crm-paginas-view');
+    if (pv) pv.style.display = v === 'paginas' ? 'flex' : 'none';
+    document.getElementById('crm-btn-paginas')?.classList.toggle('active', v === 'paginas');
+    if (v === 'paginas') lpRender();
   };
 })();

@@ -115,4 +115,121 @@ window.LANDINGS_BASE = [
   .lp-h2{font-size:24px;margin-bottom:28px}
 }`,
   },
+  {
+    id: 'cita',
+    nombre: 'Agendar una cita',
+    descripcion: 'Para servicios que se venden hablando: consultorio, asesoría, visita comercial.',
+    html: `
+<section class="lp2-hero">
+  <div class="lp2-wrap">
+    <h1>Agenda tu valoración sin costo</h1>
+    <p class="lp2-lead">20 minutos con un especialista para revisar tu caso y decirte, con honestidad, si podemos ayudarte.</p>
+    <a href="#agendar" class="lp2-cta">Elegir mi horario</a>
+    <p class="lp2-micro">Sin compromiso · Atención el mismo día</p>
+  </div>
+</section>
+
+<section class="lp2-pasos">
+  <div class="lp2-wrap">
+    <div class="lp2-paso"><span>1</span><div><h3>Déjanos tus datos</h3><p>Menos de un minuto.</p></div></div>
+    <div class="lp2-paso"><span>2</span><div><h3>Te llamamos</h3><p>Coordinamos el horario que te sirva.</p></div></div>
+    <div class="lp2-paso"><span>3</span><div><h3>Nos vemos</h3><p>Presencial o por videollamada, como prefieras.</p></div></div>
+  </div>
+</section>
+
+<section class="lp2-form" id="agendar">
+  <div class="lp2-wrap lp2-form-box">
+    <h2>Reserva tu cita</h2>
+    <form data-gracias="¡Recibido! Te llamamos para confirmar el horario.">
+      <div class="lp2-row">
+        <label>Nombre<input type="text" name="nombre" placeholder="Tu nombre" required></label>
+        <label>Teléfono<input type="tel" name="telefono" placeholder="300 000 0000" required></label>
+      </div>
+      <label>Correo<input type="email" name="email" placeholder="tu@correo.com"></label>
+      <label>¿Cuándo te queda mejor?<textarea name="mensaje" rows="2" placeholder="Ej. entre semana en la mañana"></textarea></label>
+      <button type="submit" class="lp2-btn">Agendar mi cita</button>
+    </form>
+  </div>
+</section>`,
+    css: `
+.lp2-wrap{max-width:900px;margin:0 auto;padding:0 22px}
+.lp2-hero{background:#0F766E;color:#fff;text-align:center;padding:76px 0 66px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+.lp2-hero h1{font-size:42px;line-height:1.12;letter-spacing:-1px;margin:0 0 16px;font-weight:800}
+.lp2-lead{font-size:17.5px;line-height:1.6;opacity:.92;max-width:34em;margin:0 auto 28px}
+.lp2-cta{display:inline-block;background:#fff;color:#0F766E;font-weight:800;font-size:16.5px;padding:15px 34px;border-radius:12px;text-decoration:none}
+.lp2-cta:hover{background:#ECFDF5}
+.lp2-micro{font-size:13px;opacity:.75;margin:16px 0 0}
+.lp2-pasos{background:#fff;padding:52px 0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+.lp2-pasos .lp2-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.lp2-paso{display:flex;gap:14px;align-items:flex-start}
+.lp2-paso span{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:#ECFDF5;color:#0F766E;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+.lp2-paso h3{font-size:16.5px;margin:4px 0 4px;color:#0f172a}
+.lp2-paso p{font-size:14.5px;color:#64748b;margin:0;line-height:1.55}
+.lp2-form{background:#F1F5F9;padding:56px 0 66px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+.lp2-form-box{max-width:560px;background:#fff;border-radius:18px;padding:32px 30px;box-shadow:0 14px 40px rgba(15,23,42,.09)}
+.lp2-form h2{font-size:25px;margin:0 0 20px;color:#0f172a;letter-spacing:-.5px}
+.lp2-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.lp2-form label{display:block;font-size:12.5px;font-weight:700;color:#334155;margin-bottom:13px}
+.lp2-form input,.lp2-form textarea{width:100%;margin-top:5px;padding:11px 13px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:15px;font-family:inherit;outline:none;color:#0f172a}
+.lp2-form input:focus,.lp2-form textarea:focus{border-color:#0F766E}
+.lp2-btn{width:100%;background:#0F766E;color:#fff;border:0;padding:14px;border-radius:11px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:4px}
+.lp2-btn:hover{background:#115E59}
+@media(max-width:760px){
+  .lp2-hero{padding:52px 0 46px}
+  .lp2-hero h1{font-size:31px}
+  .lp2-pasos .lp2-wrap{grid-template-columns:1fr;gap:20px}
+  .lp2-row{grid-template-columns:1fr}
+}`,
+  },
+  {
+    id: 'guia',
+    nombre: 'Descarga de guía',
+    descripcion: 'Entrega algo de valor a cambio del correo. Para llenar la parte alta del embudo.',
+    html: `
+<section class="lp3">
+  <div class="lp3-wrap">
+    <div class="lp3-txt">
+      <span class="lp3-tag">Guía gratuita · PDF</span>
+      <h1>7 errores que encarecen tu arriendo (y cómo evitarlos)</h1>
+      <p class="lp3-lead">Lo que revisamos en cada contrato antes de firmarlo. Doce páginas, sin relleno, escritas por quienes lo hacen todos los días.</p>
+      <ul class="lp3-list">
+        <li>Qué cláusulas negociar y cuáles no valen la pena</li>
+        <li>Cómo calcular el costo real, más allá del canon</li>
+        <li>La revisión de entrega que evita descuentos al salir</li>
+      </ul>
+    </div>
+    <div class="lp3-form">
+      <h2>Te la enviamos ahora</h2>
+      <form data-gracias="¡Listo! Revisa tu correo, la guía va en camino.">
+        <label>Nombre<input type="text" name="nombre" placeholder="Tu nombre" required></label>
+        <label>Correo<input type="email" name="email" placeholder="tu@correo.com" required></label>
+        <button type="submit" class="lp3-btn">Descargar la guía</button>
+        <p class="lp3-nota">Un correo, sin spam. Puedes darte de baja cuando quieras.</p>
+      </form>
+    </div>
+  </div>
+</section>`,
+    css: `
+.lp3{background:#FAFAF9;padding:66px 0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center}
+.lp3-wrap{max-width:1020px;margin:0 auto;padding:0 22px;display:grid;grid-template-columns:1.15fr .85fr;gap:50px;align-items:center}
+.lp3-tag{display:inline-block;background:#FEF3C7;color:#92400E;font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:6px 12px;border-radius:6px;margin-bottom:18px}
+.lp3 h1{font-size:40px;line-height:1.13;letter-spacing:-1px;color:#1C1917;margin:0 0 16px;font-weight:800}
+.lp3-lead{font-size:16.5px;line-height:1.65;color:#57534E;margin:0 0 24px;max-width:32em}
+.lp3-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.lp3-list li{position:relative;padding-left:26px;font-size:15px;color:#44403C;line-height:1.5}
+.lp3-list li::before{content:'';position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:2px;background:#D97706}
+.lp3-form{background:#fff;border:1px solid #E7E5E4;border-radius:16px;padding:30px 28px;box-shadow:0 10px 34px rgba(28,25,23,.07)}
+.lp3-form h2{font-size:21px;margin:0 0 20px;color:#1C1917;letter-spacing:-.4px}
+.lp3-form label{display:block;font-size:12.5px;font-weight:700;color:#44403C;margin-bottom:14px}
+.lp3-form input{width:100%;margin-top:5px;padding:11px 13px;border:1.5px solid #E7E5E4;border-radius:10px;font-size:15px;font-family:inherit;outline:none;color:#1C1917}
+.lp3-form input:focus{border-color:#D97706}
+.lp3-btn{width:100%;background:#1C1917;color:#fff;border:0;padding:14px;border-radius:11px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer}
+.lp3-btn:hover{background:#292524}
+.lp3-nota{font-size:11.5px;color:#A8A29E;text-align:center;margin:11px 0 0;line-height:1.5}
+@media(max-width:820px){
+  .lp3{padding:44px 0;min-height:0}
+  .lp3-wrap{grid-template-columns:1fr;gap:32px}
+  .lp3 h1{font-size:30px}
+}`,
+  },
 ];
