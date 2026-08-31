@@ -11,6 +11,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1E2BCC">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Acuarius">
 <title>acuarius — acceder</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script
@@ -624,6 +629,13 @@ function setL(id, on, label) {
   b.disabled = on;
   b.innerHTML = on ? `<span class="sp"></span>${label}` : label;
 }
+</script>
+<script>
+  // Al cerrar sesión se aterriza aquí: sin esto, quien sale de la app pierde
+  // el service worker y con él los avisos.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function(){}); });
+  }
 </script>
 </body>
 </html>
