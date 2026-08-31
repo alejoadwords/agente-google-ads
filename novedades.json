@@ -2,13 +2,6 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
-<<<<<<< HEAD
-      "id": "2026-08-31-tareas-de-la-ficha",
-      "fecha": "2026-08-31",
-      "tipo": "correccion",
-      "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
-      "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
-=======
       "id": "2026-08-28-firma-propuestas",
       "fecha": "2026-08-28",
       "tipo": "nuevo",
@@ -18,7 +11,13 @@
         "texto": "Ir a Propuestas",
         "ir": "marketing"
       }
->>>>>>> b9ecfec (feat(propuestas): firma electrónica al aceptar)
+    },
+    {
+      "id": "2026-08-31-tareas-de-la-ficha",
+      "fecha": "2026-08-31",
+      "tipo": "correccion",
+      "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
+      "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
     },
     {
       "id": "2026-08-28-resenas-google",
