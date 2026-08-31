@@ -2,12 +2,26 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-cerrados-sin-seguimiento",
+      "fecha": "2026-08-28",
+      "tipo": "arreglo",
+      "titulo": "Los negocios cerrados dejan de pedir seguimiento",
+      "texto": "Un lead marcado como ganado o perdido seguía generando tareas de primer contacto en la vista de Tareas y en el resumen diario por correo: se recordaba llamar a clientes cuyo negocio se había cerrado semanas atrás. Ya no aparecen ahí, ni en el Pulso, ni en el aviso «sin actividad» de la ficha. Vale tanto para las etapas Ganado y Perdido como para las etapas de cierre propias de tu proceso.",
+      "accion": {
+        "texto": "Ver mis tareas",
+        "ir": "tareas"
+      }
+    },
+    {
       "id": "2026-08-28-filtros-y-cierre",
       "fecha": "2026-08-28",
       "tipo": "nuevo",
       "titulo": "Panel de filtros en el pipeline y fecha esperada de cierre",
       "texto": "Los filtros salieron de la barra y viven ahora en un panel propio: fuente, comercial, etiquetas, estado y —lo nuevo— rangos de fecha. Puedes ver qué leads entraron hoy, en los últimos 7 o 30 días, este mes, o entre dos fechas cualesquiera. El botón Filtros muestra cuántos tienes puestos y se limpian todos de un golpe. Además, al crear o editar un lead puedes fijarle una fecha esperada de cierre: aparece en la tarjeta y se pone en rojo si se pasó, y también se puede filtrar por ella —las vencidas o las que cierran este mes—.",
-      "accion": { "texto": "Ir al pipeline", "ir": "crm" }
+      "accion": {
+        "texto": "Ir al pipeline",
+        "ir": "crm"
+      }
     },
     {
       "id": "2026-08-28-cupos-servidor",

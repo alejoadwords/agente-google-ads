@@ -49,6 +49,17 @@ async function getUserId(req) {
   } catch { return null; }
 }
 
+// Un lead cerrado —ganado o perdido— ya no necesita seguimiento. Las claves
+// 'ganado' y 'perdido' son reservadas del sistema y ningun pipeline puede
+// renombrarlas, pero un cliente puede haber creado etapas propias de cierre, y
+// el modal de cierre sella closed_at: cualquiera de las dos cosas basta.
+const ETAPAS_CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+function leadCerrado(lead) {
+  if (!lead) return false;
+  if (lead.closed_at) return true;
+  return ETAPAS_CERRADAS.includes(String(lead.stage || '').toLowerCase());
+}
+
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -187,7 +198,7 @@ export default async function handler(req) {
     let leadsPorId = {};
     if (ids.length) {
       const leads = await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,email,stage,assigned_to,assigned_name,deleted_at`,
+        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,email,stage,assigned_to,assigned_name,deleted_at,closed_at`,
         { headers: sbHeaders() }
       ).then(r => (r.ok ? r.json() : [])).catch(() => []);
       (leads || []).forEach(l => { leadsPorId[l.id] = l; });
@@ -201,6 +212,9 @@ export default async function handler(req) {
       const lead = t.lead_id ? leadsPorId[t.lead_id] : null;
       // Una tarea de un lead borrado no le sirve a nadie
       if (t.lead_id && (!lead || lead.deleted_at)) continue;
+      // Ni la de un lead ya ganado o perdido: el cliente de Certain Pezzano
+      // recibia recordatorios de seguimiento de negocios cerrados hace semanas.
+      if (lead && leadCerrado(lead)) continue;
       // "Míos" con el mismo criterio que el resumen diario: lo que tiene mi
       // nombre, y si soy el dueño de la cuenta, además lo que no tiene dueño.
       if (soloMias) {

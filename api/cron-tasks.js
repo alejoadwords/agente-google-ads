@@ -38,6 +38,17 @@ function filas(items) {
   }).join('');
 }
 
+// Un lead cerrado —ganado o perdido— ya no necesita seguimiento. Las claves
+// 'ganado' y 'perdido' son reservadas del sistema y ningun pipeline puede
+// renombrarlas, pero un cliente puede haber creado etapas propias de cierre, y
+// el modal de cierre sella closed_at: cualquiera de las dos cosas basta.
+const ETAPAS_CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+function leadCerrado(lead) {
+  if (!lead) return false;
+  if (lead.closed_at) return true;
+  return ETAPAS_CERRADAS.includes(String(lead.stage || '').toLowerCase());
+}
+
 async function enviar(to, vencidas, hoy) {
   if (!RESEND_API_KEY || !to) return false;
   const total = vencidas.length + hoy.length;
@@ -94,7 +105,7 @@ export default async function handler(req, res) {
       const tareas = porCuenta[userId];
       const ids = Array.from(new Set(tareas.map(t => t.lead_id).filter(Boolean)));
       const leads = ids.length ? await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,assigned_to,deleted_at`,
+        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,assigned_to,deleted_at,stage,closed_at`,
         { headers: sb() }
       ).then(r => (r.ok ? r.json() : [])).catch(() => []) : [];
       const porId = {};
@@ -105,6 +116,7 @@ export default async function handler(req, res) {
       for (const t of tareas) {
         const lead = t.lead_id ? porId[t.lead_id] : null;
         if (t.lead_id && (!lead || lead.deleted_at)) continue;
+        if (lead && leadCerrado(lead)) continue;
         const destinatario = lead?.assigned_to || userId;
         (bandejas[destinatario] = bandejas[destinatario] || []).push({ ...t, lead });
       }

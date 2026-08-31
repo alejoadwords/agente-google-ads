@@ -18056,6 +18056,17 @@ function crmFiltrosLimpiar() {
   crmFiltrosAplicar();
 }
 
+// Un lead ganado o perdido ya no necesita seguimiento: no aparece en el Pulso,
+// ni en el aviso de la ficha, ni en el filtro «Sin actividad», ni en las
+// tareas. Se comprueba por closed_at —que sella el modal de cierre— y por las
+// claves reservadas, porque un pipeline puede tener etapas de cierre propias.
+const ETAPAS_CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+function leadCerrado(l) {
+  if (!l) return false;
+  if (l.closed_at) return true;
+  return ETAPAS_CERRADAS.includes(String(l.stage || '').toLowerCase());
+}
+
 function crmGetFilteredLeads() {
   let leads = [...crmLeads];
   if (crmSearchQuery) {
@@ -18074,7 +18085,7 @@ function crmGetFilteredLeads() {
   if (crmQuickFilter === 'inactive') {
     const now = Date.now();
     leads = leads.filter(l => {
-      if (l.stage === 'ganado' || l.stage === 'perdido') return false;
+      if (leadCerrado(l)) return false;
       const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
       return Math.floor((now - lastActive) / 86400000) >= 7;
     });
@@ -18443,7 +18454,7 @@ function crmCardHTML(lead, now) {
   const ts = now || Date.now();
   const lastActive = lead.updated_at ? new Date(lead.updated_at).getTime() : new Date(lead.created_at || 0).getTime();
   const daysSince = Math.floor((ts - lastActive) / 86400000);
-  const showInactive = daysSince >= 7 && lead.stage !== 'ganado' && lead.stage !== 'perdido';
+  const showInactive = daysSince >= 7 && !leadCerrado(lead);
   const score = lead.custom_fields && lead.custom_fields.score ? Number(lead.custom_fields.score) : null;
   let scoreColor = 'var(--muted)';
   if (score !== null) { if (score >= 8) scoreColor = '#10B981'; else if (score >= 5) scoreColor = '#F59E0B'; else scoreColor = '#EF4444'; }
@@ -19120,6 +19131,8 @@ function crmColsGuardar(sel) {
 function crmEstadoLead(l) {
   if (l.stage === 'ganado')  return { txt: 'Ganada',  color: '#10B981', orden: 4 };
   if (l.stage === 'perdido') return { txt: 'Perdida', color: '#9CA3AF', orden: 1 };
+  // Una etapa de cierre propia del cliente tampoco es una oportunidad viva
+  if (leadCerrado(l)) return { txt: 'Cerrada', color: '#9CA3AF', orden: 1 };
   const ref = l.updated_at || l.created_at;
   const dias = ref ? Math.floor((Date.now() - new Date(ref).getTime()) / 86400000) : 0;
   if (dias >= 7) return { txt: 'Sin actividad · ' + dias + ' d', color: '#F59E0B', orden: 2 };
@@ -22748,7 +22761,7 @@ function crmRenderAnalytics() {
   leads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
   const maxSrc = Math.max(...Object.values(sourceCounts), 1);
   const needsAttention = leads.filter(l => {
-    if (l.stage === 'ganado' || l.stage === 'perdido') return false;
+    if (leadCerrado(l)) return false;
     const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
     return Math.floor((now - lastActive) / 86400000) >= 7;
   }).sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)).slice(0, 8);
@@ -23431,11 +23444,11 @@ async function pulsoCrmCards() {
     if (!leads.length) return [];
     const now = Date.now();
     const DAY = 864e5;
-    const closed = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+
     const cards = [];
 
     const stale = leads.filter(l =>
-      !closed.includes((l.stage || '').toLowerCase()) &&
+      !leadCerrado(l) &&
       (now - new Date(l.updated_at || l.created_at).getTime()) > 3 * DAY
     );
     if (stale.length) {
@@ -23664,7 +23677,6 @@ function pulsoMergeHealth(clientId, health) {
 function pulsoApplyHealth() {
   if (!Array.isArray(agencyClients) || !agencyClients.length) return;
   const now = Date.now();
-  const closed = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
   let changed = false;
   agencyClients.forEach(c => {
     let health = _pulsoHealthMap[c.id] || null;
@@ -23672,7 +23684,7 @@ function pulsoApplyHealth() {
     if (health !== 'rojo') {
       const hasStale = _pulsoLeadsCache.some(l =>
         l.client_id === c.id &&
-        !closed.includes((l.stage || '').toLowerCase()) &&
+        !leadCerrado(l) &&
         (now - new Date(l.updated_at || l.created_at).getTime()) > 3 * 864e5
       );
       if (hasStale) health = 'amarillo';
