@@ -12,6 +12,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 75 75'><rect width='75' height='75' fill='%231E2BCC' rx='8'/><path fill='%23fff' d='M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z'/><path fill='%23fff' d='M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z'/><circle fill='%23fff' cx='60.13' cy='10.7' r='5.3'/></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- App instalable (PWA). En iPhone los avisos solo llegan si el usuario la
+     añade a la pantalla de inicio: es una regla de Apple, no nuestra. -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1E2BCC">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Acuarius">
 <title>acuarius — agente google ads</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
@@ -1719,6 +1727,15 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-card-tarea.vencida{color:#DC2626;font-weight:600}
 .crm-card-cierre.vencida{color:#DC2626;font-weight:600}
 .crm-btn-filtros.active,#crm-btn-filtros.active{border-color:var(--blue);color:var(--blue)}
+.pwa-barra{position:fixed;left:16px;right:16px;bottom:16px;max-width:520px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:12px;padding:12px 14px;z-index:1500;transform:translateY(140%);transition:transform .3s var(--ease)}
+.pwa-barra.visible{transform:translateY(0)}
+.pwa-barra img{width:38px;height:38px;border-radius:9px;flex-shrink:0}
+.pwa-txt{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
+.pwa-txt b{font-size:13.5px;font-weight:700}
+.pwa-txt span{font-size:12px;color:var(--muted);line-height:1.4}
+.pwa-x{background:none;border:0;color:var(--muted2);font-size:15px;cursor:pointer;padding:2px 4px;flex-shrink:0}
+.pwa-x:hover{color:var(--text)}
+@media(max-width:520px){.pwa-barra{flex-wrap:wrap}.pwa-txt{flex:1 1 100%;order:2}}
 .crm-filtros-badge{background:var(--blue);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;margin-left:2px}
 .crm-filtros-overlay{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:1200;display:none}
 .crm-filtros-overlay.open{display:block}
@@ -5538,5 +5555,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 <!-- ── FIN MODAL DE REFERIDOS ──────────────────────────────────────────────── -->
 
+<script>
+  // El service worker se registra tarde, tras la carga: registrarlo antes
+  // compite por la red con app.js, que es lo que el usuario está esperando.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function (e) {
+        console.warn('[pwa] no se pudo registrar el service worker:', e);
+      });
+    });
+  }
+</script>
 </body>
 </html>

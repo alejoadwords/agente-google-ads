@@ -17787,6 +17787,68 @@ function crmAvisarTagsIgnoradas(lista) {
   );
 }
 
+// ── Instalar la app (PWA) ───────────────────────────────────────────────────
+// Un aviso discreto y UNA sola vez: si lo cierras, no vuelve. Nada molesta más
+// que una app pidiendo instalarse en cada visita.
+let _pwaPrompt = null;
+const PWA_LS = 'acuarius_pwa_visto';
+
+function pwaInstalada() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function pwaEsIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();          // el navegador no decide cuándo: lo decidimos nosotros
+  _pwaPrompt = e;
+  pwaMostrarAviso(false);
+});
+
+function pwaMostrarAviso(soloInstrucciones) {
+  if (pwaInstalada()) return;
+  try { if (localStorage.getItem(PWA_LS)) return; } catch {}
+  if (document.getElementById('pwa-barra')) return;
+  const b = document.createElement('div');
+  b.id = 'pwa-barra';
+  b.className = 'pwa-barra';
+  b.innerHTML =
+    '<img src="/icons/icon-192.png" alt="">' +
+    '<div class="pwa-txt"><b>Instala Acuarius</b>' +
+      '<span>' + (soloInstrucciones
+        ? 'Toca Compartir y luego «Añadir a inicio» para abrirla como una app y recibir avisos.'
+        : 'Ábrela como una app, sin pestañas, y recibe avisos de leads nuevos.') + '</span></div>' +
+    (soloInstrucciones ? '' : '<button class="btn-pri sm" onclick="pwaInstalar()">Instalar</button>') +
+    '<button class="pwa-x" onclick="pwaCerrarAviso()" aria-label="Cerrar">&#10005;</button>';
+  document.body.appendChild(b);
+  requestAnimationFrame(function () { b.classList.add('visible'); });
+}
+
+function pwaCerrarAviso() {
+  try { localStorage.setItem(PWA_LS, '1'); } catch {}
+  document.getElementById('pwa-barra')?.remove();
+}
+
+async function pwaInstalar() {
+  if (!_pwaPrompt) { pwaCerrarAviso(); return; }
+  _pwaPrompt.prompt();
+  try {
+    const r = await _pwaPrompt.userChoice;
+    if (r.outcome === 'accepted') { track('pwa_instalada'); showToast('Acuarius quedó instalada'); }
+  } catch {}
+  _pwaPrompt = null;
+  pwaCerrarAviso();
+}
+
+// iOS nunca lanza beforeinstallprompt: Apple obliga a que el usuario lo haga a
+// mano desde Compartir. Sin explicárselo, el iPhone simplemente no recibe
+// avisos y nadie entiende por qué.
+setTimeout(function () {
+  if (pwaEsIOS() && !pwaInstalada()) pwaMostrarAviso(true);
+}, 6000);
+
 // ── Reseñas de Google ───────────────────────────────────────────────────────
 // El enlace es por cliente: cada negocio tiene su propia ficha en Google. En
 // una cuenta sin cartera se guarda bajo '_cuenta'.
