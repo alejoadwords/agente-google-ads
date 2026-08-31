@@ -4578,9 +4578,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="crm-activity-input-wrap">
         <textarea class="crm-activity-input" id="crm-activity-input" placeholder="Queda en el historial, sin avisar a nadie…"></textarea>
         <div id="crm-act-due-wrap" style="display:none;margin-top:-4px">
-          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Fecha limite</label>
+          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Fecha límite</label>
           <input type="datetime-local" id="crm-act-due" class="crm-act-due-input">
         </div>
+        <!-- Por qué no se guardó. Antes una tarea sin fecha se guardaba igual y
+             no aparecía en ningún sitio, sin decir nada. -->
+        <div id="crm-act-aviso" style="display:none;font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:8px;padding:7px 10px;margin-bottom:6px;line-height:1.4"></div>
         <div class="crm-act-barra">
           <button type="button" class="crm-act-link-btn" onclick="actInsertarEnlace()" title="Convertir el texto seleccionado en un enlace">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>

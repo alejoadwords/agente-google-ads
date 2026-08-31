@@ -20208,7 +20208,9 @@ function crmSetActType(type, btn) {
   if (btn) btn.classList.add('active');
   const dueWrap = document.getElementById('crm-act-due-wrap');
   if (dueWrap) dueWrap.style.display = type === 'tarea' ? 'block' : 'none';
-  const placeholders = { nota: 'Queda en el historial, sin avisar a nadie…', llamada: 'Resultado de la llamada...', email: 'Resumen del email enviado o recibido...', reunion: 'Puntos clave de la reunión...', tarea: 'Describe la tarea pendiente...' };
+  const aviso = document.getElementById('crm-act-aviso');
+  if (aviso) { aviso.style.display = 'none'; aviso.textContent = ''; }
+  const placeholders = { nota: 'Queda en el historial, sin avisar a nadie…', llamada: 'Resultado de la llamada...', email: 'Resumen del email enviado o recibido...', reunion: 'Puntos clave de la reunión...', tarea: 'Qué hay que hacer. Aparecerá en Tareas y en la tarjeta del lead.' };
   const input = document.getElementById('crm-activity-input');
   if (input) input.placeholder = placeholders[type] || '';
 }
@@ -20218,23 +20220,74 @@ async function crmAddActivity() {
   const input = document.getElementById('crm-activity-input');
   const content = input.value.trim();
   if (!content) return;
+  const dueInput = document.getElementById('crm-act-due');
+  const aviso = document.getElementById('crm-act-aviso');
+  if (aviso) { aviso.style.display = 'none'; aviso.textContent = ''; }
+
+  // Una «Tarea» de aquí tiene que ser una tarea DE VERDAD. Antes se guardaba
+  // solo como línea del historial en lead_activities con la fecha metida en
+  // metadata, mientras que la vista Tareas, el resumen diario y la tarjeta del
+  // tablero leen la tabla activities. Resultado: se creaba algo que se llamaba
+  // tarea, no salía en ningún sitio, no avisaba y no se podía completar.
+  // Ahora se crea en activities (que es el sistema real) y en el historial
+  // queda la línea, apuntando a ella.
+  const esTarea = crmActivityType === 'tarea';
+  if (esTarea && !(dueInput && dueInput.value)) {
+    // Sin fecha no hay tarea posible: el sistema de tareas es por fecha. Se
+    // dice, en vez de guardar algo que no va a aparecer en ninguna parte.
+    if (aviso) {
+      aviso.textContent = 'Ponle fecha límite: sin fecha no aparece en Tareas ni en la tarjeta del lead.';
+      aviso.style.display = 'block';
+    }
+    if (dueInput) dueInput.focus();
+    return;
+  }
+
   const btn = document.querySelector('.crm-activity-btn');
   if (btn) btn.disabled = true;
   const metadata = {};
-  if (crmActivityType === 'tarea') {
-    const dueInput = document.getElementById('crm-act-due');
-    if (dueInput && dueInput.value) metadata.due_date = dueInput.value;
-  }
   try {
+    if (esTarea) {
+      const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+      const cq = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+      const d = await fetchAuth('/api/agenda' + cq, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'task',
+          title: content,
+          due_at: new Date(dueInput.value).toISOString(),
+          lead_id: crmDetailLead.id,
+        }),
+      }).then(r => r.json());
+      if (d.error) {
+        if (aviso) { aviso.textContent = 'No se pudo crear la tarea: ' + d.error; aviso.style.display = 'block'; }
+        if (btn) btn.disabled = false;
+        return;
+      }
+      // La línea del historial guarda la fecha para leerla, y el id de la tarea
+      // real por si algún día hace falta seguirle la pista.
+      metadata.due_date = dueInput.value;
+      if (d.activity?.id) metadata.activity_id = d.activity.id;
+    }
+
     await fetchAuth('/api/lead-activities', {
       method: 'POST',
       body: JSON.stringify({ lead_id: crmDetailLead.id, type: crmActivityType, content, metadata }),
     });
     input.value = '';
-    const dueInput = document.getElementById('crm-act-due');
     if (dueInput) dueInput.value = '';
     await crmLoadActivities(crmDetailLead.id);
-  } catch(e) { console.error('crmAddActivity', e); }
+    if (esTarea) {
+      // El chip de la tarjeta sale de activities: hay que releerlo, si no el
+      // tablero sigue enseñando la tarea anterior hasta la próxima recarga.
+      await crmTareasCargar();
+      crmRender();
+      if (typeof showToast === 'function') showToast('✅ Tarea creada', 'success');
+    }
+  } catch(e) {
+    console.error('crmAddActivity', e);
+    if (aviso) { aviso.textContent = 'No se pudo guardar. Inténtalo de nuevo.'; aviso.style.display = 'block'; }
+  }
   if (btn) btn.disabled = false;
 }
 
