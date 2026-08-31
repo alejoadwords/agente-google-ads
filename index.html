@@ -96,7 +96,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100sv
 .hdr-logo-icon svg{width:18px;height:18px}
 .hdr-logo-name{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px}
 .hdr-logo-img{height:34px;width:auto;display:block}
-.hdr-logo-mark{display:none;width:30px;height:30px;border-radius:8px;flex-shrink:0}
+.hdr-logo .hdr-logo-mark{display:none;width:30px;height:30px;min-width:30px;object-fit:contain;border-radius:8px;flex-shrink:0}
 .hdr-logo-dark{display:none}
 html[data-theme="dark"] .hdr-logo-light{display:none}
 html[data-theme="dark"] .hdr-logo-dark{display:block}
@@ -772,14 +772,14 @@ textarea.seop-input{resize:vertical;min-height:70px}
      encogía hasta desaparecer. En móvil manda otro reparto. */
   .hdr { padding: 0 10px; padding-top: env(safe-area-inset-top); height: calc(52px + env(safe-area-inset-top)); gap: 6px; }
   .hdr-logo-img { display: none; }                 /* el logotipo largo, fuera */
-  .hdr-logo-mark { display: block; }               /* la marca cuadrada, dentro */
+  .hdr-logo .hdr-logo-mark { display: block; }    /* la marca cuadrada, dentro */
   .mob-menu-btn { order: -1; }                     /* el menú, siempre lo primero */
   .hdr-badge { display: none; }                    /* el plan se ve en Configuración */
   #cmdk-hint-btn { display: none; }                /* ⌘K no existe sin teclado */
   .hdr-right { gap: 6px; min-width: 0; }
   #hdr-client-switch { margin-left: 2px !important; flex: 1 1 auto; max-width: none; min-width: 0; }
   #hdr-client-btn { width: 100%; padding: 5px 8px; }
-  .hdr-logo img { height: 46px; }
+  .hdr-logo .hdr-logo-img { height: 46px; }
   .hdr-user { display: none; }
   .hdr-sep { display: none; }
   .hdr-badge { font-size: 10px; padding: 2px 7px; }
@@ -875,7 +875,7 @@ textarea.seop-input{resize:vertical;min-height:70px}
 
 @media (max-width: 480px) {
   .hdr { padding: 0 10px; height: 48px; }
-  .hdr-logo img { height: 40px; max-width: 130px; }
+  .hdr-logo .hdr-logo-img { height: 40px; max-width: 130px; }
   .hdr-badge { display: none; }
 
   .chat-area { padding: 12px; gap: 10px; }
