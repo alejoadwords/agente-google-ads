@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-proxima-tarea-tarjeta",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "Cada tarjeta del pipeline dice cuándo es su próxima tarea",
+      "texto": "Bajo el nombre del lead aparece «Próxima tarea: 14/08/26» con la más cercana que tenga pendiente, la lleve quien la lleve. Si ya se pasó de fecha, sale en rojo y con un triángulo de alerta. Los leads sin tareas pendientes no muestran nada, para no llenar el tablero de líneas vacías. Se actualiza sola al completar o aplazar una tarea.",
+      "accion": {
+        "texto": "Ir al pipeline",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-08-28-cerrados-sin-seguimiento",
       "fecha": "2026-08-28",
       "tipo": "arreglo",

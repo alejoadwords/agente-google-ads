@@ -17284,6 +17284,7 @@ async function crmLoadLeads() {
     crmRender();
     // Los avisos llegan después y repintan: el tablero no espera por ellos.
     crmAvisosCargar().then(() => { if (crmAvisos.length) crmRender(); });
+    crmTareasCargar().then(ok => { if (ok) crmRender(); });
     crmAbrirLeadPendiente();
     return true;
   } catch(e) {
@@ -18502,6 +18503,7 @@ function crmCardHTML(lead, now) {
     (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
     '</div>' +
     crmChipCierre(lead) +
+    crmChipTarea(lead) +
     ((score !== null || showInactive) ? '<div class="crm-card-badges">' +
     (score !== null ? '<div class="crm-card-score" style="background:' + scoreColor + '20;color:' + scoreColor + '">Score ' + score + '/10</div>' : '') +
     (showInactive ? '<div class="crm-card-inactive"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + daysSince + ' días sin actividad</div>' : '') +
@@ -18509,6 +18511,43 @@ function crmCardHTML(lead, now) {
     '</div>' +
     '<div class="crm-card-actions' + (soloNota ? ' solo-nota' : '') + '">' + phoneBtn + waBtn + emailBtn + notaBtn + '</div>' +
     '</div>';
+}
+
+// ── Próxima tarea de cada lead ──────────────────────────────────────────────
+// Las tareas viven en `activities`, no en el lead, asi que este dato no llega
+// con /api/leads. Se pide aparte y repinta cuando llega, igual que los avisos:
+// el tablero no espera por el.
+let crmTareasPorLead = {};
+
+async function crmTareasCargar() {
+  try {
+    const cid = (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId)
+      ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
+    // 90 dias es el tope del endpoint. Sin `mias=1`: en la tarjeta interesa la
+    // proxima tarea del lead, la lleve quien la lleve.
+    const d = await fetchAuth('/api/agenda?tareas=1&dias=90' + cid).then(r => r.json());
+    const mapa = {};
+    ['vencidas', 'hoy', 'proximas'].forEach(k => (d[k] || []).forEach(t => {
+      if (!t.lead_id || !t.due_at) return;   // sin fecha no hay nada que enseñar
+      const dia = crmDiaDe(t.due_at);
+      if (!mapa[t.lead_id] || dia < mapa[t.lead_id]) mapa[t.lead_id] = dia;
+    }));
+    crmTareasPorLead = mapa;
+    return true;
+  } catch { crmTareasPorLead = {}; return false; }
+}
+
+function crmChipTarea(lead) {
+  const f = crmTareasPorLead[lead.id];
+  if (!f) return '';
+  const vencida = !leadCerrado(lead) && f < crmFechaLocal(new Date());
+  const [a, m, d] = f.split('-');
+  const icono = vencida
+    ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    : '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  return '<div class="crm-card-tarea' + (vencida ? ' vencida' : '') + '" title="' +
+    (vencida ? 'Tarea vencida' : 'Próxima tarea pendiente') + '">' +
+    icono + 'Próxima tarea: ' + d + '/' + m + '/' + a.slice(2) + '</div>';
 }
 
 // Fecha esperada de cierre en la tarjeta. En rojo si ya pasó y el lead sigue
@@ -30517,6 +30556,7 @@ async function tarHecha(id) {
     });
     showToast('Tarea completada', 'success');
     tarRender();
+    crmTareasCargar().then(() => crmRender());
   } catch { showToast('No se pudo actualizar', 'error'); }
 }
 
@@ -30532,6 +30572,7 @@ async function tarAplazar(id) {
       body: JSON.stringify({ id, due_at: base.toISOString() }),
     });
     tarRender();
+    crmTareasCargar().then(() => crmRender());
   } catch { showToast('No se pudo aplazar', 'error'); }
 }
 
