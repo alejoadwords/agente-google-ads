@@ -297,7 +297,7 @@ async function actionNotifyOwner(step, lead, auto) {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Acuarius <notificaciones@app.acuarius.app>', to: [ownerEmail],
+      from: 'Acuarius <notificaciones@app.acuarius.app>', reply_to: 'ceo@acuarius.app', to: [ownerEmail],
       subject: '⚡ ' + renderVars(step.subject || 'Actividad de {{nombre}} en tu CRM', lead),
       html,
     }),

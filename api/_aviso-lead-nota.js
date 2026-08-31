@@ -11,7 +11,7 @@
 // devuelve qué pasó, porque quien la escribe tiene que saber si llegó o no —
 // decirle «avisado» cuando nadie recibió nada es la peor forma de fallar.
 
-import { emailHtml, bloque, esc } from './_email-layout.js';
+import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -76,7 +76,7 @@ async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId }) {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Acuarius <crm@app.acuarius.app>',
+        from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
         to: destino.email,
         subject: `Nota sobre ${nombreLead}`,
         html: emailHtml({

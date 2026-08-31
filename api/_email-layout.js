@@ -10,6 +10,18 @@
 // maqueta moderna se desmonta ahí. Lo que aquí parece torpe es lo único que se
 // ve igual en todas partes.
 
+// A dónde va la respuesta cuando un usuario contesta un aviso.
+//
+// TODO lo que manda Acuarius sale de app.acuarius.app, que es un dominio SOLO
+// de envío: no tiene registro MX, así que no puede recibir nada. Sin esto, cada
+// respuesta de un usuario rebotaba y nadie se enteraba — ni el que escribió, ni
+// nosotros. Un canal de soporte que dice «aquí estamos» y devuelve un error de
+// entrega es peor que no ponerlo.
+//
+// Va a un buzón que existe de verdad (acuarius.app sí tiene MX). Si algún día
+// hay un soporte@acuarius.app, se cambia AQUÍ y en un sitio solo.
+export const RESPONDER_A = 'ceo@acuarius.app';
+
 const AZUL = '#1E2BCC';
 const AZUL_OSCURO = '#1520B0';
 const FONDO = '#F4F5FB';

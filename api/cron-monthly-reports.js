@@ -322,6 +322,7 @@ async function processUser(userId) {
           headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body:    JSON.stringify({
             from:    'reportes@app.acuarius.app',
+            reply_to: 'ceo@acuarius.app',
             to:      userEmail,
             subject: `📊 Reporte mensual ${getPlatformName(conn.platform)} — ${monthCap}`,
             html,

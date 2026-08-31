@@ -88,7 +88,7 @@ async function avisarFalloActivacion({ email, productName, motivo, extra }) {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Acuarius <notificaciones@app.acuarius.app>',
+        from: 'Acuarius <notificaciones@app.acuarius.app>', reply_to: 'ceo@acuarius.app',
         to: [ALERTA_A],
         subject: 'Compra sin activar: ' + (email || 'sin email') + ' (' + (productName || 'producto desconocido') + ')',
         html,

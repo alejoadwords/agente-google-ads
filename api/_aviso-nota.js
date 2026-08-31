@@ -8,7 +8,7 @@
 // Todo aquí es silencioso a propósito: que falle el correo NO puede impedir que
 // la nota se guarde. La nota es el dato; el aviso es una cortesía.
 
-import { emailHtml, bloque, esc } from './_email-layout.js';
+import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -86,7 +86,7 @@ export async function avisarNota({ ownerId, autorId, autorNombre, conv, texto })
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Acuarius <crm@app.acuarius.app>',
+          from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
           to,
           subject: `Nota interna sobre ${contacto}`,
           html: emailHtml({

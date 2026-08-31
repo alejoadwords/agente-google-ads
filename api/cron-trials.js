@@ -15,7 +15,7 @@ async function sendMail(to, subject, html) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [to], subject, html }),
+    body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', reply_to: 'ceo@acuarius.app', to: [to], subject, html }),
   });
   return r.ok;
 }

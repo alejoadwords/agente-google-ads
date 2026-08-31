@@ -203,7 +203,7 @@ export default async function handler(req) {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Acuarius <notificaciones@app.acuarius.app>', to: [email],
+          from: 'Acuarius <notificaciones@app.acuarius.app>', reply_to: 'ceo@acuarius.app', to: [email],
           subject: ownerName + ' te invitó a su equipo en Acuarius',
           html: '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
             '<p><b>' + ownerName + '</b> te invitó a colaborar en su CRM de Acuarius: leads, agenda e inbox del equipo, en un solo lugar.</p>' +

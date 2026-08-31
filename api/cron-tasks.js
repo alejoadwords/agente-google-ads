@@ -6,7 +6,7 @@
 // Regla de oro: si no hay nada pendiente, no se manda nada. Un correo diario
 // vacío se convierte en un correo que nadie abre.
 
-import { emailHtml } from './_email-layout.js';
+import { emailHtml, RESPONDER_A } from './_email-layout.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -64,7 +64,7 @@ async function enviar(to, vencidas, hoy) {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Acuarius <crm@app.acuarius.app>',
+      from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
       to,
       subject: `${asunto} — Acuarius`,
       html: emailHtml({

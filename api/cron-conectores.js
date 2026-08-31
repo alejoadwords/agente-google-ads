@@ -9,7 +9,7 @@
 // Corre una vez al día (vercel.json).
 export const config = { runtime: 'edge' };
 
-import { emailHtml, pasos, esc } from './_email-layout.js';
+import { emailHtml, pasos, esc, RESPONDER_A } from './_email-layout.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -86,7 +86,7 @@ export default async function handler(req) {
             method: 'POST',
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              from: 'Acuarius <crm@app.acuarius.app>',
+              from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
               to,
               subject: `Tu formulario de ${donde} lleva ${dias} días sin traer leads`,
               html: emailHtml({

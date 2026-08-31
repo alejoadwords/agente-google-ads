@@ -1018,12 +1018,12 @@ async function handleTicketUpdate(req, res) {
   let avisado = false;
   if (respuestaNueva && previo?.email && process.env.RESEND_API_KEY) {
     try {
-      const { emailHtml, bloque, esc } = await import('./_email-layout.js');
+      const { emailHtml, bloque, esc, RESPONDER_A } = await import('./_email-layout.js');
       const env = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Acuarius <soporte@app.acuarius.app>',
+          from: 'Acuarius <soporte@app.acuarius.app>', reply_to: RESPONDER_A,
           to: previo.email,
           subject: 'Sobre tu consulta: ' + (previo.asunto || 'soporte'),
           html: emailHtml({

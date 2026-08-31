@@ -179,7 +179,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Acuarius <notificaciones@app.acuarius.app>',
+        from: 'Acuarius <notificaciones@app.acuarius.app>', reply_to: 'ceo@acuarius.app',
         to: [ADMIN_EMAIL],
         subject: '🧠 Actualización mensual de conocimiento de los agentes — ' + drafts.length + ' propuesta(s)',
         html: '<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;color:#1a1a2e">' +

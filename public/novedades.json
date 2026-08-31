@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-31-responder-correos",
+      "fecha": "2026-08-31",
+      "tipo": "correccion",
+      "titulo": "Ahora puedes responder a los correos que te enviamos",
+      "texto": "Los avisos de Acuarius salían desde un dominio que solo puede enviar, no recibir: si respondías a un aviso de lead, a una alerta o a un reporte, tu mensaje rebotaba y no llegaba a nadie. Ya no: todas las notificaciones llevan una dirección de respuesta real y contestarlas funciona. Los correos que la plataforma envía a TUS contactos no cambian: esas respuestas siguen siendo tuyas."
+    },
+    {
       "id": "2026-08-31-tareas-de-la-ficha",
       "fecha": "2026-08-31",
       "tipo": "correccion",

@@ -4,7 +4,7 @@
 
 export const config = { runtime: 'nodejs' };
 
-import { emailHtml } from './_email-layout.js';
+import { emailHtml, RESPONDER_A } from './_email-layout.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CRON_SECRET         = process.env.CRON_SECRET;
@@ -47,7 +47,7 @@ async function sendAlertEmail(userEmail, alerts) {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Acuarius <alertas@app.acuarius.app>',
+      from: 'Acuarius <alertas@app.acuarius.app>', reply_to: RESPONDER_A,
       to: userEmail,
       subject: `⚠️ ${criticalAlerts.length} alerta${criticalAlerts.length > 1 ? 's' : ''} crítica${criticalAlerts.length > 1 ? 's' : ''} en tus campañas — Acuarius`,
       html: emailHtml({
