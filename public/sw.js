@@ -55,4 +55,37 @@ self.addEventListener('fetch', (e) => {
   }
 });
 
-// Los avisos push llegarán en el siguiente paso; el manejador vive aquí.
+// ── Avisos push ─────────────────────────────────────────────────────────────
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch {}
+  const titulo = d.titulo || 'Acuarius';
+  e.waitUntil(self.registration.showNotification(titulo, {
+    body: d.texto || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    // La etiqueta agrupa: tres leads nuevos seguidos no dejan tres avisos
+    // apilados, se reemplazan. Sin esto la pantalla se llena.
+    tag: d.etiqueta || 'acuarius',
+    renotify: true,
+    data: { url: d.url || '/' },
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const destino = (e.notification.data && e.notification.data.url) || '/';
+  // Si Acuarius ya está abierta, se reutiliza esa ventana en vez de abrir una
+  // nueva cada vez: al tercer aviso el usuario tendría cinco pestañas.
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((lista) => {
+      for (const c of lista) {
+        if (c.url.indexOf(self.location.origin) === 0 && 'focus' in c) {
+          c.navigate(destino).catch(() => {});
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(destino);
+    })
+  );
+});
