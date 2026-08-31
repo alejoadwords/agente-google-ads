@@ -636,6 +636,19 @@ export default async function handler(req) {
       custom_fields: custom_fields || {},
       created_by: actorId,
     };
+    // El importe se perdía al crear: el formulario lo manda pero el POST nunca
+    // lo copiaba, así que solo sobrevivía si luego editabas el lead. El total
+    // del pipeline salía corto y nadie sabía por qué.
+    const _valor = parseFloat(body.value);
+    if (Number.isFinite(_valor) && _valor > 0) payload.value = _valor;
+
+    // Fecha esperada de cierre: opcional, formato AAAA-MM-DD. Se valida el
+    // formato para no mandarle basura a una columna `date` — un texto libre
+    // haría fallar el insert entero y el lead se perdería por un campo
+    // accesorio.
+    if (typeof body.expected_close_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.expected_close_date)) {
+      payload.expected_close_date = body.expected_close_date;
+    }
     // Un lead creado por un miembro nace asignado a el: asi "los que yo creo
     // son mios" sigue siendo cierto sin que el creador conserve el control tras
     // una reasignacion. Los del usuario principal nacen sin asignar, para que
@@ -729,7 +742,7 @@ export default async function handler(req) {
     }
 
     // Only allow safe fields
-    const allowed = ['name','email','phone','company','stage','stage_position','notes','source','tags','custom_fields','value','assigned_to','assigned_name','close_reason','close_currency','closed_at'];
+    const allowed = ['name','email','phone','company','stage','stage_position','notes','source','tags','custom_fields','value','assigned_to','assigned_name','close_reason','close_currency','closed_at','expected_close_date'];
     const update = {};
     for (const k of allowed) {
       if (fields[k] !== undefined) update[k] = fields[k];

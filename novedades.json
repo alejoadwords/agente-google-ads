@@ -2,6 +2,32 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-filtros-y-cierre",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "Panel de filtros en el pipeline y fecha esperada de cierre",
+      "texto": "Los filtros salieron de la barra y viven ahora en un panel propio: fuente, comercial, etiquetas, estado y —lo nuevo— rangos de fecha. Puedes ver qué leads entraron hoy, en los últimos 7 o 30 días, este mes, o entre dos fechas cualesquiera. El botón Filtros muestra cuántos tienes puestos y se limpian todos de un golpe. Además, al crear o editar un lead puedes fijarle una fecha esperada de cierre: aparece en la tarjeta y se pone en rojo si se pasó, y también se puede filtrar por ella —las vencidas o las que cierran este mes—.",
+      "accion": { "texto": "Ir al pipeline", "ir": "crm" }
+    },
+    {
+      "id": "2026-08-28-cupos-servidor",
+      "fecha": "2026-08-28",
+      "tipo": "mejora",
+      "titulo": "Los cupos ahora los lleva la plataforma, no tu navegador",
+      "texto": "El contador de imágenes y de mensajes de IA vivía en tu navegador, así que podía decir una cosa distinta en cada equipo desde el que entraras. Ahora lo lleva la plataforma: el número que ves es el mismo en el móvil, en el portátil y en el del compañero de equipo, y el consumo del equipo suma en la cuenta del titular. Si llegas al cupo, el aviso te dice cuánto llevas y de cuánto es el tope."
+    },
+    {
+      "id": "2026-08-28-pipeline-lista",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "El pipeline, también en lista",
+      "texto": "Arriba del pipeline hay un conmutador Tablero / Lista. La lista muestra los mismos leads que el tablero —con los mismos filtros— en una tabla que puedes ordenar pulsando cualquier encabezado. Y con el botón «Columnas» eliges qué se ve: empresa, estado, etiquetas, score, fecha de creación, última actividad, motivo de cierre… incluidos los campos propios que tengan tus leads. Tu elección se recuerda.",
+      "accion": {
+        "texto": "Ver el pipeline",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-08-28-listas-exclusion",
       "fecha": "2026-08-28",
       "tipo": "nuevo",

@@ -1710,6 +1710,34 @@ textarea.seop-input{resize:vertical;min-height:70px}
 /* ── MÓDULO LEADS / CRM ───────────────────────────────────────────────────── */
 .crm-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
 .crm-toolbar{display:flex;align-items:center;gap:10px;padding:14px 20px 10px;flex-shrink:0;border-bottom:1px solid var(--border)}
+/* ── Panel de filtros del CRM ────────────────────────────────────────────── */
+.crm-card-cierre{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--muted);margin-top:6px}
+.crm-card-cierre.vencida{color:#DC2626;font-weight:600}
+.crm-btn-filtros.active,#crm-btn-filtros.active{border-color:var(--blue);color:var(--blue)}
+.crm-filtros-badge{background:var(--blue);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;margin-left:2px}
+.crm-filtros-overlay{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:1200;display:none}
+.crm-filtros-overlay.open{display:block}
+.crm-filtros-panel{position:fixed;top:0;right:0;bottom:0;width:340px;max-width:92vw;background:var(--card);border-left:1px solid var(--border);z-index:1201;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .2s ease;box-shadow:-8px 0 32px rgba(0,0,0,.10)}
+.crm-filtros-panel.open{transform:translateX(0)}
+.crm-filtros-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+.crm-filtros-titulo{font-size:var(--fs-md);font-weight:800}
+.crm-filtros-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.crm-filtros-body{flex:1;overflow-y:auto;padding:4px 20px 20px}
+.crm-filtro-grupo{padding:16px 0;border-bottom:1px solid var(--border)}
+.crm-filtro-grupo:last-child{border-bottom:0}
+.crm-filtro-tit{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.crm-filtro-atajos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.crm-filtro-atajo{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer}
+.crm-filtro-atajo:hover{border-color:var(--blue)}
+.crm-filtro-atajo.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.crm-filtro-rango{display:flex;gap:8px}
+.crm-filtro-rango label{flex:1;display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
+.crm-filtro-rango input{width:100%;padding:7px 9px;border:1.5px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12.5px;background:var(--bg);color:var(--text);outline:none;box-sizing:border-box}
+.crm-filtro-rango input:focus{border-color:var(--blue)}
+.crm-filtros-panel .crm-quick-filters,.crm-filtros-panel .crm-tag-filter{display:flex;flex-wrap:wrap;gap:6px}
+.crm-filtros-panel .dd-btn{width:100%;justify-content:space-between}
+.crm-filtros-pie{display:flex;gap:8px;justify-content:space-between;align-items:center;padding:14px 20px;border-top:1px solid var(--border)}
+@media(max-width:600px){.crm-filtros-panel{width:100%}}
 .crm-title{font-size:18px;font-weight:700;letter-spacing:-.3px;flex:1}
 .crm-btn-add{display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;flex-shrink:0}
 .crm-btn-add:hover{background:var(--blue-h)}
@@ -4144,17 +4172,80 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--muted2)"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" class="crm-search-input" id="crm-search" placeholder="Buscar leads..." oninput="crmSetSearch(this.value)">
       </div>
-      <button class="dd-btn" id="crm-filter-source" onclick="crmAbrirFiltroFuente(this)">
+      <button class="dd-btn" id="crm-btn-filtros" onclick="crmFiltrosAbrir()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        <span class="dd-btn-txt">Filtros</span>
+        <span id="crm-filtros-badge" class="crm-filtros-badge" style="display:none">0</span>
+      </button>
+      <div id="crm-leads-stats" class="crm-leads-stats"></div>
+      <button class="crm-export-btn" onclick="impOpen()" title="Importar contactos desde CSV, Excel o pegando">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Importar
+      </button>
+      <button class="crm-export-btn" onclick="crmExportCSV()" title="Exportar CSV">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+    </div>
+
+<!-- Panel de filtros del CRM. El marcado de fuente, comercial, etiquetas y
+     filtros rapidos se movio aqui tal cual: las funciones que ya existian
+     apuntan a estos mismos ids y siguen funcionando sin cambios. -->
+<div id="crm-filtros-overlay" class="crm-filtros-overlay" onclick="crmFiltrosCerrar()"></div>
+<aside id="crm-filtros-panel" class="crm-filtros-panel" aria-label="Filtros del pipeline">
+  <div class="crm-filtros-head">
+    <div>
+      <div class="crm-filtros-titulo">Filtros</div>
+      <div class="crm-filtros-sub" id="crm-filtros-resumen">Todos los leads</div>
+    </div>
+    <button class="btn-ghost sm" onclick="crmFiltrosCerrar()" aria-label="Cerrar">&#10005;</button>
+  </div>
+  <div class="crm-filtros-body">
+
+    <div class="crm-filtro-grupo">
+      <div class="crm-filtro-tit">Fecha de creación</div>
+      <div class="crm-filtro-atajos" id="crm-fecha-atajos"></div>
+      <div class="crm-filtro-rango">
+        <label>Desde<input type="date" id="crm-f-creado-desde" onchange="crmSetFechaFiltro()"></label>
+        <label>Hasta<input type="date" id="crm-f-creado-hasta" onchange="crmSetFechaFiltro()"></label>
+      </div>
+    </div>
+
+    <div class="crm-filtro-grupo">
+      <div class="crm-filtro-tit">Fecha esperada de cierre</div>
+      <div class="crm-filtro-atajos" id="crm-cierre-atajos"></div>
+      <div class="crm-filtro-rango">
+        <label>Desde<input type="date" id="crm-f-cierre-desde" onchange="crmSetFechaFiltro()"></label>
+        <label>Hasta<input type="date" id="crm-f-cierre-hasta" onchange="crmSetFechaFiltro()"></label>
+      </div>
+    </div>
+
+    <div class="crm-filtro-grupo">
+      <div class="crm-filtro-tit">Fuente</div>
+<button class="dd-btn" id="crm-filter-source" onclick="crmAbrirFiltroFuente(this)">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
         <span class="dd-btn-txt" id="crm-filter-source-txt">Todas las fuentes</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <button class="dd-btn" id="crm-filter-owner" style="display:none" onclick="crmAbrirFiltroComercial(this)">
+    </div>
+
+    <div class="crm-filtro-grupo" id="crm-filtro-grupo-comercial">
+      <div class="crm-filtro-tit">Comercial</div>
+<button class="dd-btn" id="crm-filter-owner" style="display:none" onclick="crmAbrirFiltroComercial(this)">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span class="dd-btn-txt" id="crm-filter-owner-txt">Todos los comerciales</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="crm-quick-filters" id="crm-quick-filters">
+    </div>
+
+    <div class="crm-filtro-grupo">
+      <div class="crm-filtro-tit">Etiquetas</div>
+<div id="crm-tag-filter" class="crm-tag-filter"></div>
+    </div>
+
+    <div class="crm-filtro-grupo">
+      <div class="crm-filtro-tit">Estado</div>
+<div class="crm-quick-filters" id="crm-quick-filters">
         <button class="crm-qf-pill warn" id="crm-qf-inactive" onclick="crmToggleQuickFilter('inactive')">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Sin actividad
@@ -4172,17 +4263,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           Con valor
         </button>
       </div>
-      <div id="crm-tag-filter" class="crm-tag-filter"></div>
-      <div id="crm-leads-stats" class="crm-leads-stats"></div>
-      <button class="crm-export-btn" onclick="impOpen()" title="Importar contactos desde CSV, Excel o pegando">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Importar
-      </button>
-      <button class="crm-export-btn" onclick="crmExportCSV()" title="Exportar CSV">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        CSV
-      </button>
     </div>
+
+  </div>
+  <div class="crm-filtros-pie">
+    <button class="btn-ghost sm" onclick="crmFiltrosLimpiar()">Limpiar filtros</button>
+    <button class="btn-pri sm" onclick="crmFiltrosCerrar()">Listo</button>
+  </div>
+</aside>
+
     <!-- Kanban view -->
     <div id="crm-kanban" class="crm-kanban"></div>
     <!-- List view -->
@@ -4380,9 +4469,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <label>Notas</label>
         <textarea id="crm-f-notes" placeholder="Notas sobre este lead..."></textarea>
       </div>
-      <div class="crm-field">
-        <label>Valor del deal</label>
-        <input type="number" id="crm-f-value" class="crm-f-value" placeholder="0" min="0" step="1000" />
+      <div class="crm-field-row">
+        <div class="crm-field">
+          <label>Valor del deal</label>
+          <input type="number" id="crm-f-value" class="crm-f-value" placeholder="0" min="0" step="1000" />
+        </div>
+        <div class="crm-field">
+          <label>Fecha esperada de cierre</label>
+          <input type="date" id="crm-f-close-date" class="crm-f-value" />
+        </div>
       </div>
       <div class="crm-field">
         <label>Tags (separados por coma)</label>
@@ -4418,6 +4513,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Empresa</span><span class="crm-detail-row-val" id="crm-d-company">—</span></div>
       <div class="crm-detail-row"><span class="crm-detail-row-label">Fuente</span><span class="crm-detail-row-val" id="crm-d-source">—</span></div>
       <div class="crm-detail-row" id="crm-d-value-row" style="display:none"><span class="crm-detail-row-label">Valor</span><span class="crm-detail-row-val" id="crm-d-value">—</span></div>
+      <div class="crm-detail-row" id="crm-d-cierre-row" style="display:none"><span class="crm-detail-row-label">Cierre esperado</span><span class="crm-detail-row-val" id="crm-d-cierre">—</span></div>
       <div class="crm-detail-row" id="crm-d-tags-row" style="display:none"><span class="crm-detail-row-label">Etiquetas</span><span class="crm-detail-row-val" id="crm-d-tags">—</span></div>
       <div class="crm-detail-row" id="crm-d-assigned-row"><span class="crm-detail-row-label">Asignado a</span><span class="crm-detail-row-val" id="crm-d-assigned-wrap">—</span></div>
     </div>

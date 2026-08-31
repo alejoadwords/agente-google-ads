@@ -17888,6 +17888,174 @@ function crmToggleTagFilter(name) {
   crmUpdateLeadsStats();
 }
 
+// ── Panel de filtros ────────────────────────────────────────────────────────
+// Los filtros se salieron de la barra: eran ocho controles y una fila de
+// pildoras de colores que se comian el ancho y competian con los datos. Aqui
+// caben, se ven cuales estan puestos y hay sitio para los rangos de fecha.
+let crmFechaCreadoDesde = '';
+let crmFechaCreadoHasta = '';
+let crmFechaCierreDesde = '';
+let crmFechaCierreHasta = '';
+
+// Fecha local en AAAA-MM-DD. Con toISOString() se usa UTC y en Bogota (UTC-5)
+// un lead creado a las 8 de la noche cae en el dia siguiente: el filtro "hoy"
+// no lo encontraria.
+function crmFechaLocal(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function crmDiaDe(valor) {
+  if (!valor) return '';
+  const d = new Date(valor);
+  return isNaN(d) ? String(valor).slice(0, 10) : crmFechaLocal(d);
+}
+
+const CRM_ATAJOS_CREADO = [
+  { id: 'hoy',      label: 'Hoy',        dias: 0   },
+  { id: '7',        label: '7 días',     dias: 6   },
+  { id: '30',       label: '30 días',    dias: 29  },
+  { id: 'mes',      label: 'Este mes',   mes: true },
+];
+
+function crmAplicarAtajoCreado(id) {
+  const hoy = new Date();
+  const a = CRM_ATAJOS_CREADO.find(x => x.id === id);
+  if (!a) return;
+  const hastaTxt = crmFechaLocal(hoy);
+  let desdeTxt;
+  if (a.mes) desdeTxt = crmFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  else { const d = new Date(hoy); d.setDate(d.getDate() - a.dias); desdeTxt = crmFechaLocal(d); }
+  // Volver a pulsar el atajo activo lo quita
+  const yaPuesto = crmFechaCreadoDesde === desdeTxt && crmFechaCreadoHasta === hastaTxt;
+  crmFechaCreadoDesde = yaPuesto ? '' : desdeTxt;
+  crmFechaCreadoHasta = yaPuesto ? '' : hastaTxt;
+  crmFiltrosSincronizar();
+  crmFiltrosAplicar();
+}
+
+function crmAtajoCierre(id) {
+  const hoy = new Date();
+  const hoyTxt = crmFechaLocal(hoy);
+  if (id === 'vencidas') {
+    const ya = crmFechaCierreHasta === hoyTxt && !crmFechaCierreDesde;
+    crmFechaCierreDesde = ''; crmFechaCierreHasta = ya ? '' : hoyTxt;
+  } else if (id === 'mes') {
+    const fin = crmFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0));
+    const ya = crmFechaCierreDesde === hoyTxt && crmFechaCierreHasta === fin;
+    crmFechaCierreDesde = ya ? '' : hoyTxt; crmFechaCierreHasta = ya ? '' : fin;
+  } else if (id === 'limpiar') {
+    crmFechaCierreDesde = ''; crmFechaCierreHasta = '';
+  }
+  crmFiltrosSincronizar();
+  crmFiltrosAplicar();
+}
+
+// Lee los cuatro campos de fecha del panel
+function crmSetFechaFiltro() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  crmFechaCreadoDesde = v('crm-f-creado-desde');
+  crmFechaCreadoHasta = v('crm-f-creado-hasta');
+  crmFechaCierreDesde = v('crm-f-cierre-desde');
+  crmFechaCierreHasta = v('crm-f-cierre-hasta');
+  crmFiltrosAplicar();
+  crmFiltrosPintarAtajos();
+}
+
+function crmFiltrosSincronizar() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('crm-f-creado-desde', crmFechaCreadoDesde);
+  set('crm-f-creado-hasta', crmFechaCreadoHasta);
+  set('crm-f-cierre-desde', crmFechaCierreDesde);
+  set('crm-f-cierre-hasta', crmFechaCierreHasta);
+  crmFiltrosPintarAtajos();
+}
+
+function crmFiltrosPintarAtajos() {
+  const hoy = new Date();
+  const cont = document.getElementById('crm-fecha-atajos');
+  if (cont) {
+    cont.innerHTML = CRM_ATAJOS_CREADO.map(a => {
+      let desdeTxt;
+      if (a.mes) desdeTxt = crmFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+      else { const d = new Date(hoy); d.setDate(d.getDate() - a.dias); desdeTxt = crmFechaLocal(d); }
+      const on = crmFechaCreadoDesde === desdeTxt && crmFechaCreadoHasta === crmFechaLocal(hoy);
+      return '<button class="crm-filtro-atajo' + (on ? ' on' : '') + '" onclick="crmAplicarAtajoCreado(\'' + a.id + '\')">' + a.label + '</button>';
+    }).join('');
+  }
+  const cc = document.getElementById('crm-cierre-atajos');
+  if (cc) {
+    const hoyTxt = crmFechaLocal(hoy);
+    const finMes = crmFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0));
+    const venc = crmFechaCierreHasta === hoyTxt && !crmFechaCierreDesde;
+    const esteMes = crmFechaCierreDesde === hoyTxt && crmFechaCierreHasta === finMes;
+    cc.innerHTML =
+      '<button class="crm-filtro-atajo' + (venc ? ' on' : '') + '" onclick="crmAtajoCierre(\'vencidas\')">Vencidas</button>' +
+      '<button class="crm-filtro-atajo' + (esteMes ? ' on' : '') + '" onclick="crmAtajoCierre(\'mes\')">Cierran este mes</button>';
+  }
+}
+
+function crmFiltrosCuenta() {
+  let n = 0;
+  if (crmFilterSource) n++;
+  if (crmFilterOwner) n++;
+  if (crmQuickFilter) n++;
+  n += (crmFilterTags || []).length;
+  if (crmFechaCreadoDesde || crmFechaCreadoHasta) n++;
+  if (crmFechaCierreDesde || crmFechaCierreHasta) n++;
+  return n;
+}
+
+function crmFiltrosBadge() {
+  const b = document.getElementById('crm-filtros-badge');
+  if (!b) return;
+  const n = crmFiltrosCuenta();
+  b.textContent = n;
+  b.style.display = n ? 'inline-flex' : 'none';
+  const btn = document.getElementById('crm-btn-filtros');
+  if (btn) btn.classList.toggle('active', n > 0);
+  const res = document.getElementById('crm-filtros-resumen');
+  if (res) res.textContent = n ? (n === 1 ? '1 filtro activo' : n + ' filtros activos') : 'Todos los leads';
+}
+
+function crmFiltrosAplicar() {
+  crmRender();
+  crmUpdateLeadsStats();
+  crmFiltrosBadge();
+}
+
+function crmFiltrosAbrir() {
+  // El grupo de comercial solo tiene sentido si hay equipo; su boton ya se
+  // esconde solo, asi que el grupo sigue esa decision en vez de repetirla.
+  const btnCom = document.getElementById('crm-filter-owner');
+  const grupo  = document.getElementById('crm-filtro-grupo-comercial');
+  if (grupo) grupo.style.display = (btnCom && btnCom.style.display === 'none') ? 'none' : '';
+  crmRenderTagFilter();
+  crmFiltrosSincronizar();
+  crmFiltrosBadge();
+  document.getElementById('crm-filtros-overlay')?.classList.add('open');
+  document.getElementById('crm-filtros-panel')?.classList.add('open');
+}
+
+function crmFiltrosCerrar() {
+  document.getElementById('crm-filtros-overlay')?.classList.remove('open');
+  document.getElementById('crm-filtros-panel')?.classList.remove('open');
+}
+
+function crmFiltrosLimpiar() {
+  crmFilterSource = '';
+  crmFilterOwner  = '';
+  crmQuickFilter  = '';
+  crmFilterTags   = [];
+  crmFechaCreadoDesde = crmFechaCreadoHasta = crmFechaCierreDesde = crmFechaCierreHasta = '';
+  document.querySelectorAll('.crm-qf-pill').forEach(p => p.classList.remove('active'));
+  if (typeof crmPintarFiltroFuente === 'function') crmPintarFiltroFuente();
+  if (typeof crmPintarFiltroComercial === 'function') crmPintarFiltroComercial();
+  crmRenderTagFilter();
+  crmFiltrosSincronizar();
+  crmFiltrosAplicar();
+}
+
 function crmGetFilteredLeads() {
   let leads = [...crmLeads];
   if (crmSearchQuery) {
@@ -17918,6 +18086,13 @@ function crmGetFilteredLeads() {
     const myId = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
     leads = leads.filter(l => l.assigned_to === myId);
   }
+  // Rangos de fecha. Se comparan cadenas AAAA-MM-DD ya normalizadas a la hora
+  // local, no objetos Date: asi el dia "desde" y el dia "hasta" entran enteros
+  // y no se escapa nada por la hora.
+  if (crmFechaCreadoDesde) leads = leads.filter(l => crmDiaDe(l.created_at) >= crmFechaCreadoDesde);
+  if (crmFechaCreadoHasta) leads = leads.filter(l => crmDiaDe(l.created_at) <= crmFechaCreadoHasta);
+  if (crmFechaCierreDesde) leads = leads.filter(l => l.expected_close_date && l.expected_close_date >= crmFechaCierreDesde);
+  if (crmFechaCierreHasta) leads = leads.filter(l => l.expected_close_date && l.expected_close_date <= crmFechaCierreHasta);
   return leads;
 }
 
@@ -17934,7 +18109,7 @@ function crmToggleQuickFilter(type) {
 
 function crmExportCSV() {
   if (!crmLeads.length) { alert('No hay leads para exportar.'); return; }
-  const headers = ['Nombre','Email','Teléfono','Empresa','Etapa','Fuente','Valor','Tags','Notas','Fecha creación'];
+  const headers = ['Nombre','Email','Teléfono','Empresa','Etapa','Fuente','Valor','Cierre esperado','Tags','Notas','Fecha creación'];
   const rows = crmGetFilteredLeads().map(l => [
     l.name || '',
     l.email || '',
@@ -17943,6 +18118,7 @@ function crmExportCSV() {
     l.stage || '',
     l.source || '',
     l.value || '',
+    l.expected_close_date || '',
     (l.tags || []).join('; '),
     (l.notes || '').replace(/\n/g,' '),
     l.created_at ? new Date(l.created_at).toLocaleDateString('es-CO') : '',
@@ -18160,6 +18336,9 @@ function crmUpdateLeadsStats() {
   } else {
     el.textContent = filtered.length + ' de ' + total;
   }
+  // Todos los filtros pasan por aqui al recontar, asi que es el sitio natural
+  // para refrescar el contador del boton sin tener que acordarse en cada uno.
+  if (typeof crmFiltrosBadge === 'function') crmFiltrosBadge();
 }
 
 // El total del pipeline se pinta desde las DOS vistas. Antes solo lo calculaba
@@ -18311,6 +18490,7 @@ function crmCardHTML(lead, now) {
     crmChipComercial(lead) + '</div>' +
     (lead.value ? '<div class="crm-card-value">$' + Number(lead.value).toLocaleString('es-CO') + '</div>' : '') +
     '</div>' +
+    crmChipCierre(lead) +
     ((score !== null || showInactive) ? '<div class="crm-card-badges">' +
     (score !== null ? '<div class="crm-card-score" style="background:' + scoreColor + '20;color:' + scoreColor + '">Score ' + score + '/10</div>' : '') +
     (showInactive ? '<div class="crm-card-inactive"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + daysSince + ' días sin actividad</div>' : '') +
@@ -18318,6 +18498,21 @@ function crmCardHTML(lead, now) {
     '</div>' +
     '<div class="crm-card-actions' + (soloNota ? ' solo-nota' : '') + '">' + phoneBtn + waBtn + emailBtn + notaBtn + '</div>' +
     '</div>';
+}
+
+// Fecha esperada de cierre en la tarjeta. En rojo si ya pasó y el lead sigue
+// abierto: una fecha vencida que se ve igual que las demas no sirve de nada.
+function crmChipCierre(lead) {
+  const f = lead.expected_close_date;
+  if (!f) return '';
+  const cerrado = lead.stage === 'ganado' || lead.stage === 'perdido';
+  const vencida = !cerrado && f < crmFechaLocal(new Date());
+  const [a, m, d] = f.split('-');
+  const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const txt = Number(d) + ' ' + (MES[Number(m) - 1] || '') + ' ' + a;
+  return '<div class="crm-card-cierre' + (vencida ? ' vencida' : '') + '" title="Fecha esperada de cierre">' +
+    '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+    txt + '</div>';
 }
 
 // ── NOTAS DE DIRECCIÓN ────────────────────────────────────────────────────────
@@ -18877,6 +19072,7 @@ const CRM_COLS_BASE = [
   { key: 'score',         label: 'Score', num: true },
   { key: 'created_at',    label: 'Creación' },
   { key: 'updated_at',    label: 'Última actividad' },
+  { key: 'expected_close_date', label: 'Cierre esperado' },
   { key: 'closed_at',     label: 'Fecha de cierre' },
   { key: 'close_reason',  label: 'Motivo de cierre' },
   { key: 'notes',         label: 'Notas' },
@@ -18952,6 +19148,9 @@ function crmColValor(l, key) {
     case 'score':  return l.custom_fields && l.custom_fields.score != null ? Number(l.custom_fields.score) : '';
     case 'created_at': case 'updated_at': case 'closed_at':
       return l[key] ? new Date(l[key]).getTime() : 0;
+    // La columna date llega como 'AAAA-MM-DD' y ordena bien como cadena; los
+    // vacíos van al final en vez de colarse como el año 1970.
+    case 'expected_close_date': return l.expected_close_date || '';
     default: return l[key] == null ? '' : l[key];
   }
 }
@@ -18998,6 +19197,14 @@ function crmColCelda(l, key, sel) {
         : '<span style="color:var(--muted2)">—</span>') + '</td>';
     case 'created_at': case 'updated_at': case 'closed_at':
       return '<td style="' + suave + ';white-space:nowrap">' + (crmFecha(l[key]) || '—') + '</td>';
+    case 'expected_close_date': {
+      if (!l.expected_close_date) return '<td style="' + suave + '">—</td>';
+      const cerrado = l.stage === 'ganado' || l.stage === 'perdido';
+      const venc = !cerrado && l.expected_close_date < crmFechaLocal(new Date());
+      const [aa, mm, dd] = l.expected_close_date.split('-');
+      return '<td style="' + (venc ? 'font-size:12px;color:#DC2626;font-weight:600' : suave) + ';white-space:nowrap">' +
+        dd + '/' + mm + '/' + aa + '</td>';
+    }
     case 'notes':
       return '<td style="' + suave + ';max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"' +
         (l.notes ? ' title="' + esc(l.notes) + '"' : '') + '>' + esc(l.notes || '—') + '</td>';
@@ -19035,7 +19242,8 @@ function crmRenderList() {
 
   let cuerpo;
   if (filtered.length === 0) {
-    const hayFiltro = crmSearchQuery || crmFilterSource || crmFilterOwner || crmFilterTags.length || crmQuickFilter;
+    const hayFiltro = crmSearchQuery || crmFilterSource || crmFilterOwner || crmFilterTags.length || crmQuickFilter
+      || crmFechaCreadoDesde || crmFechaCreadoHasta || crmFechaCierreDesde || crmFechaCierreHasta;
     cuerpo = '<tr><td colspan="' + cols.length + '" style="text-align:center;color:var(--muted);padding:40px">Sin leads' +
       (hayFiltro ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
   } else {
@@ -19187,6 +19395,8 @@ function crmOpenModal(defaultStage) {
   document.getElementById('crm-f-source').value = 'manual';
   const valModalEl = document.getElementById('crm-f-value');
   if (valModalEl) valModalEl.value = '';
+  const fcModalEl = document.getElementById('crm-f-close-date');
+  if (fcModalEl) fcModalEl.value = '';
   const tagsModalEl = document.getElementById('crm-f-tags');
   if (tagsModalEl) tagsModalEl.value = '';
   crmPopulateStageSelects();
@@ -19380,6 +19590,7 @@ async function crmSaveLead() {
     // desaparecía del tablero desde el que acababas de crearlo.
     pipeline_id: crmPipelineId || null,
     value: parseFloat(document.getElementById('crm-f-value').value) || null,
+    expected_close_date: (document.getElementById('crm-f-close-date') || {}).value || null,
     tags: document.getElementById('crm-f-tags') && document.getElementById('crm-f-tags').value.trim() ? document.getElementById('crm-f-tags').value.split(',').map(t => t.trim()).filter(Boolean) : null,
   };
   // La etapa de antes, para saber si este guardado es el que cierra el negocio.
@@ -19512,6 +19723,18 @@ async function crmOpenDetail(leadId, leadSuelto) {
   document.getElementById('crm-d-source').textContent = fuenteLabel(lead.source);
   const valueRow = document.getElementById('crm-d-value-row');
   if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
+  const cierreRow = document.getElementById('crm-d-cierre-row');
+  if (cierreRow) {
+    cierreRow.style.display = lead.expected_close_date ? 'flex' : 'none';
+    const cEl = document.getElementById('crm-d-cierre');
+    if (cEl && lead.expected_close_date) {
+      const [aa, mm, dd] = lead.expected_close_date.split('-');
+      const MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      cEl.textContent = Number(dd) + ' de ' + (MES[Number(mm) - 1] || '') + ' de ' + aa;
+      const cerrado = lead.stage === 'ganado' || lead.stage === 'perdido';
+      cEl.style.color = (!cerrado && lead.expected_close_date < crmFechaLocal(new Date())) ? '#DC2626' : '';
+    }
+  }
   crmRenderDetailTags();
   teamEnsureLoaded().then(() => teamPopulateAssign(lead));
   const notesSection = document.getElementById('crm-d-notes-section');
@@ -19810,6 +20033,8 @@ function crmEditCurrentLead() {
   document.getElementById('crm-f-source').value = lead.source || 'manual';
   const valEditEl = document.getElementById('crm-f-value');
   if (valEditEl) valEditEl.value = lead.value || '';
+  const fcEditEl = document.getElementById('crm-f-close-date');
+  if (fcEditEl) fcEditEl.value = lead.expected_close_date || '';
   const tagsEditEl = document.getElementById('crm-f-tags');
   if (tagsEditEl) tagsEditEl.value = (lead.tags || []).join(', ');
   crmPopulateStageSelects();
@@ -22598,6 +22823,8 @@ function crmCreateLeadFromConversation(conv) {
   document.getElementById('crm-f-source').value = conv.channel === 'whatsapp' ? 'web' : (conv.channel === 'meta_ads' ? 'meta_ads' : 'web');
   const valCLEl = document.getElementById('crm-f-value');
   if (valCLEl) valCLEl.value = '';
+  const fcCLEl = document.getElementById('crm-f-close-date');
+  if (fcCLEl) fcCLEl.value = '';
   const tagsCLEl = document.getElementById('crm-f-tags');
   if (tagsCLEl) tagsCLEl.value = '';
   crmPopulateStageSelects();
