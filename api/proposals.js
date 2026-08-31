@@ -192,7 +192,10 @@ export default async function handler(req) {
         } catch {}
       }
       // Solo lo que la página pública necesita
-      return jsonResp({ proposal: { title: p.title, content: p.content, amount: p.amount, currency: p.currency, payment_link: p.payment_link, status: p.status, business_name: p.business_name, mp_available: mpAvailable } });
+      // El trazo NO se devuelve: pesa y no hace falta para pintar la página.
+      const f = p.signature || null;
+      return jsonResp({ proposal: { title: p.title, content: p.content, amount: p.amount, currency: p.currency, payment_link: p.payment_link, status: p.status, business_name: p.business_name, mp_available: mpAvailable,
+        firma: f ? { nombre: f.nombre, fecha: f.fecha } : null } });
     }
 
     // POST ?action=mp_checkout — preferencia de Checkout Pro creada al vuelo con
@@ -255,9 +258,41 @@ export default async function handler(req) {
 
     if (req.method === 'POST' && url.searchParams.get('action') === 'accept') {
       if (p.status === 'paid' || p.status === 'accepted') return jsonResp({ ok: true, already: true });
+
+      // Firma electrónica simple (Ley 527 de 1999 en Colombia): lo que le da
+      // valor no es el dibujo, es poder demostrar QUIÉN aceptó, QUÉ aceptó y
+      // CUÁNDO. Por eso se guardan juntos el nombre, el correo, el trazo, la
+      // fecha, la IP y el navegador, y además una huella del contenido: si la
+      // propuesta se edita después, esa huella deja de coincidir y se nota.
+      let firma = null;
+      try {
+        const body = await req.json();
+        const nombre = String(body?.nombre || '').trim().slice(0, 120);
+        const correo = String(body?.correo || '').trim().slice(0, 200);
+        const trazo  = String(body?.trazo || '');
+        if (nombre && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo) && trazo.startsWith('data:image/png;base64,')) {
+          // El trazo se guarda tal cual llega, pero con tope: un PNG de firma
+          // ronda los 10 KB y sin límite esto es una vía para llenar la tabla.
+          if (trazo.length > 200000) return jsonResp({ error: 'La firma es demasiado grande' }, 400);
+          const huella = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(p.content || '')));
+          firma = {
+            nombre, correo,
+            documento: String(body?.documento || '').trim().slice(0, 40) || null,
+            trazo,
+            fecha: new Date().toISOString(),
+            ip: (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null,
+            navegador: (req.headers.get('user-agent') || '').slice(0, 300),
+            huella_contenido: [...new Uint8Array(huella)].map(x => x.toString(16).padStart(2, '0')).join(''),
+          };
+        }
+      } catch {}
+      // Sin firma no se acepta: el botón de antes registraba un clic anónimo
+      // que no probaba nada. Si alguien llama a la API a pelo, mismo criterio.
+      if (!firma) return jsonResp({ error: 'Faltan el nombre, el correo o la firma' }, 400);
+
       await fetch(`${SUPABASE_URL}/rest/v1/proposals?id=eq.${p.id}`, {
         method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ status: 'accepted', accepted_at: new Date().toISOString() }),
+        body: JSON.stringify({ status: 'accepted', accepted_at: new Date().toISOString(), signature: firma }),
       });
       // Notificar al dueño
       const email = await ownerEmail(p.user_id);
@@ -269,8 +304,11 @@ export default async function handler(req) {
             from: 'Acuarius <notificaciones@app.acuarius.app>', to: [email],
             subject: '🎉 Propuesta aceptada: ' + (p.title || 'Sin título'),
             html: '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
-              '<p><b>' + (p.lead_name || 'Tu prospecto') + '</b> aceptó la propuesta "' + (p.title || '') + '"' +
+              '<p><b>' + (firma?.nombre || p.lead_name || 'Tu prospecto') + '</b> firmó la propuesta "' + (p.title || '') + '"' +
               (p.amount ? ' por <b>$' + Number(p.amount).toLocaleString('es-CO') + ' ' + (p.currency || '') + '</b>' : '') + '.</p>' +
+              (firma ? '<p style="font-size:13px;color:#555">Firmó como <b>' + firma.nombre + '</b> (' + firma.correo + ')' +
+                (firma.documento ? ', documento ' + firma.documento : '') + ' el ' +
+                new Date(firma.fecha).toLocaleString('es-CO') + '. Queda registrada la firma con su fecha e IP en la propuesta.</p>' : '') +
               (p.payment_link ? '<p>El botón de pago quedó a su disposición en la propuesta.</p>' : '<p>Contáctalo para coordinar el pago y el arranque.</p>') +
               '<p style="font-size:13px;color:#888">Cuando recibas el pago, márcala como pagada en Acuarius y el lead pasará a Ganado automáticamente.</p></div>',
           }),

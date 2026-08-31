@@ -2,6 +2,18 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-28-firma-propuestas",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "Tus propuestas se firman, ya no solo se aceptan",
+      "texto": "El botón de la propuesta pasa a ser «Aceptar y firmar»: el cliente pone su nombre, su correo, opcionalmente su documento, y dibuja su firma con el dedo o el ratón. Queda guardada junto con la fecha, la IP desde la que firmó y una huella del contenido exacto que aceptó, así que si la propuesta se edita después se nota. Es una firma electrónica y tiene la misma validez que firmar a mano. A ti te llega un correo diciendo quién firmó y cuándo.",
+      "accion": {
+        "texto": "Ir a Propuestas",
+        "ir": "marketing"
+      }
+      "accion": { "texto": "Ir a Propuestas", "ir": "marketing" }
+    },
+    {
       "id": "2026-08-31-tareas-de-la-ficha",
       "fecha": "2026-08-31",
       "tipo": "correccion",
