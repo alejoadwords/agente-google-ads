@@ -31,6 +31,10 @@
       "destination": "/form.html"
     },
     {
+      "source": "/l/:slug",
+      "destination": "/landing.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
