@@ -46,6 +46,21 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .btn-pay{background:#10B981;color:#fff;box-shadow:0 6px 18px rgba(16,185,129,.25)}
   .status-banner{font-family:Arial,Helvetica,sans-serif;border-radius:12px;padding:14px 20px;margin-top:30px;font-size:14.5px;font-weight:600;text-align:center}
   .status-accepted{background:#ECFDF5;color:#059669}
+  .fm-back{position:fixed;inset:0;background:rgba(10,12,30,.55);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999}
+  .fm-card{background:#fff;border-radius:16px;max-width:460px;width:100%;max-height:92vh;overflow-y:auto;padding:24px;font-family:Arial,Helvetica,sans-serif;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .fm-card h3{margin:0 0 4px;font-size:19px;color:#0D0F1C}
+  .fm-sub{font-size:13px;color:#6b7280;margin:0 0 18px;line-height:1.5}
+  .fm-lab{display:block;font-size:12px;font-weight:bold;color:#374151;margin:12px 0 5px}
+  .fm-in{width:100%;padding:10px 12px;border:1.5px solid #E4E6F0;border-radius:9px;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none}
+  .fm-in:focus{border-color:#1E2BCC}
+  .fm-canvas{width:100%;height:150px;border:1.5px dashed #C5CAF8;border-radius:9px;background:#FAFBFF;touch-action:none;display:block}
+  .fm-row{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+  .fm-clear{background:none;border:0;color:#1E2BCC;font-size:12.5px;font-weight:bold;cursor:pointer;font-family:inherit;padding:0}
+  .fm-legal{font-size:11.5px;color:#6b7280;line-height:1.55;margin:16px 0 0;background:#F7F8FC;border-radius:9px;padding:11px 13px}
+  .fm-err{font-size:12.5px;color:#B91C1C;margin-top:10px;min-height:16px}
+  .fm-btns{display:flex;gap:10px;margin-top:16px}
+  .fm-btns .btn{flex:1;margin:0}
+  .fm-cancel{background:#F0F1F8;color:#374151}
   .foot{text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#9ca3af;margin-top:26px}
   .foot a{color:#9ca3af}
   .loading,.error{text-align:center;padding:110px 20px;font-family:Arial,Helvetica,sans-serif;color:var(--muted)}
@@ -142,8 +157,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   // Pago con MercadoPago: la preferencia se crea al vuelo (el dinero va
   // directo a la cuenta MP del emisor) y el webhook marca la propuesta pagada.
   function mpPay(btnEl, p) {
+    // Pagar es aceptar, así que también se firma. Antes este camino registraba
+    // la aceptación sin que constara quién.
+    if (p.status !== 'accepted' && !p._firmado) { abrirFirma(p, function () { mpPay(btnEl, p); }); return; }
     btnEl.disabled = true; btnEl.textContent = 'Generando pago seguro…';
-    fetch('/api/proposals?public_token=' + token + '&action=accept', { method: 'POST' }).catch(function () {});
     fetch('/api/proposals?public_token=' + token + '&action=mp_checkout', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -152,6 +169,112 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         alert(d.error || 'No se pudo generar el pago — intenta de nuevo');
       })
       .catch(function () { btnEl.disabled = false; btnEl.textContent = '💳 Pagar con MercadoPago'; });
+  }
+
+  // ── Firma electrónica ──────────────────────────────────────────────────────
+  // Firma electrónica simple: lo que le da valor no es el dibujo bonito, es
+  // que quede constancia de quién aceptó, qué aceptó y cuándo. El trazo es lo
+  // que hace que la persona entienda que está firmando algo.
+  function abrirFirma(p, despues) {
+    var back = document.createElement('div');
+    back.className = 'fm-back';
+    back.innerHTML =
+      '<div class="fm-card">' +
+        '<h3>Aceptar y firmar</h3>' +
+        '<p class="fm-sub">Al firmar aceptas los términos de esta propuesta' +
+          (p.amount ? ' por <b>$' + Number(p.amount).toLocaleString('es-CO') + ' ' + esc(p.currency || '') + '</b>' : '') + '.</p>' +
+        '<label class="fm-lab">Nombre completo *</label><input class="fm-in" id="fm-nombre" autocomplete="name">' +
+        '<label class="fm-lab">Correo electrónico *</label><input class="fm-in" id="fm-correo" type="email" autocomplete="email">' +
+        '<label class="fm-lab">Documento de identidad (opcional)</label><input class="fm-in" id="fm-doc" autocomplete="off">' +
+        '<label class="fm-lab">Tu firma *</label>' +
+        '<canvas class="fm-canvas" id="fm-canvas"></canvas>' +
+        '<div class="fm-row"><span style="font-size:11.5px;color:#9ca3af">Dibuja tu firma con el dedo o el ratón</span>' +
+        '<button type="button" class="fm-clear" id="fm-limpiar">Borrar</button></div>' +
+        '<p class="fm-legal">Al pulsar «Firmar» dejas constancia de tu aceptación con tu nombre, tu correo, la fecha y la dirección IP desde la que firmas. ' +
+        'Equivale a una firma electrónica y tiene la misma validez que firmar de puño y letra.</p>' +
+        '<div class="fm-err" id="fm-err"></div>' +
+        '<div class="fm-btns">' +
+          '<button class="btn fm-cancel" id="fm-cancelar">Cancelar</button>' +
+          '<button class="btn btn-accept" id="fm-ok">Firmar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(back);
+
+    var cv = document.getElementById('fm-canvas');
+    var ctx = cv.getContext('2d');
+    var pintando = false, hayTrazo = false;
+
+    // El canvas se dimensiona a los píxeles REALES de la pantalla, o el trazo
+    // sale borroso y desplazado en móviles, que es donde más se firma.
+    //
+    // Y se mide en el siguiente fotograma, no al insertarlo: medido antes de
+    // que el navegador calcule el diseño, getBoundingClientRect() devolvía 3px
+    // de ancho. CSS lo estiraba y se veía bien, pero el mapa de bits era una
+    // tira de 6px y la firma no se dibujaba nunca. El mínimo es la red de
+    // seguridad por si algún navegador vuelve a medir antes de tiempo.
+    function dimensionar() {
+      var ratio = window.devicePixelRatio || 1;
+      var ancho = Math.max(cv.getBoundingClientRect().width, 240);
+      cv.width = ancho * ratio;
+      cv.height = 150 * ratio;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(ratio, ratio);
+      ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0D0F1C';
+    }
+    requestAnimationFrame(dimensionar);
+
+    function punto(e) {
+      var r = cv.getBoundingClientRect();
+      var t = e.touches ? e.touches[0] : e;
+      return { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+    function abajo(e) { e.preventDefault(); pintando = true; hayTrazo = true; var q = punto(e); ctx.beginPath(); ctx.moveTo(q.x, q.y); }
+    function mover(e) { if (!pintando) return; e.preventDefault(); var q = punto(e); ctx.lineTo(q.x, q.y); ctx.stroke(); }
+    function arriba() { pintando = false; }
+    cv.addEventListener('mousedown', abajo); cv.addEventListener('mousemove', mover);
+    window.addEventListener('mouseup', arriba);
+    cv.addEventListener('touchstart', abajo, { passive: false });
+    cv.addEventListener('touchmove', mover, { passive: false });
+    cv.addEventListener('touchend', arriba);
+
+    document.getElementById('fm-limpiar').onclick = function () {
+      ctx.clearRect(0, 0, cv.width, cv.height); hayTrazo = false;
+    };
+    function cerrar() { back.remove(); }
+    document.getElementById('fm-cancelar').onclick = cerrar;
+    back.addEventListener('mousedown', function (e) { if (e.target === back) cerrar(); });
+
+    document.getElementById('fm-ok').onclick = function () {
+      var err = document.getElementById('fm-err');
+      var nombre = document.getElementById('fm-nombre').value.trim();
+      var correo = document.getElementById('fm-correo').value.trim();
+      if (nombre.length < 3) { err.textContent = 'Escribe tu nombre completo.'; return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) { err.textContent = 'Escribe un correo válido.'; return; }
+      if (!hayTrazo) { err.textContent = 'Dibuja tu firma en el recuadro.'; return; }
+      err.textContent = '';
+      var ok = document.getElementById('fm-ok');
+      ok.disabled = true; ok.textContent = 'Firmando…';
+      fetch('/api/proposals?public_token=' + token + '&action=accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: nombre, correo: correo,
+          documento: document.getElementById('fm-doc').value.trim(),
+          trazo: cv.toDataURL('image/png'),
+        }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (!res.ok) { err.textContent = res.d.error || 'No se pudo firmar.'; ok.disabled = false; ok.textContent = 'Firmar'; return; }
+          p.status = 'accepted';
+          p._firmado = true;
+          p.firma = { nombre: nombre, fecha: new Date().toISOString() };
+          cerrar();
+          renderCta(p);
+          if (despues) despues();
+        })
+        .catch(function () { err.textContent = 'No se pudo firmar. Reintenta.'; ok.disabled = false; ok.textContent = 'Firmar'; });
+    };
   }
 
   function renderCta(p) {
@@ -169,7 +292,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     }
     var hasPay = p.mp_available || p.payment_link;
     if (p.status === 'accepted') {
-      statusEl.innerHTML = '<div class="status-banner status-accepted">✓ Aceptaste esta propuesta' + (hasPay ? ' — puedes completar el pago cuando quieras' : '. Pronto te contactarán para coordinar el arranque.') + '</div>';
+      var quien = p.firma
+        ? '<div style="font-size:12.5px;font-weight:400;margin-top:6px;opacity:.85">Firmada por ' + esc(p.firma.nombre) +
+          ' el ' + new Date(p.firma.fecha).toLocaleString('es-CO') + '</div>'
+        : '';
+      statusEl.innerHTML = '<div class="status-banner status-accepted">✓ Aceptaste esta propuesta' + (hasPay ? ' — puedes completar el pago cuando quieras' : '. Pronto te contactarán para coordinar el arranque.') + quien + '</div>';
       if (p.mp_available) {
         var mp = document.createElement('button');
         mp.className = 'btn btn-pay'; mp.textContent = '💳 Pagar con MercadoPago';
@@ -182,14 +309,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     }
     var btn = document.createElement('button');
     btn.className = 'btn btn-accept';
-    btn.textContent = '✓ Aceptar propuesta';
-    btn.onclick = function () {
-      btn.disabled = true; btn.textContent = 'Aceptando…';
-      fetch('/api/proposals?public_token=' + token + '&action=accept', { method: 'POST' })
-        .then(function (r) { return r.json(); })
-        .then(function () { p.status = 'accepted'; renderCta(p); })
-        .catch(function () { btn.disabled = false; btn.textContent = '✓ Aceptar propuesta'; });
-    };
+    btn.textContent = '✓ Aceptar y firmar';
+    btn.onclick = function () { abrirFirma(p, null); };
     cta.appendChild(btn);
     if (p.mp_available) {
       var pay = document.createElement('button');

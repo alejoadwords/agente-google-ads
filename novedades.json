@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-31-tareas-de-la-ficha",
+      "fecha": "2026-08-31",
+      "tipo": "correccion",
+      "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
+      "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
+    },
+    {
       "id": "2026-08-31-responder-correos",
       "fecha": "2026-08-31",
       "tipo": "correccion",
@@ -9,11 +16,15 @@
       "texto": "Los avisos de Acuarius salían desde un dominio que solo puede enviar, no recibir: si respondías a un aviso de lead, a una alerta o a un reporte, tu mensaje rebotaba y no llegaba a nadie. Ya no: todas las notificaciones llevan una dirección de respuesta real y contestarlas funciona. Los correos que la plataforma envía a TUS contactos no cambian: esas respuestas siguen siendo tuyas."
     },
     {
-      "id": "2026-08-31-tareas-de-la-ficha",
-      "fecha": "2026-08-31",
-      "tipo": "correccion",
-      "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
-      "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
+      "id": "2026-08-28-firma-propuestas",
+      "fecha": "2026-08-28",
+      "tipo": "nuevo",
+      "titulo": "Tus propuestas se firman, ya no solo se aceptan",
+      "texto": "El botón de la propuesta pasa a ser «Aceptar y firmar»: el cliente pone su nombre, su correo, opcionalmente su documento, y dibuja su firma con el dedo o el ratón. Queda guardada junto con la fecha, la IP desde la que firmó y una huella del contenido exacto que aceptó, así que si la propuesta se edita después se nota. Es una firma electrónica y tiene la misma validez que firmar a mano. A ti te llega un correo diciendo quién firmó y cuándo.",
+      "accion": {
+        "texto": "Ir a Propuestas",
+        "ir": "marketing"
+      }
     },
     {
       "id": "2026-08-28-resenas-google",
