@@ -263,6 +263,17 @@ export default async function handler(req) {
           aviso = { enviado: false, motivo: 'no se pudo enviar el correo' };
           console.error('aviso nota lead:', e?.message);
         }
+        // Y al móvil de esa persona. El correo puede tardar en abrirse; una
+        // nota de dirección suele querer respuesta hoy, no mañana.
+        try {
+          const { enviarPushA } = await import('./_push.js');
+          await enviarPushA(para, {
+            titulo: 'Nota sobre ' + (lead.name || 'un lead'),
+            texto: (content || '').slice(0, 120),
+            url: '/crm?lead=' + lead.id,
+            etiqueta: 'nota-' + lead.id,
+          });
+        } catch (e) { console.error('[push] nota al responsable:', e?.message); }
       }
     }
     return jsonResp({ activity: rows[0], aviso }, 201);

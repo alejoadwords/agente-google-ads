@@ -5201,6 +5201,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <div class="cfg-section">
             <div class="cfg-section-title">Notificaciones</div>
             <div class="cfg-section-sub">Controla qué avisos recibes y por qué canal</div>
+            <!-- Avisos push: se pinta desde app.js porque depende del permiso
+                 del navegador y de si este dispositivo ya está suscrito. -->
+            <div class="cfg-toggle-row" id="push-fila">
+              <div>
+                <div class="cfg-toggle-label">Avisos en este dispositivo</div>
+                <div class="cfg-toggle-sub" id="push-sub">Comprobando…</div>
+              </div>
+              <div id="push-accion"></div>
+            </div>
             <div class="cfg-toggle-row">
               <div>
                 <div class="cfg-toggle-label">Resumen semanal por email</div>

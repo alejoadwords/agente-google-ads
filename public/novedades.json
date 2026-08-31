@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-08-31-avisos-push",
+      "fecha": "2026-08-31",
+      "tipo": "nuevo",
+      "titulo": "Avisos en el móvil cuando entra un lead",
+      "texto": "En Configuración → Notificaciones puedes activar los avisos de este dispositivo. Te llega uno cuando entra un lead nuevo asignado a ti y cuando la dirección te deja una nota en un lead, y al tocarlo se abre esa ficha directamente. Hay un botón de prueba para comprobar que llegan. En iPhone hay que añadir antes Acuarius a la pantalla de inicio: Apple no permite avisos desde el navegador. Los activas y desactivas por dispositivo, así que puedes tenerlos en el móvil y no en el portátil."
+    },
+    {
       "id": "2026-08-31-app-instalable",
       "fecha": "2026-08-31",
       "tipo": "nuevo",

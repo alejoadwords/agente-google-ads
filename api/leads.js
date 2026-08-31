@@ -1,4 +1,6 @@
 export const config = { runtime: 'edge' };
+
+import { enviarPushA } from './_push.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -712,6 +714,18 @@ export default async function handler(req) {
     // Triggers de automatizaciones: lead creado + etiquetas iniciales
     if (rows[0]) {
       await enqueueAutomations(userId, rows[0], 'lead_created');
+      // Aviso al móvil de quien lo va a atender. Si el lead nace asignado va a
+      // esa persona; si no, al dueño de la cuenta, que es quien reparte.
+      // Nunca bloquea ni rompe el alta: un lead guardado vale más que su aviso.
+      try {
+        const destinatario = rows[0].assigned_to || userId;
+        await enviarPushA(destinatario, {
+          titulo: 'Lead nuevo: ' + (rows[0].name || 'sin nombre'),
+          texto: (rows[0].phone || rows[0].email || '') + ' · ' + (rows[0].source || 'manual'),
+          url: '/crm?lead=' + rows[0].id,
+          etiqueta: 'lead-nuevo',
+        });
+      } catch (e) { console.error('[push] lead nuevo:', e.message); }
       if (leadTags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadTags);
     }
     return jsonResp({ lead: rows[0], tags_ignoradas: tagsIgnoradas }, 201);

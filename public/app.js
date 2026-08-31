@@ -14428,6 +14428,7 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
+  if (tab === 'notificaciones' && typeof pushPintar === 'function') pushPintar();
   // All cfg-sec-* section IDs (redesigned settings panel)
   const sections = ['perfil','plan','integraciones','notificaciones','seguridad','equipo','referral'];
   sections.forEach(t => {
@@ -17785,6 +17786,112 @@ function crmAvisarTagsIgnoradas(lista) {
     + (lista.length > 1 ? ': ' + lista.join(', ') : ''),
     'error'
   );
+}
+
+// ── Avisos push ─────────────────────────────────────────────────────────────
+// La suscripción es de ESTE navegador en ESTE dispositivo: el mismo usuario
+// puede tener el móvil suscrito y el portátil no. Por eso la fila vive en
+// Configuración y no en un ajuste de cuenta.
+function pushSoportado() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+async function pushSuscripcionActual() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    return await reg.pushManager.getSubscription();
+  } catch { return null; }
+}
+
+async function pushPintar() {
+  const sub = document.getElementById('push-sub');
+  const acc = document.getElementById('push-accion');
+  if (!sub || !acc) return;
+
+  if (!pushSoportado()) {
+    sub.textContent = 'Este navegador no admite avisos.';
+    acc.innerHTML = '';
+    return;
+  }
+  // iPhone: sin instalar la app, Safari ni siquiera deja pedir el permiso.
+  // Decirlo evita que el usuario pulse, no pase nada y se quede sin entender.
+  if (pwaEsIOS() && !pwaInstalada()) {
+    sub.textContent = 'En iPhone primero añade Acuarius a la pantalla de inicio (Compartir → Añadir a inicio).';
+    acc.innerHTML = '';
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    sub.textContent = 'Bloqueaste los avisos en este navegador. Actívalos desde sus ajustes de sitio.';
+    acc.innerHTML = '';
+    return;
+  }
+  const activa = await pushSuscripcionActual();
+  if (activa) {
+    sub.textContent = 'Activos. Te avisamos de leads nuevos y tareas vencidas.';
+    acc.innerHTML = '<button class="btn-ghost sm" onclick="pushProbar(this)">Probar</button>' +
+                    '<button class="btn-ghost sm" onclick="pushDesactivar()">Desactivar</button>';
+  } else {
+    sub.textContent = 'Recibe un aviso cuando entre un lead nuevo o venza una tarea.';
+    acc.innerHTML = '<button class="btn-pri sm" onclick="pushActivar(this)">Activar</button>';
+  }
+}
+
+// La clave pública viaja en base64url y el navegador la quiere en bytes.
+function pushClaveABytes(b64) {
+  const relleno = '='.repeat((4 - (b64.length % 4)) % 4);
+  const base = (b64 + relleno).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(base);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function pushActivar(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Activando…'; }
+  try {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') { showToast('No diste permiso para los avisos', 'error'); await pushPintar(); return; }
+
+    const { clave } = await fetch('/api/push?clave=1').then(r => r.json());
+    if (!clave) throw new Error('sin clave VAPID');
+
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,               // obligatorio: nada de avisos silenciosos
+      applicationServerKey: pushClaveABytes(clave),
+    });
+    const r = await fetchAuth('/api/push', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+    if (!r.ok) throw new Error('no se pudo guardar');
+    showToast('Avisos activados en este dispositivo');
+    track('push_activado');
+  } catch (e) {
+    console.error('[push]', e);
+    showToast('No se pudieron activar los avisos', 'error');
+  }
+  await pushPintar();
+}
+
+async function pushDesactivar() {
+  try {
+    const sub = await pushSuscripcionActual();
+    if (sub) {
+      // Primero el servidor: si se cancela en el navegador y falla el borrado,
+      // quedaría una suscripción muerta a la que seguiríamos escribiendo.
+      await fetchAuth('/api/push?endpoint=' + encodeURIComponent(sub.endpoint), { method: 'DELETE' });
+      await sub.unsubscribe();
+    }
+    showToast('Avisos desactivados');
+  } catch { showToast('No se pudieron desactivar', 'error'); }
+  await pushPintar();
+}
+
+async function pushProbar(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    const d = await fetchAuth('/api/push?prueba=1', { method: 'POST' }).then(r => r.json());
+    showToast(d.enviados ? 'Aviso enviado — debería llegarte ahora' : ('No se pudo enviar: ' + (d.motivo || 'sin dispositivos')), d.enviados ? 'success' : 'error');
+  } catch { showToast('No se pudo enviar la prueba', 'error'); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Probar'; }
 }
 
 // ── Instalar la app (PWA) ───────────────────────────────────────────────────
