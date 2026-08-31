@@ -1717,7 +1717,7 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-filtros-badge{background:var(--blue);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;margin-left:2px}
 .crm-filtros-overlay{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:1200;display:none}
 .crm-filtros-overlay.open{display:block}
-.crm-filtros-panel{position:fixed;top:0;right:0;bottom:0;width:340px;max-width:92vw;background:var(--card);border-left:1px solid var(--border);z-index:1201;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .2s ease;box-shadow:-8px 0 32px rgba(0,0,0,.10)}
+.crm-filtros-panel{position:fixed;top:0;right:0;bottom:0;width:340px;max-width:92vw;background:var(--bg);border-left:1.5px solid var(--border);z-index:1201;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s ease;box-shadow:var(--shadow-lg);overflow:hidden}
 .crm-filtros-panel.open{transform:translateX(0)}
 .crm-filtros-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:18px 20px 14px;border-bottom:1px solid var(--border)}
 .crm-filtros-titulo{font-size:var(--fs-md);font-weight:800}
@@ -1727,12 +1727,12 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-filtro-grupo:last-child{border-bottom:0}
 .crm-filtro-tit{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
 .crm-filtro-atajos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.crm-filtro-atajo{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer}
+.crm-filtro-atajo{background:var(--bg-subtle);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer}
 .crm-filtro-atajo:hover{border-color:var(--blue)}
 .crm-filtro-atajo.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
 .crm-filtro-rango{display:flex;gap:8px}
 .crm-filtro-rango label{flex:1;display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
-.crm-filtro-rango input{width:100%;padding:7px 9px;border:1.5px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12.5px;background:var(--bg);color:var(--text);outline:none;box-sizing:border-box}
+.crm-filtro-rango input{width:100%;padding:7px 9px;border:1.5px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12.5px;background:var(--bg-subtle);color:var(--text);outline:none;box-sizing:border-box}
 .crm-filtro-rango input:focus{border-color:var(--blue)}
 .crm-filtros-panel .crm-quick-filters,.crm-filtros-panel .crm-tag-filter{display:flex;flex-wrap:wrap;gap:6px}
 .crm-filtros-panel .dd-btn{width:100%;justify-content:space-between}
