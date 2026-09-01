@@ -19,18 +19,33 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Solo se lee el 'sub' del token; NO es una comprobación de permisos, es para
-// saber a quién le pasó. Aquí no hay nada que proteger salvo el propio buzón,
-// y para eso basta con exigir que el token tenga forma de token.
-function quien(req, cuerpo) {
+// Se comprueba la FIRMA, no solo que el token tenga forma de token. Sin esto,
+// cualquiera podría llenar la tabla de errores inventados: no robaría nada,
+// pero llenaría el aviso de basura y en dos días dejaríamos de leerlo — que es
+// exactamente el fallo que este sistema viene a evitar.
+let _jwks = null, _jwksExp = 0;
+async function quien(req, cuerpo) {
   try {
     // sendBeacon no permite cabeceras, así que al cerrar la pestaña el token
     // viaja en el cuerpo. Sin esto, los errores del último momento —justo los
     // que preceden a que alguien cierre la app enfadado— se perdían.
     const t = (req.headers.get('Authorization') || '').replace('Bearer ', '') || String(cuerpo?.t || '');
-    const p = t.split('.')[1];
-    if (!p) return null;
-    const j = JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/')));
+    const partes = t.split('.');
+    if (partes.length !== 3) return null;
+    const [hB64, pB64, sB64] = partes;
+    const bin = x => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const txt = x => new TextDecoder().decode(bin(x));
+    const cabecera = JSON.parse(txt(hB64));
+    if (!_jwks || _jwksExp < Date.now()) {
+      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+      _jwksExp = Date.now() + 600000;
+    }
+    const clave = _jwks.keys?.find(k => k.kid === cabecera.kid);
+    if (!clave) return null;
+    const ck = await crypto.subtle.importKey('jwk', clave, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, bin(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const j = JSON.parse(txt(pB64));
     if (j.exp && j.exp < Math.floor(Date.now() / 1000)) return null;
     return j.sub || null;
   } catch { return null; }
@@ -43,7 +58,7 @@ export default async function handler(req) {
   let body;
   try { body = await req.json(); } catch { return new Response('{}', { status: 400, headers: CORS }); }
 
-  const usuario = quien(req, body);
+  const usuario = await quien(req, body);
   if (!usuario) return new Response(JSON.stringify({ error: 'No autorizado.' }), { status: 401, headers: CORS });
 
   // Como mucho cinco por petición: el navegador ya los agrupa, y esto evita que
