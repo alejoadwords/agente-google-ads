@@ -186,7 +186,7 @@ export default async function handler(req) {
 
     // Verify the lead belongs to this user
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&select=id,name,company,assigned_to`,
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&select=id,name,company,assigned_to,client_id`,
       { headers: sbHeaders() }
     );
     const check = await checkRes.json();
@@ -216,6 +216,61 @@ export default async function handler(req) {
     });
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
+
+    // ── Una «tarea» tiene que ser una tarea de verdad ────────────────────────
+    // El sistema de tareas vive en `activities` (vista Tareas, resumen diario,
+    // chip de la tarjeta). Esta tabla es solo el historial. Cuando llega una
+    // tarea con fecha y SIN activity_id, se crea también la de verdad.
+    //
+    // Está en el servidor y no solo en el navegador a propósito: el arreglo
+    // anterior era de frontend, y una pestaña abierta desde antes del
+    // despliegue seguía creando tareas fantasma sin enterarse. Aquí da igual
+    // qué versión tenga cargada quien la crea.
+    //
+    // Si el navegador ya la creó (manda activity_id), no se hace nada: no se
+    // duplica.
+    const meta = payload.metadata || {};
+    if (type === 'tarea' && meta.due_date && !meta.activity_id) {
+      try {
+        // La fecha llega como texto local sin zona («2026-09-07T10:30»): es lo
+        // único que manda el navegador viejo. Se interpreta en hora de Colombia,
+        // que es donde están las cuentas de hoy. Una tarea con una hora a
+        // ajustar es infinitamente mejor que una tarea que no existe; cuando
+        // haya cuentas en otro huso, el navegador nuevo ya manda la hora exacta
+        // y este camino no se usa.
+        const cuando = /Z|[+-]\d{2}:?\d{2}$/.test(meta.due_date)
+          ? new Date(meta.due_date)
+          : new Date(meta.due_date + ':00-05:00');
+        if (!isNaN(cuando)) {
+          const ya = await fetch(
+            `${SUPABASE_URL}/rest/v1/activities?lead_id=eq.${lead_id}&type=eq.task` +
+            `&due_at=eq.${encodeURIComponent(cuando.toISOString())}&select=id&limit=1`,
+            { headers: sbHeaders() }
+          ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+          if (!ya.length) {
+            const creada = await fetch(`${SUPABASE_URL}/rest/v1/activities`, {
+              method: 'POST',
+              headers: sbHeaders(),
+              body: JSON.stringify({
+                user_id: userId,
+                client_id: lead.client_id || null,
+                lead_id,
+                type: 'task',
+                title: (content || 'Tarea').trim().slice(0, 200),
+                due_at: cuando.toISOString(),
+                done: false,
+              }),
+            }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+            if (!creada) console.error('[tarea] no se pudo crear la tarea real del lead', lead_id);
+          }
+        } else {
+          console.error('[tarea] fecha ilegible, no se creó la tarea real:', meta.due_date);
+        }
+      } catch (e) {
+        // Nunca tumba la respuesta: el historial ya está guardado.
+        console.error('[tarea] red de seguridad falló:', e?.message);
+      }
+    }
 
     // Trabajar el lead ES actividad. Todo lo que mide inactividad —el Pulso, el
     // badge de la tarjeta, el filtro «Sin actividad» y el disparador
