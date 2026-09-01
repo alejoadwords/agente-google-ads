@@ -91,9 +91,81 @@ export default async function handler(req, contexto) {
     return jsonResp({ paginas: filas || [] });
   }
 
+// Crear el formulario al que llegan los datos de la página. Antes solo pasaba
+// al publicar; ahora también al crearla, para que «¿a qué pipeline entran mis
+// leads?» tenga respuesta desde el primer minuto en vez de aparecer un buzón
+// nuevo el día que se publica.
+async function crearFormularioDe(userId, pagina) {
+  try {
+    const token = crypto.randomUUID().replace(/-/g, '');
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lead_forms`, {
+      method: 'POST', headers: sbHeaders(),
+      body: JSON.stringify({
+        user_id: userId, client_id: pagina.client_id || null, token, active: true, submissions: 0,
+        name: 'Página: ' + (pagina.title || 'sin título'),
+        pipeline_id: pagina.pipeline_id || null,
+        fields: [
+          { key: 'nombre', label: 'Nombre', type: 'text', required: true },
+          { key: 'email', label: 'Email', type: 'email', required: false },
+          { key: 'telefono', label: 'Teléfono / WhatsApp', type: 'tel', required: false },
+          { key: 'mensaje', label: 'Mensaje', type: 'textarea', required: false },
+        ],
+      }),
+    });
+    return r.ok ? token : null;
+  } catch (e) {
+    console.error('[landings] no se pudo crear el formulario:', e.message);
+    return null;
+  }
+}
+
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    // Duplicar. El contenido se copia EN EL SERVIDOR: mandarlo al navegador y
+    // devolverlo entero solo para copiarlo es tráfico y una ocasión más de
+    // perderlo por el camino.
+    if (body?.duplicar_de) {
+      const orig = await fetch(
+        `${SUPABASE_URL}/rest/v1/landings?id=eq.${encodeURIComponent(body.duplicar_de)}&user_id=eq.${encodeURIComponent(userId)}&select=*`,
+        { headers: sbHeaders() }
+      ).then((r) => (r.ok ? r.json() : [])).then((f) => f?.[0]);
+      if (!orig) return jsonResp({ error: 'Página no encontrada' }, 404);
+
+      const tituloCopia = String(body.title || 'Copia de ' + (orig.title || 'página')).trim().slice(0, 120);
+      let slugCopia = limpiarSlug(tituloCopia);
+      const chocan = await fetch(
+        `${SUPABASE_URL}/rest/v1/landings?slug=eq.${encodeURIComponent(slugCopia)}&select=id&limit=1`,
+        { headers: sbHeaders() }
+      ).then((r) => (r.ok ? r.json() : []));
+      if (chocan?.length) slugCopia += '-' + Math.random().toString(36).slice(2, 6);
+
+      const copia = await fetch(`${SUPABASE_URL}/rest/v1/landings`, {
+        method: 'POST', headers: sbHeaders(),
+        body: JSON.stringify({
+          user_id: userId, client_id: orig.client_id,
+          slug: slugCopia, title: tituloCopia,
+          html: orig.html, css: orig.css, plantilla: orig.plantilla,
+          settings: orig.settings || {},
+          // NO se hereda: la copia nace como borrador, sin visitas y con su
+          // propio formulario. Compartirlo mezclaría los leads de las dos
+          // páginas en la misma fuente y se perdería saber cuál funciona —que
+          // es justo para lo que se duplica una página.
+          published: false, form_token: null,
+        }),
+      });
+      if (!copia.ok) return jsonResp({ error: await copia.text() }, 500);
+      const nueva = (await copia.json())[0];
+      const tk = await crearFormularioDe(userId, { ...nueva, pipeline_id: null });
+      if (tk) {
+        await fetch(`${SUPABASE_URL}/rest/v1/landings?id=eq.${nueva.id}`, {
+          method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ form_token: tk }),
+        });
+        nueva.form_token = tk;
+      }
+      return jsonResp({ pagina: nueva }, 201);
+    }
+
     const titulo = String(body?.title || '').trim().slice(0, 120) || 'Página sin título';
     let base = limpiarSlug(body?.slug || titulo);
     // Un slug repetido daría 409 y el usuario vería «error» sin entender nada;
@@ -117,7 +189,17 @@ export default async function handler(req, contexto) {
       }),
     });
     if (!r.ok) return jsonResp({ error: await r.text() }, 500);
-    return jsonResp({ pagina: (await r.json())[0] }, 201);
+    const creada = (await r.json())[0];
+    if (!creada.form_token) {
+      const tk = await crearFormularioDe(userId, creada);
+      if (tk) {
+        await fetch(`${SUPABASE_URL}/rest/v1/landings?id=eq.${creada.id}`, {
+          method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ form_token: tk }),
+        });
+        creada.form_token = tk;
+      }
+    }
+    return jsonResp({ pagina: creada }, 201);
   }
 
   if (req.method === 'PUT') {
@@ -129,35 +211,45 @@ export default async function handler(req, contexto) {
     // solo. Publicar una landing cuyo formulario no guarda nada es el peor
     // fallo posible aquí: el cliente paga anuncios y los leads se pierden sin
     // que nadie se entere. Se puede cambiar después por otro existente.
+    // Publicar sin formulario solo puede pasar en páginas creadas antes de que
+    // el alta lo creara sola. Se cubre igual: publicar una landing cuyo
+    // formulario no guarda nada es el peor fallo posible aquí — el cliente paga
+    // anuncios y los leads se pierden sin que nadie se entere.
     if (body.published === true && !body.form_token) {
       const actual = await fetch(
         `${SUPABASE_URL}/rest/v1/landings?id=eq.${body.id}&user_id=eq.${encodeURIComponent(userId)}&select=form_token,title,client_id`,
         { headers: sbHeaders() }
       ).then((r) => (r.ok ? r.json() : [])).then((f) => f?.[0]);
       if (actual && !actual.form_token) {
-        try {
-          const token = crypto.randomUUID().replace(/-/g, '');
-          const nuevo = await fetch(`${SUPABASE_URL}/rest/v1/lead_forms`, {
-            method: 'POST', headers: sbHeaders(),
-            body: JSON.stringify({
-              user_id: userId, client_id: actual.client_id || null, token, active: true, submissions: 0,
-              name: 'Página: ' + (body.title || actual.title || 'sin título'),
-              fields: [
-                { key: 'nombre', label: 'Nombre', type: 'text', required: true },
-                { key: 'email', label: 'Email', type: 'email', required: false },
-                { key: 'telefono', label: 'Teléfono / WhatsApp', type: 'tel', required: false },
-                { key: 'mensaje', label: 'Mensaje', type: 'textarea', required: false },
-              ],
-            }),
-          });
-          if (nuevo.ok) body.form_token = token;
-        } catch (e) { console.error('[landings] no se pudo crear el formulario:', e.message); }
+        const tk = await crearFormularioDe(userId, { ...actual, title: body.title || actual.title });
+        if (tk) body.form_token = tk;
       }
     }
 
     const campos = {};
-    for (const k of ['title', 'html', 'css', 'form_token', 'published', 'plantilla', 'settings']) {
+    for (const k of ['title', 'html', 'css', 'form_token', 'published', 'plantilla', 'settings', 'client_id']) {
       if (body[k] !== undefined) campos[k] = body[k];
+    }
+
+    // El cliente y el pipeline se eligen en la página, pero quien decide dónde
+    // cae el lead es su FORMULARIO. La regla vive aquí, en un solo sitio: si se
+    // dejara al navegador, una llamada que falle a medias deja la página
+    // apuntando a un cliente y su buzón a otro, y los leads aparecen en el
+    // tablero equivocado sin que nadie entienda por qué.
+    const alFormulario = {};
+    if (body.pipeline_id !== undefined) alFormulario.pipeline_id = body.pipeline_id || null;
+    if (body.client_id !== undefined) alFormulario.client_id = body.client_id || null;
+    if (Object.keys(alFormulario).length) {
+      const token = body.form_token || (await fetch(
+        `${SUPABASE_URL}/rest/v1/landings?id=eq.${body.id}&user_id=eq.${encodeURIComponent(userId)}&select=form_token`,
+        { headers: sbHeaders() }
+      ).then((r) => (r.ok ? r.json() : [])).then((f) => f?.[0]?.form_token));
+      if (token) {
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/lead_forms?token=eq.${encodeURIComponent(token)}&user_id=eq.${encodeURIComponent(userId)}`,
+          { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(alFormulario) }
+        ).catch((e) => console.error('[landings] no se pudo mover el formulario:', e.message));
+      }
     }
     if (body.slug !== undefined) {
       const nuevo = limpiarSlug(body.slug);

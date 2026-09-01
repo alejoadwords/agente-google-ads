@@ -33306,6 +33306,8 @@ function lstBorrar(id, nombre) {
 let lpPaginas = [];
 let _lpEditor = null;      // instancia de GrapesJS
 let _lpAjTras = 'mensaje'; // qué pasa tras enviar el formulario, en el panel de ajustes
+let _lpAjCliente = null;   // cliente elegido en el panel de ajustes
+let _lpAjPipeline;         // tablero elegido; undefined = aún no se ha leído del formulario
 let _lpActual = null;      // página que se está editando
 let _lpBasePromesa = null;
 
@@ -33371,6 +33373,7 @@ async function lpRender() {
       '<div class="lp-item-acc">' +
         (p.published ? '<button class="btn-ghost sm" onclick="lpCopiar(\'' + esc(p.slug) + '\')">Copiar enlace</button>' : '') +
         '<button class="btn-ghost sm" onclick="lpAbrir(\'' + esc(p.id) + '\')">Editar</button>' +
+        '<button class="btn-ghost sm" onclick="lpDuplicar(\'' + esc(p.id) + '\',\'' + esc(p.title).replace(/'/g, '&#39;') + '\')" title="Crear una copia para probar otra versión">Duplicar</button>' +
         '<button class="btn-ghost sm" onclick="lpBorrar(\'' + esc(p.id) + '\',\'' + esc(p.title) + '\')" title="Borrar">' + ICONO_PAPELERA + '</button>' +
       '</div>' +
     '</div>';
@@ -33383,6 +33386,25 @@ function lpCopiar(slug) {
     () => showToast('Enlace copiado'),
     () => showToast(url, 'success')
   );
+}
+
+// Duplicar. Lo primero que pide cualquiera que lanza dos campañas parecidas:
+// la misma página con otro titular, para ver cuál convierte. La copia nace como
+// borrador y con SU PROPIO formulario, para que los leads de cada versión se
+// puedan distinguir — que es justo para lo que se duplica.
+async function lpDuplicar(id, titulo) {
+  const nombre = (prompt('¿Cómo quieres llamar a la copia?', 'Copia de ' + titulo) || '').trim();
+  if (!nombre) return;
+  try {
+    const r = await fetchAuth('/api/landings', {
+      method: 'POST', body: JSON.stringify({ duplicar_de: id, title: nombre }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'error');
+    await lpRender();
+    showToast('Copia creada como borrador');
+    lpAbrir(d.pagina.id);
+  } catch (e) { showToast('No se pudo duplicar la página', 'error'); }
 }
 
 async function lpBorrar(id, titulo) {
@@ -33697,6 +33719,7 @@ function lpPintarUrl() {
 function lpAjustes() {
   if (!_lpActual) return;
   const aj = _lpActual.settings || {};
+  _lpAjPipeline = undefined;   // releer del formulario; si no, se arrastra lo que se canceló
   document.getElementById('lp-aj-fondo')?.remove();
   document.getElementById('lp-aj')?.remove();
 
@@ -33713,6 +33736,12 @@ function lpAjustes() {
       '<p>Lo que no se ve en el lienzo pero decide si funciona.</p></div>' +
       '<button class="btn-ghost sm" onclick="lpAjustesCerrar()">Cerrar</button></div>' +
     '<div class="lp-aj-body">' +
+
+      '<div class="lp-aj-grupo">' +
+        '<div class="lp-aj-tit">Dónde entran los leads</div>' +
+        '<p class="lp-aj-pista">Quien llene el formulario de esta página aparecerá aquí. Si el tablero no es el correcto, el lead existe pero nadie lo ve.</p>' +
+        '<div id="lp-aj-destino">Cargando…</div>' +
+      '</div>' +
 
       '<div class="lp-aj-grupo">' +
         '<div class="lp-aj-tit">Dirección</div>' +
@@ -33765,6 +33794,60 @@ function lpAjustes() {
   requestAnimationFrame(() => { fondo.classList.add('open'); pan.classList.add('open'); });
   lpAjTras(aj.tras_enviar === 'redirigir' ? 'redirigir' : 'mensaje');
   lpAjPrevio();
+  lpAjDestino(_lpActual.client_id || null);
+}
+
+// El cliente y el pipeline a los que va esta página. El selector de cliente
+// solo aparece si de verdad hay entre quién elegir: una cuenta que no es
+// agencia no tiene por qué ver un desplegable con una sola opción.
+async function lpAjDestino(clienteId) {
+  const cont = document.getElementById('lp-aj-destino');
+  if (!cont) return;
+  _lpAjCliente = clienteId || null;
+
+  let pipelines = [];
+  try {
+    const qs = _lpAjCliente ? '?client_id=' + encodeURIComponent(_lpAjCliente) : '';
+    pipelines = await fetchAuth('/api/pipelines' + qs).then(r => r.json()).then(d => d.pipelines || []);
+  } catch {}
+
+  // El pipeline vive en el FORMULARIO de la página, que es quien crea el lead.
+  if (_lpAjPipeline === undefined) {
+    _lpAjPipeline = null;
+    try {
+      const qs = _lpAjCliente ? '?client_id=' + encodeURIComponent(_lpAjCliente) : '';
+      const forms = await fetchAuth('/api/forms' + qs).then(r => r.json()).then(d => d.forms || []);
+      const mio = forms.find(f => f.token === _lpActual.form_token);
+      if (mio) _lpAjPipeline = mio.pipeline_id || null;
+    } catch {}
+  }
+  if (_lpAjPipeline && !pipelines.some(p => p.id === _lpAjPipeline)) _lpAjPipeline = null;
+
+  const clientes = (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients)) ? agencyClients : [];
+  const opciones = (lista, sel, vacio) =>
+    (vacio ? '<option value="">' + vacio + '</option>' : '') +
+    lista.map(o => '<option value="' + esc(o.id) + '"' + (String(o.id) === String(sel) ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('');
+
+  cont.innerHTML =
+    (clientes.length > 1
+      ? '<div class="lp-aj-campo"><label>Cliente</label>' +
+        '<select id="lp-aj-cliente" onchange="lpAjCambiarCliente(this.value)">' +
+          opciones(clientes, _lpAjCliente, 'Sin cliente') +
+        '</select></div>'
+      : '') +
+    '<div class="lp-aj-campo"><label>Tablero (pipeline)</label>' +
+      (pipelines.length
+        ? '<select id="lp-aj-pipeline">' + opciones(pipelines, _lpAjPipeline, 'El principal de este cliente') + '</select>'
+        : '<p class="lp-aj-pista" style="margin:0">Todavía no hay tableros para este cliente; el lead entrará al principal en cuanto exista.</p>') +
+    '</div>';
+}
+
+// Cambiar de cliente cambia los tableros disponibles, así que el que hubiera
+// elegido deja de valer. Se borra en vez de arrastrarlo: un pipeline de otro
+// cliente mandaría los leads a un tablero que este cliente no puede ver.
+function lpAjCambiarCliente(id) {
+  _lpAjPipeline = null;
+  lpAjDestino(id || null);
 }
 
 function lpAjustesCerrar() {
@@ -33836,6 +33919,13 @@ async function lpAjustesGuardar() {
   try {
     const cuerpo = { id: _lpActual.id, settings };
     if (slug && slug !== _lpActual.slug) cuerpo.slug = slug;
+    // El destino va en la MISMA llamada: el servidor mueve la página y su
+    // formulario a la vez. Partido en dos, un fallo a medias deja la página en
+    // un cliente y su buzón en otro.
+    const selCliente = document.getElementById('lp-aj-cliente');
+    if (selCliente) cuerpo.client_id = selCliente.value || null;
+    const selPipeline = document.getElementById('lp-aj-pipeline');
+    if (selPipeline) cuerpo.pipeline_id = selPipeline.value || null;
     const r = await fetchAuth('/api/landings', { method: 'PUT', body: JSON.stringify(cuerpo) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'No se pudieron guardar los ajustes');
@@ -33903,7 +33993,7 @@ function lpCerrarEditor() {
   const sucio = document.getElementById('lp-ed-estado')?.classList.contains('sucio');
   if (sucio && !confirm('Tienes cambios sin guardar. ¿Cerrar de todas formas?')) return;
   try { _lpEditor?.destroy(); } catch {}
-  _lpEditor = null; _lpActual = null;
+  _lpEditor = null; _lpActual = null; _lpAjPipeline = undefined; _lpAjCliente = null;
   document.getElementById('lp-ed-overlay')?.remove();
   lpRender();
 }
