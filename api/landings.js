@@ -61,7 +61,7 @@ function limpiarSlug(t) {
     .slice(0, 60) || 'pagina';
 }
 
-export default async function handler(req) {
+export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
 
@@ -75,10 +75,18 @@ export default async function handler(req) {
     const p = filas?.[0];
     if (!p) return jsonResp({ error: 'Página no encontrada' }, 404);
     // La visita se cuenta sin bloquear la respuesta: la página tiene que
-    // pintarse rápido, y una métrica no vale un milisegundo del visitante.
-    fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementar_visita_landing`, {
+    // pintarse rápido y una métrica no vale un milisegundo del visitante.
+    //
+    // OJO: lanzarla y olvidarla NO funciona. La función se apaga en cuanto
+    // devuelve la respuesta y la petición muere por el camino — comprobado:
+    // tres cargas y el contador seguía en cero. `waitUntil` es lo que le dice
+    // al runtime que espere a terminarla. Si no existiera, se prefiere pagar
+    // los milisegundos antes que perder la métrica en silencio.
+    const contar = fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementar_visita_landing`, {
       method: 'POST', headers: sbHeaders(), body: JSON.stringify({ p_slug: slug }),
     }).catch(() => {});
+    if (contexto && typeof contexto.waitUntil === 'function') contexto.waitUntil(contar);
+    else await contar;
     return jsonResp({ pagina: p });
   }
 
