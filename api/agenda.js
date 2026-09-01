@@ -5,6 +5,8 @@
 // platform_connections 'google_calendar' con refresh_token y auto-renovación.
 export const config = { runtime: 'edge' };
 
+import { conErrores } from './_errores.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -138,7 +140,7 @@ async function gcalRequest(token, method, path, body, sendUpdates) {
   return data;
 }
 
-export default async function handler(req) {
+async function manejar(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
   let userId = await getUserId(req);
@@ -360,3 +362,7 @@ export default async function handler(req) {
 
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
+
+// Envuelto para que una excepción no se convierta en un 500 mudo: queda
+// registrada en error_log y el cron de la hora siguiente avisa.
+export default conErrores('agenda', manejar);

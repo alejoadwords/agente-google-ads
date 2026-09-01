@@ -9,6 +9,8 @@
 // como antes. Asi el orden de despliegue no puede romper el CRM.
 export const config = { runtime: 'edge' };
 
+import { conErrores } from './_errores.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -94,7 +96,7 @@ function ambito(clientId) {
   return clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
 }
 
-export default async function handler(req) {
+async function manejar(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   try {
     return await manejar(req);
@@ -270,3 +272,7 @@ async function crearPipeline(userId, clientId, nombre, esPrincipal, position) {
   }
   return { pipeline };
 }
+
+// Envuelto para que una excepción no se convierta en un 500 mudo: queda
+// registrada en error_log y el cron de la hora siguiente avisa.
+export default conErrores('pipelines', manejar);

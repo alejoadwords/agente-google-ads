@@ -8,6 +8,8 @@
 // (patrón leads_extra en el JWT: seats_extra).
 export const config = { runtime: 'edge' };
 
+import { conErrores } from './_errores.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -92,7 +94,7 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-export default async function handler(req) {
+async function manejar(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const userId = await getUserId(req);
   if (userId && _lastPlan === 'free') {
@@ -225,3 +227,7 @@ export default async function handler(req) {
 
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
+
+// Envuelto para que una excepción no se convierta en un 500 mudo: queda
+// registrada en error_log y el cron de la hora siguiente avisa.
+export default conErrores('team', manejar);

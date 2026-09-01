@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-errores-vigilados",
+      "fecha": "2026-09-01",
+      "tipo": "mejora",
+      "titulo": "Si algo falla, ahora nos enteramos nosotros primero",
+      "texto": "Hasta ahora, cuando algo se rompía dentro de Acuarius no había forma de saberlo hasta que alguien lo contaba. Ya no: los fallos quedan registrados —los del servidor y los que ocurren en tu pantalla— y se avisa al equipo en cuanto aparece uno nuevo. No cambia nada de lo que ves; cambia el tiempo que tardamos en arreglarlo."
+    },
+    {
       "id": "2026-09-01-seguimiento-programado",
       "fecha": "2026-09-01",
       "tipo": "arreglo",

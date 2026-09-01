@@ -556,6 +556,66 @@ async function getAuthHeaders({ fresh = false } = {}) {
 // consultas (leads, automations, campaigns…) y cada pantalla esperaba de nuevo.
 // Las peticiones idénticas en vuelo se comparten y cualquier escritura al mismo
 // endpoint invalida lo cacheado.
+// ══ REGISTRO DE ERRORES ══════════════════════════════════════════════════════
+// Hasta hoy, un error en el navegador moría en silencio: un TypeError dentro de
+// un onclick hace que el botón no haga nada, sin aviso y sin log en el
+// servidor. Así estuvo roto el botón «Editar» de la ficha sin que nadie lo
+// supiera, y así se pierden los fallos que el cliente sí ve.
+//
+// Se acumulan y se mandan en tandas: un fallo en un bucle de render puede
+// dispararse cien veces por segundo y no vamos a hacer cien peticiones.
+const _errCola = [];
+const _errVistos = new Set();
+let _errTimer = null;
+
+function errRegistrar(mensaje, donde, traza) {
+  try {
+    if (!mensaje) return;
+    // El mismo error, una sola vez por sesión: el servidor ya lleva la cuenta.
+    const clave = String(donde) + '|' + String(mensaje).slice(0, 200);
+    if (_errVistos.has(clave)) return;
+    _errVistos.add(clave);
+    if (_errVistos.size > 100) return;   // techo de seguridad por sesión
+    _errCola.push({
+      mensaje: String(mensaje).slice(0, 500),
+      donde: String(donde || 'desconocido').slice(0, 120),
+      traza: String(traza || '').slice(0, 2000),
+      url: location.pathname + location.search,
+    });
+    clearTimeout(_errTimer);
+    _errTimer = setTimeout(errEnviar, 3000);
+  } catch {}
+}
+
+async function errEnviar() {
+  if (!_errCola.length) return;
+  const tanda = _errCola.splice(0, 5);
+  try {
+    // fetch pelado y no fetchAuth: fetchAuth reporta errores, y usarlo aquí
+    // podría montar un bucle de un error informando de sí mismo.
+    const cab = { 'Content-Type': 'application/json' };
+    if (typeof sessionToken === 'string' && sessionToken) cab['Authorization'] = 'Bearer ' + sessionToken;
+    await fetch('/api/errores', { method: 'POST', headers: cab, body: JSON.stringify({ errores: tanda }) });
+  } catch {}
+}
+
+window.addEventListener('error', e => {
+  errRegistrar(e.message, (e.filename || '').split('/').pop() + ':' + e.lineno, e.error && e.error.stack);
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e.reason;
+  errRegistrar(r && r.message ? r.message : String(r), 'promesa sin capturar', r && r.stack);
+});
+// Lo que quede en la cola al cerrar la pestaña, que salga igual.
+window.addEventListener('pagehide', () => {
+  if (!_errCola.length) return;
+  try {
+    navigator.sendBeacon('/api/errores', new Blob(
+      [JSON.stringify({ errores: _errCola.splice(0, 5), t: sessionToken })],
+      { type: 'text/plain' }));
+  } catch {}
+});
+
 const _faCache = new Map();     // url -> { t, body, status }
 const _faInFlight = new Map();  // url -> Promise
 const FA_TTL = 25000;
@@ -597,12 +657,28 @@ async function _fetchAuthRaw(url, opts = {}) {
     // Los headers explícitos del llamador mandan sobre los nuestros
     return { ...opts, headers: { ...headers, ...(opts.headers || {}) } };
   };
-  let res = await fetch(url, await withAuth(false));
+  let res;
+  try {
+    res = await fetch(url, await withAuth(false));
+  } catch (e) {
+    // La red se cayó o el servidor no respondió. Antes esto solo reventaba
+    // dentro de quien llamara, y muchas veces en un catch que no decía nada.
+    errRegistrar('sin respuesta del servidor: ' + (e && e.message), 'red ' + String(url).split('?')[0]);
+    throw e;
+  }
   // Sin sesión el reintento volvería a esperar el timeout entero para nada
   const haySesion = clerkInstance && clerkInstance.session;
   if ((res.status === 401 || res.status === 403) && haySesion) {
     sessionToken = null;
     res = await fetch(url, await withAuth(true));
+  }
+  // Los fallos del servidor SÍ se reportan. El 401 y el 403 no: son permisos,
+  // no averías, y llenarían la tabla de ruido. El 404 tampoco: hay endpoints
+  // que lo usan para decir «no existe» y es una respuesta legítima.
+  if (res.status >= 500 || res.status === 429) {
+    let pista = '';
+    try { pista = (await res.clone().json())?.error || ''; } catch {}
+    errRegistrar('HTTP ' + res.status + (pista ? ': ' + pista : ''), String(url).split('?')[0]);
   }
   return res;
 }

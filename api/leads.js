@@ -1,5 +1,7 @@
 export const config = { runtime: 'edge' };
 
+import { conErrores } from './_errores.js';
+
 import { enviarPushA } from './_push.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -230,7 +232,7 @@ async function pipelinePrincipal(userId, clientId) {
     return (filas.find(p => p.is_default) || filas[0]).id;
   } catch { return null; }}
 
-export default async function handler(req) {
+async function manejar(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
   let userId = await getUserId(req);
@@ -829,3 +831,7 @@ export default async function handler(req) {
 
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
+
+// Envuelto para que una excepción no se convierta en un 500 mudo: queda
+// registrada en error_log y el cron de la hora siguiente avisa.
+export default conErrores('leads', manejar);
