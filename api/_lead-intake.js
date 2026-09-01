@@ -66,6 +66,21 @@ export function mapExternalPayload(body) {
 // pipeline concreto; si no, no se verian en ningun tablero. Devuelve null si la
 // tabla 'pipelines' aun no existe (migracion pendiente) y entonces se crea el
 // lead sin pipeline, como antes.
+// Un formulario (o una landing) puede mandar sus leads a un pipeline concreto
+// en vez de al principal. Se comprueba que ese pipeline sea de este dueño y de
+// este cliente ANTES de usarlo: si se borró, o si se cambió el cliente de la
+// página y quedó apuntando al pipeline de otro, el lead tiene que caer en el
+// principal y no en un tablero ajeno o inexistente.
+export async function pipelineElegido(userId, clientId, pipelineId) {
+  if (!pipelineId) return pipelinePrincipal(userId, clientId);
+  try {
+    const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+    const filas = await sb(`/pipelines?id=eq.${encodeURIComponent(pipelineId)}&user_id=eq.${encodeURIComponent(userId)}${scope}&select=id&limit=1`);
+    if (Array.isArray(filas) && filas.length) return filas[0].id;
+  } catch {}
+  return pipelinePrincipal(userId, clientId);
+}
+
 export async function pipelinePrincipal(userId, clientId) {
   try {
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
@@ -143,7 +158,7 @@ export async function intakeLead(userId, clientId, data) {
   const noteLine = data.note ? `📥 [${data.sourceLabel || 'Fuente externa'}] ` + String(data.note).slice(0, 600) : null;
 
   if (!lead) {
-    const pipeline = await pipelinePrincipal(userId, clientId);
+    const pipeline = await pipelineElegido(userId, clientId, data.pipelineId);
     const rows = await sb('/leads', 'POST', {
       user_id: userId, client_id: clientId,
       name: data.name || 'Lead sin nombre',

@@ -88,6 +88,10 @@ function sanitize(body) {
   if ('tipo' in body) out.tipo = body.tipo === 'conector' ? 'conector' : 'formulario';
   // Ejecutivo fijo para los leads de esta fuente. Vacío = reparto normal.
   if ('assigned_to' in body) out.assigned_to = body.assigned_to ? String(body.assigned_to).slice(0, 60) : null;
+  // Pipeline al que entran los leads de esta fuente. Vacío = el principal del
+  // cliente. Se guarda tal cual y se valida al usarlo, no aquí: si el pipeline
+  // se borra después, el lead debe caer en el principal, no perderse.
+  if ('pipeline_id' in body) out.pipeline_id = /^[0-9a-f-]{36}$/i.test(String(body.pipeline_id || '')) ? String(body.pipeline_id) : null;
   if ('origen_url' in body) out.origen_url = (body.origen_url && /^https?:\/\//i.test(body.origen_url)) ? String(body.origen_url).slice(0, 300) : null;
   return out;
 }

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-duplicar-y-destino",
+      "fecha": "2026-09-01",
+      "tipo": "nuevo",
+      "titulo": "Duplicar una página y elegir a qué tablero entran sus leads",
+      "texto": "En la lista de páginas hay un botón «Duplicar»: crea una copia como borrador para probar otro titular u otra oferta. La copia nace con su propio formulario, así los leads de cada versión se pueden distinguir y se ve cuál convierte. Y dentro de Ajustes hay un grupo nuevo, «Dónde entran los leads», para elegir el cliente y el tablero al que llegan los contactos de esa página; si no eliges ninguno, entran al principal como siempre. Los formularios web también pueden ahora apuntar a un tablero concreto.",
+      "accion": {
+        "texto": "Ver mis páginas",
+        "ir": "paginas"
+      }
+    },
+    {
       "id": "2026-09-01-errores-vigilados",
       "fecha": "2026-09-01",
       "tipo": "mejora",

@@ -100,6 +100,7 @@ export default async function handler(req) {
       tags: form.tags || [],
       // Si esta fuente tiene ejecutivo fijo, manda sobre el reparto por turnos.
       assignedTo: form.assigned_to || null,
+      pipelineId: form.pipeline_id || null,
     });
     // Contador de envíos — con await: en edge las promesas sueltas mueren al responder
     await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {
