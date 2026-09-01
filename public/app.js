@@ -33559,11 +33559,24 @@ async function lpGuardar(publicar) {
   if (!_lpEditor || !_lpActual) return;
   const estado = document.getElementById('lp-ed-estado');
   if (estado) { estado.textContent = 'Guardando…'; estado.className = 'lp-ed-estado'; }
+  // Seguro contra el borrado accidental: si el lienzo está vacío pero la página
+  // SÍ tenía contenido, no se guarda. Pasó de verdad — el editor abrió en
+  // blanco por un fallo de carga y el primer «Guardar» dejó la página en
+  // <body></body>, borrando la plantilla. Un editor nunca debe destruir lo que
+  // no consiguió mostrar.
+  const htmlNuevo = _lpEditor.getHtml();
+  const vacio = (t) => !String(t || '').replace(/<\/?body[^>]*>/gi, '').replace(/\s+/g, '');
+  if (vacio(htmlNuevo) && !vacio(_lpActual.html)) {
+    if (estado) { estado.textContent = 'No se guardó'; estado.className = 'lp-ed-estado sucio'; }
+    showToast('El editor está vacío y la página sí tiene contenido: no se guardó para no borrarla. Cierra y vuelve a abrirla.', 'error');
+    return;
+  }
+
   try {
     const cuerpo = {
       id: _lpActual.id,
       title: (document.getElementById('lp-ed-titulo') || {}).value || _lpActual.title,
-      html: _lpEditor.getHtml(),
+      html: htmlNuevo,
       css: _lpEditor.getCss(),
     };
     if (publicar) cuerpo.published = true;
