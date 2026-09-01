@@ -33423,6 +33423,28 @@ async function lpAbrir(id) {
     return;
   }
 
+  // En una pantalla estrecha el constructor no cabe: el panel de la derecha se
+  // come 250px de 393 y el lienzo queda inservible. Antes se abría igual y el
+  // usuario se peleaba con algo roto; ahora se dice, y se ofrece lo único que
+  // sí tiene sentido desde el celular: verla.
+  if (window.innerWidth < 860) {
+    document.getElementById('lp-ed-overlay')?.remove();
+    const chico = document.createElement('div');
+    chico.id = 'lp-ed-overlay';
+    chico.className = 'lp-ed-overlay';
+    chico.innerHTML = '<div style="padding:26px 20px;overflow:auto">' +
+      emptyAgua('monitor', 'El constructor necesita una pantalla más grande',
+        'Diseñar una página en el celular sale mal: el panel de herramientas no cabe y acabas peleando con el lienzo. Ábrela desde un computador o una tableta y lo tendrás cómodo.',
+        (completa.published
+          ? '<a class="btn-pri sm" href="' + esc(lpUrlPublica(completa.slug)) + '" target="_blank" rel="noopener">Ver la página</a> '
+          : '') +
+        '<button class="btn-ghost sm" onclick="lpCerrarEditor()">Cerrar</button>') +
+      '</div>';
+    document.body.appendChild(chico);
+    _lpActual = completa;
+    return;
+  }
+
   document.getElementById('lp-ed-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'lp-ed-overlay';
