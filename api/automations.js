@@ -6,7 +6,7 @@
 //        condition {field,op,value} | change_stage {stage} | add_note {text}
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

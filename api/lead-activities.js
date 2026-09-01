@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',

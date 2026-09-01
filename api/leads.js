@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 import { enviarPushA } from './_push.js';
 const CORS = {

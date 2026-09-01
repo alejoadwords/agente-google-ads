@@ -6,7 +6,7 @@
 // de leads con etiqueta 'no-email' (baja) y de leads sin email/teléfono.
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 import { campaignHtml } from './_campaign-email.js';
 

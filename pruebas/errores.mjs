@@ -14,7 +14,7 @@ globalThis.fetch = async (url, opts) => {
   escritos.push(JSON.parse(opts.body));
   return { ok: true, json: async () => ({}) };
 };
-const { registrarError, conErrores } = await import('../api/_errores.js');
+const { registrarError, conErrores } = await import('../api/_registro-errores.js');
 
 const T = []; const chk = (n, ok, d = '') => T.push([n, ok, d]);
 const silencio = console.error; console.error = () => {};

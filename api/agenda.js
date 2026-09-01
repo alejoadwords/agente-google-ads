@@ -5,7 +5,7 @@
 // platform_connections 'google_calendar' con refresh_token y auto-renovación.
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

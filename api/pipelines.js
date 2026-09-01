@@ -9,7 +9,7 @@
 // como antes. Asi el orden de despliegue no puede romper el CRM.
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

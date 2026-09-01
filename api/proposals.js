@@ -7,7 +7,7 @@
 // automatizaciones); las rutas públicas van por public_token, sin sesión.
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 import { registrarUso } from './_uso-ia.js';
 const CORS = {

@@ -8,7 +8,7 @@
 // (patrón leads_extra en el JWT: seats_extra).
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_errores.js';
+import { conErrores } from './_registro-errores.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

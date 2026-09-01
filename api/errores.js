@@ -11,7 +11,7 @@ export const config = { runtime: 'edge' };
 // Pide sesión: si no, es un buzón abierto para que cualquiera nos llene la
 // tabla. Y limita lo que acepta por petición, por lo mismo.
 
-import { registrarError } from './_errores.js';
+import { registrarError } from './_registro-errores.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
