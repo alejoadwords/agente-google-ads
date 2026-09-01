@@ -564,6 +564,14 @@ async function getAuthHeaders({ fresh = false } = {}) {
 //
 // Se acumulan y se mandan en tandas: un fallo en un bucle de render puede
 // dispararse cien veces por segundo y no vamos a hacer cien peticiones.
+// Ejecuta algo cuando el DOM ya existe. app.js se carga en la línea 4660 del
+// HTML y hay elementos que no aparecen hasta la 5300: todo lo que corra al leer
+// el archivo y toque el DOM se encuentra con null.
+function alDOMListo(fn) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+  else fn();
+}
+
 const _errCola = [];
 const _errVistos = new Set();
 let _errTimer = null;
@@ -14253,10 +14261,16 @@ let metaActiveAccount = null;
   if (savedToken) {
     if (!sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', savedToken);
     if (savedName && !sessionStorage.getItem('meta_user_name')) sessionStorage.setItem('meta_user_name', savedName);
-    updateMetaUI(true, savedName);
-    if (savedAccount) {
-      try { metaActiveAccount = JSON.parse(savedAccount); renderMetaActiveAccount(); } catch {}
-    }
+    // El DOM de Ajustes no existe todavía cuando esto corre: app.js se lee 670
+    // líneas de HTML antes que esos elementos. Sin esperar, la interfaz se
+    // quedaba sin inicializar (y loadMetaAccounts reventaba con un TypeError
+    // que solo se veía en la consola del usuario).
+    alDOMListo(() => {
+      updateMetaUI(true, savedName);
+      if (savedAccount) {
+        try { metaActiveAccount = JSON.parse(savedAccount); renderMetaActiveAccount(); } catch {}
+      }
+    });
   }
 })();
 
@@ -14283,6 +14297,13 @@ function disconnectMetaAds() {
 }
 
 async function loadMetaAccounts() {
+  // Si el contenedor no está, es que nos llamaron antes de tiempo. Se dice y se
+  // sale: reventar deja la app a medias y callar deja la interfaz sin
+  // inicializar sin que nadie se entere. Las dos cosas ya pasaron aquí.
+  if (!document.getElementById('metaAccountsLoading')) {
+    if (typeof errRegistrar === 'function') errRegistrar('loadMetaAccounts llamado antes de que exista el DOM', 'loadMetaAccounts');
+    return;
+  }
   const token = sessionStorage.getItem('meta_access_token');
   if (!token) return;
   document.getElementById('metaAccountsLoading').style.display = 'block';
@@ -14373,6 +14394,13 @@ function startNewMetaOnboarding(acc) {
 }
 
 function renderMetaActiveAccount() {
+  // Si el contenedor no está, es que nos llamaron antes de tiempo. Se dice y se
+  // sale: reventar deja la app a medias y callar deja la interfaz sin
+  // inicializar sin que nadie se entere. Las dos cosas ya pasaron aquí.
+  if (!document.getElementById('metaActiveAccount')) {
+    if (typeof errRegistrar === 'function') errRegistrar('renderMetaActiveAccount llamado antes de que exista el DOM', 'renderMetaActiveAccount');
+    return;
+  }
   if (!metaActiveAccount) return;
   const el = document.getElementById('metaActiveAccount');
   document.getElementById('metaActiveName').textContent = metaActiveAccount.name;
@@ -14583,14 +14611,20 @@ let linkedinActiveAccount = null;
   if (savedToken) {
     if (!sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', savedToken);
     if (savedName && !sessionStorage.getItem('linkedin_user_name'))   sessionStorage.setItem('linkedin_user_name', savedName);
-    updateLinkedInUI(true, savedName);
-    if (savedAccount) {
-      try {
-        linkedinActiveAccount = JSON.parse(savedAccount);
-        if (!sessionStorage.getItem('linkedin_active_account')) sessionStorage.setItem('linkedin_active_account', savedAccount);
-        renderLinkedInActiveAccount();
-      } catch {}
-    }
+    // El DOM de Ajustes no existe todavía cuando esto corre: app.js se lee 670
+    // líneas de HTML antes que esos elementos. Sin esperar, la interfaz se
+    // quedaba sin inicializar (y lo mismo pasaba con un TypeError
+    // que solo se veía en la consola del usuario).
+    alDOMListo(() => {
+      updateLinkedInUI(true, savedName);
+      if (savedAccount) {
+        try {
+          linkedinActiveAccount = JSON.parse(savedAccount);
+          if (!sessionStorage.getItem('linkedin_active_account')) sessionStorage.setItem('linkedin_active_account', savedAccount);
+          renderLinkedInActiveAccount();
+        } catch {}
+      }
+    });
   }
 })();
 
@@ -14887,10 +14921,12 @@ let adsAccounts = [];       // todas las cuentas accesibles
           if (!savedToken) {
             // Primera carga sin token local → actualizar UI como conectado
             const emailFromStorage = sessionStorage.getItem('ads_email') || localStorage.getItem('ads_email_persist') || '';
-            updateAdsUI(true, emailFromStorage);
-            if (savedAccount) {
-              try { adsActiveAccount = JSON.parse(savedAccount); renderActiveAccount(); } catch {}
-            }
+            alDOMListo(() => {
+              updateAdsUI(true, emailFromStorage);
+              if (savedAccount) {
+                try { adsActiveAccount = JSON.parse(savedAccount); renderActiveAccount(); } catch {}
+              }
+            });
           }
           return true;
         } else if (data.needsReconnect) {
@@ -15007,6 +15043,13 @@ function disconnectGoogleAds() {
 
 // Carga las cuentas desde la API y muestra el selector
 async function loadAdsAccounts() {
+  // Si el contenedor no está, es que nos llamaron antes de tiempo. Se dice y se
+  // sale: reventar deja la app a medias y callar deja la interfaz sin
+  // inicializar sin que nadie se entere. Las dos cosas ya pasaron aquí.
+  if (!document.getElementById('adsAccountsLoading')) {
+    if (typeof errRegistrar === 'function') errRegistrar('loadAdsAccounts llamado antes de que exista el DOM', 'loadAdsAccounts');
+    return;
+  }
   const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   if (!accessToken) return;
   if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', accessToken);
