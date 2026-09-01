@@ -3,14 +3,15 @@
 // endpoint propio y vista propia. Si un día se decide que sobra, se quita
 // entero sin desenredarlo del resto.
 //
-//   GET  ?slug=…            → PÚBLICO: el contenido de una página publicada
-//   GET                     → mis páginas
+//   GET  ?id=…              → una página CON su contenido (la abre el editor)
+//   GET                     → mis páginas (sin html/css: pesan)
 //   POST                    → crear
 //   PUT                     → guardar / publicar
 //   DELETE ?id=             → borrar
 //
-// El formulario de la página NO abre una vía nueva de entrada de leads: apunta
-// a /api/form-public, que ya deduplica, dispara automatizaciones y filtra bots.
+// La página PÚBLICA no se sirve desde aquí: la arma api/l.js, que la devuelve
+// ya montada para que WhatsApp y Facebook vean título, descripción e imagen al
+// compartir el enlace. Sus robots no ejecutan JavaScript.
 export const config = { runtime: 'edge' };
 
 const CORS = {
@@ -64,31 +65,6 @@ function limpiarSlug(t) {
 export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
-
-  // ── PÚBLICO: lo que pide /l/<slug> ────────────────────────────────────────
-  const slug = url.searchParams.get('slug');
-  if (req.method === 'GET' && slug) {
-    const filas = await fetch(
-      `${SUPABASE_URL}/rest/v1/landings?slug=eq.${encodeURIComponent(slug)}&published=is.true&select=title,html,css,form_token`,
-      { headers: sbHeaders() }
-    ).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-    const p = filas?.[0];
-    if (!p) return jsonResp({ error: 'Página no encontrada' }, 404);
-    // La visita se cuenta sin bloquear la respuesta: la página tiene que
-    // pintarse rápido y una métrica no vale un milisegundo del visitante.
-    //
-    // OJO: lanzarla y olvidarla NO funciona. La función se apaga en cuanto
-    // devuelve la respuesta y la petición muere por el camino — comprobado:
-    // tres cargas y el contador seguía en cero. `waitUntil` es lo que le dice
-    // al runtime que espere a terminarla. Si no existiera, se prefiere pagar
-    // los milisegundos antes que perder la métrica en silencio.
-    const contar = fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementar_visita_landing`, {
-      method: 'POST', headers: sbHeaders(), body: JSON.stringify({ p_slug: slug }),
-    }).catch(() => {});
-    if (contexto && typeof contexto.waitUntil === 'function') contexto.waitUntil(contar);
-    else await contar;
-    return jsonResp({ pagina: p });
-  }
 
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
@@ -180,10 +156,18 @@ export default async function handler(req, contexto) {
     }
 
     const campos = {};
-    for (const k of ['title', 'html', 'css', 'form_token', 'published', 'plantilla']) {
+    for (const k of ['title', 'html', 'css', 'form_token', 'published', 'plantilla', 'settings']) {
       if (body[k] !== undefined) campos[k] = body[k];
     }
-    if (body.slug !== undefined) campos.slug = limpiarSlug(body.slug);
+    if (body.slug !== undefined) {
+      const nuevo = limpiarSlug(body.slug);
+      const ocupado = await fetch(
+        `${SUPABASE_URL}/rest/v1/landings?slug=eq.${encodeURIComponent(nuevo)}&id=neq.${body.id}&select=id&limit=1`,
+        { headers: sbHeaders() }
+      ).then((r) => (r.ok ? r.json() : []));
+      if (ocupado?.length) return jsonResp({ error: 'Esa dirección ya la usa otra página. Prueba con otra.' }, 409);
+      campos.slug = nuevo;
+    }
     campos.updated_at = new Date().toISOString();
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/landings?id=eq.${body.id}&user_id=eq.${encodeURIComponent(userId)}`,

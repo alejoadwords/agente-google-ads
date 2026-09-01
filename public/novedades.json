@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-ajustes-pagina",
+      "fecha": "2026-09-01",
+      "tipo": "nuevo",
+      "titulo": "Ajustes de página: dirección, vista previa al compartir y medición",
+      "texto": "Dentro del constructor hay un botón «Ajustes». Ahí se cambia la dirección del enlace, se escribe la descripción y la imagen que verá quien reciba el enlace por WhatsApp —con una vista previa de cómo va a llegar la tarjeta—, se elige si tras enviar el formulario se muestra un mensaje o se va a una página de gracias, y se pega el píxel de Meta o el identificador de Google Analytics. El evento de lead se dispara solo al enviarse el formulario. Además, las páginas publicadas ahora se arman en el servidor: antes, al compartir el enlace llegaba una tarjeta vacía porque el robot de WhatsApp no ejecuta JavaScript.",
+      "accion": {
+        "texto": "Ver mis páginas",
+        "ir": "paginas"
+      }
+    },
+    {
       "id": "2026-09-01-constructor-paginas",
       "fecha": "2026-09-01",
       "tipo": "mejora",

@@ -32,7 +32,7 @@
     },
     {
       "source": "/l/:slug",
-      "destination": "/landing.html"
+      "destination": "/api/l?slug=:slug"
     },
     {
       "source": "/((?!api/).*)",

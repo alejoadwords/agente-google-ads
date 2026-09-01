@@ -33229,6 +33229,7 @@ function lstBorrar(id, nombre) {
 
 let lpPaginas = [];
 let _lpEditor = null;      // instancia de GrapesJS
+let _lpAjTras = 'mensaje'; // qué pasa tras enviar el formulario, en el panel de ajustes
 let _lpActual = null;      // página que se está editando
 let _lpBasePromesa = null;
 
@@ -33458,6 +33459,7 @@ async function lpAbrir(id) {
       '<div class="lp-ed-acc">' +
         '<span id="lp-ed-estado" class="lp-ed-estado"></span>' +
         '<button class="btn-ghost sm" id="lp-ed-form" onclick="lpElegirFormulario()" title="A qué formulario llegan los datos">Formulario</button>' +
+        '<button class="btn-ghost sm" onclick="lpAjustes()" title="Dirección, cómo se ve al compartirlo, medición">Ajustes</button>' +
         '<button class="btn-ghost sm" onclick="lpVistaPrevia()">Ver</button>' +
         '<button class="btn-ghost sm" onclick="lpGuardar(false)">Guardar</button>' +
         '<button class="btn-pri sm" onclick="lpGuardar(true)">' + (completa.published ? 'Guardar y publicar' : 'Publicar') + '</button>' +
@@ -33610,6 +33612,164 @@ function lpPintarUrl() {
   u.innerHTML = _lpActual.published
     ? '<a href="' + esc(lpUrlPublica(_lpActual.slug)) + '" target="_blank" rel="noopener">' + esc(lpUrlPublica(_lpActual.slug).replace('https://', '')) + '</a>'
     : 'Se publicará en /l/' + esc(_lpActual.slug);
+}
+
+// ── Ajustes de la página ────────────────────────────────────────────────────
+// Lo que no se toca con el ratón en el lienzo pero decide si la página sirve:
+// su dirección, cómo se ve cuando alguien la comparte, qué pasa después de
+// enviar el formulario y con qué se mide.
+function lpAjustes() {
+  if (!_lpActual) return;
+  const aj = _lpActual.settings || {};
+  document.getElementById('lp-aj-fondo')?.remove();
+  document.getElementById('lp-aj')?.remove();
+
+  const fondo = document.createElement('div');
+  fondo.id = 'lp-aj-fondo';
+  fondo.className = 'lp-aj-fondo';
+  fondo.onclick = lpAjustesCerrar;
+
+  const pan = document.createElement('div');
+  pan.id = 'lp-aj';
+  pan.className = 'lp-aj';
+  pan.innerHTML =
+    '<div class="lp-aj-head"><div><h3>Ajustes de la página</h3>' +
+      '<p>Lo que no se ve en el lienzo pero decide si funciona.</p></div>' +
+      '<button class="btn-ghost sm" onclick="lpAjustesCerrar()">Cerrar</button></div>' +
+    '<div class="lp-aj-body">' +
+
+      '<div class="lp-aj-grupo">' +
+        '<div class="lp-aj-tit">Dirección</div>' +
+        '<p class="lp-aj-pista">Es el enlace que pegas en el anuncio. Si la cambias cuando ya está publicada, el enlace viejo deja de funcionar.</p>' +
+        '<div class="lp-aj-url"><span>app.acuarius.app/l/</span>' +
+          '<input type="text" id="lp-aj-slug" value="' + esc(_lpActual.slug || '') + '" spellcheck="false"></div>' +
+      '</div>' +
+
+      '<div class="lp-aj-grupo">' +
+        '<div class="lp-aj-tit">Al compartir el enlace</div>' +
+        '<p class="lp-aj-pista">Lo que ve quien recibe el enlace por WhatsApp antes de abrirlo. Sin esto llega una tarjeta vacía y casi nadie la toca.</p>' +
+        '<div class="lp-aj-campo"><label>Descripción</label>' +
+          '<textarea id="lp-aj-desc" maxlength="300" oninput="lpAjPrevio()" placeholder="Una frase que dé ganas de abrirla.">' + esc(aj.descripcion || '') + '</textarea>' +
+          '<div class="lp-aj-contador" id="lp-aj-cont"></div></div>' +
+        '<div class="lp-aj-campo"><label>Imagen (enlace)</label>' +
+          '<input type="url" id="lp-aj-img" value="' + esc(aj.imagen || '') + '" oninput="lpAjPrevio()" placeholder="https://…"></div>' +
+        '<div class="lp-aj-campo"><label>Así se verá</label><div id="lp-aj-previo"></div></div>' +
+      '</div>' +
+
+      '<div class="lp-aj-grupo">' +
+        '<div class="lp-aj-tit">Tras enviar el formulario</div>' +
+        '<div class="lp-aj-op">' +
+          '<button id="lp-aj-op-mensaje" onclick="lpAjTras(\'mensaje\')">Mostrar un mensaje</button>' +
+          '<button id="lp-aj-op-redirigir" onclick="lpAjTras(\'redirigir\')">Ir a otra página</button>' +
+        '</div>' +
+        '<div id="lp-aj-gracias-c" class="lp-aj-campo" style="display:none">' +
+          '<label>¿A dónde?</label>' +
+          '<input type="url" id="lp-aj-gracias" value="' + esc(aj.url_gracias || '') + '" placeholder="https://tunegocio.com/gracias">' +
+          '<p class="lp-aj-pista" style="margin:6px 0 0">Útil para medir la conversión en Google Ads o Meta con una página de gracias propia.</p>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="lp-aj-grupo">' +
+        '<div class="lp-aj-tit">Medición</div>' +
+        '<p class="lp-aj-pista">Al enviarse el formulario se dispara solo el evento de lead: <b>Lead</b> en Meta y <b>generate_lead</b> en Google. No hay que configurar nada más.</p>' +
+        '<div class="lp-aj-campo"><label>Píxel de Meta</label>' +
+          '<input type="text" id="lp-aj-px" value="' + esc(aj.pixel_meta || '') + '" placeholder="Solo los números" spellcheck="false"></div>' +
+        '<div class="lp-aj-campo"><label>Google Analytics 4</label>' +
+          '<input type="text" id="lp-aj-ga" value="' + esc(aj.ga4 || '') + '" placeholder="G-XXXXXXXXXX" spellcheck="false"></div>' +
+      '</div>' +
+
+    '</div>' +
+    '<div class="lp-aj-pie">' +
+      '<button class="btn-ghost sm" onclick="lpAjustesCerrar()">Cancelar</button>' +
+      '<button class="btn-pri sm" onclick="lpAjustesGuardar()">Guardar ajustes</button>' +
+    '</div>';
+
+  document.body.appendChild(fondo);
+  document.body.appendChild(pan);
+  requestAnimationFrame(() => { fondo.classList.add('open'); pan.classList.add('open'); });
+  lpAjTras(aj.tras_enviar === 'redirigir' ? 'redirigir' : 'mensaje');
+  lpAjPrevio();
+}
+
+function lpAjustesCerrar() {
+  document.getElementById('lp-aj')?.classList.remove('open');
+  document.getElementById('lp-aj-fondo')?.classList.remove('open');
+  setTimeout(() => { document.getElementById('lp-aj')?.remove(); document.getElementById('lp-aj-fondo')?.remove(); }, 300);
+}
+
+function lpAjTras(modo) {
+  _lpAjTras = modo;
+  document.getElementById('lp-aj-op-mensaje')?.classList.toggle('on', modo === 'mensaje');
+  document.getElementById('lp-aj-op-redirigir')?.classList.toggle('on', modo === 'redirigir');
+  const c = document.getElementById('lp-aj-gracias-c');
+  if (c) c.style.display = modo === 'redirigir' ? '' : 'none';
+}
+
+// La tarjeta de WhatsApp, tal cual la va a ver quien reciba el enlace. Se
+// enseña porque es lo que decide si alguien lo abre, y hasta ahora no se veía
+// en ninguna parte hasta que ya era tarde.
+function lpAjPrevio() {
+  const cont = document.getElementById('lp-aj-previo');
+  if (!cont || !_lpActual) return;
+  const desc = (document.getElementById('lp-aj-desc')?.value || '').trim();
+  const img = (document.getElementById('lp-aj-img')?.value || '').trim();
+  const c = document.getElementById('lp-aj-cont');
+  if (c) c.textContent = desc.length + ' / 300';
+  const valida = /^https?:\/\/[^\s"\'<>]+$/i.test(img);
+  cont.innerHTML =
+    '<div class="lp-aj-previo">' +
+      '<div class="lp-aj-previo-img"' + (valida ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' +
+        (valida ? '' : 'Sin imagen') + '</div>' +
+      '<div class="lp-aj-previo-txt">' +
+        '<div class="lp-aj-previo-dom">app.acuarius.app</div>' +
+        '<div class="lp-aj-previo-tit">' + esc(_lpActual.title || 'Sin título') + '</div>' +
+        '<div class="lp-aj-previo-des">' + esc(desc || 'Sin descripción, la tarjeta llega vacía.') + '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+async function lpAjustesGuardar() {
+  if (!_lpActual) return;
+  const valor = (id) => (document.getElementById(id)?.value || '').trim();
+  const px = valor('lp-aj-px');
+  const ga = valor('lp-aj-ga');
+  const img = valor('lp-aj-img');
+  const gracias = valor('lp-aj-gracias');
+
+  // Se valida aquí Y en el servidor. Aquí, para poder decir qué está mal; allá,
+  // porque un identificador que no es un identificador acaba dentro de un
+  // <script> de la página.
+  if (px && !/^\d{6,20}$/.test(px)) return showToast('El píxel de Meta son solo números, sin letras ni guiones', 'error');
+  if (ga && !/^G-[A-Za-z0-9]{4,16}$/.test(ga)) return showToast('El identificador de Google Analytics empieza por G-', 'error');
+  if (img && !/^https?:\/\//i.test(img)) return showToast('El enlace de la imagen tiene que empezar por https://', 'error');
+  if (_lpAjTras === 'redirigir' && !/^https?:\/\//i.test(gracias)) {
+    return showToast('Dinos a qué página ir después de enviar, empezando por https://', 'error');
+  }
+
+  const settings = {
+    ...(_lpActual.settings || {}),
+    descripcion: valor('lp-aj-desc'),
+    imagen: img,
+    pixel_meta: px,
+    ga4: ga.toUpperCase(),
+    tras_enviar: _lpAjTras,
+    url_gracias: _lpAjTras === 'redirigir' ? gracias : '',
+  };
+  const slug = valor('lp-aj-slug');
+
+  try {
+    const cuerpo = { id: _lpActual.id, settings };
+    if (slug && slug !== _lpActual.slug) cuerpo.slug = slug;
+    const r = await fetchAuth('/api/landings', { method: 'PUT', body: JSON.stringify(cuerpo) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudieron guardar los ajustes');
+    _lpActual = { ..._lpActual, ...d.pagina };
+    lpPintarUrl();
+    lpAjustesCerrar();
+    showToast('Ajustes guardados');
+  } catch (e) {
+    showToast(e.message || 'No se pudieron guardar los ajustes', 'error');
+  }
 }
 
 async function lpGuardar(publicar) {

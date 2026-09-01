@@ -1797,6 +1797,55 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .lp-ed-estado.ok{color:var(--success);font-weight:600}
 .lp-ed-lienzo{flex:1;min-height:0;overflow:hidden}
 
+/* ── Ajustes de la página ────────────────────────────────────────────────────
+   Panel lateral sobre el editor (que vive en z-index 2000). Mismo gesto que el
+   panel de filtros del pipeline: entra por la derecha y no tapa el lienzo del
+   todo, para que se vea sobre qué se está decidiendo. */
+.lp-aj-fondo{position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:2100;display:none}
+.lp-aj-fondo.open{display:block}
+.lp-aj{position:fixed;top:0;right:0;bottom:0;width:400px;max-width:100vw;background:var(--bg);
+  border-left:1.5px solid var(--border);z-index:2101;display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .28s var(--ease);box-shadow:var(--shadow-lg)}
+.lp-aj.open{transform:translateX(0)}
+.lp-aj-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+  padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.lp-aj-head h3{font-size:var(--fs-md);font-weight:800;margin:0}
+.lp-aj-head p{font-size:11.5px;color:var(--muted);margin:2px 0 0}
+.lp-aj-body{flex:1;overflow-y:auto;padding:4px 20px 20px}
+.lp-aj-grupo{padding:16px 0;border-bottom:1px solid var(--border)}
+.lp-aj-grupo:last-child{border-bottom:0}
+.lp-aj-tit{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.lp-aj-pista{font-size:11.5px;color:var(--muted);line-height:1.55;margin:0 0 10px}
+.lp-aj label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.lp-aj input[type=text],.lp-aj input[type=url],.lp-aj textarea{width:100%;padding:9px 11px;
+  border:1.5px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:13px;
+  background:var(--bg-subtle);color:var(--text);outline:none}
+.lp-aj input:focus,.lp-aj textarea:focus{border-color:var(--blue)}
+.lp-aj textarea{resize:vertical;min-height:66px;line-height:1.5}
+.lp-aj-url{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:var(--r);
+  background:var(--bg-subtle);overflow:hidden}
+.lp-aj-url:focus-within{border-color:var(--blue)}
+.lp-aj-url span{font-size:12px;color:var(--muted);padding:0 0 0 11px;white-space:nowrap}
+.lp-aj-url input{border:0;background:none;border-radius:0;padding-left:2px}
+.lp-aj-contador{font-size:10.5px;color:var(--muted2);text-align:right;margin-top:3px}
+.lp-aj-campo{margin-bottom:12px}
+.lp-aj-campo:last-child{margin-bottom:0}
+.lp-aj-op{display:flex;gap:8px;margin-bottom:10px}
+.lp-aj-op button{flex:1;background:var(--bg-subtle);border:1.5px solid var(--border);color:var(--text);
+  font-family:var(--font);font-size:12.5px;padding:9px 8px;border-radius:var(--r);cursor:pointer}
+.lp-aj-op button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.lp-aj-pie{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border);flex-shrink:0}
+/* Cómo se verá al compartirlo. Se enseña porque es lo que de verdad decide si
+   alguien abre el enlace, y hasta ahora no se veía en ningún sitio. */
+.lp-aj-previo{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--bg-subtle)}
+.lp-aj-previo-img{height:112px;background:var(--bg-muted) center/cover no-repeat;display:flex;
+  align-items:center;justify-content:center;color:var(--muted2);font-size:11px}
+.lp-aj-previo-txt{padding:9px 11px}
+.lp-aj-previo-dom{font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.3px}
+.lp-aj-previo-tit{font-size:13px;font-weight:700;color:var(--text);margin:2px 0;line-height:1.35}
+.lp-aj-previo-des{font-size:11.5px;color:var(--muted);line-height:1.45}
+@media(max-width:480px){.lp-aj{width:100%}}
+
 /* ── Piel de Acuarius para el constructor ───────────────────────────────────
    GrapesJS trae su propia piel: gris oscuro con acentos morados. Dentro de la
    aplicación parece software de otra empresa, y quien lo abre siente que salió
