@@ -188,9 +188,12 @@ ${ga ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${ga}"></
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      // Corta, porque el dueño publica cambios y quiere verlos ya; pero
-      // suficiente para que una ráfaga de anuncio no golpee la base cada vez.
-      'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
+      // SIN caché compartida, a propósito. Con s-maxage el CDN respondía sin
+      // pasar por aquí y entonces la visita no se contaba: una ráfaga de cien
+      // visitantes del anuncio quedaba como UNA. El contador es justo la
+      // métrica por la que se hace la página, así que vale más que los
+      // milisegundos. De paso, un cambio publicado se ve al instante.
+      'Cache-Control': 'public, max-age=0, s-maxage=0, must-revalidate',
     },
   });
 }
