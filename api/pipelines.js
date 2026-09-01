@@ -108,7 +108,7 @@ export default async function handler(req) {
   }
 }
 
-export default async function handler(req) {
+async function manejar(req) {
 
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
