@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-constructor-paginas",
+      "fecha": "2026-09-01",
+      "tipo": "mejora",
+      "titulo": "El constructor de páginas ahora tiene bloques y nuestra cara",
+      "texto": "Se pueden arrastrar secciones ya hechas al lienzo: portada, beneficios, formulario, testimonios, preguntas frecuentes, llamado a la acción, botón de WhatsApp y pie, más piezas sueltas como título, texto, imagen, botón o lista. Cada una llega con su diseño listo y se adapta al celular sola. El editor además cambió de aspecto: los colores, la tipografía y los botones son los de Acuarius, los dispositivos están en español y hay botones de deshacer y rehacer a la vista.",
+      "accion": {
+        "texto": "Ver mis páginas",
+        "ir": "paginas"
+      }
+    },
+    {
       "id": "2026-09-01-seguimiento-programado",
       "fecha": "2026-09-01",
       "tipo": "arreglo",

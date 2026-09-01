@@ -9901,6 +9901,7 @@ function novIr(destino) {
         case 'crm':           navGo('crm'); break;
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
+        case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
@@ -33447,6 +33448,10 @@ async function lpAbrir(id) {
   lpPintarUrl();
   lpPintarFormulario();
 
+  // Los bloques viven en el mismo fichero que las plantillas; si se entra a
+  // editar una página existente sin pasar por el selector, aún no está.
+  try { await lpCargarBase(); } catch {}
+
   try { await lpCargarGrapesWeb(); }
   catch (e) {
     document.getElementById('lp-gjs').innerHTML =
@@ -33480,6 +33485,17 @@ async function lpAbrir(id) {
         }
       },
     },
+    // Los dispositivos, propios: el preset los deja en inglés y con anchos que
+    // no coinciden con los cortes de nuestras plantillas y bloques (600px). Si
+    // no coinciden, el usuario cambia algo «en el celular» y el cambio acaba en
+    // una media query distinta de la que usa la página. Eso se descubre tarde.
+    deviceManager: {
+      devices: [
+        { id: 'escritorio', name: 'Escritorio', width: '' },
+        { id: 'tableta', name: 'Tableta', width: '768px', widthMedia: '992px' },
+        { id: 'celular', name: 'Celular', width: '375px', widthMedia: '600px' },
+      ],
+    },
     plugins: ['gjs-preset-webpage'],
     pluginsOpts: {
       'gjs-preset-webpage': {
@@ -33492,14 +33508,33 @@ async function lpAbrir(id) {
     },
   });
 
-  const ETIQ = {
-    'sect100': '1 columna', 'sect50': '2 columnas', 'sect30': '3 columnas', 'sect37': 'Dos anchos',
-    text: 'Texto', link: 'Enlace', image: 'Imagen', video: 'Video', map: 'Mapa',
-    'link-block': 'Bloque enlazado', quote: 'Cita', 'text-sect': 'Título y texto',
-  };
-  Object.keys(ETIQ).forEach(id => {
-    try { _lpEditor.BlockManager.get(id)?.set('label', ETIQ[id]); } catch {}
+  // Los bloques son nuestros. El preset dejó de traer los suyos en la 1.0 y el
+  // panel salía vacío: se podía editar lo que la plantilla ya tenía, pero no
+  // añadir una sección. Y los genéricos («1 columna», «texto») tampoco valían
+  // para esto: quien vende no quiere una columna vacía, quiere soltar una
+  // sección de testimonios ya hecha y cambiarle las palabras.
+  (window.LANDINGS_BLOQUES || []).forEach(b => {
+    _lpEditor.BlockManager.add(b.id, {
+      label: b.label,
+      category: b.category,
+      media: typeof lpbIcono === 'function' ? lpbIcono(b.icono) : '',
+      content: b.content,
+    });
   });
+
+  // Deshacer y rehacer, a la vista. El atajo del teclado ya existía, pero en un
+  // editor visual el botón es lo que da permiso a probar: si no se ve cómo
+  // volver atrás, la gente no toca nada.
+  try {
+    const ico = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;vertical-align:middle">' + d + '</svg>';
+    _lpEditor.Panels.getPanel('options').get('buttons').add([
+      { id: 'lp-undo', command: 'core:undo', attributes: { title: 'Deshacer' },
+        label: ico('<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.4 2.6L3 13"/>') },
+      { id: 'lp-redo', command: 'core:redo', attributes: { title: 'Rehacer' },
+        label: ico('<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.4 2.6L21 13"/>') },
+    ], { at: 0 });
+  } catch (e) { console.warn('sin botones de deshacer:', e && e.message); }
 
   // Aviso de cambios sin guardar: cerrar el editor y perder media hora de
   // trabajo es el peor recuerdo posible de una función nueva.

@@ -1796,6 +1796,150 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .lp-ed-estado.sucio{color:var(--warning);font-weight:600}
 .lp-ed-estado.ok{color:var(--success);font-weight:600}
 .lp-ed-lienzo{flex:1;min-height:0;overflow:hidden}
+
+/* ── Piel de Acuarius para el constructor ───────────────────────────────────
+   GrapesJS trae su propia piel: gris oscuro con acentos morados. Dentro de la
+   aplicación parece software de otra empresa, y quien lo abre siente que salió
+   de Acuarius. Aquí se le pone nuestra línea gráfica.
+
+   La 0.23 está hecha con variables, así que casi todo es remapearlas. Lo que
+   no basta son las reglas que dan por hecho un panel OSCURO: blancos
+   translúcidos que sobre fondo claro desaparecen y bordes negros que sobre
+   fondo claro son un tajo. Esas hay que rehacerlas a mano — están abajo,
+   agrupadas y con su porqué.
+
+   Vale para los dos constructores: páginas (#lp-gjs) y correos (#gjs). */
+#lp-gjs, #gjs{
+  --gjs-main-font:var(--font);
+  --gjs-font-size:12px;
+  --gjs-primary-color:var(--bg);            /* fondo de los paneles */
+  --gjs-secondary-color:var(--text-2);      /* texto de los paneles */
+  --gjs-tertiary-color:var(--blue);         /* acento: fondo (etiquetas de clase) */
+  --gjs-quaternary-color:var(--blue);       /* acento: icono activo */
+  --gjs-font-color:var(--text-2);
+  --gjs-font-color-active:var(--text);
+  --gjs-main-color:var(--bg-subtle);
+  --gjs-main-dark-color:var(--bg-muted);    /* fondo de los campos */
+  --gjs-secondary-dark-color:var(--bg-subtle);
+  --gjs-main-light-color:var(--blue-lt);    /* capa seleccionada */
+  --gjs-secondary-light-color:var(--text-2);
+  --gjs-soft-light-color:var(--bg-subtle);  /* capa bajo el cursor */
+  --gjs-light-border:var(--border);
+  --gjs-arrow-color:var(--text-3);
+  --gjs-dark-text-shadow:transparent;       /* sombra de texto: sobre claro embarra */
+  --gjs-color-highlight:var(--blue-mid);
+  --gjs-color-blue:var(--blue);
+  --gjs-color-red:var(--danger);
+  --gjs-color-green:var(--success);
+  --gjs-color-yellow:var(--warning);
+  --gjs-color-warn:var(--warning);
+  --gjs-left-width:252px;
+  --gjs-input-padding:7px;
+  --gjs-canvas-top:44px;
+  background:var(--bg);
+}
+#lp-gjs .gjs-editor, #gjs .gjs-editor{font-family:var(--font)}
+
+/* Barra superior (dispositivos, deshacer, ver código) */
+#lp-gjs .gjs-pn-commands, #gjs .gjs-pn-commands{
+  border-bottom:1px solid var(--border);background:var(--bg-subtle);
+  height:44px;display:flex;align-items:center;padding:0 10px}
+#lp-gjs .gjs-pn-options, #gjs .gjs-pn-options{padding:0}
+#lp-gjs .gjs-pn-btn, #gjs .gjs-pn-btn{
+  border-radius:var(--r);color:var(--text-2);font-size:16px;
+  min-height:30px;min-width:32px;transition:background var(--dur-fast),color var(--dur-fast)}
+#lp-gjs .gjs-pn-btn:hover, #gjs .gjs-pn-btn:hover{background:var(--bg-muted);color:var(--text)}
+#lp-gjs .gjs-pn-btn.gjs-pn-active, #gjs .gjs-pn-btn.gjs-pn-active{
+  background:var(--blue-lt);color:var(--blue);box-shadow:none}
+
+/* Pestañas del panel derecho */
+#lp-gjs .gjs-pn-views, #gjs .gjs-pn-views{
+  border-bottom:1px solid var(--border);background:var(--bg-subtle);
+  display:flex;align-items:center;justify-content:space-around;padding:6px}
+#lp-gjs .gjs-pn-views-container, #gjs .gjs-pn-views-container{
+  box-shadow:none;border-left:1px solid var(--border);background:var(--bg)}
+
+/* Títulos de sección (bloques, estilos, ajustes, capas).
+   El original los deja en «lighter» con 1px de espaciado sobre gris: pesa poco
+   y se lee peor. Aquí van como el resto de títulos de la aplicación. */
+#lp-gjs .gjs-category-title, #gjs .gjs-category-title,
+#lp-gjs .gjs-sm-sector-title, #gjs .gjs-sm-sector-title,
+#lp-gjs .gjs-block-category .gjs-title, #gjs .gjs-block-category .gjs-title,
+#lp-gjs .gjs-trait-category .gjs-title, #gjs .gjs-trait-category .gjs-title{
+  font-weight:700;letter-spacing:.3px;font-size:11px;text-transform:uppercase;
+  color:var(--muted);background:var(--bg-subtle);
+  border-bottom:1px solid var(--border);padding:10px 12px}
+#lp-gjs .gjs-category-open, #gjs .gjs-category-open,
+#lp-gjs .gjs-block-category.gjs-open, #gjs .gjs-block-category.gjs-open,
+#lp-gjs .gjs-sm-sector.gjs-sm-open, #gjs .gjs-sm-sector.gjs-sm-open,
+#lp-gjs .gjs-trait-category.gjs-open, #gjs .gjs-trait-category.gjs-open{
+  border-bottom:1px solid var(--border)}
+
+/* Bloques que se arrastran al lienzo: tarjetas, como las del resto de la app */
+#lp-gjs .gjs-blocks-c, #gjs .gjs-blocks-c{gap:8px;padding:10px}
+#lp-gjs .gjs-block, #gjs .gjs-block{
+  /* El margen de origen es un 2,5% a los lados y con él solo cabe un bloque
+     por fila en un panel de 250px. La separación la da el gap del contenedor. */
+  width:calc(50% - 4px);min-height:76px;padding:12px 8px;margin:0;
+  background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);
+  color:var(--text-2);box-shadow:none;
+  transition:border-color var(--dur-fast),background var(--dur-fast),transform var(--dur-fast)}
+#lp-gjs .gjs-block:hover, #gjs .gjs-block:hover{
+  border-color:var(--blue);background:var(--blue-lt);color:var(--blue);
+  box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+#lp-gjs .gjs-block-label, #gjs .gjs-block-label{
+  font-family:var(--font);font-size:11.5px;font-weight:600}
+#lp-gjs .gjs-block__media, #gjs .gjs-block__media{margin-bottom:7px;opacity:.75}
+
+/* Campos. En origen son cajas oscuras sin borde; aquí, como nuestros inputs. */
+#lp-gjs .gjs-field, #gjs .gjs-field{
+  background:var(--bg);border:1.5px solid var(--border);border-radius:8px}
+#lp-gjs .gjs-field:focus-within, #gjs .gjs-field:focus-within{border-color:var(--blue)}
+#lp-gjs .gjs-field input, #gjs .gjs-field input,
+#lp-gjs .gjs-field select, #gjs .gjs-field select,
+#lp-gjs .gjs-field textarea, #gjs .gjs-field textarea{
+  font-family:var(--font);color:var(--text)}
+#lp-gjs .gjs-sm-label, #gjs .gjs-sm-label,
+#lp-gjs .gjs-label, #gjs .gjs-label{font-weight:600;color:var(--muted)}
+
+/* Etiquetas de clase: fondo azul, así que el texto va en blanco */
+#lp-gjs .gjs-clm-tag, #gjs .gjs-clm-tag{color:#fff;font-weight:600;padding:5px 7px}
+#lp-gjs #gjs-clm-add-tag, #gjs #gjs-clm-add-tag,
+#lp-gjs .gjs-clm-tags-btn, #gjs .gjs-clm-tags-btn{
+  background:var(--bg-muted);border:1px solid var(--border);color:var(--text-2);border-radius:6px}
+/* Estos dos venían en blanco translúcido: sobre panel claro, invisibles */
+#lp-gjs #gjs-clm-close, #gjs #gjs-clm-close,
+#lp-gjs #gjs-clm-checkbox, #gjs #gjs-clm-checkbox{color:var(--text-2)}
+#lp-gjs .gjs-field-checkbox input:checked + .gjs-chk-icon,
+#gjs .gjs-field-checkbox input:checked + .gjs-chk-icon{border-color:var(--blue)}
+
+/* Capas */
+#lp-gjs .gjs-layer-item, #gjs .gjs-layer-item{border-bottom:1px solid var(--border2)}
+#lp-gjs .gjs-layer, #gjs .gjs-layer{font-weight:500}
+
+/* El lienzo. Fondo gris para que la página se lea como una hoja aparte. */
+#lp-gjs .gjs-cv-canvas, #gjs .gjs-cv-canvas{background:var(--bg-muted)}
+#lp-gjs .gjs-cv-canvas-bg, #gjs .gjs-cv-canvas-bg{background:transparent}
+#lp-gjs .gjs-frame-wrapper, #gjs .gjs-frame-wrapper{padding:0}
+#lp-gjs .gjs-frame, #gjs .gjs-frame{
+  box-shadow:var(--shadow-md);background:#fff}
+
+/* Barras de desplazamiento de los paneles */
+#lp-gjs .gjs-editor-cont ::-webkit-scrollbar-track,
+#gjs .gjs-editor-cont ::-webkit-scrollbar-track{background:transparent}
+#lp-gjs .gjs-editor-cont ::-webkit-scrollbar-thumb,
+#gjs .gjs-editor-cont ::-webkit-scrollbar-thumb{background:var(--border-h);border-radius:4px}
+
+/* Ventanas del editor (código, ajustes) */
+#lp-gjs .gjs-mdl-dialog, #gjs .gjs-mdl-dialog,
+.gjs-mdl-dialog{border-radius:var(--rlg);box-shadow:var(--shadow-lg)}
+
+/* En oscuro, las variables cambian solas con los tokens; lo único propio es
+   que el lienzo no puede ser gris claro y la hoja sigue siendo blanca. */
+[data-theme="dark"] #lp-gjs .gjs-cv-canvas,
+[data-theme="dark"] #gjs .gjs-cv-canvas{background:#080A14}
+[data-theme="dark"] #lp-gjs .gjs-block:hover,
+[data-theme="dark"] #gjs .gjs-block:hover{color:var(--text)}
 @media(max-width:760px){
   .lp-plantillas{grid-template-columns:1fr}
   .lp-item{flex-wrap:wrap}
