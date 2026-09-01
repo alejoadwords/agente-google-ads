@@ -33409,12 +33409,18 @@ function lpCargarGrapesWeb() {
 async function lpAbrir(id) {
   const p = lpPaginas.find(x => x.id === id);
   if (!p) return;
-  // La lista no trae el html/css (pesan): se piden al abrir.
+  // La lista no trae el html/css —pesan y harían lenta la vista—, así que el
+  // contenido se pide aparte. Pedirlo a la lista era el fallo que dejaba el
+  // editor en blanco: llegaba sin html y GrapesJS pintaba un lienzo vacío.
   let completa = p;
   try {
-    const d = await fetchAuth('/api/landings').then(r => r.json());
-    completa = (d.paginas || []).find(x => x.id === id) || p;
-  } catch {}
+    const d = await fetchAuth('/api/landings?id=' + encodeURIComponent(id)).then(r => r.json());
+    if (d.pagina) completa = d.pagina;
+    else throw new Error(d.error || 'sin contenido');
+  } catch (e) {
+    showToast('No se pudo abrir la página', 'error');
+    return;
+  }
 
   document.getElementById('lp-ed-overlay')?.remove();
   const ov = document.createElement('div');

@@ -93,6 +93,18 @@ export default async function handler(req, contexto) {
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
+  // Una sola página, CON su contenido. La lista no lo devuelve porque el html
+  // de cada página pesa y multiplicado por veinte hace la vista lenta; el
+  // editor tiene que pedirlo aparte.
+  if (req.method === 'GET' && url.searchParams.get('id')) {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/landings?id=eq.${url.searchParams.get('id')}&user_id=eq.${encodeURIComponent(userId)}&select=*`,
+      { headers: sbHeaders() }
+    ).then((r) => (r.ok ? r.json() : []));
+    if (!filas.length) return jsonResp({ error: 'Página no encontrada' }, 404);
+    return jsonResp({ pagina: filas[0] });
+  }
+
   if (req.method === 'GET') {
     const clientId = url.searchParams.get('client_id');
     const alcance = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '';
