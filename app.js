@@ -18308,6 +18308,18 @@ function crmFiltrosLimpiar() {
 // ni en el aviso de la ficha, ni en el filtro «Sin actividad», ni en las
 // tareas. Se comprueba por closed_at —que sella el modal de cierre— y por las
 // claves reservadas, porque un pipeline puede tener etapas de cierre propias.
+// Un lead con una tarea agendada para más adelante NO está abandonado: está
+// en curso. Llamarlo «sin actividad» es la forma más rápida de que el aviso
+// deje de creerse — reportado por Certain Pezzano el 01-09-2026.
+//
+// Una tarea VENCIDA no cuenta: ahí el lead sí necesita atención, y es
+// justamente de lo que el Pulso debe avisar.
+function tieneSeguimientoProgramado(l) {
+  if (!l || typeof crmTareasPorLead === 'undefined') return false;
+  const f = crmTareasPorLead[l.id];
+  return !!f && f >= crmFechaLocal(new Date());
+}
+
 const ETAPAS_CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
 function leadCerrado(l) {
   if (!l) return false;
@@ -18333,7 +18345,7 @@ function crmGetFilteredLeads() {
   if (crmQuickFilter === 'inactive') {
     const now = Date.now();
     leads = leads.filter(l => {
-      if (leadCerrado(l)) return false;
+      if (leadCerrado(l) || tieneSeguimientoProgramado(l)) return false;
       const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
       return Math.floor((now - lastActive) / 86400000) >= 7;
     });
@@ -18702,7 +18714,7 @@ function crmCardHTML(lead, now) {
   const ts = now || Date.now();
   const lastActive = lead.updated_at ? new Date(lead.updated_at).getTime() : new Date(lead.created_at || 0).getTime();
   const daysSince = Math.floor((ts - lastActive) / 86400000);
-  const showInactive = daysSince >= 7 && !leadCerrado(lead);
+  const showInactive = daysSince >= 7 && !leadCerrado(lead) && !tieneSeguimientoProgramado(lead);
   const score = lead.custom_fields && lead.custom_fields.score ? Number(lead.custom_fields.score) : null;
   let scoreColor = 'var(--muted)';
   if (score !== null) { if (score >= 8) scoreColor = '#10B981'; else if (score >= 5) scoreColor = '#F59E0B'; else scoreColor = '#EF4444'; }
@@ -19523,6 +19535,7 @@ function crmEstadoLead(l) {
   if (l.stage === 'perdido') return { txt: 'Perdida', color: '#9CA3AF', orden: 1 };
   // Una etapa de cierre propia del cliente tampoco es una oportunidad viva
   if (leadCerrado(l)) return { txt: 'Cerrada', color: '#9CA3AF', orden: 1 };
+  if (tieneSeguimientoProgramado(l)) return { txt: 'Con seguimiento', color: '#3B82F6', orden: 3 };
   const ref = l.updated_at || l.created_at;
   const dias = ref ? Math.floor((Date.now() - new Date(ref).getTime()) / 86400000) : 0;
   if (dias >= 7) return { txt: 'Sin actividad · ' + dias + ' d', color: '#F59E0B', orden: 2 };
@@ -23193,7 +23206,7 @@ function crmRenderAnalytics() {
   leads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
   const maxSrc = Math.max(...Object.values(sourceCounts), 1);
   const needsAttention = leads.filter(l => {
-    if (leadCerrado(l)) return false;
+    if (leadCerrado(l) || tieneSeguimientoProgramado(l)) return false;
     const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
     return Math.floor((now - lastActive) / 86400000) >= 7;
   }).sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)).slice(0, 8);
@@ -23879,8 +23892,13 @@ async function pulsoCrmCards() {
 
     const cards = [];
 
+    // Las tareas hacen falta para no llamar «abandonado» a quien tiene una
+    // visita agendada el jueves. Se piden aquí porque el Pulso vive en el
+    // inicio y puede abrirse sin haber entrado nunca al CRM.
+    try { await crmTareasCargar(); } catch {}
     const stale = leads.filter(l =>
       !leadCerrado(l) &&
+      !tieneSeguimientoProgramado(l) &&
       (now - new Date(l.updated_at || l.created_at).getTime()) > 3 * DAY
     );
     if (stale.length) {
@@ -24116,7 +24134,7 @@ function pulsoApplyHealth() {
     if (health !== 'rojo') {
       const hasStale = _pulsoLeadsCache.some(l =>
         l.client_id === c.id &&
-        !leadCerrado(l) &&
+        !leadCerrado(l) && !tieneSeguimientoProgramado(l) &&
         (now - new Date(l.updated_at || l.created_at).getTime()) > 3 * 864e5
       );
       if (hasStale) health = 'amarillo';

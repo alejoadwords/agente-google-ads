@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-seguimiento-programado",
+      "fecha": "2026-09-01",
+      "tipo": "arreglo",
+      "titulo": "Un lead con visita agendada ya no sale como «sin actividad»",
+      "texto": "El Pulso avisaba de leads abandonados que en realidad tenían una tarea programada para dentro de dos o tres días. Ahora, si un lead tiene una tarea pendiente para hoy o más adelante, no aparece como inactivo: ni en el Pulso, ni en el filtro «Sin actividad», ni en el aviso de su tarjeta, ni dispara las automatizaciones de reactivación. En la vista de lista esos leads se marcan como «Con seguimiento». Si la tarea ya venció, el aviso vuelve: ahí el lead sí necesita atención."
+    },
+    {
       "id": "2026-08-31-paginas-aterrizaje",
       "fecha": "2026-08-31",
       "tipo": "nuevo",

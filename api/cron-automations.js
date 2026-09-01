@@ -610,10 +610,23 @@ async function processInactiveTriggers() {
       const days = parseInt(auto.trigger.days) || 3;
       const cutoff = new Date(Date.now() - days * 864e5).toISOString();
       const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
-      const leads = await sb(`/leads?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&deleted_at=is.null&updated_at=lt.${encodeURIComponent(cutoff)}&select=id,stage&limit=100`);
+      const leads = await sb(`/leads?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&deleted_at=is.null&updated_at=lt.${encodeURIComponent(cutoff)}&select=id,stage,closed_at&limit=100`);
+
+      // Un lead con una tarea agendada para más adelante NO está inactivo:
+      // está en curso. Escribirle «hace días que no sabemos de ti» al que tiene
+      // visita el jueves queda fatal, y es justo lo que reportó el cliente en
+      // el Pulso. Se piden de una vez las tareas pendientes de esos leads.
+      const ids = (leads || []).map(l => l.id);
+      let conSeguimiento = new Set();
+      if (ids.length) {
+        const hoy = new Date().toISOString();
+        const tareas = await sb(`/activities?done=is.false&due_at=gte.${encodeURIComponent(hoy)}&lead_id=in.(${ids.join(',')})&select=lead_id`);
+        (tareas || []).forEach(t => t.lead_id && conSeguimiento.add(t.lead_id));
+      }
 
       for (const lead of (leads || [])) {
-        if (closed.includes(String(lead.stage || '').toLowerCase())) continue;
+        if (closed.includes(String(lead.stage || '').toLowerCase()) || lead.closed_at) continue;
+        if (conSeguimiento.has(lead.id)) continue;
         // Dedupe: un job por automatización+lead (histórico completo)
         const existing = await sb(`/automation_jobs?automation_id=eq.${auto.id}&lead_id=eq.${lead.id}&select=id&limit=1`);
         if (existing?.length) continue;
