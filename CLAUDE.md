@@ -1,95 +1,117 @@
-# Acuarius — Contexto del Proyecto
+# Acuarius — contexto del proyecto
 
-## Qué es Acuarius
-SaaS de marketing con IA para agencias y empresas en LatAm. Permite a los usuarios trabajar con agentes especializados de Google Ads, Meta Ads, TikTok Ads, SEO, Contenido para Redes y un Consultor de Marketing. Cada agente tiene un system prompt propio con skills embebidas.
+## Qué es
 
-## Stack técnico
-- Frontend: HTML + CSS + JavaScript vanilla (sin frameworks)
-- Un solo archivo JS principal: `app.js` (~9.000 líneas)
-- Un solo archivo HTML principal: `index.html`
-- API: Anthropic Claude (claude-sonnet-4-20250514)
-- Sin backend propio — todo corre en el cliente
+SaaS de marketing y CRM con IA para agencias y empresas en LatAm.
+**app.acuarius.app**. Dos cosas en una:
 
-## Estructura de app.js
-Los system prompts de cada agente son constantes al inicio del archivo:
-- `SYSTEM` — Google Ads
-- `SYSTEM_META` — Meta Ads
-- `SYSTEM_TIKTOK` — TikTok Ads
-- `SYSTEM_SEO` — SEO
-- `SYSTEM_SOCIAL` — Contenido para Redes
-- `SYSTEM_CONSULTOR` — Consultor de Marketing
+- **CRM**: leads, pipelines editables, tareas, agenda, equipo, inbox
+  multicanal, automatizaciones, campañas de correo y WhatsApp, propuestas,
+  páginas de aterrizaje, reportes.
+- **Agentes de IA**: Google Ads, Meta Ads, TikTok Ads, SEO, Contenido para
+  Redes y Consultor de Marketing, cada uno con su prompt y sus skills.
 
-Cada SYSTEM usa template literals con backticks. Las variables de inyección dinámica son:
-- `{MEMORY}` — perfil del cliente activo
-- `{STAGE}` — etapa del cliente
-- `{AGENT}` — agente activo
+Planes: **free**, **trial** (14 días de Pro), **pro** (39 USD) y **agency**
+(99 USD), cobrados por Hotmart.
 
-## Regla crítica de sintaxis — NUNCA violar
-Los system prompts son template literals JS (backticks). NUNCA incluir backticks sueltos dentro del contenido de los prompts — rompen el string y crashean toda la aplicación. Si necesitas mostrar código o comandos dentro de un prompt, usar comillas simples o dobles en su lugar.
+## Stack
 
-Ejemplo del error:
-```js
-// MAL — esto rompe el template literal
-const SYSTEM = `Usa site:dominio.com para verificar...`
+- **Frontend**: HTML + CSS + JavaScript vanilla, sin framework y **sin paso de
+  compilación**. `public/index.html` (~5.800 líneas, todo el CSS dentro) y
+  `public/app.js` (~34.000 líneas).
+- **Backend**: ~128 funciones en `api/`, casi todas **edge de Vercel**
+  (`export const config = { runtime: 'edge' }`). Las de cron son Node.
+- **Base**: Supabase (PostgREST). 53 tablas. **El esquema no está versionado**:
+  los `CREATE TABLE` que hay comentados dentro de `api/*.js` son
+  aspiracionales, no la verdad. Preguntarle siempre a la base.
+- **Identidad**: Clerk (`clerk.acuarius.app`). El JWT v2 **ya no trae
+  `public_metadata`**, así que los gates de plan tienen que preguntarle a Clerk.
+- **IA**: API de Anthropic. Sonnet 5 para los agentes, Haiku 4.5 donde basta.
+- **Correo**: Resend, solo desde el dominio verificado app.acuarius.app.
+- **`package.json` no tiene ni una dependencia**, a propósito. Lo que hace
+  falta (VAPID, cifrado push, JWT) va con WebCrypto.
 
-// BIEN
-const SYSTEM = `Usa site:dominio.com para verificar...`
-// (sin backticks internos)
+## Estructura
+
+```
+public/          lo que sirve el navegador — index.html, app.js, sw.js, manifest…
+api/             funciones. api/_*.js son módulos compartidos, no endpoints
+prompts/         los system prompts de los agentes, uno por fichero
+tools/           utilidades de terminal (soporte, mapas)
+.claude/skills/  manuales para trabajar aquí (soporte)
 ```
 
-Siempre ejecutar después de cualquier cambio al sistema de prompts:
-```bash
-node --check app.js
-```
+## Reglas de despliegue que causan fallos raros
 
-## Función de renderizado de markdown: fmt()
-Ubicada alrededor de la línea 6721 de app.js. Convierte el output del agente en HTML. Soporta:
-- Tablas markdown (|col1|col2|)
-- Headers ## y ###
-- Bold **texto**
-- Listas con –, - y numeradas
-- Separadores ---
+1. **`public/` es la raíz web.** Todo fichero que cargue el navegador tiene que
+   estar en `public/`. Hay copias en la raíz por historia: al tocar `app.js`,
+   `index.html` o `novedades.json` hay que copiarlos (`cp public/app.js app.js`)
+   o el cambio es invisible en producción.
+2. **Un `api/_*.js` solo se importa desde funciones edge.** Desde una función
+   Node rompe el build.
+3. **El catch-all de `vercel.json` devuelve 200 con el shell de la app** para
+   cualquier ruta que no empiece por `/api`. Al verificar un despliegue,
+   comprobar por **contenido**, nunca por código de estado.
+4. **`READY` en Vercel no prueba que producción sirva tu código.** Hacer grep
+   del cambio en el asset servido:
+   `curl -s "https://app.acuarius.app/app.js?v=$RANDOM" | grep -c loQueCambié`
+5. **Upserts a Supabase: `?on_conflict=` es obligatorio.** Sin él, el segundo
+   guardado da 409.
 
-Si se agrega soporte para nuevos elementos markdown, debe hacerse en esta función.
+## Convenciones
 
-## Sistema de suggestions
-Al final de cada respuesta del agente, el modelo genera un bloque:
-[SUGERENCIAS: opción1 | opción2 | opción3]
-El frontend lo intercepta y renderiza como botones de acción rápida debajo de la respuesta.
+- **Todo el texto que ve el usuario, en español de LatAm.** Los comentarios del
+  código también: explican *por qué*, no *qué*.
+- **Colores y medidas siempre con `var(--token)`**, nunca hex sueltos. Botones
+  con `.btn-pri` / `.btn-ghost`, iconos con `icn()`, vacíos con `emptyAgua()`.
+  Antes de publicar algo visual, comprobar que **cada `var(--x)` y cada clase
+  existan**: un token inventado no falla, solo se ve mal.
+- **Toda mejora visible lleva su entrada en `public/novedades.json`, en el
+  mismo commit.** Validar el JSON (`python3 -c "import json;json.load(...)"`)
+  antes de comitear, sobre todo tras resolver un rebase.
+- **Fallar a la vista, nunca en silencio.** Ante cualquier cambio:
+  «¿qué se ve si esto falla?».
+- **Los avisos a clientes se firman «Equipo de Soporte — Acuarius»**, nunca con
+  un nombre propio.
 
-## Sistema de detección de intenciones especiales
-El frontend intercepta ciertos bloques en el output del agente:
-- [GAQL_QUERY: ...] → ejecuta query contra la API de Google Ads del cliente
-- [PARRILLA_LISTA] → activa botón de exportar a Google Sheets
-- [GENERAR_IMAGENES_PARRILLA] → activa botón de generación de imágenes
-- [SOCIAL_OPTIONS] → muestra opciones de acción del agente de contenido
+## Los prompts de los agentes
 
-## Panel de clientes
-Los clientes se guardan en localStorage. Cada cliente tiene:
-- Nombre del negocio, industria, presupuesto, objetivo, etapa
-- El perfil se inyecta como {MEMORY} en cada system prompt
+Viven en `prompts/` (uno por agente, ~3.700 líneas en total) y son **template
+literals con backticks**. Variables de inyección: `{MEMORY}` (perfil del
+cliente), `{STAGE}` (etapa) y `{AGENT}` (agente activo).
 
-## Convenciones de código
-- Todo el código en español en los prompts, inglés en el código JS
-- Variables CSS con var(--nombre) para colores y estilos
-- No usar frameworks externos salvo los ya incluidos (jsPDF para exportar)
-- Validar siempre con node --check antes de hacer deploy
+**Nunca meter un backtick suelto dentro del contenido de un prompt**: rompe el
+string y tumba la aplicación entera. Si hay que mostrar código o un comando,
+usar comillas simples o dobles. Siempre `node --check` después de tocarlos.
 
-## Deploy
-Los archivos se suben directamente al servidor. No hay proceso de build. El archivo que el servidor sirve como /app.js debe ser el app.js editado.
+Las actualizaciones de conocimiento van en `prompts/actualizaciones-2026.js`;
+**no se tocan los prompts grandes** para eso.
 
-## Deuda técnica conocida
-- app.js tiene ~9.000 líneas en un solo archivo (candidato a refactorización modular)
-- Los system prompts podrían separarse en /prompts/google-ads.js, /prompts/meta-ads.js, etc.
-- No hay tests automatizados
+## Bloques que el frontend intercepta
 
-## Funciones pendientes / roadmap
-- Agente de LinkedIn Ads (el system prompt base existe, falta activarlo)
-- Skills compartidas de A/B Test y Attribution Model para Google Ads y Meta
-- Mejoras al sistema de reportes automáticos
+El modelo los emite al final de su respuesta y `app.js` los convierte en
+botones o acciones. Se parsean con regex exacto: **cambiar el formato los
+rompe**.
 
-## Errores frecuentes a evitar
-1. Backticks dentro de template literals de system prompts → siempre node --check
-2. str_replace con strings duplicados → siempre buscar con grep antes de reemplazar
-3. Cambios en fmt() que rompan el renderizado de tablas → verificar con una respuesta que tenga tabla
-4. Modificar SUGERENCIAS block format → el frontend lo parsea con regex exacto
+`[SUGERENCIAS: a | b | c]` · `[GAQL_QUERY: …]` · `[PARRILLA_LISTA]` ·
+`[GENERAR_IMAGENES_PARRILLA]` · `[SOCIAL_OPTIONS]` · `[CAMPAIGN_BUILD]` ·
+`[CALIFICACION]`
+
+El markdown de las respuestas lo renderiza `fmt()` en `public/app.js`. Soporta
+tablas, `##`/`###`, negritas, listas y separadores. Si se toca, verificar con
+una respuesta que traiga tabla.
+
+## Crons
+
+14, en `vercel.json`. Los dos que más aparecen en soporte: `cron-automations` y
+`cron-campaigns`, ambos **cada 10 minutos** — nada de esto es instantáneo.
+
+## Soporte a clientes
+
+Hay un manual: `/soporte` (en `.claude/skills/soporte/`). Empieza siempre por
+`node tools/soporte.mjs <correo>`.
+
+## Lo que está bloqueado
+
+**Meta**: la app no ha pasado App Review, así que **ningún cliente puede
+conectar su cuenta de Meta todavía**. No es un fallo de su cuenta.
