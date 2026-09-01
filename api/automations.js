@@ -6,8 +6,6 @@
 //        condition {field,op,value} | change_stage {stage} | add_note {text}
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_registro-errores.js';
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -143,7 +141,7 @@ function validateAutomation(body) {
   return null;
 }
 
-async function manejar(req) {
+export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
   let userId = await getUserId(req);
@@ -250,7 +248,3 @@ async function manejar(req) {
 
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
-
-// Envuelto para que una excepción no se convierta en un 500 mudo: queda
-// registrada en error_log y el cron de la hora siguiente avisa.
-export default conErrores('automations', manejar);

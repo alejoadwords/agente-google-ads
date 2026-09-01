@@ -7,8 +7,6 @@
 // automatizaciones); las rutas públicas van por public_token, sin sesión.
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_registro-errores.js';
-
 import { registrarUso } from './_uso-ia.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -167,7 +165,7 @@ Aceptar con el botón (el plan elegido se confirma en el kickoff). Vigencia: 15 
 Extensión: 400-600 palabras.`,
 };
 
-async function manejar(req) {
+export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
 
@@ -506,7 +504,3 @@ async function manejar(req) {
 
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
-
-// Envuelto para que una excepción no se convierta en un 500 mudo: queda
-// registrada en error_log y el cron de la hora siguiente avisa.
-export default conErrores('proposals', manejar);

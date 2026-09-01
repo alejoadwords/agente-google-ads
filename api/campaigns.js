@@ -6,8 +6,6 @@
 // de leads con etiqueta 'no-email' (baja) y de leads sin email/teléfono.
 export const config = { runtime: 'edge' };
 
-import { conErrores } from './_registro-errores.js';
-
 import { campaignHtml } from './_campaign-email.js';
 
 
@@ -227,7 +225,7 @@ async function monthlySent(userId) {
   return parseInt((r.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
 }
 
-async function manejar(req) {
+export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   let userId = await getUserId(req);
   if (userId && _lastPlan === 'free') {
@@ -508,7 +506,3 @@ async function manejar(req) {
 
   return jsonResp({ error: 'Método no permitido' }, 405);
 }
-
-// Envuelto para que una excepción no se convierta en un 500 mudo: queda
-// registrada en error_log y el cron de la hora siguiente avisa.
-export default conErrores('campaigns', manejar);
