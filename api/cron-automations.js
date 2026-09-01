@@ -620,7 +620,7 @@ async function processInactiveTriggers() {
       let conSeguimiento = new Set();
       if (ids.length) {
         const hoy = new Date().toISOString();
-        const tareas = await sb(`/activities?done=is.false&due_at=gte.${encodeURIComponent(hoy)}&lead_id=in.(${ids.join(',')})&select=lead_id`);
+        const tareas = await sb(`/activities?done=is.false&cancelled_at=is.null&due_at=gte.${encodeURIComponent(hoy)}&lead_id=in.(${ids.join(',')})&select=lead_id`);
         (tareas || []).forEach(t => t.lead_id && conSeguimiento.add(t.lead_id));
       }
 

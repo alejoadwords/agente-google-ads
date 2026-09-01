@@ -110,6 +110,14 @@ function tagColorFor(name) {
 //
 // La auto-etiqueta de fuente se salva siempre de esa regla: no la escribe
 // nadie, la pone el sistema, y bloquearla rompería la trazabilidad del origen.
+// Un lead cerrado —ganado o perdido— ya no necesita seguimiento. Las claves
+// 'ganado' y 'perdido' son reservadas del sistema y ningún pipeline puede
+// renombrarlas, pero un cliente puede haber creado etapas propias de cierre, y
+// el modal de cierre sella closed_at: cualquiera de las dos cosas basta.
+// Repetida a propósito en agenda.js y cron-tasks.js: no comparten módulo
+// porque no comparten entorno. Si cambia, cambia en las tres.
+const ETAPAS_CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+
 async function prepareTags(userId, clientId, tags, source, puedeCrear = true) {
   const set = new Set((Array.isArray(tags) ? tags : []).map(normalizeTag).filter(t => t.length >= 2));
   let autoTag = null;
@@ -773,12 +781,14 @@ export default async function handler(req) {
     // Si cambia la etapa o las etiquetas, capturar el estado anterior para los triggers
     let prevStage = null;
     let prevTags = null;
-    if (update.stage !== undefined || update.tags !== undefined) {
+    let prevCerrado = null;
+    if (update.stage !== undefined || update.tags !== undefined || update.closed_at !== undefined) {
       try {
-        const pre = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=stage,tags`, { headers: sbHeaders() });
+        const pre = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=stage,tags,closed_at`, { headers: sbHeaders() });
         const prev = (await pre.json())?.[0];
         prevStage = prev?.stage ?? null;
         prevTags = prev?.tags ?? [];
+        prevCerrado = prev ? (ETAPAS_CERRADAS.includes(String(prev.stage || '').toLowerCase()) || !!prev.closed_at) : null;
       } catch {}
     }
 
@@ -788,6 +798,28 @@ export default async function handler(req) {
     );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const rows = await res.json();
+    // Al cerrar un lead, sus tareas pendientes se cierran con él.
+    //
+    // Sin esto se quedaban abiertas para siempre: el comercial seguía viendo
+    // «llamar a este cliente» de alguien que ya dijo que no, y la cuenta de
+    // tareas vencidas crecía sola. Es lo que reportó un cliente y lo que se
+    // parcheó ignorándolas al leer; esto lo arregla donde nace.
+    //
+    // Se anulan, NO se marcan hechas: nadie las hizo, y el reporte de
+    // productividad cuenta las hechas por día. Acreditarle a un comercial
+    // trabajo que no hizo sería peor que el fallo que arregla.
+    if (rows[0] && prevCerrado === false) {
+      const ahoraCerrado = ETAPAS_CERRADAS.includes(String(rows[0].stage || '').toLowerCase()) || !!rows[0].closed_at;
+      if (ahoraCerrado) {
+        try {
+          await fetch(
+            `${SUPABASE_URL}/rest/v1/activities?lead_id=eq.${id}&user_id=eq.${encodeURIComponent(userId)}&done=is.false&cancelled_at=is.null`,
+            { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ cancelled_at: new Date().toISOString() }) }
+          );
+        } catch (e) { console.error('[leads] no se pudieron cerrar las tareas del lead:', e.message); }
+      }
+    }
+
     // Trigger de automatizaciones: cambio de etapa real
     if (rows[0] && update.stage !== undefined && prevStage !== null && prevStage !== update.stage) {
       await enqueueAutomations(userId, rows[0], 'stage_changed', update.stage);

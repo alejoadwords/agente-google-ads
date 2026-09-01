@@ -49,7 +49,7 @@ async function tareasFantasma() {
 
 // ── Revisión 2: tareas que nunca podrán verse en una tarjeta ────────────────
 async function tareasSinLead() {
-  const filas = await sb('activities?type=eq.task&done=is.false&lead_id=is.null&select=id,title&limit=200');
+  const filas = await sb('activities?type=eq.task&done=is.false&cancelled_at=is.null&lead_id=is.null&select=id,title&limit=200');
   return filas?.length
     ? { titulo: 'Tareas pendientes sin lead (no salen en ninguna ficha)', detalle: filas.map(f => `«${f.title}»`) }
     : null;
@@ -59,7 +59,7 @@ async function tareasSinLead() {
 // Con un cliente activo, el filtro las esconde: existen pero no se ven.
 async function clienteDesajustado() {
   const [tareas, leads] = await Promise.all([
-    sb('activities?type=eq.task&done=is.false&select=id,title,lead_id,client_id&limit=2000'),
+    sb('activities?type=eq.task&done=is.false&cancelled_at=is.null&select=id,title,lead_id,client_id&limit=2000'),
     sb('leads?select=id,client_id&limit=5000'),
   ]);
   const deLead = new Map((leads || []).map(l => [l.id, l.client_id || null]));

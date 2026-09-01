@@ -92,7 +92,7 @@ export default async function handler(req, res) {
 
   // Solo las cuentas que tienen algo pendiente hasta el final del día
   const pendientes = await fetch(
-    `${SUPABASE_URL}/rest/v1/activities?done=is.false&due_at=lte.${encodeURIComponent(finDeHoy.toISOString())}&select=*&order=due_at.asc&limit=5000`,
+    `${SUPABASE_URL}/rest/v1/activities?done=is.false&cancelled_at=is.null&due_at=lte.${encodeURIComponent(finDeHoy.toISOString())}&select=*&order=due_at.asc&limit=5000`,
     { headers: sb() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
   if (!pendientes?.length) return res.status(200).json(resumen);

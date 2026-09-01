@@ -104,14 +104,21 @@ async function radiografia(busqueda) {
     sql(`select agent_key from public.user_profiles where user_id = '${id}';`),
     sql(`select count(*) filter (where deleted_at is null) as activos,
                 count(*) filter (where deleted_at is not null) as papelera,
-                count(*) filter (where deleted_at is null and assigned_to is null) as sin_asignar,
+                count(*) filter (where deleted_at is null and assigned_to is null
+                     and closed_at is null and stage not in ('ganado','perdido')) as sin_asignar,
                 count(*) filter (where deleted_at is null and pipeline_id is null) as sin_pipeline,
                 count(*) filter (where deleted_at is null and updated_at < now() - interval '30 days') as quietos,
                 max(created_at) as ultimo
          from public.leads where user_id = '${id}';`),
-    sql(`select count(*) filter (where not coalesce(done, false) and due_at < now()) as vencidas,
-                count(*) filter (where not coalesce(done, false) and due_at >= now()) as futuras
-         from public.activities where user_id = '${id}';`),
+    sql(`select count(*) filter (where pendiente and due_at < now()) as vencidas,
+                count(*) filter (where pendiente and due_at < now() and not cerrado) as vencidas_vivas,
+                count(*) filter (where pendiente and due_at >= now()) as futuras,
+                count(*) filter (where pendiente and cerrado) as huerfanas
+         from (select a.due_at,
+                      not coalesce(a.done, false) and a.cancelled_at is null as pendiente,
+                      (l.closed_at is not null or l.stage in ('ganado','perdido')) as cerrado
+               from public.activities a left join public.leads l on l.id = a.lead_id
+               where a.user_id = '${id}') t;`),
     sql(`select title, slug, published, visits from public.landings where user_id = '${id}';`),
     sql(`select name, status, channel, sent_at from public.campaigns where user_id = '${id}' order by created_at desc limit 5;`),
   ]);
@@ -158,7 +165,7 @@ async function radiografia(busqueda) {
   autos.forEach((a) => console.log(`  ${(a.name || '—').slice(0, 34).padEnd(36)} ${a.active ? 'activa  ' : 'apagada '} ${String(a.trigger || '').padEnd(16)} ${a.ejecuciones} ejecuciones`));
 
   titulo('TAREAS');
-  console.log(`  ${T.vencidas} vencidas sin completar · ${T.futuras} programadas`);
+  console.log(`  ${T.vencidas} vencidas sin completar · ${T.futuras} programadas${Number(T.huerfanas) ? ` · ${T.huerfanas} sobre leads ya cerrados` : ''}`);
 
   if (paginas.length) {
     titulo('PÁGINAS DE ATERRIZAJE');
@@ -191,8 +198,13 @@ async function radiografia(busqueda) {
   if (!claves.has('__assign_rules__') && comerciales.length) {
     avisar('medio', 'Hay equipo pero el reparto automático nunca se configuró: los leads llegan sin dueño.');
   }
-  if (Number(T.vencidas) > 0) {
-    avisar('medio', `${T.vencidas} tarea(s) de seguimiento vencidas sin completar.`);
+  if (Number(T.huerfanas) > 0) {
+    avisar('medio', `${T.huerfanas} tarea(s) pendientes sobre leads YA CERRADOS. Desde el 01-09-2026 se anulan solas al cerrar el lead; estas son de antes y hay que limpiarlas.`);
+  }
+  // Las huérfanas NO son un subconjunto de las vencidas —hay huérfanas con
+  // fecha futura—, así que restarlas daba negativos. Se cuenta cada cosa.
+  if (Number(T.vencidas_vivas) > 0) {
+    avisar('medio', `${T.vencidas_vivas} tarea(s) de seguimiento vencidas sobre leads todavía vivos.`);
   }
   if (limite && Number(L.activos) / limite >= 0.8) {
     avisar(Number(L.activos) >= limite ? 'alto' : 'medio',

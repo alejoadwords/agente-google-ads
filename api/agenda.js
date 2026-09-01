@@ -187,7 +187,7 @@ export default async function handler(req) {
     // pendiente, que es lo que el comercial espera.
     // Con un cliente activo se ven las suyas Y las que no cuelgan de ningún
     // cliente: una lista de trabajo nunca debe esconder algo pendiente.
-    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&done=is.false`
+    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null`
       + (clientId ? `&or=(client_id.eq.${clientId},client_id.is.null)` : '')
       + `&due_at=lte.${encodeURIComponent(hasta)}&select=*&order=due_at.asc&limit=400`;
     const tareas = await fetch(q, { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
@@ -238,7 +238,7 @@ export default async function handler(req) {
   if (req.method === 'GET' && url.searchParams.get('lead_id')) {
     const leadId = url.searchParams.get('lead_id');
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&lead_id=eq.${leadId}&select=*&order=due_at.asc`,
+      `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&lead_id=eq.${leadId}&cancelled_at=is.null&select=*&order=due_at.asc`,
       { headers: sbHeaders() }
     );
     return jsonResp({ activities: (await res.json()) || [] });
@@ -248,7 +248,7 @@ export default async function handler(req) {
   if (req.method === 'GET') {
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
-    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}${scope}&select=*&order=due_at.asc&limit=500`;
+    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}${scope}&cancelled_at=is.null&select=*&order=due_at.asc&limit=500`;
     if (from) q += `&due_at=gte.${encodeURIComponent(from)}`;
     if (to) q += `&due_at=lte.${encodeURIComponent(to)}`;
     const res = await fetch(q, { headers: sbHeaders() });

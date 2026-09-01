@@ -93,7 +93,7 @@ export async function crearTareaPrimerContacto(userId, lead, comercial) {
     // Si ya tiene una tarea pendiente no se le apila otra: el comercial vería
     // dos recordatorios de lo mismo cada vez que el lead se reasigna.
     const yaHay = await fetch(
-      `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${lead.id}&done=is.false&type=eq.task&select=id&limit=1`,
+      `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${lead.id}&done=is.false&cancelled_at=is.null&type=eq.task&select=id&limit=1`,
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     if (yaHay?.length) return null;
@@ -135,7 +135,7 @@ export async function crearTareaVentana(userId, lead, conv, quedan) {
     // entera, con lo que nunca encontraría la tarea previa y las duplicaría.
     const abiertas = await fetch(
       `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${lead.id}` +
-      `&done=is.false&type=eq.task&select=id,title&limit=20`,
+      `&done=is.false&cancelled_at=is.null&type=eq.task&select=id,title&limit=20`,
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     if ((abiertas || []).some(t => String(t.title || '').startsWith(TITULO_VENTANA))) return null;
