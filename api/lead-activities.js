@@ -238,10 +238,20 @@ export default async function handler(req) {
         // ajustar es infinitamente mejor que una tarea que no existe; cuando
         // haya cuentas en otro huso, el navegador nuevo ya manda la hora exacta
         // y este camino no se usa.
-        const cuando = /Z|[+-]\d{2}:?\d{2}$/.test(meta.due_date)
-          ? new Date(meta.due_date)
-          : new Date(meta.due_date + ':00-05:00');
-        if (!isNaN(cuando)) {
+        // OJO: NO basta con mirar si la fecha resultante es inválida. El parser
+        // de fechas de V8 es indulgente y rescata algo de casi cualquier texto:
+        // new Date('texto basura:00-05:00') devuelve el 1 de enero de 2000, no
+        // una fecha inválida. Sin comprobar el formato ANTES, una fecha
+        // corrupta habría creado una tarea vencida hace 26 años en la tarjeta
+        // del lead. Por eso se valida la forma y luego el rango.
+        const txt = String(meta.due_date);
+        const conZona = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(txt);
+        const sinZona = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(txt);
+        const cuando = conZona ? new Date(txt) : sinZona ? new Date(txt + ':00-05:00') : new Date(NaN);
+        // Y un rango con sentido: una tarea ni es de 1999 ni de dentro de 20 años.
+        const MIN = Date.UTC(2020, 0, 1), MAX = Date.now() + 5 * 365 * 86400000;
+        const enRango = !isNaN(cuando) && cuando.getTime() > MIN && cuando.getTime() < MAX;
+        if (enRango) {
           const ya = await fetch(
             `${SUPABASE_URL}/rest/v1/activities?lead_id=eq.${lead_id}&type=eq.task` +
             `&due_at=eq.${encodeURIComponent(cuando.toISOString())}&select=id&limit=1`,
@@ -264,7 +274,7 @@ export default async function handler(req) {
             if (!creada) console.error('[tarea] no se pudo crear la tarea real del lead', lead_id);
           }
         } else {
-          console.error('[tarea] fecha ilegible, no se creó la tarea real:', meta.due_date);
+          console.error('[tarea] fecha ilegible o fuera de rango, no se creó la tarea real:', meta.due_date);
         }
       } catch (e) {
         // Nunca tumba la respuesta: el historial ya está guardado.
