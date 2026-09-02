@@ -157,6 +157,16 @@ Si dice que la marcó y sigue en rojo: el chip de la tarjeta sale de otra
 consulta. Que recargue. Y si es un lead de otro comercial, la casilla sale
 bloqueada a propósito.
 
+## «Marqué una tarea sin querer» / «el correo marcó tareas solas»
+
+- En la **ficha del lead** las hechas siguen a la vista siete días, tildadas:
+  se destildan y vuelven a estar pendientes. No hace falta tocar la base.
+- El enlace **«Ya la hice»** del correo diario **no marca al abrirse**: lleva a
+  una página con un botón, justamente para que ningún antivirus de correo las
+  marque solas. Si alguien dice que se marcaron solas, no puede ser por ahí —
+  mirar quién más tiene acceso a la cuenta.
+- El enlace **caduca a los 14 días** y solo sirve para su tarea y su cuenta.
+
 ## «Cambié algo y no lo veo»
 
 Antes de investigar: **¿está desplegado?** Un `READY` en Vercel no prueba que
