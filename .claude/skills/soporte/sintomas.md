@@ -84,6 +84,29 @@ Ver [[project_meta_acceso_avanzado]].
 - Hoy se avisa al **entrar un lead** y al **haber actividad**. El aviso de
   **tarea vencida todavía no existe**: no prometerlo.
 
+## «Le dejo una nota al comercial y no se entera»
+
+- Mirar primero **cuál de las dos notas usó**. La «Nota» de *Registrar
+  actividad* no avisa a nadie a propósito; la que avisa es **«Nota al
+  responsable»**, el icono de la tarjeta y de la fila de acciones. En la base
+  se distinguen: solo la segunda lleva `metadata->>'para'`.
+
+```sql
+select created_at, metadata->>'para' as para, metadata->>'avisado_at' as avisado,
+       metadata->>'leida_at' as leida
+from lead_activities where user_id = '<owner>' and type = 'nota'
+order by created_at desc limit 20;
+```
+
+- **`para` nulo** en todas → está usando la nota que no avisa: es explicación,
+  no fallo.
+- **`para` con valor y `leida_at` nulo** → el aviso se generó. Entonces el
+  correo es lo que falta: `node tools/exports.mjs`, porque el aviso vive en
+  `api/_aviso-lead-nota.js` y ya se rompió una vez por un `export` mal puesto.
+  Desde el 01-09-2026 un aviso que no sale también queda en `error_log`.
+- El **push al celular casi nunca llega**: hay que tener fila en `push_subs`, y
+  la mayoría de comerciales no la tiene. El canal de verdad es el correo.
+
 ## «El chat con el agente no responde / se corta»
 
 - Hay **cupo de uso de IA** por plan (`ai_usage`). Agotado, no responde.

@@ -101,6 +101,8 @@ node tools/mapa-modulos.mjs > .claude/skills/soporte/modulos.md
 
 - **Certain Pezzano** — `direccioncomercial@certainpezzano.com` (dueña, plan
   pro) y `asesor1@certainpezzano.com`. Inmobiliaria; sus leads viven en el
-  tablero **Arriendo**, no en el Principal, cosa que despista al mirar. Ha
-  reportado dos cosas, las dos ya arregladas: seguimientos de leads perdidos y
-  leads marcados «sin actividad» teniendo tarea programada.
+  tablero **Arriendo**, no en el Principal, cosa que despista al mirar. Usan
+  mucho la nota al responsable: la dueña escribe y Maira Ballesteros (vendedora,
+  el único asiento) atiende. Ha reportado tres cosas, las tres ya arregladas:
+  seguimientos de leads perdidos, leads marcados «sin actividad» teniendo tarea
+  programada, y las notas al responsable que no avisaban.
