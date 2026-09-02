@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-avisarme-y-analitica",
+      "fecha": "2026-09-01",
+      "tipo": "correccion",
+      "titulo": "El botón «Avisarme cuando esté disponible» ya funciona",
+      "texto": "En la ventana de los agentes que aún no están listos, el botón para pedir aviso no llevaba a ninguna parte: el enlace estaba roto y quien lo pulsaba no nos avisaba de nada. Ya abre el correo como debía. De paso corregimos la analítica de la plataforma, que llevaba tiempo sin registrar visitas por una regla de rutas mal puesta."
+    },
+    {
       "id": "2026-09-01-conexiones-al-abrir",
       "fecha": "2026-09-01",
       "tipo": "correccion",
