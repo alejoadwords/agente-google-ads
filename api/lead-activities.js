@@ -328,6 +328,21 @@ export default async function handler(req) {
           aviso = { enviado: false, motivo: 'no se pudo enviar el correo' };
           console.error('aviso nota lead:', e?.message);
         }
+        // Un aviso que no sale deja al comercial sin enterarse y a nadie más
+        // mirando: durante seis días el módulo de correo dejó de exportar su
+        // función y el único rastro fue un console.error que no lee nadie. Va
+        // al registro de errores para que salga en el aviso diario.
+        if (!aviso?.enviado) {
+          try {
+            const { registrarError } = await import('./_registro-errores.js');
+            await registrarError({
+              origen: 'api',
+              donde: 'lead-activities/aviso-nota',
+              error: new Error('el aviso al responsable no salió: ' + (aviso?.motivo || 'sin motivo')),
+              usuario: userId,
+            });
+          } catch {}
+        }
         // Y al móvil de esa persona. El correo puede tardar en abrirse; una
         // nota de dirección suele querer respuesta hoy, no mañana.
         try {

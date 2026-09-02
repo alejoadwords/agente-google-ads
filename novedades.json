@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-aviso-nota-responsable",
+      "fecha": "2026-09-01",
+      "tipo": "arreglo",
+      "titulo": "Las notas de la dirección vuelven a avisarle al comercial",
+      "texto": "Cuando dejabas una «Nota al responsable» en un lead, la nota quedaba guardada pero el correo al comercial no salía: desde el 31 de agosto el aviso se estaba quedando por el camino. Ya vuelve a llegar. Además la campana se actualiza sola cada pocos minutos, así que si tu comercial tiene la app abierta toda la mañana, la nota que escribes ahora le aparece sin tener que recargar. Y si algún aviso no sale, ahora nos enteramos el mismo día en vez de esperar a que alguien lo reporte.",
+      "accion": {
+        "texto": "Ir al CRM",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-09-01-avisarme-y-analitica",
       "fecha": "2026-09-01",
       "tipo": "correccion",

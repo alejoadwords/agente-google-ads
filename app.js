@@ -4703,6 +4703,11 @@ window.onload = async () => {
   // arrancar: si solo se cargaran al abrir el CRM, quien entra a Inicio no vería
   // el aviso hasta pasar por el tablero, que es justo donde ya no hace falta.
   setTimeout(function(){ initAlertsBadge(); crmAvisosCargar(); }, 3000);
+  // Y se vuelven a pedir cada tanto. Un comercial deja la pestaña abierta toda
+  // la mañana: si la campana solo se llenara al cargar la página, una nota que
+  // la dirección escribe a media mañana no aparecería hasta el día siguiente.
+  setInterval(function(){ if (!document.hidden) crmAvisosRefrescar(); }, 180000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) crmAvisosRefrescar(); });
 };
 
 // ONBOARDING
@@ -19176,6 +19181,17 @@ async function crmAvisosCargar() {
     crmAvisos.forEach(a => { crmAvisosPorLead[a.lead_id] = (crmAvisosPorLead[a.lead_id] || 0) + 1; });
     if (typeof refrescarCampana === 'function') refrescarCampana();
   } catch (e) { console.warn('crmAvisosCargar', e); }
+}
+
+// Recarga periódica: si llegó una nota nueva hay que repintar el tablero, que
+// es donde vive el punto azul de cada tarjeta. Sin repintar, la campana diría 1
+// y la ficha del lead seguiría igual que hace una hora.
+async function crmAvisosRefrescar() {
+  const antes = crmAvisos.length;
+  await crmAvisosCargar();
+  if (crmAvisos.length !== antes && document.getElementById('view-crm')?.classList.contains('active')) {
+    try { crmRender(); } catch (e) { console.warn('crmAvisosRefrescar', e); }
+  }
 }
 
 // timeAgo() devuelve «3h», que en una lista de avisos se lee raro sin el «hace».

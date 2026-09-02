@@ -44,11 +44,11 @@ async function correoDe(ownerId, quienId) {
   return null;
 }
 
-export // Una nota puede llevar enlaces escritos como [texto](url) — ver actTexto() en
+// Una nota puede llevar enlaces escritos como [texto](url) — ver actTexto() en
 // public/app.js. Aqui se pintan igual, o el comercial recibe por correo los
 // corchetes en crudo. Mismo orden y misma regla: escapar primero, y solo
 // http/https, nunca javascript:.
-function conEnlaces(txt) {
+export function conEnlaces(txt) {
   let out = esc(String(txt || ''));
   out = out.replace(/\[([^\]\n]{1,120})\]\((\S{1,500}?)\)/g, (todo, etiqueta, url) => {
     const u = url.replace(/&amp;/g, '&').trim();
@@ -58,7 +58,7 @@ function conEnlaces(txt) {
   return out;
 }
 
-async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId }) {
+export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId }) {
   try {
     if (!paraId) return { enviado: false, motivo: 'el lead no tiene responsable' };
 
