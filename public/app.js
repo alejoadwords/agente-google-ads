@@ -14424,6 +14424,14 @@ function showMetaError(msg) {
 }
 
 function updateMetaUI(connected, name) {
+  // Si el DOM de Ajustes no existe todavía, se reintenta cuando exista en vez
+  // de pintar contra la nada. Va aquí y no en cada punto de llamada porque
+  // envolverlos uno a uno ya falló: se escapó el de la vuelta de OAuth y la
+  // interfaz se quedaba sin inicializar en la app instalada.
+  if (!document.getElementById('metaStatusBadge')) {
+    alDOMListo(() => updateMetaUI(connected, name));
+    return;
+  }
   const badge     = document.getElementById('metaStatusBadge');
   const discDiv   = document.getElementById('metaDisconnected');
   const connDiv   = document.getElementById('metaConnected');
@@ -14773,6 +14781,11 @@ function showLinkedInPending() {
 }
 
 function updateLinkedInUI(connected, name) {
+  // Misma defensa que en Meta y Google Ads: ver el comentario de updateMetaUI.
+  if (!document.getElementById('linkedinStatusBadge')) {
+    alDOMListo(() => updateLinkedInUI(connected, name));
+    return;
+  }
   const badge    = document.getElementById('linkedinStatusBadge');
   const discDiv  = document.getElementById('linkedinDisconnected');
   const connDiv  = document.getElementById('linkedinConnected');
@@ -14896,17 +14909,23 @@ let adsAccounts = [];       // todas las cuentas accesibles
       if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
       const _savedCurr = localStorage.getItem('ads_currency_persist');
       if (_savedCurr && !sessionStorage.getItem('ads_currency')) sessionStorage.setItem('ads_currency', _savedCurr);
-      updateAdsUI(true, savedEmail);
-      if (savedAccount) {
-        try {
-          adsActiveAccount = JSON.parse(savedAccount);
-          if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
-          if (adsActiveAccount && adsActiveAccount.currency && !sessionStorage.getItem('ads_currency')) {
-            sessionStorage.setItem('ads_currency', adsActiveAccount.currency);
-          }
-          renderActiveAccount();
-        } catch {}
-      }
+      // Esta restauración también corre al leer el archivo, con el DOM de
+      // Ajustes todavía sin construir. Se me pasó al arreglar las otras tres y
+      // lo delató la propia guarda de loadAdsAccounts, que avisó dos veces
+      // desde la app instalada.
+      alDOMListo(() => {
+        updateAdsUI(true, savedEmail);
+        if (savedAccount) {
+          try {
+            adsActiveAccount = JSON.parse(savedAccount);
+            if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
+            if (adsActiveAccount && adsActiveAccount.currency && !sessionStorage.getItem('ads_currency')) {
+              sessionStorage.setItem('ads_currency', adsActiveAccount.currency);
+            }
+            renderActiveAccount();
+          } catch {}
+        }
+      });
     }
     // Auto-refresh silencioso en background: garantiza que el token no expire
     async function silentRefreshGoogleToken() {
@@ -15356,6 +15375,14 @@ function showUpgradeHint(accountId) {
 }
 
 function updateAdsUI(connected, email) {
+  // Si el DOM de Ajustes no existe todavía, se reintenta cuando exista en vez
+  // de pintar contra la nada. Va aquí y no en cada punto de llamada porque
+  // envolverlos uno a uno ya falló: se escapó el de la vuelta de OAuth y la
+  // interfaz se quedaba sin inicializar en la app instalada.
+  if (!document.getElementById('adsStatusBadge')) {
+    alDOMListo(() => updateAdsUI(connected, email));
+    return;
+  }
   const badge      = document.getElementById('adsStatusBadge');
   const disconnDiv = document.getElementById('adsDisconnected');
   const connDiv    = document.getElementById('adsConnected');

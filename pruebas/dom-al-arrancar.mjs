@@ -58,6 +58,20 @@ let corrio2 = false;
 alDOMListo(globalThis.document, () => { corrio2 = true; });
 chk('Con el DOM ya listo, se ejecuta en el acto', corrio2 === true);
 
+
+// 5. La defensa de fondo: las tres funciones de interfaz se reintentan solas si
+//    el DOM no está. Es lo que cubre los puntos de llamada que se escapen —
+//    envolverlos uno a uno ya falló una vez, en la vuelta de OAuth de Google.
+for (const [fn, ancla] of [['updateMetaUI','metaStatusBadge'],
+                           ['updateAdsUI','adsStatusBadge'],
+                           ['updateLinkedInUI','linkedinStatusBadge']]) {
+  const i = src.indexOf(`function ${fn}(`);
+  const cabeza = src.slice(i, i + 600);
+  chk(`${fn} se reintenta sola si falta el DOM`,
+      cabeza.includes(`if (!document.getElementById('${ancla}'))`) && /alDOMListo\(\(\) =>/.test(cabeza));
+  chk(`  …y su elemento ancla existe en el HTML`, html.includes(`id="${ancla}"`));
+}
+
 let mal = 0;
 for (const [n, ok, d] of T) { if (!ok) mal++; console.log((ok ? '  OK  ' : '  FALLA ') + n + (ok ? '' : '   → ' + d)); }
 console.log('\n' + (mal ? `${mal} de ${T.length} FALLAN` : `Las ${T.length} comprobaciones pasan`));
