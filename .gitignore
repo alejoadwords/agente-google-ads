@@ -4,7 +4,8 @@
 node_modules/
 .vercel/
 .DS_Store
-.claude/
+.claude/*
+!.claude/skills/
 *.pdf
 acuarios-*.json
 client_secret_*.json
