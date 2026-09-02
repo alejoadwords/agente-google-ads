@@ -1,0 +1,67 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(node *)",
+      "Bash(python3 *)",
+      "Bash(curl *)",
+      "Bash(ffmpeg *)",
+      "Bash(ffprobe *)",
+      "Bash(sips *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push origin *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git reset *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(source *)",
+      "Bash(for *)",
+      "Bash(until *)",
+      "Bash(rm -f *)",
+      "Bash(rm -rf rec)",
+      "mcp__Claude_Browser__read_page",
+      "mcp__Claude_Browser__get_page_text",
+      "mcp__Claude_Browser__read_console_messages",
+      "mcp__Claude_Browser__read_network_requests",
+      "mcp__Claude_Browser__tabs_context",
+      "mcp__Claude_Browser__find",
+      "mcp__Claude_Browser__navigate",
+      "mcp__Claude_Browser__computer",
+      "mcp__Claude_Browser__javascript_tool",
+      "mcp__Claude_Browser__preview_start",
+      "mcp__Claude_Browser__preview_list",
+      "mcp__Claude_Browser__preview_logs",
+      "mcp__Claude_Preview__preview_list",
+      "mcp__Claude_Preview__preview_screenshot",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__ccd_session_mgmt__search_session_transcripts"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r \"(.tool_input.file_path // .tool_response.filePath) // empty\"); case \"$f\" in *api/_*.js) cd \"${CLAUDE_PROJECT_DIR:-.}\" || exit 0; out=$(node tools/exports.mjs 2>&1) || { printf \"%s\\n\" \"$out\" >&2; exit 2; };; esac",
+            "timeout": 30,
+            "statusMessage": "Comprobando los exports de api/_*.js"
+          }
+        ]
+      }
+    ]
+  }
+}
