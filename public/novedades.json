@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-02-ya-la-hice",
+      "fecha": "2026-09-02",
+      "tipo": "nuevo",
+      "titulo": "«Ya la hice», directo desde el correo",
+      "texto": "El resumen diario de tareas ahora trae un enlace «Ya la hice» en cada una. Lo tocas desde el correo, confirmas en una pantalla y queda marcada, sin entrar a la aplicación ni buscar el lead. Si te equivocas, la misma pantalla te deja deshacerlo. Además, en la ficha del lead las tareas hechas se quedan a la vista, tildadas: si marcaste una por error, la destildas y vuelve a estar pendiente.",
+      "accion": {
+        "texto": "Ver mis tareas",
+        "ir": "tareas"
+      }
+    },
+    {
       "id": "2026-09-02-tareas-en-la-ficha",
       "fecha": "2026-09-02",
       "tipo": "nuevo",

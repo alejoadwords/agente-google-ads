@@ -23,19 +23,39 @@ function esc(s) {
   return String(s ?? '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 }
 
-function filas(items) {
-  return items.map(t => {
+// El enlace de «Ya la hice». Firmado, porque abre una acción sin pedir sesión;
+// y con caducidad, porque un correo de hace tres meses no debería seguir
+// moviendo el CRM de nadie. Misma firma que los enlaces de reseñas: el HMAC
+// está repetido a propósito, aquí en Node y allá en edge, porque no comparten
+// entorno. Si cambia, cambia en los dos.
+const LINK_SECRET = process.env.LINK_SECRET || process.env.CRON_SECRET || '';
+const DIAS_VALIDEZ = 14;
+
+async function enlaceHecha(actividadId, userId) {
+  if (!LINK_SECRET) return null;
+  const { createHmac } = await import('node:crypto');
+  const exp = Math.floor(Date.now() / 1000) + DIAS_VALIDEZ * 86400;
+  const datos = [actividadId, userId, exp].join('|');
+  const mac = createHmac('sha256', LINK_SECRET).update(datos).digest('hex').slice(0, 32);
+  return 'https://app.acuarius.app/api/tarea?t=' + encodeURIComponent(datos + '.' + mac);
+}
+
+async function filas(items) {
+  const trozos = await Promise.all(items.map(async t => {
     const cuando = t.due_at
       ? new Date(t.due_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
       : 'Sin fecha';
+    const enlace = await enlaceHecha(t.id, t.user_id);
     return `<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #eee">
         <strong>${esc(t.title || 'Tarea')}</strong><br>
         <span style="color:#666;font-size:13px">${esc(t.lead?.name || 'Sin lead')}${t.lead?.phone ? ' · ' + esc(t.lead.phone) : ''}</span>
+        ${enlace ? `<br><a href="${enlace}" style="color:#1E2BCC;font-size:12.5px;font-weight:600;text-decoration:none">Ya la hice &rarr;</a>` : ''}
       </td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;color:#666;font-size:13px;white-space:nowrap">${esc(cuando)}</td>
     </tr>`;
-  }).join('');
+  }));
+  return trozos.join('');
 }
 
 // Un lead cerrado —ganado o perdido— ya no necesita seguimiento. Las claves
@@ -56,9 +76,10 @@ async function enviar(to, vencidas, hoy) {
     ? `${vencidas.length} tarea${vencidas.length > 1 ? 's' : ''} vencida${vencidas.length > 1 ? 's' : ''} y ${hoy.length} para hoy`
     : `${hoy.length} tarea${hoy.length > 1 ? 's' : ''} para hoy`;
 
-  const bloque = (titulo, items, color) => items.length ? `
+  const bloque = async (titulo, items, color) => items.length ? `
     <h3 style="color:${color};font-size:15px;margin:22px 0 8px">${titulo} (${items.length})</h3>
-    <table style="width:100%;border-collapse:collapse">${filas(items)}</table>` : '';
+    <table style="width:100%;border-collapse:collapse">${await filas(items)}</table>` : '';
+  const cuerpo = (await bloque('Vencidas', vencidas, '#B91C1C')) + (await bloque('Para hoy', hoy, '#1E2BCC'));
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -71,7 +92,7 @@ async function enviar(to, vencidas, hoy) {
         titulo: 'Tu día en el CRM',
         intro: `Tienes ${total} pendiente${total > 1 ? 's' : ''}.`,
         preheader: asunto,
-        cuerpo: bloque('Vencidas', vencidas, '#B91C1C') + bloque('Para hoy', hoy, '#1E2BCC'),
+        cuerpo,
         cta: { texto: 'Abrir mis tareas', url: 'https://app.acuarius.app/crm/tareas' },
       }),
     }),

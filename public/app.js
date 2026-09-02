@@ -20444,9 +20444,15 @@ async function crmCargarTareasLead(leadId) {
   _crmTareasLead = [];
   try {
     const d = await fetchAuth('/api/agenda?lead_id=' + encodeURIComponent(leadId)).then(r => r.json());
-    // El endpoint devuelve también las hechas —sirven de historial en otras
-    // vistas—, pero aquí solo estorban: esto es una lista de trabajo.
-    _crmTareasLead = (d.activities || []).filter(a => !a.done);
+    // Se quedan las pendientes y las hechas hace poco. Las hechas siguen a la
+    // vista a propósito: una casilla que solo va en un sentido no es una
+    // casilla. Al marcarla por error —que pasa— la fila desaparecía y no había
+    // forma de deshacerlo desde la aplicación. Ahora se destilda y vuelve.
+    // Siete días acota la lista: más allá, esto sería un historial, y el
+    // historial ya está más abajo.
+    const limite = Date.now() - 7 * 864e5;
+    _crmTareasLead = (d.activities || []).filter(a =>
+      !a.done || (a.updated_at && new Date(a.updated_at).getTime() > limite));
   } catch { _crmTareasLead = []; }
   crmPintarTareasLead();
 }
@@ -20462,7 +20468,12 @@ function crmPintarTareasLead() {
   // servidor la rechace después sería peor que no ofrecerla.
   const puedo = typeof puedoGestionar !== 'function' || puedoGestionar(crmDetailLead);
   const ahora = Date.now();
-  cont.innerHTML = _crmTareasLead.map(t => {
+  // Lo pendiente arriba y lo hecho abajo: la lista es para trabajar, no para
+  // repasar. Dentro de cada grupo, por fecha.
+  const cuandoOrdenar = (t) => (t.due_at ? new Date(t.due_at).getTime() : Number.MAX_SAFE_INTEGER);
+  const orden = [..._crmTareasLead].sort((a, b) =>
+    (a.done === b.done) ? (cuandoOrdenar(a) - cuandoOrdenar(b)) : (a.done ? 1 : -1));
+  cont.innerHTML = orden.map(t => {
     const cuando = t.due_at ? new Date(t.due_at) : null;
     const vencida = cuando && cuando.getTime() < ahora;
     // Sin fecha no lleva preposición: «Para el Sin fecha» no es español.
@@ -20471,35 +20482,41 @@ function crmPintarTareasLead() {
       : (vencida ? 'Venció el ' : 'Para el ') +
         cuando.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ' · ' +
         cuando.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-    return '<div class="crm-d-tarea' + (vencida ? ' vencida' : '') + '">' +
-      '<input type="checkbox"' + (puedo ? ' onchange="crmTareaHecha(\'' + esc(t.id) + '\')"' : ' disabled') +
-        ' title="' + (puedo ? 'Marcar como hecha' : 'Este lead lo lleva otra persona') + '">' +
+    return '<div class="crm-d-tarea' + (t.done ? ' hecha' : vencida ? ' vencida' : '') + '">' +
+      '<input type="checkbox"' + (t.done ? ' checked' : '') +
+        (puedo ? ' onchange="crmTareaHecha(\'' + esc(t.id) + '\', this.checked)"' : ' disabled') +
+        ' title="' + (!puedo ? 'Este lead lo lleva otra persona'
+                     : t.done ? 'Destilda para volver a dejarla pendiente' : 'Marcar como hecha') + '">' +
       '<div class="crm-d-tarea-txt">' +
         '<div class="crm-d-tarea-tit">' + esc(t.title || 'Tarea') + '</div>' +
-        '<div class="crm-d-tarea-fecha">' + esc(fecha) + '</div>' +
+        '<div class="crm-d-tarea-fecha">' + (t.done ? 'Hecha' : esc(fecha)) + '</div>' +
       '</div>' +
-      (puedo ? '<button class="crm-d-tarea-btn" onclick="crmTareaAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana a la misma hora">Mañana</button>' : '') +
+      (puedo && !t.done ? '<button class="crm-d-tarea-btn" onclick="crmTareaAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana a la misma hora">Mañana</button>' : '') +
     '</div>';
   }).join('');
 }
 
-async function crmTareaHecha(id) {
+async function crmTareaHecha(id, hecha) {
   const t = _crmTareasLead.find(x => x.id === id);
-  // Se quita de la lista antes de que responda el servidor: la casilla ya se
-  // marcó y dejar la fila ahí medio segundo parece que no funcionó. Si falla,
-  // vuelve.
-  _crmTareasLead = _crmTareasLead.filter(x => x.id !== id);
+  if (!t) return;
+  const antes = t.done;
+  // Se pinta el cambio antes de que responda el servidor; si falla, se vuelve
+  // al estado anterior y se dice. La fila NO desaparece: es lo que permite
+  // destildarla si se marcó por error.
+  t.done = hecha !== false;
+  t.updated_at = new Date().toISOString();
   crmPintarTareasLead();
   try {
-    const r = await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, done: true }) });
+    const r = await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, done: t.done }) });
     if (!r.ok) throw new Error();
-    showToast('Tarea marcada como hecha');
+    showToast(t.done ? 'Tarea marcada como hecha' : 'Tarea otra vez pendiente');
     // El chip rojo de la tarjeta sale de otra consulta: si no se refresca, el
     // lead sigue diciendo «vencida» después de marcarla y no se entiende nada.
     crmTareasCargar().then(() => crmRender()).catch(() => {});
   } catch {
-    if (t) { _crmTareasLead.push(t); crmPintarTareasLead(); }
-    showToast('No se pudo marcar la tarea', 'error');
+    t.done = antes;
+    crmPintarTareasLead();
+    showToast('No se pudo actualizar la tarea', 'error');
   }
 }
 

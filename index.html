@@ -2273,6 +2273,10 @@ textarea.seop-input{resize:vertical;min-height:70px}
   border-radius:var(--r);margin-bottom:7px;background:var(--bg-subtle)}
 .crm-d-tarea:last-child{margin-bottom:0}
 .crm-d-tarea.vencida{border-color:var(--danger);background:var(--danger-bg)}
+/* Hecha: se queda a la vista, apagada. Es lo que permite darse cuenta de que
+   se marcó por error y destildarla. */
+.crm-d-tarea.hecha{opacity:.55;background:var(--bg)}
+.crm-d-tarea.hecha .crm-d-tarea-tit{text-decoration:line-through;color:var(--muted)}
 .crm-d-tarea input[type=checkbox]{width:18px;height:18px;margin-top:1px;flex-shrink:0;cursor:pointer;accent-color:var(--blue)}
 .crm-d-tarea-txt{flex:1;min-width:0}
 .crm-d-tarea-tit{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35}
@@ -4827,7 +4831,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- Tareas pendientes. Va la primera a propósito: si hay una vencida es lo
          que el comercial tiene que ver al abrir el lead, no algo que buscar. -->
     <div class="crm-detail-section" id="crm-d-tareas-section" style="display:none">
-      <div class="crm-detail-section-title">Tareas pendientes</div>
+      <div class="crm-detail-section-title">Tareas</div>
       <div id="crm-d-tareas"></div>
     </div>
     <!-- Etapa -->
