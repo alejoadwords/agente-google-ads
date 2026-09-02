@@ -146,6 +146,17 @@ Ojo al escribir cualquier consulta nueva sobre `activities`: **pendiente es
 `done=false` Y `cancelled_at is null`**. Una consulta sin el segundo filtro hace
 reaparecer la tarea en un solo sitio, y el usuario deja de fiarse de los dos.
 
+## «Me dice que voy atrasado con una tarea que ya hice»
+
+No es un fallo del cálculo: es que **no la marcó como hecha**. Desde el
+02-09-2026 se puede marcar desde tres sitios —Tareas, Agenda y, lo nuevo, la
+**ficha del lead**, arriba del todo—. Antes solo desde los dos primeros, así
+que quien llamaba al cliente desde su ficha no tenía dónde apuntarlo.
+
+Si dice que la marcó y sigue en rojo: el chip de la tarjeta sale de otra
+consulta. Que recargue. Y si es un lead de otro comercial, la casilla sale
+bloqueada a propósito.
+
 ## «Cambié algo y no lo veo»
 
 Antes de investigar: **¿está desplegado?** Un `READY` en Vercel no prueba que
