@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-01-limites-reales",
+      "fecha": "2026-09-01",
+      "tipo": "correccion",
+      "titulo": "Los planes ahora dicen exactamente lo que incluyen",
+      "texto": "La descripción de los planes estaba desactualizada: decía «imágenes ilimitadas» donde hay un tope, «10.000 correos al mes» cuando las campañas ya no tienen cupo, y no mencionaba los videos. Ya coincide con lo que la plataforma hace de verdad. También arreglamos los botones de «ver planes», que no llevaban a ninguna parte."
+    },
+    {
       "id": "2026-09-01-aviso-nota-responsable",
       "fecha": "2026-09-01",
       "tipo": "arreglo",

@@ -6395,7 +6395,7 @@ async function showVideoAdForm() {
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px">' +
           (credits.is_free
-            ? '<a href="/pricing.html" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#7C3AED;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">🚀 Actualizar a Pro — 5 videos/mes incluidos</a>'
+            ? '<a href="https://acuarius.app/#planes" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#7C3AED;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">🚀 Actualizar a Pro — 5 videos/mes incluidos</a>'
             : '') +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
             '<a href="' + url5 + '" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:12px 10px;background:#7C3AED;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;text-align:center;gap:3px">' +
@@ -7396,7 +7396,7 @@ function showLimitBanner(d){
     : 'Llegaste al cupo de mensajes de este mes' + (c.limite ? ' (' + c.limite + ')' : '') + '.';
   el.innerHTML = '<strong>Cupo del mes alcanzado</strong> — ' + cuerpo +
     (d && d.upgrade
-      ? '<br><span style="font-size:12px;color:var(--muted)">El plan Pro ($39/mes) no tiene este límite.</span><br><a href="/pricing.html">Ver planes →</a>'
+      ? '<br><span style="font-size:12px;color:var(--muted)">El plan Pro ($39/mes) no tiene este límite.</span><br><a href="https://acuarius.app/#planes" target="_blank" rel="noopener">Ver planes →</a>'
       : '<br><span style="font-size:12px;color:var(--muted)">Escríbenos por el chat de soporte y te ampliamos el cupo.</span>');
   a.appendChild(el);
   a.scrollTop = a.scrollHeight;
@@ -13525,7 +13525,7 @@ function showDesignQuestionnaire() {
           '</div>' +
           '<button onclick="generateBasicImage()" style="width:100%;padding:12px;background:#F59E0B;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Generar imagen básica</button>' +
           '<div style="text-align:center;margin-top:10px">' +
-            '<button onclick="window.open(\'/pricing.html\',\'_blank\')" style="padding:6px 12px;background:none;color:var(--blue);border:1px solid var(--blue);border-radius:6px;font-size:11px;cursor:pointer;font-family:var(--font)">🚀 Actualizar a Pro</button>' +
+            '<button onclick="window.open(\'https://acuarius.app/#planes\',\'_blank\')" style="padding:6px 12px;background:none;color:var(--blue);border:1px solid var(--blue);border-radius:6px;font-size:11px;cursor:pointer;font-family:var(--font)">🚀 Actualizar a Pro</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -14502,7 +14502,7 @@ function openSettings() {
     const planCard = document.getElementById('cfg-plan-card-name');
     const planDesc = document.getElementById('cfg-plan-card-desc');
     if (planCard) planCard.textContent = isAgencyPlan ? 'Plan Agency · Activo' : isProPlan ? 'Plan Pro · Activo' : 'Plan Free';
-    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · 3 usuarios adicionales · CRM 5.000 leads · Campañas 10.000 emails/mes · Imágenes ilimitadas · $99/mes' : isProPlan ? 'CRM 1.000 leads · Automatizaciones y campañas (2.000 emails/mes) · Propuestas con IA · Proyecto SEO+GEO · $39/mes' : 'Plan gratuito · 50 mensajes/mes · 50 leads · 3 imágenes · 1 conexión API';
+    if (planDesc) planDesc.textContent = isAgencyPlan ? '10 clientes · 10 usuarios · CRM 5.000 contactos · Campañas de correo ilimitadas · 15 videos IA/mes · $99/mes' : isProPlan ? 'CRM 1.000 contactos · 3 usuarios · Campañas de correo ilimitadas · 60 imágenes y 5 videos IA/mes · Proyecto SEO+GEO · $39/mes' : 'Plan gratuito · 50 mensajes/mes · 50 leads · 3 imágenes · 1 conexión API';
     const upgradeBtn = document.getElementById('cfg-upgrade-btn');
     if (upgradeBtn) {
       if (isAgencyPlan) {
