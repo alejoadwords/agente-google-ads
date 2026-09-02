@@ -43,6 +43,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   --bg:#FFFFFF;--bg-subtle:#F7F8FC;--bg-muted:#F0F1F8;--bg-card:#FFFFFF;
   /* Aliases for backward compat */
   --sidebar:#F7F8FC;--sidebar2:#F0F1F8;
+  --panel:var(--bg-card);
   /* Semantic */
   --success:#059669;--warning:#D97706;--danger:#DC2626;
   --success-bg:#E7F7F0;--warning-bg:#FEF3E2;--danger-bg:#FDECEC;
@@ -2266,6 +2267,20 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .crm-detail-row-val{color:var(--text);flex:1;word-break:break-word}
 .crm-detail-stage-select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);cursor:pointer;outline:none}
 .crm-detail-stage-select:focus{border-color:var(--blue)}
+/* Tareas pendientes dentro de la ficha del lead. La casilla es grande a
+   propósito: se toca desde el celular, con una mano, después de colgar. */
+.crm-d-tarea{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--border);
+  border-radius:var(--r);margin-bottom:7px;background:var(--bg-subtle)}
+.crm-d-tarea:last-child{margin-bottom:0}
+.crm-d-tarea.vencida{border-color:var(--danger);background:var(--danger-bg)}
+.crm-d-tarea input[type=checkbox]{width:18px;height:18px;margin-top:1px;flex-shrink:0;cursor:pointer;accent-color:var(--blue)}
+.crm-d-tarea-txt{flex:1;min-width:0}
+.crm-d-tarea-tit{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35}
+.crm-d-tarea-fecha{font-size:11px;color:var(--muted);margin-top:2px}
+.crm-d-tarea.vencida .crm-d-tarea-fecha{color:var(--danger);font-weight:600}
+.crm-d-tarea-btn{background:none;border:0;color:var(--muted);font-family:var(--font);font-size:11px;
+  cursor:pointer;padding:2px 4px;flex-shrink:0;text-decoration:underline}
+.crm-d-tarea-btn:hover{color:var(--blue)}
 .crm-activity-input-wrap{display:flex;flex-direction:column;gap:7px}
 .crm-activity-input{padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);resize:none;outline:none;min-height:64px}
 .crm-activity-input:focus{border-color:var(--blue)}
@@ -4808,6 +4823,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="crm-detail-row" id="crm-d-cierre-row"><span class="crm-detail-row-label" style="white-space:nowrap">Cierre esperado</span><span class="crm-detail-row-val" style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><span id="crm-d-cierre-alerta" style="display:none" title="La fecha de cierre ya pasó"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><input type="date" id="crm-d-cierre" class="crm-d-cierre-input" onchange="crmGuardarCierre(this.value)"></span></div>
       <div class="crm-detail-row" id="crm-d-tags-row" style="display:none"><span class="crm-detail-row-label">Etiquetas</span><span class="crm-detail-row-val" id="crm-d-tags">—</span></div>
       <div class="crm-detail-row" id="crm-d-assigned-row"><span class="crm-detail-row-label">Asignado a</span><span class="crm-detail-row-val" id="crm-d-assigned-wrap">—</span></div>
+    </div>
+    <!-- Tareas pendientes. Va la primera a propósito: si hay una vencida es lo
+         que el comercial tiene que ver al abrir el lead, no algo que buscar. -->
+    <div class="crm-detail-section" id="crm-d-tareas-section" style="display:none">
+      <div class="crm-detail-section-title">Tareas pendientes</div>
+      <div id="crm-d-tareas"></div>
     </div>
     <!-- Etapa -->
     <div class="crm-detail-section">

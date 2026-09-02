@@ -20321,7 +20321,7 @@ async function crmOpenDetail(leadId, leadSuelto) {
   // Reset suggest result
   const suggestResult = document.getElementById('crm-d-suggest-result');
   if (suggestResult) suggestResult.style.display = 'none';
-  await Promise.all([crmLoadActivities(leadId), crmLoadLinkedConversations(leadId)]);
+  await Promise.all([crmLoadActivities(leadId), crmLoadLinkedConversations(leadId), crmCargarTareasLead(leadId)]);
 }
 
 // Editor de etiquetas en el detalle: chips con ✕ + input con autocompletado
@@ -20427,6 +20427,96 @@ function crmOpenConvFromDetail(convId, channel) {
     const btn = document.querySelector('[data-conv-id="' + convId + '"]');
     if (btn) btn.click();
   }, 300);
+}
+
+// ── Tareas pendientes del lead ──────────────────────────────────────────────
+// Marcar una tarea como hecha ya existía en Tareas y en la Agenda, pero no
+// AQUÍ, que es donde acaba el comercial cuando cuelga el teléfono. El resultado
+// era el peor posible: hacía la llamada, no tenía dónde apuntarlo, y al día
+// siguiente la tarjeta le decía en rojo que iba atrasado con algo que ya había
+// hecho. Un aviso que miente sobre trabajo hecho enseña a ignorar los avisos.
+let _crmTareasLead = [];
+
+async function crmCargarTareasLead(leadId) {
+  const sec = document.getElementById('crm-d-tareas-section');
+  const cont = document.getElementById('crm-d-tareas');
+  if (!sec || !cont) return;
+  _crmTareasLead = [];
+  try {
+    const d = await fetchAuth('/api/agenda?lead_id=' + encodeURIComponent(leadId)).then(r => r.json());
+    // El endpoint devuelve también las hechas —sirven de historial en otras
+    // vistas—, pero aquí solo estorban: esto es una lista de trabajo.
+    _crmTareasLead = (d.activities || []).filter(a => !a.done);
+  } catch { _crmTareasLead = []; }
+  crmPintarTareasLead();
+}
+
+function crmPintarTareasLead() {
+  const sec = document.getElementById('crm-d-tareas-section');
+  const cont = document.getElementById('crm-d-tareas');
+  if (!sec || !cont) return;
+  if (!_crmTareasLead.length) { sec.style.display = 'none'; cont.innerHTML = ''; return; }
+  sec.style.display = 'flex';
+  // Un lead de otro comercial se ve, pero no se toca: la ficha ya esconde el
+  // resto de acciones con esta misma regla. Ofrecer la casilla para que el
+  // servidor la rechace después sería peor que no ofrecerla.
+  const puedo = typeof puedoGestionar !== 'function' || puedoGestionar(crmDetailLead);
+  const ahora = Date.now();
+  cont.innerHTML = _crmTareasLead.map(t => {
+    const cuando = t.due_at ? new Date(t.due_at) : null;
+    const vencida = cuando && cuando.getTime() < ahora;
+    // Sin fecha no lleva preposición: «Para el Sin fecha» no es español.
+    const fecha = !cuando
+      ? 'Sin fecha'
+      : (vencida ? 'Venció el ' : 'Para el ') +
+        cuando.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ' · ' +
+        cuando.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    return '<div class="crm-d-tarea' + (vencida ? ' vencida' : '') + '">' +
+      '<input type="checkbox"' + (puedo ? ' onchange="crmTareaHecha(\'' + esc(t.id) + '\')"' : ' disabled') +
+        ' title="' + (puedo ? 'Marcar como hecha' : 'Este lead lo lleva otra persona') + '">' +
+      '<div class="crm-d-tarea-txt">' +
+        '<div class="crm-d-tarea-tit">' + esc(t.title || 'Tarea') + '</div>' +
+        '<div class="crm-d-tarea-fecha">' + esc(fecha) + '</div>' +
+      '</div>' +
+      (puedo ? '<button class="crm-d-tarea-btn" onclick="crmTareaAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana a la misma hora">Mañana</button>' : '') +
+    '</div>';
+  }).join('');
+}
+
+async function crmTareaHecha(id) {
+  const t = _crmTareasLead.find(x => x.id === id);
+  // Se quita de la lista antes de que responda el servidor: la casilla ya se
+  // marcó y dejar la fila ahí medio segundo parece que no funcionó. Si falla,
+  // vuelve.
+  _crmTareasLead = _crmTareasLead.filter(x => x.id !== id);
+  crmPintarTareasLead();
+  try {
+    const r = await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, done: true }) });
+    if (!r.ok) throw new Error();
+    showToast('Tarea marcada como hecha');
+    // El chip rojo de la tarjeta sale de otra consulta: si no se refresca, el
+    // lead sigue diciendo «vencida» después de marcarla y no se entiende nada.
+    crmTareasCargar().then(() => crmRender()).catch(() => {});
+  } catch {
+    if (t) { _crmTareasLead.push(t); crmPintarTareasLead(); }
+    showToast('No se pudo marcar la tarea', 'error');
+  }
+}
+
+async function crmTareaAplazar(id) {
+  const t = _crmTareasLead.find(x => x.id === id);
+  if (!t) return;
+  // Mañana a la misma hora; si no tenía hora, a las 9. Igual que en Tareas.
+  const base = t.due_at ? new Date(t.due_at) : new Date(new Date().setHours(9, 0, 0, 0));
+  base.setDate(base.getDate() + 1);
+  try {
+    const r = await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, due_at: base.toISOString() }) });
+    if (!r.ok) throw new Error();
+    t.due_at = base.toISOString();
+    crmPintarTareasLead();
+    showToast('Movida a mañana');
+    crmTareasCargar().then(() => crmRender()).catch(() => {});
+  } catch { showToast('No se pudo aplazar', 'error'); }
 }
 
 async function crmSuggestNextAction() {
