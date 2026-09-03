@@ -81,7 +81,19 @@ export default async function handler(req) {
         updated_at: new Date().toISOString(),
       }),
     });
-    if (!r.ok) return json({ error: (await r.text()).slice(0, 200) }, 500);
+    if (!r.ok) {
+      const txt = await r.text();
+      // 23503 = la fila de `users` aún no existe. Pasa en la PRIMERA carga de
+      // un usuario recién registrado: llega aquí antes de que se cree su fila.
+      // No es un fallo del servidor y en la siguiente carga funciona solo, así
+      // que no se devuelve 500 — solo se pierde esta marca de «visto», que es
+      // inofensivo. Queda en el log por si algún día deja de ser transitorio.
+      if (txt.includes('23503')) {
+        console.error('[novedades] usuario aún sin fila en users, marca de visto pospuesta:', userId);
+        return json({ visto, pospuesto: true });
+      }
+      return json({ error: txt.slice(0, 200) }, 500);
+    }
     return json({ visto });
   }
 

@@ -63,6 +63,24 @@ const r3 = await conErrores('prueba', async () => { throw new Error('doble fallo
 chk('  y el envoltorio sigue respondiendo 500', r3.status === 500);
 fallarAlEscribir = false;
 
+
+// ── 4. El aviso distingue ruido de red de fallos reales ─────────────────────
+// Lee la regla del propio cron para no probar una copia.
+import { readFileSync } from 'node:fs';
+const cron = readFileSync(new URL('../api/cron-errores.js', import.meta.url), 'utf8');
+const ini = cron.indexOf('const esRuidoDeRed = e =>');
+const fin = cron.indexOf(';', cron.indexOf('.length < 2', ini)) + 1;
+const esRuidoDeRed = new Function('return ' + cron.slice(ini + 'const esRuidoDeRed = '.length, fin))();
+const caso = (mensaje, veces, cuentas) => esRuidoDeRed({ mensaje, veces, usuarios: Array.from({length: cuentas}, (_, i) => 'u' + i) });
+chk('Un «Failed to fetch» suelto en una cuenta es ruido: no avisa',
+    caso('sin respuesta del servidor: Failed to fetch', 1, 1) === true);
+chk('Un 504 suelto en una cuenta espera', caso('HTTP 504', 1, 1) === true);
+chk('El mismo fallo de red 3 veces SÍ avisa', caso('sin respuesta del servidor: Failed to fetch', 3, 1) === false);
+chk('El mismo fallo de red en 2 cuentas SÍ avisa', caso('sin respuesta del servidor: Failed to fetch', 1, 2) === false);
+chk('Un 500 con código de base de datos avisa siempre, aunque sea una vez',
+    caso('HTTP 500: {"code":"23503"', 1, 1) === false);
+chk('Un TypeError del navegador avisa siempre', caso('Cannot read properties of null', 1, 1) === false);
+
 console.error = silencio;
 let mal = 0;
 for (const [n, ok, d] of T) { if (!ok) mal++; console.log((ok ? '  OK  ' : '  FALLA ') + n + (ok ? '' : '   → ' + d)); }

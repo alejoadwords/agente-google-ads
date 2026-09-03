@@ -28,14 +28,26 @@ export default async function handler(req) {
     return new Response('No autorizado', { status: 401 });
   }
 
-  const nuevos = await fetch(
+  const todos = await fetch(
     `${SUPABASE_URL}/rest/v1/error_log?avisado_at=is.null&resuelto=is.false` +
     `&select=firma,origen,donde,mensaje,detalle,veces,usuarios,primera_vez&order=veces.desc&limit=25`,
     { headers: cab }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
 
+  // Un «Failed to fetch» o un 502/503/504 que pasa UNA vez en UNA cuenta es,
+  // casi siempre, el teléfono del usuario perdiendo señal o un pico del
+  // proveedor. No es un fallo nuestro y no debe despertar a nadie: el primer
+  // día de vida del sistema mandó tres correos por un mismo móvil con una
+  // barra de cobertura. Esos se dejan SIN marcar como avisados: si el mismo
+  // fallo se repite o toca a otra cuenta, entonces sí avisa.
+  const esRuidoDeRed = e =>
+    /^sin respuesta del servidor|^HTTP 50[234]\b/.test(e.mensaje || '') &&
+    (e.veces || 0) < 3 && (e.usuarios || []).length < 2;
+  const enEspera = todos.filter(esRuidoDeRed).length;
+  const nuevos = todos.filter(e => !esRuidoDeRed(e));
+
   if (!nuevos.length) {
-    return new Response(JSON.stringify({ ok: true, nuevos: 0 }), {
+    return new Response(JSON.stringify({ ok: true, nuevos: 0, en_espera: enEspera }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
