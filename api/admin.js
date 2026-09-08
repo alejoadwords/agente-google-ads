@@ -76,42 +76,94 @@ async function clerkUpdateMetadata(id, metadata) {
 
 // ── METRICS ──────────────────────────────────────────────
 async function handleMetrics(req, res) {
+  // El MRR de este panel decía $152 y no era ningún ingreso real. Tenía cuatro
+  // errores encadenados, y los cuatro venían de contar PLANES en vez de PAGOS:
+  //
+  //   1. mrr = (individual * 19) + (agency * 19).  'individual' no es un plan
+  //      de Acuarius —es un alias viejo que solo tienen cuentas de prueba— y
+  //      $19 no es ningún precio: Pro son $39 y Agency $99.
+  //   2. Contaba a cualquiera con plan de pago, incluida una cortesía. Alguien
+  //      probando gratis figuraba como ingreso.
+  //   3. Los trials se buscaban con plan 'free'; el plan se llama 'trial', así
+  //      que el contador siempre daba 0.
+  //   4. La facturación se filtraba por status 'paid' y en `billing` el estado
+  //      es 'active'. Por eso el histórico salía en $0 habiendo filas.
+  //
+  // Ahora el MRR sale de quien PAGA: plan de pago vigente y origen 'hotmart' o
+  // 'externo'. La cortesía vale $0 a propósito.
   const [allUsers, billingAll, logsRecent] = await Promise.all([
-    supabaseReq('/users?select=id,plan,status,created_at,trial_ends_at'),
-    supabaseReq('/billing?select=amount,plan,status,created_at&status=eq.paid'),
+    supabaseReq('/users?select=id,email,plan,status,created_at,trial_ends_at,plan_ends_at,plan_origen'),
+    supabaseReq('/billing?select=amount,plan,status,created_at,period_end'),
     supabaseReq('/activity_logs?select=action,created_at&order=created_at.desc&limit=200'),
   ]);
 
   const now = new Date();
-  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-  const sevenDaysAgo  = new Date(now - 7  * 24 * 60 * 60 * 1000);
+  const hace30 = new Date(now - 30 * 86400000);
+  const hace7  = new Date(now -  7 * 86400000);
+  const en3    = new Date(now.getTime() + 3 * 86400000);
 
-  const totalUsers      = allUsers.length;
-  const activeUsers     = allUsers.filter(u => u.status === 'active').length;
-  const suspended       = allUsers.filter(u => u.status === 'suspended').length;
-  const trialUsers      = allUsers.filter(u => u.plan === 'free' && new Date(u.trial_ends_at) > now).length;
-  const individualUsers = allUsers.filter(u => u.plan === 'individual').length;
-  const agencyUsers     = allUsers.filter(u => u.plan === 'agency').length;
-  const newLast30       = allUsers.filter(u => new Date(u.created_at) > thirtyDaysAgo).length;
-  const newLast7        = allUsers.filter(u => new Date(u.created_at) > sevenDaysAgo).length;
+  const PRECIO = { pro: 39, individual: 39, agency: 99, agencia: 99 };
+  const esDePago = (p) => Object.prototype.hasOwnProperty.call(PRECIO, p);
+  const vigente  = (u) => !u.plan_ends_at || new Date(u.plan_ends_at) > now;
+  const paga     = (u) => esDePago(u.plan) && vigente(u) && ['hotmart', 'externo'].includes(u.plan_origen);
 
-  const mrr          = (individualUsers * 19) + (agencyUsers * 19);
-  const totalRevenue = billingAll.reduce((s, b) => s + parseFloat(b.amount), 0);
-  const revenueThisMonth = billingAll
-    .filter(b => new Date(b.created_at) > thirtyDaysAgo)
-    .reduce((s, b) => s + parseFloat(b.amount), 0);
+  const totalUsers  = allUsers.length;
+  const activeUsers = allUsers.filter(u => u.status === 'active').length;
+  const suspended   = allUsers.filter(u => u.status === 'suspended').length;
+  const newLast30   = allUsers.filter(u => new Date(u.created_at) > hace30).length;
+  const newLast7    = allUsers.filter(u => new Date(u.created_at) > hace7).length;
 
-  const messagesLast7 = logsRecent.filter(l => l.action === 'message_sent'     && new Date(l.created_at) > sevenDaysAgo).length;
-  const imagesLast7   = logsRecent.filter(l => l.action === 'image_generated'  && new Date(l.created_at) > sevenDaysAgo).length;
+  // Reparto por plan, con TODOS los planes que existen de verdad.
+  const porPlan = {};
+  for (const u of allUsers) porPlan[u.plan || 'free'] = (porPlan[u.plan || 'free'] || 0) + 1;
 
-  const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const trialUsers = allUsers.filter(u => u.plan === 'trial').length;
   const trialsExpiringSoon = allUsers.filter(u =>
-    u.plan === 'free' && new Date(u.trial_ends_at) > now && new Date(u.trial_ends_at) < threeDaysFromNow
+    u.plan === 'trial' && u.trial_ends_at && new Date(u.trial_ends_at) > now && new Date(u.trial_ends_at) < en3
   ).length;
 
+  // Los que pagan de verdad, y los que tienen plan de pago sin pagar.
+  const pagando = allUsers.filter(paga);
+  const mrr = pagando.reduce((s, u) => s + (PRECIO[u.plan] || 0), 0);
+  const cortesia = allUsers.filter(u => esDePago(u.plan) && vigente(u) && u.plan_origen === 'cortesia');
+  const sinRegistrar = allUsers
+    .filter(u => esDePago(u.plan) && !u.plan_origen)
+    .map(u => ({ email: u.email, plan: u.plan, sin_fecha: !u.plan_ends_at }));
+  const vencidosActivos = allUsers.filter(u => esDePago(u.plan) && u.plan_ends_at && new Date(u.plan_ends_at) <= now).length;
+
+  // Facturación real: en `billing` el estado es 'active' | 'cancelled'.
+  const cobros = billingAll.filter(b => b.status === 'active');
+  const totalRevenue = cobros.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
+  const revenueThisMonth = cobros
+    .filter(b => new Date(b.created_at) > hace30)
+    .reduce((s, b) => s + parseFloat(b.amount || 0), 0);
+
+  const messagesLast7 = logsRecent.filter(l => l.action === 'message_sent'    && new Date(l.created_at) > hace7).length;
+  const imagesLast7   = logsRecent.filter(l => l.action === 'image_generated' && new Date(l.created_at) > hace7).length;
+
   return res.json({
-    overview: { totalUsers, activeUsers, suspended, trialUsers, individualUsers, agencyUsers, newLast30, newLast7, trialsExpiringSoon },
-    revenue:  { mrr, totalRevenue: parseFloat(totalRevenue.toFixed(2)), revenueThisMonth: parseFloat(revenueThisMonth.toFixed(2)) },
+    overview: {
+      totalUsers, activeUsers, suspended, trialUsers, newLast30, newLast7, trialsExpiringSoon,
+      porPlan,
+      // se mantienen por compatibilidad con la vista actual del panel
+      individualUsers: porPlan.individual || 0,
+      agencyUsers: (porPlan.agency || 0) + (porPlan.agencia || 0),
+      proUsers: porPlan.pro || 0,
+      freeUsers: porPlan.free || 0,
+    },
+    revenue: {
+      mrr,
+      clientesPagando: pagando.length,
+      totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+      revenueThisMonth: parseFloat(revenueThisMonth.toFixed(2)),
+    },
+    // Lo que hay que mirar: planes de pago que no son ingreso.
+    atencion: {
+      cortesias: cortesia.length,
+      sin_registrar: sinRegistrar.length,
+      sin_registrar_detalle: sinRegistrar.slice(0, 12),
+      vencidos_activos: vencidosActivos,
+    },
     activity: { messagesLast7, imagesLast7 },
   });
 }
