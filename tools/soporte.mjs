@@ -92,7 +92,7 @@ async function radiografia(busqueda) {
   const avisos = [];
   const avisar = (nivel, texto) => avisos.push({ nivel, texto });
 
-  const [equipo, fuentes, pipelines, canales, plataformas, autos, perfiles, leads, tareas, paginas, campanas] = await Promise.all([
+  const [equipo, fuentes, pipelines, canales, plataformas, autos, perfiles, leads, tareas, paginas, campanas, pagos] = await Promise.all([
     sql(`select member_name, member_email, role, status, member_user_id from public.team_members where owner_user_id = '${id}';`),
     sql(`select name, token, active, tipo, submissions, last_submission_at, pipeline_id, client_id from public.lead_forms where user_id = '${id}' order by created_at;`),
     sql(`select p.id, p.name, p.is_default, p.client_id,
@@ -121,6 +121,7 @@ async function radiografia(busqueda) {
                where a.user_id = '${id}') t;`),
     sql(`select title, slug, published, visits from public.landings where user_id = '${id}';`),
     sql(`select name, status, channel, sent_at from public.campaigns where user_id = '${id}' order by created_at desc limit 5;`),
+    sql(`select plan, status, amount, period_end from public.billing where user_id = '${id}' order by period_end desc;`),
   ]);
 
   const L = leads[0] || {}, T = tareas[0] || {};
@@ -215,6 +216,22 @@ async function radiografia(busqueda) {
   }
   if (u.plan === 'trial' && u.trial_ends_at && new Date(u.trial_ends_at) < new Date()) {
     avisar('alto', 'La prueba venció y la cuenta sigue en plan trial.');
+  }
+  // Un plan de pago SIN fecha de fin no lo caduca nadie. Esta comprobación
+  // faltaba y por eso seis cuentas llevaban meses con Pro regalado: la de
+  // arriba solo mira los planes 'trial', y una cuenta puesta a 'pro' a mano
+  // no entraba. La fecha de prueba vencida se imprimía arriba y nadie la veía.
+  const DE_PAGO = ['pro', 'agency', 'agencia', 'individual'];
+  if (DE_PAGO.includes(u.plan)) {
+    if (!u.plan_ends_at) {
+      avisar('alto', `La cuenta tiene plan ${u.plan} SIN fecha de fin: no la va a caducar nadie. ` +
+        'Ponle fecha desde el panel (Confirmar pago o Dar cortesía).');
+    } else if (new Date(u.plan_ends_at) < new Date()) {
+      avisar('alto', `El plan ${u.plan} venció el ${dia(u.plan_ends_at)} y sigue activo.`);
+    }
+    if (!pagos.some((p) => p.status === 'active') && u.plan_origen !== 'cortesia') {
+      avisar('medio', `Plan ${u.plan} sin ningún pago registrado. Si paga por fuera, confírmalo en el panel para que quede rastro.`);
+    }
   }
   fuentes.filter((f) => f.active && f.submissions > 0 && f.last_submission_at && dias(f.last_submission_at) > 30)
     .forEach((f) => avisar('info', `La fuente «${f.name}» lleva ${dias(f.last_submission_at)} días sin recibir nada.`));

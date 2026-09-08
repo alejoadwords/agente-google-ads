@@ -371,6 +371,10 @@ async function handleSync(req, res) {
     const name   = `${u.first_name || ''} ${u.last_name || ''}`.trim();
     const plan   = u.public_metadata?.plan   || 'free';
     const status = u.public_metadata?.status || 'active';
+    // Se arrastran también la fecha y el origen: si el espejo se desvía por
+    // cualquier vía (Hotmart, un cambio a mano en Clerk), el sync lo corrige.
+    const hasta  = u.public_metadata?.hasta  || null;
+    const origen = u.public_metadata?.origen || null;
 
     await fetch(`${SUPABASE_URL}/rest/v1/users`, {
       method: 'POST',
@@ -381,7 +385,7 @@ async function handleSync(req, res) {
         'Prefer': 'resolution=merge-duplicates',
       },
       body: JSON.stringify({
-        id: u.id, email, name, plan, status,
+        id: u.id, email, name, plan, status, plan_ends_at: hasta, plan_origen: origen,
         created_at: new Date(u.created_at).toISOString(),
         updated_at: new Date(u.updated_at).toISOString(),
       }),
@@ -390,6 +394,111 @@ async function handleSync(req, res) {
   }
 
   return res.json({ success: true, synced, total: allClerkUsers.length, clerkDebug });
+}
+
+// ── PLAN CON FECHA ────────────────────────────────────────
+// Da o renueva un plan dejando SIEMPRE constancia de hasta cuándo vale y por
+// qué lo tiene. Nació de encontrar seis cuentas con 'pro' puesto a mano que no
+// caducaba nadie: el cron solo miraba los planes 'trial'.
+//
+//   origen 'externo'  → el cliente pagó por fuera (transferencia, Nequi…).
+//                       Deja fila en `billing`, para que el pago exista en el
+//                       sistema y no solo en la memoria de alguien.
+//   origen 'cortesia' → acceso regalado para probar. NO deja fila de pago:
+//                       no lo es, y contarlo como ingreso falsearía las cuentas.
+//   origen 'hotmart'  → lo pone el webhook; aquí se acepta por si hay que
+//                       reponer un cobro que no llegó.
+//
+// Clerk manda: la app lee el plan del JWT, no de la tabla users. Si Clerk falla,
+// esto devuelve error y NO escribe el pago — un pago registrado con el plan sin
+// aplicar es peor que no haber hecho nada.
+async function handleSetPlan(req, res) {
+  const { userId, plan, meses, origen, monto, nota } = req.body || {};
+  const PLANES  = ['free', 'pro', 'agency', 'trial'];
+  const ORIGENES = ['externo', 'cortesia', 'hotmart'];
+
+  if (!userId)                     return res.status(400).json({ error: 'Falta userId' });
+  if (!PLANES.includes(plan))      return res.status(400).json({ error: 'Plan inválido. Usa: ' + PLANES.join(', ') });
+  if (plan !== 'free' && !ORIGENES.includes(origen)) {
+    return res.status(400).json({ error: 'Falta el origen. Usa: ' + ORIGENES.join(', ') });
+  }
+  const n = plan === 'free' ? 0 : parseInt(meses, 10);
+  if (plan !== 'free' && (!Number.isFinite(n) || n < 1 || n > 24)) {
+    return res.status(400).json({ error: 'Los meses deben ser un número entre 1 y 24' });
+  }
+
+  // Si ya tiene una fecha por delante, se SUMA: renovar a alguien al día no
+  // puede recortarle lo que le queda.
+  let desde = new Date();
+  try {
+    const r = await fetch(`https://api.clerk.com/v1/users/${userId}`, { headers: { Authorization: 'Bearer ' + CLERK_SECRET } });
+    const actual = await r.json();
+    const yaTiene = actual?.public_metadata?.hasta ? new Date(actual.public_metadata.hasta) : null;
+    if (yaTiene && !isNaN(yaTiene) && yaTiene > desde) desde = yaTiene;
+  } catch (e) {
+    console.error('[admin] no se pudo leer el plan actual de', userId, e.message);
+  }
+  const hasta = new Date(desde);
+  hasta.setMonth(hasta.getMonth() + n);
+
+  const meta = plan === 'free'
+    ? { plan: 'free', status: 'active', hasta: null, origen: null, aviso_fin: null }
+    : { plan, status: 'active', hasta: hasta.toISOString().slice(0, 10), origen, aviso_fin: null };
+
+  const r = await clerkUpdateMetadata(userId, meta);
+  if (!r.ok) return res.status(502).json({ error: 'Clerk rechazó el cambio: ' + r.error });
+
+  // Espejo en la tabla `users`, SOLO para diagnóstico: la verdad sigue siendo
+  // Clerk. Existe para que tools/soporte.mjs pueda avisar de un plan sin fecha
+  // sin necesitar credenciales de Clerk. Si falla, no se aborta nada.
+  await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ plan: meta.plan, plan_ends_at: meta.hasta, plan_origen: meta.origen }),
+  }).catch((e) => console.error('[admin] espejo de users no actualizado:', e.message));
+
+  // El pago, solo si de verdad lo hubo.
+  let pagoRegistrado = false;
+  if (plan !== 'free' && origen !== 'cortesia') {
+    const importe = Number(monto) || (plan === 'agency' ? 99 : 39) * n;
+    const ok = await fetch(`${SUPABASE_URL}/rest/v1/billing`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id: userId, amount: importe, currency: 'USD', plan,
+        period_start: new Date().toISOString(),
+        period_end: hasta.toISOString(),
+        status: 'active',
+        notes: (origen === 'externo' ? 'Pago externo confirmado en el panel' : 'Registrado en el panel')
+               + (nota ? ' — ' + String(nota).slice(0, 200) : ''),
+      }),
+    }).then(x => x.ok).catch(() => false);
+    pagoRegistrado = ok;
+    // El plan YA está aplicado: que falle el registro no se le puede ocultar a
+    // quien lo hizo, porque el pago quedaría sin rastro.
+    if (!ok) console.error('[admin] plan aplicado pero NO se pudo registrar el pago de', userId);
+  }
+
+  return res.json({
+    ok: true,
+    plan,
+    hasta: meta.hasta,
+    origen: meta.origen,
+    pago_registrado: pagoRegistrado,
+    aviso: (plan !== 'free' && origen !== 'cortesia' && !pagoRegistrado)
+      ? 'El plan quedó aplicado, pero el pago NO se pudo registrar. Anótalo aparte.'
+      : null,
+  });
 }
 
 // ── RECOMMENDATIONS ───────────────────────────────────────
@@ -947,6 +1056,7 @@ export default async function handler(req, res) {
     if (action === 'ticket-update')    return await handleTicketUpdate(req, res);
     if (action === 'metrics')          return await handleMetrics(req, res);
     if (action === 'users')            return await handleUsers(req, res);
+    if (action === 'set-plan')         return await handleSetPlan(req, res);
     if (action === 'create-test-user') return await handleCreateTestUser(req, res);
     if (action === 'delete-test-user')   return await handleDeleteTestUser(req, res);
     if (action === 'reset-test-password') return await handleResetTestPassword(req, res);
