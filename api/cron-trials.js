@@ -116,15 +116,28 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // ── Camino 1: la prueba de siempre ─────────────────────────────────
-        if (meta.plan !== 'trial' || !meta.trial_until) continue;
-        const until = new Date(meta.trial_until);
+        // ── Camino 1: la prueba, la automática y la que se da desde el panel ──
+        //
+        // Se acepta `hasta` como respaldo de `trial_until`. Una prueba dada a
+        // mano escribe las dos, pero si alguna vía futura escribiera solo una,
+        // esto evita que la cuenta se quede sin caducar: hasta que se añadió,
+        // un 'trial' sin `trial_until` no entraba en NINGUNA de las dos ramas
+        // —ni la de pago, porque 'trial' no está en esa lista— y vivía para
+        // siempre. Es el mismo agujero de los Pro regalados, por el otro lado.
+        if (meta.plan !== 'trial') continue;
+        const fechaPrueba = meta.trial_until || meta.hasta;
+        if (!fechaPrueba) { sinFecha.push(email || u.id); continue; }
+        const until = new Date(fechaPrueba);
+        if (isNaN(until)) { sinFecha.push(email || u.id); continue; }
         const now = new Date();
         const msLeft = until.getTime() - now.getTime();
 
         if (msLeft <= 0) {
-          await setMeta(u.id, { plan: 'free' });
-          await espejo(u.id, { plan: 'free' });
+          // Se limpian las dos fechas al bajar a gratuito. Dejarlas puestas
+          // hacía que la cuenta siguiera figurando con vigencia en el panel
+          // después de haber caducado.
+          await setMeta(u.id, { plan: 'free', trial_until: null, hasta: null, origen: null });
+          await espejo(u.id, { plan: 'free', trial_ends_at: null, plan_ends_at: null, plan_origen: null });
           expired++;
           if (email) {
             await sendMail(email, 'Tu prueba de Acuarius Pro terminó — así sigues',

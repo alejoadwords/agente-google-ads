@@ -436,6 +436,7 @@ async function handleSync(req, res) {
     // cualquier vía (Hotmart, un cambio a mano en Clerk), el sync lo corrige.
     const hasta  = u.public_metadata?.hasta  || null;
     const origen = u.public_metadata?.origen || null;
+    const prueba = u.public_metadata?.trial_until || null;
 
     await fetch(`${SUPABASE_URL}/rest/v1/users`, {
       method: 'POST',
@@ -447,6 +448,7 @@ async function handleSync(req, res) {
       },
       body: JSON.stringify({
         id: u.id, email, name, plan, status, plan_ends_at: hasta, plan_origen: origen,
+        trial_ends_at: prueba,
         created_at: new Date(u.created_at).toISOString(),
         updated_at: new Date(u.updated_at).toISOString(),
       }),
@@ -474,37 +476,64 @@ async function handleSync(req, res) {
 // esto devuelve error y NO escribe el pago — un pago registrado con el plan sin
 // aplicar es peor que no haber hecho nada.
 async function handleSetPlan(req, res) {
-  const { userId, plan, meses, origen, monto, nota } = req.body || {};
+  const { userId, plan, meses, dias, monto, nota } = req.body || {};
   const PLANES  = ['free', 'pro', 'agency', 'trial'];
   const ORIGENES = ['externo', 'cortesia', 'hotmart'];
+
+  // Una prueba nunca es un ingreso, así que su concepto no se pregunta: es
+  // cortesía siempre. Dejarlo elegir permitiría dar de alta un 'trial' que
+  // luego apareciera en el MRR.
+  const esPrueba = plan === 'trial';
+  const origen = esPrueba ? 'cortesia' : (req.body || {}).origen;
 
   if (!userId)                     return res.status(400).json({ error: 'Falta userId' });
   if (!PLANES.includes(plan))      return res.status(400).json({ error: 'Plan inválido. Usa: ' + PLANES.join(', ') });
   if (plan !== 'free' && !ORIGENES.includes(origen)) {
     return res.status(400).json({ error: 'Falta el origen. Usa: ' + ORIGENES.join(', ') });
   }
-  const n = plan === 'free' ? 0 : parseInt(meses, 10);
-  if (plan !== 'free' && (!Number.isFinite(n) || n < 1 || n > 24)) {
+
+  // La prueba se mide en días —14 es lo que da el alta automática— y el resto
+  // en meses. Pedir «meses» para una prueba obligaba a regalar un mes entero.
+  const d = esPrueba ? parseInt(dias, 10) : 0;
+  const n = (esPrueba || plan === 'free') ? 0 : parseInt(meses, 10);
+  if (esPrueba && (!Number.isFinite(d) || d < 1 || d > 90)) {
+    return res.status(400).json({ error: 'Los días deben ser un número entre 1 y 90' });
+  }
+  if (!esPrueba && plan !== 'free' && (!Number.isFinite(n) || n < 1 || n > 24)) {
     return res.status(400).json({ error: 'Los meses deben ser un número entre 1 y 24' });
   }
 
   // Si ya tiene una fecha por delante, se SUMA: renovar a alguien al día no
-  // puede recortarle lo que le queda.
+  // puede recortarle lo que le queda. Vale para las dos fechas, porque una
+  // prueba en curso vive en `trial_until` y un plan de pago en `hasta`.
   let desde = new Date();
   try {
-    const r = await fetch(`https://api.clerk.com/v1/users/${userId}`, { headers: { Authorization: 'Bearer ' + CLERK_SECRET } });
+    const r = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      headers: { Authorization: 'Bearer ' + CLERK_SECRET, 'User-Agent': 'acuarius-admin' },
+    });
     const actual = await r.json();
-    const yaTiene = actual?.public_metadata?.hasta ? new Date(actual.public_metadata.hasta) : null;
-    if (yaTiene && !isNaN(yaTiene) && yaTiene > desde) desde = yaTiene;
+    for (const campo of ['hasta', 'trial_until']) {
+      const f = actual?.public_metadata?.[campo] ? new Date(actual.public_metadata[campo]) : null;
+      if (f && !isNaN(f) && f > desde) desde = f;
+    }
   } catch (e) {
     console.error('[admin] no se pudo leer el plan actual de', userId, e.message);
   }
   const hasta = new Date(desde);
-  hasta.setMonth(hasta.getMonth() + n);
+  if (esPrueba) hasta.setDate(hasta.getDate() + d);
+  else hasta.setMonth(hasta.getMonth() + n);
 
+  // `trial_until` es el campo que de verdad mueve una prueba: lo lee el
+  // contador de la app (app.js) y la rama de pruebas del cron. Sin él, un
+  // 'trial' puesto a mano no caducaba y no se veía en ningún lado.
+  // `trial_used` se marca para que además no pueda arrancar otra por su cuenta.
   const meta = plan === 'free'
-    ? { plan: 'free', status: 'active', hasta: null, origen: null, aviso_fin: null }
-    : { plan, status: 'active', hasta: hasta.toISOString().slice(0, 10), origen, aviso_fin: null };
+    ? { plan: 'free', status: 'active', hasta: null, origen: null, trial_until: null, aviso_fin: null }
+    : esPrueba
+      ? { plan: 'trial', status: 'active', hasta: hasta.toISOString().slice(0, 10),
+          trial_until: hasta.toISOString(), trial_used: true, origen, aviso_fin: null }
+      : { plan, status: 'active', hasta: hasta.toISOString().slice(0, 10),
+          trial_until: null, origen, aviso_fin: null };
 
   const r = await clerkUpdateMetadata(userId, meta);
   if (!r.ok) return res.status(502).json({ error: 'Clerk rechazó el cambio: ' + r.error });
@@ -520,7 +549,12 @@ async function handleSetPlan(req, res) {
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
-    body: JSON.stringify({ plan: meta.plan, plan_ends_at: meta.hasta, plan_origen: meta.origen }),
+    body: JSON.stringify({
+      plan: meta.plan,
+      plan_ends_at: meta.hasta,
+      plan_origen: meta.origen,
+      trial_ends_at: meta.trial_until,
+    }),
   }).catch((e) => console.error('[admin] espejo de users no actualizado:', e.message));
 
   // El pago, solo si de verdad lo hubo.
@@ -554,6 +588,7 @@ async function handleSetPlan(req, res) {
     ok: true,
     plan,
     hasta: meta.hasta,
+    trial_until: meta.trial_until || null,
     origen: meta.origen,
     pago_registrado: pagoRegistrado,
     aviso: (plan !== 'free' && origen !== 'cortesia' && !pagoRegistrado)
