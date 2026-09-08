@@ -93,7 +93,7 @@ async function handleMetrics(req, res) {
   // 'externo'. La cortesía vale $0 a propósito.
   const [allUsers, billingAll, logsRecent] = await Promise.all([
     supabaseReq('/users?select=id,email,plan,status,created_at,trial_ends_at,plan_ends_at,plan_origen'),
-    supabaseReq('/billing?select=amount,plan,status,created_at,period_end'),
+    supabaseReq('/billing?select=amount,plan,status,created_at,period_end,hotmart_transaction'),
     supabaseReq('/activity_logs?select=action,created_at&order=created_at.desc&limit=200'),
   ]);
 
@@ -132,7 +132,15 @@ async function handleMetrics(req, res) {
   const vencidosActivos = allUsers.filter(u => esDePago(u.plan) && u.plan_ends_at && new Date(u.plan_ends_at) <= now).length;
 
   // Facturación real: en `billing` el estado es 'active' | 'cancelled'.
-  const cobros = billingAll.filter(b => b.status === 'active');
+  //
+  // Y se descartan las transacciones de prueba. Probar el webhook de Hotmart
+  // deja una fila igual que la de una compra de verdad, y las únicas dos que
+  // existían el 08-09-2026 eran precisamente eso: TEST-1779886958699 y
+  // TEST-E2E-PRO. El panel enseñaba $49 de «histórico» que nadie pagó nunca.
+  // Un ingreso inventado es peor que ninguno, porque no se cuestiona.
+  const esPrueba = (b) => /^TEST[-_]/i.test(b.hotmart_transaction || '');
+  const cobros = billingAll.filter(b => b.status === 'active' && !esPrueba(b));
+  const cobrosDePrueba = billingAll.filter(esPrueba).length;
   const totalRevenue = cobros.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
   const revenueThisMonth = cobros
     .filter(b => new Date(b.created_at) > hace30)
@@ -160,6 +168,7 @@ async function handleMetrics(req, res) {
     // Lo que hay que mirar: planes de pago que no son ingreso.
     atencion: {
       cortesias: cortesia.length,
+      cobros_de_prueba: cobrosDePrueba,
       sin_registrar: sinRegistrar.length,
       sin_registrar_detalle: sinRegistrar.slice(0, 12),
       vencidos_activos: vencidosActivos,
