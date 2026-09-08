@@ -504,18 +504,22 @@ async function handleSetPlan(req, res) {
   }
 
   // Si ya tiene una fecha por delante, se SUMA: renovar a alguien al día no
-  // puede recortarle lo que le queda. Vale para las dos fechas, porque una
-  // prueba en curso vive en `trial_until` y un plan de pago en `hasta`.
+  // puede recortarle lo que le queda.
+  //
+  // Cada cosa suma sobre LA SUYA: una prueba se alarga desde `trial_until` y un
+  // plan de pago desde `hasta`. Mezclarlas tenía una trampa fea: dar «14 días
+  // de prueba» a alguien con Pro pagado hasta diciembre lo dejaba en plan
+  // 'trial' hasta diciembre + 14, es decir, le quitaba el plan que pagó y le
+  // regalaba dos semanas encima.
   let desde = new Date();
   try {
     const r = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
       headers: { Authorization: 'Bearer ' + CLERK_SECRET, 'User-Agent': 'acuarius-admin' },
     });
     const actual = await r.json();
-    for (const campo of ['hasta', 'trial_until']) {
-      const f = actual?.public_metadata?.[campo] ? new Date(actual.public_metadata[campo]) : null;
-      if (f && !isNaN(f) && f > desde) desde = f;
-    }
+    const campo = esPrueba ? 'trial_until' : 'hasta';
+    const f = actual?.public_metadata?.[campo] ? new Date(actual.public_metadata[campo]) : null;
+    if (f && !isNaN(f) && f > desde) desde = f;
   } catch (e) {
     console.error('[admin] no se pudo leer el plan actual de', userId, e.message);
   }
