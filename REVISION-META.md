@@ -152,6 +152,9 @@ otra cuenta de Facebook y el mensaje entra al inbox.
 
 ### Guion de rodaje
 
+**El guion completo, escena por escena y con los nombres reales de las pantallas,
+está en `GUION-VIDEO-META.md`.** Aquí queda el resumen de qué justifica cada paso.
+
 Un solo video, sin cortes, con el cursor visible y sin audio necesario. Grabar en
 pantalla completa, sin pestañas ni marcadores que enseñen cuentas de clientes.
 
@@ -164,7 +167,7 @@ pantalla completa, sin pestañas ni marcadores que enseñen cuentas de clientes.
 | 5 | Elegir cuenta publicitaria de la lista | `ads_read` |
 | 6 | Elegir las páginas a conectar | `pages_show_list` |
 | 7 | Volver a Acuarius: la cuenta aparece conectada, con su nombre e ID | contexto |
-| 8 | Abrir el panel: campañas reales con impresiones, clics y gasto **distintos de cero** | `ads_read` |
+| 8 | Abrir el agente **Meta Ads**: el panel de campañas se carga solo dentro del chat, con impresiones, clics y gasto **distintos de cero** | `ads_read` |
 | 9 | Pedirle al agente que analice una campaña; se ve la respuesta con los datos reales | `ads_read` |
 | 10 | Crear una campaña desde el chat y mostrar que **queda en pausa** | `ads_management` |
 | 11 | Conversaciones → llega un mensaje real de Messenger y se responde desde el inbox | `pages_messaging`, `pages_manage_metadata` |
@@ -221,7 +224,9 @@ Texto para pegar (en inglés):
 
 1. Verificación del negocio (lo más lento — empezar por aquí).
 2. Tapar los huecos del punto 2, incluida la política de privacidad.
-3. Grabar el video con una cuenta sin rol.
+3. Grabar el video **con una cuenta que SÍ tenga rol** (ver sección 4: sin rol es
+   imposible mientras los permisos estén en acceso estándar). Guion de rodaje
+   paso a paso en `GUION-VIDEO-META.md`.
 4. Crear la cuenta de prueba.
 5. Enviar los siete permisos **en una sola solicitud**: si se envían sueltos, cada uno
    abre su propio ciclo de revisión.
