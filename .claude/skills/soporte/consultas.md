@@ -77,6 +77,27 @@ select created_at, subject, status from public.support_tickets
 where user_id = 'user_XXX' order by created_at desc limit 20;
 ```
 
+## Comprobar que una tabla nueva no nació abierta
+
+Acuarius solo habla con Supabase desde el servidor con la clave de servicio, que
+se salta RLS. Por eso toda tabla debe tener **RLS activo y ninguna política**.
+
+```sql
+select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
+```
+
+Cualquier fila ahí es una tabla que **cualquiera con la clave pública puede leer
+y escribir**. Y las políticas que dejan pasar a todos:
+
+```sql
+select tablename, policyname, cmd, roles::text from pg_policies
+where schemaname = 'public' and (qual = 'true' or with_check = 'true');
+```
+
+Ojo: **un `PATCH` no sirve para comprobarlo** — una tabla protegida sin
+políticas también responde 204 con cero filas. Ver [[project_rls_supabase]].
+
 ## Lo que NO se consulta
 
 - El contenido de `chat_messages` y `conversation_notes`: son conversaciones de
