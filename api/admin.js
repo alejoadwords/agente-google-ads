@@ -534,7 +534,10 @@ async function handleSetPlan(req, res) {
   const meta = plan === 'free'
     ? { plan: 'free', status: 'active', hasta: null, origen: null, trial_until: null, aviso_fin: null }
     : esPrueba
-      ? { plan: 'trial', status: 'active', hasta: hasta.toISOString().slice(0, 10),
+      // La prueba NO escribe `hasta`: esa fecha es de los planes de pago. Al
+      // escribir las dos, cobrarle después un mes a quien tenía 60 días de
+      // prueba se los sumaba encima — Pro hasta diciembre en vez de octubre.
+      ? { plan: 'trial', status: 'active', hasta: null,
           trial_until: hasta.toISOString(), trial_used: true, origen, aviso_fin: null }
       : { plan, status: 'active', hasta: hasta.toISOString().slice(0, 10),
           trial_until: null, origen, aviso_fin: null };
@@ -591,7 +594,9 @@ async function handleSetPlan(req, res) {
   return res.json({
     ok: true,
     plan,
-    hasta: meta.hasta,
+    // `hasta` sale con la fecha que aplique, sea de pago o de prueba, para que
+    // quien llame no tenga que saber en qué campo vive cada una.
+    hasta: meta.hasta || (meta.trial_until ? meta.trial_until.slice(0, 10) : null),
     trial_until: meta.trial_until || null,
     origen: meta.origen,
     pago_registrado: pagoRegistrado,
