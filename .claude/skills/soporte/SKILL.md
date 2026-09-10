@@ -99,6 +99,13 @@ node tools/mapa-modulos.mjs > .claude/skills/soporte/modulos.md
 
 ## Cuentas que ya se atienden
 
+- **HBSB** — `comercialhbsb53@gmail.com`. Cuenta creada el 10-09-2026 con
+  **prueba de un mes concedida a mano**: vence el **10-10-2026**. No es la prueba
+  automática, que dura 14 días. Se da desde el panel con la acción de prueba y
+  **30 días** — eso escribe `trial_until`, que es el campo que mueve una prueba;
+  darle Pro de cortesía con `hasta` sería otra cosa y contaría distinto. El cron
+  avisa 3 días antes y baja a `free`. Ver [[project_planes_con_fecha]].
+
 - **Certain Pezzano** — `direccioncomercial@certainpezzano.com` (dueña, plan
   pro) y `asesor1@certainpezzano.com`. Inmobiliaria; sus leads viven en el
   tablero **Arriendo**, no en el Principal, cosa que despista al mirar. Usan
