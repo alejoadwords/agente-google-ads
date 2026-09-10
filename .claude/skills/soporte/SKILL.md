@@ -99,12 +99,13 @@ node tools/mapa-modulos.mjs > .claude/skills/soporte/modulos.md
 
 ## Cuentas que ya se atienden
 
-- **HBSB** — `comercialhbsb53@gmail.com`. Cuenta creada el 10-09-2026 con
-  **prueba de un mes concedida a mano**: vence el **10-10-2026**. No es la prueba
-  automática, que dura 14 días. Se da desde el panel con la acción de prueba y
-  **30 días** — eso escribe `trial_until`, que es el campo que mueve una prueba;
-  darle Pro de cortesía con `hasta` sería otra cosa y contaría distinto. El cron
-  avisa 3 días antes y baja a `free`. Ver [[project_planes_con_fecha]].
+- **HBSB** — `comercialhbsb53@gmail.com`. Alta el 10-09-2026. Se le dieron 30
+  días de prueba a mano y **quedó con 44**: vence el **24-10-2026**, no el 10-10.
+  Los días se **SUMAN a lo que le quede**, y al registrarse ya tenía los 14 de la
+  prueba automática (hasta el 24-09). Es el comportamiento de diseño —renovar a
+  quien está al día no le recorta—, pero para una prueba «de un mes desde hoy» a
+  una cuenta recién creada hay que dar **16 días, no 30**, o escribir
+  `trial_until` a mano en Clerk. Ver [[project_planes_con_fecha]].
 
 - **Certain Pezzano** — `direccioncomercial@certainpezzano.com` (dueña, plan
   pro) y `asesor1@certainpezzano.com`. Inmobiliaria; sus leads viven en el
