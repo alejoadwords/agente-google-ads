@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Firma de correo — Acuarius</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+/* Arma la firma de correo de Acuarius y la copia con formato.
+
+   La firma se construye con tabla y estilos en línea, no con flex ni clases:
+   los clientes de correo llevan años sin soportar lo segundo, y Outlook parte
+   cualquier maquetación moderna. Por eso el HTML de la firma se ve anticuado a
+   propósito — es el único que llega igual a todas partes. */
+:root{
+  --blue:#1E2BCC; --blue-h:#1520B0; --aqua:#00B8CE;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg-subtle:#F7F8FC; --border:#E4E6F0; --success:#059669;
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-subtle);font-family:var(--font);color:var(--text)}
+.barra{background:#fff;border-bottom:1px solid var(--border);padding:12px 20px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.barra img{height:22px}
+.barra .sep{flex:1}
+.barra a{color:var(--blue);text-decoration:none;font-size:13px;font-weight:500}
+
+.wrap{max-width:960px;margin:0 auto;padding:24px 20px 70px;
+  display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px;align-items:start}
+@media(max-width:800px){.wrap{grid-template-columns:1fr}}
+.panel,.vista{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.campo{margin-bottom:13px}
+label{display:block;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  font-weight:600;color:var(--text-3);margin-bottom:5px}
+input{width:100%;font-family:var(--font);font-size:14px;color:var(--text);background:#fff;
+  border:1px solid var(--border);border-radius:9px;padding:9px 11px}
+input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px rgba(30,43,204,.15)}
+.btn{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:11px 16px;
+  font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;width:100%}
+.btn:hover{background:var(--blue-h)}
+.ok{color:var(--success);font-size:13px;font-weight:600;margin-top:9px;min-height:18px}
+.tit{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;
+  color:var(--text-3);margin-bottom:11px}
+.marco{border:1px dashed var(--border);border-radius:10px;padding:20px;background:#fff}
+.pasos{font-size:13px;color:var(--text-2);line-height:1.6;margin:16px 0 0;padding-left:18px}
+.pasos li{margin-bottom:5px}
+.pasos b{color:var(--text)}
+.reglas{margin-top:20px;font-size:13px;color:var(--text-2);line-height:1.6}
+.reglas b{color:var(--text)}
+details{margin-top:16px}
+summary{cursor:pointer;font-size:13px;color:var(--blue);font-weight:500}
+pre{background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;
+  padding:13px;overflow-x:auto;font-size:11.5px;line-height:1.5;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-2);
+  white-space:pre-wrap;word-break:break-word}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div class="barra">
+  <img src="/logo.png" alt="Acuarius">
+  <strong style="font-size:14px">Firma de correo</strong>
+  <span class="sep"></span>
+  <a href="/marca/presentacion.html">Presentación</a>
+  <a href="/marca/redes.html">Redes</a>
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="campo"><label for="nombre">Nombre</label>
+      <input id="nombre" value="Alejandro González"></div>
+    <div class="campo"><label for="cargo">Cargo</label>
+      <input id="cargo" value="Dirección"></div>
+    <div class="campo"><label for="correo">Correo</label>
+      <input id="correo" value="ceo@acuarius.app"></div>
+    <div class="campo"><label for="tel">Teléfono <span style="text-transform:none;letter-spacing:0;font-weight:400">(opcional)</span></label>
+      <input id="tel" value="" placeholder="+57 300 000 0000"></div>
+    <button class="btn" id="copiar">Copiar firma</button>
+    <div class="ok" id="aviso"></div>
+    <ol class="pasos">
+      <li><b>Gmail:</b> Configuración → Firma → pegar con <b>Ctrl/⌘ + V</b></li>
+      <li><b>Outlook:</b> Archivo → Opciones → Correo → Firmas</li>
+      <li>Pegar sin formato borra el diseño: usa el pegado normal</li>
+    </ol>
+  </div>
+
+  <div class="vista">
+    <div class="tit">Así se ve</div>
+    <div class="marco"><div id="firma"></div></div>
+
+    <div class="reglas">
+      <b>Lo que no lleva:</b> foto, frase motivacional, aviso legal de tres párrafos, iconos
+      de redes ni «piensa antes de imprimir». Una firma es una tarjeta, no un folleto.
+      <br><br>
+      El logo se sirve desde <span style="font-family:ui-monospace,monospace;font-size:12px">app.acuarius.app</span>,
+      así que se ve en cualquier cliente sin adjuntar nada. Si el destinatario bloquea las
+      imágenes, el texto alternativo mantiene la firma legible.
+    </div>
+
+    <details>
+      <summary>Ver el HTML, por si hay que pegarlo a mano</summary>
+      <pre id="codigo"></pre>
+    </details>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function construir(){
+  const nombre = esc($('nombre').value.trim() || 'Nombre Apellido');
+  const cargo  = esc($('cargo').value.trim());
+  const correo = esc($('correo').value.trim());
+  const tel    = esc($('tel').value.trim());
+  const base   = location.origin;
+
+  // Tabla y estilos en línea: es lo único que sobrevive a Outlook.
+  return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:'Outfit',Helvetica,Arial,sans-serif"><tr>
+<td style="padding:0 16px 0 0;vertical-align:top">
+<img src="${base}/logo.png" alt="Acuarius" width="120" height="48" style="display:block;width:120px;height:48px;border:0">
+</td>
+<td style="padding:0 0 0 16px;border-left:2px solid #1E2BCC;vertical-align:top">
+<div style="font-size:15px;font-weight:600;color:#0D0F1C;line-height:1.3">${nombre}</div>
+${cargo ? `<div style="font-size:13px;color:#5A607A;line-height:1.5">${cargo}</div>` : ''}
+<div style="font-size:13px;color:#5A607A;line-height:1.5;padding-top:4px">
+<span style="color:#1E2BCC;font-weight:600">Acuarius</span> — CRM y marketing con IA
+</div>
+<div style="font-size:13px;line-height:1.6;padding-top:4px">
+<a href="https://acuarius.app" style="color:#1E2BCC;text-decoration:none">acuarius.app</a>${
+  correo ? ` &nbsp;·&nbsp; <a href="mailto:${correo}" style="color:#5A607A;text-decoration:none">${correo}</a>` : ''}${
+  tel ? ` &nbsp;·&nbsp; <span style="color:#5A607A">${tel}</span>` : ''}
+</div>
+</td></tr></table>`;
+}
+
+function pintar(){
+  const html = construir();
+  $('firma').innerHTML = html;
+  $('codigo').textContent = html;
+}
+
+['nombre','cargo','correo','tel'].forEach(id => $(id).addEventListener('input', pintar));
+
+$('copiar').addEventListener('click', async () => {
+  const aviso = $('aviso');
+  const html = construir();
+  // Se copia como HTML enriquecido para que Gmail conserve el diseño. Si el
+  // navegador no deja (permiso denegado, contexto no seguro), se cae a
+  // seleccionar el nodo y copiar — y si tampoco, se dice. Nunca se queda
+  // callado dando a entender que copió.
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html':  new Blob([html], { type:'text/html' }),
+      'text/plain': new Blob([$('firma').innerText], { type:'text/plain' }),
+    })]);
+    aviso.textContent = 'Copiada. Pégala en la firma de tu correo.';
+  } catch (e) {
+    try {
+      const r = document.createRange();
+      r.selectNodeContents($('firma'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      if (!document.execCommand('copy')) throw new Error('sin permiso');
+      s.removeAllRanges();
+      aviso.textContent = 'Copiada. Pégala en la firma de tu correo.';
+    } catch (e2) {
+      aviso.style.color = 'var(--blue)';
+      aviso.textContent = 'Tu navegador no dejó copiar. Abre «Ver el HTML» y cópialo de ahí.';
+      return;
+    }
+  }
+  aviso.style.color = 'var(--success)';
+  setTimeout(() => { aviso.textContent = ''; }, 4000);
+});
+
+pintar();
+</script>
+</body>
+</html>

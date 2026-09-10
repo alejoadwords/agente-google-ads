@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plantilla de presentación — Acuarius</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Montserrat:wght@700;800;900&display=swap">
+<style>
+/* Plantilla de láminas 16:9 para presentaciones de Acuarius.
+   Imprime a PDF con el mismo patrón que public/propuesta.html: @page a
+   297×167mm y una lámina por página. Se edita a mano: duplicar el bloque de
+   la lámina que sirva y cambiar el texto.
+
+   Los tamaños de letra van en `cqw` (porcentaje del ancho de la lámina) y no
+   en px. Es lo que hace que el texto escale igual en pantalla, en pantalla
+   completa y en el PDF: con px, el PDF sale con la letra diminuta. */
+:root{
+  --blue:#1E2BCC; --blue-h:#1520B0; --aqua:#00B8CE;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg-subtle:#F7F8FC; --border:#E4E6F0;
+  --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --display:'Montserrat','Outfit',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#EDEFF6;font-family:var(--font);color:var(--text)}
+
+.barra{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--border);
+  padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.barra img{height:22px}
+.barra .sep{flex:1}
+.barra a{color:var(--blue);text-decoration:none;font-size:13px;font-weight:500}
+.btn{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:8px 16px;
+  font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer}
+.btn:hover{background:var(--blue-h)}
+.ayuda{max-width:1180px;margin:20px auto 0;padding:0 20px;font-size:13.5px;color:var(--text-2)}
+.ayuda b{color:var(--text)}
+
+.mazo{max-width:1180px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:22px}
+.lamina{position:relative;width:100%;aspect-ratio:16/9;container-type:inline-size;
+  background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 6px 26px rgba(11,13,24,.10);
+  break-inside:avoid;display:flex;flex-direction:column;justify-content:center;
+  padding:7cqw 8cqw}
+.rotulo{position:absolute;top:-9px;left:2px;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--text-3);font-weight:600}
+
+/* ── Fondos ── */
+.f-grad{background:var(--grad);color:#fff}
+.f-azul{background:var(--blue);color:#fff}
+.f-oscuro{background:#0D0F1C;color:#fff}
+.f-suave{background:var(--bg-subtle)}
+
+/* ── Tipografía de lámina ── */
+.kicker{font-size:1.5cqw;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+  margin-bottom:2.4cqw;opacity:.72}
+.f-grad .kicker,.f-azul .kicker,.f-oscuro .kicker{opacity:.8}
+h1.t{font-size:6.4cqw;line-height:1.03;letter-spacing:-.028em;font-weight:700;margin:0;
+  text-wrap:balance}
+h2.t{font-size:4.6cqw;line-height:1.08;letter-spacing:-.024em;font-weight:600;margin:0 0 2.6cqw;
+  text-wrap:balance}
+p.s{font-size:2.1cqw;line-height:1.5;margin:2.4cqw 0 0;max-width:44cqw;opacity:.9}
+.f-suave p.s,.lamina:not([class*=f-]) p.s{color:var(--text-2);opacity:1}
+ul.l{font-size:2.1cqw;line-height:1.55;margin:0;padding-left:2.6cqw;color:var(--text-2)}
+ul.l li{margin-bottom:1.2cqw}
+ul.l li::marker{color:var(--blue)}
+
+.logo-l{position:absolute;top:5cqw;left:8cqw;height:3.6cqw;width:auto}
+.pie{position:absolute;bottom:4.4cqw;left:8cqw;right:8cqw;display:flex;justify-content:space-between;
+  align-items:center;font-size:1.4cqw;color:var(--text-3)}
+.f-grad .pie,.f-azul .pie,.f-oscuro .pie{color:rgba(255,255,255,.68)}
+.pie img{height:2.2cqw;width:auto;opacity:.9}
+
+/* Dato grande: el número manda, el resto lo acompaña */
+.dato{font-family:var(--display);font-weight:900;font-size:15cqw;line-height:.9;
+  letter-spacing:-.03em;background:var(--grad);-webkit-background-clip:text;
+  background-clip:text;color:transparent}
+.f-oscuro .dato,.f-azul .dato{background:none;color:#fff;-webkit-text-fill-color:#fff}
+.dato-pie{font-size:2.1cqw;color:var(--text-2);margin-top:1.6cqw;max-width:40cqw}
+
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:5cqw}
+.cols h3{font-size:2.4cqw;margin:0 0 1cqw;font-weight:600;letter-spacing:-.01em}
+.cols p{font-size:1.85cqw;line-height:1.5;color:var(--text-2);margin:0}
+
+table.t{width:100%;border-collapse:collapse;font-size:1.85cqw}
+table.t th{text-align:left;font-size:1.3cqw;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-3);font-weight:600;padding:1.4cqw 1.6cqw;border-bottom:.12cqw solid var(--border)}
+table.t td{padding:1.4cqw 1.6cqw;border-bottom:.12cqw solid #F0F1F8;color:var(--text-2)}
+table.t td:first-child{color:var(--text);font-weight:500}
+table.t td.n{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+
+.cita{font-size:3.4cqw;line-height:1.28;font-weight:600;letter-spacing:-.018em;max-width:52cqw}
+.cita-a{font-size:1.7cqw;margin-top:3cqw;opacity:.72}
+
+/* La firma de la marca: una franja del degradado. Una por lámina, no más. */
+.franja{position:absolute;left:0;right:0;bottom:0;height:.7cqw;background:var(--grad)}
+
+@media print{
+  @page{ size:297mm 167mm; margin:0 }
+  body{background:#fff}
+  .barra,.ayuda,.rotulo{display:none!important}
+  .mazo{max-width:none;margin:0;padding:0;gap:0;display:block}
+  .lamina{width:297mm;height:167mm;aspect-ratio:auto;border-radius:0;box-shadow:none;
+    break-after:page;page-break-after:always}
+  .lamina:last-child{break-after:auto;page-break-after:auto}
+  /* Sin esto Chrome imprime los fondos en blanco y la portada sale vacía. */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<div class="barra">
+  <img src="/logo.png" alt="Acuarius">
+  <strong style="font-size:14px">Plantilla de presentación</strong>
+  <span class="sep"></span>
+  <a href="/marca/redes.html">Redes</a>
+  <a href="/marca/firma.html">Firma</a>
+  <button class="btn" onclick="window.print()">Descargar PDF</button>
+</div>
+
+<div class="ayuda">
+  <b>Cómo se usa.</b> Duplica la lámina que necesites y cambia el texto. «Descargar PDF»
+  imprime una lámina por página a 16:9 — en el diálogo, márgenes en «Ninguno» y
+  <b>activa «Gráficos de fondo»</b> o las portadas salen en blanco.
+  Una idea por lámina y el degradado una sola vez por lámina.
+</div>
+
+<div class="mazo">
+
+  <!-- ── Portada ── -->
+  <div class="lamina f-grad"><span class="rotulo">Portada</span>
+    <img class="logo-l" src="/logo-white.png" alt="Acuarius">
+    <h1 class="t">El CRM que además<br>hace el marketing</h1>
+    <p class="s">Leads, pipeline, inbox y campañas en un solo lugar, con agentes de IA que
+      hacen el trabajo. Para equipos de América Latina.</p>
+    <div class="pie"><span>acuarius.app</span><span>Septiembre 2026</span></div>
+  </div>
+
+  <!-- ── Separador de sección ── -->
+  <div class="lamina f-azul"><span class="rotulo">Sección</span>
+    <div class="kicker">Parte 01</div>
+    <h1 class="t">El problema</h1>
+    <div class="franja"></div>
+  </div>
+
+  <!-- ── Contenido con lista ── -->
+  <div class="lamina"><span class="rotulo">Contenido</span>
+    <div class="kicker" style="color:var(--blue);opacity:1">Hoy</div>
+    <h2 class="t">Un equipo comercial de cinco personas usa siete herramientas</h2>
+    <ul class="l">
+      <li>Los leads viven en una hoja de cálculo que nadie actualiza</li>
+      <li>Las conversaciones se pierden entre WhatsApp, Instagram y el correo</li>
+      <li>Las campañas las arma alguien que no ve el pipeline</li>
+      <li>Nadie sabe qué pasó con el lead de hace tres semanas</li>
+    </ul>
+    <div class="franja"></div>
+  </div>
+
+  <!-- ── Dos columnas ── -->
+  <div class="lamina f-suave"><span class="rotulo">Dos columnas</span>
+    <h2 class="t">Antes y después</h2>
+    <div class="cols">
+      <div>
+        <h3>Sin Acuarius</h3>
+        <p>Siete suscripciones, ningún dato conectado y un comercial que dedica la mitad
+          del día a copiar información de un sitio a otro.</p>
+      </div>
+      <div>
+        <h3>Con Acuarius</h3>
+        <p>Un solo lugar. Los agentes construyen las campañas, el inbox reúne todos los
+          canales y cada lead tiene su próxima tarea a la vista.</p>
+      </div>
+    </div>
+    <div class="franja"></div>
+  </div>
+
+  <!-- ── Dato grande ── -->
+  <div class="lamina"><span class="rotulo">Un dato</span>
+    <div class="kicker" style="color:var(--blue);opacity:1">Importación de contactos</div>
+    <div class="dato">2.500</div>
+    <p class="dato-pie">contactos por minuto. Una base de diez mil registros queda cargada
+      y ordenada en menos de cinco minutos.</p>
+    <div class="franja"></div>
+  </div>
+
+  <!-- ── Tabla ── -->
+  <div class="lamina"><span class="rotulo">Tabla</span>
+    <h2 class="t">Planes</h2>
+    <table class="t">
+      <thead><tr><th>Plan</th><th>Para quién</th><th class="n">Al mes</th></tr></thead>
+      <tbody>
+        <tr><td>Gratuito</td><td>Para empezar y probar el CRM</td><td class="n">0 USD</td></tr>
+        <tr><td>Prueba</td><td>Pro completo durante 14 días</td><td class="n">0 USD</td></tr>
+        <tr><td>Pro</td><td>Equipos que ya venden todos los días</td><td class="n">39 USD</td></tr>
+        <tr><td>Agency</td><td>Agencias con varias cuentas de cliente</td><td class="n">99 USD</td></tr>
+      </tbody>
+    </table>
+    <div class="franja"></div>
+  </div>
+
+  <!-- ── Cita ── -->
+  <div class="lamina f-oscuro"><span class="rotulo">Cita</span>
+    <div class="cita">«La diferencia no es guardar mejor los datos. Es que alguien haga
+      algo con ellos.»</div>
+    <div class="cita-a">Manual de marca Acuarius</div>
+  </div>
+
+  <!-- ── Cierre ── -->
+  <div class="lamina f-grad"><span class="rotulo">Cierre</span>
+    <img class="logo-l" src="/logo-white.png" alt="Acuarius">
+    <h1 class="t">Empieza hoy</h1>
+    <p class="s">14 días de Pro, sin tarjeta. Si te sirve, sigues por 39 USD al mes.</p>
+    <div class="pie"><span>acuarius.app</span><span>ceo@acuarius.app</span></div>
+  </div>
+
+</div>
+</body>
+</html>

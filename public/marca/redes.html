@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Piezas para redes — Acuarius</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Montserrat:wght@700;800;900&display=swap">
+<style>
+/* Genera las piezas de redes de Acuarius al tamaño exacto de cada red y las
+   descarga en PNG.
+
+   Se dibuja en canvas y no en HTML a propósito: html2canvas aproxima, y una
+   pieza de marca que sale a un píxel de distancia cada vez deja de ser una
+   plantilla. Aquí lo que se ve es exactamente lo que se descarga. */
+:root{
+  --blue:#1E2BCC; --blue-h:#1520B0; --aqua:#00B8CE;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#fff; --bg-subtle:#F7F8FC; --border:#E4E6F0;
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-subtle);font-family:var(--font);color:var(--text)}
+.barra{background:#fff;border-bottom:1px solid var(--border);padding:12px 20px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.barra img{height:22px}
+.barra .sep{flex:1}
+.barra a{color:var(--blue);text-decoration:none;font-size:13px;font-weight:500}
+
+.wrap{max-width:1160px;margin:0 auto;padding:24px 20px 70px;
+  display:grid;grid-template-columns:330px minmax(0,1fr);gap:26px;align-items:start}
+@media(max-width:840px){.wrap{grid-template-columns:1fr}}
+
+.panel{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;
+  position:sticky;top:20px}
+@media(max-width:840px){.panel{position:static}}
+.campo{margin-bottom:14px}
+label{display:block;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  font-weight:600;color:var(--text-3);margin-bottom:5px}
+input,textarea,select{width:100%;font-family:var(--font);font-size:14px;color:var(--text);
+  background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 11px;resize:vertical}
+input:focus,textarea:focus,select:focus{outline:0;border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(30,43,204,.15)}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 11px;
+  font-family:var(--font);font-size:12.5px;cursor:pointer;color:var(--text-2)}
+.opt[aria-pressed="true"]{border-color:var(--blue);background:rgba(30,43,204,.07);
+  color:var(--blue);font-weight:600}
+.btn{width:100%;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:11px 16px;
+  font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;margin-top:4px}
+.btn:hover{background:var(--blue-h)}
+.hint{font-size:12px;color:var(--text-3);margin-top:9px;line-height:1.5}
+
+.lienzo{background:#fff;border:1px solid var(--border);border-radius:14px;padding:22px;
+  display:flex;flex-direction:column;align-items:center;gap:12px}
+canvas{max-width:100%;height:auto;border-radius:8px;box-shadow:0 6px 26px rgba(11,13,24,.12)}
+.medida{font-size:12.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div class="barra">
+  <img src="/logo.png" alt="Acuarius">
+  <strong style="font-size:14px">Piezas para redes</strong>
+  <span class="sep"></span>
+  <a href="/marca/presentacion.html">Presentación</a>
+  <a href="/marca/firma.html">Firma</a>
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="campo">
+      <label for="formato">Formato</label>
+      <select id="formato">
+        <option value="1080x1080">Cuadrado 1080×1080 — feed</option>
+        <option value="1080x1350">Vertical 1080×1350 — feed alto</option>
+        <option value="1080x1920">Historia 1080×1920 — stories y reels</option>
+        <option value="1200x630">Enlace 1200×630 — LinkedIn, X, vista previa</option>
+      </select>
+    </div>
+
+    <div class="campo">
+      <label>Fondo</label>
+      <div class="opts" id="fondos"></div>
+    </div>
+
+    <div class="campo">
+      <label for="kicker">Etiqueta <span style="text-transform:none;letter-spacing:0;font-weight:400">(opcional)</span></label>
+      <input id="kicker" value="Nuevo en Acuarius" maxlength="34">
+    </div>
+
+    <div class="campo">
+      <label for="titular">Titular</label>
+      <textarea id="titular" rows="3" maxlength="90">Tus leads, ordenados solos</textarea>
+    </div>
+
+    <div class="campo">
+      <label for="bajada">Bajada <span style="text-transform:none;letter-spacing:0;font-weight:400">(opcional)</span></label>
+      <textarea id="bajada" rows="2" maxlength="150">El CRM que además hace el marketing.</textarea>
+    </div>
+
+    <button class="btn" id="descargar">Descargar PNG</button>
+    <div class="hint">El titular va en Montserrat 900 en versalitas y la bajada en Outfit,
+      igual que las creatividades del producto. El aqua nunca queda debajo del texto.</div>
+  </div>
+
+  <div class="lienzo">
+    <canvas id="lienzo"></canvas>
+    <div class="medida" id="medida"></div>
+  </div>
+</div>
+
+<script>
+// Los cuatro fondos permitidos por el manual. El aqua sólido no está a
+// propósito: con texto blanco encima da 2,4:1 de contraste, la mitad de lo
+// legible. Entra como filete, nunca como cama de un titular.
+const FONDOS = {
+  grad:   { nom:'Degradado', tinta:'#FFFFFF', pinta:(c,w,h)=>{ const g=c.createLinearGradient(0,0,w,h);
+            g.addColorStop(0,'#1E2BCC'); g.addColorStop(1,'#00B8CE'); c.fillStyle=g; c.fillRect(0,0,w,h); } },
+  azul:   { nom:'Azul',      tinta:'#FFFFFF', pinta:(c,w,h)=>{ c.fillStyle='#1E2BCC'; c.fillRect(0,0,w,h); } },
+  oscuro: { nom:'Oscuro',    tinta:'#FFFFFF', pinta:(c,w,h)=>{ c.fillStyle='#0D0F1C'; c.fillRect(0,0,w,h); } },
+  claro:  { nom:'Blanco',    tinta:'#0D0F1C', pinta:(c,w,h)=>{ c.fillStyle='#FFFFFF'; c.fillRect(0,0,w,h); } },
+};
+let fondoSel = 'grad';
+
+const $ = id => document.getElementById(id);
+const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
+
+// Los dos logos, en color y en blanco. Se espera a que carguen antes de
+// dibujar: un canvas dibujado con la imagen a medio cargar sale sin logo y sin
+// avisar de nada.
+const logos = {};
+function cargarLogo(clave, ruta){
+  return new Promise(res => {
+    const i = new Image();
+    i.onload = () => { logos[clave] = i; res(); };
+    i.onerror = () => { console.error('[redes] no cargó', ruta); res(); };
+    i.src = ruta;
+  });
+}
+
+// Parte el texto en líneas que quepan, midiendo de verdad con el canvas en vez
+// de contar caracteres: «Illlll» y «WWWWWW» ocupan lo mismo contando letras.
+function enLineas(texto, maxAncho){
+  const palabras = String(texto).trim().split(/\s+/).filter(Boolean);
+  const lineas = []; let linea = '';
+  for (const p of palabras){
+    const prueba = linea ? linea + ' ' + p : p;
+    if (ctx.measureText(prueba).width > maxAncho && linea){ lineas.push(linea); linea = p; }
+    else linea = prueba;
+  }
+  if (linea) lineas.push(linea);
+  return lineas;
+}
+
+function dibujar(){
+  const [w, h] = $('formato').value.split('x').map(Number);
+  lienzo.width = w; lienzo.height = h;
+  // Se muestra a un tamaño cómodo; el archivo sigue siendo de w×h reales.
+  const anchoVista = Math.min(w, h > w ? 330 : 520);
+  lienzo.style.width = anchoVista + 'px';
+  $('medida').textContent = w + ' × ' + h + ' px · ' + FONDOS[fondoSel].nom;
+
+  const F = FONDOS[fondoSel];
+  F.pinta(ctx, w, h);
+
+  // Todo se mide contra el lado corto, así una historia no sale con el texto
+  // estirado y la pieza cuadrada con el texto enano.
+  const u = Math.min(w, h) / 100;
+  const margen = 8 * u;
+  const anchoUtil = w - margen * 2;
+  let y = margen;
+
+  // Logo arriba
+  const logo = F.tinta === '#FFFFFF' ? logos.blanco : logos.color;
+  if (logo){
+    const lw = 26 * u, lh = lw * (logo.height / logo.width);
+    ctx.drawImage(logo, margen, y, lw, lh);
+    y += lh + 7 * u;
+  }
+
+  const bloque = [];
+
+  const kicker = $('kicker').value.trim();
+  if (kicker){
+    ctx.font = '600 ' + (2.5 * u) + "px Outfit, sans-serif";
+    bloque.push({ tipo:'kicker', lineas:[kicker.toUpperCase()], alto: 2.5 * u * 1.3, tras: 3 * u });
+  }
+
+  const titular = $('titular').value.trim();
+  if (titular){
+    // El titular se encoge hasta que quepa en cuatro líneas. Sin esto, un
+    // titular largo se sale de la pieza por abajo sin decir nada.
+    let tam = 9 * u, lineas;
+    for (;;){
+      ctx.font = '900 ' + tam + "px Montserrat, sans-serif";
+      lineas = enLineas(titular.toUpperCase(), anchoUtil);
+      if (lineas.length <= 4 || tam <= 4 * u) break;
+      tam -= 0.3 * u;
+    }
+    bloque.push({ tipo:'titular', tam, lineas, alto: lineas.length * tam * 1.06, tras: 3.4 * u });
+  }
+
+  const bajada = $('bajada').value.trim();
+  if (bajada){
+    const tam = 3.1 * u;
+    ctx.font = '400 ' + tam + "px Outfit, sans-serif";
+    const lineas = enLineas(bajada, anchoUtil * 0.86);
+    bloque.push({ tipo:'bajada', tam, lineas, alto: lineas.length * tam * 1.42, tras: 0 });
+  }
+
+  // Dónde se apoya el bloque, según la forma de la pieza:
+  //
+  // En cuadrado y apaisado va abajo, sobre el filete — así todas las piezas de
+  // una campaña comparten línea aunque el texto cambie de largo.
+  //
+  // En vertical, no: una historia de 1080×1920 con el texto abajo deja 1.225 px
+  // de nada en el medio, el 64 % de la pieza vacía. Y encima Instagram tapa la
+  // franja inferior con su propia interfaz. Ahí el bloque se centra entre el
+  // logo y el filete, que es donde el ojo y la app coinciden.
+  const altoTotal = bloque.reduce((s, b) => s + b.alto + b.tras, 0);
+  const suelo = h - margen - 3.2 * u;
+  const esVertical = h / w >= 1.25;
+  let cursor = esVertical
+    ? y + Math.max(0, (suelo - y - altoTotal) / 2)
+    : suelo - altoTotal;
+  if (cursor < y) cursor = y;
+
+  for (const b of bloque){
+    if (b.tipo === 'kicker'){
+      ctx.font = '600 ' + (2.5 * u) + "px Outfit, sans-serif";
+      ctx.fillStyle = F.tinta === '#FFFFFF' ? 'rgba(255,255,255,.78)' : '#1E2BCC';
+      ctx.letterSpacing = (0.28 * u) + 'px';
+      ctx.textBaseline = 'top';
+      ctx.fillText(b.lineas[0], margen, cursor);
+      ctx.letterSpacing = '0px';
+    } else if (b.tipo === 'titular'){
+      ctx.font = '900 ' + b.tam + "px Montserrat, sans-serif";
+      ctx.fillStyle = F.tinta;
+      ctx.textBaseline = 'top';
+      b.lineas.forEach((l, i) => ctx.fillText(l, margen, cursor + i * b.tam * 1.06));
+    } else {
+      ctx.font = '400 ' + b.tam + "px Outfit, sans-serif";
+      ctx.fillStyle = F.tinta === '#FFFFFF' ? 'rgba(255,255,255,.86)' : '#5A607A';
+      ctx.textBaseline = 'top';
+      b.lineas.forEach((l, i) => ctx.fillText(l, margen, cursor + i * b.tam * 1.42));
+    }
+    cursor += b.alto + b.tras;
+  }
+
+  // El filete: la firma de la marca. En las piezas de fondo claro va el
+  // degradado; sobre el degradado iría invisible, así que ahí va en blanco.
+  const alto = 1.1 * u;
+  if (fondoSel === 'grad'){ ctx.fillStyle = 'rgba(255,255,255,.9)'; }
+  else {
+    const g = ctx.createLinearGradient(margen, 0, margen + 30 * u, 0);
+    g.addColorStop(0, '#1E2BCC'); g.addColorStop(1, '#00B8CE');
+    ctx.fillStyle = fondoSel === 'azul' ? '#00B8CE' : g;
+  }
+  ctx.fillRect(margen, h - margen - alto, 30 * u, alto);
+}
+
+$('fondos').innerHTML = Object.entries(FONDOS).map(([k, v]) =>
+  `<button class="opt" data-f="${k}" aria-pressed="${k === fondoSel}">${v.nom}</button>`).join('');
+$('fondos').addEventListener('click', e => {
+  const b = e.target.closest('[data-f]'); if (!b) return;
+  fondoSel = b.dataset.f;
+  $('fondos').querySelectorAll('[data-f]').forEach(x =>
+    x.setAttribute('aria-pressed', x.dataset.f === fondoSel));
+  dibujar();
+});
+['formato','kicker','titular','bajada'].forEach(id =>
+  $(id).addEventListener('input', dibujar));
+
+$('descargar').addEventListener('click', () => {
+  const nombre = 'acuarius-' + $('formato').value + '-' + fondoSel + '.png';
+  lienzo.toBlob(b => {
+    const u = URL.createObjectURL(b);
+    const a = document.createElement('a');
+    a.href = u; a.download = nombre; a.click();
+    setTimeout(() => URL.revokeObjectURL(u), 1000);
+  }, 'image/png');
+});
+
+// Nada se dibuja hasta que las fuentes y los logos estén listos. Dibujar antes
+// pinta el titular en la tipografía del sistema y parece que la plantilla está
+// mal hecha.
+(async function arrancar(){
+  await Promise.all([cargarLogo('color', '/logo.png'), cargarLogo('blanco', '/logo-white.png')]);
+  try {
+    await Promise.all([
+      document.fonts.load('900 100px Montserrat'),
+      document.fonts.load('600 40px Outfit'),
+      document.fonts.load('400 40px Outfit'),
+    ]);
+    await document.fonts.ready;
+  } catch (e) { console.warn('[redes] fuentes:', e && e.message); }
+  dibujar();
+})();
+</script>
+</body>
+</html>
