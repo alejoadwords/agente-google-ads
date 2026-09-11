@@ -20,8 +20,20 @@ chk('Al vencer, baja a free y borra la fecha',
     /setMeta\(u\.id, \{ plan: 'free', hasta: null/.test(cron));
 chk('Avisa antes de vencer, una sola vez',
     /restan <= 3 \* 86400000 && !meta\.aviso_fin/.test(cron));
-chk('La prueba de siempre sigue funcionando',
-    /if \(meta\.plan !== 'trial' \|\| !meta\.trial_until\) continue;/.test(cron));
+// Antes esta comprobación exigía `!meta.trial_until` en el mismo `if`, y esa
+// condición era justo el agujero: una prueba dada a mano desde el panel no
+// tiene por qué haber pasado por el alta automática, así que se saltaba las
+// dos ramas del cron y no caducaba nunca. Ahora se comprueba lo que importa:
+// que entre cualquier prueba, con la fecha que tenga, y que la que no tenga
+// ninguna se reporte en vez de ignorarse en silencio.
+chk('Entra cualquier prueba, venga del alta automática o del panel',
+    /if \(meta\.plan !== 'trial'\) continue;/.test(cron));
+chk('Acepta trial_until y usa hasta como respaldo',
+    /const fechaPrueba = meta\.trial_until \|\| meta\.hasta;/.test(cron));
+chk('Una prueba sin ninguna fecha se reporta, no se salta',
+    /if \(!fechaPrueba\) \{ sinFecha\.push/.test(cron));
+chk('Una fecha ilegible tampoco pasa de largo',
+    /if \(isNaN\(until\)\) \{ sinFecha\.push/.test(cron));
 
 // ── 2. La acción del panel, ejecutada de verdad ────────────────────────────
 const admin = readFileSync(new URL('../api/admin.js', import.meta.url), 'utf8');

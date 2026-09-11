@@ -5,7 +5,7 @@
 // (o reutiliza el existente por email) y encola el flujo.
 // Pensado para formularios de landing, Zapier, Make, Meta Lead Ads, etc.
 
-import { intakeLead, mapExternalPayload, pick as pickIntake, pipelinePrincipal } from '../_lead-intake.js';
+import { intakeLead, mapExternalPayload, pick as pickIntake, pipelinePrincipal, camposDePauta } from '../_lead-intake.js';
 
 // Edge runtime: los imports de módulos compartidos (_lead-intake) se bundlean
 // sin problema — en el runtime Node de Vercel ese import rompía el build de
@@ -112,6 +112,10 @@ export default async function handler(req) {
         tags: Array.isArray(gBody.tags || gBody.etiquetas) ? (gBody.tags || gBody.etiquetas) : String(gBody.tags || gBody.etiquetas || '').split(',').filter(Boolean),
       };
       if (!mapped.name && !mapped.email && !mapped.phone) return jsonOut({ error: 'Faltan datos de contacto (name, email o phone)' }, 400);
+      // De qué campaña, conjunto y anuncio viene. Se saca después de mapear
+      // para que valga igual con un payload propio que con uno de Hotmart.
+      const pauta = camposDePauta(gBody);
+      if (Object.keys(pauta).length) mapped.custom_fields = { ...(mapped.custom_fields || {}), ...pauta };
       const { lead, created } = await intakeLead(conn.user_id, null, mapped);
       return jsonOut({ ok: true, lead_id: lead.id, created });
     }

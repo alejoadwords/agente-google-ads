@@ -7,7 +7,7 @@
 
 export const config = { runtime: 'edge' };
 
-import { intakeLead } from '../_lead-intake.js';
+import { intakeLead, camposDePauta } from '../_lead-intake.js';
 import { processIncoming } from '../_inbox-engine.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -105,7 +105,11 @@ async function processLeadgen(value) {
   const connection = connRows?.[0];
   if (!connection || !connection.access_token) return;
 
-  const lead = await fetch(`https://graph.facebook.com/v19.0/${leadgenId}?access_token=${connection.access_token}`)
+  // `field_data` va explícito a propósito: al pasar `fields` Graph deja de
+  // devolver los campos por defecto, y sin él se perdería el lead entero sin
+  // dar ningún error.
+  const CAMPOS = 'field_data,created_time,campaign_name,adset_name,ad_name,platform';
+  const lead = await fetch(`https://graph.facebook.com/v19.0/${leadgenId}?fields=${CAMPOS}&access_token=${connection.access_token}`)
     .then(r => r.json()).catch(() => null);
   if (!lead || lead.error || !Array.isArray(lead.field_data)) {
     console.error('[leadgen] no se pudo traer el lead:', JSON.stringify(lead?.error || {}).slice(0, 200));
@@ -128,6 +132,18 @@ async function processLeadgen(value) {
   const known = new Set(['full_name', 'first_name', 'last_name', 'nombre', 'email', 'correo', 'phone_number', 'telefono', 'whatsapp', 'company_name', 'empresa']);
   const extras = Object.entries(fields).filter(([k, v]) => !known.has(k) && v).map(([k, v]) => `${k}: ${String(v).slice(0, 150)}`).slice(0, 8);
 
+  // De qué campaña, conjunto y anuncio viene. Graph los da en el propio lead;
+  // si alguno faltara, el webhook trae los ids en `value` como respaldo, que
+  // sirven para cruzar con el administrador de anuncios aunque no se lean tan
+  // bien como el nombre.
+  const pauta = camposDePauta({
+    campaign_name: lead.campaign_name,
+    adset_name: lead.adset_name,
+    ad_name: lead.ad_name || value.ad_id || null,
+    platform: lead.platform,
+  });
+  if (formName) pauta['Formulario'] = formName.slice(0, 120);
+
   await intakeLead(connection.user_id, null, {
     name, email, phone,
     company: fields.company_name || fields.empresa || null,
@@ -135,6 +151,7 @@ async function processLeadgen(value) {
     source: 'meta_lead_ads',
     sourceLabel: 'Meta Lead Ads',
     tags: ['meta lead ads', ...(formName ? [formName] : [])],
+    custom_fields: Object.keys(pauta).length ? pauta : undefined,
   });
 }
 

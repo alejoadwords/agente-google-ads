@@ -132,7 +132,44 @@ export async function enqueueAutomations(userId, lead, triggerType, extra) {
   } catch (e) { console.error('[intake] enqueue:', e.message); }
 }
 
-// Crea o mergea un lead. data: {name, email, phone, company, value, note, source, sourceLabel, tags[], stage}
+// Campos de pauta: de qué campaña, conjunto y anuncio viene el lead.
+//
+// Van a `custom_fields` y no a la nota porque la nota es texto libre: se ve en
+// la ficha y no sirve para nada más. En `custom_fields` la vista de lista los
+// descubre sola y los ofrece como columnas —el título de la columna ES la
+// clave—, así que se nombran como se quieren leer.
+//
+// Se aceptan alias en los dos idiomas y en los nombres que usan Meta, Make y
+// los parámetros UTM, porque quien monta la conexión no siempre puede elegir
+// cómo se llama el campo del otro lado.
+const CAMPOS_PAUTA = {
+  'Campaña':    ['campaign_name', 'campaign', 'campaña', 'campana', 'utm_campaign', 'nombre_campana'],
+  'Conjunto':   ['adset_name', 'adset', 'ad_set', 'ad_set_name', 'adgroup_name', 'adgroup', 'conjunto', 'conjunto_de_anuncios'],
+  'Anuncio':    ['ad_name', 'anuncio', 'creative_name', 'ad'],
+  'Plataforma': ['publisher_platform', 'platform', 'plataforma'],
+};
+
+// Saca los campos de pauta de un payload plano. Devuelve {} si no hay ninguno:
+// nunca escribe claves vacías, que ensuciarían el catálogo de columnas con
+// campos que siempre están en blanco.
+export function camposDePauta(body) {
+  const out = {};
+  if (!body || typeof body !== 'object') return out;
+  const plano = {};
+  for (const [k, v] of Object.entries(body)) plano[String(k).toLowerCase().trim()] = v;
+  for (const [destino, alias] of Object.entries(CAMPOS_PAUTA)) {
+    for (const a of alias) {
+      const v = plano[a];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        out[destino] = String(v).trim().slice(0, 120);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+// Crea o mergea un lead. data: {name, email, phone, company, value, note, source, sourceLabel, tags[], stage, custom_fields}
 // Devuelve {lead, created}.
 export async function intakeLead(userId, clientId, data) {
   const tagSet = new Set((data.tags || []).map(normTag).filter(t => t.length >= 2));
@@ -157,6 +194,10 @@ export async function intakeLead(userId, clientId, data) {
 
   const noteLine = data.note ? `📥 [${data.sourceLabel || 'Fuente externa'}] ` + String(data.note).slice(0, 600) : null;
 
+  // Los campos propios que trae esta entrada, ya normalizados por quien llama.
+  const cfEntrada = data.custom_fields && typeof data.custom_fields === 'object'
+    ? data.custom_fields : null;
+
   if (!lead) {
     const pipeline = await pipelineElegido(userId, clientId, data.pipelineId);
     const rows = await sb('/leads', 'POST', {
@@ -169,6 +210,7 @@ export async function intakeLead(userId, clientId, data) {
       source: data.source || 'externa',
       tags: leadTags,
       notes: noteLine,
+      ...(cfEntrada && Object.keys(cfEntrada).length ? { custom_fields: cfEntrada } : {}),
       ...(pipeline ? { pipeline_id: pipeline } : {}),
     });
     const created = rows[0];
@@ -189,6 +231,27 @@ export async function intakeLead(userId, clientId, data) {
   if (data.phone && !lead.phone) patch.phone = data.phone;
   if (data.email && !lead.email) patch.email = data.email;
   if (data.company && !lead.company) patch.company = data.company;
+  // Campos de pauta: gana el PRIMERO, igual que el resto del merge.
+  //
+  // Si la misma persona rellena dos anuncios distintos, el crédito es del que
+  // la trajo — sobrescribir dejaría que el último anuncio se llevara leads que
+  // no generó, y el reporte de qué anuncio funciona diría lo contrario de la
+  // verdad. Lo nuevo no se pierde: se anota, que para eso está la nota.
+  if (cfEntrada) {
+    const previos = (lead.custom_fields && typeof lead.custom_fields === 'object') ? lead.custom_fields : {};
+    const nuevos = {}, repetidos = [];
+    for (const [k, v] of Object.entries(cfEntrada)) {
+      if (previos[k] === undefined || previos[k] === null || previos[k] === '') nuevos[k] = v;
+      else if (String(previos[k]) !== String(v)) repetidos.push(`${k}: ${v}`);
+    }
+    if (Object.keys(nuevos).length) patch.custom_fields = { ...previos, ...nuevos };
+    if (repetidos.length) {
+      patch.notes = (patch.notes || lead.notes || '') +
+        (patch.notes || lead.notes ? '\n' : '') +
+        `📥 Volvió por otra pauta — ${repetidos.join(' · ')}`;
+    }
+  }
+
   const mergedTags = [...new Set([...(lead.tags || []), ...leadTags])].slice(0, 15);
   const added = mergedTags.filter(t => !(lead.tags || []).includes(t));
   if (added.length) patch.tags = mergedTags;
