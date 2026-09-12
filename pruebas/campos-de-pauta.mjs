@@ -88,7 +88,19 @@ chk('meta.js ya no pasa null fijo', !/intakeLead\(connection\.user_id, null,/.te
 chk('meta.js usa el ámbito de la conexión', /connection\.client_id \|\| await ambitoDeTrabajo/.test(metaHook));
 chk('meta.js respeta el tablero del canal', /pipelineId: connection\.pipeline_id/.test(metaHook));
 
-// ── 6. La lista puede enseñarlos como columnas ───────────────────────────────
+// ── 6. Una cuenta sin equipo también recibe su pendiente ─────────────────────
+//
+// asignarLead salía con `return null` antes de crear la tarea de primer
+// contacto, asi que una cuenta de una sola persona recibia los leads de su
+// pauta sin ningun pendiente — con la casilla marcada y el plazo puesto.
+chk('si no hay comercial, igual se crea la tarea', /if \(!com\) \{[\s\S]{0,200}crearTareaPrimerContacto\(userId, created, null\)/.test(intake));
+chk('se recoge lo que devuelve asignarLead', /const com = await asignarLead\(/.test(intake));
+const followup = leer('api/_followup.js');
+chk('la tarea no necesita responsable', /const quien = comercial\?\.nombre \? /.test(followup));
+chk('la tarea cuelga de la cuenta, no de una persona', !/assigned_to/.test(followup.slice(followup.indexOf('crearTareaPrimerContacto'), followup.indexOf('crearTareaVentana'))));
+chk('el ajuste sigue mandando sobre si se crea', /if \(!regla\.primer_contacto\) return null;/.test(followup));
+
+// ── 7. La lista puede enseñarlos como columnas ───────────────────────────────
 const app = leer('public/app.js');
 chk('la lista descubre los campos propios', /Object\.keys\(cf\)\.forEach/.test(app));
 chk('el título de la columna sale de la clave', /label: k\.replace\(\/_\/g, ' '\)/.test(app));

@@ -237,7 +237,20 @@ export async function intakeLead(userId, clientId, data) {
     // un flujo que notifique al responsable ya lo encuentre asignado.
     try {
       const { asignarLead } = await import('./_assign.js');
-      await asignarLead(userId, created, created.source, data.assignedTo || null);
+      const com = await asignarLead(userId, created, created.source, data.assignedTo || null);
+      // Sin equipo no hay a quién asignar, pero el lead sigue necesitando que
+      // alguien lo llame. En una cuenta de una sola persona el dueño ES el
+      // comercial, así que la tarea de primer contacto se crea igual, sin
+      // responsable — la tarea cuelga de la cuenta, no de una persona.
+      //
+      // Antes `asignarLead` salía antes de llegar a crearla, así que una cuenta
+      // sin equipo recibía los leads de su pauta y no se le creaba ni un
+      // pendiente, con la casilla marcada y el plazo puesto. El propio ajuste
+      // decide si se crea; aquí solo se deja de bloquear el camino.
+      if (!com) {
+        const { crearTareaPrimerContacto } = await import('./_followup.js');
+        await crearTareaPrimerContacto(userId, created, null).catch(() => {});
+      }
     } catch (e) { console.error('asignar en intake:', e); }
     await enqueueAutomations(userId, created, 'lead_created');
     if (leadTags.length) await enqueueAutomations(userId, created, 'tag_added', leadTags);
