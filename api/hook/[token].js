@@ -5,7 +5,7 @@
 // (o reutiliza el existente por email) y encola el flujo.
 // Pensado para formularios de landing, Zapier, Make, Meta Lead Ads, etc.
 
-import { intakeLead, mapExternalPayload, pick as pickIntake, pipelinePrincipal, camposDePauta } from '../_lead-intake.js';
+import { intakeLead, mapExternalPayload, pick as pickIntake, pipelinePrincipal, camposDePauta, ambitoDeTrabajo } from '../_lead-intake.js';
 
 // Edge runtime: los imports de módulos compartidos (_lead-intake) se bundlean
 // sin problema — en el runtime Node de Vercel ese import rompía el build de
@@ -96,7 +96,7 @@ export default async function handler(req) {
     if (!auto) {
       // Fallback: webhook de entrada genérico del usuario (Fuentes de leads).
       // Crea/mergea el lead y dispara lead_created/tag_added — sin automatización fija.
-      const conns = await sb(`/platform_connections?platform=eq.lead_webhook&access_token=eq.${encodeURIComponent(token)}&select=user_id&limit=1`);
+      const conns = await sb(`/platform_connections?platform=eq.lead_webhook&access_token=eq.${encodeURIComponent(token)}&select=user_id,client_id&limit=1`);
       const conn = conns?.[0];
       if (!conn) return jsonOut({ error: 'Webhook no encontrado o automatización inactiva' }, 404);
       const gBody = reqBody;
@@ -116,7 +116,11 @@ export default async function handler(req) {
       // para que valga igual con un payload propio que con uno de Hotmart.
       const pauta = camposDePauta(gBody);
       if (Object.keys(pauta).length) mapped.custom_fields = { ...(mapped.custom_fields || {}), ...pauta };
-      const { lead, created } = await intakeLead(conn.user_id, null, mapped);
+      // El ámbito de la conexión manda; si no tiene, se resuelve el de la
+      // cuenta. Antes entraba `null` fijo y el lead caía en el tablero vacío
+      // que nadie mira.
+      const cliente = conn.client_id || await ambitoDeTrabajo(conn.user_id);
+      const { lead, created } = await intakeLead(conn.user_id, cliente, mapped);
       return jsonOut({ ok: true, lead_id: lead.id, created });
     }
 

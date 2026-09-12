@@ -7,7 +7,7 @@
 
 export const config = { runtime: 'edge' };
 
-import { intakeLead, camposDePauta } from '../_lead-intake.js';
+import { intakeLead, camposDePauta, ambitoDeTrabajo } from '../_lead-intake.js';
 import { processIncoming } from '../_inbox-engine.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -144,8 +144,14 @@ async function processLeadgen(value) {
   });
   if (formName) pauta['Formulario'] = formName.slice(0, 120);
 
-  await intakeLead(connection.user_id, null, {
+  // Igual que el webhook genérico: el lead va al ámbito y al tablero que tiene
+  // configurados la conexión, no al `null` fijo que lo dejaba en el tablero
+  // vacío del registro, fuera de la vista del cliente.
+  const cliente = connection.client_id || await ambitoDeTrabajo(connection.user_id);
+
+  await intakeLead(connection.user_id, cliente, {
     name, email, phone,
+    pipelineId: connection.pipeline_id || null,
     company: fields.company_name || fields.empresa || null,
     note: extras.join(' · ') || null,
     source: 'meta_lead_ads',

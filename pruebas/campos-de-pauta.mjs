@@ -71,7 +71,24 @@ chk('NO se olvida de field_data al pasar fields', /fields=\$\{CAMPOS\}/.test(met
 chk('pasa custom_fields al intake', /custom_fields: Object\.keys\(pauta\)\.length \? pauta : undefined/.test(metaHook));
 chk('usa el ad_id como respaldo', /value\.ad_id/.test(metaHook));
 
-// ── 5. La lista puede enseñarlos como columnas ───────────────────────────────
+// ── 5. El lead entra en el ámbito donde el cliente trabaja ───────────────────
+//
+// Toda cuenta acaba con dos ámbitos: el `client_id` nulo del registro, con un
+// tablero «Principal» vacío, y el `pro_main` donde viven los leads de verdad.
+// Los dos webhooks entraban con null fijo, así que dejaban el lead en un
+// tablero que nadie mira. Y no se arregla borrando el tablero vacío: sin
+// ningún tablero en ese ámbito el lead entraría SIN tablero, que es peor.
+chk('ambitoDeTrabajo se exporta', /export async function ambitoDeTrabajo/.test(intake));
+chk('resuelve pro_main cuando existe', /client_id=eq\.pro_main/.test(intake));
+chk('una agencia con varios clientes no se adivina', /return \(Array\.isArray\(filas\) && filas\.length\) \? 'pro_main' : null/.test(intake));
+chk('el hook ya no pasa null fijo', !/intakeLead\(conn\.user_id, null,/.test(hook));
+chk('el hook usa el ámbito de la conexión', /conn\.client_id \|\| await ambitoDeTrabajo\(conn\.user_id\)/.test(hook));
+chk('el hook pide client_id al buscar la conexión', /select=user_id,client_id/.test(hook));
+chk('meta.js ya no pasa null fijo', !/intakeLead\(connection\.user_id, null,/.test(metaHook));
+chk('meta.js usa el ámbito de la conexión', /connection\.client_id \|\| await ambitoDeTrabajo/.test(metaHook));
+chk('meta.js respeta el tablero del canal', /pipelineId: connection\.pipeline_id/.test(metaHook));
+
+// ── 6. La lista puede enseñarlos como columnas ───────────────────────────────
 const app = leer('public/app.js');
 chk('la lista descubre los campos propios', /Object\.keys\(cf\)\.forEach/.test(app));
 chk('el título de la columna sale de la clave', /label: k\.replace\(\/_\/g, ' '\)/.test(app));

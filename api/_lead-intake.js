@@ -81,6 +81,25 @@ export async function pipelineElegido(userId, clientId, pipelineId) {
   return pipelinePrincipal(userId, clientId);
 }
 
+// En qué ámbito trabaja de verdad la cuenta.
+//
+// Toda cuenta acaba con DOS ámbitos: el `client_id` nulo que nace al
+// registrarse, con un tablero «Principal» vacío, y el que se crea al completar
+// el perfil —en Pro siempre con el id fijo `pro_main`—, que es donde viven los
+// leads y los tableros de verdad.
+//
+// El webhook genérico entraba con `null` fijo, así que dejaba los leads en el
+// ámbito vacío: en otro tablero, invisibles desde donde el cliente mira. Aquí
+// se resuelve el ámbito bueno. Si la cuenta es de agencia con varios clientes
+// no hay `pro_main` y se devuelve null a propósito: ahí no se puede adivinar a
+// qué cliente va el lead, y meterlo en uno al azar sería peor que no acertar.
+export async function ambitoDeTrabajo(userId) {
+  try {
+    const filas = await sb(`/pipelines?user_id=eq.${encodeURIComponent(userId)}&client_id=eq.pro_main&select=id&limit=1`);
+    return (Array.isArray(filas) && filas.length) ? 'pro_main' : null;
+  } catch { return null; }
+}
+
 export async function pipelinePrincipal(userId, clientId) {
   try {
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
