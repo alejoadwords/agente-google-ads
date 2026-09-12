@@ -118,7 +118,24 @@ chk('Ajustes ya no pide invitar a nadie para asignar',
 
 chk('la copia de la raíz está sincronizada', leer('app.js').includes('todos los leads nuevos se te asignan a ti'));
 
-// ── 8. La lista puede enseñarlos como columnas ───────────────────────────────
+// ── 8. El lead de pauta alimenta el Pulso ────────────────────────────────────
+//
+// El Pulso del inicio se calcula en el navegador a partir de /api/leads, asi
+// que lo que hay que garantizar aqui son sus dependencias: que el lead entre
+// en el ambito que el Pulso mira, que la fecha tenga respaldo y que un lead
+// con tarea no se cuente como abandonado.
+chk('el Pulso filtra por el ámbito del cliente activo',
+    /const leads = activo \? todos\.filter\(l => l\.client_id === activo\) : todos;/.test(appJs));
+chk('«sin actividad» respalda updated_at con created_at',
+    /new Date\(l\.updated_at \|\| l\.created_at\)/.test(appJs));
+chk('un lead con tarea no cuenta como abandonado',
+    /!tieneSeguimientoProgramado\(l\)/.test(appJs));
+chk('carga las tareas antes de decidir, aunque no se haya abierto el CRM',
+    /await crmTareasCargar\(\);/.test(appJs));
+chk('«lead nuevo hoy» se mide por created_at',
+    /const fresh = leads\.filter\(l => \(now - new Date\(l\.created_at\)\.getTime\(\)\) < DAY\);/.test(appJs));
+
+// ── 9. La lista puede enseñarlos como columnas ───────────────────────────────
 const app = leer('public/app.js');
 chk('la lista descubre los campos propios', /Object\.keys\(cf\)\.forEach/.test(app));
 chk('el título de la columna sale de la clave', /label: k\.replace\(\/_\/g, ' '\)/.test(app));
