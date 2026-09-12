@@ -100,7 +100,25 @@ chk('la tarea no necesita responsable', /const quien = comercial\?\.nombre \? /.
 chk('la tarea cuelga de la cuenta, no de una persona', !/assigned_to/.test(followup.slice(followup.indexOf('crearTareaPrimerContacto'), followup.indexOf('crearTareaVentana'))));
 chk('el ajuste sigue mandando sobre si se crea', /if \(!regla\.primer_contacto\) return null;/.test(followup));
 
-// ── 7. La lista puede enseñarlos como columnas ───────────────────────────────
+// ── 7. En una cuenta de una persona, los leads son del dueño ─────────────────
+//
+// comercialesActivos solo lee team_members, asi que sin equipo no habia
+// candidato y el lead quedaba «Sin asignar» — con el filtro «Míos» vacio y la
+// ficha diciendo que no era de nadie, en una cuenta de un solo usuario.
+const assign = leer('api/_assign.js');
+const appJs = leer('public/app.js');
+chk('existe el dueño como comercial', /async function duenoComoComercial/.test(assign));
+chk('sin equipo, el lead va al dueño', /if \(!equipo\.length\) return await duenoComoComercial\(userId\);/.test(assign));
+chk('el equipo se lee ANTES que la regla', assign.indexOf('const equipo = await comercialesActivos(userId);') < assign.indexOf("if (regla.modo === 'off') return null;"));
+chk('al dueño no se le manda el correo de asignación', /if \(!com\.esDueno\) await avisarComercial/.test(assign));
+chk('el dueño va marcado para poder distinguirlo', /esDueno: true/.test(assign));
+chk('sigue habiendo reparto real cuando hay equipo', /regla\.modo === 'fijo'/.test(assign) && /equipo\[\(idx \+ 1\) % equipo\.length\]/.test(assign));
+chk('Ajustes ya no pide invitar a nadie para asignar',
+    !/el reparto necesita al menos un comercial/.test(appJs) && /todos los leads nuevos se te asignan a ti/.test(appJs));
+
+chk('la copia de la raíz está sincronizada', leer('app.js').includes('todos los leads nuevos se te asignan a ti'));
+
+// ── 8. La lista puede enseñarlos como columnas ───────────────────────────────
 const app = leer('public/app.js');
 chk('la lista descubre los campos propios', /Object\.keys\(cf\)\.forEach/.test(app));
 chk('el título de la columna sale de la clave', /label: k\.replace\(\/_\/g, ' '\)/.test(app));

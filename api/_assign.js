@@ -92,15 +92,38 @@ export async function comercialesActivos(userId) {
 // Devuelve { id, nombre } o null si no toca asignar.
 // El turno avanza por fuente, no global: así una fuente con mucho volumen no
 // deja a los demás sin repartir en las otras.
+// El dueño, visto como comercial. Se lee del espejo `users` y no de Clerk
+// porque aquí basta con el nombre y el correo, y no conviene depender de una
+// llamada externa en el camino de entrada de un lead.
+async function duenoComoComercial(userId) {
+  try {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=name,email&limit=1`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : []));
+    const u = filas?.[0];
+    if (!u) return null;
+    return { id: userId, nombre: u.name || u.email || 'Dueño de la cuenta', email: u.email, esDueno: true };
+  } catch { return null; }
+}
+
 export async function siguienteComercial(userId, fuente) {
+  const equipo = await comercialesActivos(userId);
+
+  // Cuenta de una sola persona: el dueño ES el comercial, y no hay reparto que
+  // decidir. Se le asigna sin mirar la regla a propósito, porque la pantalla
+  // de reglas ni siquiera aparece sin equipo — así que «off» ahí no es una
+  // decisión de nadie, es el valor de fábrica que nunca se pudo cambiar.
+  //
+  // Dejarlos «sin asignar» solo servía para que el filtro «Míos» no encontrara
+  // nada y para que la ficha dijera «Sin asignar» teniendo un único dueño.
+  if (!equipo.length) return await duenoComoComercial(userId);
+
   const clave = String(fuente || 'default').toLowerCase().slice(0, 40);
   const blob = await leerBlob(userId);
   const reglas = blob.reglas || {};
   const regla = normalizarRegla(reglas[clave] || reglas.default);
   if (regla.modo === 'off') return null;
-
-  const equipo = await comercialesActivos(userId);
-  if (!equipo.length) return null;
 
   if (regla.modo === 'fijo') {
     const uno = equipo.find(m => m.id === regla.fijo);
@@ -181,7 +204,11 @@ export async function asignarLead(userId, lead, fuente, forzado = null) {
     // existe y el comercial lo encuentra al entrar.
     const { crearTareaPrimerContacto } = await import('./_followup.js');
     await crearTareaPrimerContacto(userId, lead, com).catch(() => {});
-    await avisarComercial(com, lead, fuente || lead.source);
+    // Al dueño no se le manda el correo de «te asignaron un lead». Ese aviso
+    // existe para contarle a otra persona que algo cayó en su cartera; a quien
+    // es la cuenta entera no le dice nada nuevo, y con un canal activo serían
+    // decenas de correos al día. Le queda la tarea, la campana y el push.
+    if (!com.esDueno) await avisarComercial(com, lead, fuente || lead.source);
     return com;
   } catch (e) {
     console.error('asignarLead:', e);

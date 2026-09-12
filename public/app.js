@@ -30853,7 +30853,10 @@ async function asgRender() {
   }
   const equipo = asgData.equipo || [];
   if (!equipo.length) {
-    box.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Invita a tu equipo primero: el reparto necesita al menos un comercial con la cuenta activa.</div>';
+    // Antes decía «invita a tu equipo primero», y quien trabaja solo entendía
+    // que sus leads se quedaban sin dueño para siempre. Ahora se le asignan a
+    // él, así que lo que toca es decírselo, no pedirle que invite a nadie.
+    box.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Trabajas solo en esta cuenta, así que <b>todos los leads nuevos se te asignan a ti</b>. Cuando invites a alguien, aquí podrás repartirlos en turnos o mandar cada fuente a una persona.</div>';
     return;
   }
   const opts = equipo.map(m => '<option value="' + esc(m.id) + '">' + esc(m.nombre) + '</option>').join('');
