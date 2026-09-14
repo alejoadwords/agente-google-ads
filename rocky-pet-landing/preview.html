@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rocky Pet Co — Preview del template Elementor</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  :root{
+    --crema:#F6EEE2; --card:#FBF6EC; --borde:#EADFC9; --marron:#33220F; --marron-top:#2E1D0E;
+    --oro:#B98A3B; --oro-claro:#D9AE62; --sec:#6E5A44; --estrellas:#E8A33D; --wa:#25D366; --wa-d:#1DA851;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:var(--crema);color:var(--marron);line-height:1.5}
+  img{max-width:100%;display:block}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+  .display{font-family:'Playfair Display',serif;font-weight:800}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:var(--marron);color:var(--crema);font-weight:700;font-size:14px;letter-spacing:1px;text-transform:uppercase;border-radius:10px;padding:14px 28px;text-decoration:none;transition:.15s}
+  .btn:hover{background:#4A3319;color:#fff}
+  .btn.pill{border-radius:50px}
+  .card{background:var(--card);border:1px solid var(--borde);border-radius:16px}
+
+  .topbar{background:var(--marron-top);color:var(--crema);text-align:center;font-size:14px;padding:10px 16px}
+  .hd{display:flex;align-items:center;justify-content:space-between;padding:18px 0;gap:16px}
+  .logo{font-family:'Playfair Display',serif;font-weight:700;font-size:26px}
+  .logo small{font-size:13px;letter-spacing:4px;color:var(--oro);display:block;margin-top:-4px}
+  .hd nav{display:flex;gap:22px}
+  .hd nav a{color:var(--marron);font-weight:600;font-size:14px;text-decoration:none}
+  .hd nav a:hover{color:var(--oro)}
+  .hd .btn{font-size:12px;padding:10px 20px}
+
+  .hero{display:grid;grid-template-columns:45fr 55fr;gap:36px;align-items:center;padding:40px 0 50px}
+  .hero h1{font-size:40px;line-height:1.08}
+  .hero h1 .rey{color:var(--oro);font-size:2.1em;display:block;line-height:1}
+  .hero p{color:var(--sec);font-size:16px;margin:16px 0 22px;max-width:400px}
+  .hero-chips{display:flex;gap:18px;flex-wrap:wrap;margin-top:20px}
+  .hero-chips span{font-size:12px;font-weight:600;display:inline-flex;gap:7px;align-items:center}
+  .hero-chips i{color:var(--oro)}
+  .hero-img img{border-radius:20px}
+
+  .sec-t{font-family:'Playfair Display',serif;font-weight:800;font-size:30px;text-align:center;padding-top:30px}
+  .sec-d{text-align:center;color:var(--sec);font-size:15px;margin:6px 0 24px}
+
+  .prods{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;padding-bottom:20px}
+  .prod{background:var(--card);border:1px solid var(--borde);border-radius:16px;padding:14px 14px 18px;text-align:center}
+  .prod img{border-radius:10px;margin-bottom:10px}
+  .prod b{font-size:14px;display:block;line-height:1.3}
+  .prod .stars{color:var(--estrellas);font-size:13px;margin:6px 0}
+  .prod .stars small{color:var(--sec)}
+  .prod .price{font-size:17px;font-weight:800;margin-bottom:10px}
+  .prod .btn{font-size:11px;padding:9px 16px;border-radius:8px}
+
+  .cat{display:grid;grid-template-columns:30fr 50fr 20fr;gap:20px;align-items:center;padding:18px 24px;margin:8px 0}
+  .cat .ttl{display:flex;gap:12px;align-items:center}
+  .cat .ttl i{color:var(--oro);font-size:22px}
+  .cat .ttl b{font-size:15px;text-transform:uppercase;display:block}
+  .cat .ttl small{color:var(--sec);font-size:13px}
+  .cat img{border-radius:10px}
+  .cat .btn{justify-self:end;font-size:12px;padding:10px 22px;border-radius:50px}
+
+  .bens{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:34px 0}
+  .ben{background:var(--card);border:1px solid var(--borde);border-radius:16px;padding:20px 16px;text-align:center}
+  .ben i{color:var(--oro);font-size:28px;margin-bottom:12px}
+  .ben b{display:block;font-size:14px;text-transform:uppercase;margin-bottom:6px}
+  .ben small{color:var(--sec);font-size:13px;line-height:1.5}
+
+  .fam{display:grid;grid-template-columns:40fr 28fr 32fr;gap:20px;padding-bottom:30px}
+  .fam .card{padding:24px}
+  .fam h3{font-family:'Playfair Display',serif;font-size:20px;margin-bottom:8px}
+  .fam .card>p{color:var(--sec);font-size:14px;margin-bottom:14px}
+  .fam ul{list-style:none}
+  .fam li{display:flex;gap:10px;font-size:13px;padding:7px 0}
+  .fam li i{color:var(--oro);margin-top:2px}
+  .fam > img{border-radius:16px;height:100%;object-fit:cover}
+  .fam .nos p{line-height:1.7;margin-bottom:14px}
+  .fam .nos img{width:100%;height:auto;border-radius:12px}
+
+  .tests{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:10px 0 30px}
+  .test{background:var(--card);border:1px solid var(--borde);border-radius:16px;padding:22px}
+  .test .stars{color:var(--estrellas);letter-spacing:3px;margin-bottom:10px}
+  .test p{font-size:14px;line-height:1.6;margin-bottom:12px}
+  .test b{font-size:13px}
+
+  .cta-wa{background:var(--wa);border-radius:50px;display:grid;grid-template-columns:70fr 30fr;gap:16px;align-items:center;padding:22px 34px;margin:10px 0 40px;color:#fff}
+  .cta-wa h2{font-size:24px;letter-spacing:1px}
+  .cta-wa p{opacity:.9;font-size:14px;margin-top:4px}
+  .cta-wa .btn{background:#fff;color:var(--wa-d);border-radius:50px;justify-self:end}
+  .cta-wa .btn:hover{background:#F0FFF4;color:var(--wa-d)}
+
+  footer{background:var(--marron-top);color:#CBBA88;padding:40px 0 22px}
+  .fgrid{display:grid;grid-template-columns:30fr 23fr 24fr 23fr;gap:24px}
+  footer .logo{color:#fff}
+  footer .logo small{color:var(--oro-claro)}
+  footer h6{color:var(--oro-claro);font-size:13px;letter-spacing:1.5px;margin-bottom:12px}
+  footer a{display:block;color:#CBBA88;font-size:13px;text-decoration:none;padding:4px 0}
+  footer a:hover{color:#fff}
+  footer a i,footer .fi i{color:var(--oro-claro);margin-right:8px}
+  .social{display:flex;gap:10px;margin-top:14px}
+  .social a{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:#fff;padding:0}
+  .copy{text-align:center;font-size:12px;color:rgba(203,186,136,.6);margin-top:26px}
+
+  @media(max-width:900px){
+    .hd nav{display:none}
+    .hero{grid-template-columns:1fr}
+    .prods{grid-template-columns:repeat(2,1fr)}
+    .cat{grid-template-columns:1fr;text-align:center}
+    .cat .ttl{justify-content:center}
+    .cat .btn{justify-self:center}
+    .bens{grid-template-columns:repeat(2,1fr)}
+    .fam{grid-template-columns:1fr}
+    .tests{grid-template-columns:1fr}
+    .cta-wa{grid-template-columns:1fr;text-align:center;border-radius:24px}
+    .cta-wa .btn{justify-self:center}
+    .fgrid{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">🚚 <strong>Envíos gratis</strong> por compras mayores a $50.000 pesos 🐾</div>
+
+<div class="wrap hd">
+  <div class="logo">👑 ROCKY<small>— PET CO —</small></div>
+  <nav>
+    <a href="#">Inicio</a><a href="#tienda">Tienda</a><a href="#categorias">Categorías</a>
+    <a href="#nosotros">Nosotros</a><a href="#contacto">Contacto</a>
+  </nav>
+  <a class="btn pill" href="#tienda">🐾 Lo quiero</a>
+</div>
+
+<div class="wrap hero">
+  <div>
+    <h1 class="display">PARA EL <span class="rey">REY</span> DE LA CASA</h1>
+    <p>Productos premium para perros que merecen lo mejor. Calidad, comodidad y felicidad para tu mejor amigo.</p>
+    <a class="btn" href="#tienda">Lo quiero 🐾</a>
+    <div class="hero-chips">
+      <span><i class="fas fa-truck"></i>Envíos rápidos a todo México</span>
+      <span><i class="fas fa-medal"></i>Productos de alta calidad</span>
+      <span><i class="fas fa-heart"></i>Hechos con amor para ellos</span>
+    </div>
+  </div>
+  <div class="hero-img"><img src="https://placehold.co/760x560/F1E6D4/8A6A3F/png?text=FOTO+HERO+%E2%80%94+Rocky+con+su+corona+(reemplazar)" alt=""></div>
+</div>
+
+<div class="wrap" id="tienda">
+  <h2 class="sec-t">🐾 PRODUCTOS RECOMENDADOS 🐾</h2>
+  <p class="sec-d">Los favoritos de los reyes de la casa</p>
+  <div class="prods">
+    <div class="prod"><img src="https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Cama+Royal+Comfort"><b>Cama Royal Comfort</b><div class="stars">★★★★★ <small>(126)</small></div><div class="price">$1.299 MXN</div><a class="btn" href="#">Lo quiero 🐾</a></div>
+    <div class="prod"><img src="https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Collar+Cuero+Premium"><b>Collar Cuero Premium</b><div class="stars">★★★★★ <small>(95)</small></div><div class="price">$599 MXN</div><a class="btn" href="#">Lo quiero 🐾</a></div>
+    <div class="prod"><img src="https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Le%C3%B3n+de+Peluche"><b>León de Peluche</b><div class="stars">★★★★★ <small>(74)</small></div><div class="price">$299 MXN</div><a class="btn" href="#">Lo quiero 🐾</a></div>
+    <div class="prod"><img src="https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Plato+Interactivo"><b>Plato Interactivo Puzzle</b><div class="stars">★★★★★ <small>(83)</small></div><div class="price">$419 MXN</div><a class="btn" href="#">Lo quiero 🐾</a></div>
+    <div class="prod"><img src="https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Shampoo+Hidratante"><b>Shampoo Hidratante</b><div class="stars">★★★★★ <small>(64)</small></div><div class="price">$299 MXN</div><a class="btn" href="#">Lo quiero 🐾</a></div>
+    <div class="prod"><img src="https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Bolso+Transportador"><b>Bolso Transportador</b><div class="stars">★★★★★ <small>(67)</small></div><div class="price">$899 MXN</div><a class="btn" href="#">Lo quiero 🐾</a></div>
+  </div>
+</div>
+
+<div class="wrap" id="categorias">
+  <div class="cat card"><div class="ttl"><i class="fas fa-paw"></i><div><b>Juguetes</b><small>11 referencias</small></div></div><img src="https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas+de+productos+%E2%80%94+Juguetes"><a class="btn" href="#">Ver todos</a></div>
+  <div class="cat card"><div class="ttl"><i class="fas fa-paw"></i><div><b>Aseo</b><small>10 referencias</small></div></div><img src="https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas+de+productos+%E2%80%94+Aseo"><a class="btn" href="#">Ver todos</a></div>
+  <div class="cat card"><div class="ttl"><i class="fas fa-paw"></i><div><b>Platos y comederos interactivos</b><small>11 referencias</small></div></div><img src="https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas+%E2%80%94+Platos+y+comederos"><a class="btn" href="#">Ver todos</a></div>
+  <div class="cat card"><div class="ttl"><i class="fas fa-paw"></i><div><b>Disfraces</b><small>1 referencia</small></div></div><img src="https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas+%E2%80%94+Disfraces"><a class="btn" href="#">Ver todos</a></div>
+</div>
+
+<div class="wrap bens">
+  <div class="ben"><i class="fas fa-award"></i><b>Materiales premium</b><small>Duraderos, seguros y pensados para su bienestar.</small></div>
+  <div class="ben"><i class="fas fa-crown"></i><b>Diseños exclusivos</b><small>Estilo y funcionalidad para el rey de la casa.</small></div>
+  <div class="ben"><i class="fas fa-headset"></i><b>Atención personalizada</b><small>Te acompañamos en cada paso para elegir lo mejor.</small></div>
+  <div class="ben"><i class="fas fa-shield-alt"></i><b>Compra 100% segura</b><small>Tus datos y pagos siempre protegidos.</small></div>
+</div>
+
+<div class="wrap fam" id="nosotros">
+  <div class="card">
+    <h3>🐾 PORQUÉ ÉL ES PARTE DE TU FAMILIA</h3>
+    <p>Diseñamos cada producto pensando en su felicidad y en tu tranquilidad.</p>
+    <ul>
+      <li><i class="fas fa-couch"></i><span><strong>DESCANSO</strong> — Camas y accesorios para un descanso reparador</span></li>
+      <li><i class="fas fa-bone"></i><span><strong>JUEGO</strong> — Juguetes resistentes y divertidos para su día a día</span></li>
+      <li><i class="fas fa-utensils"></i><span><strong>ALIMENTACIÓN</strong> — Todo para una alimentación saludable y balanceada</span></li>
+      <li><i class="fas fa-tag"></i><span><strong>ACCESORIOS</strong> — Collares, correas y más para cada aventura juntos</span></li>
+    </ul>
+  </div>
+  <img src="https://placehold.co/500x620/F1E6D4/8A6A3F/png?text=Foto+%E2%80%94+perro+feliz+(reemplazar)">
+  <div class="card nos">
+    <h3>NOSOTROS</h3>
+    <p>En Rocky Pet Co creemos que nuestras mascotas son parte de nuestra familia y merecen lo mejor. Seleccionamos cuidadosamente cada producto para ofrecer calidad, seguridad y diseño en cada detalle. Nuestro compromiso es acompañarte en cada etapa de su vida con productos premium y un servicio cercano y confiable.</p>
+    <img src="https://placehold.co/440x260/F1E6D4/8A6A3F/png?text=Foto+%E2%80%94+familia+con+su+perro">
+  </div>
+</div>
+
+<div class="wrap">
+  <h2 class="sec-t" style="padding-top:10px">🐾 LO QUE DICEN NUESTROS REYES</h2>
+  <div class="tests" style="margin-top:20px">
+    <div class="test"><div class="stars">★★★★★</div><p>"A mi Rocky le encantó su cama, desde el primer día no quiso usar otra. Se nota la calidad."</p><b>— Mariana G.</b></div>
+    <div class="test"><div class="stars">★★★★★</div><p>"Los juguetes son resistentes y divertidos, perfecto para mi perrito que muerde todo."</p><b>— Carlos V.</b></div>
+    <div class="test"><div class="stars">★★★★★</div><p>"La mejor tienda para consentir a tu peludo. Envío rápido y excelente atención."</p><b>— Andrea L.</b></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="cta-wa">
+    <div><h2><i class="fab fa-whatsapp"></i> PEDIR POR WHATSAPP</h2><p>Te asesoramos y ayudamos a elegir lo mejor para tu rey.</p></div>
+    <a class="btn" href="https://wa.me/5215512345678" target="_blank" rel="noopener">Escríbenos ➜</a>
+  </div>
+</div>
+
+<footer id="contacto">
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <div class="logo">👑 ROCKY<small>— PET CO —</small></div>
+        <div class="social"><a href="#"><i class="fab fa-facebook-f"></i></a><a href="#"><i class="fab fa-instagram"></i></a><a href="#"><i class="fab fa-tiktok"></i></a></div>
+      </div>
+      <div><h6>TIENDA</h6><a href="#"><i class="fas fa-angle-right"></i>Juguetes</a><a href="#"><i class="fas fa-angle-right"></i>Aseo</a><a href="#"><i class="fas fa-angle-right"></i>Platos y comederos</a><a href="#"><i class="fas fa-angle-right"></i>Disfraces</a></div>
+      <div><h6>INFORMACIÓN</h6><a href="#"><i class="fas fa-angle-right"></i>Envíos y devoluciones</a><a href="#"><i class="fas fa-angle-right"></i>Preguntas frecuentes</a><a href="#"><i class="fas fa-angle-right"></i>Términos y condiciones</a><a href="#"><i class="fas fa-angle-right"></i>Políticas de privacidad</a></div>
+      <div><h6>CONTACTO</h6><a href="mailto:hola@rockypetco.com"><i class="fas fa-envelope"></i>hola@rockypetco.com</a><a href="#"><i class="fab fa-whatsapp"></i>55 1254 5678</a><a href="#"><i class="fas fa-map-marker-alt"></i>Ciudad de México, México</a></div>
+    </div>
+    <div class="copy">© 2026 Rocky Pet Co. Todos los derechos reservados. 🐾</div>
+  </div>
+</footer>
+
+</body>
+</html>

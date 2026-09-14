@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-14-perfiles-de-acceso",
+      "fecha": "2026-09-14",
+      "tipo": "nuevo",
+      "titulo": "Perfiles de acceso: elige qué ve cada persona de tu equipo",
+      "texto": "Al invitar a alguien ahora eliges su perfil: Administrador ve y hace todo, incluido invitar y cambiar perfiles; Mercadeo entra a CRM, Marketing, Conversaciones, Análisis y los agentes, pero no toca el equipo; y Ventas trabaja los leads y las conversaciones, sin Marketing ni agentes, y en los reportes solo ve su propia gestión. El perfil se cambia cuando quieras desde Configuración → Equipo, sin reenviar la invitación. A quien ya estaba en tu equipo le quedó el perfil de Ventas.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
       "id": "2026-09-02-ya-la-hice",
       "fecha": "2026-09-02",
       "tipo": "nuevo",

@@ -9986,6 +9986,7 @@ function novIr(destino) {
       switch (destino) {
         case 'academia':      openAcademia(); break;
         case 'integraciones': openSettings(); setTimeout(() => { try { switchSettingsTab('integraciones'); } catch {} }, 220); break;
+        case 'ajustes-equipo': openSettings(); setTimeout(() => { try { switchSettingsTab('equipo'); } catch {} }, 220); break;
         case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
         case 'crm':           navGo('crm'); break;
         case 'marketing':     navGo('marketing'); break;
@@ -28624,6 +28625,11 @@ async function teamRenderSettings() {
     const d = await fetchAuth('/api/team').then(r => r.json());
     crmTeam = d.members || [];
     _teamSeats = d.seats || null;
+    // Los perfiles y el mío los manda el servidor: si se escribieran aquí,
+    // el día que cambien habría dos verdades y ganaría la equivocada.
+    _teamPerfiles = d.perfiles || [];
+    _teamYo = d.yo || null;
+    teamPintarSelectorPerfil();
     if (seatsEl && _teamSeats) {
       seatsEl.innerHTML = '👥 <b>' + _teamSeats.used + ' de ' + (_teamSeats.total >= 99 ? '∞' : _teamSeats.total) + '</b> usuarios usados' +
         (_teamSeats.total < 99 ? ' · <a href="https://pay.hotmart.com/D106852996L" target="_blank" rel="noopener" style="color:var(--blue);font-weight:700;text-decoration:none">➕ ampliar usuarios</a>' : '');
@@ -28637,12 +28643,78 @@ async function teamRenderSettings() {
       return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;background:var(--bg-subtle)">' +
         '<div style="width:30px;height:30px;border-radius:50%;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">' + esc((m.member_name || m.member_email || '?').slice(0, 2).toUpperCase()) + '</div>' +
         '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">' + esc(m.member_name || m.member_email) + '</div>' +
-        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + ' · ' + esc(m.role) + '</div></div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + '</div></div>' +
+        teamSelectorFila(m) +
         '<div style="font-size:11px">' + st + '</div>' +
-        '<button class="btn-ghost sm" title="Quitar del equipo" onclick="teamRemove(\'' + m.id + '\')">✕</button>' +
+        (teamPuedoTocar(m)
+          ? '<button class="btn-ghost sm" title="Quitar del equipo" onclick="teamRemove(\'' + m.id + '\')">✕</button>'
+          : '') +
       '</div>';
     }).join('');
   } catch (e) { list.innerHTML = '<div style="font-size:12px;color:var(--muted2)">No se pudo cargar el equipo.</div>'; }
+}
+
+// ── Perfiles de acceso ──────────────────────────────────────────────────────
+// Qué ve y qué puede hacer cada quien. Lo de aquí es SOLO la cara: el permiso
+// lo comprueba el servidor en cada endpoint (api/_perfiles.js). Esconder un
+// desplegable no protege nada; sirve para no ofrecer lo que va a ser rechazado.
+let _teamPerfiles = [];
+let _teamYo = null;
+
+function teamPintarSelectorPerfil() {
+  const sel = document.getElementById('cfg-team-perfil');
+  if (!sel || !_teamPerfiles.length) return;
+  const elegido = sel.value || 'ventas';
+  sel.innerHTML = _teamPerfiles.map(p =>
+    '<option value="' + esc(p.id) + '"' + (p.id === elegido ? ' selected' : '') + '>' + esc(p.etiqueta) + '</option>'
+  ).join('');
+  teamPintarAyudaPerfil();
+}
+
+// La descripción del perfil elegido, debajo del desplegable. Sin esto hay que
+// adivinar qué implica «Mercadeo», y se elige mal.
+function teamPintarAyudaPerfil() {
+  const sel = document.getElementById('cfg-team-perfil');
+  const ayuda = document.getElementById('cfg-team-perfil-ayuda');
+  if (!sel || !ayuda) return;
+  const p = _teamPerfiles.find(x => x.id === sel.value);
+  ayuda.textContent = p ? p.descripcion : '';
+}
+
+// Nadie se toca a sí mismo, y solo gestiona equipo quien tiene ese perfil.
+// La misma regla está en el servidor (puedeTocarA); aquí solo evita ofrecer un
+// desplegable que iba a ser rechazado.
+function teamPuedoTocar(m) {
+  if (!_teamYo || !_teamYo.gestiona_equipo) return false;
+  const yo = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || null;
+  if (yo && m && m.member_user_id === yo) return false;
+  return true;
+}
+
+function teamSelectorFila(m) {
+  const actual = m.role === 'vendedor' ? 'ventas' : m.role;
+  if (!teamPuedoTocar(m) || !_teamPerfiles.length) {
+    const p = _teamPerfiles.find(x => x.id === actual);
+    return '<div style="font-size:11px;color:var(--muted)">' + esc(p ? p.etiqueta : actual) + '</div>';
+  }
+  return '<select class="auto-input" style="width:auto;font-size:11.5px;padding:4px 8px" ' +
+    'onchange="teamCambiarPerfil(\'' + esc(m.id) + '\', this.value, this)">' +
+    _teamPerfiles.map(p => '<option value="' + esc(p.id) + '"' + (p.id === actual ? ' selected' : '') + '>' + esc(p.etiqueta) + '</option>').join('') +
+    '</select>';
+}
+
+async function teamCambiarPerfil(id, perfil, sel) {
+  if (sel) sel.disabled = true;
+  try {
+    const r = await fetchAuth('/api/team', { method: 'PUT', body: JSON.stringify({ id, perfil }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo cambiar el perfil');
+    showToast('Perfil actualizado');
+    teamRenderSettings();
+  } catch (e) {
+    showToast(e.message || 'No se pudo cambiar el perfil', 'error');
+    teamRenderSettings();   // vuelve a pintar con lo que hay de verdad en el servidor
+  } finally { if (sel) sel.disabled = false; }
 }
 
 async function teamInvite() {
@@ -28655,7 +28727,10 @@ async function teamInvite() {
     const ownerName = (clerkInstance?.user?.firstName ? clerkInstance.user.firstName + (clerkInstance.user.lastName ? ' ' + clerkInstance.user.lastName : '') : null) || 'Tu equipo';
     const d = await fetchAuth('/api/team', {
       method: 'POST',
-      body: JSON.stringify({ email, name, owner_name: ownerName }),
+      body: JSON.stringify({
+        email, name, owner_name: ownerName,
+        perfil: (document.getElementById('cfg-team-perfil') || {}).value || 'ventas',
+      }),
     }).then(r => r.json());
     if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
     if (d.seats_full) {

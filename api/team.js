@@ -8,9 +8,11 @@
 // (patrón leads_extra en el JWT: seats_extra).
 export const config = { runtime: 'edge' };
 
+import { quienPregunta, gestionaEquipo, normalizarPerfil, puedeTocarA, paraElCliente, PERFILES } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -26,6 +28,16 @@ function sbHeaders(prefer) {
     'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Prefer': prefer || 'return=representation',
   };
+}
+
+// Trae la fila del equipo comprobando que es de ESTA cuenta. Sin el filtro por
+// owner_user_id, un id de otra cuenta se podría tocar desde aquí.
+async function filaDelEquipo(cuenta, id) {
+  const filas = await fetch(
+    `${SUPABASE_URL}/rest/v1/team_members?id=eq.${encodeURIComponent(id)}&owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,role,status&limit=1`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  return filas?.[0] || null;
 }
 
 let _lastPlan = 'free';
@@ -132,21 +144,30 @@ export default async function handler(req) {
   // Un miembro puede LEER el equipo —lo necesita todo selector de "quién
   // atiende"—, pero no invitar ni quitar a nadie. Sin esto la lista le llegaba
   // vacía y no podía asignarle un lead a ningún compañero.
-  let cuenta = userId;
-  let esMiembro = false;
-  try {
-    const _tw = await fetch(
-      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
-      { headers: sbHeaders() }
-    );
-    if (!_tw.ok) throw new Error('HTTP ' + _tw.status);
-    const _fila = (await _tw.json())?.[0];
-    if (_fila?.owner_user_id) { cuenta = _fila.owner_user_id; esMiembro = true; }
-  } catch {
-    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  let quien;
+  try { quien = await quienPregunta(userId); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  const cuenta = quien.userId;
+  const esMiembro = quien.esMiembro;
+
+  // Gestionar el equipo es del dueño y de los administradores. Antes lo era
+  // SOLO del dueño; ahora un administrador invitado también, que es justo lo
+  // que significa su perfil.
+  if (req.method !== 'GET' && !quien.esDueno && !gestionaEquipo(quien.perfil)) {
+    return jsonResp({
+      error: 'Tu perfil no puede gestionar el equipo. Pídeselo al administrador de la cuenta.',
+      sin_permiso: true,
+    }, 403);
   }
-  if (esMiembro && req.method !== 'GET') {
-    return jsonResp({ error: 'Solo el dueño de la cuenta puede gestionar el equipo' }, 403);
+
+  // Los asientos y el plan son del DUEÑO, no de quien pregunta. En cuanto un
+  // administrador invitado pudo invitar, esto dejó de ser un detalle: su propio
+  // JWT trae SU plan (normalmente free) y el límite habría salido mal, dejándole
+  // invitar a nadie en una cuenta Agency.
+  if (esMiembro) {
+    const metaDueno = await clerkMeta(cuenta);
+    _lastPlan = metaDueno.plan || 'free';
+    _seatsExtra = parseInt(metaDueno.seats_extra || 0) || 0;
   }
 
   // GET — listar el equipo + asientos
@@ -157,7 +178,14 @@ export default async function handler(req) {
     const myEmail = await clerkEmail(userId);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
     const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
-    return jsonResp({ members: rows || [], seats: { total: seats, used: 1 + (rows || []).length, plan: _lastPlan } });
+    // `yo` es lo que el navegador usa para pintar el menú. NO es el permiso: el
+    // permiso se comprueba en cada endpoint. Ver api/_perfiles.js.
+    return jsonResp({
+      members: rows || [],
+      seats: { total: seats, used: 1 + (rows || []).length, plan: _lastPlan },
+      yo: paraElCliente(quien),
+      perfiles: Object.entries(PERFILES).map(([id, p]) => ({ id, etiqueta: p.etiqueta, descripcion: p.descripcion })),
+    });
   }
 
   // POST — invitar
@@ -171,7 +199,7 @@ export default async function handler(req) {
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
     const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
 
-    const existing = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}&select=id,member_email`, { headers: sbHeaders() }).then(r => r.json());
+    const existing = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_email`, { headers: sbHeaders() }).then(r => r.json());
     if ((existing || []).some(m => m.member_email === email)) return jsonResp({ error: 'Ese email ya está en tu equipo' }, 400);
     if (1 + (existing || []).length >= seats) {
       return jsonResp({
@@ -188,9 +216,11 @@ export default async function handler(req) {
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members`, {
       method: 'POST', headers: sbHeaders(),
       body: JSON.stringify({
-        owner_user_id: userId, owner_name: ownerName,
+        owner_user_id: cuenta, owner_name: ownerName,
         member_email: email, member_name: String(body.name || '').slice(0, 80) || null,
-        role: body.role === 'admin' ? 'admin' : 'vendedor',
+        // `perfil` es el nombre nuevo; se sigue aceptando `role` por si queda
+        // alguna llamada vieja. Lo desconocido cae en el perfil más limitado.
+        role: normalizarPerfil(body.perfil || body.role),
         status: 'invited', invite_token: token,
       }),
     }).then(r => r.ok ? r.json() : null);
@@ -215,11 +245,42 @@ export default async function handler(req) {
     return jsonResp({ member: rows[0] }, 201);
   }
 
+  // PUT — cambiar el perfil de alguien del equipo
+  if (req.method === 'PUT') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    if (!body.id) return jsonResp({ error: 'Falta id' }, 400);
+    const perfil = normalizarPerfil(body.perfil || body.role);
+
+    const fila = await filaDelEquipo(cuenta, body.id);
+    if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    if (!puedeTocarA(quien, fila)) {
+      return jsonResp({
+        error: 'No puedes cambiarte el perfil a ti mismo. Pídeselo a otro administrador o al dueño.',
+        sin_permiso: true,
+      }, 403);
+    }
+
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?id=eq.${encodeURIComponent(body.id)}&owner_user_id=eq.${encodeURIComponent(cuenta)}`,
+      { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ role: perfil }) }
+    );
+    if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+    const filas = await res.json();
+    if (!filas.length) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    return jsonResp({ member: filas[0] });
+  }
+
   // DELETE — quitar miembro o revocar invitación
   if (req.method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
-    await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${id}&owner_user_id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE', headers: sbHeaders() });
+    const fila = await filaDelEquipo(cuenta, id);
+    if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    if (!puedeTocarA(quien, fila)) {
+      return jsonResp({ error: 'No puedes quitarte a ti mismo del equipo.', sin_permiso: true }, 403);
+    }
+    await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${id}&owner_user_id=eq.${encodeURIComponent(cuenta)}`, { method: 'DELETE', headers: sbHeaders() });
     return jsonResp({ ok: true });
   }
 
