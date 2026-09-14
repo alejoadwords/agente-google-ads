@@ -191,7 +191,16 @@ export default async function handler(req) {
   // GET ?me=1 — ¿soy miembro del workspace de alguien? (para el init de la app)
   if (req.method === 'GET' && url.searchParams.get('me')) {
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,owner_name&limit=1`, { headers: sbHeaders() }).then(r => r.json());
-    if (rows?.[0]) return jsonResp({ membership: rows[0], ...(await planDelDueno(rows[0].owner_user_id)) });
+    if (rows?.[0]) {
+      // El perfil viaja aquí para que el navegador sepa qué menú pintar. No es
+      // el permiso —ese lo comprueba cada endpoint—, es la cara.
+      const quienEs = { esMiembro: true, perfil: rows[0].role, esDueno: false, actorId: userId, userId: rows[0].owner_user_id };
+      return jsonResp({
+        membership: rows[0],
+        ...(await planDelDueno(rows[0].owner_user_id)),
+        yo: paraElCliente(quienEs),
+      });
+    }
     // Todavía no es miembro de nadie: puede que tenga una invitación esperando
     // a su correo y se haya registrado por su cuenta, sin tocar el enlace. Es
     // el caso normal, no el raro: la gente va a la web y se registra.

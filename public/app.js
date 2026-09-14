@@ -17036,9 +17036,34 @@ function leadsInforme(repintar) {
   if (_leadsAmbitoDe !== crmAmbitoCliente()) {
     crmCargarLeadsAmbito().then(() => { try { if (repintar) repintar(); } catch {} });
   }
-  return _leadsAmbitoDe === crmAmbitoCliente()
+  const todos = _leadsAmbitoDe === crmAmbitoCliente()
     ? crmLeadsAmbito
     : (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  return soloMiGestion(todos);
+}
+
+// Los tres informes —Ventas, Productividad y Por comercial— pasan por aquí, así
+// que el recorte se hace en un solo sitio. Un perfil de Ventas cuenta SU
+// gestión: no tiene por qué ver cuánto cerró el de al lado, que es material de
+// quien dirige. Decisión de Alejandro el 14-09-2026.
+//
+// El lead sigue viéndose en el tablero: ahí se ve todo y se gestiona lo propio,
+// que es como funciona el CRM. Lo que cambia es de quién son los NÚMEROS.
+// Recorta actividades a las de unos leads concretos. Solo actúa cuando el
+// perfil pide ver únicamente lo suyo; si no, devuelve todo tal cual.
+function actsDeMisLeads(actividades, misLeads) {
+  const yo = window._miPerfil;
+  if (!yo || !yo.solo_lo_suyo) return actividades || [];
+  const mios = new Set((misLeads || []).map(l => l.id));
+  return (actividades || []).filter(a => !a.lead_id || mios.has(a.lead_id));
+}
+
+function soloMiGestion(leads) {
+  const yo = window._miPerfil;
+  if (!yo || !yo.solo_lo_suyo) return leads;
+  const mio = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || null;
+  if (!mio) return leads;
+  return (leads || []).filter(l => l.assigned_to === mio);
 }
 
 function pipeClave() {
@@ -28610,8 +28635,10 @@ async function teamInit() {
     }
     window._workspace = me.membership ? { ownerId: me.membership.owner_user_id, role: me.membership.role, ownerName: me.membership.owner_name } : null;
     if (window._workspace) {
+      window._miPerfil = me.yo || null;
       teamApplyMemberUI();
       teamAplicarPlanDelDueno(me);
+      teamAplicarPerfil();
     }
   } catch (e) { window._workspace = null; }
 }
@@ -28636,6 +28663,49 @@ function teamAplicarPlanDelDueno(me) {
   window._planDelDueno = plan;
   try { updateUserUI(clerkInstance.user); } catch {}
   try { agencyInit(); } catch {}                 // redibuja el selector con el plan bueno
+}
+
+// Esconde del menú lo que el perfil no alcanza.
+//
+// ESTO NO ES EL PERMISO. El permiso lo comprueba el servidor en cada endpoint
+// (api/_perfiles.js); esto evita ofrecer una puerta que va a estar cerrada, que
+// es peor que no enseñarla. Si algún día los dos dejan de coincidir, manda el
+// servidor y aquí solo se ve una pestaña de más.
+function teamAplicarPerfil() {
+  const yo = window._miPerfil;
+  if (!yo || !Array.isArray(yo.modulos)) return;
+  const puede = (m) => yo.modulos.includes(m);
+
+  // Los cuatro módulos de la barra lateral
+  ['crm', 'marketing', 'conversaciones', 'analisis'].forEach(m => {
+    const el = document.getElementById('navm-' + m);
+    if (el) el.style.display = puede(m) ? '' : 'none';
+  });
+
+  // Los agentes: la cabecera y su grupo desplegable
+  if (!puede('agentes')) {
+    ['navm-agents', 'sb-agents-group'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
+
+  // La pestaña Equipo de Configuración: solo quien gestiona equipo
+  if (!yo.gestiona_equipo) {
+    const tab = document.querySelector('.cfg-nav-item[data-tab="equipo"]');
+    if (tab) tab.style.display = 'none';
+  }
+
+  // Si está parado en un módulo que no le toca —por una URL guardada o por el
+  // último sitio donde estuvo—, se le lleva al primero que sí. Dejarlo en una
+  // pantalla que no puede usar es peor que moverlo.
+  try {
+    const actual = window._navMod;
+    if (actual && actual !== 'home' && !puede(actual)) {
+      const primero = ['crm', 'conversaciones', 'analisis', 'marketing'].find(puede);
+      if (primero) navGo(primero);
+    }
+  } catch {}
 }
 
 // Miembros (vendedores): ocultar las herramientas de administración del dueño
@@ -29880,9 +29950,15 @@ async function prodRender() {
     box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando actividad…</div>';
     await prodLoad();
   }
-  const { acts, inter } = _prodData;
+  const { acts: actsTodas, inter: interTodas } = _prodData;
   await crmCargarLeadsAmbito();
   const leads = leadsInforme();
+  // Productividad cuenta tareas y actividades, no solo leads. `leads` ya viene
+  // recortado a la gestión propia si el perfil lo pide, así que las tareas se
+  // recortan a esos mismos leads: si no, un comercial vería su propio nombre
+  // con los números de todo el equipo, que es peor que no recortar nada.
+  const acts = actsDeMisLeads(actsTodas, leads);
+  const inter = actsDeMisLeads(interTodas, leads);
   const now = Date.now();
   const from = rangoIni(_prodRange, 3650);
   const hastaP = rangoFin(_prodRange);
