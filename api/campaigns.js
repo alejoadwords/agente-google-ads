@@ -6,6 +6,8 @@
 // de leads con etiqueta 'no-email' (baja) y de leads sin email/teléfono.
 export const config = { runtime: 'edge' };
 
+import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+
 import { campaignHtml } from './_campaign-email.js';
 
 
@@ -228,12 +230,30 @@ async function monthlySent(userId) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   let userId = await getUserId(req);
-  if (userId && _lastPlan === 'free') {
+
+  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Miembros del equipo: se opera sobre la cuenta del DUEÑO. Sin esto, un
+  // miembro veía esta sección VACÍA —su propia cuenta, que no tiene nada— y el
+  // perfil Mercadeo no habría servido de nada.
+  //
+  // Y Marketing se escribe solo desde los perfiles que lo tienen. Leer sí: el
+  // reporte de Marketing vive dentro de Análisis, al que Ventas sí entra.
+  let quien;
+  try { quien = await quienPregunta(userId); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  userId = quien.userId;
+  if (req.method !== 'GET' && !puedeVer(quien.perfil, 'marketing')) {
+    const no = exigeModulo(quien, 'marketing');
+    if (no) return no;
+  }
+  // El cupo de correos es del DUEÑO. Si quien llama es un miembro, su propio
+  // token trae SU plan —normalmente free— y el cupo habría salido mal.
+  if (quien.esMiembro || _lastPlan === 'free') {
     const meta = await clerkMeta(userId);
     if (meta.plan) _lastPlan = meta.plan;
     if (meta.emails_extra) _emailsExtra = parseInt(meta.emails_extra) || 0;
   }
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
   const url = new URL(req.url);
   const clientId = url.searchParams.get('client_id') || null;

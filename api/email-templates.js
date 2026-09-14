@@ -9,6 +9,8 @@
 // legítimo; que le borre la suya a otro, no.
 export const config = { runtime: 'edge' };
 
+import { puedeVer } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
@@ -67,7 +69,7 @@ export default async function handler(req) {
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
   const actorId = userId;
-  let actorNombre = null, mando = true;
+  let actorNombre = null, mando = true, perfilMiembro = null;
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role&limit=1`, { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -76,9 +78,19 @@ export default async function handler(req) {
       userId = tw.owner_user_id;
       actorNombre = tw.member_name || tw.member_email || null;
       mando = tw.role === 'admin';
+      perfilMiembro = tw.role || null;   // para el corte por módulo, más abajo
     }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+
+  // Las plantillas son de Marketing: quien no tiene ese módulo no las escribe.
+  // Leer sí las puede: hacen falta para ver una campaña ya enviada.
+  if (req.method !== 'GET' && perfilMiembro && !puedeVer(perfilMiembro, 'marketing')) {
+    return jsonResp({
+      error: 'Tu perfil no tiene acceso a Marketing. Pídeselo al administrador de la cuenta.',
+      sin_permiso: true, modulo: 'marketing',
+    }, 403);
   }
 
   const url = new URL(req.url);

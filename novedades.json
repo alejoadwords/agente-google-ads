@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-14-marketing-del-equipo",
+      "fecha": "2026-09-14",
+      "tipo": "arreglo",
+      "titulo": "Tu equipo ya ve las campañas, automatizaciones y páginas de la cuenta",
+      "texto": "Quien entraba invitado veía Campañas, Automatizaciones y Páginas vacías: la aplicación le mostraba su propia cuenta en vez de la tuya. Ya no. Además, ahora el perfil manda: quien tiene Marketing puede crear y editar, y quien no lo tiene puede seguir viendo los reportes de Análisis pero no toca nada. De paso, el cupo de correos de una campaña se lee del plan del dueño de la cuenta, no del de quien la envía.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
       "id": "2026-09-14-perfiles-de-acceso",
       "fecha": "2026-09-14",
       "tipo": "nuevo",

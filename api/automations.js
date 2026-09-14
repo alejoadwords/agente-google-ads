@@ -6,6 +6,8 @@
 //        condition {field,op,value} | change_stage {stage} | add_note {text}
 export const config = { runtime: 'edge' };
 
+import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -146,6 +148,21 @@ export default async function handler(req) {
 
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Miembros del equipo: se opera sobre la cuenta del DUEÑO. Sin esto, un
+  // miembro veía esta sección VACÍA —su propia cuenta, que no tiene nada— y el
+  // perfil Mercadeo no habría servido de nada.
+  //
+  // Y Marketing se escribe solo desde los perfiles que lo tienen. Leer sí: el
+  // reporte de Marketing vive dentro de Análisis, al que Ventas sí entra.
+  let quien;
+  try { quien = await quienPregunta(userId); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  userId = quien.userId;
+  if (req.method !== 'GET' && !puedeVer(quien.perfil, 'marketing')) {
+    const no = exigeModulo(quien, 'marketing');
+    if (no) return no;
+  }
 
 
   const url = new URL(req.url);
