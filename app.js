@@ -28600,6 +28600,14 @@ async function teamInit() {
       else if (d.error) showToast('⚠️ ' + d.error, 'error');
     }
     const me = await fetchAuth('/api/team?me=1').then(r => r.json());
+    // Se acaba de atar una invitación que esperaba a su correo. La aplicación ya
+    // cargó como cuenta suelta —vacía—, así que hay que recargar o se quedaría
+    // mirando la nada sin entender por qué, que es justo lo que pasaba antes.
+    if (me.vinculado_ahora && me.membership) {
+      showToast('🎉 Te uniste al equipo de ' + (me.membership.owner_name || 'tu empresa'), 'success');
+      setTimeout(() => location.reload(), 1200);
+      return;
+    }
     window._workspace = me.membership ? { ownerId: me.membership.owner_user_id, role: me.membership.role, ownerName: me.membership.owner_name } : null;
     if (window._workspace) teamApplyMemberUI();
   } catch (e) { window._workspace = null; }

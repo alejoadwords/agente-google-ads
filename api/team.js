@@ -100,6 +100,66 @@ async function clerkEmail(userId) {
   } catch { return ''; }
 }
 
+/**
+ * El correo PRINCIPAL y VERIFICADO, o cadena vacía.
+ *
+ * Distinto de clerkEmail() a propósito, y la diferencia es de seguridad: atar
+ * una invitación por correo sin exigir verificación deja que cualquiera se
+ * registre con el correo de otro y entre a su CRM. clerkEmail() sigue como
+ * estaba para lo demás —comparar con el propio, mirar si es admin—, donde una
+ * suplantación no abre ninguna puerta.
+ */
+async function clerkEmailVerificado(userId) {
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    if (!r.ok) return '';
+    const u = await r.json();
+    const lista = u.email_addresses || [];
+    // El principal; si no está marcado, el primero verificado que haya.
+    const principal = lista.find(e => e.id === u.primary_email_address_id) || lista[0];
+    const elegido = (principal && principal.verification?.status === 'verified')
+      ? principal
+      : lista.find(e => e.verification?.status === 'verified');
+    return (elegido?.email_address || '').toLowerCase();
+  } catch { return ''; }
+}
+
+/**
+ * Ata una invitación pendiente al usuario que acaba de entrar, buscándola por
+ * su correo verificado.
+ *
+ * Hacía falta porque el correo de invitación promete literalmente «créala
+ * gratis con este mismo email y la invitación se aplica sola», y eso no pasaba:
+ * el canje solo funcionaba si hacían clic en el enlace. Quien se registraba por
+ * su cuenta con el correo invitado se quedaba con una cuenta suelta y vacía, y
+ * su invitación en «Invitado» para siempre.
+ */
+async function vincularPorCorreo(userId) {
+  const correo = await clerkEmailVerificado(userId);
+  if (!correo) return null;
+  const filas = await fetch(
+    `${SUPABASE_URL}/rest/v1/team_members?member_email=eq.${encodeURIComponent(correo)}` +
+    `&status=eq.invited&select=id,owner_user_id,owner_name,role&order=created_at.desc&limit=1`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  const inv = filas?.[0];
+  if (!inv || !inv.owner_user_id) return null;
+  if (inv.owner_user_id === userId) return null;   // nadie se une a su propio equipo
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${inv.id}&status=eq.invited`, {
+    method: 'PATCH', headers: sbHeaders(),
+    body: JSON.stringify({
+      member_user_id: userId, member_email: correo,
+      status: 'active', joined_at: new Date().toISOString(),
+    }),
+  });
+  if (!res.ok) return null;
+  const hechas = await res.json().catch(() => []);
+  return hechas?.length ? { owner_user_id: inv.owner_user_id, role: inv.role, owner_name: inv.owner_name } : null;
+}
+
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -118,7 +178,12 @@ export default async function handler(req) {
   // GET ?me=1 — ¿soy miembro del workspace de alguien? (para el init de la app)
   if (req.method === 'GET' && url.searchParams.get('me')) {
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,owner_name&limit=1`, { headers: sbHeaders() }).then(r => r.json());
-    return jsonResp({ membership: rows?.[0] || null });
+    if (rows?.[0]) return jsonResp({ membership: rows[0] });
+    // Todavía no es miembro de nadie: puede que tenga una invitación esperando
+    // a su correo y se haya registrado por su cuenta, sin tocar el enlace. Es
+    // el caso normal, no el raro: la gente va a la web y se registra.
+    const atada = await vincularPorCorreo(userId);
+    return jsonResp({ membership: atada, vinculado_ahora: !!atada });
   }
 
   // POST ?action=redeem — canjear invitación (cualquier usuario autenticado)
