@@ -160,6 +160,19 @@ async function vincularPorCorreo(userId) {
   return hechas?.length ? { owner_user_id: inv.owner_user_id, role: inv.role, owner_name: inv.owner_name } : null;
 }
 
+/**
+ * El plan del DUEÑO. Un miembro tiene su propio plan —normalmente trial o free—
+ * y con él la aplicación le dibujaba la variante «Pro» en vez del selector de
+ * cliente del dueño, y le aplicaba topes que no son los de la cuenta en la que
+ * trabaja. El plan efectivo de quien trabaja en una cuenta ajena es el de esa
+ * cuenta. Es el cuarto sitio donde aparece el mismo fallo: asientos del equipo,
+ * cupo de correos, tope de leads y ahora el selector.
+ */
+async function planDelDueno(ownerId) {
+  const meta = await clerkMeta(ownerId);
+  return { plan_dueno: meta.plan || 'free', trial_until_dueno: meta.trial_until || null };
+}
+
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -178,12 +191,15 @@ export default async function handler(req) {
   // GET ?me=1 — ¿soy miembro del workspace de alguien? (para el init de la app)
   if (req.method === 'GET' && url.searchParams.get('me')) {
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,owner_name&limit=1`, { headers: sbHeaders() }).then(r => r.json());
-    if (rows?.[0]) return jsonResp({ membership: rows[0] });
+    if (rows?.[0]) return jsonResp({ membership: rows[0], ...(await planDelDueno(rows[0].owner_user_id)) });
     // Todavía no es miembro de nadie: puede que tenga una invitación esperando
     // a su correo y se haya registrado por su cuenta, sin tocar el enlace. Es
     // el caso normal, no el raro: la gente va a la web y se registra.
     const atada = await vincularPorCorreo(userId);
-    return jsonResp({ membership: atada, vinculado_ahora: !!atada });
+    return jsonResp({
+      membership: atada, vinculado_ahora: !!atada,
+      ...(atada ? await planDelDueno(atada.owner_user_id) : {}),
+    });
   }
 
   // POST ?action=redeem — canjear invitación (cualquier usuario autenticado)

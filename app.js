@@ -295,7 +295,7 @@ async function initAuth(){
       if (userPlan === 'trial') {
         if (_tm.trial_until && new Date(_tm.trial_until) > new Date()) { window._trialUntil = _tm.trial_until; userPlan = 'pro'; }
         else userPlan = 'free'; // vencida — api/cron-trials ajusta el metadata a diario
-      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser()) {
+      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser() && !window._workspace) {
         // Primer ingreso de una cuenta free: activar la prueba automáticamente
         setTimeout(async () => {
           try {
@@ -28609,8 +28609,33 @@ async function teamInit() {
       return;
     }
     window._workspace = me.membership ? { ownerId: me.membership.owner_user_id, role: me.membership.role, ownerName: me.membership.owner_name } : null;
-    if (window._workspace) teamApplyMemberUI();
+    if (window._workspace) {
+      teamApplyMemberUI();
+      teamAplicarPlanDelDueno(me);
+    }
   } catch (e) { window._workspace = null; }
+}
+
+// El plan efectivo de un miembro es el del DUEÑO de la cuenta en la que trabaja.
+//
+// Su propio plan —normalmente trial o free— le dibujaba la variante «Pro» en
+// vez del selector de cliente del dueño, y le aplicaba topes que no son los de
+// esta cuenta. Cuando esto corre, la interfaz ya se pintó con el plan
+// equivocado, así que hay que volver a dibujar lo que depende de él.
+function teamAplicarPlanDelDueno(me) {
+  let plan = me.plan_dueno || null;
+  if (!plan) return;
+  // Misma traducción que hace el arranque: una prueba vigente se comporta como
+  // Pro y una vencida como free. Si se hiciera distinto aquí, el miembro vería
+  // otra cosa que el dueño en la misma cuenta.
+  if (plan === 'trial') {
+    plan = (me.trial_until_dueno && new Date(me.trial_until_dueno) > new Date()) ? 'pro' : 'free';
+  }
+  if (plan === userPlan) return;                 // ya estaba bien: no repintar
+  userPlan = plan;
+  window._planDelDueno = plan;
+  try { updateUserUI(clerkInstance.user); } catch {}
+  try { agencyInit(); } catch {}                 // redibuja el selector con el plan bueno
 }
 
 // Miembros (vendedores): ocultar las herramientas de administración del dueño
