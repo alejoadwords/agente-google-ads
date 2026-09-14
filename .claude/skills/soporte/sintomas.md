@@ -167,6 +167,19 @@ bloqueada a propósito.
   mirar quién más tiene acceso a la cuenta.
 - El enlace **caduca a los 14 días** y solo sirve para su tarea y su cuenta.
 
+## «Mi asesor no ve lo mismo que yo» / «no le cargan los tableros»
+
+Casi siempre es **el plan**: un miembro tiene el suyo (trial o free) y hasta el
+14-09-2026 la aplicación le dibujaba la variante Pro en vez del selector de
+cliente del dueño. Sin cliente seleccionado no se ven los pipelines, que cuelgan
+de un cliente. Arreglado: ahora manda el plan del dueño. Si lo sigue viendo mal,
+que cierre sesión y vuelva a entrar.
+
+Si el problema es que **no está en el equipo**, mirar `team_members`: `status`
+debe ser `active` y `member_user_id` no puede estar vacío. Desde el 14-09-2026
+la invitación se aplica sola al entrar con el correo invitado **verificado**;
+si su correo no está verificado en Clerk, no se ata y es correcto que no se ate.
+
 ## «Cambié algo y no lo veo»
 
 Antes de investigar: **¿está desplegado?** Un `READY` en Vercel no prueba que
