@@ -28695,7 +28695,7 @@ function conReglasPintar() {
     '<div class="auto-field">' +
       '<label class="auto-label">¿Qué campo de tu formulario decide?</label>' +
       '<input class="auto-input" id="con-reglas-campo" maxlength="80" value="' + esc(_conReglas.campo || '') + '" placeholder="Ej. field_a74788e" oninput="_conReglas.campo=this.value">' +
-      '<div style="font-size:11px;color:var(--muted);margin-top:5px">Es el <b>name</b> del campo en tu web. En el código de la página se ve como <code>name="field_a74788e"</code>. Si viene de Elementor puede llegar como <code>form_fields[field_a74788e]</code>: aquí se escribe solo lo de dentro.</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:5px">Es el <b>name</b> del campo en tu web. En el código de la página se ve como <code>name="field_a74788e"</code>; si llega como <code>form_fields[field_a74788e]</code> o <code>fields[field_a74788e][value]</code>, aquí se escribe solo lo de dentro.<br><b>¿Varios formularios?</b> Sepáralos con comas y usamos el que venga en cada envío: <code>field_a74788e, field_a7e5788</code>.</div>' +
     '</div>' +
     _conReglas.casos.map((r, i) => conRamaHtml(r, i)).join('') +
     '<button class="btn-sec sm" onclick="conRamaAgregar()" style="margin-bottom:12px">' + icn('plus', 11) + ' Añadir otra respuesta</button>' +
