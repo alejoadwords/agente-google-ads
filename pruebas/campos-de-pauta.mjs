@@ -109,7 +109,14 @@ const assign = leer('api/_assign.js');
 const appJs = leer('public/app.js');
 chk('existe el dueño como comercial', /async function duenoComoComercial/.test(assign));
 chk('sin equipo, el lead va al dueño', /if \(!equipo\.length\) return await duenoComoComercial\(userId\);/.test(assign));
-chk('el equipo se lee ANTES que la regla', assign.indexOf('const equipo = await comercialesActivos(userId);') < assign.indexOf("if (regla.modo === 'off') return null;"));
+// Ojo con comparar posiciones: si el texto buscado ya no existe, indexOf da -1
+// y «-1 < loQueSea» es verdadero, así que la prueba pasaría sin comprobar nada.
+// Pasó de verdad: alguien cambió `const equipo` por `let equipo` y esto siguió
+// en verde. Por eso ahora se exige primero que exista.
+const posEquipo = assign.search(/(?:const|let) equipo = await comercialesActivos\(userId\);/);
+const posRegla = assign.indexOf("if (regla.modo === 'off') return null;");
+chk('la lectura del equipo sigue estando', posEquipo > -1 && posRegla > -1);
+chk('el equipo se lee ANTES que la regla', posEquipo > -1 && posRegla > -1 && posEquipo < posRegla);
 chk('al dueño no se le manda el correo de asignación', /if \(!com\.esDueno\) await avisarComercial/.test(assign));
 chk('el dueño va marcado para poder distinguirlo', /esDueno: true/.test(assign));
 chk('sigue habiendo reparto real cuando hay equipo', /regla\.modo === 'fijo'/.test(assign) && /equipo\[\(idx \+ 1\) % equipo\.length\]/.test(assign));
