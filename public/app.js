@@ -9993,9 +9993,14 @@ function novIr(destino) {
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
+        case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
-        default:              if (destino && destino.startsWith('/')) location.href = destino;
+        // Un destino mal escrito dejaba un botón que no hacía absolutamente
+        // nada al pulsarlo. Nadie lo notaba al publicar la novedad.
+        default:
+          if (destino && destino.startsWith('/')) location.href = destino;
+          else { console.warn('[novedades] destino desconocido:', destino); showToast('No pudimos abrir esa sección', 'error'); }
       }
     } catch (e) { console.warn('[novedades] destino no válido:', destino, e); }
   }, 220);
@@ -28532,10 +28537,18 @@ function conAbrir(id) {
         '<label class="auto-label">Etiquetas para estos leads (opcional)</label>' +
         '<input class="auto-input" id="con-tags" maxlength="200" value="' + esc(c ? (c.tags || []).join(', ') : '') + '" placeholder="web, contacto">' +
       '</div>' +
-      '<div class="auto-field" style="margin-bottom:0">' +
+      '<div class="auto-field">' +
         '<label class="auto-label">¿Quién atiende estos leads?</label>' +
         '<select class="auto-input" id="con-ejecutivo"><option value="">Reparto automático</option></select>' +
         '<div style="font-size:11px;color:var(--muted);margin-top:5px">Con <b>reparto automático</b> se sigue la regla de la fuente (por turnos entre el equipo). Si eliges a alguien, todos los leads de esta web van a su nombre.</div>' +
+      '</div>' +
+      '<div class="auto-field" style="margin-bottom:0">' +
+        '<label class="auto-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+          '<input type="checkbox" id="con-reglas-on" onchange="conReglasToggle()"' + (c && c.reglas && c.reglas.campo ? ' checked' : '') + '>' +
+          '<span>El mismo formulario alimenta varios tableros</span>' +
+        '</label>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Para webs donde el visitante elige (comprar o arrendar, un servicio u otro) y ese formulario es el mismo en todas las páginas.</div>' +
+        '<div id="con-reglas-caja" style="display:none;margin-top:12px"></div>' +
       '</div>' +
       '<div id="con-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:12px"></div>' +
     '</div>' +
@@ -28549,6 +28562,153 @@ function conAbrir(id) {
     const sel = document.getElementById('con-ejecutivo');
     if (sel) sel.innerHTML = html;
   });
+  _conReglas = (c && c.reglas && c.reglas.campo)
+    ? JSON.parse(JSON.stringify(c.reglas))
+    : { campo: '', casos: [], sino: null };
+  conReglasPreparar();
+}
+
+// ── Reglas de destino de un conector ────────────────────────────────────────
+// Una web repite el MISMO formulario en todas sus páginas y dentro trae un
+// desplegable que decide de qué es el lead. Aquí se dice qué campo mirar y a
+// qué tablero va cada respuesta. El corte de verdad lo hace el servidor
+// (api/_reglas-destino.js): esto solo es la pantalla para configurarlo.
+let _conReglas = { campo: '', casos: [], sino: null };
+let _conPipes = [];
+
+async function conReglasPreparar() {
+  try {
+    const cli = crmAmbitoCliente();
+    const qs = cli ? '?client_id=' + encodeURIComponent(cli) : '';
+    const d = await fetchAuth('/api/pipelines' + qs).then(r => r.json());
+    _conPipes = d.pipelines || [];
+  } catch { _conPipes = []; }
+  await asegurarEquipo();
+  conReglasToggle();
+}
+
+function conReglasToggle() {
+  const on = !!document.getElementById('con-reglas-on')?.checked;
+  const caja = document.getElementById('con-reglas-caja');
+  if (!caja) return;
+  caja.style.display = on ? 'block' : 'none';
+  if (!on) return;
+  if (!_conReglas.casos.length) _conReglas.casos = [{ vale: '', pipeline_id: null, tags: [], reparto: null }];
+  conReglasPintar();
+}
+
+function conPipeOpciones(sel, textoVacio) {
+  return '<option value="">' + esc(textoVacio) + '</option>' +
+    _conPipes.map(p => '<option value="' + esc(p.id) + '"' + (sel === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
+}
+
+function conEquipo() {
+  const miId = clerkInstance?.user?.id || '';
+  const yo = clerkInstance?.user?.firstName || 'Yo';
+  return [{ id: miId, name: yo + ' (yo)' }].concat(
+    (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id && m.member_user_id !== miId)
+      .map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email }))
+  );
+}
+
+// El desplegable de «quién atiende» de cada rama. Tres respuestas posibles:
+// vacío (la regla normal de la cuenta), 'turnos' (por turnos entre los que se
+// marquen) o el id de una persona.
+function conQuienOpciones(rep) {
+  const modo = rep && rep.modo === 'fijo' ? rep.quien : (rep && rep.modo === 'turnos' ? 'turnos' : '');
+  return '<option value=""' + (modo === '' ? ' selected' : '') + '>Reparto automático de la cuenta</option>' +
+    '<option value="turnos"' + (modo === 'turnos' ? ' selected' : '') + '>Por turnos entre varios…</option>' +
+    conEquipo().map(m => '<option value="' + esc(m.id) + '"' + (modo === m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>').join('');
+}
+
+function conRamaHtml(r, i) {
+  const rep = r.reparto;
+  const turnos = rep && rep.modo === 'turnos';
+  const entre = turnos && Array.isArray(rep.entre) ? rep.entre : [];
+  return '<div style="border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">' +
+      '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si responde</span>' +
+      '<input class="auto-input" style="flex:1;min-width:0" maxlength="80" placeholder="Arrendar" value="' + esc(r.vale || '') + '" oninput="conRamaSet(' + i + ',\'vale\',this.value)">' +
+      '<span style="font-size:11.5px;color:var(--muted)">→</span>' +
+      '<select class="auto-input" style="flex:1;min-width:0" onchange="conRamaSet(' + i + ',\'pipeline_id\',this.value)">' + conPipeOpciones(r.pipeline_id, 'Tablero por defecto') + '</select>' +
+      '<button class="btn-ghost sm" title="Quitar" onclick="conRamaQuitar(' + i + ')">&#10005;</button>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:7px">' +
+      '<select class="auto-input" style="flex:1;min-width:0" onchange="conRamaQuien(' + i + ',this.value)">' + conQuienOpciones(rep) + '</select>' +
+      '<input class="auto-input" style="flex:1;min-width:0" maxlength="120" placeholder="Etiquetas (opcional)" value="' + esc((r.tags || []).join(', ')) + '" oninput="conRamaTags(' + i + ',this.value)">' +
+    '</div>' +
+    (turnos
+      ? '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">' +
+          conEquipo().map(m => '<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">' +
+            '<input type="checkbox"' + (entre.includes(m.id) ? ' checked' : '') + ' onchange="conRamaEntre(' + i + ',\'' + esc(m.id) + '\',this.checked)">' +
+            esc(m.name) + '</label>').join('') +
+          (entre.length ? '' : '<span style="font-size:11px;color:var(--muted)">Sin marcar a nadie reparte entre todo el equipo.</span>') +
+        '</div>'
+      : '') +
+  '</div>';
+}
+
+function conReglasPintar() {
+  const caja = document.getElementById('con-reglas-caja');
+  if (!caja) return;
+  const sino = _conReglas.sino || {};
+  caja.innerHTML =
+    '<div class="auto-field">' +
+      '<label class="auto-label">¿Qué campo de tu formulario decide?</label>' +
+      '<input class="auto-input" id="con-reglas-campo" maxlength="80" value="' + esc(_conReglas.campo || '') + '" placeholder="Ej. field_a74788e" oninput="_conReglas.campo=this.value">' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:5px">Es el <b>name</b> del campo en tu web. En el código de la página se ve como <code>name="field_a74788e"</code>. Si viene de Elementor puede llegar como <code>form_fields[field_a74788e]</code>: aquí se escribe solo lo de dentro.</div>' +
+    '</div>' +
+    _conReglas.casos.map((r, i) => conRamaHtml(r, i)).join('') +
+    '<button class="btn-sec sm" onclick="conRamaAgregar()" style="margin-bottom:12px">' + icn('plus', 11) + ' Añadir otra respuesta</button>' +
+    '<div style="border:1px dashed var(--border);border-radius:11px;padding:11px 12px">' +
+      '<div style="display:flex;align-items:center;gap:7px">' +
+        '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si no coincide ninguna →</span>' +
+        '<select class="auto-input" style="flex:1;min-width:0" onchange="conSinoSet(\'pipeline_id\',this.value)">' + conPipeOpciones(sino.pipeline_id, 'Tablero por defecto') + '</select>' +
+        '<input class="auto-input" style="flex:1;min-width:0" maxlength="120" placeholder="Etiquetas (opcional)" value="' + esc((sino.tags || []).join(', ')) + '" oninput="conSinoTags(this.value)">' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:6px">Pasa cuando el visitante deja el campo vacío o tu web cambia las opciones. Una etiqueta aquí —«sin clasificar»— te deja verlos de un vistazo.</div>' +
+    '</div>';
+}
+
+function conRamaSet(i, campo, val) {
+  if (!_conReglas.casos[i]) return;
+  _conReglas.casos[i][campo] = campo === 'pipeline_id' ? (val || null) : val;
+}
+function conRamaTags(i, val) {
+  if (!_conReglas.casos[i]) return;
+  _conReglas.casos[i].tags = String(val || '').split(',').map(t => t.trim()).filter(Boolean);
+}
+function conRamaQuien(i, val) {
+  const r = _conReglas.casos[i];
+  if (!r) return;
+  if (!val) r.reparto = null;
+  else if (val === 'turnos') r.reparto = { modo: 'turnos', entre: [] };
+  else r.reparto = { modo: 'fijo', quien: val };
+  conReglasPintar();   // «por turnos» despliega a quién incluir
+}
+function conRamaEntre(i, id, marcado) {
+  const r = _conReglas.casos[i];
+  if (!r || !r.reparto || r.reparto.modo !== 'turnos') return;
+  const set = new Set(r.reparto.entre || []);
+  if (marcado) set.add(id); else set.delete(id);
+  r.reparto.entre = [...set];
+}
+function conRamaAgregar() {
+  _conReglas.casos.push({ vale: '', pipeline_id: null, tags: [], reparto: null });
+  conReglasPintar();
+}
+function conRamaQuitar(i) {
+  _conReglas.casos.splice(i, 1);
+  if (!_conReglas.casos.length) _conReglas.casos = [{ vale: '', pipeline_id: null, tags: [], reparto: null }];
+  conReglasPintar();
+}
+function conSinoSet(campo, val) {
+  _conReglas.sino = _conReglas.sino || {};
+  _conReglas.sino[campo] = val || null;
+}
+function conSinoTags(val) {
+  _conReglas.sino = _conReglas.sino || {};
+  _conReglas.sino.tags = String(val || '').split(',').map(t => t.trim()).filter(Boolean);
 }
 
 async function conCrear(id) {
@@ -28568,6 +28728,19 @@ async function conCrear(id) {
     name: nombre, tipo: 'conector', origen_url: url || null, tags,
     assigned_to: document.getElementById('con-ejecutivo')?.value || null,
   };
+  // Reglas de destino. Se manda null al desmarcar la casilla: si se omitiera el
+  // campo, el servidor conservaría las reglas viejas y el usuario creería que
+  // las quitó mientras siguen repartiendo por detrás.
+  const reglasOn = !!document.getElementById('con-reglas-on')?.checked;
+  if (!reglasOn) {
+    datos.reglas = null;
+  } else {
+    const campo = String(_conReglas.campo || '').trim();
+    const casos = (_conReglas.casos || []).filter(c => String(c.vale || '').trim());
+    if (!campo) return mostrar('Dinos qué campo de tu formulario decide el destino.');
+    if (!casos.length) return mostrar('Añade al menos una respuesta con su tablero.');
+    datos.reglas = { campo, casos, sino: _conReglas.sino || null };
+  }
   try {
     const cli = crmAmbitoCliente();
     const r = id
@@ -28612,6 +28785,20 @@ function conSnippet(id, obj) {
         '<b style="color:var(--text)">Dónde va:</b> justo antes de &lt;/body&gt;, en las páginas que tengan el formulario. En WordPress vale cualquier plugin de «insertar código en el pie».<br><br>' +
         '<b style="color:var(--text)">Qué hace:</b> detecta cuando alguien envía <i>cualquier</i> formulario de esa página y manda esos datos a Acuarius. Tu formulario sigue funcionando igual que siempre — no cambia nada de lo que ya tienes montado.<br><br>' +
         '<b style="color:var(--text)">Cómo saber si funciona:</b> envía tu propio formulario una vez y mira si aparece el lead. El contador de envíos de esta tarjeta también sube.' +
+      '</div>' +
+      // El script engancha el envío ANTES de que el reCAPTCHA de la página
+      // decida. En una web protegida eso mete en el CRM hasta los envíos que su
+      // propio formulario acaba rechazando. Por eso, cuando el formulario sabe
+      // llamar a una URL él solo, esa es la buena — y hay que decirlo aquí, que
+      // es donde la gente elige.
+      '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">' +
+        '<div style="font-weight:800;font-size:12.5px;margin-bottom:6px">¿Tu formulario sabe enviar a una URL? Mejor así</div>' +
+        '<div style="font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:9px">Elementor, WPForms, Gravity Forms y casi todos traen una acción de <b>Webhook</b>. Pégale esta dirección y los envíos entran desde su servidor: no dependen del navegador y no se cuelan los que tu propio formulario rechaza por spam.</div>' +
+        '<div style="display:flex;gap:6px;align-items:stretch">' +
+          '<code id="con-hook" style="flex:1;font-size:10.5px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:10px 11px;overflow-x:auto;white-space:nowrap">' + esc('https://app.acuarius.app/api/form-public?token=' + c.token) + '</code>' +
+          '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(document.getElementById(\'con-hook\').textContent).then(function(){showToast(\'Copiado ✓\',\'success\')})">Copiar</button>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:7px">En Elementor: la pestaña <b>Acciones tras el envío</b> → añade <b>Webhook</b> → pega la URL. <b>Usa una o la otra, no las dos</b>, o cada envío entraría dos veces.</div>' +
       '</div>' +
     '</div>' +
     '<div style="display:flex;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +

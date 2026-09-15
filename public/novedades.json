@@ -2,6 +2,24 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-15-conector-reglas-destino",
+      "fecha": "2026-09-15",
+      "tipo": "nuevo",
+      "titulo": "Un solo formulario en tu web, varios tableros en Acuarius",
+      "texto": "Si tu web repite el mismo formulario en todas sus páginas y dentro le preguntas al visitante qué quiere —comprar o arrendar, un servicio u otro—, ahora Acuarius puede repartir según esa respuesta. En Fuentes de leads, al editar una conexión, marca «El mismo formulario alimenta varios tableros»: dices qué campo decide y, para cada respuesta, a qué tablero va, quién lo atiende y con qué etiqueta. Cada rama lleva su propio turno de reparto, así que arriendo y venta pueden repartirse entre personas distintas. Lo que no coincida cae en el tablero por defecto con la etiqueta que elijas.",
+      "accion": {
+        "texto": "Ir a Fuentes de leads",
+        "ir": "fuentes"
+      }
+    },
+    {
+      "id": "2026-09-15-conector-webhook",
+      "fecha": "2026-09-15",
+      "tipo": "mejora",
+      "titulo": "Conectar tu formulario por webhook, sin script",
+      "texto": "Elementor, WPForms y casi todos los constructores traen una acción de Webhook. En «Ver código» de cada conexión ahora te damos también esa dirección: los envíos entran desde el servidor de tu web, no desde el navegador, así que no se pierden y no se cuelan los que tu propio formulario rechaza por spam. Además ya entendemos el formato de Elementor, que manda los campos como form_fields[correo] — antes esos envíos llegaban sin datos de contacto y se rechazaban. Usa el script o el webhook, no los dos, o cada envío entraría dos veces."
+    },
+    {
       "id": "2026-09-15-ventas-solo-sus-leads",
       "fecha": "2026-09-15",
       "tipo": "mejora",
