@@ -237,7 +237,14 @@ export async function intakeLead(userId, clientId, data) {
     // un flujo que notifique al responsable ya lo encuentre asignado.
     try {
       const { asignarLead } = await import('./_assign.js');
-      const com = await asignarLead(userId, created, created.source, data.assignedTo || null);
+      // repartoClave separa el turno: un conector con reglas reparte arriendo y
+      // venta por su cuenta, sin robarle el turno al resto de formularios.
+      const com = await asignarLead(
+        userId, created,
+        data.repartoClave || created.source,
+        data.assignedTo || null,
+        data.repartoEntre || null
+      );
       // Sin equipo no hay a quién asignar, pero el lead sigue necesitando que
       // alguien lo llame. En una cuenta de una sola persona el dueño ES el
       // comercial, así que la tarea de primer contacto se crea igual, sin
