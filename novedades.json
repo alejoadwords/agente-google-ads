@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-14-seguridad-anuncios",
+      "fecha": "2026-09-14",
+      "tipo": "arreglo",
+      "titulo": "Los datos de tus cuentas publicitarias ahora exigen tu sesión",
+      "texto": "Las pantallas de Google Ads y Meta Ads identificaban la cuenta por un dato que viajaba en la dirección, sin comprobar quién estaba preguntando. Lo corregimos: ahora la cuenta se toma de tu sesión iniciada y ese dato de la dirección se ignora. No tienes que hacer nada y nada cambia en lo que ves. Si algún panel de anuncios no carga, cierra sesión y vuelve a entrar."
+    },
+    {
       "id": "2026-09-14-perfiles-menu",
       "fecha": "2026-09-14",
       "tipo": "mejora",

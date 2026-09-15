@@ -1385,7 +1385,7 @@ async function briefLoadPlatformAccounts() {
       metaRow.style.display = 'block';
       metaSel.innerHTML = '<option value="">Cargando...</option>';
       try {
-        const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
+        const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
         const data = await r.json();
         const accounts = data.accounts || [];
         if (accounts.length) {
@@ -2481,7 +2481,7 @@ async function warLoadMetaAccountsForPicker() {
 
   try {
     const uid = clerkInstance?.user?.id || '';
-    const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
+    const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
     const data = await r.json();
     const accounts = data.accounts || [];
 
@@ -2518,7 +2518,7 @@ async function warAutoFill(plat) {
       const warClient  = agencyClients.find(c => c.id === warClientId);
       const customerId = warClient?.googleCustomerId || sessionStorage.getItem('ads_customer_id');
       if (!customerId || !uid) throw new Error('Sin cuenta conectada');
-      const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
+      const r = await fetchAuth('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
       apiData = await r.json();
     }
 
@@ -2529,7 +2529,7 @@ async function warAutoFill(plat) {
       const metaToken  = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
       if (!adAccountId) throw new Error('Selecciona una cuenta publicitaria');
       if (!metaToken)   throw new Error('No hay token. Conecta tu cuenta de Meta Ads.');
-      const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
+      const r = await fetchAuth('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
       apiData = await r.json();
     }
 
@@ -6852,8 +6852,8 @@ async function showGoogleAdsDashboard() {
       overview = d.overview; campaigns = d.campaigns;
     } else {
       [overview, campaigns] = await Promise.all([
-        fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
-        fetch(`/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
       ]);
       localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
     }
@@ -6977,8 +6977,8 @@ async function showMetaAdsDashboard() {
       overview = d.overview; campaigns = d.campaigns;
     } else {
       [overview, campaigns] = await Promise.all([
-        fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
-        fetch(`/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
       ]);
       localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
     }
@@ -7076,7 +7076,7 @@ async function manageCampaignStatus(campaignId, campaignName, newStatus) {
   if (!token) { alert('No hay sesión de Meta Ads. Reconecta tu cuenta.'); return; }
 
   try {
-    const r = await fetch('/api/meta-ads?action=update-campaign', {
+    const r = await fetchAuth('/api/meta-ads?action=update-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessToken: token, adAccountId: accountId, campaignId, status: newStatus }),
     });
@@ -7108,7 +7108,7 @@ async function getGoogleAdsContext() {
     const cacheKey = `gads_ctx_${customerId}_${Math.floor(Date.now() / 900000)}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) return cached;
-    const res  = await fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=LAST_30_DAYS`);
+    const res  = await fetchAuth(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=LAST_30_DAYS`);
     const data = await res.json();
     if (data.testAccess || data.error || !data.impressions) return '';
     const ctx = `DATOS REALES DE LA CUENTA GOOGLE ADS (últimos 30 días):
@@ -7138,7 +7138,7 @@ async function getMetaAdsContext() {
     let currency = 'USD';
     try { const acc = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}'); currency = acc.currency || 'USD'; } catch {}
     const accountName = (() => { try { return JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').name || ''; } catch { return ''; } })();
-    const res  = await fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
+    const res  = await fetchAuth(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
     const data = await res.json();
     if (data.error || !data.impressions) return '';
     // Nota de conversión si no es USD
@@ -11729,7 +11729,7 @@ async function cwGenerateCopy() {
   try {
     var clientProfile = '';
     try { clientProfile = JSON.stringify(mem || {}); } catch(e) {}
-    var r = await fetch('/api/meta-ads?action=generate-copy', {
+    var r = await fetchAuth('/api/meta-ads?action=generate-copy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -11958,7 +11958,7 @@ async function cwLaunch() {
   if (btn) { btn.disabled = true; btn.textContent = 'Creando campaña...'; }
 
   try {
-    var r = await fetch('/api/meta-ads?action=create-campaign', {
+    var r = await fetchAuth('/api/meta-ads?action=create-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12013,7 +12013,7 @@ async function cwLaunch() {
         } else {
           adPayload.imageBase64 = campaignWizardData.adImage.base64;
         }
-        var adR = await fetch('/api/meta-ads?action=create-ad', {
+        var adR = await fetchAuth('/api/meta-ads?action=create-ad', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(adPayload),
         });
@@ -12069,7 +12069,7 @@ async function activateCreatedCampaign() {
   var btn = document.getElementById('cw-activate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
   try {
-    var r = await fetch('/api/meta-ads?action=update-campaign', {
+    var r = await fetchAuth('/api/meta-ads?action=update-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessToken: token, adAccountId: campaignWizardData.adAccountId, campaignId, adsetId, status: 'ACTIVE' }),
     });
@@ -12192,7 +12192,7 @@ async function gcwGenerateContent() {
   try {
     var clientProfile = '';
     try { clientProfile = JSON.stringify(mem || {}); } catch(e){}
-    var r = await fetch('/api/google-ads?action=generate-ad-content', {
+    var r = await fetchAuth('/api/google-ads?action=generate-ad-content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12408,7 +12408,7 @@ async function gcwLaunch() {
 
   try {
     var uid = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
-    var r = await fetch('/api/google-ads?action=create-campaign', {
+    var r = await fetchAuth('/api/google-ads?action=create-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -14459,7 +14459,7 @@ async function callMetaAPI(endpoint, method = 'GET', params = {}) {
     return { error: 'No hay cuenta de Meta activa. Selecciona una en Configuración → Conexiones.' };
   const resolvedEndpoint = endpoint.replace('{AD_ACCOUNT_ID}', accountId?.replace('act_','') || '');
   try {
-    const res  = await fetch('/api/meta-ads', {
+    const res  = await fetchAuth('/api/meta-ads', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ accessToken: token, adAccountId: accountId, endpoint: resolvedEndpoint, method, params }),
     });
@@ -15411,7 +15411,7 @@ async function queryGoogleAds(gaqlQuery) {
   if (!accessToken && !userId) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
   if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {
-    const res = await fetch('/api/google-ads', {
+    const res = await fetchAuth('/api/google-ads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customerId, query: gaqlQuery, accessToken: accessToken || '', userId }),
@@ -24079,8 +24079,8 @@ async function pulsoGoogleCards() {
   try {
     const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&accessToken=' + encodeURIComponent(token);
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
     ]);
     if (!d || d.error) return (d && d.needsConnect) ? [pulsoReconnectCard('Google Ads')] : [];
     const cards = [];
@@ -24127,8 +24127,8 @@ async function pulsoMetaCards() {
   try {
     const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&accessToken=' + encodeURIComponent(token);
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
     ]);
     if (!d || d.error) return (d && d.needsConnect) ? [pulsoReconnectCard('Meta Ads')] : [];
     const cards = [];
@@ -24479,8 +24479,8 @@ async function pulsoAgencyAdsCards() {
     const custId = String(c.googleCustomerId).replace(/-/g, '');
     const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + custId + (gToken ? '&accessToken=' + encodeURIComponent(gToken) : '');
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
     ]);
     return { c, d, series };
   }));
@@ -24543,8 +24543,8 @@ async function pulsoAgencyMetaCards() {
     const acctId = String(c.metaAdAccountId).startsWith('act_') ? c.metaAdAccountId : 'act_' + c.metaAdAccountId;
     const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(acctId) + '&accessToken=' + encodeURIComponent(mToken);
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
     ]);
     return { c, d, series };
   }));
@@ -27985,7 +27985,7 @@ async function cbCreate() {
   }
   btn.disabled = true; btn.textContent = 'Creando campaña…';
   try {
-    const d = await fetch('/api/google-ads?action=create-campaign', {
+    const d = await fetchAuth('/api/google-ads?action=create-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, confirm: true, plan }),
     }).then(r => r.json());
@@ -28015,7 +28015,7 @@ async function cbActivate(campaignId) {
   const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
   const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
   try {
-    const d = await fetch('/api/google-ads?action=update-campaign-status', {
+    const d = await fetchAuth('/api/google-ads?action=update-campaign-status', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, campaignId, status: 'ENABLED', confirm: true }),
     }).then(r => r.json());
