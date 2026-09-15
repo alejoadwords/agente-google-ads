@@ -18665,6 +18665,18 @@ function ddAbrir(ancla, opciones, valor, alElegir) {
       + '<span>' + esc(o.name) + '</span></div>').join('');
   document.body.appendChild(menu);
 
+  // El menú se cuelga del body, así que su z-index tiene que ganarle al de la
+  // capa desde la que se abre. Dentro de un modal (overlay en 9998) el menú, que
+  // vive en 4000, se dibujaba DETRÁS: el botón parecía muerto y no había ningún
+  // error que mirar. Se calcula desde el propio ancla en vez de listar clases,
+  // porque hay overlays desde 200 hasta 99998 y la lista se quedaría vieja.
+  let zTecho = 0;
+  for (let el = ancla; el && el !== document.body; el = el.parentElement) {
+    const z = parseInt(getComputedStyle(el).zIndex, 10);
+    if (Number.isFinite(z) && z > zTecho) zTecho = z;
+  }
+  if (zTecho >= 4000) menu.style.zIndex = String(zTecho + 1);
+
   const r = ancla.getBoundingClientRect();
   menu.style.left = Math.min(r.left, window.innerWidth - menu.offsetWidth - 12) + 'px';
   // Si no cabe debajo, se abre hacia arriba en vez de salirse de la pantalla
