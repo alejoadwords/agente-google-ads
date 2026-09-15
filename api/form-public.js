@@ -8,6 +8,7 @@ export const config = { runtime: 'edge' };
 
 import { intakeLead, pick } from './_lead-intake.js';
 import { decidirDestino, desanidarCorchetes } from './_reglas-destino.js';
+import { registrarError } from './_registro-errores.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,17 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-export default async function handler(req) {
+// Cuánto puede esperar quien nos llama antes de que demos el envío por bueno.
+//
+// El Webhook de Elementor usa wp_remote_post, y el tiempo de espera por defecto
+// de WordPress es de CINCO segundos. En frío tardábamos 5,7 s: WordPress se
+// rendía y le pintaba «Your submission failed» al visitante mientras nosotros
+// creábamos el lead igual. El visitante se va creyendo que el formulario está
+// roto, que es el peor final posible para un lead que ya era nuestro.
+const MARGEN_MS = 3500;
+const SIN_TERMINAR = Symbol('sin terminar');
+
+export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
   const token = String(url.searchParams.get('token') || '');
@@ -119,8 +130,9 @@ export default async function handler(req) {
   const referencia = pick(body, 'referer_title', 'referencia', 'inmueble', 'producto', 'sku');
   const camposPropios = referencia ? { referencia: referencia.slice(0, 120) } : null;
 
-  try {
-    const { lead, created } = await intakeLead(form.user_id, form.client_id, {
+  // El trabajo de verdad, en una sola promesa que se pueda cronometrar.
+  const trabajo = (async () => {
+    const { created } = await intakeLead(form.user_id, form.client_id, {
       name, email, phone,
       company: pick(body, 'company', 'empresa', 'negocio'),
       note: noteParts.join(' · ') || null,
@@ -134,7 +146,6 @@ export default async function handler(req) {
       repartoEntre: destino.repartoEntre || null,
       ...(camposPropios ? { custom_fields: camposPropios } : {}),
     });
-    // Contador de envíos — con await: en edge las promesas sueltas mueren al responder
     await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {
       method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
       // aviso_silencio_at vuelve a null: si el conector estuvo callado, se avisó
@@ -145,9 +156,54 @@ export default async function handler(req) {
         aviso_silencio_at: null,
       }),
     }).catch(() => {});
-    return jsonResp({ ok: true, created, redirect_url: form.redirect_url || null, success_message: form.success_message || '¡Gracias! Recibimos tus datos y te contactaremos pronto.' });
-  } catch (e) {
-    console.error('[form-public] error:', e.message);
+    return created;
+  })();
+
+  // Se le pone un cronómetro. Si termina a tiempo contestamos lo que pasó de
+  // verdad —errores incluidos, que para eso están—; si se alarga, contestamos
+  // que lo recibimos y lo terminamos en waitUntil. No es tragarse el fallo: lo
+  // que NO puede pasar es que el visitante vea «error» por un lead que ya es
+  // nuestro. Si el trabajo falla después, queda en el registro de errores.
+  const puedeSeguirDespues = !!(contexto && typeof contexto.waitUntil === 'function');
+  const envuelto = trabajo.then(
+    created => ({ created }),
+    e => ({ fallo: e })
+  );
+
+  let desenlace;
+  if (puedeSeguirDespues) {
+    let avisar;
+    const reloj = new Promise(r => { avisar = r; });
+    const t = setTimeout(() => avisar(SIN_TERMINAR), MARGEN_MS);
+    desenlace = await Promise.race([envuelto, reloj]);
+    clearTimeout(t);
+  } else {
+    // Sin waitUntil, abandonar la promesa la mata: mejor esperar.
+    desenlace = await envuelto;
+  }
+
+  const respuesta = {
+    ok: true,
+    redirect_url: form.redirect_url || null,
+    success_message: form.success_message || '¡Gracias! Recibimos tus datos y te contactaremos pronto.',
+  };
+
+  if (desenlace === SIN_TERMINAR) {
+    contexto.waitUntil(envuelto.then(r => {
+      if (r && r.fallo) {
+        return registrarError({
+          origen: 'form-public', donde: 'intake tardío', error: r.fallo,
+          detalle: 'Conector: ' + form.name + ' (' + form.id + '). Ya habíamos respondido ok.',
+        });
+      }
+    }));
+    // `created` no se sabe todavía y no se inventa.
+    return jsonResp({ ...respuesta, created: null, en_proceso: true });
+  }
+
+  if (desenlace.fallo) {
+    await registrarError({ origen: 'form-public', donde: 'intake', error: desenlace.fallo, detalle: 'Conector: ' + form.name });
     return jsonResp({ error: 'No se pudo procesar el envío' }, 500);
   }
+  return jsonResp({ ...respuesta, created: desenlace.created });
 }
