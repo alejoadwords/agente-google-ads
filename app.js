@@ -5254,7 +5254,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           let refreshed = false;
           if(uid){
             try{
-              const rr = await fetch('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
+              const rr = await fetchAuth('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
               if(rr.ok){
                 const rd = await rr.json();
                 if(rd.access_token && !rd.needsReconnect){
@@ -14933,7 +14933,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
       const uid = clerkInstance?.user?.id || (() => { try { return JSON.parse(atob((clerkInstance?.session?.id||'').split('.')[1]||'{}')).sub; } catch { return ''; } })();
       if (!uid) return;
       try {
-        const r = await fetch('/api/refresh-google-token', {
+        const r = await fetchAuth('/api/refresh-google-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: uid }),
@@ -24748,7 +24748,7 @@ async function ensureFreshTokens() {
   if (!uid) return;
   // Google Ads
   try {
-    const g = await fetch('/api/refresh-google-token', {
+    const g = await fetchAuth('/api/refresh-google-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid }),
@@ -24760,7 +24760,7 @@ async function ensureFreshTokens() {
   } catch {}
   // Meta Ads
   try {
-    const m = await fetch('/api/refresh-meta-token?userId=' + encodeURIComponent(uid)).then(r => r.json());
+    const m = await fetchAuth('/api/refresh-meta-token?userId=' + encodeURIComponent(uid)).then(r => r.json());
     if (m && m.access_token) {
       sessionStorage.setItem('meta_access_token', m.access_token);
       localStorage.setItem('meta_access_token_persist', m.access_token);

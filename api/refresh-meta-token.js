@@ -38,12 +38,59 @@ async function saveToken(userId, accessToken, expiresIn) {
   return expiresAt;
 }
 
+
+// ── Quién pregunta ──────────────────────────────────────────────────────────
+//
+// Esto faltaba, y era lo más grave del lote: el `userId` llegaba en la petición
+// y el endpoint DEVOLVÍA el token de OAuth de esa persona, en claro y sin pedir
+// sesión. Con ese token se opera contra la plataforma directamente, fuera de
+// Acuarius. Ahora el usuario sale del token firmado y el de la petición se
+// ignora. Repetido a mano porque esto es Node y no puede importar api/_*.js.
+let _jwks = null, _jwksExp = 0;
+async function verificarFirma(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const b64 = x => Buffer.from(x.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const header = JSON.parse(b64(hB64).toString('utf8'));
+    if (!_jwks || _jwksExp < Date.now()) {
+      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+      _jwksExp = Date.now() + 600000;
+    }
+    const key = _jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const payload = JSON.parse(b64(pB64).toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+
+// La cuenta sobre la que se trabaja: la del dueño si quien pregunta es miembro.
+async function usuarioAutenticado(req) {
+  const payload = await verificarFirma((req.headers.authorization || '').replace('Bearer ', ''));
+  if (!payload?.sub) return null;
+  try {
+    const r = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(payload.sub)}` +
+      `&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+    );
+    if (!r.ok) return null;
+    return (await r.json())?.[0]?.owner_user_id || payload.sub;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const userId = req.query.userId || (req.body && req.body.userId) || '';
-  if (!userId) return res.status(400).json({ error: 'userId requerido' });
+  // El usuario sale del TOKEN FIRMADO; el de la petición se ignora.
+  const userId = await usuarioAutenticado(req);
+  if (!userId) return res.status(401).json({ error: 'No autorizado' });
   if (!SUPABASE_URL) return res.status(500).json({ error: 'Supabase no configurado' });
 
   try {
