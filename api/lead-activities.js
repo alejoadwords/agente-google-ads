@@ -1,4 +1,6 @@
 export const config = { runtime: 'edge' };
+
+import { soloSusLeads } from './_perfiles.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
@@ -60,6 +62,7 @@ export default async function handler(req) {
   let actorNombre = null;
   // Quien no es miembro de ningún equipo ES el dueño, y el dueño manda siempre.
   let actorMandaEnLaCuenta = true;
+  let rolMiembro = null;
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role&limit=1`, { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -68,10 +71,16 @@ export default async function handler(req) {
       userId = tw.owner_user_id;
       actorNombre = tw.member_name || tw.member_email || null;
       actorMandaEnLaCuenta = tw.role === 'admin';
+      rolMiembro = tw.role || null;
     }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
+
+  // Perfil Ventas: el historial y las notas de un lead ajeno tampoco se abren
+  // por URL. El tablero ya no se lo muestra; esta es la otra puerta.
+  const filtroMios = (actorId !== userId && soloSusLeads(rolMiembro))
+    ? `&assigned_to=eq.${encodeURIComponent(actorId)}` : '';
 
   const url = new URL(req.url);
 
@@ -153,7 +162,7 @@ export default async function handler(req) {
     }
     // Verify the lead belongs to this user
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&user_id=eq.${userId}&select=id`,
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&user_id=eq.${userId}${filtroMios}&select=id`,
       { headers: sbHeaders() }
     );
     const check = await checkRes.json();
@@ -186,7 +195,7 @@ export default async function handler(req) {
 
     // Verify the lead belongs to this user
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&select=id,name,company,assigned_to,client_id`,
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}${filtroMios}&select=id,name,company,assigned_to,client_id`,
       { headers: sbHeaders() }
     );
     const check = await checkRes.json();

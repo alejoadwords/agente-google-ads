@@ -17047,8 +17047,9 @@ function leadsInforme(repintar) {
 // gestión: no tiene por qué ver cuánto cerró el de al lado, que es material de
 // quien dirige. Decisión de Alejandro el 14-09-2026.
 //
-// El lead sigue viéndose en el tablero: ahí se ve todo y se gestiona lo propio,
-// que es como funciona el CRM. Lo que cambia es de quién son los NÚMEROS.
+// Desde el 15-09-2026 el servidor ya no le manda los leads ajenos, así que este
+// recorte es redundante en Ventas. Se deja: si mañana otro perfil pide "solo lo
+// suyo" en reportes sin dejar de ver el tablero entero, aquí ya está resuelto.
 // Recorta actividades a las de unos leads concretos. Solo actúa cuando el
 // perfil pide ver únicamente lo suyo; si no, devuelve todo tal cual.
 function actsDeMisLeads(actividades, misLeads) {
@@ -17701,9 +17702,29 @@ function crmAvisoEtapasAjenas(leads) {
   kanban.parentElement.insertBefore(el, kanban);
 }
 
+// Un asesor recién invitado abre el CRM y lo ve vacío. Sin esta línea creería
+// que la aplicación está rota o que perdió los leads de la cuenta: el tablero
+// no le esconde nada, es que todavía no le han repartido nada.
+function crmAvisoSinCartera() {
+  const ID = 'crm-aviso-cartera';
+  document.getElementById(ID)?.remove();
+  if (!window._miPerfil || !window._miPerfil.solo_sus_leads) return;
+  if ((crmLeads || []).length) return;
+  const ancla = document.getElementById(crmView === 'kanban' ? 'crm-kanban' : 'crm-list-view');
+  if (!ancla || !ancla.parentElement) return;
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 20px 6px;padding:10px 14px;background:var(--sidebar);border:1px solid var(--border);' +
+    'border-radius:10px;font-size:var(--fs-sm);color:var(--muted)';
+  el.textContent = 'Aquí verás los leads que te asignen. Todavía no tienes ninguno a tu nombre: ' +
+    'pídele al administrador de la cuenta que te reparta los tuyos.';
+  ancla.parentElement.insertBefore(el, ancla);
+}
+
 function crmRender() {
   if (crmView === 'kanban') crmRenderKanban();
   else crmRenderList();
+  crmAvisoSinCartera();
   crmPintarVistaSw();
   crmUpdateClientTag();
   crmUpdateSidebarCount();
@@ -17714,9 +17735,11 @@ function crmRender() {
 }
 
 // ── Quién puede gestionar cada lead ─────────────────────────────────────────
-// Ver, buscar y filtrar es libre para toda la cuenta. Editar, mover de etapa y
-// borrar, no. La regla vive TAMBIÉN en el servidor (api/leads.js): esto de aquí
-// solo evita ofrecer botones que iban a rebotar con un 403.
+// Para un administrador o Mercadeo, ver y filtrar es libre en toda la cuenta y
+// lo que se restringe es editar, mover de etapa y borrar. Para el perfil Ventas
+// no hay nada que restringir aquí: el servidor solo le manda sus leads.
+// La regla vive TAMBIÉN en el servidor (api/leads.js): esto de aquí solo evita
+// ofrecer botones que iban a rebotar con un 403.
 let crmMiId = '';
 let crmSoyMiembro = false;
 
@@ -18755,6 +18778,9 @@ async function crmPintarFiltroComercial() {
   const btn = document.getElementById('crm-filter-owner');
   const txt = document.getElementById('crm-filter-owner-txt');
   if (!btn || !txt) return;
+  // Un perfil de Ventas solo tiene en el tablero sus propios leads: filtrar por
+  // comercial no puede darle nada distinto. El servidor ya no le manda el resto.
+  if (window._miPerfil && window._miPerfil.solo_sus_leads) { btn.style.display = 'none'; crmFilterOwner = ''; return; }
   await asegurarEquipo();
   const activos = (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id);
   // Sin equipo el filtro sobra: ocuparía sitio para no ofrecer nada.

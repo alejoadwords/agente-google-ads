@@ -22,6 +22,7 @@ export const PERFILES = {
     modulos: ['crm', 'marketing', 'conversaciones', 'analisis', 'agentes'],
     gestionaEquipo: true,
     soloLoSuyoEnReportes: false,
+    soloSusLeads: false,
   },
   ventas: {
     etiqueta: 'Ventas',
@@ -31,6 +32,11 @@ export const PERFILES = {
     // En Análisis solo cuentan SUS leads y SUS tareas. Un comercial no tiene por
     // qué ver cuánto cerró el de al lado: eso es material de quien dirige.
     soloLoSuyoEnReportes: true,
+    // Y en el TABLERO solo ve los leads que le asignaron. Los que no tienen
+    // dueño tampoco: un asesor nuevo no debe encontrarse la cartera entera el
+    // día que entra. Quien reparte es el administrador, a mano o con el reparto
+    // automático.
+    soloSusLeads: true,
   },
   mercadeo: {
     etiqueta: 'Mercadeo',
@@ -38,6 +44,7 @@ export const PERFILES = {
     modulos: ['crm', 'marketing', 'conversaciones', 'analisis', 'agentes'],
     gestionaEquipo: false,
     soloLoSuyoEnReportes: false,
+    soloSusLeads: false,
   },
 };
 
@@ -115,6 +122,11 @@ export function exigeModulo(quien, modulo) {
   }), { status: 403, headers: { 'Content-Type': 'application/json' } });
 }
 
+/** ¿Solo ve en el tablero los leads que tiene asignados? */
+export function soloSusLeads(perfil) {
+  return !!PERFILES[normalizarPerfil(perfil)]?.soloSusLeads;
+}
+
 /** ¿Sus reportes se limitan a su propia gestión? */
 export function soloLoSuyo(perfil) {
   return !!PERFILES[normalizarPerfil(perfil)]?.soloLoSuyoEnReportes;
@@ -153,6 +165,7 @@ export function paraElCliente(quien) {
     modulos: p.modulos,
     gestiona_equipo: quien.esDueno || p.gestionaEquipo,
     solo_lo_suyo: !!p.soloLoSuyoEnReportes,
+    solo_sus_leads: !!p.soloSusLeads,
     toca_el_plan: quien.esDueno === true,
   };
 }

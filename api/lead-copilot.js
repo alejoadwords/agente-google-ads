@@ -1,5 +1,6 @@
 export const config = { runtime: 'edge' };
 import { registrarUso, cuentaDe } from './_uso-ia.js';
+import { soloSusLeads } from './_perfiles.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -46,14 +47,16 @@ export default async function handler(req) {
   // Un miembro del equipo opera sobre la cuenta del dueño: los datos son de la
   // cuenta, no de la persona. Sin esto el miembro consulta su propia cuenta
   // —vacía— y el módulo le sale en blanco sin ningún error a la vista.
+  const _actor = userId;
+  let _rol = null;
   try {
     const _tw = await fetch(
-      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`,
       { headers: sbHeaders() }
     );
     if (!_tw.ok) throw new Error('HTTP ' + _tw.status);
     const _fila = (await _tw.json())?.[0];
-    if (_fila?.owner_user_id) userId = _fila.owner_user_id;
+    if (_fila?.owner_user_id) { userId = _fila.owner_user_id; _rol = _fila.role || null; }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
@@ -64,9 +67,13 @@ export default async function handler(req) {
   const { lead_id, action } = body; // action: 'analyze' | 'draft_message' | 'score'
   if (!lead_id || !action) return jsonResp({ error: 'Faltan campos' }, 400);
 
-  // Load lead
+  // Load lead. Perfil Ventas: solo los suyos — el copiloto resume la ficha
+  // entera, así que sin este corte era la forma más cómoda de leer el lead de
+  // un compañero.
+  const _filtroMios = (_actor !== userId && soloSusLeads(_rol))
+    ? `&assigned_to=eq.${encodeURIComponent(_actor)}` : '';
   const leadRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&deleted_at=is.null&select=*`,
+    `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}&deleted_at=is.null${_filtroMios}&select=*`,
     { headers: sbHeaders() }
   );
   const leadRows = await leadRes.json();
