@@ -107,8 +107,16 @@ async function duenoComoComercial(userId) {
   } catch { return null; }
 }
 
-export async function siguienteComercial(userId, fuente) {
-  const equipo = await comercialesActivos(userId);
+// `entre` limita el turno a un grupo: lo usan las reglas de destino de un
+// conector, donde arriendo y venta reparten entre gente distinta. Si los que
+// nombra la regla ya no están en el equipo se ignora y reparte entre todos:
+// mejor un lead con dueño equivocado que un lead sin dueño.
+export async function siguienteComercial(userId, fuente, entre = null) {
+  let equipo = await comercialesActivos(userId);
+  if (Array.isArray(entre) && entre.length) {
+    const subset = equipo.filter(m => entre.includes(m.id));
+    if (subset.length) equipo = subset;
+  }
 
   // Cuenta de una sola persona: el dueño ES el comercial, y no hay reparto que
   // decidir. Se le asigna sin mirar la regla a propósito, porque la pantalla
@@ -173,7 +181,7 @@ async function avisarComercial(com, lead, fuente) {
 // propio (un formulario o un conector asignado a alguien). Pasa por aquí y no
 // por un PATCH suelto para que ese comercial reciba igual su correo y su tarea
 // de primer contacto: si no, un lead asignado a dedo entraría mudo.
-export async function asignarLead(userId, lead, fuente, forzado = null) {
+export async function asignarLead(userId, lead, fuente, forzado = null, entre = null) {
   try {
     if (!lead?.id || lead.assigned_to) return null;
     let com;
@@ -181,9 +189,9 @@ export async function asignarLead(userId, lead, fuente, forzado = null) {
       com = (await comercialesActivos(userId)).find(m => m.id === forzado) || null;
       // Si ya no está en el equipo se cae al reparto normal: mejor que dejar el
       // lead sin dueño porque alguien se fue de la agencia hace meses.
-      if (!com) com = await siguienteComercial(userId, fuente || lead.source);
+      if (!com) com = await siguienteComercial(userId, fuente || lead.source, entre);
     } else {
-      com = await siguienteComercial(userId, fuente || lead.source);
+      com = await siguienteComercial(userId, fuente || lead.source, entre);
     }
     if (!com) return null;
     await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}`, {

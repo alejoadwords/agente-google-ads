@@ -1,0 +1,4245 @@
+{
+  "content": [
+    {
+      "id": "rk000003",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#2E1D0E",
+        "padding": {
+          "unit": "px",
+          "top": "10",
+          "right": "20",
+          "bottom": "10",
+          "left": "20",
+          "isLinked": false
+        },
+        "structure": "100"
+      },
+      "elements": [
+        {
+          "id": "rk000002",
+          "elType": "column",
+          "settings": {
+            "_column_size": 100,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk000001",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\">🚚 <strong>Envíos gratis</strong> por compras mayores a $50.000 pesos 🐾</p>",
+                "align": "center",
+                "text_color": "#F6EEE2",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk00000f",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "18",
+          "right": "20",
+          "bottom": "18",
+          "left": "20",
+          "isLinked": false
+        },
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk000005",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000004",
+              "elType": "widget",
+              "settings": {
+                "title": "👑 ROCKY <span style=\"font-size:0.55em;letter-spacing:4px;color:#B98A3B;\">PET CO</span>",
+                "header_size": "h4",
+                "align": "left",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 28,
+                  "sizes": []
+                },
+                "typography_font_weight": "700"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00000c",
+          "elType": "column",
+          "settings": {
+            "_column_size": 50,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00000b",
+              "elType": "widget",
+              "settings": {
+                "icon_list": [
+                  {
+                    "_id": "rk000006",
+                    "text": "Inicio",
+                    "selected_icon": {
+                      "value": "fas fa-circle",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000007",
+                    "text": "Tienda",
+                    "selected_icon": {
+                      "value": "fas fa-circle",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#tienda",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000008",
+                    "text": "Categorías",
+                    "selected_icon": {
+                      "value": "fas fa-circle",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#categorias",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000009",
+                    "text": "Nosotros",
+                    "selected_icon": {
+                      "value": "fas fa-circle",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#nosotros",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00000a",
+                    "text": "Contacto",
+                    "selected_icon": {
+                      "value": "fas fa-circle",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#contacto",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "view": "inline",
+                "icon_color": "#B98A3B",
+                "text_color": "#33220F",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 4,
+                  "sizes": []
+                },
+                "text_indent": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "space_between": {
+                  "unit": "px",
+                  "size": 22,
+                  "sizes": []
+                },
+                "icon_typography_typography": "custom",
+                "icon_typography_font_family": "Inter",
+                "icon_typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "icon_typography_font_weight": "600",
+                "align": "center"
+              },
+              "elements": [],
+              "widgetType": "icon-list"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00000e",
+          "elType": "column",
+          "settings": {
+            "_column_size": 20,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00000d",
+              "elType": "widget",
+              "settings": {
+                "text": "🐾 Lo quiero",
+                "align": "right",
+                "link": {
+                  "url": "#tienda",
+                  "is_external": "",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "50",
+                  "right": "50",
+                  "bottom": "50",
+                  "left": "50",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "20",
+                  "bottom": "10",
+                  "left": "20",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk00001a",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "40",
+          "right": "20",
+          "bottom": "50",
+          "left": "20",
+          "isLinked": false
+        },
+        "structure": "45"
+      },
+      "elements": [
+        {
+          "id": "rk000017",
+          "elType": "column",
+          "settings": {
+            "_column_size": 45,
+            "_inline_size": null,
+            "content_position": "center",
+            "space_between_widgets": 16
+          },
+          "elements": [
+            {
+              "id": "rk000010",
+              "elType": "widget",
+              "settings": {
+                "title": "PARA EL<br><span style=\"color:#B98A3B;font-size:2.1em;line-height:1;\">REY</span><br>DE LA CASA",
+                "header_size": "h1",
+                "align": "left",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 40,
+                  "sizes": []
+                },
+                "typography_font_weight": "800",
+                "typography_font_size_mobile": {
+                  "unit": "px",
+                  "size": 30,
+                  "sizes": []
+                },
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.1,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000011",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p>Productos premium para perros que merecen lo mejor. Calidad, comodidad y felicidad para tu mejor amigo.</p>",
+                "align": "left",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                },
+                "typography_font_weight": "400",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.6,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk000012",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "left",
+                "link": {
+                  "url": "#tienda",
+                  "is_external": "",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "16",
+                  "right": "36",
+                  "bottom": "16",
+                  "left": "36",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 15,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            },
+            {
+              "id": "rk000016",
+              "elType": "widget",
+              "settings": {
+                "icon_list": [
+                  {
+                    "_id": "rk000013",
+                    "text": "Envíos rápidos a todo México",
+                    "selected_icon": {
+                      "value": "fas fa-truck",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000014",
+                    "text": "Productos de alta calidad",
+                    "selected_icon": {
+                      "value": "fas fa-medal",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000015",
+                    "text": "Hechos con amor para ellos",
+                    "selected_icon": {
+                      "value": "fas fa-heart",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "view": "inline",
+                "icon_color": "#B98A3B",
+                "text_color": "#33220F",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                },
+                "text_indent": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "space_between": {
+                  "unit": "px",
+                  "size": 18,
+                  "sizes": []
+                },
+                "icon_typography_typography": "custom",
+                "icon_typography_font_family": "Inter",
+                "icon_typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "icon_typography_font_weight": "600"
+              },
+              "elements": [],
+              "widgetType": "icon-list"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000019",
+          "elType": "column",
+          "settings": {
+            "_column_size": 55,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk000018",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/760x560/F1E6D4/8A6A3F/png?text=FOTO%20HERO%20%E2%80%94%20Rocky%20con%20su%20corona%20(reemplazar)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "20",
+                  "right": "20",
+                  "bottom": "20",
+                  "left": "20",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk00001e",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "30",
+          "right": "20",
+          "bottom": "10",
+          "left": "20",
+          "isLinked": false
+        },
+        "structure": "100"
+      },
+      "elements": [
+        {
+          "id": "rk00001d",
+          "elType": "column",
+          "settings": {
+            "_column_size": 100,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk00001b",
+              "elType": "widget",
+              "settings": {
+                "title": "🐾 PRODUCTOS RECOMENDADOS 🐾",
+                "header_size": "h2",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 30,
+                  "sizes": []
+                },
+                "typography_font_weight": "800",
+                "_element_id": "tienda"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00001c",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\">Los favoritos de los reyes de la casa</p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 15,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000043",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "10",
+          "right": "20",
+          "bottom": "20",
+          "left": "20",
+          "isLinked": false
+        },
+        "gap": "narrow",
+        "structure": "16"
+      },
+      "elements": [
+        {
+          "id": "rk000024",
+          "elType": "column",
+          "settings": {
+            "_column_size": 16,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "14",
+              "right": "14",
+              "bottom": "18",
+              "left": "14",
+              "isLinked": false
+            },
+            "margin": {
+              "unit": "px",
+              "top": "0",
+              "right": "4",
+              "bottom": "0",
+              "left": "4",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk00001f",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Cama%20Royal%20Comfort",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            },
+            {
+              "id": "rk000020",
+              "elType": "widget",
+              "settings": {
+                "title": "Cama Royal Comfort",
+                "header_size": "h5",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.3,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000021",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\"><span style=\"color:#E8A33D;\">★★★★★</span> <span style=\"font-size:12px;\">(126)</span></p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk000022",
+              "elType": "widget",
+              "settings": {
+                "title": "$1.299 MXN",
+                "header_size": "h4",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 17,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000023",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "center",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "8",
+                  "right": "8",
+                  "bottom": "8",
+                  "left": "8",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "9",
+                  "right": "16",
+                  "bottom": "9",
+                  "left": "16",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 11,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00002a",
+          "elType": "column",
+          "settings": {
+            "_column_size": 16,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "14",
+              "right": "14",
+              "bottom": "18",
+              "left": "14",
+              "isLinked": false
+            },
+            "margin": {
+              "unit": "px",
+              "top": "0",
+              "right": "4",
+              "bottom": "0",
+              "left": "4",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000025",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Collar%20Cuero%20Premium",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            },
+            {
+              "id": "rk000026",
+              "elType": "widget",
+              "settings": {
+                "title": "Collar Cuero Premium",
+                "header_size": "h5",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.3,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000027",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\"><span style=\"color:#E8A33D;\">★★★★★</span> <span style=\"font-size:12px;\">(95)</span></p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk000028",
+              "elType": "widget",
+              "settings": {
+                "title": "$599 MXN",
+                "header_size": "h4",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 17,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000029",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "center",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "8",
+                  "right": "8",
+                  "bottom": "8",
+                  "left": "8",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "9",
+                  "right": "16",
+                  "bottom": "9",
+                  "left": "16",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 11,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000030",
+          "elType": "column",
+          "settings": {
+            "_column_size": 16,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "14",
+              "right": "14",
+              "bottom": "18",
+              "left": "14",
+              "isLinked": false
+            },
+            "margin": {
+              "unit": "px",
+              "top": "0",
+              "right": "4",
+              "bottom": "0",
+              "left": "4",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk00002b",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Le%C3%B3n%20de%20Peluche",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            },
+            {
+              "id": "rk00002c",
+              "elType": "widget",
+              "settings": {
+                "title": "León de Peluche",
+                "header_size": "h5",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.3,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00002d",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\"><span style=\"color:#E8A33D;\">★★★★★</span> <span style=\"font-size:12px;\">(74)</span></p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk00002e",
+              "elType": "widget",
+              "settings": {
+                "title": "$299 MXN",
+                "header_size": "h4",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 17,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00002f",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "center",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "8",
+                  "right": "8",
+                  "bottom": "8",
+                  "left": "8",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "9",
+                  "right": "16",
+                  "bottom": "9",
+                  "left": "16",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 11,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000036",
+          "elType": "column",
+          "settings": {
+            "_column_size": 16,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "14",
+              "right": "14",
+              "bottom": "18",
+              "left": "14",
+              "isLinked": false
+            },
+            "margin": {
+              "unit": "px",
+              "top": "0",
+              "right": "4",
+              "bottom": "0",
+              "left": "4",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000031",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Plato%20Interactivo%20Puzzle",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            },
+            {
+              "id": "rk000032",
+              "elType": "widget",
+              "settings": {
+                "title": "Plato Interactivo Puzzle",
+                "header_size": "h5",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.3,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000033",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\"><span style=\"color:#E8A33D;\">★★★★★</span> <span style=\"font-size:12px;\">(83)</span></p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk000034",
+              "elType": "widget",
+              "settings": {
+                "title": "$419 MXN",
+                "header_size": "h4",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 17,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000035",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "center",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "8",
+                  "right": "8",
+                  "bottom": "8",
+                  "left": "8",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "9",
+                  "right": "16",
+                  "bottom": "9",
+                  "left": "16",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 11,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00003c",
+          "elType": "column",
+          "settings": {
+            "_column_size": 16,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "14",
+              "right": "14",
+              "bottom": "18",
+              "left": "14",
+              "isLinked": false
+            },
+            "margin": {
+              "unit": "px",
+              "top": "0",
+              "right": "4",
+              "bottom": "0",
+              "left": "4",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000037",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Shampoo%20Hidratante",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            },
+            {
+              "id": "rk000038",
+              "elType": "widget",
+              "settings": {
+                "title": "Shampoo Hidratante",
+                "header_size": "h5",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.3,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000039",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\"><span style=\"color:#E8A33D;\">★★★★★</span> <span style=\"font-size:12px;\">(64)</span></p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk00003a",
+              "elType": "widget",
+              "settings": {
+                "title": "$299 MXN",
+                "header_size": "h4",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 17,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00003b",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "center",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "8",
+                  "right": "8",
+                  "bottom": "8",
+                  "left": "8",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "9",
+                  "right": "16",
+                  "bottom": "9",
+                  "left": "16",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 11,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000042",
+          "elType": "column",
+          "settings": {
+            "_column_size": 16,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "14",
+              "right": "14",
+              "bottom": "18",
+              "left": "14",
+              "isLinked": false
+            },
+            "margin": {
+              "unit": "px",
+              "top": "0",
+              "right": "4",
+              "bottom": "0",
+              "left": "4",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk00003d",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/400x400/F1E6D4/8A6A3F/png?text=Bolso%20Transportador",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            },
+            {
+              "id": "rk00003e",
+              "elType": "widget",
+              "settings": {
+                "title": "Bolso Transportador",
+                "header_size": "h5",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.3,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00003f",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\"><span style=\"color:#E8A33D;\">★★★★★</span> <span style=\"font-size:12px;\">(67)</span></p>",
+                "align": "center",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk000040",
+              "elType": "widget",
+              "settings": {
+                "title": "$899 MXN",
+                "header_size": "h4",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 17,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000041",
+              "elType": "widget",
+              "settings": {
+                "text": "Lo quiero 🐾",
+                "align": "center",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "8",
+                  "right": "8",
+                  "bottom": "8",
+                  "left": "8",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "9",
+                  "right": "16",
+                  "bottom": "9",
+                  "left": "16",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 11,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk00004a",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#FBF6EC",
+        "border_border": "solid",
+        "border_width": {
+          "unit": "px",
+          "top": "1",
+          "right": "1",
+          "bottom": "1",
+          "left": "1",
+          "isLinked": true
+        },
+        "border_color": "#EADFC9",
+        "border_radius": {
+          "unit": "px",
+          "top": "16",
+          "right": "16",
+          "bottom": "16",
+          "left": "16",
+          "isLinked": true
+        },
+        "padding": {
+          "unit": "px",
+          "top": "18",
+          "right": "24",
+          "bottom": "18",
+          "left": "24",
+          "isLinked": false
+        },
+        "margin": {
+          "unit": "px",
+          "top": "10",
+          "right": "0",
+          "bottom": "8",
+          "left": "0",
+          "isLinked": false
+        },
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk000045",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000044",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-paw",
+                  "library": "fa-solid"
+                },
+                "title_text": "JUGUETES",
+                "description_text": "11 referencias",
+                "position": "left",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 22,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "left",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 15,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                },
+                "_element_id": "categorias"
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000047",
+          "elType": "column",
+          "settings": {
+            "_column_size": 50,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000046",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas%20de%20productos%20%E2%80%94%20Juguetes%20(reemplazar%20por%20galer%C3%ADa)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000049",
+          "elType": "column",
+          "settings": {
+            "_column_size": 20,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000048",
+              "elType": "widget",
+              "settings": {
+                "text": "Ver todos",
+                "align": "right",
+                "link": {
+                  "url": "#",
+                  "is_external": "",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "50",
+                  "right": "50",
+                  "bottom": "50",
+                  "left": "50",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "22",
+                  "bottom": "10",
+                  "left": "22",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000051",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#FBF6EC",
+        "border_border": "solid",
+        "border_width": {
+          "unit": "px",
+          "top": "1",
+          "right": "1",
+          "bottom": "1",
+          "left": "1",
+          "isLinked": true
+        },
+        "border_color": "#EADFC9",
+        "border_radius": {
+          "unit": "px",
+          "top": "16",
+          "right": "16",
+          "bottom": "16",
+          "left": "16",
+          "isLinked": true
+        },
+        "padding": {
+          "unit": "px",
+          "top": "18",
+          "right": "24",
+          "bottom": "18",
+          "left": "24",
+          "isLinked": false
+        },
+        "margin": {
+          "unit": "px",
+          "top": "8",
+          "right": "0",
+          "bottom": "8",
+          "left": "0",
+          "isLinked": false
+        },
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk00004c",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00004b",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-paw",
+                  "library": "fa-solid"
+                },
+                "title_text": "ASEO",
+                "description_text": "10 referencias",
+                "position": "left",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 22,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "left",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 15,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00004e",
+          "elType": "column",
+          "settings": {
+            "_column_size": 50,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00004d",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas%20de%20productos%20%E2%80%94%20Aseo%20(reemplazar%20por%20galer%C3%ADa)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000050",
+          "elType": "column",
+          "settings": {
+            "_column_size": 20,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00004f",
+              "elType": "widget",
+              "settings": {
+                "text": "Ver todos",
+                "align": "right",
+                "link": {
+                  "url": "#",
+                  "is_external": "",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "50",
+                  "right": "50",
+                  "bottom": "50",
+                  "left": "50",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "22",
+                  "bottom": "10",
+                  "left": "22",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000058",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#FBF6EC",
+        "border_border": "solid",
+        "border_width": {
+          "unit": "px",
+          "top": "1",
+          "right": "1",
+          "bottom": "1",
+          "left": "1",
+          "isLinked": true
+        },
+        "border_color": "#EADFC9",
+        "border_radius": {
+          "unit": "px",
+          "top": "16",
+          "right": "16",
+          "bottom": "16",
+          "left": "16",
+          "isLinked": true
+        },
+        "padding": {
+          "unit": "px",
+          "top": "18",
+          "right": "24",
+          "bottom": "18",
+          "left": "24",
+          "isLinked": false
+        },
+        "margin": {
+          "unit": "px",
+          "top": "8",
+          "right": "0",
+          "bottom": "8",
+          "left": "0",
+          "isLinked": false
+        },
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk000053",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000052",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-paw",
+                  "library": "fa-solid"
+                },
+                "title_text": "PLATOS Y COMEDEROS INTERACTIVOS",
+                "description_text": "11 referencias",
+                "position": "left",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 22,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "left",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 15,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000055",
+          "elType": "column",
+          "settings": {
+            "_column_size": 50,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000054",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas%20de%20productos%20%E2%80%94%20Platos%20y%20comederos%20(reemplazar%20por%20galer%C3%ADa)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000057",
+          "elType": "column",
+          "settings": {
+            "_column_size": 20,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000056",
+              "elType": "widget",
+              "settings": {
+                "text": "Ver todos",
+                "align": "right",
+                "link": {
+                  "url": "#",
+                  "is_external": "",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "50",
+                  "right": "50",
+                  "bottom": "50",
+                  "left": "50",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "22",
+                  "bottom": "10",
+                  "left": "22",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk00005f",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#FBF6EC",
+        "border_border": "solid",
+        "border_width": {
+          "unit": "px",
+          "top": "1",
+          "right": "1",
+          "bottom": "1",
+          "left": "1",
+          "isLinked": true
+        },
+        "border_color": "#EADFC9",
+        "border_radius": {
+          "unit": "px",
+          "top": "16",
+          "right": "16",
+          "bottom": "16",
+          "left": "16",
+          "isLinked": true
+        },
+        "padding": {
+          "unit": "px",
+          "top": "18",
+          "right": "24",
+          "bottom": "18",
+          "left": "24",
+          "isLinked": false
+        },
+        "margin": {
+          "unit": "px",
+          "top": "8",
+          "right": "0",
+          "bottom": "8",
+          "left": "0",
+          "isLinked": false
+        },
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk00005a",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000059",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-paw",
+                  "library": "fa-solid"
+                },
+                "title_text": "DISFRACES",
+                "description_text": "1 referencia",
+                "position": "left",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 22,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "left",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 15,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00005c",
+          "elType": "column",
+          "settings": {
+            "_column_size": 50,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00005b",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/700x90/F1E6D4/8A6A3F/png?text=Miniaturas%20de%20productos%20%E2%80%94%20Disfraces%20(reemplazar%20por%20galer%C3%ADa)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "10",
+                  "bottom": "10",
+                  "left": "10",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00005e",
+          "elType": "column",
+          "settings": {
+            "_column_size": 20,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk00005d",
+              "elType": "widget",
+              "settings": {
+                "text": "Ver todos",
+                "align": "right",
+                "link": {
+                  "url": "#",
+                  "is_external": "",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#33220F",
+                "button_text_color": "#F6EEE2",
+                "hover_color": "#FFFFFF",
+                "button_background_hover_color": "#4A3319",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "50",
+                  "right": "50",
+                  "bottom": "50",
+                  "left": "50",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "10",
+                  "right": "22",
+                  "bottom": "10",
+                  "left": "22",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000068",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "34",
+          "right": "20",
+          "bottom": "34",
+          "left": "20",
+          "isLinked": false
+        },
+        "gap": "extended",
+        "structure": "25"
+      },
+      "elements": [
+        {
+          "id": "rk000061",
+          "elType": "column",
+          "settings": {
+            "_column_size": 25,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "20",
+              "right": "16",
+              "bottom": "20",
+              "left": "16",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000060",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-award",
+                  "library": "fa-solid"
+                },
+                "title_text": "MATERIALES PREMIUM",
+                "description_text": "Duraderos, seguros y pensados para su bienestar.",
+                "position": "top",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 28,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "center",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000063",
+          "elType": "column",
+          "settings": {
+            "_column_size": 25,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "20",
+              "right": "16",
+              "bottom": "20",
+              "left": "16",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000062",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-crown",
+                  "library": "fa-solid"
+                },
+                "title_text": "DISEÑOS EXCLUSIVOS",
+                "description_text": "Estilo y funcionalidad para el rey de la casa.",
+                "position": "top",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 28,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "center",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000065",
+          "elType": "column",
+          "settings": {
+            "_column_size": 25,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "20",
+              "right": "16",
+              "bottom": "20",
+              "left": "16",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000064",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-headset",
+                  "library": "fa-solid"
+                },
+                "title_text": "ATENCIÓN PERSONALIZADA",
+                "description_text": "Te acompañamos en cada paso para elegir lo mejor.",
+                "position": "top",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 28,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "center",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000067",
+          "elType": "column",
+          "settings": {
+            "_column_size": 25,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "20",
+              "right": "16",
+              "bottom": "20",
+              "left": "16",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000066",
+              "elType": "widget",
+              "settings": {
+                "selected_icon": {
+                  "value": "fas fa-shield-alt",
+                  "library": "fa-solid"
+                },
+                "title_text": "COMPRA 100% SEGURA",
+                "description_text": "Tus datos y pagos siempre protegidos.",
+                "position": "top",
+                "title_size": "h5",
+                "primary_color": "#B98A3B",
+                "title_color": "#33220F",
+                "description_color": "#6E5A44",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 28,
+                  "sizes": []
+                },
+                "icon_space": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "text_align": "center",
+                "title_typography_typography": "custom",
+                "title_typography_font_family": "Inter",
+                "title_typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "title_typography_font_weight": "700",
+                "title_typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 0.5,
+                  "sizes": []
+                },
+                "title_typography_text_transform": "uppercase",
+                "description_typography_typography": "custom",
+                "description_typography_font_family": "Inter",
+                "description_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "description_typography_font_weight": "400",
+                "description_typography_line_height": {
+                  "unit": "em",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "icon-box"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000077",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "10",
+          "right": "20",
+          "bottom": "30",
+          "left": "20",
+          "isLinked": false
+        },
+        "gap": "extended",
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk000070",
+          "elType": "column",
+          "settings": {
+            "_column_size": 40,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "24",
+              "right": "24",
+              "bottom": "24",
+              "left": "24",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000069",
+              "elType": "widget",
+              "settings": {
+                "title": "🐾 PORQUÉ ÉL ES PARTE DE TU FAMILIA",
+                "header_size": "h3",
+                "align": "left",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 20,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00006a",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p>Diseñamos cada producto pensando en su felicidad y en tu tranquilidad.</p>",
+                "align": "left",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk00006f",
+              "elType": "widget",
+              "settings": {
+                "icon_list": [
+                  {
+                    "_id": "rk00006b",
+                    "text": "<strong>DESCANSO</strong> — Camas y accesorios para un descanso reparador",
+                    "selected_icon": {
+                      "value": "fas fa-couch",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00006c",
+                    "text": "<strong>JUEGO</strong> — Juguetes resistentes y divertidos para su día a día",
+                    "selected_icon": {
+                      "value": "fas fa-bone",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00006d",
+                    "text": "<strong>ALIMENTACIÓN</strong> — Todo para una alimentación saludable y balanceada",
+                    "selected_icon": {
+                      "value": "fas fa-utensils",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00006e",
+                    "text": "<strong>ACCESORIOS</strong> — Collares, correas y más para cada aventura juntos",
+                    "selected_icon": {
+                      "value": "fas fa-tag",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "view": "traditional",
+                "icon_color": "#B98A3B",
+                "text_color": "#33220F",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                },
+                "text_indent": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "space_between": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "icon_typography_typography": "custom",
+                "icon_typography_font_family": "Inter",
+                "icon_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "icon_typography_font_weight": "500"
+              },
+              "elements": [],
+              "widgetType": "icon-list"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000072",
+          "elType": "column",
+          "settings": {
+            "_column_size": 28,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk000071",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/500x620/F1E6D4/8A6A3F/png?text=Foto%20%E2%80%94%20perro%20feliz%20en%20su%20cama%20(reemplazar)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "16",
+                  "right": "16",
+                  "bottom": "16",
+                  "left": "16",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000076",
+          "elType": "column",
+          "settings": {
+            "_column_size": 32,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "24",
+              "right": "24",
+              "bottom": "24",
+              "left": "24",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk000073",
+              "elType": "widget",
+              "settings": {
+                "title": "NOSOTROS",
+                "header_size": "h3",
+                "align": "left",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 20,
+                  "sizes": []
+                },
+                "typography_font_weight": "800",
+                "_element_id": "nosotros"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000074",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p>En Rocky Pet Co creemos que nuestras mascotas son parte de nuestra familia y merecen lo mejor. Seleccionamos cuidadosamente cada producto para ofrecer calidad, seguridad y diseño en cada detalle. Nuestro compromiso es acompañarte en cada etapa de su vida con productos premium y un servicio cercano y confiable.</p>",
+                "align": "left",
+                "text_color": "#6E5A44",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.7,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            },
+            {
+              "id": "rk000075",
+              "elType": "widget",
+              "settings": {
+                "image": {
+                  "url": "https://placehold.co/440x260/F1E6D4/8A6A3F/png?text=Foto%20%E2%80%94%20familia%20con%20su%20perro%20(reemplazar)",
+                  "id": ""
+                },
+                "image_size": "full",
+                "align": "center",
+                "image_border_radius": {
+                  "unit": "px",
+                  "top": "12",
+                  "right": "12",
+                  "bottom": "12",
+                  "left": "12",
+                  "isLinked": true
+                }
+              },
+              "elements": [],
+              "widgetType": "image"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk00007a",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "20",
+          "right": "20",
+          "bottom": "10",
+          "left": "20",
+          "isLinked": false
+        },
+        "structure": "100"
+      },
+      "elements": [
+        {
+          "id": "rk000079",
+          "elType": "column",
+          "settings": {
+            "_column_size": 100,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk000078",
+              "elType": "widget",
+              "settings": {
+                "title": "🐾 LO QUE DICEN NUESTROS REYES",
+                "header_size": "h2",
+                "align": "center",
+                "title_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 26,
+                  "sizes": []
+                },
+                "typography_font_weight": "800"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000081",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#F6EEE2",
+        "padding": {
+          "unit": "px",
+          "top": "10",
+          "right": "20",
+          "bottom": "30",
+          "left": "20",
+          "isLinked": false
+        },
+        "gap": "extended",
+        "structure": "33"
+      },
+      "elements": [
+        {
+          "id": "rk00007c",
+          "elType": "column",
+          "settings": {
+            "_column_size": 33,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "22",
+              "right": "22",
+              "bottom": "22",
+              "left": "22",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk00007b",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p><span style=\"color:#E8A33D;letter-spacing:3px;\">★★★★★</span></p><p>\"A mi Rocky le encantó su cama, desde el primer día no quiso usar otra. Se nota la calidad.\"</p><p><strong>— Mariana G.</strong></p>",
+                "align": "left",
+                "text_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.6,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00007e",
+          "elType": "column",
+          "settings": {
+            "_column_size": 33,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "22",
+              "right": "22",
+              "bottom": "22",
+              "left": "22",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk00007d",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p><span style=\"color:#E8A33D;letter-spacing:3px;\">★★★★★</span></p><p>\"Los juguetes son resistentes y divertidos, perfecto para mi perrito que muerde todo.\"</p><p><strong>— Carlos V.</strong></p>",
+                "align": "left",
+                "text_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.6,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000080",
+          "elType": "column",
+          "settings": {
+            "_column_size": 33,
+            "_inline_size": null,
+            "background_background": "classic",
+            "background_color": "#FBF6EC",
+            "border_border": "solid",
+            "border_width": {
+              "unit": "px",
+              "top": "1",
+              "right": "1",
+              "bottom": "1",
+              "left": "1",
+              "isLinked": true
+            },
+            "border_color": "#EADFC9",
+            "border_radius": {
+              "unit": "px",
+              "top": "16",
+              "right": "16",
+              "bottom": "16",
+              "left": "16",
+              "isLinked": true
+            },
+            "padding": {
+              "unit": "px",
+              "top": "22",
+              "right": "22",
+              "bottom": "22",
+              "left": "22",
+              "isLinked": false
+            }
+          },
+          "elements": [
+            {
+              "id": "rk00007f",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p><span style=\"color:#E8A33D;letter-spacing:3px;\">★★★★★</span></p><p>\"La mejor tienda para consentir a tu peludo. Envío rápido y excelente atención.\"</p><p><strong>— Andrea L.</strong></p>",
+                "align": "left",
+                "text_color": "#33220F",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400",
+                "typography_line_height": {
+                  "unit": "em",
+                  "size": 1.6,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk000087",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#25D366",
+        "border_radius": {
+          "unit": "px",
+          "top": "50",
+          "right": "50",
+          "bottom": "50",
+          "left": "50",
+          "isLinked": true
+        },
+        "padding": {
+          "unit": "px",
+          "top": "22",
+          "right": "34",
+          "bottom": "22",
+          "left": "34",
+          "isLinked": false
+        },
+        "margin": {
+          "unit": "px",
+          "top": "10",
+          "right": "0",
+          "bottom": "40",
+          "left": "0",
+          "isLinked": false
+        },
+        "structure": "66"
+      },
+      "elements": [
+        {
+          "id": "rk000084",
+          "elType": "column",
+          "settings": {
+            "_column_size": 70,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000082",
+              "elType": "widget",
+              "settings": {
+                "title": "PEDIR POR WHATSAPP",
+                "header_size": "h2",
+                "align": "left",
+                "title_color": "#FFFFFF",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 24,
+                  "sizes": []
+                },
+                "typography_font_weight": "800",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000083",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p>Te asesoramos y ayudamos a elegir lo mejor para tu rey.</p>",
+                "align": "left",
+                "text_color": "rgba(255,255,255,0.9)",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000086",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null,
+            "content_position": "center"
+          },
+          "elements": [
+            {
+              "id": "rk000085",
+              "elType": "widget",
+              "settings": {
+                "text": "Escríbenos ➜",
+                "align": "right",
+                "link": {
+                  "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                  "is_external": "on",
+                  "nofollow": "",
+                  "custom_attributes": ""
+                },
+                "background_color": "#FFFFFF",
+                "button_text_color": "#1DA851",
+                "hover_color": "#1DA851",
+                "button_background_hover_color": "#F0FFF4",
+                "border_radius": {
+                  "unit": "px",
+                  "top": "50",
+                  "right": "50",
+                  "bottom": "50",
+                  "left": "50",
+                  "isLinked": true
+                },
+                "text_padding": {
+                  "unit": "px",
+                  "top": "14",
+                  "right": "28",
+                  "bottom": "14",
+                  "left": "28",
+                  "isLinked": false
+                },
+                "size": "md",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 14,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1,
+                  "sizes": []
+                },
+                "typography_text_transform": "uppercase"
+              },
+              "elements": [],
+              "widgetType": "button"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk0000a2",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#2E1D0E",
+        "padding": {
+          "unit": "px",
+          "top": "40",
+          "right": "20",
+          "bottom": "26",
+          "left": "20",
+          "isLinked": false
+        },
+        "gap": "extended",
+        "structure": "30"
+      },
+      "elements": [
+        {
+          "id": "rk00008d",
+          "elType": "column",
+          "settings": {
+            "_column_size": 30,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk000088",
+              "elType": "widget",
+              "settings": {
+                "title": "👑 ROCKY <span style=\"font-size:0.55em;letter-spacing:4px;color:#D9AE62;\">PET CO</span>",
+                "header_size": "h4",
+                "align": "left",
+                "title_color": "#FFFFFF",
+                "typography_typography": "custom",
+                "typography_font_family": "Playfair Display",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 24,
+                  "sizes": []
+                },
+                "typography_font_weight": "700"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00008c",
+              "elType": "widget",
+              "settings": {
+                "social_icon_list": [
+                  {
+                    "_id": "rk000089",
+                    "social_icon": {
+                      "value": "fab fa-facebook-f",
+                      "library": "fa-brands"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "on",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00008a",
+                    "social_icon": {
+                      "value": "fab fa-instagram",
+                      "library": "fa-brands"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "on",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00008b",
+                    "social_icon": {
+                      "value": "fab fa-tiktok",
+                      "library": "fa-brands"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "on",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "shape": "circle",
+                "align": "left",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "social-icons"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk000094",
+          "elType": "column",
+          "settings": {
+            "_column_size": 23,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk00008e",
+              "elType": "widget",
+              "settings": {
+                "title": "TIENDA",
+                "header_size": "h6",
+                "align": "left",
+                "title_color": "#D9AE62",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk000093",
+              "elType": "widget",
+              "settings": {
+                "icon_list": [
+                  {
+                    "_id": "rk00008f",
+                    "text": "Juguetes",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#categorias",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000090",
+                    "text": "Aseo",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#categorias",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000091",
+                    "text": "Platos y comederos",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#categorias",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000092",
+                    "text": "Disfraces",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#categorias",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "view": "traditional",
+                "icon_color": "#D9AE62",
+                "text_color": "#CBBA88",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                },
+                "text_indent": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "space_between": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "icon_typography_typography": "custom",
+                "icon_typography_font_family": "Inter",
+                "icon_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "icon_typography_font_weight": "500"
+              },
+              "elements": [],
+              "widgetType": "icon-list"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk00009b",
+          "elType": "column",
+          "settings": {
+            "_column_size": 24,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk000095",
+              "elType": "widget",
+              "settings": {
+                "title": "INFORMACIÓN",
+                "header_size": "h6",
+                "align": "left",
+                "title_color": "#D9AE62",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1.5,
+                  "sizes": []
+                }
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk00009a",
+              "elType": "widget",
+              "settings": {
+                "icon_list": [
+                  {
+                    "_id": "rk000096",
+                    "text": "Envíos y devoluciones",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000097",
+                    "text": "Preguntas frecuentes",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000098",
+                    "text": "Términos y condiciones",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk000099",
+                    "text": "Políticas de privacidad",
+                    "selected_icon": {
+                      "value": "fas fa-angle-right",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "#",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "view": "traditional",
+                "icon_color": "#D9AE62",
+                "text_color": "#CBBA88",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                },
+                "text_indent": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "space_between": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "icon_typography_typography": "custom",
+                "icon_typography_font_family": "Inter",
+                "icon_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "icon_typography_font_weight": "500"
+              },
+              "elements": [],
+              "widgetType": "icon-list"
+            }
+          ],
+          "isInner": false
+        },
+        {
+          "id": "rk0000a1",
+          "elType": "column",
+          "settings": {
+            "_column_size": 23,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk00009c",
+              "elType": "widget",
+              "settings": {
+                "title": "CONTACTO",
+                "header_size": "h6",
+                "align": "left",
+                "title_color": "#D9AE62",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "typography_font_weight": "700",
+                "typography_letter_spacing": {
+                  "unit": "px",
+                  "size": 1.5,
+                  "sizes": []
+                },
+                "_element_id": "contacto"
+              },
+              "elements": [],
+              "widgetType": "heading"
+            },
+            {
+              "id": "rk0000a0",
+              "elType": "widget",
+              "settings": {
+                "icon_list": [
+                  {
+                    "_id": "rk00009d",
+                    "text": "hola@rockypetco.com",
+                    "selected_icon": {
+                      "value": "fas fa-envelope",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "mailto:hola@rockypetco.com",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00009e",
+                    "text": "55 1254 5678",
+                    "selected_icon": {
+                      "value": "fab fa-whatsapp",
+                      "library": "fa-brands"
+                    },
+                    "link": {
+                      "url": "https://wa.me/5215512345678?text=Hola%2C%20quiero%20asesor%C3%ADa%20para%20elegir%20productos%20para%20mi%20perro",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  },
+                  {
+                    "_id": "rk00009f",
+                    "text": "Ciudad de México, México",
+                    "selected_icon": {
+                      "value": "fas fa-map-marker-alt",
+                      "library": "fa-solid"
+                    },
+                    "link": {
+                      "url": "",
+                      "is_external": "",
+                      "nofollow": ""
+                    }
+                  }
+                ],
+                "view": "traditional",
+                "icon_color": "#D9AE62",
+                "text_color": "#CBBA88",
+                "icon_size": {
+                  "unit": "px",
+                  "size": 16,
+                  "sizes": []
+                },
+                "text_indent": {
+                  "unit": "px",
+                  "size": 8,
+                  "sizes": []
+                },
+                "space_between": {
+                  "unit": "px",
+                  "size": 10,
+                  "sizes": []
+                },
+                "icon_typography_typography": "custom",
+                "icon_typography_font_family": "Inter",
+                "icon_typography_font_size": {
+                  "unit": "px",
+                  "size": 13,
+                  "sizes": []
+                },
+                "icon_typography_font_weight": "500"
+              },
+              "elements": [],
+              "widgetType": "icon-list"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    },
+    {
+      "id": "rk0000a5",
+      "elType": "section",
+      "settings": {
+        "background_background": "classic",
+        "background_color": "#2E1D0E",
+        "padding": {
+          "unit": "px",
+          "top": "4",
+          "right": "20",
+          "bottom": "22",
+          "left": "20",
+          "isLinked": false
+        },
+        "structure": "100"
+      },
+      "elements": [
+        {
+          "id": "rk0000a4",
+          "elType": "column",
+          "settings": {
+            "_column_size": 100,
+            "_inline_size": null
+          },
+          "elements": [
+            {
+              "id": "rk0000a3",
+              "elType": "widget",
+              "settings": {
+                "editor": "<p style=\"text-align:center;\">© 2026 Rocky Pet Co. Todos los derechos reservados. 🐾</p>",
+                "align": "center",
+                "text_color": "rgba(203,186,136,0.6)",
+                "typography_typography": "custom",
+                "typography_font_family": "Inter",
+                "typography_font_size": {
+                  "unit": "px",
+                  "size": 12,
+                  "sizes": []
+                },
+                "typography_font_weight": "400"
+              },
+              "elements": [],
+              "widgetType": "text-editor"
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    }
+  ],
+  "page_settings": {
+    "hide_title": "yes",
+    "template": "elementor_canvas",
+    "background_background": "classic",
+    "background_color": "#F6EEE2"
+  },
+  "version": "0.4",
+  "title": "Rocky Pet Co — Landing",
+  "type": "page"
+}

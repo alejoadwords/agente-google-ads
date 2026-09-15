@@ -98,6 +98,19 @@ where schemaname = 'public' and (qual = 'true' or with_check = 'true');
 Ojo: **un `PATCH` no sirve para comprobarlo** — una tabla protegida sin
 políticas también responde 204 con cero filas. Ver [[project_rls_supabase]].
 
+## Un endpoint nunca se cree un userId de la petición
+
+El 14-09-2026 se cerraron cuatro que sí lo hacían y servían el token de OAuth
+guardado de esa persona. Al revisar o escribir un endpoint que devuelva datos de
+una cuenta, comprobar que el id sale del **token firmado**:
+
+```bash
+grep -l "req.query.userId\|req.body.userId" api/*.js
+```
+
+Cada resultado hay que mirarlo: solo vale si además verifica la firma del JWT.
+Ver [[project_agujero_ads_sin_sesion]].
+
 ## Lo que NO se consulta
 
 - El contenido de `chat_messages` y `conversation_notes`: son conversaciones de

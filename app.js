@@ -295,7 +295,7 @@ async function initAuth(){
       if (userPlan === 'trial') {
         if (_tm.trial_until && new Date(_tm.trial_until) > new Date()) { window._trialUntil = _tm.trial_until; userPlan = 'pro'; }
         else userPlan = 'free'; // vencida — api/cron-trials ajusta el metadata a diario
-      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser()) {
+      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser() && !window._workspace) {
         // Primer ingreso de una cuenta free: activar la prueba automáticamente
         setTimeout(async () => {
           try {
@@ -1385,7 +1385,7 @@ async function briefLoadPlatformAccounts() {
       metaRow.style.display = 'block';
       metaSel.innerHTML = '<option value="">Cargando...</option>';
       try {
-        const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
+        const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
         const data = await r.json();
         const accounts = data.accounts || [];
         if (accounts.length) {
@@ -2481,7 +2481,7 @@ async function warLoadMetaAccountsForPicker() {
 
   try {
     const uid = clerkInstance?.user?.id || '';
-    const r = await fetch('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
+    const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
     const data = await r.json();
     const accounts = data.accounts || [];
 
@@ -2518,7 +2518,7 @@ async function warAutoFill(plat) {
       const warClient  = agencyClients.find(c => c.id === warClientId);
       const customerId = warClient?.googleCustomerId || sessionStorage.getItem('ads_customer_id');
       if (!customerId || !uid) throw new Error('Sin cuenta conectada');
-      const r = await fetch('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
+      const r = await fetchAuth('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
       apiData = await r.json();
     }
 
@@ -2529,7 +2529,7 @@ async function warAutoFill(plat) {
       const metaToken  = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
       if (!adAccountId) throw new Error('Selecciona una cuenta publicitaria');
       if (!metaToken)   throw new Error('No hay token. Conecta tu cuenta de Meta Ads.');
-      const r = await fetch('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
+      const r = await fetchAuth('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
       apiData = await r.json();
     }
 
@@ -5254,7 +5254,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           let refreshed = false;
           if(uid){
             try{
-              const rr = await fetch('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
+              const rr = await fetchAuth('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
               if(rr.ok){
                 const rd = await rr.json();
                 if(rd.access_token && !rd.needsReconnect){
@@ -6852,8 +6852,8 @@ async function showGoogleAdsDashboard() {
       overview = d.overview; campaigns = d.campaigns;
     } else {
       [overview, campaigns] = await Promise.all([
-        fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
-        fetch(`/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=${_gDashPeriod}`).then(r => r.json()),
       ]);
       localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
     }
@@ -6977,8 +6977,8 @@ async function showMetaAdsDashboard() {
       overview = d.overview; campaigns = d.campaigns;
     } else {
       [overview, campaigns] = await Promise.all([
-        fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
-        fetch(`/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
+        fetchAuth(`/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=${_mDashPeriod}`).then(r => r.json()),
       ]);
       localStorage.setItem(cacheKey, JSON.stringify({ overview, campaigns }));
     }
@@ -7076,7 +7076,7 @@ async function manageCampaignStatus(campaignId, campaignName, newStatus) {
   if (!token) { alert('No hay sesión de Meta Ads. Reconecta tu cuenta.'); return; }
 
   try {
-    const r = await fetch('/api/meta-ads?action=update-campaign', {
+    const r = await fetchAuth('/api/meta-ads?action=update-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessToken: token, adAccountId: accountId, campaignId, status: newStatus }),
     });
@@ -7108,7 +7108,7 @@ async function getGoogleAdsContext() {
     const cacheKey = `gads_ctx_${customerId}_${Math.floor(Date.now() / 900000)}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) return cached;
-    const res  = await fetch(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=LAST_30_DAYS`);
+    const res  = await fetchAuth(`/api/google-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&customerId=${customerId}&dateRange=LAST_30_DAYS`);
     const data = await res.json();
     if (data.testAccess || data.error || !data.impressions) return '';
     const ctx = `DATOS REALES DE LA CUENTA GOOGLE ADS (últimos 30 días):
@@ -7138,7 +7138,7 @@ async function getMetaAdsContext() {
     let currency = 'USD';
     try { const acc = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}'); currency = acc.currency || 'USD'; } catch {}
     const accountName = (() => { try { return JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').name || ''; } catch { return ''; } })();
-    const res  = await fetch(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
+    const res  = await fetchAuth(`/api/meta-ads?action=get-account-overview&userId=${encodeURIComponent(uid)}&adAccountId=${accountId}&datePreset=last_30d`);
     const data = await res.json();
     if (data.error || !data.impressions) return '';
     // Nota de conversión si no es USD
@@ -9986,15 +9986,21 @@ function novIr(destino) {
       switch (destino) {
         case 'academia':      openAcademia(); break;
         case 'integraciones': openSettings(); setTimeout(() => { try { switchSettingsTab('integraciones'); } catch {} }, 220); break;
+        case 'ajustes-equipo': openSettings(); setTimeout(() => { try { switchSettingsTab('equipo'); } catch {} }, 220); break;
         case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
         case 'crm':           navGo('crm'); break;
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
+        case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
-        default:              if (destino && destino.startsWith('/')) location.href = destino;
+        // Un destino mal escrito dejaba un botón que no hacía absolutamente
+        // nada al pulsarlo. Nadie lo notaba al publicar la novedad.
+        default:
+          if (destino && destino.startsWith('/')) location.href = destino;
+          else { console.warn('[novedades] destino desconocido:', destino); showToast('No pudimos abrir esa sección', 'error'); }
       }
     } catch (e) { console.warn('[novedades] destino no válido:', destino, e); }
   }, 220);
@@ -11728,7 +11734,7 @@ async function cwGenerateCopy() {
   try {
     var clientProfile = '';
     try { clientProfile = JSON.stringify(mem || {}); } catch(e) {}
-    var r = await fetch('/api/meta-ads?action=generate-copy', {
+    var r = await fetchAuth('/api/meta-ads?action=generate-copy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -11957,7 +11963,7 @@ async function cwLaunch() {
   if (btn) { btn.disabled = true; btn.textContent = 'Creando campaña...'; }
 
   try {
-    var r = await fetch('/api/meta-ads?action=create-campaign', {
+    var r = await fetchAuth('/api/meta-ads?action=create-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12012,7 +12018,7 @@ async function cwLaunch() {
         } else {
           adPayload.imageBase64 = campaignWizardData.adImage.base64;
         }
-        var adR = await fetch('/api/meta-ads?action=create-ad', {
+        var adR = await fetchAuth('/api/meta-ads?action=create-ad', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(adPayload),
         });
@@ -12068,7 +12074,7 @@ async function activateCreatedCampaign() {
   var btn = document.getElementById('cw-activate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
   try {
-    var r = await fetch('/api/meta-ads?action=update-campaign', {
+    var r = await fetchAuth('/api/meta-ads?action=update-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessToken: token, adAccountId: campaignWizardData.adAccountId, campaignId, adsetId, status: 'ACTIVE' }),
     });
@@ -12191,7 +12197,7 @@ async function gcwGenerateContent() {
   try {
     var clientProfile = '';
     try { clientProfile = JSON.stringify(mem || {}); } catch(e){}
-    var r = await fetch('/api/google-ads?action=generate-ad-content', {
+    var r = await fetchAuth('/api/google-ads?action=generate-ad-content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12407,7 +12413,7 @@ async function gcwLaunch() {
 
   try {
     var uid = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
-    var r = await fetch('/api/google-ads?action=create-campaign', {
+    var r = await fetchAuth('/api/google-ads?action=create-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -14458,7 +14464,7 @@ async function callMetaAPI(endpoint, method = 'GET', params = {}) {
     return { error: 'No hay cuenta de Meta activa. Selecciona una en Configuración → Conexiones.' };
   const resolvedEndpoint = endpoint.replace('{AD_ACCOUNT_ID}', accountId?.replace('act_','') || '');
   try {
-    const res  = await fetch('/api/meta-ads', {
+    const res  = await fetchAuth('/api/meta-ads', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ accessToken: token, adAccountId: accountId, endpoint: resolvedEndpoint, method, params }),
     });
@@ -14932,7 +14938,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
       const uid = clerkInstance?.user?.id || (() => { try { return JSON.parse(atob((clerkInstance?.session?.id||'').split('.')[1]||'{}')).sub; } catch { return ''; } })();
       if (!uid) return;
       try {
-        const r = await fetch('/api/refresh-google-token', {
+        const r = await fetchAuth('/api/refresh-google-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: uid }),
@@ -15410,7 +15416,7 @@ async function queryGoogleAds(gaqlQuery) {
   if (!accessToken && !userId) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
   if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {
-    const res = await fetch('/api/google-ads', {
+    const res = await fetchAuth('/api/google-ads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customerId, query: gaqlQuery, accessToken: accessToken || '', userId }),
@@ -17035,9 +17041,35 @@ function leadsInforme(repintar) {
   if (_leadsAmbitoDe !== crmAmbitoCliente()) {
     crmCargarLeadsAmbito().then(() => { try { if (repintar) repintar(); } catch {} });
   }
-  return _leadsAmbitoDe === crmAmbitoCliente()
+  const todos = _leadsAmbitoDe === crmAmbitoCliente()
     ? crmLeadsAmbito
     : (typeof crmLeads !== 'undefined' ? crmLeads : []);
+  return soloMiGestion(todos);
+}
+
+// Los tres informes —Ventas, Productividad y Por comercial— pasan por aquí, así
+// que el recorte se hace en un solo sitio. Un perfil de Ventas cuenta SU
+// gestión: no tiene por qué ver cuánto cerró el de al lado, que es material de
+// quien dirige. Decisión de Alejandro el 14-09-2026.
+//
+// Desde el 15-09-2026 el servidor ya no le manda los leads ajenos, así que este
+// recorte es redundante en Ventas. Se deja: si mañana otro perfil pide "solo lo
+// suyo" en reportes sin dejar de ver el tablero entero, aquí ya está resuelto.
+// Recorta actividades a las de unos leads concretos. Solo actúa cuando el
+// perfil pide ver únicamente lo suyo; si no, devuelve todo tal cual.
+function actsDeMisLeads(actividades, misLeads) {
+  const yo = window._miPerfil;
+  if (!yo || !yo.solo_lo_suyo) return actividades || [];
+  const mios = new Set((misLeads || []).map(l => l.id));
+  return (actividades || []).filter(a => !a.lead_id || mios.has(a.lead_id));
+}
+
+function soloMiGestion(leads) {
+  const yo = window._miPerfil;
+  if (!yo || !yo.solo_lo_suyo) return leads;
+  const mio = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || null;
+  if (!mio) return leads;
+  return (leads || []).filter(l => l.assigned_to === mio);
 }
 
 function pipeClave() {
@@ -17675,9 +17707,29 @@ function crmAvisoEtapasAjenas(leads) {
   kanban.parentElement.insertBefore(el, kanban);
 }
 
+// Un asesor recién invitado abre el CRM y lo ve vacío. Sin esta línea creería
+// que la aplicación está rota o que perdió los leads de la cuenta: el tablero
+// no le esconde nada, es que todavía no le han repartido nada.
+function crmAvisoSinCartera() {
+  const ID = 'crm-aviso-cartera';
+  document.getElementById(ID)?.remove();
+  if (!window._miPerfil || !window._miPerfil.solo_sus_leads) return;
+  if ((crmLeads || []).length) return;
+  const ancla = document.getElementById(crmView === 'kanban' ? 'crm-kanban' : 'crm-list-view');
+  if (!ancla || !ancla.parentElement) return;
+  const el = document.createElement('div');
+  el.id = ID;
+  el.style.cssText = 'margin:0 20px 6px;padding:10px 14px;background:var(--sidebar);border:1px solid var(--border);' +
+    'border-radius:10px;font-size:var(--fs-sm);color:var(--muted)';
+  el.textContent = 'Aquí verás los leads que te asignen. Todavía no tienes ninguno a tu nombre: ' +
+    'pídele al administrador de la cuenta que te reparta los tuyos.';
+  ancla.parentElement.insertBefore(el, ancla);
+}
+
 function crmRender() {
   if (crmView === 'kanban') crmRenderKanban();
   else crmRenderList();
+  crmAvisoSinCartera();
   crmPintarVistaSw();
   crmUpdateClientTag();
   crmUpdateSidebarCount();
@@ -17688,9 +17740,11 @@ function crmRender() {
 }
 
 // ── Quién puede gestionar cada lead ─────────────────────────────────────────
-// Ver, buscar y filtrar es libre para toda la cuenta. Editar, mover de etapa y
-// borrar, no. La regla vive TAMBIÉN en el servidor (api/leads.js): esto de aquí
-// solo evita ofrecer botones que iban a rebotar con un 403.
+// Para un administrador o Mercadeo, ver y filtrar es libre en toda la cuenta y
+// lo que se restringe es editar, mover de etapa y borrar. Para el perfil Ventas
+// no hay nada que restringir aquí: el servidor solo le manda sus leads.
+// La regla vive TAMBIÉN en el servidor (api/leads.js): esto de aquí solo evita
+// ofrecer botones que iban a rebotar con un 403.
 let crmMiId = '';
 let crmSoyMiembro = false;
 
@@ -18729,6 +18783,9 @@ async function crmPintarFiltroComercial() {
   const btn = document.getElementById('crm-filter-owner');
   const txt = document.getElementById('crm-filter-owner-txt');
   if (!btn || !txt) return;
+  // Un perfil de Ventas solo tiene en el tablero sus propios leads: filtrar por
+  // comercial no puede darle nada distinto. El servidor ya no le manda el resto.
+  if (window._miPerfil && window._miPerfil.solo_sus_leads) { btn.style.display = 'none'; crmFilterOwner = ''; return; }
   await asegurarEquipo();
   const activos = (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id);
   // Sin equipo el filtro sobra: ocuparía sitio para no ofrecer nada.
@@ -24053,8 +24110,8 @@ async function pulsoGoogleCards() {
   try {
     const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&accessToken=' + encodeURIComponent(token);
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
     ]);
     if (!d || d.error) return (d && d.needsConnect) ? [pulsoReconnectCard('Google Ads')] : [];
     const cards = [];
@@ -24101,8 +24158,8 @@ async function pulsoMetaCards() {
   try {
     const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&accessToken=' + encodeURIComponent(token);
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
     ]);
     if (!d || d.error) return (d && d.needsConnect) ? [pulsoReconnectCard('Meta Ads')] : [];
     const cards = [];
@@ -24453,8 +24510,8 @@ async function pulsoAgencyAdsCards() {
     const custId = String(c.googleCustomerId).replace(/-/g, '');
     const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + custId + (gToken ? '&accessToken=' + encodeURIComponent(gToken) : '');
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
     ]);
     return { c, d, series };
   }));
@@ -24517,8 +24574,8 @@ async function pulsoAgencyMetaCards() {
     const acctId = String(c.metaAdAccountId).startsWith('act_') ? c.metaAdAccountId : 'act_' + c.metaAdAccountId;
     const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(acctId) + '&accessToken=' + encodeURIComponent(mToken);
     const [d, series] = await Promise.all([
-      fetch(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
-      fetch(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
+      fetchAuth(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
+      fetchAuth(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
     ]);
     return { c, d, series };
   }));
@@ -24722,7 +24779,7 @@ async function ensureFreshTokens() {
   if (!uid) return;
   // Google Ads
   try {
-    const g = await fetch('/api/refresh-google-token', {
+    const g = await fetchAuth('/api/refresh-google-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid }),
@@ -24734,7 +24791,7 @@ async function ensureFreshTokens() {
   } catch {}
   // Meta Ads
   try {
-    const m = await fetch('/api/refresh-meta-token?userId=' + encodeURIComponent(uid)).then(r => r.json());
+    const m = await fetchAuth('/api/refresh-meta-token?userId=' + encodeURIComponent(uid)).then(r => r.json());
     if (m && m.access_token) {
       sessionStorage.setItem('meta_access_token', m.access_token);
       localStorage.setItem('meta_access_token_persist', m.access_token);
@@ -27959,7 +28016,7 @@ async function cbCreate() {
   }
   btn.disabled = true; btn.textContent = 'Creando campaña…';
   try {
-    const d = await fetch('/api/google-ads?action=create-campaign', {
+    const d = await fetchAuth('/api/google-ads?action=create-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, confirm: true, plan }),
     }).then(r => r.json());
@@ -27989,7 +28046,7 @@ async function cbActivate(campaignId) {
   const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
   const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
   try {
-    const d = await fetch('/api/google-ads?action=update-campaign-status', {
+    const d = await fetchAuth('/api/google-ads?action=update-campaign-status', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, campaignId, status: 'ENABLED', confirm: true }),
     }).then(r => r.json());
@@ -28480,10 +28537,18 @@ function conAbrir(id) {
         '<label class="auto-label">Etiquetas para estos leads (opcional)</label>' +
         '<input class="auto-input" id="con-tags" maxlength="200" value="' + esc(c ? (c.tags || []).join(', ') : '') + '" placeholder="web, contacto">' +
       '</div>' +
-      '<div class="auto-field" style="margin-bottom:0">' +
+      '<div class="auto-field">' +
         '<label class="auto-label">¿Quién atiende estos leads?</label>' +
         '<select class="auto-input" id="con-ejecutivo"><option value="">Reparto automático</option></select>' +
         '<div style="font-size:11px;color:var(--muted);margin-top:5px">Con <b>reparto automático</b> se sigue la regla de la fuente (por turnos entre el equipo). Si eliges a alguien, todos los leads de esta web van a su nombre.</div>' +
+      '</div>' +
+      '<div class="auto-field" style="margin-bottom:0">' +
+        '<label class="auto-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+          '<input type="checkbox" id="con-reglas-on" onchange="conReglasToggle()"' + (c && c.reglas && c.reglas.campo ? ' checked' : '') + '>' +
+          '<span>El mismo formulario alimenta varios tableros</span>' +
+        '</label>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Para webs donde el visitante elige (comprar o arrendar, un servicio u otro) y ese formulario es el mismo en todas las páginas.</div>' +
+        '<div id="con-reglas-caja" style="display:none;margin-top:12px"></div>' +
       '</div>' +
       '<div id="con-error" style="display:none;font-size:12px;color:#b91c1c;margin-top:12px"></div>' +
     '</div>' +
@@ -28497,6 +28562,153 @@ function conAbrir(id) {
     const sel = document.getElementById('con-ejecutivo');
     if (sel) sel.innerHTML = html;
   });
+  _conReglas = (c && c.reglas && c.reglas.campo)
+    ? JSON.parse(JSON.stringify(c.reglas))
+    : { campo: '', casos: [], sino: null };
+  conReglasPreparar();
+}
+
+// ── Reglas de destino de un conector ────────────────────────────────────────
+// Una web repite el MISMO formulario en todas sus páginas y dentro trae un
+// desplegable que decide de qué es el lead. Aquí se dice qué campo mirar y a
+// qué tablero va cada respuesta. El corte de verdad lo hace el servidor
+// (api/_reglas-destino.js): esto solo es la pantalla para configurarlo.
+let _conReglas = { campo: '', casos: [], sino: null };
+let _conPipes = [];
+
+async function conReglasPreparar() {
+  try {
+    const cli = crmAmbitoCliente();
+    const qs = cli ? '?client_id=' + encodeURIComponent(cli) : '';
+    const d = await fetchAuth('/api/pipelines' + qs).then(r => r.json());
+    _conPipes = d.pipelines || [];
+  } catch { _conPipes = []; }
+  await asegurarEquipo();
+  conReglasToggle();
+}
+
+function conReglasToggle() {
+  const on = !!document.getElementById('con-reglas-on')?.checked;
+  const caja = document.getElementById('con-reglas-caja');
+  if (!caja) return;
+  caja.style.display = on ? 'block' : 'none';
+  if (!on) return;
+  if (!_conReglas.casos.length) _conReglas.casos = [{ vale: '', pipeline_id: null, tags: [], reparto: null }];
+  conReglasPintar();
+}
+
+function conPipeOpciones(sel, textoVacio) {
+  return '<option value="">' + esc(textoVacio) + '</option>' +
+    _conPipes.map(p => '<option value="' + esc(p.id) + '"' + (sel === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
+}
+
+function conEquipo() {
+  const miId = clerkInstance?.user?.id || '';
+  const yo = clerkInstance?.user?.firstName || 'Yo';
+  return [{ id: miId, name: yo + ' (yo)' }].concat(
+    (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id && m.member_user_id !== miId)
+      .map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email }))
+  );
+}
+
+// El desplegable de «quién atiende» de cada rama. Tres respuestas posibles:
+// vacío (la regla normal de la cuenta), 'turnos' (por turnos entre los que se
+// marquen) o el id de una persona.
+function conQuienOpciones(rep) {
+  const modo = rep && rep.modo === 'fijo' ? rep.quien : (rep && rep.modo === 'turnos' ? 'turnos' : '');
+  return '<option value=""' + (modo === '' ? ' selected' : '') + '>Reparto automático de la cuenta</option>' +
+    '<option value="turnos"' + (modo === 'turnos' ? ' selected' : '') + '>Por turnos entre varios…</option>' +
+    conEquipo().map(m => '<option value="' + esc(m.id) + '"' + (modo === m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>').join('');
+}
+
+function conRamaHtml(r, i) {
+  const rep = r.reparto;
+  const turnos = rep && rep.modo === 'turnos';
+  const entre = turnos && Array.isArray(rep.entre) ? rep.entre : [];
+  return '<div style="border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">' +
+      '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si responde</span>' +
+      '<input class="auto-input" style="flex:1;min-width:0" maxlength="80" placeholder="Arrendar" value="' + esc(r.vale || '') + '" oninput="conRamaSet(' + i + ',\'vale\',this.value)">' +
+      '<span style="font-size:11.5px;color:var(--muted)">→</span>' +
+      '<select class="auto-input" style="flex:1;min-width:0" onchange="conRamaSet(' + i + ',\'pipeline_id\',this.value)">' + conPipeOpciones(r.pipeline_id, 'Tablero por defecto') + '</select>' +
+      '<button class="btn-ghost sm" title="Quitar" onclick="conRamaQuitar(' + i + ')">&#10005;</button>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:7px">' +
+      '<select class="auto-input" style="flex:1;min-width:0" onchange="conRamaQuien(' + i + ',this.value)">' + conQuienOpciones(rep) + '</select>' +
+      '<input class="auto-input" style="flex:1;min-width:0" maxlength="120" placeholder="Etiquetas (opcional)" value="' + esc((r.tags || []).join(', ')) + '" oninput="conRamaTags(' + i + ',this.value)">' +
+    '</div>' +
+    (turnos
+      ? '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">' +
+          conEquipo().map(m => '<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">' +
+            '<input type="checkbox"' + (entre.includes(m.id) ? ' checked' : '') + ' onchange="conRamaEntre(' + i + ',\'' + esc(m.id) + '\',this.checked)">' +
+            esc(m.name) + '</label>').join('') +
+          (entre.length ? '' : '<span style="font-size:11px;color:var(--muted)">Sin marcar a nadie reparte entre todo el equipo.</span>') +
+        '</div>'
+      : '') +
+  '</div>';
+}
+
+function conReglasPintar() {
+  const caja = document.getElementById('con-reglas-caja');
+  if (!caja) return;
+  const sino = _conReglas.sino || {};
+  caja.innerHTML =
+    '<div class="auto-field">' +
+      '<label class="auto-label">¿Qué campo de tu formulario decide?</label>' +
+      '<input class="auto-input" id="con-reglas-campo" maxlength="80" value="' + esc(_conReglas.campo || '') + '" placeholder="Ej. field_a74788e" oninput="_conReglas.campo=this.value">' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:5px">Es el <b>name</b> del campo en tu web. En el código de la página se ve como <code>name="field_a74788e"</code>. Si viene de Elementor puede llegar como <code>form_fields[field_a74788e]</code>: aquí se escribe solo lo de dentro.</div>' +
+    '</div>' +
+    _conReglas.casos.map((r, i) => conRamaHtml(r, i)).join('') +
+    '<button class="btn-sec sm" onclick="conRamaAgregar()" style="margin-bottom:12px">' + icn('plus', 11) + ' Añadir otra respuesta</button>' +
+    '<div style="border:1px dashed var(--border);border-radius:11px;padding:11px 12px">' +
+      '<div style="display:flex;align-items:center;gap:7px">' +
+        '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si no coincide ninguna →</span>' +
+        '<select class="auto-input" style="flex:1;min-width:0" onchange="conSinoSet(\'pipeline_id\',this.value)">' + conPipeOpciones(sino.pipeline_id, 'Tablero por defecto') + '</select>' +
+        '<input class="auto-input" style="flex:1;min-width:0" maxlength="120" placeholder="Etiquetas (opcional)" value="' + esc((sino.tags || []).join(', ')) + '" oninput="conSinoTags(this.value)">' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:6px">Pasa cuando el visitante deja el campo vacío o tu web cambia las opciones. Una etiqueta aquí —«sin clasificar»— te deja verlos de un vistazo.</div>' +
+    '</div>';
+}
+
+function conRamaSet(i, campo, val) {
+  if (!_conReglas.casos[i]) return;
+  _conReglas.casos[i][campo] = campo === 'pipeline_id' ? (val || null) : val;
+}
+function conRamaTags(i, val) {
+  if (!_conReglas.casos[i]) return;
+  _conReglas.casos[i].tags = String(val || '').split(',').map(t => t.trim()).filter(Boolean);
+}
+function conRamaQuien(i, val) {
+  const r = _conReglas.casos[i];
+  if (!r) return;
+  if (!val) r.reparto = null;
+  else if (val === 'turnos') r.reparto = { modo: 'turnos', entre: [] };
+  else r.reparto = { modo: 'fijo', quien: val };
+  conReglasPintar();   // «por turnos» despliega a quién incluir
+}
+function conRamaEntre(i, id, marcado) {
+  const r = _conReglas.casos[i];
+  if (!r || !r.reparto || r.reparto.modo !== 'turnos') return;
+  const set = new Set(r.reparto.entre || []);
+  if (marcado) set.add(id); else set.delete(id);
+  r.reparto.entre = [...set];
+}
+function conRamaAgregar() {
+  _conReglas.casos.push({ vale: '', pipeline_id: null, tags: [], reparto: null });
+  conReglasPintar();
+}
+function conRamaQuitar(i) {
+  _conReglas.casos.splice(i, 1);
+  if (!_conReglas.casos.length) _conReglas.casos = [{ vale: '', pipeline_id: null, tags: [], reparto: null }];
+  conReglasPintar();
+}
+function conSinoSet(campo, val) {
+  _conReglas.sino = _conReglas.sino || {};
+  _conReglas.sino[campo] = val || null;
+}
+function conSinoTags(val) {
+  _conReglas.sino = _conReglas.sino || {};
+  _conReglas.sino.tags = String(val || '').split(',').map(t => t.trim()).filter(Boolean);
 }
 
 async function conCrear(id) {
@@ -28516,6 +28728,19 @@ async function conCrear(id) {
     name: nombre, tipo: 'conector', origen_url: url || null, tags,
     assigned_to: document.getElementById('con-ejecutivo')?.value || null,
   };
+  // Reglas de destino. Se manda null al desmarcar la casilla: si se omitiera el
+  // campo, el servidor conservaría las reglas viejas y el usuario creería que
+  // las quitó mientras siguen repartiendo por detrás.
+  const reglasOn = !!document.getElementById('con-reglas-on')?.checked;
+  if (!reglasOn) {
+    datos.reglas = null;
+  } else {
+    const campo = String(_conReglas.campo || '').trim();
+    const casos = (_conReglas.casos || []).filter(c => String(c.vale || '').trim());
+    if (!campo) return mostrar('Dinos qué campo de tu formulario decide el destino.');
+    if (!casos.length) return mostrar('Añade al menos una respuesta con su tablero.');
+    datos.reglas = { campo, casos, sino: _conReglas.sino || null };
+  }
   try {
     const cli = crmAmbitoCliente();
     const r = id
@@ -28561,6 +28786,20 @@ function conSnippet(id, obj) {
         '<b style="color:var(--text)">Qué hace:</b> detecta cuando alguien envía <i>cualquier</i> formulario de esa página y manda esos datos a Acuarius. Tu formulario sigue funcionando igual que siempre — no cambia nada de lo que ya tienes montado.<br><br>' +
         '<b style="color:var(--text)">Cómo saber si funciona:</b> envía tu propio formulario una vez y mira si aparece el lead. El contador de envíos de esta tarjeta también sube.' +
       '</div>' +
+      // El script engancha el envío ANTES de que el reCAPTCHA de la página
+      // decida. En una web protegida eso mete en el CRM hasta los envíos que su
+      // propio formulario acaba rechazando. Por eso, cuando el formulario sabe
+      // llamar a una URL él solo, esa es la buena — y hay que decirlo aquí, que
+      // es donde la gente elige.
+      '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">' +
+        '<div style="font-weight:800;font-size:12.5px;margin-bottom:6px">¿Tu formulario sabe enviar a una URL? Mejor así</div>' +
+        '<div style="font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:9px">Elementor, WPForms, Gravity Forms y casi todos traen una acción de <b>Webhook</b>. Pégale esta dirección y los envíos entran desde su servidor: no dependen del navegador y no se cuelan los que tu propio formulario rechaza por spam.</div>' +
+        '<div style="display:flex;gap:6px;align-items:stretch">' +
+          '<code id="con-hook" style="flex:1;font-size:10.5px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:10px 11px;overflow-x:auto;white-space:nowrap">' + esc('https://app.acuarius.app/api/form-public?token=' + c.token) + '</code>' +
+          '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(document.getElementById(\'con-hook\').textContent).then(function(){showToast(\'Copiado ✓\',\'success\')})">Copiar</button>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:7px">En Elementor: la pestaña <b>Acciones tras el envío</b> → añade <b>Webhook</b> → pega la URL. <b>Usa una o la otra, no las dos</b>, o cada envío entraría dos veces.</div>' +
+      '</div>' +
     '</div>' +
     '<div style="display:flex;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0">' +
       '<button class="btn-pri sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Listo</button>' +
@@ -28599,9 +28838,87 @@ async function teamInit() {
       else if (d.error) showToast('⚠️ ' + d.error, 'error');
     }
     const me = await fetchAuth('/api/team?me=1').then(r => r.json());
+    // Se acaba de atar una invitación que esperaba a su correo. La aplicación ya
+    // cargó como cuenta suelta —vacía—, así que hay que recargar o se quedaría
+    // mirando la nada sin entender por qué, que es justo lo que pasaba antes.
+    if (me.vinculado_ahora && me.membership) {
+      showToast('🎉 Te uniste al equipo de ' + (me.membership.owner_name || 'tu empresa'), 'success');
+      setTimeout(() => location.reload(), 1200);
+      return;
+    }
     window._workspace = me.membership ? { ownerId: me.membership.owner_user_id, role: me.membership.role, ownerName: me.membership.owner_name } : null;
-    if (window._workspace) teamApplyMemberUI();
+    if (window._workspace) {
+      window._miPerfil = me.yo || null;
+      teamApplyMemberUI();
+      teamAplicarPlanDelDueno(me);
+      teamAplicarPerfil();
+    }
   } catch (e) { window._workspace = null; }
+}
+
+// El plan efectivo de un miembro es el del DUEÑO de la cuenta en la que trabaja.
+//
+// Su propio plan —normalmente trial o free— le dibujaba la variante «Pro» en
+// vez del selector de cliente del dueño, y le aplicaba topes que no son los de
+// esta cuenta. Cuando esto corre, la interfaz ya se pintó con el plan
+// equivocado, así que hay que volver a dibujar lo que depende de él.
+function teamAplicarPlanDelDueno(me) {
+  let plan = me.plan_dueno || null;
+  if (!plan) return;
+  // Misma traducción que hace el arranque: una prueba vigente se comporta como
+  // Pro y una vencida como free. Si se hiciera distinto aquí, el miembro vería
+  // otra cosa que el dueño en la misma cuenta.
+  if (plan === 'trial') {
+    plan = (me.trial_until_dueno && new Date(me.trial_until_dueno) > new Date()) ? 'pro' : 'free';
+  }
+  if (plan === userPlan) return;                 // ya estaba bien: no repintar
+  userPlan = plan;
+  window._planDelDueno = plan;
+  try { updateUserUI(clerkInstance.user); } catch {}
+  try { agencyInit(); } catch {}                 // redibuja el selector con el plan bueno
+}
+
+// Esconde del menú lo que el perfil no alcanza.
+//
+// ESTO NO ES EL PERMISO. El permiso lo comprueba el servidor en cada endpoint
+// (api/_perfiles.js); esto evita ofrecer una puerta que va a estar cerrada, que
+// es peor que no enseñarla. Si algún día los dos dejan de coincidir, manda el
+// servidor y aquí solo se ve una pestaña de más.
+function teamAplicarPerfil() {
+  const yo = window._miPerfil;
+  if (!yo || !Array.isArray(yo.modulos)) return;
+  const puede = (m) => yo.modulos.includes(m);
+
+  // Los cuatro módulos de la barra lateral
+  ['crm', 'marketing', 'conversaciones', 'analisis'].forEach(m => {
+    const el = document.getElementById('navm-' + m);
+    if (el) el.style.display = puede(m) ? '' : 'none';
+  });
+
+  // Los agentes: la cabecera y su grupo desplegable
+  if (!puede('agentes')) {
+    ['navm-agents', 'sb-agents-group'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
+
+  // La pestaña Equipo de Configuración: solo quien gestiona equipo
+  if (!yo.gestiona_equipo) {
+    const tab = document.querySelector('.cfg-nav-item[data-tab="equipo"]');
+    if (tab) tab.style.display = 'none';
+  }
+
+  // Si está parado en un módulo que no le toca —por una URL guardada o por el
+  // último sitio donde estuvo—, se le lleva al primero que sí. Dejarlo en una
+  // pantalla que no puede usar es peor que moverlo.
+  try {
+    const actual = window._navMod;
+    if (actual && actual !== 'home' && !puede(actual)) {
+      const primero = ['crm', 'conversaciones', 'analisis', 'marketing'].find(puede);
+      if (primero) navGo(primero);
+    }
+  } catch {}
 }
 
 // Miembros (vendedores): ocultar las herramientas de administración del dueño
@@ -28624,6 +28941,11 @@ async function teamRenderSettings() {
     const d = await fetchAuth('/api/team').then(r => r.json());
     crmTeam = d.members || [];
     _teamSeats = d.seats || null;
+    // Los perfiles y el mío los manda el servidor: si se escribieran aquí,
+    // el día que cambien habría dos verdades y ganaría la equivocada.
+    _teamPerfiles = d.perfiles || [];
+    _teamYo = d.yo || null;
+    teamPintarSelectorPerfil();
     if (seatsEl && _teamSeats) {
       seatsEl.innerHTML = '👥 <b>' + _teamSeats.used + ' de ' + (_teamSeats.total >= 99 ? '∞' : _teamSeats.total) + '</b> usuarios usados' +
         (_teamSeats.total < 99 ? ' · <a href="https://pay.hotmart.com/D106852996L" target="_blank" rel="noopener" style="color:var(--blue);font-weight:700;text-decoration:none">➕ ampliar usuarios</a>' : '');
@@ -28637,12 +28959,78 @@ async function teamRenderSettings() {
       return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;background:var(--bg-subtle)">' +
         '<div style="width:30px;height:30px;border-radius:50%;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">' + esc((m.member_name || m.member_email || '?').slice(0, 2).toUpperCase()) + '</div>' +
         '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">' + esc(m.member_name || m.member_email) + '</div>' +
-        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + ' · ' + esc(m.role) + '</div></div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + '</div></div>' +
+        teamSelectorFila(m) +
         '<div style="font-size:11px">' + st + '</div>' +
-        '<button class="btn-ghost sm" title="Quitar del equipo" onclick="teamRemove(\'' + m.id + '\')">✕</button>' +
+        (teamPuedoTocar(m)
+          ? '<button class="btn-ghost sm" title="Quitar del equipo" onclick="teamRemove(\'' + m.id + '\')">✕</button>'
+          : '') +
       '</div>';
     }).join('');
   } catch (e) { list.innerHTML = '<div style="font-size:12px;color:var(--muted2)">No se pudo cargar el equipo.</div>'; }
+}
+
+// ── Perfiles de acceso ──────────────────────────────────────────────────────
+// Qué ve y qué puede hacer cada quien. Lo de aquí es SOLO la cara: el permiso
+// lo comprueba el servidor en cada endpoint (api/_perfiles.js). Esconder un
+// desplegable no protege nada; sirve para no ofrecer lo que va a ser rechazado.
+let _teamPerfiles = [];
+let _teamYo = null;
+
+function teamPintarSelectorPerfil() {
+  const sel = document.getElementById('cfg-team-perfil');
+  if (!sel || !_teamPerfiles.length) return;
+  const elegido = sel.value || 'ventas';
+  sel.innerHTML = _teamPerfiles.map(p =>
+    '<option value="' + esc(p.id) + '"' + (p.id === elegido ? ' selected' : '') + '>' + esc(p.etiqueta) + '</option>'
+  ).join('');
+  teamPintarAyudaPerfil();
+}
+
+// La descripción del perfil elegido, debajo del desplegable. Sin esto hay que
+// adivinar qué implica «Mercadeo», y se elige mal.
+function teamPintarAyudaPerfil() {
+  const sel = document.getElementById('cfg-team-perfil');
+  const ayuda = document.getElementById('cfg-team-perfil-ayuda');
+  if (!sel || !ayuda) return;
+  const p = _teamPerfiles.find(x => x.id === sel.value);
+  ayuda.textContent = p ? p.descripcion : '';
+}
+
+// Nadie se toca a sí mismo, y solo gestiona equipo quien tiene ese perfil.
+// La misma regla está en el servidor (puedeTocarA); aquí solo evita ofrecer un
+// desplegable que iba a ser rechazado.
+function teamPuedoTocar(m) {
+  if (!_teamYo || !_teamYo.gestiona_equipo) return false;
+  const yo = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || null;
+  if (yo && m && m.member_user_id === yo) return false;
+  return true;
+}
+
+function teamSelectorFila(m) {
+  const actual = m.role === 'vendedor' ? 'ventas' : m.role;
+  if (!teamPuedoTocar(m) || !_teamPerfiles.length) {
+    const p = _teamPerfiles.find(x => x.id === actual);
+    return '<div style="font-size:11px;color:var(--muted)">' + esc(p ? p.etiqueta : actual) + '</div>';
+  }
+  return '<select class="auto-input" style="width:auto;font-size:11.5px;padding:4px 8px" ' +
+    'onchange="teamCambiarPerfil(\'' + esc(m.id) + '\', this.value, this)">' +
+    _teamPerfiles.map(p => '<option value="' + esc(p.id) + '"' + (p.id === actual ? ' selected' : '') + '>' + esc(p.etiqueta) + '</option>').join('') +
+    '</select>';
+}
+
+async function teamCambiarPerfil(id, perfil, sel) {
+  if (sel) sel.disabled = true;
+  try {
+    const r = await fetchAuth('/api/team', { method: 'PUT', body: JSON.stringify({ id, perfil }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo cambiar el perfil');
+    showToast('Perfil actualizado');
+    teamRenderSettings();
+  } catch (e) {
+    showToast(e.message || 'No se pudo cambiar el perfil', 'error');
+    teamRenderSettings();   // vuelve a pintar con lo que hay de verdad en el servidor
+  } finally { if (sel) sel.disabled = false; }
 }
 
 async function teamInvite() {
@@ -28655,7 +29043,10 @@ async function teamInvite() {
     const ownerName = (clerkInstance?.user?.firstName ? clerkInstance.user.firstName + (clerkInstance.user.lastName ? ' ' + clerkInstance.user.lastName : '') : null) || 'Tu equipo';
     const d = await fetchAuth('/api/team', {
       method: 'POST',
-      body: JSON.stringify({ email, name, owner_name: ownerName }),
+      body: JSON.stringify({
+        email, name, owner_name: ownerName,
+        perfil: (document.getElementById('cfg-team-perfil') || {}).value || 'ventas',
+      }),
     }).then(r => r.json());
     if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
     if (d.seats_full) {
@@ -29772,9 +30163,15 @@ async function prodRender() {
     box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando actividad…</div>';
     await prodLoad();
   }
-  const { acts, inter } = _prodData;
+  const { acts: actsTodas, inter: interTodas } = _prodData;
   await crmCargarLeadsAmbito();
   const leads = leadsInforme();
+  // Productividad cuenta tareas y actividades, no solo leads. `leads` ya viene
+  // recortado a la gestión propia si el perfil lo pide, así que las tareas se
+  // recortan a esos mismos leads: si no, un comercial vería su propio nombre
+  // con los números de todo el equipo, que es peor que no recortar nada.
+  const acts = actsDeMisLeads(actsTodas, leads);
+  const inter = actsDeMisLeads(interTodas, leads);
   const now = Date.now();
   const from = rangoIni(_prodRange, 3650);
   const hastaP = rangoFin(_prodRange);

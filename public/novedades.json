@@ -2,6 +2,97 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-15-conector-reglas-destino",
+      "fecha": "2026-09-15",
+      "tipo": "nuevo",
+      "titulo": "Un solo formulario en tu web, varios tableros en Acuarius",
+      "texto": "Si tu web repite el mismo formulario en todas sus páginas y dentro le preguntas al visitante qué quiere —comprar o arrendar, un servicio u otro—, ahora Acuarius puede repartir según esa respuesta. En Fuentes de leads, al editar una conexión, marca «El mismo formulario alimenta varios tableros»: dices qué campo decide y, para cada respuesta, a qué tablero va, quién lo atiende y con qué etiqueta. Cada rama lleva su propio turno de reparto, así que arriendo y venta pueden repartirse entre personas distintas. Lo que no coincida cae en el tablero por defecto con la etiqueta que elijas.",
+      "accion": {
+        "texto": "Ir a Fuentes de leads",
+        "ir": "fuentes"
+      }
+    },
+    {
+      "id": "2026-09-15-conector-webhook",
+      "fecha": "2026-09-15",
+      "tipo": "mejora",
+      "titulo": "Conectar tu formulario por webhook, sin script",
+      "texto": "Elementor, WPForms y casi todos los constructores traen una acción de Webhook. En «Ver código» de cada conexión ahora te damos también esa dirección: los envíos entran desde el servidor de tu web, no desde el navegador, así que no se pierden y no se cuelan los que tu propio formulario rechaza por spam. Además ya entendemos el formato de Elementor, que manda los campos como form_fields[correo] — antes esos envíos llegaban sin datos de contacto y se rechazaban. Usa el script o el webhook, no los dos, o cada envío entraría dos veces."
+    },
+    {
+      "id": "2026-09-15-ventas-solo-sus-leads",
+      "fecha": "2026-09-15",
+      "tipo": "mejora",
+      "titulo": "El perfil de Ventas ve en el tablero solo los leads que le asignaron",
+      "texto": "Hasta ayer, un perfil de Ventas veía en el pipeline todos los leads de la cuenta aunque solo pudiera gestionar los suyos. Ya no: ve únicamente los que tienen su nombre, y lo mismo en su agenda, en el historial de cada lead y en el copiloto. Quien entra nuevo empieza con el tablero vacío hasta que le repartan su cartera, y por eso se lo decimos en pantalla en vez de dejarlo en blanco. Los perfiles de Administrador y Mercadeo siguen viendo la cuenta completa. Si eres administrador, reparte desde el tablero o activa el reparto automático en Configuración → Equipo.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
+      "id": "2026-09-14-seguridad-anuncios",
+      "fecha": "2026-09-14",
+      "tipo": "arreglo",
+      "titulo": "Los datos de tus cuentas publicitarias ahora exigen tu sesión",
+      "texto": "Las pantallas de Google Ads y Meta Ads identificaban la cuenta por un dato que viajaba en la dirección, sin comprobar quién estaba preguntando. Lo corregimos: ahora la cuenta se toma de tu sesión iniciada y ese dato de la dirección se ignora. No tienes que hacer nada y nada cambia en lo que ves. Si algún panel de anuncios no carga, cierra sesión y vuelve a entrar."
+    },
+    {
+      "id": "2026-09-14-perfiles-menu",
+      "fecha": "2026-09-14",
+      "tipo": "mejora",
+      "titulo": "Cada quien ve solo lo suyo: el menú se adapta al perfil",
+      "texto": "Quien tiene perfil de Ventas ya no ve las secciones de Marketing ni los agentes: su menú queda con CRM, Conversaciones y Análisis. Mercadeo ve todo eso más Marketing y los agentes, pero no la pestaña de Equipo. Y en los informes, un perfil de Ventas cuenta solo su propia gestión —sus leads y sus tareas—, no la de sus compañeros. En el tablero sigue viendo todos los leads de la cuenta, como siempre; lo que cambia es de quién son los números.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
+      "id": "2026-09-14-plan-del-dueno",
+      "fecha": "2026-09-14",
+      "tipo": "arreglo",
+      "titulo": "Tu equipo ve la aplicación como tu cuenta, no como la suya",
+      "texto": "Quien entraba invitado veía la aplicación según SU plan —normalmente el de prueba— y no según el de la cuenta en la que trabaja. Por eso no le salía el selector de cliente que ve el dueño y podía toparse con límites que no son los de esa cuenta. Ahora el plan que manda es el del dueño: tu equipo ve el mismo selector, los mismos clientes y los mismos topes que tú. Y a un invitado ya no se le arranca una prueba propia que no necesita.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
+      "id": "2026-09-14-invitacion-por-correo",
+      "fecha": "2026-09-14",
+      "tipo": "arreglo",
+      "titulo": "Quien se registra con el correo invitado entra a tu equipo, aunque no use el enlace",
+      "texto": "El correo de invitación decía que bastaba con crear la cuenta usando ese mismo email, pero no era así: si la persona se registraba por su cuenta en vez de tocar el enlace, terminaba con una cuenta suelta y vacía, y su invitación se quedaba en «Invitado» para siempre. Ahora, al entrar, la invitación se aplica sola. Solo funciona con el correo verificado, para que nadie pueda entrar a tu equipo registrándose con el correo de otra persona.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
+      "id": "2026-09-14-marketing-del-equipo",
+      "fecha": "2026-09-14",
+      "tipo": "arreglo",
+      "titulo": "Tu equipo ya ve las campañas, automatizaciones y páginas de la cuenta",
+      "texto": "Quien entraba invitado veía Campañas, Automatizaciones y Páginas vacías: la aplicación le mostraba su propia cuenta en vez de la tuya. Ya no. Además, ahora el perfil manda: quien tiene Marketing puede crear y editar, y quien no lo tiene puede seguir viendo los reportes de Análisis pero no toca nada. De paso, el cupo de correos de una campaña se lee del plan del dueño de la cuenta, no del de quien la envía.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
+      "id": "2026-09-14-perfiles-de-acceso",
+      "fecha": "2026-09-14",
+      "tipo": "nuevo",
+      "titulo": "Perfiles de acceso: elige qué ve cada persona de tu equipo",
+      "texto": "Al invitar a alguien ahora eliges su perfil: Administrador ve y hace todo, incluido invitar y cambiar perfiles; Mercadeo entra a CRM, Marketing, Conversaciones, Análisis y los agentes, pero no toca el equipo; y Ventas trabaja los leads y las conversaciones, sin Marketing ni agentes, y en los reportes solo ve su propia gestión. El perfil se cambia cuando quieras desde Configuración → Equipo, sin reenviar la invitación. A quien ya estaba en tu equipo le quedó el perfil de Ventas.",
+      "accion": {
+        "texto": "Ver mi equipo",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
       "id": "2026-09-02-ya-la-hice",
       "fecha": "2026-09-02",
       "tipo": "nuevo",

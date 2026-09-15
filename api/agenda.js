@@ -5,6 +5,8 @@
 // platform_connections 'google_calendar' con refresh_token y auto-renovación.
 export const config = { runtime: 'edge' };
 
+import { soloSusLeads } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -58,6 +60,19 @@ function leadCerrado(lead) {
   if (!lead) return false;
   if (lead.closed_at) return true;
   return ETAPAS_CERRADAS.includes(String(lead.stage || '').toLowerCase());
+}
+
+// Deja solo las actividades cuyo lead está asignado a quien pregunta. Las que
+// no cuelgan de ningún lead se quedan: son notas de su propia agenda.
+async function soloDeMisLeads(filas, cuenta, actor) {
+  const ids = Array.from(new Set((filas || []).map(a => a.lead_id).filter(Boolean)));
+  if (!ids.length) return filas || [];
+  const leads = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&user_id=eq.${encodeURIComponent(cuenta)}&select=id,assigned_to`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  const mios = new Set((leads || []).filter(l => l.assigned_to === actor).map(l => l.id));
+  return (filas || []).filter(a => !a.lead_id || mios.has(a.lead_id));
 }
 
 function jsonResp(data, status = 200) {
@@ -146,11 +161,21 @@ export default async function handler(req) {
   const yoSoy = userId; // quién pregunta, antes de resolver el workspace
 
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
+  let rolMiembro = null;
+  // Si esta consulta falla no se puede seguir: sin ella el miembro operaría
+  // sobre su propia cuenta (vacía) y parecería que perdió toda su agenda.
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`, { headers: sbHeaders() });
+    if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
-  } catch {}
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; rolMiembro = _tw.role || null; }
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+  // Perfil Ventas: su agenda es la suya. Las tareas de los leads de otros no
+  // son suyas ni aunque quite el filtro "Míos" — el filtro es comodidad, esto
+  // es permiso.
+  const forzarMias = yoSoy !== userId && soloSusLeads(rolMiembro);
 
 
   const url = new URL(req.url);
@@ -178,7 +203,7 @@ export default async function handler(req) {
   // Es la vista de trabajo del comercial: lo que tiene que hacer, no un
   // calendario. Con mias=1 solo salen las de los leads que son suyos.
   if (req.method === 'GET' && url.searchParams.get('tareas')) {
-    const soloMias = url.searchParams.get('mias') === '1';
+    const soloMias = forzarMias || url.searchParams.get('mias') === '1';
     const dias = Math.min(Math.max(parseInt(url.searchParams.get('dias') || 14) || 14, 1), 90);
     const hasta = new Date(Date.now() + dias * 86400000).toISOString();
 
@@ -237,6 +262,15 @@ export default async function handler(req) {
   // GET ?lead_id= — actividades de un lead
   if (req.method === 'GET' && url.searchParams.get('lead_id')) {
     const leadId = url.searchParams.get('lead_id');
+    // Pedir las tareas de un lead ajeno por su id es entrar por la ventana: el
+    // tablero ya no lo muestra, pero la URL seguía respondiendo.
+    if (forzarMias) {
+      const due = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&user_id=eq.${userId}&select=assigned_to`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      if (due?.[0]?.assigned_to !== yoSoy) return jsonResp({ activities: [] });
+    }
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&lead_id=eq.${leadId}&cancelled_at=is.null&select=*&order=due_at.asc`,
       { headers: sbHeaders() }
@@ -252,7 +286,11 @@ export default async function handler(req) {
     if (from) q += `&due_at=gte.${encodeURIComponent(from)}`;
     if (to) q += `&due_at=lte.${encodeURIComponent(to)}`;
     const res = await fetch(q, { headers: sbHeaders() });
-    return jsonResp({ activities: (await res.json()) || [] });
+    let filas = (await res.json()) || [];
+    // El calendario es otra puerta a lo mismo: sin este corte, el perfil Ventas
+    // veía en el mes las reuniones de los leads de sus compañeros.
+    if (forzarMias) filas = await soloDeMisLeads(filas, userId, yoSoy);
+    return jsonResp({ activities: filas });
   }
 
   // POST — crear actividad (reunión → evento en Google Calendar)

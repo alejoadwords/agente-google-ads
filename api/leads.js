@@ -1,6 +1,7 @@
 export const config = { runtime: 'edge' };
 
 import { enviarPushA } from './_push.js';
+import { soloSusLeads } from './_perfiles.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -268,6 +269,12 @@ export default async function handler(req) {
   // El catálogo de etiquetas es de la cuenta: ponerlas es de todos, inventarlas
   // no. Ver prepareTags().
   const puedeCrearEtiquetas = !esMiembro || rolMiembro === 'admin';
+  // Perfil Ventas: en el tablero solo existen los leads que le asignaron. Ni
+  // los de sus compañeros ni los que aún no tienen dueño — un asesor que entra
+  // hoy no debe encontrarse la cartera entera. Repartir es del administrador.
+  // Se filtra AQUÍ, en la consulta: esconderlo en el navegador no es un permiso.
+  const soloLosMios = esMiembro && soloSusLeads(rolMiembro);
+  const filtroMios = soloLosMios ? `&assigned_to=eq.${encodeURIComponent(actorId)}` : '';
 
 
   const url = new URL(req.url);
@@ -421,19 +428,19 @@ export default async function handler(req) {
     // Sin pipeline_id devuelve todos, como antes: asi la app sigue viva si la
     // migracion de pipelines aun no se ha corrido.
     const pipelineId = url.searchParams.get('pipeline_id');
-    let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}&select=*&order=stage_position.asc,created_at.desc`;
+    let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}${filtroMios}&select=*&order=stage_position.asc,created_at.desc`;
     if (pipelineId) query += `&pipeline_id=eq.${encodeURIComponent(pipelineId)}`;
     if (stage) query += `&stage=eq.${encodeURIComponent(stage)}`;
     const res = await fetch(query, { headers: sbHeaders() });
     const rows = await res.json();
-    return jsonResp({ leads: rows || [], actor_id: actorId, es_miembro: esMiembro });
+    return jsonResp({ leads: rows || [], actor_id: actorId, es_miembro: esMiembro, solo_mios: soloLosMios });
   }
 
   // GET single lead
   if (req.method === 'GET' && url.searchParams.get('id')) {
     const id = url.searchParams.get('id');
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&deleted_at=is.null&select=*`,
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&deleted_at=is.null${filtroMios}&select=*`,
       { headers: sbHeaders() }
     );
     const rows = await res.json();

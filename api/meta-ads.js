@@ -185,6 +185,67 @@ async function apuntaIA({ userId, origen, agente, modelo, uso }) {
   } catch (e) { console.error('apuntaIA:', e?.message); }
 }
 
+
+// ── Quién pregunta ──────────────────────────────────────────────────────────
+//
+// Esto faltaba, y era un agujero de verdad: el `userId` llegaba por la URL y
+// con él se leía de la base el token de OAuth guardado de esa persona. Sabiendo
+// un id de Clerk —que no es secreto; /api/leads devuelve el de los compañeros—
+// cualquiera listaba las cuentas publicitarias de otro, leía su gasto y podía
+// CAMBIARLE el presupuesto de una campaña.
+//
+// Ahora el usuario sale del token firmado y el de la URL se ignora. Mismo
+// patrón que api/seo-rank.js, repetido a mano porque esto es Node y no puede
+// importar api/_*.js.
+let _jwks = null, _jwksExp = 0;
+async function verificarFirma(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const b64 = x => Buffer.from(x.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const header = JSON.parse(b64(hB64).toString('utf8'));
+    if (!_jwks || _jwksExp < Date.now()) {
+      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+      _jwksExp = Date.now() + 600000;
+    }
+    const key = _jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const payload = JSON.parse(b64(pB64).toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+
+// La cuenta sobre la que se trabaja: la del dueño si quien pregunta es un
+// miembro del equipo. Sin esto, un asesor dejaría de ver los anuncios de la
+// cuenta en la que trabaja.
+async function cuentaDe(actorId) {
+  try {
+    const r = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(actorId)}` +
+      `&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: {
+          apikey: process.env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        } }
+    );
+    if (!r.ok) return null;                       // no se adivina: se corta
+    const fila = (await r.json())?.[0];
+    return fila?.owner_user_id || actorId;
+  } catch { return null; }
+}
+
+/** Devuelve el id de la cuenta, o null si no hay sesión válida. */
+async function usuarioAutenticado(req) {
+  const payload = await verificarFirma((req.headers.authorization || '').replace('Bearer ', ''));
+  if (!payload?.sub) return null;
+  return await cuentaDe(payload.sub);
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -219,7 +280,11 @@ export default async function handler(req, res) {
   }
 
   // ── New action-based routes ──────────────────────────────────
-  const userId      = req.query.userId     || (req.body && req.body.userId) || '';
+  // El usuario sale del TOKEN FIRMADO. El `userId` de la URL se ignora a
+  // propósito: era por donde se colaba cualquiera a usar el token de OAuth
+  // ajeno. Si no hay sesión válida, aquí se acaba.
+  const userId = await usuarioAutenticado(req);
+  if (!userId) return res.status(401).json({ error: 'No autorizado' });
   const adAccountId = req.query.adAccountId || (req.body && req.body.adAccountId) || '';
   const datePreset  = req.query.datePreset  || 'last_30d';
 

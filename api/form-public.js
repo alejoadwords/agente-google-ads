@@ -7,6 +7,7 @@
 export const config = { runtime: 'edge' };
 
 import { intakeLead, pick } from './_lead-intake.js';
+import { decidirDestino, desanidarCorchetes } from './_reglas-destino.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -75,20 +76,48 @@ export default async function handler(req) {
   // Honeypot: los bots llenan el campo oculto — responder ok sin crear nada
   if (body._hp) return jsonResp({ ok: true });
 
+  // Elementor Forms manda `form_fields[email]`, no `email`. Sin desanidar, un
+  // envío perfectamente válido entraba sin datos de contacto y lo rechazábamos
+  // con un 400 que en su web no se ve: el lead se perdía sin que nadie supiera.
+  body = desanidarCorchetes(body);
+
   const name = pick(body, 'name', 'nombre', 'full_name', 'fullname');
   const email = pick(body, 'email', 'correo', 'mail');
   const phone = pick(body, 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp', 'celular');
   if (!name && !email && !phone) return jsonResp({ error: 'Faltan datos de contacto' }, 400);
 
   // Campos custom → nota (todo lo que no mapea al lead)
-  const known = new Set(['name', 'nombre', 'full_name', 'fullname', 'email', 'correo', 'mail', 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp', 'celular', 'company', 'empresa', 'negocio', '_hp', 'token', '_page']);
+  const known = new Set(['name', 'nombre', 'full_name', 'fullname', 'email', 'correo', 'mail', 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp', 'celular', 'company', 'empresa', 'negocio', '_hp', 'token', '_page',
+    // Fontanería de Elementor: identificadores internos que no le dicen nada a
+    // quien va a llamar al lead. `referer_title` sí, pero va aparte, a su campo.
+    'form_id', 'post_id', 'queried_id', 'referer_title', 'referrer', 'page_url', 'page_title', 'form_name', 'user_agent', 'remote_ip',
+  ]);
+  // Los originales con corchetes ya están desanidados: contarlos otra vez
+  // llenaría la nota con cada campo repetido dos veces.
+  for (const k of Object.keys(body)) if (/^[^\[\]]+\[[^\[\]]+\]$/.test(k)) known.add(k.toLowerCase());
   const extras = Object.entries(body)
     .filter(([k, v]) => !known.has(k.toLowerCase()) && String(v || '').trim())
     .map(([k, v]) => `${k}: ${String(v).trim().slice(0, 200)}`)
     .slice(0, 10);
-  const page = pick(body, '_page');
+  const page = pick(body, '_page', 'page_url', 'referrer');
   const noteParts = [...extras];
   if (page) noteParts.push('Página: ' + page.slice(0, 200));
+
+  // ¿A qué tablero va y quién lo atiende? Lo decide la regla del conector a
+  // partir de un campo del propio formulario: una inmobiliaria manda «Comprar»
+  // o «Arrendar» en el mismo formulario de todas sus fichas.
+  const destino = decidirDestino(form.reglas, body, {
+    pipeline_id: form.pipeline_id, assigned_to: form.assigned_to, tags: form.tags,
+  });
+  // Si hay reglas, la ficha cuenta qué decidió el sistema. Cuando un lead
+  // aparezca donde no debía, esto es la diferencia entre leerlo y adivinarlo.
+  if (destino.caso) noteParts.push('Destino: ' + destino.caso);
+
+  // La referencia del inmueble (o del producto) que la web manda junto al
+  // envío. Va a campos propios y no a la nota porque así se puede ver como
+  // columna en la lista y filtrar por ella.
+  const referencia = pick(body, 'referer_title', 'referencia', 'inmueble', 'producto', 'sku');
+  const camposPropios = referencia ? { referencia: referencia.slice(0, 120) } : null;
 
   try {
     const { lead, created } = await intakeLead(form.user_id, form.client_id, {
@@ -97,10 +126,13 @@ export default async function handler(req) {
       note: noteParts.join(' · ') || null,
       source: 'formulario',
       sourceLabel: (form.tipo === 'conector' ? 'Web: ' : 'Formulario: ') + form.name,
-      tags: form.tags || [],
+      tags: destino.tags || [],
       // Si esta fuente tiene ejecutivo fijo, manda sobre el reparto por turnos.
-      assignedTo: form.assigned_to || null,
-      pipelineId: form.pipeline_id || null,
+      assignedTo: destino.assignedTo || null,
+      pipelineId: destino.pipelineId || null,
+      repartoClave: destino.repartoClave || null,
+      repartoEntre: destino.repartoEntre || null,
+      ...(camposPropios ? { custom_fields: camposPropios } : {}),
     });
     // Contador de envíos — con await: en edge las promesas sueltas mueren al responder
     await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {

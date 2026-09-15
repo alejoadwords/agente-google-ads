@@ -4,6 +4,8 @@
 // y conector para formularios existentes (public/f.js).
 export const config = { runtime: 'edge' };
 
+import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -93,7 +95,48 @@ function sanitize(body) {
   // se borra después, el lead debe caer en el principal, no perderse.
   if ('pipeline_id' in body) out.pipeline_id = /^[0-9a-f-]{36}$/i.test(String(body.pipeline_id || '')) ? String(body.pipeline_id) : null;
   if ('origen_url' in body) out.origen_url = (body.origen_url && /^https?:\/\//i.test(body.origen_url)) ? String(body.origen_url).slice(0, 300) : null;
+  if ('reglas' in body) out.reglas = sanitizeReglas(body.reglas);
   return out;
+}
+
+// Reglas de destino de un conector. Se limpia lo que entra porque esto decide
+// a qué tablero y a qué persona va cada lead: un campo basura aquí manda leads
+// a un sitio donde nadie los mira.
+function sanitizeReglas(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const campo = String(raw.campo || '').trim().slice(0, 80);
+  if (!campo) return null;                       // sin campo que mirar no hay regla
+
+  const rama = (r) => {
+    if (!r || typeof r !== 'object') return null;
+    const out = {};
+    out.pipeline_id = /^[0-9a-f-]{36}$/i.test(String(r.pipeline_id || '')) ? String(r.pipeline_id) : null;
+    out.tags = Array.isArray(r.tags)
+      ? r.tags.map(t => String(t).trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30)).filter(t => t.length >= 2).slice(0, 5)
+      : [];
+    const rep = r.reparto;
+    if (rep && rep.modo === 'fijo' && rep.quien) {
+      out.reparto = { modo: 'fijo', quien: String(rep.quien).slice(0, 60) };
+    } else if (rep && rep.modo === 'turnos') {
+      const entre = Array.isArray(rep.entre) ? rep.entre.map(x => String(x).slice(0, 60)).slice(0, 20) : [];
+      out.reparto = { modo: 'turnos', entre };
+    } else {
+      out.reparto = null;                        // null = el reparto normal de la cuenta
+    }
+    return out;
+  };
+
+  const casos = (Array.isArray(raw.casos) ? raw.casos : [])
+    .map(c => {
+      const vale = String(c && c.vale || '').trim().slice(0, 80);
+      if (!vale) return null;                    // una rama sin valor no puede ganar nunca
+      return { vale, ...rama(c) };
+    })
+    .filter(Boolean)
+    .slice(0, 10);
+  if (!casos.length) return null;                // solo con "si no coincide" no hay regla
+
+  return { campo, casos, sino: rama(raw.sino) };
 }
 
 export default async function handler(req) {
@@ -102,12 +145,21 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
-  // Equipo: miembros operan sobre los formularios del dueño
-  try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
-    const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
-  } catch {}
+  // Equipo: se opera sobre la cuenta del dueño, y Marketing se escribe solo
+  // desde los perfiles que lo tienen. Leer sí: el reporte de Marketing vive
+  // dentro de Análisis, al que Ventas sí entra.
+  //
+  // Antes esto se tragaba el error con un catch vacío: si la consulta fallaba,
+  // el miembro pasaba por dueño y trabajaba sobre una cuenta vacía sin que
+  // nadie lo notara. Ahora revienta a la vista.
+  let quien;
+  try { quien = await quienPregunta(userId); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  userId = quien.userId;
+  if (req.method !== 'GET' && !puedeVer(quien.perfil, 'marketing')) {
+    const no = exigeModulo(quien, 'marketing');
+    if (no) return no;
+  }
 
 
   const url = new URL(req.url);

@@ -5,6 +5,8 @@
 // wizard de campañas y api/campaigns.js (resolveAudience con list_id).
 export const config = { runtime: 'edge' };
 
+import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -55,12 +57,21 @@ export default async function handler(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
-  // Equipo: los miembros operan sobre las listas del dueño del workspace
-  try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
-    const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
-  } catch {}
+  // Equipo: se opera sobre la cuenta del dueño, y Marketing se escribe solo
+  // desde los perfiles que lo tienen. Leer sí: el reporte de Marketing vive
+  // dentro de Análisis, al que Ventas sí entra.
+  //
+  // Antes esto se tragaba el error con un catch vacío: si la consulta fallaba,
+  // el miembro pasaba por dueño y trabajaba sobre una cuenta vacía sin que
+  // nadie lo notara. Ahora revienta a la vista.
+  let quien;
+  try { quien = await quienPregunta(userId); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  userId = quien.userId;
+  if (req.method !== 'GET' && !puedeVer(quien.perfil, 'marketing')) {
+    const no = exigeModulo(quien, 'marketing');
+    if (no) return no;
+  }
 
 
   const url = new URL(req.url);
