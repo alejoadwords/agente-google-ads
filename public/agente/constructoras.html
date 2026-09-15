@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Material comercial: no debe salir en buscadores. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="El agente que filtra antes de la sala de ventas: cinco ejemplos en una constructora.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="El Agente en una Constructora · Acuarius">
+<meta property="og:description" content="El agente que filtra antes de la sala de ventas: cinco ejemplos en una constructora.">
+<meta property="og:url" content="https://app.acuarius.app/agente/constructoras">
+<link rel="icon" href="/icons/icon-192.png">
+<title>El Agente en una Constructora</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE; --violet:#7C3AED;
+  --success:#059669; --warning:#D97706; --danger:#DC2626;
+  --success-bg:#E7F7F0; --warning-bg:#FEF3E2; --danger-bg:#FDECEC;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#FFFFFF; --bg-subtle:#F7F8FC; --bg-muted:#F0F1F8; --surface:#FFFFFF;
+  --border:#E4E6F0; --border2:#F0F1F8;
+  --accent:var(--blue); --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  --chat-fondo:#E9E2DB; --chat-ellos:#FFFFFF; --chat-nos:#DCF8C6;
+  --chat-texto:#111B21; --chat-hora:#667781; --chat-barra:#F0F2F5;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}}
+:root[data-theme="dark"]{
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:1060px;margin:0 auto;padding:34px 24px 90px}
+
+h1{font-size:clamp(30px,4.4vw,44px);line-height:1.05;letter-spacing:-.028em;font-weight:700;
+  margin:0 0 12px;text-wrap:balance}
+h2{font-size:clamp(21px,2.7vw,26px);line-height:1.2;letter-spacing:-.02em;font-weight:600;
+  margin:0 0 5px;text-wrap:balance}
+p{margin:0 0 14px;max-width:66ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.85em;background:var(--bg-muted);padding:1.5px 5px;
+  border-radius:5px;border:1px solid var(--border2)}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+  color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:16px;height:2px;background:var(--grad);border-radius:2px}
+.lede{font-size:17px;color:var(--text-2);max-width:64ch;margin-bottom:0}
+header{padding-bottom:26px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+.marca{display:inline-flex;align-items:center;gap:8px;background:var(--warning-bg);
+  border:1px solid color-mix(in srgb,var(--warning) 34%,transparent);border-radius:20px;
+  padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:18px}
+.marca::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning)}
+
+.caso{padding:46px 0;border-bottom:1px solid var(--border2)}
+.caso:last-of-type{border-bottom:0}
+.caso-head{margin-bottom:22px}
+.caso-num{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:500;
+  letter-spacing:.04em;margin-bottom:6px}
+.caso-que{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);
+  background:rgba(30,43,204,.08);border-radius:7px;padding:5px 11px;margin-top:8px}
+.caso-body{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:820px){.caso-body{grid-template-columns:1fr}}
+
+.tel{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--chat-fondo);
+  box-shadow:0 10px 30px rgba(13,15,28,.12)}
+.tel-barra{background:var(--chat-barra);padding:10px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(0,0,0,.07)}
+.tel-av{width:34px;height:34px;border-radius:50%;background:var(--grad);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.tel-nom{font-size:14px;font-weight:600;color:var(--chat-texto);line-height:1.2}
+.tel-est{font-size:11.5px;color:var(--chat-hora)}
+.tel-chat{padding:14px 12px;display:flex;flex-direction:column;gap:7px}
+.dia{align-self:center;background:rgba(255,255,255,.75);color:var(--chat-hora);font-size:11px;
+  font-weight:500;padding:3px 11px;border-radius:7px;margin:3px 0}
+.b{max-width:85%;padding:7px 10px 6px;border-radius:9px;font-size:14px;line-height:1.42;
+  color:var(--chat-texto);position:relative;box-shadow:0 1px .5px rgba(11,20,26,.13);
+  white-space:pre-line}
+.b.ellos{align-self:flex-start;background:var(--chat-ellos);border-top-left-radius:2px}
+.b.nos{align-self:flex-end;background:var(--chat-nos);border-top-right-radius:2px}
+.b .h{font-size:10.5px;color:var(--chat-hora);float:right;margin:6px 0 -2px 8px;
+  font-variant-numeric:tabular-nums}
+.b b{font-weight:600}
+.adj{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.05);border-radius:7px;
+  padding:8px 10px;margin-bottom:5px}
+.adj .ic{width:26px;height:32px;background:#E53935;border-radius:3px;flex:none;display:flex;
+  align-items:center;justify-content:center;color:#fff;font-size:8.5px;font-weight:700}
+.adj .nm{font-size:12.5px;color:var(--chat-texto);font-weight:500;line-height:1.25}
+.adj .pe{font-size:11px;color:var(--chat-hora)}
+
+.crm{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+.crm-t{padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--bg-subtle);
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--text-3)}
+.crm-b{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+.fila{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;font-size:14px;align-items:baseline}
+.fila dt{font-size:12.5px;color:var(--text-3);font-weight:500}
+.fila dd{margin:0;color:var(--text)}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:20px;
+  margin:0 4px 4px 0}
+.c-ok{background:var(--success-bg);color:var(--success)}
+.c-az{background:rgba(30,43,204,.1);color:var(--accent)}
+.c-am{background:var(--warning-bg);color:var(--warning)}
+.c-ro{background:var(--danger-bg);color:var(--danger)}
+.c-vi{background:rgba(124,58,237,.12);color:var(--violet)}
+.c-gr{background:var(--bg-muted);color:var(--text-2)}
+.lectura{border-top:1px solid var(--border2);padding:13px 16px;font-size:14px;color:var(--text-2);
+  background:var(--bg-subtle)}
+.lectura b{color:var(--text)}
+
+.cierre{margin-top:52px;padding-top:30px;border-top:1px solid var(--border)}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:14px;margin:20px 0}
+.rejilla div{border:1px solid var(--border);border-radius:12px;padding:15px 17px;background:var(--surface)}
+.rejilla h3{font-size:14.5px;font-weight:600;margin:0 0 5px}
+.rejilla p{font-size:13.5px;color:var(--text-2);margin:0}
+.nota{border-left:2.5px solid var(--accent);padding-left:15px;margin:20px 0;color:var(--text-2);
+  font-size:15px;max-width:66ch}
+.nota strong{color:var(--text)}
+.aviso{background:var(--warning-bg);border:1px solid color-mix(in srgb,var(--warning) 32%,transparent);
+  border-radius:10px;padding:14px 16px;margin:20px 0;max-width:68ch;font-size:14.5px}
+.aviso .t{font-weight:600;color:var(--text);margin-bottom:4px;display:flex;gap:7px;align-items:center}
+.aviso .t::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning);flex:none}
+ol.pasos,ul.pasos{max-width:66ch;padding-left:20px}
+ol.pasos li,ul.pasos li{margin-bottom:9px}
+ol.pasos b,ul.pasos b{color:var(--text)}
+.etapas{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:14px 0 18px}
+.etapas span{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:20px;
+  background:var(--bg-muted);color:var(--text-2)}
+.etapas i{color:var(--text-3);font-style:normal}
+footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--text-3);max-width:66ch}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Material de presentación · Constructoras</div>
+    <h1>El agente que filtra<br>antes de la sala de ventas</h1>
+    <p class="lede">Cinco ejemplos de lo que hace el agente de WhatsApp en una constructora:
+      entiende si compran para vivir o para invertir, averigua si hay cuota inicial, manda cada
+      lead al proyecto que le sirve — y no promete una fecha de entrega ni un subsidio.</p>
+  </header>
+
+  <div style="padding-top:22px">
+    <div class="marca">Conversaciones de ejemplo, creadas para esta demostración</div>
+    <p>Escritas siguiendo <strong>las instrucciones que el agente tiene de verdad</strong>:
+      mensajes cortos, una pregunta a la vez y nunca afirmar un precio, una disponibilidad o una
+      condición que no esté en su información. Constructora ficticia con dos proyectos.</p>
+  </div>
+
+  <!-- ── 1 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 01</div>
+      <h2>Del anuncio a la cita en sala de ventas</h2>
+      <div class="caso-que">Demuestra: califica por cuota inicial y ofrece unidades reales</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">DP</div>
+          <div><div class="tel-nom">Daniel Palacios</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">miércoles</div>
+          <div class="b ellos">Buenas tardes, vi el proyecto de Suba. ¿Qué precios manejan?<span class="h">18:30</span></div>
+          <div class="b nos">Buenas tardes. En Alameda los apartamentos arrancan en <b>$245.000.000</b> para los de 2 alcobas.<span class="h">18:31</span></div>
+          <div class="b nos">¿Lo está mirando para vivir o como inversión?<span class="h">18:31</span></div>
+          <div class="b ellos">Para vivir, con mi esposa y un niño<span class="h">18:34</span></div>
+          <div class="b nos">Entendido. Entonces le van a servir más los de 3 alcobas. ¿Ya han mirado tema de cuota inicial?<span class="h">18:35</span></div>
+          <div class="b ellos">Sí, tenemos unos 80 millones ahorrados<span class="h">18:38</span></div>
+          <div class="b nos">Con eso está muy bien parado: la cuota inicial es el 30% y se difiere hasta la entrega, así que le sobraría margen.<span class="h">18:39</span></div>
+          <div class="b nos">Estas tres están disponibles hoy en Alameda:
+
+<b>Torre 2 · piso 8</b> · 3 alcobas · 68 m² · $289.000.000 (AL-802)
+<b>Torre 2 · piso 11</b> · 3 alcobas · 68 m² · $296.000.000 (AL-1103)
+<b>Torre 3 · piso 5</b> · 3 alcobas · 72 m² · $312.000.000 (AL-1505)
+
+¿Alguna le llama la atención?<span class="h">18:40</span></div>
+          <div class="b ellos">La del piso 11, me gusta que sea alto<span class="h">18:43</span></div>
+          <div class="b nos">Buena elección. Lo que sigue es venir a la sala de ventas y ver el apartamento modelo, que es donde se aterriza todo. ¿Le sirve este sábado?<span class="h">18:44</span></div>
+          <div class="b ellos">Sí, en la mañana<span class="h">18:45</span></div>
+          <div class="b nos">Perfecto. ¿Me confirma su nombre completo para dejar la cita?<span class="h">18:45</span></div>
+          <div class="b ellos">Daniel Palacios<span class="h">18:46</span></div>
+          <div class="b nos">Gracias, señor Daniel. Lo contacta Lorena, que maneja Alameda, para confirmarle la hora del sábado.<span class="h">18:46</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 18:46</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Daniel Palacios · +57 3•• ••• ••24</dd></dl>
+            <dl class="fila"><dt>Origen</dt><dd>WhatsApp · campaña de Meta</dd></dl>
+            <dl class="fila"><dt>Proyecto</dt><dd>Alameda</dd></dl>
+            <dl class="fila"><dt>Destino</dt><dd><b>Vivienda</b> · familia con un hijo</dd></dl>
+            <dl class="fila"><dt>Cuota inicial</dt><dd>$80.000.000 disponibles</dd></dl>
+            <dl class="fila"><dt>Interés</dt><dd>AL-1103 · $296.000.000</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">3 alcobas</span><span class="chip c-az">vivienda</span><span class="chip c-ok">con inicial</span></dd></dl>
+            <dl class="fila"><dt>Responsable</dt><dd>Lorena · Alameda</dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Confirmar cita del sábado</dd></dl>
+          </div>
+          <div class="lectura">La pregunta que decide todo en una constructora no es el precio:
+            es <b>si tiene la cuota inicial</b>. El agente la hizo en el cuarto mensaje, sin que
+            sonara a interrogatorio, porque venía encadenada a lo que Daniel acababa de contar.
+            <br><br>Lorena no recibe «un interesado en Suba». Recibe un lead con <b>destino,
+            tipología, capacidad de pago y unidad escogida</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 02</div>
+      <h2>La entrega y el subsidio no se prometen</h2>
+      <div class="caso-que">Demuestra: el límite que le evita un problema legal a la constructora</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">YC</div>
+          <div><div class="tel-nom">Yeimy C.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">jueves</div>
+          <div class="b ellos">Hola, ¿para cuándo entregan Alameda? Necesito mudarme antes de diciembre del otro año<span class="h">10:12</span></div>
+          <div class="b nos">Hola. La entrega estimada de Alameda es el <b>primer semestre de 2028</b>, y es estimada: la fecha en firme queda en el documento de separación, no en un chat.<span class="h">10:13</span></div>
+          <div class="b nos">Si necesita mudarse antes de diciembre del próximo año, sobre planos no le va a alcanzar. ¿Ha mirado proyectos ya construidos?<span class="h">10:14</span></div>
+          <div class="b ellos">No sabía que se demoraba tanto 😕 ¿Y aplico al subsidio de Mi Casa Ya?<span class="h">10:17</span></div>
+          <div class="b nos">Eso depende de sus ingresos, de si ha tenido vivienda antes y de las condiciones vigentes del programa. No se lo puedo confirmar yo ni de un lado ni del otro.<span class="h">10:18</span></div>
+          <div class="b nos">Lorena sí lo revisa con sus datos y le dice con certeza si aplica. ¿Quiere que la contacte?<span class="h">10:18</span></div>
+          <div class="b ellos">Sí por favor, aunque sea para entender opciones<span class="h">10:20</span></div>
+          <div class="b nos">Listo. La contacta hoy mismo y le mira las dos cosas: el subsidio y qué alternativas hay con entrega más cercana.<span class="h">10:21</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 10:21</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Yeimy C.</dd></dl>
+            <dl class="fila"><dt>Restricción</dt><dd><b>Necesita entrega antes de dic. 2027</b></dd></dl>
+            <dl class="fila"><dt>Pendientes</dt><dd>Verificar subsidio con sus datos<br>Ofrecer proyecto con entrega cercana</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-am">pregunta subsidio</span><span class="chip c-am">urgencia de entrega</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd><span class="chip c-am">Lorena · hoy</span></dd></dl>
+          </div>
+          <div class="lectura">Dos preguntas que en este sector <b>no se responden por chat</b>.
+            Una fecha de entrega prometida por escrito y un subsidio dado por hecho son dos
+            reclamaciones esperando a pasar.
+            <br><br>Y fíjese en lo que hizo además: detectó que <b>el plazo no le sirve</b> y lo
+            dijo de una, en vez de dejarla ilusionada hasta la sala de ventas. Eso no pierde un
+            cliente: lo reubica.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 03</div>
+      <h2>Dos proyectos, dos equipos, un solo número</h2>
+      <div class="caso-que">Demuestra: el agente deduce el proyecto y enruta al asesor correcto</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">AS</div>
+          <div><div class="tel-nom">Alberto Salgado</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">domingo</div>
+          <div class="b ellos">Buenas noches. Estoy buscando para inversión, algo que se valorice bien<span class="h">22:15</span></div>
+          <div class="b nos">Buenas noches. Para inversión la gente suele mirar Mirador, en Usaquén, que es el de estrato alto.<span class="h">22:16</span></div>
+          <div class="b nos">Sobre valorización no le puedo dar cifras ni proyecciones — eso depende del mercado y nadie serio se lo garantiza. Lo que sí le puedo contar es el proyecto y los precios de hoy.<span class="h">22:16</span></div>
+          <div class="b ellos">Me parece bien que lo diga así. ¿Qué precios maneja?<span class="h">22:19</span></div>
+          <div class="b nos">En Mirador arrancan en <b>$620.000.000</b> los de 2 alcobas más estudio, de 92 m².<span class="h">22:19</span></div>
+          <div class="b ellos">¿Y hay opción de que lo administren para arriendo?<span class="h">22:22</span></div>
+          <div class="b nos">Esa parte la maneja el área comercial y prefiero no adelantarle condiciones. Se lo confirma Camilo, que lleva Mirador y atiende los casos de inversión.<span class="h">22:23</span></div>
+          <div class="b ellos">Perfecto, que me contacte<span class="h">22:24</span></div>
+          <div class="b nos">Listo. ¿Me confirma su nombre? Mañana a primera hora lo contacta.<span class="h">22:24</span></div>
+          <div class="b ellos">Alberto Salgado<span class="h">22:25</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 22:25</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Alberto Salgado</dd></dl>
+            <dl class="fila"><dt>Destino</dt><dd><b>Inversión</b></dd></dl>
+            <dl class="fila"><dt>Enrutado a</dt><dd><span class="chip c-vi">Tablero Mirador</span></dd></dl>
+            <dl class="fila"><dt>Responsable</dt><dd>Camilo · Mirador</dd></dl>
+            <dl class="fila"><dt>Pendiente</dt><dd>Condiciones de administración en arriendo</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">inversión</span><span class="chip c-az">usaquén</span></dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+          </div>
+          <div class="lectura">Una constructora con varios proyectos suele tener <b>un solo número
+            de WhatsApp y equipos distintos</b>. El agente averigua qué busca la persona y el
+            sistema la manda al tablero y al asesor de ese proyecto.
+            <br><br>La traducción de «busca inversión» a «tablero Mirador, asesor Camilo» no la
+            decide el modelo: es <b>una tabla que la constructora configura</b> y se puede
+            cambiar sin tocar nada del agente.
+            <br><br>Y otra vez el límite: le pidieron una proyección de valorización y no la dio.
+            Una cifra de rentabilidad por escrito es un problema, no una venta.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 04</div>
+      <h2>El que todavía no, y vale la pena guardar</h2>
+      <div class="caso-que">Demuestra: filtra sin cerrar la puerta</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">KR</div>
+          <div><div class="tel-nom">Katherine R.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">lunes</div>
+          <div class="b ellos">Hola, quiero comprar apartamento pero no tengo ahorros todavía. ¿Se puede sin cuota inicial?<span class="h">14:05</span></div>
+          <div class="b nos">Hola. Sobre planos siempre se necesita cuota inicial: es el 30% y se paga en cuotas hasta la entrega, que en Alameda es 2028.<span class="h">14:06</span></div>
+          <div class="b nos">Eso quiere decir que tendría casi tres años para reunirla, no hay que tenerla completa hoy. ¿Podría destinar algo mensual?<span class="h">14:07</span></div>
+          <div class="b ellos">Uy, eso no lo sabía. Pues unos 2 millones al mes sí podría<span class="h">14:10</span></div>
+          <div class="b nos">Con ese ritmo la cosa cambia bastante. No le voy a hacer el cálculo yo porque cada plan se arma distinto, pero es un caso que sí vale la pena que revise un asesor.<span class="h">14:11</span></div>
+          <div class="b ellos">Sí me gustaría entender bien cómo funciona<span class="h">14:13</span></div>
+          <div class="b nos">Perfecto. Le paso su caso a Lorena para que le arme el plan con números reales. ¿Su nombre completo?<span class="h">14:13</span></div>
+          <div class="b ellos">Katherine Ramírez<span class="h">14:14</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 14:14</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Katherine Ramírez</dd></dl>
+            <dl class="fila"><dt>Cuota inicial</dt><dd>Sin ahorros · <b>$2.000.000/mes de capacidad</b></dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-am">Por evaluar</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-am">sin inicial</span><span class="chip c-ok">capacidad mensual</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Armar plan de pago · Lorena</dd></dl>
+          </div>
+          <div class="lectura">Este ejemplo enseña el matiz que separa a un agente de un filtro
+            tonto. «No tengo ahorros» <b>no es un no</b> en venta sobre planos: si la entrega es
+            en tres años, la inicial se construye en el camino.
+            <br><br>El agente lo explicó, <b>no hizo el cálculo</b> —porque cada plan se arma
+            distinto— y descubrió el dato que convierte a Katherine en un lead real: dos millones
+            al mes. Un formulario web la habría descartado en la primera pregunta.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 05</div>
+      <h2>Lee la preaprobación del banco</h2>
+      <div class="caso-que">Demuestra: entiende PDFs y dice qué falta</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">DP</div>
+          <div><div class="tel-nom">Daniel Palacios</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">martes</div>
+          <div class="b ellos"><div class="adj"><div class="ic">PDF</div>
+            <div><div class="nm">preaprobacion-banco.pdf</div><div class="pe">2 páginas · 156 kB</div></div></div>
+            Buenas, me salió la preaprobación del crédito<span class="h">09:15</span></div>
+          <div class="b nos">Excelente noticia, señor Daniel. Ya la revisé: preaprobación por <b>$210.000.000</b>, vigente hasta el <b>30 de noviembre</b>, a su nombre.<span class="h">09:16</span></div>
+          <div class="b nos">Con eso y los $80.000.000 de inicial, el AL-1103 le queda cubierto. Igual el cierre financiero lo valida Lorena con el documento formal.<span class="h">09:17</span></div>
+          <div class="b ellos">Perfecto. ¿Qué más necesitan para separar?<span class="h">09:19</span></div>
+          <div class="b nos">Para la separación piden cédula, certificado laboral y los extractos de los últimos tres meses. La preaprobación ya la tiene ✔<span class="h">09:20</span></div>
+          <div class="b ellos">Los mando esta semana entonces<span class="h">09:22</span></div>
+          <div class="b nos">Muy bien. Le aviso a Lorena que ya viene con la preaprobación para que le adelante el resto.<span class="h">09:22</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 09:22</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Daniel Palacios</dd></dl>
+            <dl class="fila"><dt>Adjunto</dt><dd>preaprobacion-banco.pdf</dd></dl>
+            <dl class="fila"><dt>Leído</dt><dd>$210.000.000 · vence 30-11</dd></dl>
+            <dl class="fila"><dt>Faltan</dt><dd>Cédula · certificado laboral · extractos</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Preaprobado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-ok">crédito preaprobado</span><span class="chip c-am">vence 30-nov</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Completar carpeta para separación</dd></dl>
+          </div>
+          <div class="lectura">El agente <b>lee el PDF, saca el monto y la vigencia</b>, y dice
+            qué falta para la separación.
+            <br><br>El dato que más vale es la fecha: <b>la preaprobación vence el 30 de
+            noviembre</b>. Queda etiquetada, así que el sistema puede recordárselo al asesor
+            antes de que se venza — que es justo donde se caen los negocios que ya estaban
+            hechos.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Cierre ── -->
+  <section class="cierre">
+    <div class="eyebrow">Para cerrar la presentación</div>
+    <h2>Por qué no suena a bot</h2>
+    <p>No es el modelo: es cómo está instruido. Estas cuatro reglas están escritas en el agente
+      y son las que producen todo lo de arriba.</p>
+    <div class="rejilla">
+      <div><h3>Una pregunta a la vez</h3>
+        <p>Primero responde lo que le preguntaron; la suya va después, encadenada. Nunca suelta
+          el cuestionario de golpe.</p></div>
+      <div><h3>Mensajes de chat, no de brochure</h3>
+        <p>Una a tres oraciones. Como escribe un asesor con oficio, no como una ficha técnica.</p></div>
+      <div><h3>No inventa jamás</h3>
+        <p>Precio, disponibilidad o condición solo si está en su inventario. Fechas, subsidios y
+          rentabilidades siempre a una persona.</p></div>
+      <div><h3>No pregunta dos veces</h3>
+        <p>Si ya le dieron un dato antes, no lo vuelve a pedir. Y si no se lo quieren dar, no
+          insiste.</p></div>
+    </div>
+
+    <h2 style="margin-top:38px">Las tres cosas que este sector nunca puede responder por chat</h2>
+    <p>Es el punto que hay que subrayar delante de un gerente comercial, porque no le está
+      hablando de eficiencia: le está hablando de <b>no meterse en un problema</b>.</p>
+    <ul class="pasos">
+      <li><b>Una fecha de entrega en firme.</b> La estimada se puede decir si está en su
+        información, siempre nombrada como estimada. La en firme vive en el documento de
+        separación.</li>
+      <li><b>Que aplica un subsidio.</b> Depende de ingresos, de si tuvo vivienda antes y de las
+        condiciones vigentes. Lo verifica una persona con los datos del cliente.</li>
+      <li><b>Una cifra de valorización o rentabilidad.</b> Una proyección por escrito en un chat
+        es una promesa, y nadie serio la firma.</li>
+    </ul>
+    <div class="nota">
+      <strong>Dicho de otra forma.</strong> Lo que a un gerente de constructora le preocupa de
+      poner un bot a atender no es que venda poco: es que <em>escriba</em> algo que después haya
+      que sostener. Estos tres límites son la respuesta a esa preocupación, y conviene ponerlos
+      encima de la mesa antes de que los pregunten.
+    </div>
+
+    <h2 style="margin-top:38px">El tablero de una constructora</h2>
+    <p>El ciclo aquí es largo —meses, a veces años— y por eso el CRM importa más que en
+      cualquier otro sector: <b>ningún asesor se acuerda de todo durante dos años</b>.</p>
+    <div class="etapas"><span>Interesado</span><i>→</i><span>Calificado</span><i>→</i><span>Visitó sala</span><i>→</i><span>Preaprobado</span><i>→</i><span>Separado</span><i>→</i><span>Escriturado</span></div>
+    <div class="nota">
+      <strong>Donde se pierde la plata:</strong> entre «Preaprobado» y «Separado». Una
+      preaprobación que se vence, un documento que nadie pidió, un cliente que no volvió a
+      recibir noticias en seis semanas. Eso es exactamente lo que resuelven las tareas
+      automáticas y las etiquetas con fecha — como la del ejemplo 05.
+    </div>
+
+    <h2 style="margin-top:38px">Qué hay que cargarle a una constructora</h2>
+    <ol class="pasos">
+      <li><b>El inventario de unidades disponibles</b>, con torre, piso, tipología, área, precio
+        y código. Es exactamente lo que el agente sabe manejar, y es de ahí de donde saca lo que
+        puede ofrecer.</li>
+      <li><b>Las condiciones comerciales generales</b>: porcentaje de cuota inicial, plazo,
+        valor de separación, entrega estimada por proyecto.</li>
+      <li><b>Los límites</b>, explícitos: no confirmar entrega en firme, no confirmar subsidios,
+        no dar cifras de valorización.</li>
+      <li><b>La tabla de enrutado</b>: qué busca la persona → a qué proyecto y a qué asesor va.</li>
+      <li><b>Qué preguntar antes de pasar a sala de ventas</b>: vivienda o inversión, tipología,
+        cuota inicial y plazo de entrega que necesita. Cuatro datos y el asesor llama a vender,
+        no a averiguar.</li>
+    </ol>
+
+    <div class="aviso">
+      <div class="t">El inventario hay que mantenerlo al día</div>
+      Aquí cada unidad es única: si se vende el AL-1103 y nadie lo quita del inventario, el
+      agente lo va a seguir ofreciendo. En una inmobiliaria de arriendo eso es un mal rato; en
+      una constructora, con dos clientes detrás del mismo apartamento, es un problema.
+      <br><br>No es un defecto de la herramienta: es la <b>rutina de actualización</b> que hay
+      que acordar con el cliente en la puesta en marcha. Conviene pactarla ahí y no descubrirla
+      después.
+    </div>
+
+    <div class="nota">
+      <strong>El cierre que mejor funciona en una reunión.</strong> Todos los CRM guardan la
+      conversación. La diferencia está en la columna de la derecha de cada ejemplo: el destino,
+      la cuota inicial, la unidad escogida, el proyecto enrutado y la tarea — <em>sin que nadie
+      de la sala de ventas tocara nada</em>. Enseñe primero el chat y después esa columna.
+    </div>
+  </section>
+
+  <footer>
+    Conversaciones de ejemplo · Acuarius · septiembre de 2026.<br>
+    Escritas siguiendo las instrucciones reales del agente. Constructora, proyectos, unidades y
+    precios son ficticios. Existen las versiones equivalentes para inmobiliarias, clínicas,
+    educación y restaurantes.
+  </footer>
+</main>
+</body>
+</html>

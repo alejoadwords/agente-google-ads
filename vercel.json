@@ -35,6 +35,30 @@
       "destination": "/api/l?slug=:slug"
     },
     {
+      "source": "/agente/inmobiliarias",
+      "destination": "/agente/inmobiliarias.html"
+    },
+    {
+      "source": "/agente/constructoras",
+      "destination": "/agente/constructoras.html"
+    },
+    {
+      "source": "/agente/clinicas",
+      "destination": "/agente/clinicas.html"
+    },
+    {
+      "source": "/agente/educacion",
+      "destination": "/agente/educacion.html"
+    },
+    {
+      "source": "/agente/restaurantes",
+      "destination": "/agente/restaurantes.html"
+    },
+    {
+      "source": "/agente",
+      "destination": "/agente/index.html"
+    },
+    {
       "source": "/((?!api/|_vercel/).*)",
       "destination": "/index.html"
     }

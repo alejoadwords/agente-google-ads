@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Material comercial: no debe salir en buscadores. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="Reservas, alergias, domicilios y eventos: seis ejemplos en un restaurante.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="El Agente en un Restaurante · Acuarius">
+<meta property="og:description" content="Reservas, alergias, domicilios y eventos: seis ejemplos en un restaurante.">
+<meta property="og:url" content="https://app.acuarius.app/agente/restaurantes">
+<link rel="icon" href="/icons/icon-192.png">
+<title>El Agente en un Restaurante</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE; --violet:#7C3AED;
+  --success:#059669; --warning:#D97706; --danger:#DC2626;
+  --success-bg:#E7F7F0; --warning-bg:#FEF3E2; --danger-bg:#FDECEC;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#FFFFFF; --bg-subtle:#F7F8FC; --bg-muted:#F0F1F8; --surface:#FFFFFF;
+  --border:#E4E6F0; --border2:#F0F1F8;
+  --accent:var(--blue); --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  --chat-fondo:#E9E2DB; --chat-ellos:#FFFFFF; --chat-nos:#DCF8C6;
+  --chat-texto:#111B21; --chat-hora:#667781; --chat-barra:#F0F2F5;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}}
+:root[data-theme="dark"]{
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:1060px;margin:0 auto;padding:34px 24px 90px}
+
+h1{font-size:clamp(30px,4.4vw,44px);line-height:1.05;letter-spacing:-.028em;font-weight:700;
+  margin:0 0 12px;text-wrap:balance}
+h2{font-size:clamp(21px,2.7vw,26px);line-height:1.2;letter-spacing:-.02em;font-weight:600;
+  margin:0 0 5px;text-wrap:balance}
+p{margin:0 0 14px;max-width:66ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.85em;background:var(--bg-muted);padding:1.5px 5px;
+  border-radius:5px;border:1px solid var(--border2)}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+  color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:16px;height:2px;background:var(--grad);border-radius:2px}
+.lede{font-size:17px;color:var(--text-2);max-width:64ch;margin-bottom:0}
+header{padding-bottom:26px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+.marca{display:inline-flex;align-items:center;gap:8px;background:var(--warning-bg);
+  border:1px solid color-mix(in srgb,var(--warning) 34%,transparent);border-radius:20px;
+  padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:18px}
+.marca::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning)}
+
+.caso{padding:46px 0;border-bottom:1px solid var(--border2)}
+.caso:last-of-type{border-bottom:0}
+.caso-head{margin-bottom:22px}
+.caso-num{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:500;
+  letter-spacing:.04em;margin-bottom:6px}
+.caso-que{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);
+  background:rgba(30,43,204,.08);border-radius:7px;padding:5px 11px;margin-top:8px}
+.caso-body{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:820px){.caso-body{grid-template-columns:1fr}}
+
+.tel{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--chat-fondo);
+  box-shadow:0 10px 30px rgba(13,15,28,.12)}
+.tel-barra{background:var(--chat-barra);padding:10px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(0,0,0,.07)}
+.tel-av{width:34px;height:34px;border-radius:50%;background:var(--grad);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.tel-nom{font-size:14px;font-weight:600;color:var(--chat-texto);line-height:1.2}
+.tel-est{font-size:11.5px;color:var(--chat-hora)}
+.tel-chat{padding:14px 12px;display:flex;flex-direction:column;gap:7px}
+.dia{align-self:center;background:rgba(255,255,255,.75);color:var(--chat-hora);font-size:11px;
+  font-weight:500;padding:3px 11px;border-radius:7px;margin:3px 0}
+.b{max-width:85%;padding:7px 10px 6px;border-radius:9px;font-size:14px;line-height:1.42;
+  color:var(--chat-texto);position:relative;box-shadow:0 1px .5px rgba(11,20,26,.13);
+  white-space:pre-line}
+.b.ellos{align-self:flex-start;background:var(--chat-ellos);border-top-left-radius:2px}
+.b.nos{align-self:flex-end;background:var(--chat-nos);border-top-right-radius:2px}
+.b .h{font-size:10.5px;color:var(--chat-hora);float:right;margin:6px 0 -2px 8px;
+  font-variant-numeric:tabular-nums}
+.b b{font-weight:600}
+.adj{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.05);border-radius:7px;
+  padding:8px 10px;margin-bottom:5px}
+.adj .ic{width:26px;height:32px;border-radius:3px;flex:none;display:flex;
+  align-items:center;justify-content:center;color:#fff;font-size:8.5px;font-weight:700}
+.adj .nm{font-size:12.5px;color:var(--chat-texto);font-weight:500;line-height:1.25}
+.adj .pe{font-size:11px;color:var(--chat-hora)}
+.foto{width:100%;height:118px;border-radius:6px;margin-bottom:5px;
+  background:linear-gradient(135deg,#8FA3B8,#6C7F94);display:flex;align-items:center;
+  justify-content:center;color:rgba(255,255,255,.9);font-size:11.5px;font-weight:500;
+  letter-spacing:.02em}
+
+.crm{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+.crm-t{padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--bg-subtle);
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--text-3)}
+.crm-b{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+.fila{display:grid;grid-template-columns:116px minmax(0,1fr);gap:12px;font-size:14px;align-items:baseline}
+.fila dt{font-size:12.5px;color:var(--text-3);font-weight:500}
+.fila dd{margin:0;color:var(--text)}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:20px;
+  margin:0 4px 4px 0}
+.c-ok{background:var(--success-bg);color:var(--success)}
+.c-az{background:rgba(30,43,204,.1);color:var(--accent)}
+.c-am{background:var(--warning-bg);color:var(--warning)}
+.c-ro{background:var(--danger-bg);color:var(--danger)}
+.c-gr{background:var(--bg-muted);color:var(--text-2)}
+.lectura{border-top:1px solid var(--border2);padding:13px 16px;font-size:14px;color:var(--text-2);
+  background:var(--bg-subtle)}
+.lectura b{color:var(--text)}
+
+.cierre{margin-top:52px;padding-top:30px;border-top:1px solid var(--border)}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:14px;margin:20px 0}
+.rejilla div{border:1px solid var(--border);border-radius:12px;padding:15px 17px;background:var(--surface)}
+.rejilla h3{font-size:14.5px;font-weight:600;margin:0 0 5px}
+.rejilla p{font-size:13.5px;color:var(--text-2);margin:0}
+.nota{border-left:2.5px solid var(--accent);padding-left:15px;margin:20px 0;color:var(--text-2);
+  font-size:15px;max-width:66ch}
+.nota strong{color:var(--text)}
+.aviso{background:var(--warning-bg);border:1px solid color-mix(in srgb,var(--warning) 32%,transparent);
+  border-radius:10px;padding:14px 16px;margin:20px 0;max-width:68ch;font-size:14.5px}
+.aviso .t{font-weight:600;color:var(--text);margin-bottom:4px;display:flex;gap:7px;align-items:center}
+.aviso .t::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning);flex:none}
+ol.pasos,ul.pasos{max-width:66ch;padding-left:20px}
+ol.pasos li,ul.pasos li{margin-bottom:9px}
+ol.pasos b,ul.pasos b{color:var(--text)}
+.etapas{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:14px 0 18px}
+.etapas span{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:20px;
+  background:var(--bg-muted);color:var(--text-2)}
+.etapas i{color:var(--text-3);font-style:normal}
+footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--text-3);max-width:66ch}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Material de presentación · Restaurantes</div>
+    <h1>El agente que contesta<br>cuando la cocina está a tope</h1>
+    <p class="lede">Seis ejemplos de lo que hace el agente de WhatsApp en un restaurante: toma
+      reservas y pedidos a domicilio, protege a la casa de un error con una alergia y —donde de
+      verdad está el dinero— convierte una consulta de evento en un anticipo pagado.</p>
+  </header>
+
+  <div style="padding-top:22px">
+    <div class="marca">Conversaciones de ejemplo, creadas para esta demostración</div>
+    <p>Escritas siguiendo <strong>las instrucciones que el agente tiene de verdad</strong>:
+      mensajes cortos, una pregunta a la vez y nunca afirmar un dato que no esté en su
+      información. Restaurante ficticio, precios ficticios.</p>
+  </div>
+
+  <div class="aviso">
+    <div class="t">Lo primero que hay que decir en la reunión</div>
+    Acuarius <b>no es un sistema de reservas ni una plataforma de domicilios</b>. El agente no ve
+    el plano de mesas, no cobra y no mete el pedido a cocina: arma la solicitud completa y la
+    pasa a una persona, que confirma. Dilo tú antes de que lo pregunten — si lo demuestras como si reservara solo, te
+    lo van a reclamar en la primera semana.
+    <br><br>Y aclarado eso, señala dónde está el negocio de verdad: <b>los eventos y los grupos</b>.
+    Una mesa de cuatro un martes no necesita CRM; un evento de cuarenta personas sí, y es el
+    que hoy se pierde entre mensajes sin responder.
+  </div>
+
+  <!-- ── 1 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 01</div>
+      <h2>Una reserva, completa, en un minuto</h2>
+      <div class="caso-que">Demuestra: recoge todo lo que el anfitrión necesita saber</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">SD</div>
+          <div><div class="tel-nom">Sebastián D.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">jueves</div>
+          <div class="b ellos">Hola! Quisiera reservar para mañana en la noche<span class="h">17:22</span></div>
+          <div class="b nos">¡Hola! 😊 Claro que sí. ¿Para cuántas personas?<span class="h">17:22</span></div>
+          <div class="b ellos">Somos 4<span class="h">17:23</span></div>
+          <div class="b nos">Perfecto. ¿A qué hora les sirve?<span class="h">17:23</span></div>
+          <div class="b ellos">Sobre las 8<span class="h">17:24</span></div>
+          <div class="b nos">Listo 👌 ¿Alguna preferencia, terraza o interior?<span class="h">17:24</span></div>
+          <div class="b ellos">Terraza si se puede, y es por el cumpleaños de mi esposa<span class="h">17:26</span></div>
+          <div class="b nos">¡Qué bueno! 🎉 Lo dejo anotado para que les preparemos algo.<span class="h">17:26</span></div>
+          <div class="b nos">La disponibilidad de terraza para un viernes la confirma el anfitrión, que es quien ve las mesas. ¿Me das tu nombre para dejarlo a tu nombre?<span class="h">17:27</span></div>
+          <div class="b ellos">Sebastián Duarte<span class="h">17:28</span></div>
+          <div class="b nos">Gracias Sebastián ✨ En un rato te confirman por aquí la mesa y la terraza. Nos vemos mañana.<span class="h">17:28</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 17:28</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Cliente</dt><dd>Sebastián Duarte · +57 3•• ••• ••41</dd></dl>
+            <dl class="fila"><dt>Solicitud</dt><dd>Viernes · 8:00 p. m. · 4 personas</dd></dl>
+            <dl class="fila"><dt>Preferencia</dt><dd>Terraza</dd></dl>
+            <dl class="fila"><dt>Ocasión</dt><dd><b>Cumpleaños de la esposa</b></dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-am">Por confirmar</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">terraza</span><span class="chip c-az">cumpleaños</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Confirmar mesa · hoy</dd></dl>
+          </div>
+          <div class="lectura">Ocho mensajes mientras la cocina montaba el servicio de la noche.
+            El anfitrión solo tiene que mirar el plano y responder «confirmada».
+            <br><br>El dato que vale no es la hora ni el número de personas: es
+            <b>«cumpleaños de la esposa»</b>. Eso es un postre con vela y una reseña de cinco
+            estrellas — y nadie lo pregunta cuando llaman por teléfono a las cinco de la tarde.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 02</div>
+      <h2>Con una alergia no se improvisa</h2>
+      <div class="caso-que">Demuestra: el límite que le evita un problema serio a la casa</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">NM</div>
+          <div><div class="tel-nom">Natalia M.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">viernes</div>
+          <div class="b ellos">Hola, una pregunta. Mi hijo es alérgico al maní. ¿El pad thai lleva maní?<span class="h">12:05</span></div>
+          <div class="b nos">Hola 🙌 Gracias por avisarnos, es importante.<span class="h">12:06</span></div>
+          <div class="b nos">El pad thai sí lleva maní. Pero con una alergia no me quedo solo con la receta: en la cocina se comparten superficies y utensilios, y eso solo lo puede confirmar el chef.<span class="h">12:06</span></div>
+          <div class="b ellos">Ah, no había pensado en eso<span class="h">12:08</span></div>
+          <div class="b nos">Es lo más común y es justo donde pasan los sustos 😕<span class="h">12:08</span></div>
+          <div class="b nos">Le paso ahora mismo tu caso al chef para que te diga qué platos son seguros de verdad para tu hijo. ¿Para qué día sería la visita?<span class="h">12:09</span></div>
+          <div class="b ellos">Para el sábado, somos 5 con dos niños<span class="h">12:11</span></div>
+          <div class="b nos">Perfecto, lo dejo marcado en la reserva para que en cocina lo tengan presente el sábado 🍽️<span class="h">12:11</span></div>
+          <div class="b ellos">Muchísimas gracias, en serio. Es la primera vez que alguien me responde así<span class="h">12:13</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 12:13</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Cliente</dt><dd>Natalia M.</dd></dl>
+            <dl class="fila"><dt>Solicitud</dt><dd>Sábado · 5 personas · 2 niños</dd></dl>
+            <dl class="fila"><dt>Alerta</dt><dd><span class="chip c-ro">Alergia al maní</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd><span class="chip c-am">Chef · confirmar platos seguros</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-ro">alergia</span><span class="chip c-az">con niños</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Avisar a cocina el sábado</dd></dl>
+          </div>
+          <div class="lectura">El agente sabía que el pad thai lleva maní —está en su carta— y
+            lo dijo. Lo que <b>no hizo</b> fue lo peligroso: declarar seguro otro plato por
+            deducción. La contaminación cruzada no está en ninguna receta.
+            <br><br>Este es el ejemplo que le enseñas a un dueño de restaurante. Lo que le
+            quita el sueño de un bot no es que reserve mal: es que le diga a una mamá que algo
+            no lleva maní.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 03</div>
+      <h2>Cuarenta personas, un martes a las once de la noche</h2>
+      <div class="caso-que">Demuestra: dónde está el dinero que hoy se pierde</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">MV</div>
+          <div><div class="tel-nom">Mónica Valbuena</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">martes</div>
+          <div class="b ellos">Buenas noches. Estoy organizando la cena de fin de año de la empresa y quería cotizar<span class="h">23:04</span></div>
+          <div class="b nos">¡Buenas noches! 🙌 Con mucho gusto, eventos es de lo que más hacemos en diciembre.<span class="h">23:05</span></div>
+          <div class="b nos">¿Para cuántas personas sería?<span class="h">23:05</span></div>
+          <div class="b ellos">Unas 40, más o menos<span class="h">23:07</span></div>
+          <div class="b nos">Perfecto, con 40 se puede cerrar el salón privado 🎄 ¿Ya tienen fecha pensada?<span class="h">23:07</span></div>
+          <div class="b ellos">La idea es el 12 o el 13 de diciembre, viernes o sábado<span class="h">23:09</span></div>
+          <div class="b nos">Esas dos son las fechas más pedidas del año, así que conviene apartar pronto.<span class="h">23:10</span></div>
+          <div class="b nos">Nuestros menús de evento arrancan en <b>$85.000</b> por persona e incluyen entrada, fuerte y postre. ¿Manejan un presupuesto por persona?<span class="h">23:10</span></div>
+          <div class="b ellos">Estábamos pensando en unos 120 por persona con bebidas<span class="h">23:13</span></div>
+          <div class="b nos">Con ese presupuesto tienes buenas opciones, incluyendo carta de bebidas 🥂<span class="h">23:13</span></div>
+          <div class="b nos">La cotización exacta y la disponibilidad del salón para esas fechas te las arma Carolina, que lleva eventos. ¿Me confirmas tu nombre y el de la empresa?<span class="h">23:14</span></div>
+          <div class="b ellos">Mónica Valbuena, de Seguros del Norte<span class="h">23:15</span></div>
+          <div class="b nos">Gracias Mónica ✨ Mañana a primera hora Carolina te escribe con la propuesta para el 12 y el 13.<span class="h">23:15</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que Carolina encontró el miércoles a las 8:00</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Mónica Valbuena · Seguros del Norte</dd></dl>
+            <dl class="fila"><dt>Entró</dt><dd>martes, 23:04</dd></dl>
+            <dl class="fila"><dt>Evento</dt><dd>Cena de fin de año · 40 personas</dd></dl>
+            <dl class="fila"><dt>Fechas</dt><dd>12 o 13 de diciembre</dd></dl>
+            <dl class="fila"><dt>Presupuesto</dt><dd>$120.000 por persona</dd></dl>
+            <dl class="fila"><dt>Valor</dt><dd><b>$4.800.000</b></dd></dl>
+            <dl class="fila"><dt>Tablero</dt><dd>Eventos · <span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Enviar cotización · hoy</dd></dl>
+          </div>
+          <div class="lectura">Un evento de <b>4,8 millones</b> entró a las once de la noche de
+            un martes. Sin agente, ese mensaje lo habría leído alguien el jueves, cuando Mónica
+            ya estuviera cotizando con otros dos restaurantes.
+            <br><br>Fíjate en lo que quedó: personas, fechas, presupuesto y valor estimado.
+            Carolina no llama a preguntar, <b>llama a cotizar</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 04</div>
+      <h2>Lo que la casa no hace</h2>
+      <div class="caso-que">Demuestra: no interrumpe al equipo en plena hora pico</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">DC</div>
+          <div><div class="tel-nom">Diego C.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">sábado</div>
+          <div class="b ellos">Buenas, ¿hacen domicilios a Chía?<span class="h">13:40</span></div>
+          <div class="b nos">Hola 👋 No, nuestros domicilios llegan hasta Usaquén y Chicó. Chía nos queda fuera de cobertura.<span class="h">13:41</span></div>
+          <div class="b ellos">Uff, qué pesar. ¿Y para llevar sí puedo pasar a recoger?<span class="h">13:43</span></div>
+          <div class="b nos">¡Claro que sí! Para llevar no hay problema, pides por aquí y pasas cuando esté listo 🛍️<span class="h">13:43</span></div>
+          <div class="b ellos">Perfecto, eso hago entonces otro día<span class="h">13:45</span></div>
+          <div class="b nos">Te esperamos, Diego 😊 Cuando quieras me escribes y te lo dejo listo.<span class="h">13:45</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 13:45</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Diego C. · Chía</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-gr">Registrado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-gr">fuera de cobertura</span><span class="chip c-az">interesado en llevar</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd>No — nadie se distrajo un sábado a la 1:40</dd></dl>
+          </div>
+          <div class="lectura">Un «no» claro, en el momento de más carga del servicio, sin que
+            nadie levantara la vista de la barra.
+            <br><br>Y en el mismo mensaje encontró la salida: <b>no puede recibir domicilio,
+            pero sí puede recoger</b>. El contacto queda etiquetado y sirve para la próxima
+            campaña de «para llevar».</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 05</div>
+      <h2>El anticipo que cierra el evento</h2>
+      <div class="caso-que">Demuestra: lee fotos y comprobantes, no solo texto</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">MV</div>
+          <div><div class="tel-nom">Mónica Valbuena</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">viernes</div>
+          <div class="b ellos"><div class="foto">Comprobante de transferencia</div>
+            Hola! Ya hicimos la transferencia del anticipo 🙌<span class="h">16:30</span></div>
+          <div class="b nos">¡Excelente Mónica! 🎉 Ya lo veo: transferencia por <b>$2.400.000</b> del 12 de septiembre, a nombre de Seguros del Norte.<span class="h">16:31</span></div>
+          <div class="b nos">Corresponde al 50% del evento del 13 de diciembre. Le aviso a Carolina para que lo verifique con contabilidad y te mande la confirmación formal 📄<span class="h">16:31</span></div>
+          <div class="b ellos">Perfecto. Una última cosa: dos de los invitados son vegetarianos<span class="h">16:34</span></div>
+          <div class="b nos">Anotado 🌱 Lo dejo en el evento para que cocina lo tenga desde ya. Si más adelante te confirman otras restricciones, me escribes y las sumo.<span class="h">16:35</span></div>
+          <div class="b ellos">Listo, gracias por todo<span class="h">16:36</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 16:36</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Evento</dt><dd>Seguros del Norte · 13 de diciembre</dd></dl>
+            <dl class="fila"><dt>Adjunto</dt><dd>Comprobante de transferencia</dd></dl>
+            <dl class="fila"><dt>Leído</dt><dd>$2.400.000 · 12 de septiembre</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Anticipo recibido</span></dd></dl>
+            <dl class="fila"><dt>Restricciones</dt><dd>2 vegetarianos</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">evento</span><span class="chip c-az">empresa</span><span class="chip c-az">vegetariano</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Verificar con contabilidad</dd></dl>
+          </div>
+          <div class="lectura">El agente <b>lee la foto del comprobante</b> —importe, fecha y
+            titular— y mueve el evento de etapa. No confirma el pago él: eso lo verifica una
+            persona, y lo dice.
+            <br><br>Y de paso recogió las restricciones alimentarias tres meses antes del
+            evento, que es exactamente cuando cocina quiere enterarse y no la semana anterior.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 6 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 06</div>
+      <h2>Un pedido a domicilio, de principio a fin</h2>
+      <div class="caso-que">Demuestra: toma el pedido completo y lo deja listo para cocina</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">JT</div>
+          <div><div class="tel-nom">Julián T.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">domingo</div>
+          <div class="b ellos">Hola, ¿están haciendo domicilios ahorita?<span class="h">19:48</span></div>
+          <div class="b nos">¡Hola! 😊 Sí, hasta las 10 p. m. ¿A qué zona sería?<span class="h">19:48</span></div>
+          <div class="b ellos">Cedritos<span class="h">19:49</span></div>
+          <div class="b nos">Perfecto, ahí llegamos 🛵 El domicilio cuesta <b>$8.000</b> y está saliendo en unos 40 minutos.<span class="h">19:49</span></div>
+          <div class="b ellos">Dale. Quiero 2 pad thai de camarón y unos baos de cerdo<span class="h">19:52</span></div>
+          <div class="b nos">Anotado 📝 Te confirmo:
+
+<b>2</b> Pad thai de camarón · $52.000 c/u
+<b>1</b> Bao de cerdo x3 · $34.000
+Domicilio · $8.000
+
+Total: <b>$146.000</b>
+
+¿Está bien así o le sumas algo?<span class="h">19:53</span></div>
+          <div class="b ellos">Así está bien. ¿Los pad thai los pueden dejar sin picante?<span class="h">19:55</span></div>
+          <div class="b nos">Claro, lo dejo en la nota del pedido 👌<span class="h">19:55</span></div>
+          <div class="b nos">¿Me pasas la dirección completa y cómo vas a pagar?<span class="h">19:55</span></div>
+          <div class="b ellos">Calle 140 #12-30, apto 502. Pago con datáfono<span class="h">19:57</span></div>
+          <div class="b nos">Listo Julián ✅ Paso el pedido a cocina ahora mismo y en un momento te confirman por aquí que ya entró y a qué hora sale.<span class="h">19:58</span></div>
+          <div class="b ellos">Gracias!<span class="h">19:58</span></div>
+          <div class="b nos">Pedido confirmado, Julián. Sale en 40 minutos 🛵 Cualquier cosa me escribes por aquí.<span class="h">20:03</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 19:58</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Cliente</dt><dd>Julián T. · +57 3•• ••• ••88</dd></dl>
+            <dl class="fila"><dt>Dirección</dt><dd>Calle 140 #12-30, apto 502 · Cedritos</dd></dl>
+            <dl class="fila"><dt>Pedido</dt><dd>2 pad thai camarón · 1 bao de cerdo x3</dd></dl>
+            <dl class="fila"><dt>Nota</dt><dd>Sin picante</dd></dl>
+            <dl class="fila"><dt>Valor</dt><dd><b>$146.000</b> · datáfono</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">domicilio</span><span class="chip c-az">cedritos</span><span class="chip c-az">sin picante</span><span class="chip c-az">pad thai</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Entrar pedido a cocina</dd></dl>
+          </div>
+          <div class="lectura">El agente <b>arma el pedido, lo repite y da el total</b> con los
+            precios de su carta. Lo que no hace es meterlo solo a cocina: eso lo confirma una
+            persona, y por eso el último mensaje lo escribe alguien del equipo.
+            <br><br>Lo importante está abajo del todo: <b>Julián quedó en la base del
+            restaurante</b>, con su dirección, lo que pide y que no come picante.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Cierre ── -->
+  <section class="cierre">
+    <div class="eyebrow">Para cerrar la presentación</div>
+    <h2>Por qué no suena a bot</h2>
+    <p>No es el modelo: es cómo está instruido. Estas cuatro reglas están escritas en el agente
+      y son las que producen todo lo de arriba.</p>
+    <div class="rejilla">
+      <div><h3>Una pregunta a la vez</h3>
+        <p>Primero responde lo que le preguntaron; la suya va después, encadenada. Nunca suelta
+          el cuestionario de golpe.</p></div>
+      <div><h3>Mensajes de chat, no de carta</h3>
+        <p>Una a tres oraciones. Como escribe un anfitrión con oficio, no como una carta de
+          menú.</p></div>
+      <div><h3>No inventa jamás</h3>
+        <p>Un precio o un ingrediente solo si está en su información. Con alergias no deduce:
+          pasa al chef.</p></div>
+      <div><h3>No pregunta dos veces</h3>
+        <p>Si ya le dieron un dato antes, no lo vuelve a pedir. Y si no se lo quieren dar, no
+          insiste.</p></div>
+    </div>
+
+    <h2 style="margin-top:38px">Los dos tableros de un restaurante</h2>
+    <p>Aquí está la diferencia entre vender «un bot de reservas» y vender un CRM. Un restaurante
+      necesita dos procesos y solo uno de ellos es una venta:</p>
+    <p style="margin-bottom:6px"><b>Reservas</b> — volumen alto, valor bajo, vida corta:</p>
+    <div class="etapas"><span>Solicitud</span><i>→</i><span>Confirmada</span><i>→</i><span>Asistió</span><i>→</i><span>No llegó</span></div>
+    <p style="margin-bottom:6px"><b>Eventos</b> — pocos, grandes, y con semanas de por medio:</p>
+    <div class="etapas"><span>Consulta</span><i>→</i><span>Cotizado</span><i>→</i><span>Anticipo</span><i>→</i><span>Confirmado</span><i>→</i><span>Realizado</span></div>
+    <div class="nota">
+      <strong>El de Eventos es el que paga la plataforma.</strong> Un evento perdido son cuatro
+      o cinco millones; mil reservas de mesa no cambian el mes. Vende el CRM por el tablero de
+      Eventos y regala el de Reservas como el extra que ordena el día a día.
+    </div>
+
+    <h2 style="margin-top:38px">El domicilio por WhatsApp vale más que el del marketplace</h2>
+    <p>Este es el argumento que más mueve a un dueño de restaurante, y no tiene que ver con la
+      conversación: tiene que ver con <b>a quién le queda el cliente</b>.</p>
+    <ul class="pasos">
+      <li><b>Por el marketplace</b>, el pedido deja una comisión del 20-30% y el cliente es de
+        ellos. El restaurante no tiene su teléfono, ni su dirección, ni sabe qué pide.</li>
+      <li><b>Por WhatsApp</b>, el mismo pedido deja <b>cero comisión</b> y el cliente entra a la
+        base del restaurante, con su dirección, lo que pidió y sus preferencias.</li>
+    </ul>
+    <p>Mira las etiquetas del ejemplo 06: <code>domicilio</code>, <code>cedritos</code>,
+      <code>sin picante</code>, <code>pad thai</code>. Con eso, el restaurante puede hacer cosas
+      que con un marketplace no puede:</p>
+    <ul class="pasos">
+      <li>Escribirle a <b>todos los de Cedritos</b> un domingo de lluvia</li>
+      <li>Avisarle del nuevo plato de camarón a <b>quien ya pidió camarón</b></li>
+      <li>Reactivar a <b>quien no pide hace seis semanas</b>, con la automatización de inactividad</li>
+    </ul>
+    <div class="nota">
+      <strong>El cálculo que conviene hacer en la reunión, con sus números.</strong> Pregúntale
+      cuántos domicilios hace al mes y cuánto le cobra de comisión el marketplace. Mover aunque
+      sea una parte de esos pedidos a WhatsApp <b>paga la plataforma varias veces</b> — y además
+      se queda con la base de clientes, que es lo que de verdad no tiene precio.
+    </div>
+
+    <div class="aviso">
+      <div class="t">Qué NO hace el agente con un domicilio</div>
+      Dilo tú en la reunión, antes de que lo descubran:
+      <br><br>
+      <b>No cobra.</b> No procesa pagos ni links de pago dentro del chat.<br>
+      <b>No entra el pedido a cocina ni al POS.</b> Lo deja listo y una persona lo ingresa.<br>
+      <b>No confirma disponibilidad de un plato.</b> Si se acabó el camarón, eso lo sabe la cocina.<br>
+      <b>No hace seguimiento del domiciliario.</b> No sabe dónde va la moto.<br>
+      <b>No recuerda pedidos anteriores.</b> Conoce lo que se habló en esa conversación, no el
+      histórico del cliente — ese vive en el CRM y lo ve el equipo, no el agente.
+      <br><br>
+      Lo que sí hace, y es la mitad del trabajo: <b>responder cobertura, tiempos, costo del
+      domicilio, formas de pago y carta</b> sin molestar a nadie, y armar el pedido completo
+      para que entrarlo tome quince segundos.
+    </div>
+
+    <h2 style="margin-top:38px">Qué hay que cargarle a un restaurante</h2>
+    <ol class="pasos">
+      <li><b>La carta con precios e ingredientes.</b> Es de ahí de donde saca lo que puede
+        afirmar — y lo que le permite decir «ese sí lleva maní».</li>
+      <li><b>La regla de alergias</b>, explícita: puede decir qué lleva un plato según la carta,
+        pero <b>nunca declarar un plato seguro</b> para un alérgico. Eso siempre pasa al chef.</li>
+      <li><b>Cobertura de domicilios, costo, tiempo de entrega y formas de pago.</b> Junto con
+        horarios y parqueadero, resuelve la mitad de los mensajes sin molestar a nadie.</li>
+      <li><b>Menús de evento y precio por persona</b>, con el mínimo de personas.</li>
+      <li><b>Qué preguntar antes de pasar al anfitrión</b>: personas, día, hora, preferencia de
+        zona y ocasión. Ese último dato es el que convierte una mesa en una reseña.</li>
+    </ol>
+
+    <div class="aviso">
+      <div class="t">Sobre los emojis</div>
+      El tono de estos ejemplos sale de <b>cómo se configura la personalidad del agente</b>, que
+      es texto libre en su ficha. En un restaurante suman cercanía y encajan; en una clínica o
+      una financiera restarían seriedad. Es un ajuste por cliente, y vale la pena presentarlo
+      como argumento: «su agente habla como usted quiera que hable».
+    </div>
+
+    <div class="nota">
+      <strong>El cierre que mejor funciona en una reunión.</strong> Todos los CRM guardan la
+      conversación. La diferencia está en la columna de la derecha de cada ejemplo: la ocasión
+      anotada, la alergia marcada, el evento valorado y con su tarea — <em>sin que nadie de la
+      casa tocara nada</em>. Enseña primero el chat y después esa columna.
+    </div>
+  </section>
+
+  <footer>
+    Conversaciones de ejemplo · Acuarius · septiembre de 2026.<br>
+    Escritas siguiendo las instrucciones reales del agente. Restaurante, clientes, platos y precios son
+    ficticios. Existen las versiones equivalentes para inmobiliarias, clínicas y educación.
+  </footer>
+</main>
+</body>
+</html>

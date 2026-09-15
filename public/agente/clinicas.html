@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Material comercial: no debe salir en buscadores. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="El agente que atiende la recepción sin dormir: cinco ejemplos en una clínica.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="El Agente en una Clínica · Acuarius">
+<meta property="og:description" content="El agente que atiende la recepción sin dormir: cinco ejemplos en una clínica.">
+<meta property="og:url" content="https://app.acuarius.app/agente/clinicas">
+<link rel="icon" href="/icons/icon-192.png">
+<title>El Agente en una Clínica</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE; --violet:#7C3AED;
+  --success:#059669; --warning:#D97706; --danger:#DC2626;
+  --success-bg:#E7F7F0; --warning-bg:#FEF3E2; --danger-bg:#FDECEC;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#FFFFFF; --bg-subtle:#F7F8FC; --bg-muted:#F0F1F8; --surface:#FFFFFF;
+  --border:#E4E6F0; --border2:#F0F1F8;
+  --accent:var(--blue); --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  --chat-fondo:#E9E2DB; --chat-ellos:#FFFFFF; --chat-nos:#DCF8C6;
+  --chat-texto:#111B21; --chat-hora:#667781; --chat-barra:#F0F2F5;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}}
+:root[data-theme="dark"]{
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:1060px;margin:0 auto;padding:34px 24px 90px}
+
+h1{font-size:clamp(30px,4.4vw,44px);line-height:1.05;letter-spacing:-.028em;font-weight:700;
+  margin:0 0 12px;text-wrap:balance}
+h2{font-size:clamp(21px,2.7vw,26px);line-height:1.2;letter-spacing:-.02em;font-weight:600;
+  margin:0 0 5px;text-wrap:balance}
+p{margin:0 0 14px;max-width:66ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.85em;background:var(--bg-muted);padding:1.5px 5px;
+  border-radius:5px;border:1px solid var(--border2)}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+  color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:16px;height:2px;background:var(--grad);border-radius:2px}
+.lede{font-size:17px;color:var(--text-2);max-width:64ch;margin-bottom:0}
+header{padding-bottom:26px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+.marca{display:inline-flex;align-items:center;gap:8px;background:var(--warning-bg);
+  border:1px solid color-mix(in srgb,var(--warning) 34%,transparent);border-radius:20px;
+  padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:18px}
+.marca::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning)}
+
+.caso{padding:46px 0;border-bottom:1px solid var(--border2)}
+.caso:last-of-type{border-bottom:0}
+.caso-head{margin-bottom:22px}
+.caso-num{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:500;
+  letter-spacing:.04em;margin-bottom:6px}
+.caso-que{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);
+  background:rgba(30,43,204,.08);border-radius:7px;padding:5px 11px;margin-top:8px}
+.caso-body{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:820px){.caso-body{grid-template-columns:1fr}}
+
+.tel{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--chat-fondo);
+  box-shadow:0 10px 30px rgba(13,15,28,.12)}
+.tel-barra{background:var(--chat-barra);padding:10px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(0,0,0,.07)}
+.tel-av{width:34px;height:34px;border-radius:50%;background:var(--grad);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.tel-nom{font-size:14px;font-weight:600;color:var(--chat-texto);line-height:1.2}
+.tel-est{font-size:11.5px;color:var(--chat-hora)}
+.tel-chat{padding:14px 12px;display:flex;flex-direction:column;gap:7px}
+.dia{align-self:center;background:rgba(255,255,255,.75);color:var(--chat-hora);font-size:11px;
+  font-weight:500;padding:3px 11px;border-radius:7px;margin:3px 0}
+.b{max-width:85%;padding:7px 10px 6px;border-radius:9px;font-size:14px;line-height:1.42;
+  color:var(--chat-texto);position:relative;box-shadow:0 1px .5px rgba(11,20,26,.13);
+  white-space:pre-line}
+.b.ellos{align-self:flex-start;background:var(--chat-ellos);border-top-left-radius:2px}
+.b.nos{align-self:flex-end;background:var(--chat-nos);border-top-right-radius:2px}
+.b .h{font-size:10.5px;color:var(--chat-hora);float:right;margin:6px 0 -2px 8px;
+  font-variant-numeric:tabular-nums}
+.b b{font-weight:600}
+.adj{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.05);border-radius:7px;
+  padding:8px 10px;margin-bottom:5px}
+.adj .ic{width:26px;height:32px;background:#E53935;border-radius:3px;flex:none;display:flex;
+  align-items:center;justify-content:center;color:#fff;font-size:8.5px;font-weight:700}
+.adj .nm{font-size:12.5px;color:var(--chat-texto);font-weight:500;line-height:1.25}
+.adj .pe{font-size:11px;color:var(--chat-hora)}
+
+.crm{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+.crm-t{padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--bg-subtle);
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--text-3)}
+.crm-b{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+.fila{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;font-size:14px;align-items:baseline}
+.fila dt{font-size:12.5px;color:var(--text-3);font-weight:500}
+.fila dd{margin:0;color:var(--text)}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:20px;
+  margin:0 4px 4px 0}
+.c-ok{background:var(--success-bg);color:var(--success)}
+.c-az{background:rgba(30,43,204,.1);color:var(--accent)}
+.c-am{background:var(--warning-bg);color:var(--warning)}
+.c-ro{background:var(--danger-bg);color:var(--danger)}
+.c-gr{background:var(--bg-muted);color:var(--text-2)}
+.lectura{border-top:1px solid var(--border2);padding:13px 16px;font-size:14px;color:var(--text-2);
+  background:var(--bg-subtle)}
+.lectura b{color:var(--text)}
+
+.cierre{margin-top:52px;padding-top:30px;border-top:1px solid var(--border)}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:14px;margin:20px 0}
+.rejilla div{border:1px solid var(--border);border-radius:12px;padding:15px 17px;background:var(--surface)}
+.rejilla h3{font-size:14.5px;font-weight:600;margin:0 0 5px}
+.rejilla p{font-size:13.5px;color:var(--text-2);margin:0}
+.nota{border-left:2.5px solid var(--accent);padding-left:15px;margin:20px 0;color:var(--text-2);
+  font-size:15px;max-width:66ch}
+.nota strong{color:var(--text)}
+.aviso{background:var(--warning-bg);border:1px solid color-mix(in srgb,var(--warning) 32%,transparent);
+  border-radius:10px;padding:14px 16px;margin:20px 0;max-width:68ch;font-size:14.5px}
+.aviso .t{font-weight:600;color:var(--text);margin-bottom:4px;display:flex;gap:7px;align-items:center}
+.aviso .t::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning);flex:none}
+ol.pasos{max-width:66ch;padding-left:20px}
+ol.pasos li{margin-bottom:9px}
+ol.pasos b{color:var(--text)}
+footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--text-3);max-width:66ch}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Material de presentación · Clínicas y consultorios</div>
+    <h1>El agente que atiende<br>la recepción, sin dormir</h1>
+    <p class="lede">Cinco ejemplos de lo que hace el agente de WhatsApp en una clínica: resuelve
+      dudas, agenda valoraciones, filtra lo que no aplica y —lo más importante— sabe dónde
+      termina su trabajo.</p>
+  </header>
+
+  <div style="padding-top:22px">
+    <div class="marca">Conversaciones de ejemplo, creadas para esta demostración</div>
+    <p>Escritas siguiendo <strong>las instrucciones que el agente tiene de verdad</strong>:
+      mensajes cortos, una pregunta a la vez y nunca afirmar un precio o una condición que no
+      esté en su información. Clínica odontológica con dos sedes, nombres ficticios.</p>
+  </div>
+
+  <!-- ── 1 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 01</div>
+      <h2>De «cuánto cuesta» a la valoración agendada</h2>
+      <div class="caso-que">Demuestra: responde precio, califica y deja la cita lista</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">DM</div>
+          <div><div class="tel-nom">Daniela Muñoz</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">martes</div>
+          <div class="b ellos">Hola, buenas tardes. ¿Cuánto cuesta la ortodoncia?<span class="h">18:42</span></div>
+          <div class="b nos">¡Hola! El plan completo de ortodoncia arranca en <b>$2.900.000</b> y se puede pagar en cuotas. El precio exacto depende de tu caso, y eso lo define el ortodoncista en la valoración.<span class="h">18:42</span></div>
+          <div class="b nos">La valoración no tiene costo. ¿Te gustaría agendarla?<span class="h">18:43</span></div>
+          <div class="b ellos">Sí, me interesa. ¿Atienden por EPS?<span class="h">18:45</span></div>
+          <div class="b nos">Ortodoncia la manejamos solo como particular o con medicina prepagada. ¿Cuál sería tu caso?<span class="h">18:45</span></div>
+          <div class="b ellos">Particular<span class="h">18:47</span></div>
+          <div class="b nos">Listo. Tenemos sede en <b>Chicó</b> y en <b>Colina</b>. ¿Cuál te queda más cómoda?<span class="h">18:47</span></div>
+          <div class="b ellos">Colina, trabajo por ahí cerca<span class="h">18:48</span></div>
+          <div class="b nos">Perfecto. ¿Qué días y a qué hora te sirve mejor?<span class="h">18:48</span></div>
+          <div class="b ellos">Entre semana después de las 5, o sábado en la mañana<span class="h">18:50</span></div>
+          <div class="b nos">Anotado. ¿Me confirmas tu nombre completo?<span class="h">18:50</span></div>
+          <div class="b ellos">Daniela Muñoz<span class="h">18:51</span></div>
+          <div class="b nos">Gracias Daniela. Le paso tus datos a recepción y mañana temprano te confirman el horario disponible en Colina por este mismo chat.<span class="h">18:51</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 18:51</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Paciente</dt><dd>Daniela Muñoz · +57 3•• ••• ••17</dd></dl>
+            <dl class="fila"><dt>Origen</dt><dd>WhatsApp · anuncio de Instagram</dd></dl>
+            <dl class="fila"><dt>Interés</dt><dd>Ortodoncia · valoración</dd></dl>
+            <dl class="fila"><dt>Pago</dt><dd>Particular</dd></dl>
+            <dl class="fila"><dt>Sede</dt><dd>Colina</dd></dl>
+            <dl class="fila"><dt>Disponibilidad</dt><dd>Entre semana 5 p. m. · sábado a. m.</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">ortodoncia</span><span class="chip c-az">particular</span><span class="chip c-az">colina</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Confirmar horario de valoración</dd></dl>
+          </div>
+          <div class="lectura">A las siete de la tarde, con la recepción cerrada. Al día siguiente
+            nadie tiene que preguntar de nuevo qué quiere, cómo paga ni a qué sede va:
+            <b>ya está todo escrito</b> y solo falta confirmar la hora.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 02</div>
+      <h2>No diagnostica, y no le da pena decirlo</h2>
+      <div class="caso-que">Demuestra: el límite que toda clínica necesita que su bot respete</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">RS</div>
+          <div><div class="tel-nom">Ricardo S.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">miércoles</div>
+          <div class="b ellos">Tengo una muela de atrás que me duele hace 3 días y la encía está hinchada. ¿Será una infección?<span class="h">21:08</span></div>
+          <div class="b nos">Siento que estés con ese dolor. No puedo decirte qué es sin que un odontólogo te revise — eso sería adivinar, y en salud no se adivina.<span class="h">21:09</span></div>
+          <div class="b nos">Lo que sí te digo: con tres días de dolor e inflamación conviene que te vean pronto. ¿Puedes mañana?<span class="h">21:09</span></div>
+          <div class="b ellos">¿Y mientras tanto puedo tomar amoxicilina? Tengo en la casa<span class="h">21:11</span></div>
+          <div class="b nos">Eso no te lo puedo recomendar yo, ni para decirte que sí ni que no. Un antibiótico lo tiene que indicar el profesional que te revise.<span class="h">21:11</span></div>
+          <div class="b nos">Te agendo con prioridad para mañana y que sea él quien te diga qué tomar. ¿A qué hora te sirve?<span class="h">21:12</span></div>
+          <div class="b ellos">En la mañana, antes de entrar a trabajar<span class="h">21:13</span></div>
+          <div class="b nos">Perfecto. Marco tu caso como urgencia y recepción te escribe apenas abran, a las 7, con el primer espacio libre.<span class="h">21:13</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 21:13</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Paciente</dt><dd>Ricardo S.</dd></dl>
+            <dl class="fila"><dt>Motivo</dt><dd>Dolor 3 días · inflamación de encía</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-ro">urgencia</span><span class="chip c-az">dolor</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd><span class="chip c-am">Prioridad · recepción 7:00</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Asignar primer espacio de la mañana</dd></dl>
+          </div>
+          <div class="lectura">Dos veces le pidieron un criterio clínico y dos veces no lo dio:
+            <b>ni diagnóstico ni medicamento</b>. Pero tampoco lo dejó ahí — reconoció la urgencia,
+            subió la prioridad y dejó la mañana comprometida.
+            <br><br>Este es el ejemplo que decide la venta con un director médico. Lo que le
+            preocupa de un bot no es que venda poco: es que diga una barbaridad.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 03</div>
+      <h2>Domingo, 22:50</h2>
+      <div class="caso-que">Demuestra: la hora a la que la gente busca clínica de verdad</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">MP</div>
+          <div><div class="tel-nom">Marcela P.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">domingo</div>
+          <div class="b ellos">Buenas noches, quería preguntar por el blanqueamiento<span class="h">22:50</span></div>
+          <div class="b nos">¡Hola! Claro. El blanqueamiento en consultorio está en <b>$450.000</b> e incluye una sesión de control.<span class="h">22:50</span></div>
+          <div class="b nos">¿Es para ti o para alguien más?<span class="h">22:51</span></div>
+          <div class="b ellos">Para mí. Es que me caso en noviembre 😅<span class="h">22:53</span></div>
+          <div class="b nos">¡Felicitaciones! Con noviembre vas muy bien de tiempo, incluso para hacer limpieza antes, que es lo que se recomienda.<span class="h">22:53</span></div>
+          <div class="b ellos">Ah, no sabía. ¿Cuánto vale la limpieza?<span class="h">22:55</span></div>
+          <div class="b nos">La profilaxis está en <b>$120.000</b>. Muchas pacientes hacen las dos cosas juntas.<span class="h">22:55</span></div>
+          <div class="b nos">¿Quieres que te agende una valoración para organizar las fechas con tiempo?<span class="h">22:56</span></div>
+          <div class="b ellos">Sí porfa, esta semana si se puede<span class="h">22:57</span></div>
+          <div class="b nos">Listo. Recepción te escribe mañana con los espacios de esta semana. ¿Me confirmas tu nombre?<span class="h">22:57</span></div>
+          <div class="b ellos">Marcela Peña<span class="h">22:58</span></div>
+          <div class="dia">lunes</div>
+          <div class="b nos">Buenos días Marcela, soy Tatiana de recepción. Tengo jueves 4 p. m. o viernes 10 a. m. para tu valoración, ¿cuál te sirve?<span class="h">08:04</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que recepción encontró el lunes a las 8:00</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Paciente</dt><dd>Marcela Peña</dd></dl>
+            <dl class="fila"><dt>Entró</dt><dd>domingo, 22:50</dd></dl>
+            <dl class="fila"><dt>Interés</dt><dd>Blanqueamiento + profilaxis</dd></dl>
+            <dl class="fila"><dt>Motivo</dt><dd>Matrimonio en noviembre</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">estética</span><span class="chip c-az">novia</span></dd></dl>
+          </div>
+          <div class="lectura">Venía por un servicio de $450.000 y se va interesada en dos, porque
+            el agente <b>escuchó el motivo real</b> —una boda— y conectó lo que tenía sentido.
+            Sin presionar y sin inventar: los dos precios estaban en su información.
+            <br><br>Y quedó anotado «matrimonio en noviembre», que es exactamente lo que
+            recepción necesita para hablarle como persona el lunes.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 04</div>
+      <h2>Lo que la clínica no hace</h2>
+      <div class="caso-que">Demuestra: no ocupa a la recepción con lo que no aplica</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">HG</div>
+          <div><div class="tel-nom">Hernán G.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">jueves</div>
+          <div class="b ellos">Buen día, ¿ustedes hacen cirugía maxilofacial? Necesito una ortognática<span class="h">11:15</span></div>
+          <div class="b nos">Buen día. No, ese procedimiento no lo manejamos — somos odontología general, ortodoncia y estética dental.<span class="h">11:16</span></div>
+          <div class="b ellos">Ah, ok. ¿Y saben dónde la hacen?<span class="h">11:18</span></div>
+          <div class="b nos">No te puedo recomendar un sitio concreto sin conocerlo, prefiero no mandarte a ciegas. Lo que sí: si después de la cirugía necesitas ortodoncia, ahí sí te podemos acompañar.<span class="h">11:19</span></div>
+          <div class="b ellos">Perfecto, seguramente los busco para eso. Gracias<span class="h">11:21</span></div>
+          <div class="b nos">Con gusto, Hernán. Te dejo anotado y quedamos pendientes.<span class="h">11:21</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 11:21</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Hernán G.</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-gr">Registrado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-gr">no-calificado</span><span class="chip c-az">ortodoncia futura</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd>No — no ocupó a recepción</dd></dl>
+            <dl class="fila"><dt>Queda para</dt><dd>Reactivar tras la cirugía</dd></dl>
+          </div>
+          <div class="lectura">Tres cosas en seis mensajes: dijo que no, <b>no se inventó una
+            recomendación</b> que no podía sostener, y encontró la única vía por la que ese
+            paciente sí puede volver.
+            <br><br>Para una recepción que atiende doscientos mensajes al día, el valor no está
+            solo en los que entran: está en los que <b>no llegan a interrumpir</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 05</div>
+      <h2>Lee la autorización antes que nadie</h2>
+      <div class="caso-que">Demuestra: entiende PDFs y fotos, no solo texto</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">LT</div>
+          <div><div class="tel-nom">Lucía Torres</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">viernes</div>
+          <div class="b ellos"><div class="adj"><div class="ic">PDF</div>
+            <div><div class="nm">autorizacion-eps.pdf</div><div class="pe">1 página · 112 kB</div></div></div>
+            Buenas, me pidieron enviar la autorización antes de la cita<span class="h">09:22</span></div>
+          <div class="b nos">Gracias Lucía, ya la revisé: autorización <b>N.º 884213</b>, para endodoncia en molar, vigente hasta el <b>30 de septiembre</b>.<span class="h">09:23</span></div>
+          <div class="b nos">Está en regla y alcanza para tu cita. La dejo cargada en tu historia para que el día de la cita no tengas que llevarla impresa.<span class="h">09:23</span></div>
+          <div class="b ellos">Uf, qué alivio. ¿Y tengo que pagar algo ese día?<span class="h">09:25</span></div>
+          <div class="b nos">El copago lo define tu EPS, no nosotros, y en la autorización no viene el valor. Recepción te lo confirma cuando llegues o te lo averigua antes si quieres.<span class="h">09:26</span></div>
+          <div class="b ellos">Mejor antes, para llevarlo listo<span class="h">09:27</span></div>
+          <div class="b nos">Perfecto, lo dejo pedido y te escriben con el dato.<span class="h">09:27</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 09:27</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Paciente</dt><dd>Lucía Torres</dd></dl>
+            <dl class="fila"><dt>Adjunto</dt><dd>autorizacion-eps.pdf</dd></dl>
+            <dl class="fila"><dt>Leído</dt><dd>N.º 884213 · endodoncia · vence 30-09</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">eps</span><span class="chip c-ok">autorización al día</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Averiguar copago y avisar</dd></dl>
+          </div>
+          <div class="lectura">El agente <b>lee el PDF y usa lo que dice</b> — número, procedimiento
+            y vigencia—. Si la autorización estuviera vencida, se sabría <em>hoy</em> y no el día
+            de la cita con la paciente ya en la sala.
+            <br><br>Y en el copago volvió a hacer lo mismo de siempre: <b>no está en el documento,
+            no se lo inventa</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Cierre ── -->
+  <section class="cierre">
+    <div class="eyebrow">Para cerrar la presentación</div>
+    <h2>Por qué no suena a bot</h2>
+    <p>No es el modelo: es cómo está instruido. Estas cuatro reglas están escritas en el agente
+      y son las que producen todo lo de arriba.</p>
+    <div class="rejilla">
+      <div><h3>Una pregunta a la vez</h3>
+        <p>Primero responde lo que le preguntaron; la suya va después, encadenada. Nunca suelta
+          el cuestionario de golpe.</p></div>
+      <div><h3>Mensajes de chat, no de correo</h3>
+        <p>Una a tres oraciones. Como escribe una recepcionista con oficio, no como un folleto.</p></div>
+      <div><h3>No inventa jamás</h3>
+        <p>Un precio o una condición solo si está en su información. Si no, lo pasa a una persona
+          y lo dice.</p></div>
+      <div><h3>No pregunta dos veces</h3>
+        <p>Si ya le dieron un dato antes, no lo vuelve a pedir. Y si no se lo quieren dar, no
+          insiste.</p></div>
+    </div>
+
+    <div class="aviso">
+      <div class="t">El límite clínico se configura, no viene solo</div>
+      La regla de fábrica es «no afirmes nada que no esté en tu información», y eso ya evita
+      precios y condiciones inventadas. Pero <b>«no diagnosticar ni recomendar medicamentos» hay
+      que escribirlo</b> en la configuración del agente de cada clínica, en su contexto y en sus
+      preguntas frecuentes. No es un ajuste que venga marcado por defecto.
+      <br><br>Es media hora de puesta en marcha y es lo primero que yo haría con un cliente de
+      salud, antes de conectarle un solo canal.
+    </div>
+
+    <h2 style="margin-top:38px">Qué hay que cargarle a una clínica</h2>
+    <ol class="pasos">
+      <li><b>Sus servicios y precios</b>, en las preguntas frecuentes del agente. Es de ahí de
+        donde saca lo que puede afirmar — sin eso, remite todo a recepción.</li>
+      <li><b>Qué atiende por EPS, prepagada o particular.</b> Es la primera pregunta de casi
+        todos los pacientes en LatAm.</li>
+      <li><b>Sus sedes y horarios.</b></li>
+      <li><b>El límite clínico</b>, explícito: no diagnostica, no recomienda medicamentos, y
+        ante señales de urgencia escala.</li>
+      <li><b>Qué preguntar antes de pasar a recepción</b>: servicio, forma de pago, sede y
+        disponibilidad. Cuatro datos y la cita se confirma en un mensaje.</li>
+    </ol>
+
+    <div class="nota">
+      <strong>El cierre que mejor funciona en una reunión.</strong> Todos los CRM guardan la
+      conversación. La diferencia está en la columna de la derecha de cada ejemplo: el paciente
+      calificado, etiquetado, con su motivo y su tarea — <em>sin que nadie de la clínica tocara
+      nada</em>. Enseña primero el chat y después esa columna.
+    </div>
+  </section>
+
+  <footer>
+    Conversaciones de ejemplo · Acuarius · septiembre de 2026.<br>
+    Escritas siguiendo las instrucciones reales del agente. Pacientes, precios y sedes son
+    ficticios. Versión para clínicas y consultorios; existe la equivalente para inmobiliarias.
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Material comercial: no debe salir en buscadores. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="Cómo conversa un agente bien entrenado: cinco ejemplos en una inmobiliaria.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Conversaciones del Agente · Acuarius">
+<meta property="og:description" content="Cómo conversa un agente bien entrenado: cinco ejemplos en una inmobiliaria.">
+<meta property="og:url" content="https://app.acuarius.app/agente/inmobiliarias">
+<link rel="icon" href="/icons/icon-192.png">
+<title>Conversaciones del Agente</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE; --violet:#7C3AED;
+  --success:#059669; --warning:#D97706; --danger:#DC2626;
+  --success-bg:#E7F7F0; --warning-bg:#FEF3E2;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#FFFFFF; --bg-subtle:#F7F8FC; --bg-muted:#F0F1F8; --surface:#FFFFFF;
+  --border:#E4E6F0; --border2:#F0F1F8;
+  --accent:var(--blue); --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  /* Del chat: se mantienen fijos en los dos temas. Una captura de un chat no
+     cambia de color porque quien la mira tenga el modo oscuro puesto. */
+  --chat-fondo:#E9E2DB; --chat-ellos:#FFFFFF; --chat-nos:#DCF8C6;
+  --chat-texto:#111B21; --chat-hora:#667781; --chat-barra:#F0F2F5;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110;
+}}
+:root[data-theme="dark"]{
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:1060px;margin:0 auto;padding:34px 24px 90px}
+
+h1{font-size:clamp(30px,4.4vw,44px);line-height:1.05;letter-spacing:-.028em;font-weight:700;
+  margin:0 0 12px;text-wrap:balance}
+h2{font-size:clamp(21px,2.7vw,26px);line-height:1.2;letter-spacing:-.02em;font-weight:600;
+  margin:0 0 5px;text-wrap:balance}
+p{margin:0 0 14px;max-width:66ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.85em;background:var(--bg-muted);padding:1.5px 5px;
+  border-radius:5px;border:1px solid var(--border2)}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+  color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:16px;height:2px;background:var(--grad);border-radius:2px}
+.lede{font-size:17px;color:var(--text-2);max-width:64ch;margin-bottom:0}
+header{padding-bottom:26px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+.marca{display:inline-flex;align-items:center;gap:8px;background:var(--warning-bg);
+  border:1px solid color-mix(in srgb,var(--warning) 34%,transparent);border-radius:20px;
+  padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:18px}
+.marca::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning)}
+
+/* ── Un ejemplo ── */
+.caso{padding:46px 0;border-bottom:1px solid var(--border2)}
+.caso:last-of-type{border-bottom:0}
+.caso-head{margin-bottom:22px}
+.caso-num{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:500;
+  letter-spacing:.04em;margin-bottom:6px}
+.caso-que{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);
+  background:rgba(30,43,204,.08);border-radius:7px;padding:5px 11px;margin-top:8px}
+.caso-body{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:820px){.caso-body{grid-template-columns:1fr}}
+
+/* ── El chat ── */
+.tel{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--chat-fondo);
+  box-shadow:0 10px 30px rgba(13,15,28,.12)}
+.tel-barra{background:var(--chat-barra);padding:10px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(0,0,0,.07)}
+.tel-av{width:34px;height:34px;border-radius:50%;background:var(--grad);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.tel-nom{font-size:14px;font-weight:600;color:var(--chat-texto);line-height:1.2}
+.tel-est{font-size:11.5px;color:var(--chat-hora)}
+.tel-chat{padding:14px 12px;display:flex;flex-direction:column;gap:7px}
+.dia{align-self:center;background:rgba(255,255,255,.75);color:var(--chat-hora);font-size:11px;
+  font-weight:500;padding:3px 11px;border-radius:7px;margin:3px 0}
+.b{max-width:85%;padding:7px 10px 6px;border-radius:9px;font-size:14px;line-height:1.42;
+  color:var(--chat-texto);position:relative;box-shadow:0 1px .5px rgba(11,20,26,.13);
+  white-space:pre-line}
+.b.ellos{align-self:flex-start;background:var(--chat-ellos);border-top-left-radius:2px}
+.b.nos{align-self:flex-end;background:var(--chat-nos);border-top-right-radius:2px}
+.b .h{font-size:10.5px;color:var(--chat-hora);float:right;margin:6px 0 -2px 8px;
+  font-variant-numeric:tabular-nums}
+.b b{font-weight:600}
+.adj{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.05);border-radius:7px;
+  padding:8px 10px;margin-bottom:5px}
+.adj .ic{width:26px;height:32px;background:#E53935;border-radius:3px;flex:none;display:flex;
+  align-items:center;justify-content:center;color:#fff;font-size:8.5px;font-weight:700}
+.adj .nm{font-size:12.5px;color:var(--chat-texto);font-weight:500;line-height:1.25}
+.adj .pe{font-size:11px;color:var(--chat-hora)}
+
+/* ── Lo que pasó en el CRM ── */
+.crm{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+.crm-t{padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--bg-subtle);
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--text-3)}
+.crm-b{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+.fila{display:grid;grid-template-columns:104px minmax(0,1fr);gap:12px;font-size:14px;align-items:baseline}
+.fila dt{font-size:12.5px;color:var(--text-3);font-weight:500}
+.fila dd{margin:0;color:var(--text)}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:20px;
+  margin:0 4px 4px 0}
+.c-ok{background:var(--success-bg);color:var(--success)}
+.c-az{background:rgba(30,43,204,.1);color:var(--accent)}
+.c-am{background:var(--warning-bg);color:var(--warning)}
+.c-gr{background:var(--bg-muted);color:var(--text-2)}
+.lectura{border-top:1px solid var(--border2);padding:13px 16px;font-size:14px;color:var(--text-2);
+  background:var(--bg-subtle)}
+.lectura b{color:var(--text)}
+
+/* ── Cierre ── */
+.cierre{margin-top:52px;padding-top:30px;border-top:1px solid var(--border)}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:14px;margin:20px 0}
+.rejilla div{border:1px solid var(--border);border-radius:12px;padding:15px 17px;background:var(--surface)}
+.rejilla h3{font-size:14.5px;font-weight:600;margin:0 0 5px}
+.rejilla p{font-size:13.5px;color:var(--text-2);margin:0}
+.nota{border-left:2.5px solid var(--accent);padding-left:15px;margin:20px 0;color:var(--text-2);
+  font-size:15px;max-width:66ch}
+.nota strong{color:var(--text)}
+footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--text-3);max-width:66ch}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Material de presentación · Acuarius</div>
+    <h1>Cómo conversa un agente<br>bien entrenado</h1>
+    <p class="lede">Cinco ejemplos de lo que hace el agente de WhatsApp: atiende, entiende qué
+      busca la persona, ofrece solo lo que existe de verdad y deja el lead listo en el CRM.</p>
+  </header>
+
+  <div style="padding-top:22px">
+    <div class="marca">Conversaciones de ejemplo, creadas para esta demostración</div>
+    <p>No son chats de clientes reales. Se escribieron siguiendo <strong>las instrucciones que
+      el agente tiene de verdad</strong> —mensajes cortos, una pregunta a la vez, nunca inventar
+      un dato—, así que muestran lo que la plataforma hace hoy, no lo que podría hacer algún día.</p>
+  </div>
+
+  <!-- ── 1 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 01</div>
+      <h2>Del anuncio a la visita agendada</h2>
+      <div class="caso-que">Demuestra: calificación natural · inventario real · entrega al asesor</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">AC</div>
+          <div><div class="tel-nom">Andrés Cifuentes</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">jueves</div>
+          <div class="b ellos">Buenas noches, vi el anuncio de un apartamento en Cedritos<span class="h">20:14</span></div>
+          <div class="b nos">¡Hola! Sí, por esa zona manejamos varias opciones. ¿Lo buscas en arriendo o en venta?<span class="h">20:14</span></div>
+          <div class="b ellos">Arriendo<span class="h">20:16</span></div>
+          <div class="b nos">Listo. ¿Para cuándo lo necesitarías?<span class="h">20:16</span></div>
+          <div class="b ellos">Estamos mirando para octubre, se nos vence el contrato<span class="h">20:18</span></div>
+          <div class="b nos">Perfecto, vas con tiempo. ¿En qué rango de arriendo te sientes cómodo?<span class="h">20:18</span></div>
+          <div class="b ellos">Hasta unos 3 millones más o menos<span class="h">20:21</span></div>
+          <div class="b nos">Con eso tenemos buenas opciones. Estas tres están disponibles hoy:
+
+<b>Cedritos</b> · 3 hab · $2.850.000 (AR-1142)
+<b>Cedritos</b> · 2 hab + estudio · $2.950.000 (AR-1187)
+<b>Santa Bárbara</b> · 3 hab · $3.000.000 (AR-1205)
+
+¿Alguna te llama la atención?<span class="h">20:22</span></div>
+          <div class="b ellos">La primera, la de 3 habitaciones<span class="h">20:25</span></div>
+          <div class="b nos">Buena elección. ¿Te sirve que agendemos una visita esta semana?<span class="h">20:25</span></div>
+          <div class="b ellos">Sí, el sábado en la mañana si se puede<span class="h">20:26</span></div>
+          <div class="b nos">Se puede. ¿Me confirmas tu nombre para dejarla agendada?<span class="h">20:26</span></div>
+          <div class="b ellos">Andrés Cifuentes<span class="h">20:27</span></div>
+          <div class="b nos">Gracias, Andrés. Te paso con Maira, que coordina las visitas de la zona, y ella te confirma la hora exacta del sábado.<span class="h">20:27</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 20:27</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Andrés Cifuentes · +57 3•• ••• ••42</dd></dl>
+            <dl class="fila"><dt>Origen</dt><dd>WhatsApp · campaña de Meta</dd></dl>
+            <dl class="fila"><dt>Tablero</dt><dd>Arriendo</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">arriendo</span><span class="chip c-az">cedritos</span><span class="chip c-az">3 habitaciones</span></dd></dl>
+            <dl class="fila"><dt>Responsable</dt><dd>Maira Ballesteros</dd></dl>
+            <dl class="fila"><dt>Interés</dt><dd>AR-1142 · $2.850.000</dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Confirmar visita del sábado</dd></dl>
+          </div>
+          <div class="lectura">Trece mensajes y el comercial recibe un lead con <b>zona, presupuesto,
+            plazo, inmueble de interés y visita pedida</b>. No tuvo que estar despierto a las ocho
+            de la noche.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 02</div>
+      <h2>Lo que no sabe, no se lo inventa</h2>
+      <div class="caso-que">Demuestra: la regla que separa a un agente serio de un bot</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">AC</div>
+          <div><div class="tel-nom">Andrés Cifuentes</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">viernes</div>
+          <div class="b ellos">Una pregunta, ¿el de Cedritos acepta mascotas? Tengo un golden<span class="h">09:02</span></div>
+          <div class="b nos">Esa la define la copropiedad y para ese edificio no la tengo confirmada. Prefiero no decirte que sí y que después resulte que no.<span class="h">09:03</span></div>
+          <div class="b nos">Se lo pregunto a Maira y te respondo hoy mismo. ¿Te parece?<span class="h">09:03</span></div>
+          <div class="b ellos">Sí, tranquilo, gracias por la honestidad<span class="h">09:05</span></div>
+          <div class="b nos">Con gusto. Mientras tanto, ¿tienes alguna zona de respaldo por si esa no permite?<span class="h">09:05</span></div>
+          <div class="b ellos">Cedritos o Santa Bárbara, ahí nos movemos<span class="h">09:07</span></div>
+          <div class="b nos">Perfecto, las tengo en cuenta las dos.<span class="h">09:07</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 09:07</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Nota</dt><dd>Pendiente confirmar mascotas en AR-1142</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">mascota</span><span class="chip c-az">santa bárbara</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd><span class="chip c-am">Requiere asesor</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Responder sobre mascotas · hoy</dd></dl>
+          </div>
+          <div class="lectura">La instrucción del agente es literal: <b>solo puede afirmar precios,
+            disponibilidad y condiciones si están en su inventario</b>. Un dato inventado lo tiene
+            que desmentir después una persona, y eso cuesta el cliente.
+            <br><br>Fíjate en el detalle: no cortó la conversación. Escaló la duda y siguió
+            averiguando <b>una zona de respaldo</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 03</div>
+      <h2>Un domingo a las once y media de la noche</h2>
+      <div class="caso-que">Demuestra: el lead que se habría perdido esperando al lunes</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">LR</div>
+          <div><div class="tel-nom">Liliana Rojas</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">domingo</div>
+          <div class="b ellos">Hola, buenas. Estoy buscando apartamento en arriendo, ¿todavía atienden?<span class="h">23:34</span></div>
+          <div class="b nos">¡Hola! Sí, cuéntame. ¿En qué zona lo estás buscando?<span class="h">23:34</span></div>
+          <div class="b ellos">Por el norte, Suba o Colina<span class="h">23:36</span></div>
+          <div class="b nos">Buenas zonas las dos. ¿Para cuántas personas sería?<span class="h">23:36</span></div>
+          <div class="b ellos">Somos 4, con dos niños<span class="h">23:38</span></div>
+          <div class="b nos">Entendido, entonces buscamos de 3 habitaciones. ¿Hasta cuánto de arriendo te acomoda?<span class="h">23:38</span></div>
+          <div class="b ellos">Máximo 2 millones y medio<span class="h">23:41</span></div>
+          <div class="b nos">Listo, con eso tengo con qué buscarte. Mañana temprano Maira te escribe con las opciones que encajen. ¿Te queda bien por este mismo chat?<span class="h">23:42</span></div>
+          <div class="b ellos">Perfecto, gracias<span class="h">23:43</span></div>
+          <div class="dia">lunes</div>
+          <div class="b nos">Buenos días Liliana, soy Maira de Certain Pezzano. Vi lo que buscas y tengo tres opciones por Suba y Colina que te pueden servir…<span class="h">07:12</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que Maira encontró el lunes a las 7:00</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Liliana Rojas</dd></dl>
+            <dl class="fila"><dt>Entró</dt><dd>domingo, 23:34</dd></dl>
+            <dl class="fila"><dt>Zona</dt><dd>Suba o Colina</dd></dl>
+            <dl class="fila"><dt>Familia</dt><dd>4 personas · 3 habitaciones</dd></dl>
+            <dl class="fila"><dt>Presupuesto</dt><dd>hasta $2.500.000</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Primer contacto · vencía 03:34</dd></dl>
+          </div>
+          <div class="lectura">Nadie del equipo estaba trabajando un domingo a las once y media.
+            La conversación siguió igual, y el lunes a las siete <b>Maira no empezó de cero:
+            empezó con las opciones en la mano</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 04</div>
+      <h2>El que no encaja, y por qué eso también es ganar</h2>
+      <div class="caso-que">Demuestra: protege el tiempo del equipo comercial</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">JM</div>
+          <div><div class="tel-nom">Jorge M.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">martes</div>
+          <div class="b ellos">Buenas, busco arriendo en el Chicó<span class="h">15:20</span></div>
+          <div class="b nos">Hola, con gusto. ¿En qué rango de arriendo estás pensando?<span class="h">15:20</span></div>
+          <div class="b ellos">Algo de un millón<span class="h">15:22</span></div>
+          <div class="b nos">Por el Chicó los arriendos arrancan bastante por encima de eso. ¿Te serviría que mire en otras zonas con ese presupuesto?<span class="h">15:23</span></div>
+          <div class="b ellos">No, necesito que sea por allá por el trabajo<span class="h">15:25</span></div>
+          <div class="b nos">Te entiendo. Ahora mismo no tengo nada en el Chicó en ese rango, y prefiero decírtelo de una.<span class="h">15:26</span></div>
+          <div class="b nos">Si quieres te dejo anotado y te escribo apenas entre algo que se acerque. ¿Te parece?<span class="h">15:26</span></div>
+          <div class="b ellos">Listo, gracias por la sinceridad<span class="h">15:28</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 15:28</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Jorge M.</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-gr">Registrado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-gr">no-calificado</span><span class="chip c-az">chicó</span><span class="chip c-az">presupuesto bajo</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd>No — no ocupó a ningún comercial</dd></dl>
+            <dl class="fila"><dt>Queda para</dt><dd>Aviso si entra algo en ese rango</dd></dl>
+          </div>
+          <div class="lectura">Este es el ejemplo que más le interesa a un director comercial.
+            <b>Nadie del equipo perdió media hora</b> en una búsqueda imposible, el contacto se fue
+            con buena impresión, y queda en la base etiquetado para reactivarlo el día que entre
+            algo que le sirva.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 05</div>
+      <h2>También lee lo que le mandan</h2>
+      <div class="caso-que">Demuestra: entiende PDFs y fotos, no solo texto</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">CV</div>
+          <div><div class="tel-nom">Claudia Vargas</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">miércoles</div>
+          <div class="b ellos"><div class="adj"><div class="ic">PDF</div>
+            <div><div class="nm">comprobante-septiembre.pdf</div><div class="pe">1 página · 84 kB</div></div></div>
+            Buenas, les adjunto el comprobante del pago de este mes<span class="h">10:41</span></div>
+          <div class="b nos">Gracias Claudia, ya lo veo: transferencia por $2.850.000 del 3 de septiembre a nombre de Claudia Vargas, referencia AR-1142.<span class="h">10:42</span></div>
+          <div class="b nos">Lo dejo en la conversación y le aviso a Maira para que lo confirme con cartera. En cuanto quede registrado te avisamos.<span class="h">10:42</span></div>
+          <div class="b ellos">Muchas gracias, quedo atenta<span class="h">10:44</span></div>
+          <div class="b ellos">Ah, y otra cosa: la llave del baño está goteando hace dos días<span class="h">10:45</span></div>
+          <div class="b nos">Lo anoto y se lo paso al área de mantenimiento junto con el inmueble. ¿Te sirve que te llamen esta semana para coordinar la visita del técnico?<span class="h">10:46</span></div>
+          <div class="b ellos">Sí, en la tarde mejor<span class="h">10:47</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 10:47</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Claudia Vargas · inquilina AR-1142</dd></dl>
+            <dl class="fila"><dt>Adjunto</dt><dd>comprobante-septiembre.pdf</dd></dl>
+            <dl class="fila"><dt>Leído</dt><dd>$2.850.000 · 3 de septiembre</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">pago reportado</span><span class="chip c-am">mantenimiento</span></dd></dl>
+            <dl class="fila"><dt>Tareas</dt><dd>Confirmar pago con cartera<br>Coordinar técnico · tarde</dd></dl>
+          </div>
+          <div class="lectura">El agente <b>lee el PDF y usa lo que dice</b> — importe, fecha y
+            titular—, y de paso recoge un segundo asunto que no tenía nada que ver con el primero
+            sin perder el hilo de ninguno.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Cierre ── -->
+  <section class="cierre">
+    <div class="eyebrow">Para cerrar la presentación</div>
+    <h2>Por qué no suena a bot</h2>
+    <p>No es el modelo: es cómo está instruido. Estas cuatro reglas están escritas en el
+      agente y son las que producen todo lo de arriba.</p>
+    <div class="rejilla">
+      <div><h3>Una pregunta a la vez</h3>
+        <p>Primero responde lo que le preguntaron; la suya va después, encadenada. Nunca suelta
+          el cuestionario de golpe.</p></div>
+      <div><h3>Mensajes de chat, no de correo</h3>
+        <p>Una a tres oraciones. Sin listas de puntos salvo para enumerar opciones reales del
+          inventario.</p></div>
+      <div><h3>No inventa jamás</h3>
+        <p>Precio, disponibilidad o condición: solo si está en su inventario. Si no, lo escala
+          y lo dice.</p></div>
+      <div><h3>No pregunta dos veces</h3>
+        <p>Si ya le dieron un dato en cualquier mensaje anterior, no lo vuelve a pedir. Y si no
+          se lo quieren dar, no insiste.</p></div>
+    </div>
+
+    <div class="nota">
+      <strong>El cierre que mejor funciona en una reunión.</strong> Todos los CRM guardan la
+      conversación. La diferencia está en la columna de la derecha de cada ejemplo: el lead
+      calificado, etiquetado, asignado y con su tarea — <em>sin que nadie del equipo tocara nada</em>.
+      Enseña primero el chat y después esa columna.
+    </div>
+  </section>
+
+  <footer>
+    Conversaciones de ejemplo · Acuarius · septiembre de 2026.<br>
+    Escritas siguiendo las instrucciones reales del agente. Los nombres, inmuebles y códigos
+    son ficticios.
+  </footer>
+</main>
+</body>
+</html>

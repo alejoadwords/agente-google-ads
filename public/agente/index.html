@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="Conversaciones de ejemplo del agente de WhatsApp de Acuarius, por sector.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="El agente de WhatsApp, por sector · Acuarius">
+<meta property="og:description" content="Conversaciones de ejemplo del agente de WhatsApp de Acuarius, por sector.">
+<meta property="og:url" content="https://app.acuarius.app/agente/">
+<link rel="icon" href="/icons/icon-192.png">
+<title>El agente, por sector · Acuarius</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#FFFFFF; --bg-subtle:#F7F8FC; --surface:#FFFFFF;
+  --border:#E4E6F0; --border2:#F0F1F8;
+  --accent:var(--blue); --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:860px;margin:0 auto;padding:56px 24px 90px}
+.logo{height:30px;width:auto;margin-bottom:30px;display:block}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+  color:var(--accent);margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:16px;height:2px;background:var(--grad);border-radius:2px}
+h1{font-size:clamp(31px,4.6vw,46px);line-height:1.04;letter-spacing:-.028em;font-weight:700;
+  margin:0 0 14px;text-wrap:balance}
+.lede{font-size:17.5px;color:var(--text-2);max-width:56ch;margin:0 0 40px}
+
+.lista{display:flex;flex-direction:column;gap:10px}
+a.item{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:16px;align-items:center;
+  padding:17px 20px;border:1px solid var(--border);border-radius:14px;background:var(--surface);
+  text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+a.item:hover{border-color:var(--accent);transform:translateY(-1px)}
+a.item .ic{font-size:25px;line-height:1;text-align:center}
+a.item .nm{font-size:17px;font-weight:600;letter-spacing:-.012em}
+a.item .de{font-size:13.5px;color:var(--text-2);margin-top:1px}
+a.item .fl{color:var(--text-3);font-size:19px;line-height:1}
+a.item:hover .fl{color:var(--accent)}
+
+.pie{margin-top:40px;padding-top:22px;border-top:1px solid var(--border);
+  font-size:13.5px;color:var(--text-2);max-width:60ch}
+.pie b{color:var(--text)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:14px}
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/logo.png" alt="Acuarius">
+  <div class="eyebrow">Agente de WhatsApp</div>
+  <h1>Conversaciones reales,<br>sector por sector</h1>
+  <p class="lede">Cómo atiende, califica y entrega un agente bien entrenado — y qué queda
+    registrado en el CRM después de cada conversación.</p>
+
+  <div class="lista">
+    <a class="item" href="/agente/inmobiliarias">
+      <div class="ic">🏠</div>
+      <div><div class="nm">Inmobiliarias</div>
+        <div class="de">Del anuncio a la visita agendada · 5 ejemplos</div></div>
+      <div class="fl">→</div></a>
+
+    <a class="item" href="/agente/constructoras">
+      <div class="ic">🏗️</div>
+      <div><div class="nm">Constructoras</div>
+        <div class="de">Cuota inicial, enrutado por proyecto y lo que no se promete · 5 ejemplos</div></div>
+      <div class="fl">→</div></a>
+
+    <a class="item" href="/agente/clinicas">
+      <div class="ic">🩺</div>
+      <div><div class="nm">Clínicas y consultorios</div>
+        <div class="de">Agenda valoraciones y sabe dónde termina su trabajo · 5 ejemplos</div></div>
+      <div class="fl">→</div></a>
+
+    <a class="item" href="/agente/educacion">
+      <div class="ic">🎒</div>
+      <div><div class="nm">Educación</div>
+        <div class="de">Admisiones, costos y visitas al colegio · 5 ejemplos</div></div>
+      <div class="fl">→</div></a>
+
+    <a class="item" href="/agente/restaurantes">
+      <div class="ic">🍽️</div>
+      <div><div class="nm">Restaurantes</div>
+        <div class="de">Reservas, alergias, domicilios y eventos · 6 ejemplos</div></div>
+      <div class="fl">→</div></a>
+  </div>
+
+  <div class="pie">
+    <b>Conversaciones de ejemplo</b>, creadas para demostración. No son chats de clientes
+    reales: se escribieron siguiendo las instrucciones que el agente tiene de verdad, así que
+    muestran lo que la plataforma hace hoy.
+  </div>
+</main>
+</body>
+</html>

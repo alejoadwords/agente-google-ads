@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Material comercial: no debe salir en buscadores. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="El agente que atiende a los papás a las once: cinco ejemplos en un colegio.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="El Agente en un Colegio · Acuarius">
+<meta property="og:description" content="El agente que atiende a los papás a las once: cinco ejemplos en un colegio.">
+<meta property="og:url" content="https://app.acuarius.app/agente/educacion">
+<link rel="icon" href="/icons/icon-192.png">
+<title>El Agente en un Colegio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE; --violet:#7C3AED;
+  --success:#059669; --warning:#D97706; --danger:#DC2626;
+  --success-bg:#E7F7F0; --warning-bg:#FEF3E2; --danger-bg:#FDECEC;
+  --text:#0D0F1C; --text-2:#5A607A; --text-3:#9DA3BE;
+  --bg:#FFFFFF; --bg-subtle:#F7F8FC; --bg-muted:#F0F1F8; --surface:#FFFFFF;
+  --border:#E4E6F0; --border2:#F0F1F8;
+  --accent:var(--blue); --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  --chat-fondo:#E9E2DB; --chat-ellos:#FFFFFF; --chat-nos:#DCF8C6;
+  --chat-texto:#111B21; --chat-hora:#667781; --chat-barra:#F0F2F5;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}}
+:root[data-theme="dark"]{
+  --text:#EDEFFA; --text-2:#A7AECD; --text-3:#6E7699;
+  --bg:#0B0D1A; --bg-subtle:#111428; --bg-muted:#171B36; --surface:#141833;
+  --border:#272D52; --border2:#1C2142; --accent:#8C97F7;
+  --success:#34D399; --warning:#FBBF24; --danger:#F87171; --violet:#A78BFA;
+  --success-bg:#0E2A22; --warning-bg:#2E2110; --danger-bg:#2E1414;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:1060px;margin:0 auto;padding:34px 24px 90px}
+
+h1{font-size:clamp(30px,4.4vw,44px);line-height:1.05;letter-spacing:-.028em;font-weight:700;
+  margin:0 0 12px;text-wrap:balance}
+h2{font-size:clamp(21px,2.7vw,26px);line-height:1.2;letter-spacing:-.02em;font-weight:600;
+  margin:0 0 5px;text-wrap:balance}
+p{margin:0 0 14px;max-width:66ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.85em;background:var(--bg-muted);padding:1.5px 5px;
+  border-radius:5px;border:1px solid var(--border2)}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+  color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:16px;height:2px;background:var(--grad);border-radius:2px}
+.lede{font-size:17px;color:var(--text-2);max-width:64ch;margin-bottom:0}
+header{padding-bottom:26px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+.marca{display:inline-flex;align-items:center;gap:8px;background:var(--warning-bg);
+  border:1px solid color-mix(in srgb,var(--warning) 34%,transparent);border-radius:20px;
+  padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:18px}
+.marca::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning)}
+
+.caso{padding:46px 0;border-bottom:1px solid var(--border2)}
+.caso:last-of-type{border-bottom:0}
+.caso-head{margin-bottom:22px}
+.caso-num{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:500;
+  letter-spacing:.04em;margin-bottom:6px}
+.caso-que{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);
+  background:rgba(30,43,204,.08);border-radius:7px;padding:5px 11px;margin-top:8px}
+.caso-body{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:820px){.caso-body{grid-template-columns:1fr}}
+
+.tel{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--chat-fondo);
+  box-shadow:0 10px 30px rgba(13,15,28,.12)}
+.tel-barra{background:var(--chat-barra);padding:10px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(0,0,0,.07)}
+.tel-av{width:34px;height:34px;border-radius:50%;background:var(--grad);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.tel-nom{font-size:14px;font-weight:600;color:var(--chat-texto);line-height:1.2}
+.tel-est{font-size:11.5px;color:var(--chat-hora)}
+.tel-chat{padding:14px 12px;display:flex;flex-direction:column;gap:7px}
+.dia{align-self:center;background:rgba(255,255,255,.75);color:var(--chat-hora);font-size:11px;
+  font-weight:500;padding:3px 11px;border-radius:7px;margin:3px 0}
+.b{max-width:85%;padding:7px 10px 6px;border-radius:9px;font-size:14px;line-height:1.42;
+  color:var(--chat-texto);position:relative;box-shadow:0 1px .5px rgba(11,20,26,.13);
+  white-space:pre-line}
+.b.ellos{align-self:flex-start;background:var(--chat-ellos);border-top-left-radius:2px}
+.b.nos{align-self:flex-end;background:var(--chat-nos);border-top-right-radius:2px}
+.b .h{font-size:10.5px;color:var(--chat-hora);float:right;margin:6px 0 -2px 8px;
+  font-variant-numeric:tabular-nums}
+.b b{font-weight:600}
+.adj{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.05);border-radius:7px;
+  padding:8px 10px;margin-bottom:5px}
+.adj .ic{width:26px;height:32px;background:#E53935;border-radius:3px;flex:none;display:flex;
+  align-items:center;justify-content:center;color:#fff;font-size:8.5px;font-weight:700}
+.adj .nm{font-size:12.5px;color:var(--chat-texto);font-weight:500;line-height:1.25}
+.adj .pe{font-size:11px;color:var(--chat-hora)}
+
+.crm{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+.crm-t{padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--bg-subtle);
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--text-3)}
+.crm-b{padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+.fila{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;font-size:14px;align-items:baseline}
+.fila dt{font-size:12.5px;color:var(--text-3);font-weight:500}
+.fila dd{margin:0;color:var(--text)}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:20px;
+  margin:0 4px 4px 0}
+.c-ok{background:var(--success-bg);color:var(--success)}
+.c-az{background:rgba(30,43,204,.1);color:var(--accent)}
+.c-am{background:var(--warning-bg);color:var(--warning)}
+.c-ro{background:var(--danger-bg);color:var(--danger)}
+.c-gr{background:var(--bg-muted);color:var(--text-2)}
+.lectura{border-top:1px solid var(--border2);padding:13px 16px;font-size:14px;color:var(--text-2);
+  background:var(--bg-subtle)}
+.lectura b{color:var(--text)}
+
+.cierre{margin-top:52px;padding-top:30px;border-top:1px solid var(--border)}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(224px,1fr));gap:14px;margin:20px 0}
+.rejilla div{border:1px solid var(--border);border-radius:12px;padding:15px 17px;background:var(--surface)}
+.rejilla h3{font-size:14.5px;font-weight:600;margin:0 0 5px}
+.rejilla p{font-size:13.5px;color:var(--text-2);margin:0}
+.nota{border-left:2.5px solid var(--accent);padding-left:15px;margin:20px 0;color:var(--text-2);
+  font-size:15px;max-width:66ch}
+.nota strong{color:var(--text)}
+.aviso{background:var(--warning-bg);border:1px solid color-mix(in srgb,var(--warning) 32%,transparent);
+  border-radius:10px;padding:14px 16px;margin:20px 0;max-width:68ch;font-size:14.5px}
+.aviso .t{font-weight:600;color:var(--text);margin-bottom:4px;display:flex;gap:7px;align-items:center}
+.aviso .t::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warning);flex:none}
+ol.pasos{max-width:66ch;padding-left:20px}
+ol.pasos li{margin-bottom:9px}
+ol.pasos b{color:var(--text)}
+footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--text-3);max-width:66ch}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Material de presentación · Educación</div>
+    <h1>El agente que atiende<br>a los papás a las once</h1>
+    <p class="lede">Cinco ejemplos de lo que hace el agente de WhatsApp en un colegio: resuelve
+      la pregunta de la pensión, entiende para qué grado, agenda la visita y deja la admisión
+      encaminada. Con el tono de alguien que sabe que le están hablando de un hijo.</p>
+  </header>
+
+  <div style="padding-top:22px">
+    <div class="marca">Conversaciones de ejemplo, creadas para esta demostración</div>
+    <p>Escritas siguiendo <strong>las instrucciones que el agente tiene de verdad</strong>:
+      mensajes cortos, una pregunta a la vez y nunca afirmar un costo o una condición que no
+      esté en su información. Colegio ficticio, nombres y valores ficticios.</p>
+  </div>
+
+  <!-- ── 1 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 01</div>
+      <h2>De «¿cuánto vale?» a la visita al colegio</h2>
+      <div class="caso-que">Demuestra: responde el costo, entiende el caso y agenda</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">CR</div>
+          <div><div class="tel-nom">Carolina Ruiz</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">lunes</div>
+          <div class="b ellos">Hola, buenas tardes. Quisiera saber los costos para el próximo año<span class="h">19:05</span></div>
+          <div class="b nos">¡Hola Carolina! 😊 Con mucho gusto. Para 2027 la matrícula es de <b>$3.200.000</b> y la pensión de <b>$1.450.000</b> mensuales, en diez cuotas.<span class="h">19:06</span></div>
+          <div class="b nos">¿Para qué grado estarías mirando?<span class="h">19:06</span></div>
+          <div class="b ellos">Para quinto, mi hija está terminando cuarto<span class="h">19:08</span></div>
+          <div class="b nos">Perfecto 🙌 ¿Y viene de otro colegio o es su primer cambio?<span class="h">19:08</span></div>
+          <div class="b ellos">Sí, viene de otro. La verdad queremos algo más cerca de la casa y con mejor inglés<span class="h">19:11</span></div>
+          <div class="b nos">Te entiendo, es de las razones más comunes por las que nos buscan. Nosotros somos bilingües desde preescolar, así que en quinto ya entra a un ritmo fuerte de inglés.<span class="h">19:12</span></div>
+          <div class="b nos">¿En qué zona viven? Para contarte si te queda bien la ruta 🚌<span class="h">19:12</span></div>
+          <div class="b ellos">En Suba, cerca del portal<span class="h">19:14</span></div>
+          <div class="b nos">Por ahí sí pasa ruta, cuesta <b>$380.000</b> al mes.<span class="h">19:14</span></div>
+          <div class="b nos">Lo que mejor funciona en estos casos es venir a conocer el colegio y que tu hija vea los salones. Hacemos visitas guiadas los martes y jueves. ¿Te sirve alguna?<span class="h">19:15</span></div>
+          <div class="b ellos">El jueves podría, en la mañana<span class="h">19:17</span></div>
+          <div class="b nos">¡Listo! 📅 Le paso tus datos a admisiones y mañana te confirman la hora del jueves. ¿Me das el nombre completo de tu hija?<span class="h">19:17</span></div>
+          <div class="b ellos">Valentina Ruiz Ospina<span class="h">19:18</span></div>
+          <div class="b nos">Gracias Carolina. Nos vemos el jueves ✨<span class="h">19:18</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 19:18</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Acudiente</dt><dd>Carolina Ruiz · +57 3•• ••• ••06</dd></dl>
+            <dl class="fila"><dt>Aspirante</dt><dd>Valentina Ruiz Ospina</dd></dl>
+            <dl class="fila"><dt>Grado</dt><dd>Quinto · año 2027</dd></dl>
+            <dl class="fila"><dt>Procedencia</dt><dd>Otro colegio · busca cercanía e inglés</dd></dl>
+            <dl class="fila"><dt>Zona</dt><dd>Suba · ruta disponible</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">quinto</span><span class="chip c-az">traslado</span><span class="chip c-az">ruta suba</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Confirmar visita guiada del jueves</dd></dl>
+          </div>
+          <div class="lectura">Admisiones no recibe «una señora preguntó por costos». Recibe
+            <b>el grado, el año, de dónde viene, por qué se cambia, la zona y una visita pedida</b>.
+            <br><br>Y el dato que más vale para la llamada del día siguiente no es ninguno de esos:
+            es <b>«busca cercanía e inglés»</b>. Eso no se pregunta en un formulario.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 02</div>
+      <h2>El cupo y la beca: dos cosas que no se prometen</h2>
+      <div class="caso-que">Demuestra: dice que no sabe sin perder al interesado</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">AM</div>
+          <div><div class="tel-nom">Andrés Mora</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">martes</div>
+          <div class="b ellos">Buenas. ¿Todavía hay cupo en sexto para el próximo año?<span class="h">08:40</span></div>
+          <div class="b nos">¡Buenos días! Los cupos por grado los maneja admisiones y cambian semana a semana, así que no quiero decirte que sí y que después no sea 😕<span class="h">08:41</span></div>
+          <div class="b nos">Hoy mismo te lo confirman. ¿Te parece si mientras tanto avanzamos con lo demás?<span class="h">08:41</span></div>
+          <div class="b ellos">Dale. Y otra cosa, ¿manejan becas o descuentos por hermanos?<span class="h">08:43</span></div>
+          <div class="b nos">Descuento por hermanos sí manejamos, es del <b>10%</b> en la pensión del segundo hijo en adelante.<span class="h">08:44</span></div>
+          <div class="b nos">Las becas las define un comité con cada caso, así que eso tampoco te lo puedo adelantar yo. ¿Tienes más de un hijo para ingresar?<span class="h">08:44</span></div>
+          <div class="b ellos">Sí, dos. Uno para sexto y otro para tercero<span class="h">08:46</span></div>
+          <div class="b nos">Perfecto, entonces el descuento aplicaría 👍 Lo dejo anotado para que admisiones te lo cotice con los dos incluidos.<span class="h">08:46</span></div>
+          <div class="b ellos">Buenísimo, gracias<span class="h">08:47</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 08:47</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Acudiente</dt><dd>Andrés Mora</dd></dl>
+            <dl class="fila"><dt>Aspirantes</dt><dd><b>Dos</b> · sexto y tercero</dd></dl>
+            <dl class="fila"><dt>Pendientes</dt><dd>Confirmar cupo en sexto<br>Informar sobre becas</dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">dos hijos</span><span class="chip c-ok">descuento hermanos</span><span class="chip c-am">pregunta beca</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd><span class="chip c-am">Admisiones · hoy</span></dd></dl>
+          </div>
+          <div class="lectura">Dos preguntas que no podía responder y una que sí. Contestó la que
+            tenía —el 10% por hermanos está en su información— y <b>escaló las otras dos sin
+            cortar la conversación</b>.
+            <br><br>Y al hacerlo descubrió lo importante: <b>no es un estudiante, son dos</b>.
+            Ese lead vale el doble y nadie del colegio estaba despierto para notarlo.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 03</div>
+      <h2>Domingo, 23:20, mirando colegios</h2>
+      <div class="caso-que">Demuestra: la hora real a la que los papás deciden</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">PG</div>
+          <div><div class="tel-nom">Paola G.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">domingo</div>
+          <div class="b ellos">Hola, perdón la hora 🙈 estaba mirando colegios y vi el suyo<span class="h">23:20</span></div>
+          <div class="b nos">¡Hola! Tranquila, para eso estamos 😊 Cuéntame, ¿para qué grado estás buscando?<span class="h">23:20</span></div>
+          <div class="b ellos">Para transición, mi hijo cumple 5 en enero<span class="h">23:22</span></div>
+          <div class="b nos">Qué lindo, esa es la edad justa para transición 🧡<span class="h">23:22</span></div>
+          <div class="b nos">¿Es su primera vez en colegio o viene de jardín?<span class="h">23:23</span></div>
+          <div class="b ellos">De jardín, pero es súper tímido y eso es lo que más me preocupa la verdad<span class="h">23:25</span></div>
+          <div class="b nos">Te entiendo perfectamente, es de las cosas que más nos preguntan los papás de transición.<span class="h">23:26</span></div>
+          <div class="b nos">En preescolar trabajamos con grupos pequeños y hay acompañamiento de psicología en el proceso de adaptación. Es algo que te van a explicar mucho mejor en la visita.<span class="h">23:26</span></div>
+          <div class="b ellos">Eso me deja más tranquila. ¿Cómo hago para ir?<span class="h">23:28</span></div>
+          <div class="b nos">Hacemos visitas guiadas martes y jueves en la mañana ✨ Mañana admisiones te escribe por aquí para cuadrar la que te sirva. ¿Me confirmas tu nombre?<span class="h">23:29</span></div>
+          <div class="b ellos">Paola Gutiérrez. Mil gracias por responder a esta hora 🙏<span class="h">23:30</span></div>
+          <div class="b nos">Con muchísimo gusto, Paola. Que descanses 🌙<span class="h">23:30</span></div>
+          <div class="dia">lunes</div>
+          <div class="b nos">Buenos días Paola, soy Ángela de admisiones. Vi que te interesa transición para tu hijo y que te preocupa la adaptación — justo eso te lo quiero mostrar en la visita…<span class="h">07:40</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que admisiones encontró el lunes</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Acudiente</dt><dd>Paola Gutiérrez</dd></dl>
+            <dl class="fila"><dt>Entró</dt><dd>domingo, 23:20</dd></dl>
+            <dl class="fila"><dt>Grado</dt><dd>Transición · cumple 5 en enero</dd></dl>
+            <dl class="fila"><dt>Procedencia</dt><dd>Jardín</dd></dl>
+            <dl class="fila"><dt>Preocupación</dt><dd><b>Niño tímido · adaptación</b></dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-ok">Calificado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-az">transición</span><span class="chip c-az">adaptación</span></dd></dl>
+          </div>
+          <div class="lectura">Un colegio no se elige a las diez de la mañana de un martes. Se
+            elige un domingo a las once de la noche, después de acostar a los niños.
+            <br><br>Mira el primer mensaje de Ángela el lunes: <b>no arranca con los costos,
+            arranca con la timidez del niño</b>. Eso es lo que convierte una visita en una
+            matrícula, y estaba en la conversación de la madrugada.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 04</div>
+      <h2>El que no encaja, resuelto en cuatro mensajes</h2>
+      <div class="caso-que">Demuestra: no ocupa a admisiones con lo que no aplica</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">JR</div>
+          <div><div class="tel-nom">Javier R.</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">miércoles</div>
+          <div class="b ellos">Buenas, ¿tienen bachillerato para adultos en jornada nocturna?<span class="h">16:30</span></div>
+          <div class="b nos">Buenas tardes 👋 No, nosotros somos colegio de calendario A, de preescolar a once, solo jornada única en la mañana.<span class="h">16:31</span></div>
+          <div class="b ellos">Ah, entiendo. ¿Y sabe de alguno que sí?<span class="h">16:33</span></div>
+          <div class="b nos">No te puedo recomendar uno sin conocerlo, prefiero no mandarte a ciegas. Lo que sí: la Secretaría de Educación tiene el listado de instituciones con esa jornada 📋<span class="h">16:34</span></div>
+          <div class="b ellos">Vale, muchas gracias por la claridad<span class="h">16:35</span></div>
+          <div class="b nos">Con gusto, Javier. Y si algún día buscas colegio para un hijo, aquí estamos 😊<span class="h">16:35</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 16:35</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Contacto</dt><dd>Javier R.</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-gr">Registrado</span></dd></dl>
+            <dl class="fila"><dt>Etiquetas</dt><dd><span class="chip c-gr">no-calificado</span><span class="chip c-az">fuera de oferta</span></dd></dl>
+            <dl class="fila"><dt>Escalado</dt><dd>No — no ocupó a admisiones</dd></dl>
+          </div>
+          <div class="lectura">En temporada de matrículas, admisiones recibe cientos de mensajes y
+            una parte grande son de gente que <b>nunca va a matricular ahí</b>.
+            <br><br>Cuatro mensajes, sin ocupar a nadie, sin inventar una recomendación y dejando
+            la puerta abierta. El valor no está solo en los leads que entran: está en los que
+            <b>no llegan a interrumpir</b> a un equipo que está a tope.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5 ─────────────────────────────────────────── -->
+  <section class="caso">
+    <div class="caso-head">
+      <div class="caso-num">Ejemplo 05</div>
+      <h2>Lee el boletín y dice qué falta</h2>
+      <div class="caso-que">Demuestra: entiende PDFs y fotos, no solo texto</div>
+    </div>
+    <div class="caso-body">
+      <div class="tel">
+        <div class="tel-barra"><div class="tel-av">CR</div>
+          <div><div class="tel-nom">Carolina Ruiz</div><div class="tel-est">en línea</div></div></div>
+        <div class="tel-chat">
+          <div class="dia">viernes</div>
+          <div class="b ellos"><div class="adj"><div class="ic">PDF</div>
+            <div><div class="nm">boletin-valentina.pdf</div><div class="pe">3 páginas · 240 kB</div></div></div>
+            Hola, les mando el boletín que me pidieron para la admisión<span class="h">14:12</span></div>
+          <div class="b nos">¡Gracias Carolina! Ya lo revisé 📄 Es el boletín de cuarto de Valentina, con los tres periodos y el certificado de paz y salvo al final. Está completo por ese lado 👌<span class="h">14:13</span></div>
+          <div class="b nos">Para cerrar la carpeta nos faltarían dos cosas: el <b>registro civil</b> y el <b>carné de vacunas</b>. ¿Los tienes a la mano?<span class="h">14:14</span></div>
+          <div class="b ellos">El registro sí, el carné creo que está en la casa. ¿Sirve una foto?<span class="h">14:16</span></div>
+          <div class="b nos">Sí, una foto legible sirve perfecto 📷 Mándalos cuando puedas y con eso admisiones ya puede programar la entrevista familiar.<span class="h">14:16</span></div>
+          <div class="b ellos">Listo, esta noche los mando<span class="h">14:18</span></div>
+          <div class="b nos">Perfecto ✨ Quedo pendiente.<span class="h">14:18</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="crm">
+          <div class="crm-t">Lo que quedó en el CRM · 14:18</div>
+          <div class="crm-b">
+            <dl class="fila"><dt>Aspirante</dt><dd>Valentina Ruiz Ospina · quinto</dd></dl>
+            <dl class="fila"><dt>Adjunto</dt><dd>boletin-valentina.pdf</dd></dl>
+            <dl class="fila"><dt>Leído</dt><dd>Boletín de cuarto · 3 periodos · paz y salvo</dd></dl>
+            <dl class="fila"><dt>Faltan</dt><dd>Registro civil · carné de vacunas</dd></dl>
+            <dl class="fila"><dt>Etapa</dt><dd><span class="chip c-am">Documentos incompletos</span></dd></dl>
+            <dl class="fila"><dt>Tarea</dt><dd>Programar entrevista al completar</dd></dl>
+          </div>
+          <div class="lectura">El agente <b>abre el PDF y dice qué trae</b> — grado, periodos,
+            paz y salvo— y, sobre todo, <b>qué falta</b>.
+            <br><br>En admisiones el cuello de botella no son las visitas: son las carpetas a
+            medio llenar que nadie revisa hasta una semana después. Aquí se supo en un minuto.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Cierre ── -->
+  <section class="cierre">
+    <div class="eyebrow">Para cerrar la presentación</div>
+    <h2>Por qué no suena a bot</h2>
+    <p>No es el modelo: es cómo está instruido. Estas cuatro reglas están escritas en el agente
+      y son las que producen todo lo de arriba.</p>
+    <div class="rejilla">
+      <div><h3>Una pregunta a la vez</h3>
+        <p>Primero responde lo que le preguntaron; la suya va después, encadenada. Nunca suelta
+          el cuestionario de golpe.</p></div>
+      <div><h3>Mensajes de chat, no de correo</h3>
+        <p>Una a tres oraciones. Como escribe alguien de admisiones con oficio, no como un
+          folleto de matrículas.</p></div>
+      <div><h3>No inventa jamás</h3>
+        <p>Un costo o una condición solo si está en su información. Cupos y becas los pasa a
+          una persona, y lo dice.</p></div>
+      <div><h3>No pregunta dos veces</h3>
+        <p>Si ya le dieron un dato antes, no lo vuelve a pedir. Y si no se lo quieren dar, no
+          insiste.</p></div>
+    </div>
+
+    <div class="aviso">
+      <div class="t">Sobre los emojis: son una decisión, no un accidente</div>
+      El tono con emojis de estos ejemplos <b>sale de cómo se configura la personalidad del
+      agente</b>, que es texto libre en su ficha. No viene puesto por defecto: hay que pedírselo.
+      <br><br>Y no le queda bien a todo el mundo. En un colegio o una marca de consumo suma
+      cercanía; en una clínica, un bufete o una financiera resta seriedad. <b>Es un ajuste por
+      cliente</b>, y conviene presentarlo así en la reunión: «su agente habla como usted quiera
+      que hable».
+      <br><br>Ojo también con la dosis: uno o dos por mensaje y no en todos. Un agente que mete
+      tres emojis en cada frase se delata más rápido que uno que no mete ninguno.
+    </div>
+
+    <h2 style="margin-top:38px">Qué hay que cargarle a un colegio</h2>
+    <ol class="pasos">
+      <li><b>Matrícula, pensión y ruta</b>, con los valores del año. Es de ahí de donde saca lo
+        que puede afirmar — sin eso, remite todo a admisiones.</li>
+      <li><b>Grados que ofrece, jornada y calendario.</b> Filtra solo con eso a buena parte de
+        quienes escriben.</li>
+      <li><b>Descuentos que sí son fijos</b>, como el de hermanos. Los que dependen de un comité
+        —becas— se dejan fuera a propósito.</li>
+      <li><b>Los documentos de admisión</b>, para que pueda revisar carpetas y decir qué falta.</li>
+      <li><b>Qué preguntar antes de pasar a admisiones</b>: grado, año, de dónde viene, zona y
+        disponibilidad para la visita. Cinco datos y la visita se cuadra en un mensaje.</li>
+    </ol>
+
+    <div class="nota">
+      <strong>El cierre que mejor funciona en una reunión.</strong> Todos los CRM guardan la
+      conversación. La diferencia está en la columna de la derecha de cada ejemplo: el aspirante
+      con su grado, su procedencia, su motivo real y su tarea — <em>sin que nadie del colegio
+      tocara nada</em>. Enseña primero el chat y después esa columna.
+    </div>
+  </section>
+
+  <footer>
+    Conversaciones de ejemplo · Acuarius · septiembre de 2026.<br>
+    Escritas siguiendo las instrucciones reales del agente. Colegio, familias y valores son
+    ficticios. Existen las versiones equivalentes para inmobiliarias y para clínicas.
+  </footer>
+</main>
+</body>
+</html>
