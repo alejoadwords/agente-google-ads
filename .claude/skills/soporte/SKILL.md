@@ -114,3 +114,26 @@ node tools/mapa-modulos.mjs > .claude/skills/soporte/modulos.md
   el único asiento) atiende. Ha reportado tres cosas, las tres ya arregladas:
   seguimientos de leads perdidos, leads marcados «sin actividad» teniendo tarea
   programada, y las notas al responsable que no avisaban.
+
+## Conectar el formulario de una web (receta)
+
+El caso que ya salió: **Elementor Forms**, el mismo formulario repetido en todas
+las páginas, y dentro un desplegable que decide el destino del lead.
+
+1. Mirar el HTML de la página y sacar el **`name` del campo que decide**. En
+   Elementor llega como `form_fields[field_a74788e]`; en Acuarius se escribe
+   solo `field_a74788e`.
+2. Crear **una** conexión en Fuentes de leads y marcar «El mismo formulario
+   alimenta varios tableros». Una rama por cada opción del desplegable, con su
+   tablero y su reparto.
+3. Dar la **URL de webhook**, no el script, si el constructor tiene acción de
+   Webhook. Con reCAPTCHA en la página el script mete también los envíos que el
+   propio formulario rechaza. **Nunca los dos a la vez**: entra duplicado.
+4. Probar enviando el formulario real una vez por cada opción y comprobar dónde
+   cae. La ficha del lead dice `Destino: <rama>` — ahí se lee qué decidió el
+   sistema en vez de adivinarlo.
+
+Trampas comprobadas: el tablero de una rama tiene que ser **del mismo cliente**
+que la conexión, o `pipelineElegido()` lo rechaza y el lead cae en el tablero
+por defecto sin avisar. Y el «tablero por defecto» no se configura en el
+conector: es la casilla *proceso por defecto* del CRM, por cuenta y por cliente.
