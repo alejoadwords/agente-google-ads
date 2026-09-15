@@ -28537,7 +28537,7 @@ function conAbrir(id) {
         '<label class="auto-label">Etiquetas para estos leads (opcional)</label>' +
         '<input class="auto-input" id="con-tags" maxlength="200" value="' + esc(c ? (c.tags || []).join(', ') : '') + '" placeholder="web, contacto">' +
       '</div>' +
-      '<div class="auto-field">' +
+      '<div class="auto-field" id="con-ejecutivo-campo">' +
         '<label class="auto-label">¿Quién atiende estos leads?</label>' +
         '<select class="auto-input" id="con-ejecutivo"><option value="">Reparto automático</option></select>' +
         '<div style="font-size:11px;color:var(--muted);margin-top:5px">Con <b>reparto automático</b> se sigue la regla de la fuente (por turnos entre el equipo). Si eliges a alguien, todos los leads de esta web van a su nombre.</div>' +
@@ -28592,16 +28592,14 @@ function conReglasToggle() {
   const caja = document.getElementById('con-reglas-caja');
   if (!caja) return;
   caja.style.display = on ? 'block' : 'none';
+  // Con reglas, cada rama dice quién atiende. Dejar arriba OTRO «quién atiende»
+  // es preguntar lo mismo dos veces con respuestas que pueden contradecirse.
+  const campoUno = document.getElementById('con-ejecutivo-campo');
+  if (campoUno) campoUno.style.display = on ? 'none' : '';
   if (!on) return;
   if (!_conReglas.casos.length) _conReglas.casos = [{ vale: '', pipeline_id: null, tags: [], reparto: null }];
   conReglasPintar();
 }
-
-function conPipeOpciones(sel, textoVacio) {
-  return '<option value="">' + esc(textoVacio) + '</option>' +
-    _conPipes.map(p => '<option value="' + esc(p.id) + '"' + (sel === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
-}
-
 function conEquipo() {
   const miId = clerkInstance?.user?.id || '';
   const yo = clerkInstance?.user?.firstName || 'Yo';
@@ -28610,44 +28608,73 @@ function conEquipo() {
       .map(m => ({ id: m.member_user_id, name: m.member_name || m.member_email }))
   );
 }
-
-// El desplegable de «quién atiende» de cada rama. Tres respuestas posibles:
-// vacío (la regla normal de la cuenta), 'turnos' (por turnos entre los que se
-// marquen) o el id de una persona.
-function conQuienOpciones(rep) {
-  const modo = rep && rep.modo === 'fijo' ? rep.quien : (rep && rep.modo === 'turnos' ? 'turnos' : '');
-  return '<option value=""' + (modo === '' ? ' selected' : '') + '>Reparto automático de la cuenta</option>' +
-    '<option value="turnos"' + (modo === 'turnos' ? ' selected' : '') + '>Por turnos entre varios…</option>' +
-    conEquipo().map(m => '<option value="' + esc(m.id) + '"' + (modo === m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>').join('');
-}
-
 function conRamaHtml(r, i) {
-  const rep = r.reparto;
-  const turnos = rep && rep.modo === 'turnos';
-  const entre = turnos && Array.isArray(rep.entre) ? rep.entre : [];
+  const entre = conQuienesAtienden(r);
   return '<div style="border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
-    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">' +
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px">' +
       '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si responde</span>' +
       '<input class="auto-input" style="flex:1;min-width:0" maxlength="80" placeholder="Arrendar" value="' + esc(r.vale || '') + '" oninput="conRamaSet(' + i + ',\'vale\',this.value)">' +
-      '<span style="font-size:11.5px;color:var(--muted)">→</span>' +
-      '<select class="auto-input" style="flex:1;min-width:0" onchange="conRamaSet(' + i + ',\'pipeline_id\',this.value)">' + conPipeOpciones(r.pipeline_id, 'Tablero por defecto') + '</select>' +
+      '<span style="font-size:11.5px;color:var(--muted)">&#8594;</span>' +
+      '<button class="dd-btn" style="flex:1;min-width:0;max-width:none;justify-content:space-between" onclick="conElegirTablero(this,' + i + ')">' +
+        '<span class="dd-btn-txt">' + esc(conPipeNombre(r.pipeline_id)) + '</span>' + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="flex-shrink:0;opacity:.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+      '</button>' +
       '<button class="btn-ghost sm" title="Quitar" onclick="conRamaQuitar(' + i + ')">&#10005;</button>' +
     '</div>' +
-    '<div style="display:flex;align-items:center;gap:7px">' +
-      '<select class="auto-input" style="flex:1;min-width:0" onchange="conRamaQuien(' + i + ',this.value)">' + conQuienOpciones(rep) + '</select>' +
-      '<input class="auto-input" style="flex:1;min-width:0" maxlength="120" placeholder="Etiquetas (opcional)" value="' + esc((r.tags || []).join(', ')) + '" oninput="conRamaTags(' + i + ',this.value)">' +
+    // Las personas se ven SIEMPRE. Estaban escondidas detrás de una opción del
+    // desplegable («Por turnos entre varios…») y desde fuera parecía que no se
+    // podía elegir a nadie — que es justo lo más importante de esta pantalla:
+    // no todo el mundo atiende arriendo, ni todo el mundo atiende venta.
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">¿Quiénes atienden esta respuesta?</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+      conEquipo().map(m => '<button class="dd-btn' + (entre.includes(m.id) ? ' activo' : '') + '" ' +
+        'style="max-width:none" onclick="conRamaPersona(' + i + ',\'' + esc(m.id) + '\')">' +
+        (entre.includes(m.id) ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '') +
+        esc(m.name) + '</button>').join('') +
     '</div>' +
-    (turnos
-      ? '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">' +
-          conEquipo().map(m => '<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">' +
-            '<input type="checkbox"' + (entre.includes(m.id) ? ' checked' : '') + ' onchange="conRamaEntre(' + i + ',\'' + esc(m.id) + '\',this.checked)">' +
-            esc(m.name) + '</label>').join('') +
-          (entre.length ? '' : '<span style="font-size:11px;color:var(--muted)">Sin marcar a nadie reparte entre todo el equipo.</span>') +
-        '</div>'
-      : '') +
+    '<div style="font-size:11px;color:var(--muted);margin-top:6px">' +
+      (entre.length === 0 ? 'Sin marcar a nadie se usa el reparto normal de la cuenta.'
+       : entre.length === 1 ? 'Todos estos leads van a su nombre.'
+       : 'Se reparten por turnos entre los ' + entre.length + ' marcados.') +
+    '</div>' +
+    '<input class="auto-input" style="margin-top:9px" maxlength="120" placeholder="Etiquetas para estos leads (opcional)" value="' + esc((r.tags || []).join(', ')) + '" oninput="conRamaTags(' + i + ',this.value)">' +
   '</div>';
 }
 
+// Quiénes atienden una rama, venga guardada como turnos o como persona fija.
+// El modo 'fijo' ya no se puede elegir en pantalla —marcar a una sola persona
+// hace lo mismo— pero el servidor lo sigue entendiendo y puede haber reglas
+// guardadas así.
+function conQuienesAtienden(r) {
+  const rep = r && r.reparto;
+  if (!rep) return [];
+  if (rep.modo === 'fijo' && rep.quien) return [rep.quien];
+  return Array.isArray(rep.entre) ? rep.entre : [];
+}
+
+function conRamaPersona(i, id) {
+  const r = _conReglas.casos[i];
+  if (!r) return;
+  const set = new Set(conQuienesAtienden(r));
+  if (set.has(id)) set.delete(id); else set.add(id);
+  r.reparto = set.size ? { modo: 'turnos', entre: [...set] } : null;
+  conReglasPintar();
+}
+
+function conPipeNombre(id) {
+  if (!id) return 'Tablero por defecto';
+  const p = _conPipes.find(x => x.id === id);
+  return p ? p.name : 'Tablero por defecto';
+}
+
+function conElegirTablero(btn, i) {
+  const opciones = [{ id: '', name: 'Tablero por defecto' }].concat(_conPipes.map(p => ({ id: p.id, name: p.name })));
+  const actual = i === null ? ((_conReglas.sino || {}).pipeline_id || '') : (_conReglas.casos[i].pipeline_id || '');
+  ddAbrir(btn, opciones, actual, id => {
+    if (i === null) conSinoSet('pipeline_id', id);
+    else conRamaSet(i, 'pipeline_id', id);
+    conReglasPintar();
+  });
+}
 function conReglasPintar() {
   const caja = document.getElementById('con-reglas-caja');
   if (!caja) return;
@@ -28662,8 +28689,11 @@ function conReglasPintar() {
     '<button class="btn-sec sm" onclick="conRamaAgregar()" style="margin-bottom:12px">' + icn('plus', 11) + ' Añadir otra respuesta</button>' +
     '<div style="border:1px dashed var(--border);border-radius:11px;padding:11px 12px">' +
       '<div style="display:flex;align-items:center;gap:7px">' +
-        '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si no coincide ninguna →</span>' +
-        '<select class="auto-input" style="flex:1;min-width:0" onchange="conSinoSet(\'pipeline_id\',this.value)">' + conPipeOpciones(sino.pipeline_id, 'Tablero por defecto') + '</select>' +
+        '<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">Si no coincide ninguna &#8594;</span>' +
+        '<button class="dd-btn" style="flex:1;min-width:0;max-width:none;justify-content:space-between" onclick="conElegirTablero(this,null)">' +
+          '<span class="dd-btn-txt">' + esc(conPipeNombre(sino.pipeline_id)) + '</span>' +
+          '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="flex-shrink:0;opacity:.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>' +
         '<input class="auto-input" style="flex:1;min-width:0" maxlength="120" placeholder="Etiquetas (opcional)" value="' + esc((sino.tags || []).join(', ')) + '" oninput="conSinoTags(this.value)">' +
       '</div>' +
       '<div style="font-size:11px;color:var(--muted);margin-top:6px">Pasa cuando el visitante deja el campo vacío o tu web cambia las opciones. Una etiqueta aquí —«sin clasificar»— te deja verlos de un vistazo.</div>' +
@@ -28674,25 +28704,12 @@ function conRamaSet(i, campo, val) {
   if (!_conReglas.casos[i]) return;
   _conReglas.casos[i][campo] = campo === 'pipeline_id' ? (val || null) : val;
 }
+
 function conRamaTags(i, val) {
   if (!_conReglas.casos[i]) return;
   _conReglas.casos[i].tags = String(val || '').split(',').map(t => t.trim()).filter(Boolean);
 }
-function conRamaQuien(i, val) {
-  const r = _conReglas.casos[i];
-  if (!r) return;
-  if (!val) r.reparto = null;
-  else if (val === 'turnos') r.reparto = { modo: 'turnos', entre: [] };
-  else r.reparto = { modo: 'fijo', quien: val };
-  conReglasPintar();   // «por turnos» despliega a quién incluir
-}
-function conRamaEntre(i, id, marcado) {
-  const r = _conReglas.casos[i];
-  if (!r || !r.reparto || r.reparto.modo !== 'turnos') return;
-  const set = new Set(r.reparto.entre || []);
-  if (marcado) set.add(id); else set.delete(id);
-  r.reparto.entre = [...set];
-}
+
 function conRamaAgregar() {
   _conReglas.casos.push({ vale: '', pipeline_id: null, tags: [], reparto: null });
   conReglasPintar();
