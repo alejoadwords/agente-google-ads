@@ -243,7 +243,8 @@ export async function intakeLead(userId, clientId, data) {
         userId, created,
         data.repartoClave || created.source,
         data.assignedTo || null,
-        data.repartoEntre || null
+        data.repartoEntre || null,
+        data.repartoTurnos === true
       );
       // Sin equipo no hay a quién asignar, pero el lead sigue necesitando que
       // alguien lo llame. En una cuenta de una sola persona el dueño ES el

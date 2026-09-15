@@ -64,6 +64,7 @@ export function decidirDestino(reglas, body, base = {}) {
     tags: Array.isArray(base.tags) ? [...base.tags] : [],
     repartoClave: null,
     repartoEntre: null,
+    repartoTurnos: false,
     caso: null,
   };
 
@@ -102,6 +103,9 @@ export function decidirDestino(reglas, body, base = {}) {
     salida.assignedTo = null;
     salida.repartoClave = 'conector:' + normaliza(ganador ? ganador.vale : 'sino').slice(0, 30);
     salida.repartoEntre = Array.isArray(rep.entre) && rep.entre.length ? rep.entre : null;
+    // La rama dijo «por turnos». Eso manda sobre la regla general de la cuenta,
+    // que puede estar en «fijo» o en «off» por otra fuente distinta.
+    salida.repartoTurnos = true;
   }
   return salida;
 }

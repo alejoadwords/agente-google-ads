@@ -144,6 +144,7 @@ export default async function handler(req, contexto) {
       pipelineId: destino.pipelineId || null,
       repartoClave: destino.repartoClave || null,
       repartoEntre: destino.repartoEntre || null,
+      repartoTurnos: destino.repartoTurnos === true,
       ...(camposPropios ? { custom_fields: camposPropios } : {}),
     });
     await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${form.id}`, {
