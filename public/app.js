@@ -32164,28 +32164,37 @@ function sopTapaAlgo(r) {
 function sopEsquivar() {
   const b = document.getElementById('sop-burbuja');
   if (!b || !b.classList.contains('visible')) return;
+
+  // NO se mueve para medir. El intento anterior la iba colocando en cada
+  // escalón y midiendo ahí, y eso dejaba a la burbuja arrancando la animación
+  // desde el último sitio donde se la probó en vez de desde donde estaba de
+  // verdad: se veía caer desde arriba o aparecer de la nada. Como está fija a
+  // la esquina, el rectángulo de cada candidata se calcula con aritmética y la
+  // burbuja se toca UNA sola vez, ya con el destino decidido.
+  const w = b.offsetWidth || 52;
+  const h = b.offsetHeight || 52;
+  const derecha = 20;                    // el `right` del CSS
+  const previa = b.style.visibility;
   // Oculta —que no quitada— para que elementFromPoint no se encuentre con ella
   // misma: un elemento con visibility:hidden no recibe el impacto.
-  //
-  // Y sin transición mientras se mide: con ella, getBoundingClientRect devuelve
-  // la posición A MITAD de la animación, no la que se acaba de fijar, así que
-  // la burbuja se medía a sí misma moviéndose y siempre acababa en el último
-  // escalón. Se restaura antes de pintar, para que el salto se vea suave.
-  const previa = b.style.visibility;
-  const transPrevia = b.style.transition;
   b.style.visibility = 'hidden';
-  b.style.transition = 'none';
+  let elegido = SOP_ALTURAS[SOP_ALTURAS.length - 1];
   try {
     for (const alto of SOP_ALTURAS) {
-      b.style.bottom = alto + 'px';
-      if (!sopTapaAlgo(b.getBoundingClientRect())) break;
+      const r = {
+        left: window.innerWidth - derecha - w, right: window.innerWidth - derecha,
+        top: window.innerHeight - alto - h,    bottom: window.innerHeight - alto,
+        width: w, height: h,
+      };
+      if (!sopTapaAlgo(r)) { elegido = alto; break; }
     }
   } catch {
-    b.style.bottom = '';
+    elegido = SOP_ALTURAS[0];
   } finally {
     b.style.visibility = previa;
-    b.style.transition = transPrevia;
   }
+  const destino = elegido + 'px';
+  if (b.style.bottom !== destino) b.style.bottom = destino;
 }
 
 // Se recalcula tras cualquier clic —abrir un cajón, cambiar de módulo, cerrar

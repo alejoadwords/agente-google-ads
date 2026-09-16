@@ -54,7 +54,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   --fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-md:15px;--fs-lg:18px;--fs-xl:24px;--fs-2xl:32px;
   /* System */
   --font:'Outfit',sans-serif;--r:10px;--rlg:14px;--rxl:18px;
-  --ease:cubic-bezier(0.16,1,0.3,1);
+  --ease:cubic-bezier(0.16,1,0.3,1);--ease-mover:cubic-bezier(0.4,0,0.2,1);
   --dur-fast:.15s;--dur-base:.25s;--dur-slow:.4s;
   --shadow-sm:0 1px 3px rgba(13,15,28,.06),0 1px 2px rgba(13,15,28,.04);
   --shadow-md:0 4px 12px rgba(13,15,28,.08),0 1px 3px rgba(13,15,28,.05);
@@ -2521,7 +2521,7 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .pul-accion:hover{color:var(--blue);border-color:var(--blue)}
 
 /* ── Soporte flotante ── */
-#sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease),bottom .2s var(--ease)}
+#sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease),bottom var(--dur-base) var(--ease-mover)}
 #sop-burbuja:hover{transform:translateY(-2px)}
 #sop-burbuja.visible{display:flex}
 #sop-panel{position:fixed;right:20px;bottom:20px;z-index:9600;width:min(390px,calc(100vw - 32px));height:min(560px,calc(100vh - 40px));background:var(--bg-card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden}
