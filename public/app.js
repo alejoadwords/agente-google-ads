@@ -32133,7 +32133,73 @@ const SOP_SUGERENCIAS = [
 function sopMostrarBurbuja() {
   const b = document.getElementById('sop-burbuja');
   if (b) b.classList.toggle('visible', !!(typeof clerkInstance !== 'undefined' && clerkInstance?.user));
+  sopEsquivar();
 }
+
+// ── Que la burbuja no tape lo que la persona vino a pulsar ───────────────────
+//
+// Vive fija en la esquina inferior derecha, y esa esquina es justo donde las
+// pantallas ponen su botón principal: Enviar en el inbox, Eliminar en la ficha
+// del lead. Tapar el botón que alguien viene a pulsar es peor que no tener el
+// soporte a mano.
+//
+// No se resuelve con una lista de pantallas: esa lista se queda vieja el día
+// que alguien añada otro cajón, y nadie se entera porque no falla nada — solo
+// se ve mal. Así que se mira QUÉ HAY DEBAJO y se sube hasta quedar libre.
+const SOP_ALTURAS = [20, 96, 172];
+
+function sopTapaAlgo(r) {
+  const m = 6;
+  const puntos = [
+    [r.left + r.width / 2, r.top + r.height / 2],
+    [r.left + m, r.top + m], [r.right - m, r.top + m],
+    [r.left + m, r.bottom - m], [r.right - m, r.bottom - m],
+  ];
+  return puntos.some(([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return !!(el && el.closest('button, a[href], input, textarea, select, [role="button"], [onclick]'));
+  });
+}
+
+function sopEsquivar() {
+  const b = document.getElementById('sop-burbuja');
+  if (!b || !b.classList.contains('visible')) return;
+  // Oculta —que no quitada— para que elementFromPoint no se encuentre con ella
+  // misma: un elemento con visibility:hidden no recibe el impacto.
+  //
+  // Y sin transición mientras se mide: con ella, getBoundingClientRect devuelve
+  // la posición A MITAD de la animación, no la que se acaba de fijar, así que
+  // la burbuja se medía a sí misma moviéndose y siempre acababa en el último
+  // escalón. Se restaura antes de pintar, para que el salto se vea suave.
+  const previa = b.style.visibility;
+  const transPrevia = b.style.transition;
+  b.style.visibility = 'hidden';
+  b.style.transition = 'none';
+  try {
+    for (const alto of SOP_ALTURAS) {
+      b.style.bottom = alto + 'px';
+      if (!sopTapaAlgo(b.getBoundingClientRect())) break;
+    }
+  } catch {
+    b.style.bottom = '';
+  } finally {
+    b.style.visibility = previa;
+    b.style.transition = transPrevia;
+  }
+}
+
+// Se recalcula tras cualquier clic —abrir un cajón, cambiar de módulo, cerrar
+// un modal— y al cambiar el tamaño. 350 ms porque el cajón del lead entra con
+// una transición de 280: medir antes daría la posición de la pantalla anterior.
+let _sopReloj = null;
+function sopRevisarPronto() {
+  clearTimeout(_sopReloj);
+  _sopReloj = setTimeout(sopEsquivar, 350);
+}
+alDOMListo(() => {
+  document.addEventListener('click', sopRevisarPronto, true);
+  window.addEventListener('resize', sopRevisarPronto);
+});
 
 async function sopAbrir() {
   document.getElementById('sop-panel')?.classList.add('abierto');

@@ -2521,7 +2521,7 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .pul-accion:hover{color:var(--blue);border-color:var(--blue)}
 
 /* ── Soporte flotante ── */
-#sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease)}
+#sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease),bottom .2s var(--ease)}
 #sop-burbuja:hover{transform:translateY(-2px)}
 #sop-burbuja.visible{display:flex}
 #sop-panel{position:fixed;right:20px;bottom:20px;z-index:9600;width:min(390px,calc(100vw - 32px));height:min(560px,calc(100vh - 40px));background:var(--bg-card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden}
