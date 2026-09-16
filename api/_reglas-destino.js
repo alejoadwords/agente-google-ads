@@ -157,3 +157,67 @@ export function desanidarCorchetes(body) {
   }
   return out;
 }
+
+// ── La nota que le queda al comercial ───────────────────────────────────────
+//
+// Antes se volcaba el envío tal cual y salía esto:
+//
+//   field_e3ffc40: Barranquilla · interesado: Arrendar · message: Estoy
+//   buscando… · field_9dc3912: on · Página: https://certainpezzano.com/
+//   contacto/?utm_campaign=&utm_source=adwords&utm_term=casas%20e… ·
+//   Destino: Arrendar
+//
+// Quien abre la ficha va a LLAMAR a esa persona. Lo que necesita es qué pidió
+// y de dónde vino, no el identificador interno de una casilla de aceptación.
+
+// Elementor no manda el rótulo del campo, solo su id. Si el cliente le puso
+// nombre —`interesado`, `ciudad`— sale legible; si dejó el automático
+// (`field_a1b2c3`) no hay rótulo que inventar, así que va el valor solo.
+const ID_AUTOMATICO = /^field[_-][0-9a-z]{5,}$/i;
+
+export function rotulo(clave) {
+  if (ID_AUTOMATICO.test(clave)) return null;
+  const t = String(clave).replace(/[_-]+/g, ' ').trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+// Tipos de Elementor que nunca son un dato del visitante.
+const TIPOS_BASURA = new Set(['acceptance', 'recaptcha', 'recaptcha_v3', 'honeypot', 'html', 'step', 'submit']);
+const VALORES_BASURA = new Set(['on', 'true', '1', 'yes', 'sí', 'si']);
+
+export function esRuido(clave, valor, tipo) {
+  if (tipo && TIPOS_BASURA.has(String(tipo).toLowerCase())) return true;
+  const v = String(valor == null ? '' : valor).trim();
+  if (!v) return true;
+  // Una casilla marcada llega como "on": que alguien acepte la política de
+  // datos no es información sobre lo que busca.
+  if (VALORES_BASURA.has(v.toLowerCase()) && v.length <= 4) return true;
+  return false;
+}
+
+/** La página, sin protocolo, sin www y sin la cola de parámetros. */
+export function paginaCorta(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(String(url));
+    return (u.hostname.replace(/^www\./, '') + u.pathname).replace(/\/$/, '') || u.hostname;
+  } catch {
+    return String(url).split('?')[0].replace(/^https?:\/\//, '').replace(/^www\./, '').slice(0, 120);
+  }
+}
+
+/**
+ * De dónde vino, en una línea. Los utm son de lo más valioso que trae un lead
+ * —dicen qué campaña lo trajo— pero pegados crudos en medio de una URL no los
+ * lee nadie.
+ */
+export function campana(url) {
+  if (!url) return null;
+  let p;
+  try { p = new URL(String(url)).searchParams; } catch { return null; }
+  const partes = ['utm_source', 'utm_campaign', 'utm_medium', 'utm_term', 'utm_content']
+    .map(k => (p.get(k) || '').trim())
+    .filter(Boolean)
+    .map(v => decodeURIComponent(v).slice(0, 60));
+  return partes.length ? [...new Set(partes)].join(' · ') : null;
+}

@@ -7,7 +7,7 @@
 export const config = { runtime: 'edge' };
 
 import { intakeLead, pick } from './_lead-intake.js';
-import { decidirDestino, desanidarCorchetes } from './_reglas-destino.js';
+import { decidirDestino, desanidarCorchetes, rotulo, esRuido, paginaCorta, campana } from './_reglas-destino.js';
 import { registrarError } from './_registro-errores.js';
 
 const CORS = {
@@ -90,14 +90,18 @@ export default async function handler(req, contexto) {
   // Elementor Forms manda `form_fields[email]`, no `email`. Sin desanidar, un
   // envío perfectamente válido entraba sin datos de contacto y lo rechazábamos
   // con un 400 que en su web no se ve: el lead se perdía sin que nadie supiera.
+  const crudo = body;                      // guarda los tipos que manda Elementor
   body = desanidarCorchetes(body);
+  const tipoDe = (k) => crudo['fields[' + k + '][type]'] || null;
 
   const name = pick(body, 'name', 'nombre', 'full_name', 'fullname');
   const email = pick(body, 'email', 'correo', 'mail');
   const phone = pick(body, 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp', 'celular');
   if (!name && !email && !phone) return jsonResp({ error: 'Faltan datos de contacto' }, 400);
 
-  // Campos custom → nota (todo lo que no mapea al lead)
+  // ── La nota ────────────────────────────────────────────────────────────
+  // Una línea por dato, con su rótulo, y fuera el ruido. Quien abre la ficha
+  // va a llamar a esta persona: necesita qué pidió y de dónde vino.
   const known = new Set(['name', 'nombre', 'full_name', 'fullname', 'email', 'correo', 'mail', 'phone', 'telefono', 'teléfono', 'tel', 'whatsapp', 'celular', 'company', 'empresa', 'negocio', '_hp', 'token', '_page',
     // Fontanería de Elementor: identificadores internos que no le dicen nada a
     // quien va a llamar al lead. `referer_title` sí, pero va aparte, a su campo.
@@ -106,13 +110,29 @@ export default async function handler(req, contexto) {
   // Los originales con corchetes ya están desanidados: contarlos otra vez
   // llenaría la nota con cada campo repetido dos veces.
   for (const k of Object.keys(body)) if (/^[^\[\]]+\[[^\[\]]+\]$/.test(k)) known.add(k.toLowerCase());
-  const extras = Object.entries(body)
-    .filter(([k, v]) => !known.has(k.toLowerCase()) && String(v || '').trim())
-    .map(([k, v]) => `${k}: ${String(v).trim().slice(0, 200)}`)
-    .slice(0, 10);
+
+  const lineas = [];
+  let mensaje = null;
+  for (const [k, v] of Object.entries(body)) {
+    if (known.has(k.toLowerCase())) continue;
+    if (esRuido(k, v, tipoDe(k))) continue;
+    const valor = String(v).trim().slice(0, 400);
+    // El mensaje libre va al final: es el largo, y leerlo primero empuja el
+    // resto fuera de la vista.
+    if (/^(message|mensaje|comentario|comments?)$/i.test(k)) { mensaje = valor; continue; }
+    const r = rotulo(k);
+    lineas.push(r ? r + ': ' + valor : valor);
+    if (lineas.length >= 8) break;
+  }
+  if (mensaje) lineas.push('Mensaje: ' + mensaje);
+
   const page = pick(body, '_page', 'page_url', 'referrer');
-  const noteParts = [...extras];
-  if (page) noteParts.push('Página: ' + page.slice(0, 200));
+  const corta = paginaCorta(page);
+  if (corta) lineas.push('Página: ' + corta);
+  const campa = campana(page);
+  if (campa) lineas.push('Campaña: ' + campa);
+
+  const noteParts = lineas;
 
   // ¿A qué tablero va y quién lo atiende? Lo decide la regla del conector a
   // partir de un campo del propio formulario: una inmobiliaria manda «Comprar»
@@ -120,9 +140,13 @@ export default async function handler(req, contexto) {
   const destino = decidirDestino(form.reglas, body, {
     pipeline_id: form.pipeline_id, assigned_to: form.assigned_to, tags: form.tags,
   });
-  // Si hay reglas, la ficha cuenta qué decidió el sistema. Cuando un lead
-  // aparezca donde no debía, esto es la diferencia entre leerlo y adivinarlo.
-  if (destino.caso) noteParts.push('Destino: ' + destino.caso);
+  // Cuando la regla acertó, la respuesta del visitante ya está arriba y repetir
+  // "Destino: Arrendar" solo alarga la nota. Se anota justo cuando hace falta
+  // una explicación: cuando NO coincidió con ninguna rama y el lead cayó en el
+  // tablero de reserva. Ahí sí, sin esto habría que adivinarlo.
+  if (destino.caso === 'sin coincidencia') {
+    noteParts.push('No coincidió con ninguna regla: entró al tablero por defecto');
+  }
 
   // La referencia del inmueble (o del producto) que la web manda junto al
   // envío. Va a campos propios y no a la nota porque así se puede ver como
@@ -135,9 +159,16 @@ export default async function handler(req, contexto) {
     const { created } = await intakeLead(form.user_id, form.client_id, {
       name, email, phone,
       company: pick(body, 'company', 'empresa', 'negocio'),
-      note: noteParts.join(' · ') || null,
+      // Arranca con un salto para que la cabecera «📥 [Web …]» que pone
+      // intakeLead se quede sola en su línea y los datos empiecen debajo.
+      note: noteParts.length ? '\n' + noteParts.join('\n') : null,
       source: 'formulario',
-      sourceLabel: (form.tipo === 'conector' ? 'Web: ' : 'Formulario: ') + form.name,
+      // "Web: Web certainpezzano.com" — el prefijo se duplicaba con el nombre
+      // que el cliente ya le había puesto a su conexión. Solo se antepone si
+      // hace falta para entender de dónde viene.
+      sourceLabel: form.tipo === 'conector'
+        ? (/^web\b/i.test(form.name) ? form.name : 'Web: ' + form.name)
+        : 'Formulario: ' + form.name,
       tags: destino.tags || [],
       // Si esta fuente tiene ejecutivo fijo, manda sobre el reparto por turnos.
       assignedTo: destino.assignedTo || null,
