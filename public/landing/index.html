@@ -1423,9 +1423,13 @@ document.addEventListener('click', function (e) {
      api/team.js PLAN_SEATS · api/leads.js PLAN_LIMITS · api/campaigns.js EMAIL_QUOTAS
    Si cambian allí, cambian aquí.                                            */
 (function () {
+  // Sin enlaces de pago: desde aqui siempre se entra por la prueba de 14
+  // dias, nunca al checkout. Los habia, apuntando a Hotmart, y no los leia
+  // nadie — configuracion muerta que el dia de manana alguien habria creido
+  // que hacia algo. Los de verdad viven en la app.
   var PLANES = [
-    { id: 'pro',    nombre: 'Plan Pro',    base: 39, usuarios: 3,  contactos: 1000, precioContacto: 4, url: 'https://pay.hotmart.com/G105202218G' },
-    { id: 'agency', nombre: 'Plan Agency', base: 99, usuarios: 10, contactos: 5000, precioContacto: 4, url: 'https://pay.hotmart.com/L105202723X' },
+    { id: 'pro',    nombre: 'Plan Pro',    base: 39, usuarios: 3,  contactos: 1000, precioContacto: 4 },
+    { id: 'agency', nombre: 'Plan Agency', base: 99, usuarios: 10, contactos: 5000, precioContacto: 4 },
   ];
   var MESES_ANUAL    = 10;     // 2 meses gratis: se pagan 10 de 12
   var anual          = false;  // periodicidad elegida en el toggle
