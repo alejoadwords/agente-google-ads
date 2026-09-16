@@ -106,7 +106,8 @@ section{padding:96px 40px}
 .calc-toggle-btn.active .calc-toggle-badge{color:var(--success)}
 .calc-ahorro{font-size:12px;font-weight:700;background:rgba(255,255,255,.16);padding:6px 14px;border-radius:20px;margin-top:12px;display:inline-block}
 .calc-plan-tag{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:rgba(255,255,255,.16);padding:6px 14px;border-radius:20px;margin-bottom:20px}
-.calc-price{display:flex;align-items:flex-start;justify-content:center;gap:3px;line-height:1}
+.calc-price{display:flex;align-items:flex-start;justify-content:center;gap:3px;line-height:1;max-width:100%;flex-wrap:nowrap}
+.calc-price-dec{font-size:30px;font-weight:800;letter-spacing:-.02em}
 .calc-price-cur{font-size:24px;font-weight:700;margin-top:8px}
 .calc-price-amount{font-family:var(--font-display);font-size:62px;font-weight:800;letter-spacing:-.04em}
 .calc-price-per{font-size:13px;font-weight:600;opacity:.75;align-self:flex-end;margin-bottom:12px;margin-left:4px}
@@ -131,6 +132,7 @@ section{padding:96px 40px}
 .calc-linea{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted);padding:5px 0}
 .calc-linea strong{color:var(--text);font-weight:600}
 .calc-linea-total{border-top:1px solid var(--border);margin-top:6px;padding-top:10px;font-size:14px;color:var(--text);font-weight:700}
+.calc-grupo{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-top:18px;margin-bottom:2px}
 .calc-aviso{font-size:12px;color:var(--amber);line-height:1.5;margin-top:10px}
 .calc-pie{text-align:center;font-size:12px;color:var(--muted2);margin-top:22px;line-height:1.6}
 @media(max-width:860px){
@@ -1439,6 +1441,11 @@ document.addEventListener('click', function (e) {
 
   var contactos = 1000;
   var fmt = function (n) { return n.toLocaleString('es-CO'); };
+  // Los centavos solo aparecen si los hay: "$33" y "$58,50", nunca "$33,00".
+  var fmtDinero = function (n) {
+    return Number.isInteger(n) ? fmt(n)
+      : n.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
 
   // Escalones de contactos: finos al principio, gruesos después
   function siguienteContactos(v, dir) {
@@ -1480,12 +1487,24 @@ document.addEventListener('click', function (e) {
     // prometer un descuento que no existe.
     var planAnual   = mejor.plan.base * MESES_ANUAL;
     var extrasMes   = mejor.costeUsuarios + mejor.costeContactos;
-    var mostrado    = anual ? Math.round(planAnual / 12) + extrasMes : mejor.total;
+    // En anual el titular es un EQUIVALENTE mensual, no un cobro: nadie paga
+    // esa cifra ningun mes. Antes se redondeaba con Math.round y $58,50 salia
+    // como $59 — un precio inventado hacia arriba en la cara mas visible de la
+    // pagina. Se muestra con decimales cuando los tiene.
+    var equivMes    = planAnual / 12 + extrasMes;
+    var mostrado    = anual ? equivMes : mejor.total;
 
     $('calc-plan').textContent = personalizado ? 'Plan Personalizado' : mejor.plan.nombre;
-    $('calc-total').textContent = personalizado ? 'A medida' : fmt(mostrado);
+    var cifra = personalizado ? 'A medida' : fmtDinero(mostrado);
+    // Los centavos van en su propio tramo, mas pequeno: si no, el titular se
+    // sale de la tarjeta y pisa la etiqueta de la derecha.
+    $('calc-total').innerHTML = cifra.indexOf(',') > -1
+      ? cifra.split(',')[0] + '<span class="calc-price-dec">,' + cifra.split(',')[1] + '</span>'
+      : cifra;
     document.querySelector('.calc-price-cur').style.display = personalizado ? 'none' : '';
-    document.querySelector('.calc-price-per').style.display = personalizado ? 'none' : '';
+    var elPer = document.querySelector('.calc-price-per');
+    elPer.style.display = personalizado ? 'none' : '';
+    elPer.textContent = 'USD / mes';
 
     var cta = $('calc-cta');
     if (personalizado) {
@@ -1494,39 +1513,68 @@ document.addEventListener('click', function (e) {
       cta.href = 'mailto:ceo@acuarius.app?subject=Plan%20Personalizado%20Acuarius';
     } else {
       $('calc-note').textContent = anual
-        ? 'Pago anual del plan: $' + fmt(planAnual) + ' USD' + (extrasMes ? ' + $' + fmt(extrasMes) + '/mes en complementos' : '')
+        ? 'Equivalente mensual. Se cobra: $' + fmt(planAnual) + ' USD al año' + (extrasMes ? ' + $' + fmt(extrasMes) + '/mes en complementos' : '')
         : 'Emails ilimitados · Todos los agentes IA · Cancela cuando quieras';
       cta.textContent = 'Empieza gratis 14 días';
       cta.href = 'https://app.acuarius.app/login.html';
     }
 
     // Desglose
+    //
+    // El anual estaba mal contado: los $390 YA son 10 × $39, y encima se
+    // pintaba una linea "2 meses gratis −$78" como si restara otra vez. Quien
+    // sumara la lista obtenia $338 y el total decia $390. Ademas los
+    // complementos, que se cobran aparte cada mes, quedaban dentro del bloque
+    // que remata en "Pago anual del plan", asi que parecian sumarse ahi.
+    //
+    // Ahora la resta es de verdad (12 meses − 2 gratis = el pago anual) y los
+    // complementos viven en su propio bloque con su propio subtotal.
     var l = [];
+    // Por encima del tope decimos "A medida" y "hablemos". Seguir pintando
+    // debajo una lista con $990 y $830/mes contradice el titular: el visitante
+    // se queda con el numero, que es justo el que NO vamos a cobrarle.
+    if (personalizado) {
+      $('calc-desglose').innerHTML =
+        '<p class="calc-aviso" style="color:var(--muted);margin-top:0">A partir de ' + MAX_USUARIOS +
+        ' usuarios o ' + fmt(MAX_CONTACTOS) + ' contactos el precio deja de salir de esta tabla: ' +
+        'depende del volumen y del acompañamiento que necesites. Escríbenos y te lo armamos.</p>';
+      $('calc-u-menos').disabled = usuarios <= 1;
+      $('calc-u-mas').disabled = usuarios >= MAX_USUARIOS;
+      $('calc-c-menos').disabled = contactos <= PASO_CONTACTOS;
+      $('calc-c-mas').disabled = contactos >= MAX_CONTACTOS;
+      return;
+    }
     if (anual) {
-      l.push(linea(mejor.plan.nombre + ' anual — incluye ' + mejor.plan.usuarios + ' usuarios y ' + fmt(mejor.plan.contactos) + ' contactos', '$' + fmt(planAnual) + '/año'));
-      l.push(linea('<span style="color:var(--success)">2 meses gratis frente al pago mensual</span>', '<span style="color:var(--success)">−$' + fmt(mejor.plan.base * 2) + '</span>'));
+      var brutoAnual = mejor.plan.base * 12;
+      var ahorro     = mejor.plan.base * (12 - MESES_ANUAL);
+      l.push(grupo(mejor.plan.nombre + ' anual — incluye ' + mejor.plan.usuarios + ' usuarios y ' + fmt(mejor.plan.contactos) + ' contactos'));
+      l.push(linea('12 meses × $' + mejor.plan.base, '$' + fmt(brutoAnual)));
+      l.push(linea('<span style="color:var(--success)">2 meses gratis</span>', '<span style="color:var(--success)">−$' + fmt(ahorro) + '</span>'));
+      l.push(total('Pago anual del plan', '$' + fmt(planAnual) + ' USD'));
+
+      if (extrasMes) {
+        l.push(grupo('Complementos · se cobran aparte, cada mes'));
+        if (mejor.extraUsuarios > 0) l.push(linea(textoUsuarios(mejor), '$' + fmt(mejor.costeUsuarios) + '/mes'));
+        if (mejor.packs > 0)         l.push(linea(textoContactos(mejor), '$' + fmt(mejor.costeContactos) + '/mes'));
+        l.push(total('Total complementos', '$' + fmt(extrasMes) + '/mes'));
+      }
+
+      l.push(linea('Emails de campañas y automatizaciones', 'Incluidos'));
+      {
+        l.push('<p class="calc-pie" style="text-align:left;margin-top:14px">Primer año: $' + fmt(planAnual) +
+          (extrasMes ? ' del plan + $' + fmt(extrasMes) + ' × 12 meses de complementos = <strong>$' + fmt(planAnual + extrasMes * 12) + ' USD</strong>' : ' USD') + '</p>');
+      }
     } else {
       l.push(linea(mejor.plan.nombre + ' — incluye ' + mejor.plan.usuarios + ' usuarios y ' + fmt(mejor.plan.contactos) + ' contactos', '$' + mejor.plan.base));
-    }
-    if (mejor.extraUsuarios > 0) {
-      l.push(linea(mejor.extraUsuarios + (mejor.extraUsuarios === 1 ? ' usuario adicional' : ' usuarios adicionales') + ' × $' + PRECIO_USUARIO, '$' + mejor.costeUsuarios));
-    }
-    if (mejor.packs > 0) {
-      l.push(linea(fmt(mejor.packs * PASO_CONTACTOS) + ' contactos adicionales × $' + mejor.plan.precioContacto + ' por 1.000', '$' + mejor.costeContactos));
-    }
-    l.push(linea('Emails de campañas y automatizaciones', 'Incluidos'));
-    if (!personalizado) {
-      if (anual) {
-        l.push('<div class="calc-linea calc-linea-total"><span>Pago anual del plan</span><strong>$' + fmt(planAnual) + ' USD</strong></div>');
-        if (extrasMes) l.push(linea('Complementos (se cobran mensuales)', '$' + fmt(extrasMes) + '/mes'));
-      } else {
-        l.push('<div class="calc-linea calc-linea-total"><span>Total mensual</span><strong>$' + fmt(mejor.total) + ' USD</strong></div>');
-      }
+      if (mejor.extraUsuarios > 0) l.push(linea(textoUsuarios(mejor), '$' + mejor.costeUsuarios));
+      if (mejor.packs > 0)         l.push(linea(textoContactos(mejor), '$' + mejor.costeContactos));
+      l.push(linea('Emails de campañas y automatizaciones', 'Incluidos'));
+      l.push(total('Total mensual', '$' + fmt(mejor.total) + ' USD'));
     }
 
     // Si el otro plan cuesta lo mismo o poco más, decirlo: da más por el mismo dinero
     var otro = opciones[1];
-    if (!personalizado && otro && otro.total - mejor.total <= 10 && otro.plan.id === 'agency') {
+    if (otro && otro.total - mejor.total <= 10 && otro.plan.id === 'agency') {
       l.push('<p class="calc-aviso">Por $' + fmt(otro.total - mejor.total) + ' más al mes, Agency te da ' + otro.plan.usuarios + ' usuarios, ' + fmt(otro.plan.contactos) + ' contactos y 10 perfiles de cliente.</p>');
     }
     $('calc-desglose').innerHTML = l.join('');
@@ -1539,6 +1587,23 @@ document.addEventListener('click', function (e) {
 
   function linea(texto, valor) {
     return '<div class="calc-linea"><span>' + texto + '</span><strong>' + valor + '</strong></div>';
+  }
+
+  function total(texto, valor) {
+    return '<div class="calc-linea calc-linea-total"><span>' + texto + '</span><strong>' + valor + '</strong></div>';
+  }
+
+  function grupo(texto) {
+    return '<div class="calc-grupo">' + texto + '</div>';
+  }
+
+  // Los dos textos de complementos son iguales en mensual y en anual: escritos
+  // dos veces acabarian diciendo cosas distintas el dia que se toque uno.
+  function textoUsuarios(m) {
+    return m.extraUsuarios + (m.extraUsuarios === 1 ? ' usuario adicional' : ' usuarios adicionales') + ' × $' + PRECIO_USUARIO;
+  }
+  function textoContactos(m) {
+    return fmt(m.packs * PASO_CONTACTOS) + ' contactos adicionales × $' + m.plan.precioContacto + ' por 1.000';
   }
 
   function setPeriodicidad(esAnual) {
