@@ -32252,11 +32252,9 @@ async function vozPreguntar(texto) {
   try {
     const r = await fetchAuth('/api/voz', {
       method: 'POST',
-      body: JSON.stringify({
-        texto,
-        client_id: crmAmbitoCliente() || null,
-        pipeline_id: (typeof crmPipelineId !== 'undefined' ? crmPipelineId : null),
-      }),
+      // Sin ámbito: el servidor busca en toda la cuenta. Quien habla no está
+      // mirando la pantalla y no tiene por qué haber elegido el tablero antes.
+      body: JSON.stringify({ texto }),
     });
     const d = await leerRespuesta(r);
     if (!r.ok) { vozPintar({ etiqueta: 'Ups', voz: d.error || 'No se pudo procesar.' }); return; }

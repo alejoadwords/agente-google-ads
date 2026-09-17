@@ -147,8 +147,7 @@ async function clasificar(texto, contexto, apiKey) {
 
 // ── Las respuestas. Cada una consulta la base y arma su tarjeta ─────────────
 async function responder(plan, ctx) {
-  const { userId, actorId, filtroMios, clientId, leads } = ctx;
-  const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+  const { userId, actorId, filtroMios, leads } = ctx;
   const lead = plan.lead_id ? leads.find(l => l.id === plan.lead_id) : null;
 
   switch (plan.intencion) {
@@ -176,11 +175,11 @@ async function responder(plan, ctx) {
 
     case 'fase_lead': {
       if (!lead) return sinLead();
-      const etapas = ctx.etapas.length ? ctx.etapas : [lead.stage];
+      const etapas = ctx.etapasDe(lead.pipeline_id);
       return {
         etiqueta: 'Lead',
-        voz: `${lead.name} está en ${lead.etiquetaEtapa || lead.stage}.`,
-        escalera: { etapas, actual: lead.etiquetaEtapa || lead.stage },
+        voz: `${lead.name} está en ${lead.etiquetaEtapa}` + (lead.tablero ? `, en el tablero ${lead.tablero}.` : '.'),
+        escalera: { etapas: etapas.length ? etapas : [lead.etiquetaEtapa], actual: lead.etiquetaEtapa },
         acciones: ['Abrir su ficha'],
         lead_id: lead.id,
       };
@@ -261,7 +260,7 @@ async function responder(plan, ctx) {
     case 'sin_tocar': {
       const dias = Number(plan.dias) > 0 ? Number(plan.dias) : 7;
       const corte = diaMas(hoyLocal(), -dias);
-      const filas = await sb(`/leads?user_id=eq.${userId}${scope}&deleted_at=is.null${filtroMios}` +
+      const filas = await sb(`/leads?user_id=eq.${userId}&deleted_at=is.null${filtroMios}` +
         `&stage=not.in.(ganado,perdido)&updated_at=lt.${corte}T00:00:00Z` +
         `&select=id,name,stage,updated_at&order=updated_at.asc&limit=10`);
       if (!filas.length) return { etiqueta: 'Cartera', voz: `Ninguno lleva más de ${dias} días sin que lo toques. Vas al día.` };
@@ -329,29 +328,40 @@ export default async function handler(req) {
   try { quien = await quienPregunta(userId); }
   catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
 
-  const clientId = body.client_id || null;
-  const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
   const soloMios = quien.esMiembro && soloSusLeads(quien.perfil);
   const filtroMios = soloMios ? `&assigned_to=eq.${encodeURIComponent(quien.actorId)}` : '';
 
   try {
-    // El contexto es solo lo imprescindible para reconocer a quién nombró: id,
-    // nombre y etapa. Ni teléfonos ni notas — no hace falta mandarlos fuera
-    // para entender una frase.
-    const [leadsRaw, etapasRaw] = await Promise.all([
-      sb(`/leads?user_id=eq.${quien.userId}${scope}&deleted_at=is.null${filtroMios}` +
-         `&select=id,name,stage&order=updated_at.desc&limit=400`),
-      body.pipeline_id
-        ? sb(`/pipeline_stages?pipeline_id=eq.${encodeURIComponent(body.pipeline_id)}&select=key,label&order=position.asc`)
-        : Promise.resolve([]),
+    // TODA la cuenta, no el cliente que tenga abierto. Preguntar «en qué fase
+    // está Liliana Blanco» no puede exigir haber seleccionado antes el tablero
+    // correcto: quien habla no está mirando la pantalla. Atarlo al ámbito hacía
+    // que desde «Mi cuenta» —donde no hay leads— respondiera siempre lo mismo
+    // aunque el lead existiera.
+    const [leadsRaw, etapasRaw, tablerosRaw] = await Promise.all([
+      sb(`/leads?user_id=eq.${quien.userId}&deleted_at=is.null${filtroMios}` +
+         `&select=id,name,stage,pipeline_id&order=updated_at.desc&limit=400`),
+      sb(`/pipeline_stages?user_id=eq.${quien.userId}&select=key,label,pipeline_id&order=position.asc`),
+      sb(`/pipelines?user_id=eq.${quien.userId}&select=id,name`),
     ]);
 
-    const porClave = {};
-    etapasRaw.forEach(e => { porClave[e.key] = e.label; });
-    const leads = leadsRaw.map(l => ({ id: l.id, name: l.name, stage: porClave[l.stage] || l.stage, etiquetaEtapa: porClave[l.stage] || l.stage }));
+    // Cada lead lleva su etapa traducida por SU tablero: dos tableros pueden
+    // usar la misma clave con rótulos distintos.
+    const rotulo = {};
+    etapasRaw.forEach(e => { rotulo[(e.pipeline_id || '') + '|' + e.key] = e.label; });
+    const nombreTablero = {};
+    tablerosRaw.forEach(t => { nombreTablero[t.id] = t.name; });
+
+    const leads = leadsRaw.map(l => {
+      const etiqueta = rotulo[(l.pipeline_id || '') + '|' + l.stage] || l.stage;
+      return { id: l.id, name: l.name, stage: etiqueta, etiquetaEtapa: etiqueta,
+               pipeline_id: l.pipeline_id, tablero: nombreTablero[l.pipeline_id] || null };
+    });
 
     if (!leads.length) {
-      return jsonResp({ etiqueta: 'Sin leads', voz: 'Todavía no tienes leads a tu nombre en este tablero.' });
+      return jsonResp({ etiqueta: 'Sin leads',
+        voz: quien.esMiembro && soloMios
+          ? 'Todavía no tienes leads a tu nombre. Pídele al administrador que te reparta los tuyos.'
+          : 'Todavía no hay leads en esta cuenta.' });
     }
 
     const hoy = hoyLocal();
@@ -361,8 +371,8 @@ export default async function handler(req) {
     if (!plan) return jsonResp({ etiqueta: 'No entendí', voz: 'No te entendí. ¿Me lo repites?' });
 
     const resp = await responder(plan, {
-      userId: quien.userId, actorId: quien.actorId, filtroMios, clientId, leads,
-      etapas: etapasRaw.map(e => e.label),
+      userId: quien.userId, actorId: quien.actorId, filtroMios, leads,
+      etapasDe: (pid) => etapasRaw.filter(e => e.pipeline_id === pid).map(e => e.label),
       soloLoSuyo: soloMios,
     });
 
