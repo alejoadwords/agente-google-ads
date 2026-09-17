@@ -105,6 +105,40 @@ export const HERRAMIENTAS = [
     },
   },
   {
+    name: 'responder',
+    description: 'LLÁMALA SIEMPRE AL FINAL, una sola vez, con la respuesta ya lista. Es la única forma de contestarle a la persona: nada de lo que escribas fuera de esta herramienta se le muestra.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        voz: { type: 'string', description: 'Lo que se va a LEER EN VOZ ALTA. Una o dos frases, como se lo dirías hablando. Aquí va la respuesta, no un resumen de lo que hiciste. Nada de listas largas: el detalle va en "filas".' },
+        etiqueta: { type: 'string', description: 'Una palabra para la cabecera: Agenda, Lead, Equipo, Cierres, Cartera, Números, Todavía no, No entendí…' },
+        cifra: { type: 'string', description: 'Opcional. Un número o importe para destacar en grande.' },
+        cifra_pie: { type: 'string', description: 'Opcional. Qué es esa cifra.' },
+        filas: {
+          type: 'array', description: 'Opcional. El detalle, que se ve en pantalla.',
+          items: {
+            type: 'object',
+            properties: {
+              titulo: { type: 'string' },
+              detalle: { type: 'string' },
+              alerta: { type: 'boolean', description: 'true para marcarla en rojo: vencida, sin actividad, en riesgo.' },
+            },
+            required: ['titulo'],
+          },
+        },
+        escalera: {
+          type: 'object', description: 'Opcional. Solo al hablar de la etapa de UN lead.',
+          properties: { etapas: { type: 'array', items: { type: 'string' } }, actual: { type: 'string' } },
+        },
+        aviso: { type: 'string', description: 'Opcional. Para advertir algo o preguntar a cuál se refiere.' },
+        opciones: { type: 'array', items: { type: 'string' }, description: 'Opcional. Nombres entre los que elegir cuando haya duda.' },
+        acciones: { type: 'array', items: { type: 'string' }, description: 'Opcional y pocas: «Abrir su ficha», «Llamarlo», «Abrir la agenda», «Ver el tablero».' },
+        nota_al_pie: { type: 'string', description: 'Opcional. Una salvedad sobre cómo se contó, cuando el número podría engañar.' },
+      },
+      required: ['voz', 'etiqueta'],
+    },
+  },
+  {
     name: 'panorama',
     description: 'La foto general de la cuenta: cuántos leads hay en cada etapa de cada tablero, con los importes, y el tamaño del equipo. Úsala cuando la pregunta sea amplia o no sepas por dónde empezar.',
     input_schema: { type: 'object', properties: {} },

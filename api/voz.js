@@ -30,7 +30,7 @@ const CORS = {
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const TZ = 'America/Bogota';
-const MAX_VUELTAS = 4;          // tope de idas y venidas con las herramientas
+const MAX_VUELTAS = 6;          // tope de idas y venidas con las herramientas
 
 function sbHeaders() {
   return { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -84,19 +84,7 @@ QUÉ NO PUEDES HACER
 Esta versión solo consulta. Si te piden crear una tarea, mover un lead de etapa, asignar, borrar o mandar un mensaje, dilo con naturalidad: que por ahora solo puedes consultar y que eso llegará. No lo intentes ni digas que lo hiciste.
 
 CÓMO RESPONDES
-Termina SIEMPRE con un bloque JSON, y nada después:
-{
- "voz": "lo que se va a leer en voz alta. Una o dos frases, como se lo dirías hablando. Ahí va la respuesta, no un resumen de lo que hiciste.",
- "etiqueta": "una palabra para la cabecera: Agenda, Lead, Equipo, Cierres, Cartera, Números, Todavía no, No entendí…",
- "cifra": "opcional, un número o importe grande para destacar",
- "cifra_pie": "opcional, qué es esa cifra",
- "filas": [{"titulo":"…","detalle":"…","alerta":true}],
- "escalera": {"etapas":["…"],"actual":"…"},
- "aviso": "opcional, cuando haga falta advertir algo o preguntar cuál",
- "opciones": ["opcional","nombres","para","desambiguar"],
- "acciones": ["Abrir su ficha"],
- "nota_al_pie": "opcional, una salvedad sobre cómo se contó"
-}
+Cuando tengas la respuesta, llama a la herramienta "responder". ES LA ÚNICA FORMA de contestarle: nada de lo que escribas fuera de ella se le muestra a nadie. Llámala una sola vez y al final.
 
 CÓMO HABLAS
 - Español de Colombia, tuteo, sin jerga técnica. Nunca digas "según los datos", "el sistema" ni "la base de datos".
@@ -117,7 +105,7 @@ async function conversar(texto, ctx, apiKey) {
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 1400,
+        max_tokens: 2000,
         system: INSTRUCCIONES + `\n\nHOY ES ${ctx.hoy} (${ctx.diaSemana}). Quien te habla es ${ctx.nombre}` +
                 (ctx.soloLoSuyo ? ', y su perfil solo ve los leads a su nombre.' : ', y ve toda la cuenta.'),
         tools: HERRAMIENTAS,
@@ -133,8 +121,18 @@ async function conversar(texto, ctx, apiKey) {
     }
 
     const pedidos = (d.content || []).filter(c => c.type === 'tool_use');
+
+    // La respuesta llega como herramienta, no como texto que haya que parsear.
+    // Antes el JSON venía dentro del texto y yo lo sacaba buscando la ÚLTIMA
+    // llave: con `filas` —que es una lista de objetos— esa llave era la de una
+    // fila, se parseaba ese trozo suelto y la respuesta entera se perdía.
+    // Fallaba toda pregunta cuya respuesta tuviera detalle, que son casi todas.
+    const respuesta = pedidos.find(p => p.name === 'responder');
+    if (respuesta) return { card: respuesta.input, uso: usoTotal, modelo };
+
     if (!pedidos.length || d.stop_reason !== 'tool_use') {
-      return { texto: (d.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'), uso: usoTotal, modelo };
+      const txt = (d.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+      return { card: txt ? { voz: txt, etiqueta: 'Respuesta' } : null, uso: usoTotal, modelo };
     }
 
     mensajes.push({ role: 'assistant', content: d.content });
@@ -147,21 +145,7 @@ async function conversar(texto, ctx, apiKey) {
     }
     mensajes.push({ role: 'user', content: resultados });
   }
-  return { texto: '', uso: usoTotal, modelo };   // se acabaron las vueltas
-}
-
-// El JSON va al final del texto. Se busca desde la última llave hacia delante
-// probando cierres, porque el modelo puede escribir llaves dentro de una nota.
-function sacarJson(txt) {
-  if (!txt) return null;
-  const i = txt.lastIndexOf('{');
-  if (i < 0) return null;
-  for (let fin = txt.length; fin > i; fin--) {
-    const trozo = txt.slice(i, fin).trim();
-    if (!trozo.endsWith('}')) continue;
-    try { return JSON.parse(trozo); } catch {}
-  }
-  return null;
+  return { card: null, uso: usoTotal, modelo };   // se acabaron las vueltas
 }
 
 export default async function handler(req) {
@@ -224,20 +208,16 @@ export default async function handler(req) {
       nombre: quien.nombre || 'el dueño de la cuenta',
     };
 
-    const { texto: salida, uso, modelo } = await conversar(texto, ctx, apiKey);
-    const card = sacarJson(salida);
+    const { card, uso, modelo } = await conversar(texto, ctx, apiKey);
 
     if (uso && (uso.input_tokens || uso.output_tokens)) {
       await registrarUso({ userId: await cuentaDe(userId), actorId: userId, origen: 'voz', modelo, uso }).catch(() => {});
     }
 
     if (!card || !card.voz) {
-      // Sin JSON utilizable se devuelve el texto plano si lo hay, y si no, se
-      // admite el fallo. Una tarjeta vacía parece una avería de la aplicación.
-      const plano = String(salida || '').replace(/\{[\s\S]*$/, '').trim();
       return jsonResp({
-        etiqueta: plano ? 'Respuesta' : 'No entendí',
-        voz: plano || 'No conseguí armar la respuesta. ¿Me lo preguntas de otra forma?',
+        etiqueta: 'No entendí',
+        voz: 'No conseguí armar la respuesta. ¿Me lo preguntas de otra forma?',
         dijo: texto,
       });
     }
