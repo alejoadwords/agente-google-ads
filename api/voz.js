@@ -1,20 +1,26 @@
 // api/voz.js — hablarle al CRM.
 //
-// Recibe lo que alguien dijo en voz alta desde el teléfono y responde con una
-// tarjeta ya armada, más una frase para leer en voz alta.
+// Recibe lo que alguien dijo en voz alta desde el teléfono y devuelve una
+// tarjeta ya armada más una frase para leer en voz alta.
 //
-// EL MODELO NO CUENTA NI INVENTA. Se le pide una sola cosa: entender QUÉ pidió
-// y A QUIÉN se refiere, contra la lista real de leads de esa cuenta. Los
-// números, las fechas y los textos los arma este archivo consultando la base.
-// Un asistente que se equivoca en «atendiste 14» y suena igual de seguro que
-// cuando acierta es peor que no tenerlo.
+// EL MODELO NO INVENTA NÚMEROS. No ve la base ni escribe consultas: solo puede
+// pedir las herramientas de `_voz-herramientas.js`, todas de solo lectura y
+// todas con el alcance de quien pregunta ya aplicado. Cada cifra que sale por
+// el altavoz salió de una de ellas. Un asistente que se equivoca sonando igual
+// de seguro que cuando acierta es peor que no tenerlo.
 //
-// Fase 1: solo CONSULTA. No escribe nada. Ver `INTENCIONES`.
+// Antes esto era un catálogo cerrado de doce intenciones y todo lo que no
+// estuviera en la lista caía en «no entendí» — pero quien habla no conoce la
+// lista. Ahora el modelo pregunta lo que necesite y compone la respuesta.
+//
+// Fase 1: solo CONSULTA. Pedir crear, mover o mandar algo se responde con un
+// «todavía no», nunca intentándolo.
 
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, soloSusLeads } from './_perfiles.js';
 import { registrarUso, cuentaDe } from './_uso-ia.js';
+import { HERRAMIENTAS, ejecutar, hoyLocal } from './_voz-herramientas.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +30,7 @@ const CORS = {
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const TZ = 'America/Bogota';
+const MAX_VUELTAS = 4;          // tope de idas y venidas con las herramientas
 
 function sbHeaders() {
   return { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -59,466 +66,109 @@ async function getUserId(req) {
   } catch { return null; }
 }
 
-// Quién tiene la función encendida. En una variable de entorno y no en el
-// código para poder sumar gente sin desplegar.
+// Quién la tiene encendida. En una variable de entorno para sumar gente sin
+// desplegar.
 function enLaBeta(id) {
-  const lista = String(process.env.VOZ_BETA || '').split(',').map(s => s.trim()).filter(Boolean);
-  return lista.includes(id);
+  return String(process.env.VOZ_BETA || '').split(',').map(s => s.trim()).filter(Boolean).includes(id);
 }
 
-// ── Fechas en la hora de quien pregunta, no del servidor ────────────────────
-function hoyLocal() {
-  const f = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
-  return f.format(new Date());                       // AAAA-MM-DD
-}
-function diaMas(iso, n) {
-  const d = new Date(iso + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-function bonita(iso) {
-  const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const [a, m, d] = iso.split('-');
-  return `${Number(d)} de ${M[Number(m) - 1]}`;
-}
-function haceCuanto(iso) {
-  const dias = Math.round((Date.parse(hoyLocal() + 'T12:00:00Z') - Date.parse(String(iso).slice(0, 10) + 'T12:00:00Z')) / 86400000);
-  if (dias <= 0) return 'hoy';
-  if (dias === 1) return 'ayer';
-  return `hace ${dias} días`;
-}
-function hora(iso) {
-  try {
-    return new Intl.DateTimeFormat('es-CO', { timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso));
-  } catch { return ''; }
-}
+const INSTRUCCIONES = `Eres el asistente de voz de Acuarius, un CRM. Alguien te acaba de HABLAR desde su teléfono, probablemente mientras hace otra cosa. Le respondes con datos reales de su cuenta.
 
-// ── Lo que el modelo puede pedir ────────────────────────────────────────────
-const INTENCIONES = [
-  'pendientes',        // tareas de hoy y vencidas
-  'fase_lead',         // en qué etapa está alguien
-  'ultima_interaccion',
-  'notas_lead',
-  'datos_lead',        // teléfono / correo
-  'atendidos',         // cuántos leads trabajé en un periodo
-  'sin_tocar',         // leads abandonados
-  'pendientes_de',     // la agenda de otra persona del equipo
-  'actividad_equipo',  // quién ha trabajado y quién no, en un periodo
-  'cierres_equipo',    // ganados, montos y perdidos por persona
-  'ambiguo',           // el nombre se parece a varios
-  'fuera_de_alcance',  // pide escribir algo: esta fase no lo hace
-  'no_entendido',
-];
+CÓMO TRABAJAS
+- Usa las herramientas para averiguar lo que haga falta. Puedes llamarlas varias veces y combinar lo que devuelvan.
+- NUNCA des una cifra, un nombre, una fecha o un importe que no haya salido de una herramienta. Si no lo sabes, dilo.
+- Si una herramienta devuelve "varios", pregúntale a cuál se refiere en vez de escoger tú.
+- Si la pregunta es amplia o no sabes por dónde empezar, llama a "panorama" primero.
 
-const INSTRUCCIONES = `Clasificas lo que un comercial dijo en voz alta a su CRM. NO respondes su pregunta: solo dices qué pidió.
+QUÉ NO PUEDES HACER
+Esta versión solo consulta. Si te piden crear una tarea, mover un lead de etapa, asignar, borrar o mandar un mensaje, dilo con naturalidad: que por ahora solo puedes consultar y que eso llegará. No lo intentes ni digas que lo hiciste.
 
-Devuelve SOLO un objeto JSON:
-{"intencion":"<una de la lista>","lead_id":"<id exacto o null>","persona_id":"<id exacto de alguien del equipo o null>","candidatos":["id","id"],"dias":<número o null>,"desde":"AAAA-MM-DD","hasta":"AAAA-MM-DD"}
-
-Intenciones: ${INTENCIONES.join(', ')}.
-
-Reglas:
-- "lead_id" SOLO si estás seguro de a quién se refiere. El reconocimiento de voz deforma los nombres: "Daisy" puede ser "Deysy", "Jorge Acosta" puede llegar como "Jorge a Costa".
-- Si el nombre se parece a VARIOS leads o no estás seguro, usa intencion "ambiguo" y pon hasta 3 ids en "candidatos".
-- Si no se parece a ninguno, "no_entendido".
-- Si pide CREAR, MOVER, ASIGNAR, BORRAR o MANDAR algo: "fuera_de_alcance".
-- Para periodos ("la semana pasada", "mañana", "este mes", "el viernes") calcula "desde" y "hasta" a partir de la fecha de hoy que te doy. La semana va de lunes a domingo. Esto vale TAMBIÉN para "pendientes": si dijo "para mañana" pon desde y hasta en el día de mañana. Si no mencionó ningún día, deja desde y hasta en null.
-- Para "sin_tocar", "dias" es el umbral que pidieron; si no dijeron, 7.
-- Si pregunta por la agenda de OTRA persona del equipo ("qué tiene pendiente Maira"), usa "pendientes_de" y pon su id en "persona_id". Si no hay equipo en la lista, no uses esta intención.
-- Si pregunta quién ha trabajado o quién no ha tocado sus leads, usa "actividad_equipo".
-- Si pregunta por CIERRES, ventas, montos, cuánto se vendió o cómo va el equipo en resultados, usa "cierres_equipo". Si no dijo periodo, deja desde y hasta en null y se toma el mes en curso.`;
-
-async function clasificar(texto, contexto, apiKey) {
-  const prompt = INSTRUCCIONES +
-    `\n\nHOY ES ${contexto.hoy} (${contexto.diaSemana}).` +
-    `\n\nSUS LEADS (id · nombre · etapa):\n` +
-    contexto.leads.map(l => `${l.id} · ${l.name} · ${l.stage}`).join('\n') +
-    (contexto.equipo && contexto.equipo.length
-      ? `\n\nSU EQUIPO (id · nombre):\n` + contexto.equipo.map(m => `${m.id} · ${m.nombre}`).join('\n')
-      : '\n\n(No tiene equipo o no puede ver el de nadie más.)') +
-    `\n\nLO QUE DIJO:\n"${texto}"`;
-
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!r.ok) throw new Error('anthropic ' + r.status);
-  const d = await r.json();
-  const txt = d.content?.[0]?.text || '';
-  const m = txt.match(/\{[\s\S]*\}/);
-  return { plan: m ? JSON.parse(m[0]) : null, uso: d.usage, modelo: d.model };
+CÓMO RESPONDES
+Termina SIEMPRE con un bloque JSON, y nada después:
+{
+ "voz": "lo que se va a leer en voz alta. Una o dos frases, como se lo dirías hablando. Ahí va la respuesta, no un resumen de lo que hiciste.",
+ "etiqueta": "una palabra para la cabecera: Agenda, Lead, Equipo, Cierres, Cartera, Números, Todavía no, No entendí…",
+ "cifra": "opcional, un número o importe grande para destacar",
+ "cifra_pie": "opcional, qué es esa cifra",
+ "filas": [{"titulo":"…","detalle":"…","alerta":true}],
+ "escalera": {"etapas":["…"],"actual":"…"},
+ "aviso": "opcional, cuando haga falta advertir algo o preguntar cuál",
+ "opciones": ["opcional","nombres","para","desambiguar"],
+ "acciones": ["Abrir su ficha"],
+ "nota_al_pie": "opcional, una salvedad sobre cómo se contó"
 }
 
-// ── Las respuestas. Cada una consulta la base y arma su tarjeta ─────────────
-async function responder(plan, ctx) {
-  const { userId, actorId, filtroMios, leads } = ctx;
-  const lead = plan.lead_id ? leads.find(l => l.id === plan.lead_id) : null;
+CÓMO HABLAS
+- Español de Colombia, tuteo, sin jerga técnica. Nunca digas "según los datos", "el sistema" ni "la base de datos".
+- "voz" se ESCUCHA: nada de listas ni de leer quince nombres seguidos. El detalle va en "filas", que se ve en pantalla.
+- Importes en pesos, con puntos de miles y sin decimales.
+- Si un número necesita una salvedad para no engañar —cerrados sin fecha, actividad sin autor— ponla en "nota_al_pie". No la escondas.
+- "escalera" solo cuando hables de la etapa de un lead concreto.
+- "acciones" útiles y pocas: "Abrir su ficha", "Llamarlo", "Abrir la agenda", "Ver el tablero".`;
 
-  switch (plan.intencion) {
+async function conversar(texto, ctx, apiKey) {
+  const mensajes = [{ role: 'user', content: texto }];
+  const usoTotal = { input_tokens: 0, output_tokens: 0 };
+  let modelo = null;
 
-    case 'pendientes': {
-      // «Mías» con la misma regla que la pantalla de agenda: lo que tiene mi
-      // nombre y, si soy el dueño de la cuenta, además lo que no tiene dueño.
-      // Sin esto, a la dueña —que ve todos los leads— le salían las 66 tareas
-      // del equipo como si fueran suyas. Un directivo que abre «qué tengo
-      // pendiente» y ve el trabajo ajeno no vuelve a preguntar.
-      const conRango = !!(plan.desde && plan.hasta);
-      const desde = conRango ? plan.desde + 'T00:00:00Z' : null;
-      const hasta = (conRango ? plan.hasta : hoyLocal()) + 'T23:59:59Z';
-
-      let q = `/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null` +
-              `&due_at=lte.${encodeURIComponent(hasta)}&select=title,due_at,lead_id&order=due_at.asc&limit=200`;
-      if (desde) q += `&due_at=gte.${encodeURIComponent(desde)}`;
-      const todas = await sb(q);
-
-      const duenoDe = {};
-      leads.forEach(l => { duenoDe[l.id] = l.assigned_to; });
-      const visibles = todas.filter(t => !t.lead_id || Object.prototype.hasOwnProperty.call(duenoDe, t.lead_id));
-      const esMia = t => {
-        if (!t.lead_id) return true;                       // una tarea suelta es de quien la puso
-        const d = duenoDe[t.lead_id];
-        return d === actorId || (!d && ctx.esDueno);
-      };
-      const mias = visibles.filter(esMia);
-      const ajenas = visibles.length - mias.length;
-      const cuando = conRango
-        ? (plan.desde === diaMas(hoyLocal(), 1) ? 'para mañana' : `entre el ${bonita(plan.desde)} y el ${bonita(plan.hasta)}`)
-        : 'para hoy';
-
-      if (!mias.length) {
-        return {
-          etiqueta: 'Agenda',
-          voz: `No tienes nada ${cuando}.` +
-               (ajenas && ctx.veElEquipo ? ` Tu equipo tiene ${ajenas} ${ajenas === 1 ? 'tarea' : 'tareas'}.` : ''),
-          filas: ajenas && ctx.veElEquipo ? repartoPorPersona(visibles.filter(t => !esMia(t)), duenoDe, ctx.equipo) : null,
-          nota_al_pie: ajenas && ctx.veElEquipo
-            ? 'Una tarea es de quien tenga el lead a su nombre.' : null,
-          acciones: ajenas && ctx.veElEquipo ? ['Abrir la agenda'] : [],
-        };
-      }
-      const vencidas = mias.filter(t => Date.parse(t.due_at) < Date.now());
-      return {
-        etiqueta: 'Agenda',
-        voz: `Tienes ${mias.length} ${mias.length === 1 ? 'pendiente' : 'pendientes'} ${cuando}` +
-             (vencidas.length ? `, ${vencidas.length} ${vencidas.length === 1 ? 'vencido' : 'vencidos'}.` : '.'),
-        filas: mias.slice(0, 8).map(t => ({
-          titulo: t.title,
-          detalle: Date.parse(t.due_at) < Date.now()
-            ? 'Venció ' + haceCuanto(t.due_at) + ' · ' + hora(t.due_at)
-            : bonita(String(t.due_at).slice(0, 10)) + ' · ' + hora(t.due_at),
-          alerta: Date.parse(t.due_at) < Date.now(),
-        })),
-        nota_al_pie: ajenas && ctx.veElEquipo
-          ? `Tu equipo tiene ${ajenas} ${ajenas === 1 ? 'tarea' : 'tareas'} más a su nombre.` : null,
-        acciones: ['Abrir la agenda'],
-      };
+  for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 1400,
+        system: INSTRUCCIONES + `\n\nHOY ES ${ctx.hoy} (${ctx.diaSemana}). Quien te habla es ${ctx.nombre}` +
+                (ctx.soloLoSuyo ? ', y su perfil solo ve los leads a su nombre.' : ', y ve toda la cuenta.'),
+        tools: HERRAMIENTAS,
+        messages: mensajes,
+      }),
+    });
+    if (!r.ok) throw new Error('anthropic ' + r.status + ' ' + (await r.text()).slice(0, 200));
+    const d = await r.json();
+    modelo = d.model;
+    if (d.usage) {
+      usoTotal.input_tokens += d.usage.input_tokens || 0;
+      usoTotal.output_tokens += d.usage.output_tokens || 0;
     }
 
-    case 'fase_lead': {
-      if (!lead) return sinLead();
-      const etapas = ctx.etapasDe(lead.pipeline_id);
-      return {
-        etiqueta: 'Lead',
-        voz: `${lead.name} está en ${lead.etiquetaEtapa}` + (lead.tablero ? `, en el tablero ${lead.tablero}.` : '.'),
-        escalera: { etapas: etapas.length ? etapas : [lead.etiquetaEtapa], actual: lead.etiquetaEtapa },
-        acciones: ['Abrir su ficha'],
-        lead_id: lead.id,
-      };
+    const pedidos = (d.content || []).filter(c => c.type === 'tool_use');
+    if (!pedidos.length || d.stop_reason !== 'tool_use') {
+      return { texto: (d.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'), uso: usoTotal, modelo };
     }
 
-    case 'ultima_interaccion': {
-      if (!lead) return sinLead();
-      const act = await sb(`/lead_activities?lead_id=eq.${lead.id}&user_id=eq.${userId}` +
-        `&select=type,content,created_at&order=created_at.desc&limit=1`);
-      if (!act.length) {
-        return { etiqueta: 'Historial', voz: `No hay nada registrado con ${lead.name} todavía.`,
-                 acciones: ['Abrir su ficha'], lead_id: lead.id };
-      }
-      const a = act[0];
-      return {
-        etiqueta: 'Historial',
-        voz: `La última con ${lead.name} fue ${haceCuanto(a.created_at)}: ${a.type}.`,
-        filas: [{ titulo: capitaliza(a.type) + ' · ' + bonita(String(a.created_at).slice(0, 10)),
-                  detalle: (a.content || '').slice(0, 220) }],
-        acciones: ['Abrir su ficha'],
-        lead_id: lead.id,
-      };
+    mensajes.push({ role: 'assistant', content: d.content });
+    const resultados = [];
+    for (const p of pedidos) {
+      let salida;
+      try { salida = await ejecutar(p.name, p.input, ctx); }
+      catch (e) { salida = { error: 'No se pudo consultar: ' + (e && e.message ? e.message : 'fallo') }; }
+      resultados.push({ type: 'tool_result', tool_use_id: p.id, content: JSON.stringify(salida).slice(0, 12000) });
     }
-
-    case 'notas_lead': {
-      if (!lead) return sinLead();
-      const filas = await sb(`/leads?id=eq.${lead.id}&user_id=eq.${userId}&select=notes`);
-      const notas = (filas?.[0]?.notes || '').trim();
-      if (!notas) return { etiqueta: 'Lead', voz: `${lead.name} no tiene notas.`, acciones: ['Abrir su ficha'], lead_id: lead.id };
-      return {
-        etiqueta: 'Lead',
-        voz: notas.replace(/📥/g, '').replace(/\n+/g, '. ').slice(0, 600),
-        filas: [{ titulo: 'Notas de ' + lead.name, detalle: notas.slice(0, 600) }],
-        acciones: ['Abrir su ficha'],
-        lead_id: lead.id,
-      };
-    }
-
-    case 'datos_lead': {
-      if (!lead) return sinLead();
-      const filas = await sb(`/leads?id=eq.${lead.id}&user_id=eq.${userId}&select=phone,email,company`);
-      const d = filas?.[0] || {};
-      return {
-        etiqueta: 'Lead',
-        voz: d.phone ? `El teléfono de ${lead.name} es ${d.phone.split('').join(' ')}.`
-                     : `${lead.name} no tiene teléfono registrado.`,
-        filas: [
-          d.phone ? { titulo: d.phone, detalle: 'Teléfono' } : null,
-          d.email ? { titulo: d.email, detalle: 'Correo' } : null,
-        ].filter(Boolean),
-        acciones: d.phone ? ['Llamarlo', 'Abrir su ficha'] : ['Abrir su ficha'],
-        lead_id: lead.id, telefono: d.phone || null,
-      };
-    }
-
-    // Aquí el número lo cuenta el servidor, no el modelo.
-    case 'atendidos': {
-      const desde = plan.desde || diaMas(hoyLocal(), -7);
-      const hasta = plan.hasta || hoyLocal();
-      const act = await sb(`/lead_activities?user_id=eq.${userId}` +
-        `&type=in.(llamada,email,reunion,nota)` +
-        `&created_at=gte.${desde}T00:00:00Z&created_at=lte.${hasta}T23:59:59Z` +
-        `&select=lead_id,metadata&limit=2000`);
-      const mios = new Set(leads.map(l => l.id));
-      const cuenta = new Set(act
-        .filter(a => a.lead_id && mios.has(a.lead_id))
-        // Mismo cuidado: el id está en actor_id, no en actor.
-        .filter(a => !ctx.soloLoSuyo || !a.metadata?.actor_id || a.metadata.actor_id === actorId)
-        .map(a => a.lead_id));
-      return {
-        etiqueta: 'Números',
-        voz: `Atendiste ${cuenta.size} ${cuenta.size === 1 ? 'lead' : 'leads'} entre el ${bonita(desde)} y el ${bonita(hasta)}.`,
-        cifra: String(cuenta.size),
-        cifra_pie: `leads con actividad tuya · ${bonita(desde)} al ${bonita(hasta)}`,
-        nota_al_pie: 'Cuento un lead cuando le registraste una llamada, un correo, una reunión o una nota.',
-      };
-    }
-
-    case 'sin_tocar': {
-      const dias = Number(plan.dias) > 0 ? Number(plan.dias) : 7;
-      const corte = diaMas(hoyLocal(), -dias);
-      const filas = await sb(`/leads?user_id=eq.${userId}&deleted_at=is.null${filtroMios}` +
-        `&stage=not.in.(ganado,perdido)&updated_at=lt.${corte}T00:00:00Z` +
-        `&select=id,name,stage,updated_at&order=updated_at.asc&limit=10`);
-      if (!filas.length) return { etiqueta: 'Cartera', voz: `Ninguno lleva más de ${dias} días sin que lo toques. Vas al día.` };
-      return {
-        etiqueta: 'Cartera',
-        voz: `${filas.length === 10 ? 'Al menos 10' : filas.length} ${filas.length === 1 ? 'lead lleva' : 'leads llevan'} más de ${dias} días sin movimiento.`,
-        filas: filas.map(l => ({ titulo: l.name, detalle: 'Sin tocar ' + haceCuanto(l.updated_at) + ' · ' + l.stage })),
-        acciones: ['Ver el tablero'],
-      };
-    }
-
-    // Consultas de quien dirige. Solo para quien ve el trabajo de todos: a un
-    // perfil de Ventas no le toca saber la agenda de sus compañeros.
-    case 'pendientes_de': {
-      if (!ctx.veElEquipo) return soloParaJefes();
-      const p = (ctx.equipo || []).find(m => m.id === plan.persona_id);
-      if (!p) return { etiqueta: 'No entendí', voz: 'No encontré a esa persona en tu equipo.',
-                       aviso: 'Dime el nombre como aparece en Configuración → Equipo.' };
-      const conRango = !!(plan.desde && plan.hasta);
-      const hasta = (conRango ? plan.hasta : hoyLocal()) + 'T23:59:59Z';
-      let q = `/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null` +
-              `&due_at=lte.${encodeURIComponent(hasta)}&select=title,due_at,lead_id&order=due_at.asc&limit=200`;
-      if (conRango) q += `&due_at=gte.${encodeURIComponent(plan.desde + 'T00:00:00Z')}`;
-      const todas = await sb(q);
-      const suyos = new Set(leads.filter(l => l.assigned_to === p.id).map(l => l.id));
-      const suyas = todas.filter(t => t.lead_id && suyos.has(t.lead_id));
-      const cuando = conRango
-        ? (plan.desde === diaMas(hoyLocal(), 1) ? 'para mañana' : `entre el ${bonita(plan.desde)} y el ${bonita(plan.hasta)}`)
-        : 'para hoy';
-      if (!suyas.length) return { etiqueta: 'Equipo', voz: `${p.nombre} no tiene nada ${cuando}.` };
-      const venc = suyas.filter(t => Date.parse(t.due_at) < Date.now());
-      return {
-        etiqueta: 'Equipo',
-        voz: `${p.nombre} tiene ${suyas.length} ${suyas.length === 1 ? 'pendiente' : 'pendientes'} ${cuando}` +
-             (venc.length ? `, ${venc.length} ${venc.length === 1 ? 'vencido' : 'vencidos'}.` : '.'),
-        filas: suyas.slice(0, 8).map(t => ({
-          titulo: t.title,
-          detalle: Date.parse(t.due_at) < Date.now()
-            ? 'Venció ' + haceCuanto(t.due_at) + ' · ' + hora(t.due_at)
-            : bonita(String(t.due_at).slice(0, 10)) + ' · ' + hora(t.due_at),
-          alerta: Date.parse(t.due_at) < Date.now(),
-        })),
-        acciones: ['Abrir la agenda'],
-      };
-    }
-
-    case 'actividad_equipo': {
-      if (!ctx.veElEquipo) return soloParaJefes();
-      const equipo = ctx.equipo || [];
-      if (!equipo.length) return { etiqueta: 'Equipo', voz: 'Todavía no tienes equipo en la cuenta.' };
-      const desde = plan.desde || diaMas(hoyLocal(), -7);
-      const hasta = plan.hasta || hoyLocal();
-      const act = await sb(`/lead_activities?user_id=eq.${userId}` +
-        `&type=in.(llamada,email,reunion,nota)` +
-        `&created_at=gte.${desde}T00:00:00Z&created_at=lte.${hasta}T23:59:59Z` +
-        `&select=lead_id,metadata&limit=3000`);
-      // Por persona, cuántos leads distintos tocó. Solo cuenta lo que quedó
-      // registrado a nombre de alguien: las notas que escribe el sistema no
-      // llevan autor y atribuírselas a alguien sería inventar trabajo.
-      const porPersona = {};
-      equipo.forEach(m => { porPersona[m.id] = new Set(); });
-      // `metadata.actor` es el NOMBRE de la persona; el id vive en `actor_id`.
-      // Comparar el nombre contra un id no casa NUNCA, y esta consulta habría
-      // dicho que nadie trabajó — con cuatro personas que sí lo hicieron hoy.
-      // Se acepta el nombre como respaldo por si alguna fila vieja no trae id.
-      const porNombre = {};
-      equipo.forEach(m => { porNombre[m.nombre] = m.id; });
-      act.forEach(a => {
-        const md = a.metadata || {};
-        const id = md.actor_id || porNombre[md.actor];
-        if (id && porPersona[id] && a.lead_id) porPersona[id].add(a.lead_id);
-      });
-      const tabla = equipo
-        .map(m => ({ nombre: m.nombre, n: porPersona[m.id].size }))
-        .sort((a, b) => a.n - b.n);
-      const quietos = tabla.filter(t => t.n === 0);
-      return {
-        etiqueta: 'Equipo',
-        voz: quietos.length
-          ? `${quietos.length === 1 ? 'Una persona no registró' : quietos.length + ' personas no registraron'} nada entre el ${bonita(desde)} y el ${bonita(hasta)}: ${quietos.map(q => q.nombre).join(', ')}.`
-          : `Todos registraron actividad entre el ${bonita(desde)} y el ${bonita(hasta)}.`,
-        filas: tabla.map(t => ({
-          titulo: t.nombre,
-          detalle: t.n === 0 ? 'Sin actividad registrada' : `${t.n} ${t.n === 1 ? 'lead atendido' : 'leads atendidos'}`,
-          alerta: t.n === 0,
-        })),
-        nota_al_pie: 'Cuento los leads distintos a los que cada quien le registró una llamada, un correo, una reunión o una nota.',
-      };
-    }
-
-    case 'cierres_equipo': {
-      if (!ctx.veElEquipo) return soloParaJefes();
-      const desde = plan.desde || hoyLocal().slice(0, 8) + '01';
-      const hasta = plan.hasta || hoyLocal();
-      const cerrados = await sb(`/leads?user_id=eq.${userId}&deleted_at=is.null` +
-        `&stage=in.(ganado,perdido)` +
-        `&closed_at=gte.${desde}T00:00:00Z&closed_at=lte.${hasta}T23:59:59Z` +
-        `&select=stage,value,assigned_to&limit=2000`);
-
-      const nombre = {};
-      (ctx.equipo || []).forEach(m => { nombre[m.id] = m.nombre; });
-      const por = {};
-      const anota = (k) => (por[k] = por[k] || { ganados: 0, monto: 0, perdidos: 0 });
-      cerrados.forEach(l => {
-        const r = anota(l.assigned_to || '_sin');
-        if (l.stage === 'ganado') { r.ganados++; r.monto += Number(l.value) || 0; }
-        else r.perdidos++;
-      });
-      const total = { ganados: 0, monto: 0, perdidos: 0 };
-      Object.values(por).forEach(r => { total.ganados += r.ganados; total.monto += r.monto; total.perdidos += r.perdidos; });
-
-      // Los ganados SIN fecha de cierre no caben en ningún periodo. Callarlos
-      // haría que este número nunca cuadre con el del tablero y que nadie se
-      // fíe del informe: mejor decir cuántos quedaron fuera y por qué.
-      const sinFecha = await sb(`/leads?user_id=eq.${userId}&deleted_at=is.null` +
-        `&stage=eq.ganado&closed_at=is.null&select=id&limit=200`);
-
-      if (!total.ganados && !total.perdidos) {
-        return { etiqueta: 'Cierres', voz: `No hay cierres registrados entre el ${bonita(desde)} y el ${bonita(hasta)}.` };
-      }
-      return {
-        etiqueta: 'Cierres',
-        voz: `Entre el ${bonita(desde)} y el ${bonita(hasta)} el equipo cerró ${total.ganados} ` +
-             `${total.ganados === 1 ? 'negocio' : 'negocios'} por ${plata(total.monto)}` +
-             (total.perdidos ? `, y perdió ${total.perdidos}.` : '.'),
-        cifra: plata(total.monto),
-        cifra_pie: `${total.ganados} ${total.ganados === 1 ? 'negocio ganado' : 'negocios ganados'} · ${bonita(desde)} al ${bonita(hasta)}`,
-        filas: Object.entries(por)
-          .sort((a, b) => b[1].monto - a[1].monto || b[1].ganados - a[1].ganados)
-          .slice(0, 8)
-          .map(([k, r]) => ({
-            titulo: k === '_sin' ? 'Sin responsable' : (nombre[k] || 'Alguien que ya no está'),
-            detalle: `${r.ganados} ${r.ganados === 1 ? 'ganado' : 'ganados'} · ${plata(r.monto)}` +
-                     (r.perdidos ? ` · ${r.perdidos} ${r.perdidos === 1 ? 'perdido' : 'perdidos'}` : ''),
-            alerta: r.ganados === 0 && r.perdidos > 0,
-          })),
-        nota_al_pie: sinFecha.length
-          ? `Hay ${sinFecha.length} ${sinFecha.length === 1 ? 'negocio ganado' : 'negocios ganados'} sin fecha de cierre, así que no entran en ningún periodo.`
-          : null,
-      };
-    }
-
-    case 'ambiguo': {
-      const cand = (plan.candidatos || []).map(id => leads.find(l => l.id === id)).filter(Boolean).slice(0, 3);
-      if (!cand.length) return sinLead();
-      return {
-        etiqueta: 'Cuál de todos',
-        voz: '¿A cuál te refieres?',
-        aviso: 'No estoy seguro de a quién te refieres.',
-        opciones: cand.map(l => ({ texto: l.name, lead_id: l.id })),
-      };
-    }
-
-    case 'fuera_de_alcance':
-      return {
-        etiqueta: 'Todavía no',
-        voz: 'Por ahora solo puedo consultar, no cambiar cosas. Eso lo tienes que hacer desde la pantalla.',
-        aviso: 'Crear tareas, mover de etapa o mandar mensajes llegará más adelante, y siempre pidiéndote confirmación.',
-      };
-
-    default:
-      return { etiqueta: 'No entendí', voz: 'No te entendí. ¿Me lo repites?',
-               aviso: 'Prueba con «qué tengo pendiente hoy» o «en qué fase está» y el nombre de un lead.' };
+    mensajes.push({ role: 'user', content: resultados });
   }
+  return { texto: '', uso: usoTotal, modelo };   // se acabaron las vueltas
 }
 
-// «Tu equipo tiene 30» no le sirve a nadie para decidir nada. De quién son, sí.
-function repartoPorPersona(tareas, duenoDe, equipo) {
-  const nombre = {};
-  (equipo || []).forEach(m => { nombre[m.id] = m.nombre; });
-  const cuenta = {};
-  tareas.forEach(t => {
-    const d = t.lead_id ? duenoDe[t.lead_id] : null;
-    const k = d || '(sin responsable)';
-    cuenta[k] = (cuenta[k] || 0) + 1;
-  });
-  return Object.entries(cuenta)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([k, n]) => ({ titulo: nombre[k] || k.replace('(sin responsable)', 'Sin responsable'),
-                        detalle: n + (n === 1 ? ' tarea' : ' tareas') }));
+// El JSON va al final del texto. Se busca desde la última llave hacia delante
+// probando cierres, porque el modelo puede escribir llaves dentro de una nota.
+function sacarJson(txt) {
+  if (!txt) return null;
+  const i = txt.lastIndexOf('{');
+  if (i < 0) return null;
+  for (let fin = txt.length; fin > i; fin--) {
+    const trozo = txt.slice(i, fin).trim();
+    if (!trozo.endsWith('}')) continue;
+    try { return JSON.parse(trozo); } catch {}
+  }
+  return null;
 }
 
-// Pesos colombianos, sin decimales: nadie dice «un millón de pesos con cero
-// centavos», y los céntimos en una cifra de siete dígitos solo estorban.
-function plata(n) {
-  const v = Math.round(Number(n) || 0);
-  return '$' + v.toLocaleString('es-CO');
-}
-
-function soloParaJefes() {
-  return { etiqueta: 'No disponible', voz: 'Eso solo lo puede consultar quien dirige la cuenta.',
-           aviso: 'Tu perfil ve su propia gestión, no la de tus compañeros.' };
-}
-
-function sinLead() {
-  return { etiqueta: 'No entendí', voz: 'No encontré ese lead entre los tuyos.',
-           aviso: 'Puede que el micrófono haya entendido mal el nombre. Vuelve a intentarlo despacio.' };
-}
-function capitaliza(s) { const t = String(s || ''); return t.charAt(0).toUpperCase() + t.slice(1); }
-
-// ── Handler ─────────────────────────────────────────────────────────────────
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
-
-  // El navegador pregunta si tiene que pintar el botón. Se contesta rápido y
-  // sin tocar nada más.
-  const url = new URL(req.url);
   if (req.method === 'GET') return jsonResp({ habilitado: enLaBeta(userId) });
   if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
   if (!enLaBeta(userId)) return jsonResp({ error: 'No disponible', habilitado: false }, 403);
@@ -539,67 +189,61 @@ export default async function handler(req) {
   const filtroMios = soloMios ? `&assigned_to=eq.${encodeURIComponent(quien.actorId)}` : '';
 
   try {
-    // TODA la cuenta, no el cliente que tenga abierto. Preguntar «en qué fase
-    // está Liliana Blanco» no puede exigir haber seleccionado antes el tablero
-    // correcto: quien habla no está mirando la pantalla. Atarlo al ámbito hacía
-    // que desde «Mi cuenta» —donde no hay leads— respondiera siempre lo mismo
-    // aunque el lead existiera.
+    // Toda la cuenta, no el cliente que tenga abierto: quien habla no está
+    // mirando la pantalla y no tiene por qué haber elegido el tablero antes.
     const [leadsRaw, etapasRaw, tablerosRaw, equipoRaw] = await Promise.all([
       sb(`/leads?user_id=eq.${quien.userId}&deleted_at=is.null${filtroMios}` +
-         `&select=id,name,stage,pipeline_id,assigned_to&order=updated_at.desc&limit=400`),
+         `&select=id,name,stage,pipeline_id,assigned_to,value,source,tags,created_at,updated_at,closed_at` +
+         `&order=updated_at.desc&limit=600`),
       sb(`/pipeline_stages?user_id=eq.${quien.userId}&select=key,label,pipeline_id&order=position.asc`),
       sb(`/pipelines?user_id=eq.${quien.userId}&select=id,name`),
-      // Solo se pide si quien pregunta puede ver el trabajo de los demás.
       soloMios ? Promise.resolve([])
                : sb(`/team_members?owner_user_id=eq.${quien.userId}&status=eq.active` +
                     `&member_user_id=not.is.null&select=member_user_id,member_name,member_email`),
     ]);
-    const equipo = (equipoRaw || []).map(m => ({
-      id: m.member_user_id, nombre: m.member_name || m.member_email,
+
+    // Cada etapa se traduce con SU tablero: dos tableros pueden usar la misma
+    // clave con rótulos distintos («ganado» es «Entrega de inmueble» en uno y
+    // «Firma de promesa» en otro).
+    const rotulo = {}; etapasRaw.forEach(e => { rotulo[(e.pipeline_id || '') + '|' + e.key] = e.label; });
+    const nombreTablero = {}; tablerosRaw.forEach(t => { nombreTablero[t.id] = t.name; });
+
+    const leads = leadsRaw.map(l => ({
+      ...l,
+      etiquetaEtapa: rotulo[(l.pipeline_id || '') + '|' + l.stage] || l.stage,
+      tablero: nombreTablero[l.pipeline_id] || null,
     }));
+    const equipo = (equipoRaw || []).map(m => ({ id: m.member_user_id, nombre: m.member_name || m.member_email }));
 
-    // Cada lead lleva su etapa traducida por SU tablero: dos tableros pueden
-    // usar la misma clave con rótulos distintos.
-    const rotulo = {};
-    etapasRaw.forEach(e => { rotulo[(e.pipeline_id || '') + '|' + e.key] = e.label; });
-    const nombreTablero = {};
-    tablerosRaw.forEach(t => { nombreTablero[t.id] = t.name; });
+    const ctx = {
+      userId: quien.userId, actorId: quien.actorId,
+      soloLoSuyo: soloMios, esDueno: quien.esDueno === true, veElEquipo: !soloMios,
+      leads, equipo,
+      hoy: hoyLocal(),
+      diaSemana: new Intl.DateTimeFormat('es-CO', { timeZone: TZ, weekday: 'long' }).format(new Date()),
+      nombre: quien.nombre || 'el dueño de la cuenta',
+    };
 
-    const leads = leadsRaw.map(l => {
-      const etiqueta = rotulo[(l.pipeline_id || '') + '|' + l.stage] || l.stage;
-      return { id: l.id, name: l.name, stage: etiqueta, etiquetaEtapa: etiqueta,
-               pipeline_id: l.pipeline_id, tablero: nombreTablero[l.pipeline_id] || null,
-               assigned_to: l.assigned_to || null };
-    });
+    const { texto: salida, uso, modelo } = await conversar(texto, ctx, apiKey);
+    const card = sacarJson(salida);
 
-    if (!leads.length) {
-      return jsonResp({ etiqueta: 'Sin leads',
-        voz: quien.esMiembro && soloMios
-          ? 'Todavía no tienes leads a tu nombre. Pídele al administrador que te reparta los tuyos.'
-          : 'Todavía no hay leads en esta cuenta.' });
-    }
-
-    const hoy = hoyLocal();
-    const diaSemana = new Intl.DateTimeFormat('es-CO', { timeZone: TZ, weekday: 'long' }).format(new Date());
-
-    const { plan, uso, modelo } = await clasificar(texto, { hoy, diaSemana, leads, equipo }, apiKey);
-    if (!plan) return jsonResp({ etiqueta: 'No entendí', voz: 'No te entendí. ¿Me lo repites?' });
-
-    const resp = await responder(plan, {
-      userId: quien.userId, actorId: quien.actorId, filtroMios, leads,
-      etapasDe: (pid) => etapasRaw.filter(e => e.pipeline_id === pid).map(e => e.label),
-      soloLoSuyo: soloMios,
-      esDueno: quien.esDueno === true,
-      veElEquipo: !soloMios,           // dueño y admin ven el trabajo de todos
-      equipo,
-    });
-
-    if (uso) {
+    if (uso && (uso.input_tokens || uso.output_tokens)) {
       await registrarUso({ userId: await cuentaDe(userId), actorId: userId, origen: 'voz', modelo, uso }).catch(() => {});
     }
-    return jsonResp({ ...resp, dijo: texto, intencion: plan.intencion });
+
+    if (!card || !card.voz) {
+      // Sin JSON utilizable se devuelve el texto plano si lo hay, y si no, se
+      // admite el fallo. Una tarjeta vacía parece una avería de la aplicación.
+      const plano = String(salida || '').replace(/\{[\s\S]*$/, '').trim();
+      return jsonResp({
+        etiqueta: plano ? 'Respuesta' : 'No entendí',
+        voz: plano || 'No conseguí armar la respuesta. ¿Me lo preguntas de otra forma?',
+        dijo: texto,
+      });
+    }
+    return jsonResp({ ...card, dijo: texto });
   } catch (e) {
-    console.error('[voz]', e?.message);
+    console.error('[voz]', e && e.message);
     return jsonResp({ error: 'No se pudo procesar. Reintenta en un momento.' }, 500);
   }
 }
