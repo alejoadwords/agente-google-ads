@@ -69,8 +69,35 @@ function leadCerrado(lead) {
   return ETAPAS_CERRADAS.includes(String(lead.stage || '').toLowerCase());
 }
 
+// El registro de errores, a mano. api/_registro-errores.js no se puede importar
+// desde aquí —esta función es Node y ese módulo rompió el build una vez—, pero
+// el RPC es el mismo, así que estos fallos salen en el aviso diario como
+// cualquier otro. Antes, un resumen que no salía no dejaba ni una huella: el
+// resumen del cron se lo queda Vercel y nadie lo lee.
+async function anotar(mensaje, detalle, usuario) {
+  try {
+    console.error('[cron] cron-tasks:', mensaje, detalle || '');
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/registrar_error`, {
+      method: 'POST',
+      headers: sb(),
+      body: JSON.stringify({
+        p_firma: 'cron-tasks-' + String(mensaje).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60),
+        p_origen: 'cron',
+        p_donde: 'cron-tasks',
+        p_mensaje: String(mensaje).slice(0, 500),
+        p_detalle: detalle ? String(detalle).slice(0, 4000) : null,
+        p_usuario: usuario || null,
+      }),
+    });
+  } catch {}
+}
+
+// Devuelve el motivo en vez de un booleano: «no salió» sin decir por qué es lo
+// que dejó a un equipo entero sin su resumen sin que nadie pudiera verlo.
 async function enviar(to, vencidas, hoy) {
-  if (!RESEND_API_KEY || !to) return false;
+  if (!RESEND_API_KEY) return { ok: false, motivo: 'RESEND_API_KEY no configurada' };
+  if (!to) return { ok: false, motivo: 'esa persona no tiene correo en el equipo' };
   const total = vencidas.length + hoy.length;
   const asunto = vencidas.length
     ? `${vencidas.length} tarea${vencidas.length > 1 ? 's' : ''} vencida${vencidas.length > 1 ? 's' : ''} y ${hoy.length} para hoy`
@@ -97,7 +124,9 @@ async function enviar(to, vencidas, hoy) {
       }),
     }),
   });
-  return res.ok;
+  if (res.ok) return { ok: true };
+  const cuerpoErr = await res.text().catch(() => '');
+  return { ok: false, motivo: `Resend ${res.status}`, detalle: cuerpoErr.slice(0, 500) };
 }
 
 export default async function handler(req, res) {
@@ -107,7 +136,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
-  const resumen = { cuentas: 0, correos: 0, errores: [] };
+  const resumen = { cuentas: 0, correos: 0, fallidos: [], errores: [] };
   const ahora = Date.now();
   const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
 
@@ -162,11 +191,19 @@ export default async function handler(req, res) {
         const vencidas = suyas.filter(t => t.due_at && new Date(t.due_at).getTime() < ahora);
         const hoy = suyas.filter(t => !t.due_at || new Date(t.due_at).getTime() >= ahora);
         if (!vencidas.length && !hoy.length) continue;
-        if (await enviar(emailDe[quien], vencidas, hoy)) resumen.correos++;
+        const r = await enviar(emailDe[quien], vencidas, hoy);
+        if (r.ok) { resumen.correos++; continue; }
+        resumen.fallidos.push({ quien, motivo: r.motivo });
+        await anotar(
+          'el resumen diario de tareas no salió: ' + r.motivo,
+          `destinatario ${quien} · ${vencidas.length} vencidas · ${hoy.length} para hoy · ${r.detalle || ''}`,
+          userId
+        );
       }
       resumen.cuentas++;
     } catch (e) {
       resumen.errores.push(`${userId}: ${e.message}`);
+      await anotar('la cuenta falló al armar su resumen de tareas', e?.stack || e?.message, userId);
     }
   }
 
