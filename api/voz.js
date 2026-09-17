@@ -104,6 +104,7 @@ const INTENCIONES = [
   'sin_tocar',         // leads abandonados
   'pendientes_de',     // la agenda de otra persona del equipo
   'actividad_equipo',  // quién ha trabajado y quién no, en un periodo
+  'cierres_equipo',    // ganados, montos y perdidos por persona
   'ambiguo',           // el nombre se parece a varios
   'fuera_de_alcance',  // pide escribir algo: esta fase no lo hace
   'no_entendido',
@@ -124,7 +125,8 @@ Reglas:
 - Para periodos ("la semana pasada", "mañana", "este mes", "el viernes") calcula "desde" y "hasta" a partir de la fecha de hoy que te doy. La semana va de lunes a domingo. Esto vale TAMBIÉN para "pendientes": si dijo "para mañana" pon desde y hasta en el día de mañana. Si no mencionó ningún día, deja desde y hasta en null.
 - Para "sin_tocar", "dias" es el umbral que pidieron; si no dijeron, 7.
 - Si pregunta por la agenda de OTRA persona del equipo ("qué tiene pendiente Maira"), usa "pendientes_de" y pon su id en "persona_id". Si no hay equipo en la lista, no uses esta intención.
-- Si pregunta quién ha trabajado, quién no ha tocado sus leads o cómo va el equipo, usa "actividad_equipo".`;
+- Si pregunta quién ha trabajado o quién no ha tocado sus leads, usa "actividad_equipo".
+- Si pregunta por CIERRES, ventas, montos, cuánto se vendió o cómo va el equipo en resultados, usa "cierres_equipo". Si no dijo periodo, deja desde y hasta en null y se toma el mes en curso.`;
 
 async function clasificar(texto, contexto, apiKey) {
   const prompt = INSTRUCCIONES +
@@ -396,6 +398,58 @@ async function responder(plan, ctx) {
       };
     }
 
+    case 'cierres_equipo': {
+      if (!ctx.veElEquipo) return soloParaJefes();
+      const desde = plan.desde || hoyLocal().slice(0, 8) + '01';
+      const hasta = plan.hasta || hoyLocal();
+      const cerrados = await sb(`/leads?user_id=eq.${userId}&deleted_at=is.null` +
+        `&stage=in.(ganado,perdido)` +
+        `&closed_at=gte.${desde}T00:00:00Z&closed_at=lte.${hasta}T23:59:59Z` +
+        `&select=stage,value,assigned_to&limit=2000`);
+
+      const nombre = {};
+      (ctx.equipo || []).forEach(m => { nombre[m.id] = m.nombre; });
+      const por = {};
+      const anota = (k) => (por[k] = por[k] || { ganados: 0, monto: 0, perdidos: 0 });
+      cerrados.forEach(l => {
+        const r = anota(l.assigned_to || '_sin');
+        if (l.stage === 'ganado') { r.ganados++; r.monto += Number(l.value) || 0; }
+        else r.perdidos++;
+      });
+      const total = { ganados: 0, monto: 0, perdidos: 0 };
+      Object.values(por).forEach(r => { total.ganados += r.ganados; total.monto += r.monto; total.perdidos += r.perdidos; });
+
+      // Los ganados SIN fecha de cierre no caben en ningún periodo. Callarlos
+      // haría que este número nunca cuadre con el del tablero y que nadie se
+      // fíe del informe: mejor decir cuántos quedaron fuera y por qué.
+      const sinFecha = await sb(`/leads?user_id=eq.${userId}&deleted_at=is.null` +
+        `&stage=eq.ganado&closed_at=is.null&select=id&limit=200`);
+
+      if (!total.ganados && !total.perdidos) {
+        return { etiqueta: 'Cierres', voz: `No hay cierres registrados entre el ${bonita(desde)} y el ${bonita(hasta)}.` };
+      }
+      return {
+        etiqueta: 'Cierres',
+        voz: `Entre el ${bonita(desde)} y el ${bonita(hasta)} el equipo cerró ${total.ganados} ` +
+             `${total.ganados === 1 ? 'negocio' : 'negocios'} por ${plata(total.monto)}` +
+             (total.perdidos ? `, y perdió ${total.perdidos}.` : '.'),
+        cifra: plata(total.monto),
+        cifra_pie: `${total.ganados} ${total.ganados === 1 ? 'negocio ganado' : 'negocios ganados'} · ${bonita(desde)} al ${bonita(hasta)}`,
+        filas: Object.entries(por)
+          .sort((a, b) => b[1].monto - a[1].monto || b[1].ganados - a[1].ganados)
+          .slice(0, 8)
+          .map(([k, r]) => ({
+            titulo: k === '_sin' ? 'Sin responsable' : (nombre[k] || 'Alguien que ya no está'),
+            detalle: `${r.ganados} ${r.ganados === 1 ? 'ganado' : 'ganados'} · ${plata(r.monto)}` +
+                     (r.perdidos ? ` · ${r.perdidos} ${r.perdidos === 1 ? 'perdido' : 'perdidos'}` : ''),
+            alerta: r.ganados === 0 && r.perdidos > 0,
+          })),
+        nota_al_pie: sinFecha.length
+          ? `Hay ${sinFecha.length} ${sinFecha.length === 1 ? 'negocio ganado' : 'negocios ganados'} sin fecha de cierre, así que no entran en ningún periodo.`
+          : null,
+      };
+    }
+
     case 'ambiguo': {
       const cand = (plan.candidatos || []).map(id => leads.find(l => l.id === id)).filter(Boolean).slice(0, 3);
       if (!cand.length) return sinLead();
@@ -435,6 +489,13 @@ function repartoPorPersona(tareas, duenoDe, equipo) {
     .slice(0, 8)
     .map(([k, n]) => ({ titulo: nombre[k] || k.replace('(sin responsable)', 'Sin responsable'),
                         detalle: n + (n === 1 ? ' tarea' : ' tareas') }));
+}
+
+// Pesos colombianos, sin decimales: nadie dice «un millón de pesos con cero
+// centavos», y los céntimos en una cifra de siete dígitos solo estorban.
+function plata(n) {
+  const v = Math.round(Number(n) || 0);
+  return '$' + v.toLocaleString('es-CO');
 }
 
 function soloParaJefes() {
