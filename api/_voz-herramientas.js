@@ -207,18 +207,23 @@ async function buscarLeads(a, ctx) {
   if (a.cerrados_desde) filas = filas.filter(l => l.closed_at && String(l.closed_at).slice(0, 10) >= a.cerrados_desde);
   if (a.cerrados_hasta) filas = filas.filter(l => l.closed_at && String(l.closed_at).slice(0, 10) <= a.cerrados_hasta);
 
-  const lim = Math.min(Math.max(Number(a.limite) || 10, 1), 25);
+  // La muestra vuelve a entrar como texto en la siguiente llamada al modelo y
+  // es la mitad del costo de la consulta. Así que va corta y sin campos vacíos:
+  // un `"empresa": null` cuesta lo mismo que uno con contenido y no dice nada.
+  const lim = Math.min(Math.max(Number(a.limite) || 8, 1), 20);
   const nombreDe = {}; ctx.equipo.forEach(m => { nombreDe[m.id] = m.nombre; });
+  const sinVacios = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== '' && v !== 0));
   return {
     total: filas.length,
     suma_importes: filas.reduce((s, l) => s + (Number(l.value) || 0), 0),
-    muestra: filas.slice(0, lim).map(l => ({
+    mostrando: Math.min(filas.length, lim),
+    muestra: filas.slice(0, lim).map(l => sinVacios({
       nombre: l.name,
       etapa: l.etiquetaEtapa,
       tablero: l.tablero,
       responsable: l.assigned_to ? (nombreDe[l.assigned_to] || 'alguien que ya no está') : 'sin responsable',
       importe: Number(l.value) || 0,
-      dias_sin_movimiento: l.updated_at ? dias(l.updated_at) : null,
+      dias_quieto: l.updated_at ? dias(l.updated_at) : null,
       fuente: l.source || null,
     })),
   };
@@ -234,7 +239,7 @@ async function fichaDeLead(a, ctx) {
   const l = cand[0];
   const [detalle, acts] = await Promise.all([
     sb(`/leads?id=eq.${l.id}&user_id=eq.${encodeURIComponent(ctx.userId)}&select=phone,email,company,value,tags,notes,created_at,updated_at,closed_at,close_reason,source,expected_close_date`),
-    sb(`/lead_activities?lead_id=eq.${l.id}&select=type,content,created_at,metadata&order=created_at.desc&limit=5`),
+    sb(`/lead_activities?lead_id=eq.${l.id}&select=type,content,created_at,metadata&order=created_at.desc&limit=3`),
   ]);
   const d = detalle?.[0] || {};
   const nombreDe = {}; ctx.equipo.forEach(m => { nombreDe[m.id] = m.nombre; });
@@ -252,11 +257,11 @@ async function fichaDeLead(a, ctx) {
     sin_movimiento_dias: d.updated_at ? dias(d.updated_at) : null,
     cierre_esperado: d.expected_close_date || null,
     motivo_de_cierre: d.close_reason || null,
-    notas: (d.notes || '').slice(0, 900) || null,
+    notas: (d.notes || '').slice(0, 500) || null,
     ultimas_actividades: (acts || []).map(x => ({
       tipo: x.type, hace_dias: dias(x.created_at),
       quien: (x.metadata && x.metadata.actor) || null,
-      texto: (x.content || '').slice(0, 200),
+      texto: (x.content || '').slice(0, 140),
     })),
   };
 }
@@ -289,7 +294,7 @@ async function buscarTareas(a, ctx) {
   }
 
   const ahora = Date.now();
-  const lim = Math.min(Math.max(Number(a.limite) || 10, 1), 25);
+  const lim = Math.min(Math.max(Number(a.limite) || 8, 1), 20);
   return {
     total: filas.length,
     vencidas: filas.filter(t => Date.parse(t.due_at) < ahora).length,
@@ -380,7 +385,8 @@ async function panorama(_a, ctx) {
     total_leads: ctx.leads.length,
     tableros: Object.entries(porTablero).map(([t, etapas]) => ({
       tablero: t,
-      etapas: Object.entries(etapas).map(([e, v]) => ({ etapa: e, ...v })),
+      // Sin las etapas vacías: ocupan sitio en cada llamada y no dicen nada.
+      etapas: Object.entries(etapas).filter(([, v]) => v.leads > 0).map(([e, v]) => ({ etapa: e, ...v })),
     })),
     equipo: ctx.equipo.map(m => m.nombre),
     alcance: ctx.soloLoSuyo ? 'solo los leads a su nombre' : 'toda la cuenta',

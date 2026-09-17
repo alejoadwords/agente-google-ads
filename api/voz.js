@@ -96,7 +96,7 @@ CÓMO HABLAS
 
 async function conversar(texto, ctx, apiKey) {
   const mensajes = [{ role: 'user', content: texto }];
-  const usoTotal = { input_tokens: 0, output_tokens: 0 };
+  const usoTotal = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   let modelo = null;
 
   for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
@@ -106,8 +106,18 @@ async function conversar(texto, ctx, apiKey) {
       body: JSON.stringify({
         model: 'claude-sonnet-5',
         max_tokens: 2000,
-        system: INSTRUCCIONES + `\n\nHOY ES ${ctx.hoy} (${ctx.diaSemana}). Quien te habla es ${ctx.nombre}` +
-                (ctx.soloLoSuyo ? ', y su perfil solo ve los leads a su nombre.' : ', y ve toda la cuenta.'),
+        // Lo que NO cambia —instrucciones y esquemas, unos 1.900 tokens— se
+        // marca para caché. El ahorro es modesto (≈9% de la consulta) porque
+        // el grueso de la entrada son los resultados de las herramientas, que
+        // cambian siempre; pero dentro de una misma consulta hay dos o tres
+        // llamadas y la segunda ya lee de caché en vez de pagar el precio
+        // entero. Lo variable va DESPUÉS del marcador, o invalidaría el caché
+        // en cada consulta.
+        system: [
+          { type: 'text', text: INSTRUCCIONES, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: `HOY ES ${ctx.hoy} (${ctx.diaSemana}). Quien te habla es ${ctx.nombre}` +
+              (ctx.soloLoSuyo ? ', y su perfil solo ve los leads a su nombre.' : ', y ve toda la cuenta.') },
+        ],
         tools: HERRAMIENTAS,
         messages: mensajes,
       }),
@@ -118,6 +128,8 @@ async function conversar(texto, ctx, apiKey) {
     if (d.usage) {
       usoTotal.input_tokens += d.usage.input_tokens || 0;
       usoTotal.output_tokens += d.usage.output_tokens || 0;
+      usoTotal.cache_creation_input_tokens += d.usage.cache_creation_input_tokens || 0;
+      usoTotal.cache_read_input_tokens += d.usage.cache_read_input_tokens || 0;
     }
 
     const pedidos = (d.content || []).filter(c => c.type === 'tool_use');
@@ -141,7 +153,7 @@ async function conversar(texto, ctx, apiKey) {
       let salida;
       try { salida = await ejecutar(p.name, p.input, ctx); }
       catch (e) { salida = { error: 'No se pudo consultar: ' + (e && e.message ? e.message : 'fallo') }; }
-      resultados.push({ type: 'tool_result', tool_use_id: p.id, content: JSON.stringify(salida).slice(0, 12000) });
+      resultados.push({ type: 'tool_result', tool_use_id: p.id, content: JSON.stringify(salida).slice(0, 6000) });
     }
     mensajes.push({ role: 'user', content: resultados });
   }
