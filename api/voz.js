@@ -119,7 +119,7 @@ Reglas:
 - Si el nombre se parece a VARIOS leads o no estás seguro, usa intencion "ambiguo" y pon hasta 3 ids en "candidatos".
 - Si no se parece a ninguno, "no_entendido".
 - Si pide CREAR, MOVER, ASIGNAR, BORRAR o MANDAR algo: "fuera_de_alcance".
-- Para periodos ("la semana pasada", "este mes", "ayer") calcula "desde" y "hasta" a partir de la fecha de hoy que te doy. La semana va de lunes a domingo.
+- Para periodos ("la semana pasada", "mañana", "este mes", "el viernes") calcula "desde" y "hasta" a partir de la fecha de hoy que te doy. La semana va de lunes a domingo. Esto vale TAMBIÉN para "pendientes": si dijo "para mañana" pon desde y hasta en el día de mañana. Si no mencionó ningún día, deja desde y hasta en null.
 - Para "sin_tocar", "dias" es el umbral que pidieron; si no dijeron, 7.`;
 
 async function clasificar(texto, contexto, apiKey) {
@@ -153,22 +153,56 @@ async function responder(plan, ctx) {
   switch (plan.intencion) {
 
     case 'pendientes': {
-      const hasta = hoyLocal() + 'T23:59:59Z';
-      const filas = await sb(`/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null` +
-        `&due_at=lte.${encodeURIComponent(hasta)}&select=title,due_at,lead_id&order=due_at.asc&limit=40`);
-      const mios = new Set(leads.map(l => l.id));
-      const suyas = filas.filter(t => !t.lead_id || mios.has(t.lead_id));
-      if (!suyas.length) return { etiqueta: 'Agenda', voz: 'No tienes nada pendiente para hoy.' };
-      const vencidas = suyas.filter(t => Date.parse(t.due_at) < Date.now());
+      // «Mías» con la misma regla que la pantalla de agenda: lo que tiene mi
+      // nombre y, si soy el dueño de la cuenta, además lo que no tiene dueño.
+      // Sin esto, a la dueña —que ve todos los leads— le salían las 66 tareas
+      // del equipo como si fueran suyas. Un directivo que abre «qué tengo
+      // pendiente» y ve el trabajo ajeno no vuelve a preguntar.
+      const conRango = !!(plan.desde && plan.hasta);
+      const desde = conRango ? plan.desde + 'T00:00:00Z' : null;
+      const hasta = (conRango ? plan.hasta : hoyLocal()) + 'T23:59:59Z';
+
+      let q = `/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null` +
+              `&due_at=lte.${encodeURIComponent(hasta)}&select=title,due_at,lead_id&order=due_at.asc&limit=200`;
+      if (desde) q += `&due_at=gte.${encodeURIComponent(desde)}`;
+      const todas = await sb(q);
+
+      const duenoDe = {};
+      leads.forEach(l => { duenoDe[l.id] = l.assigned_to; });
+      const visibles = todas.filter(t => !t.lead_id || Object.prototype.hasOwnProperty.call(duenoDe, t.lead_id));
+      const esMia = t => {
+        if (!t.lead_id) return true;                       // una tarea suelta es de quien la puso
+        const d = duenoDe[t.lead_id];
+        return d === actorId || (!d && ctx.esDueno);
+      };
+      const mias = visibles.filter(esMia);
+      const ajenas = visibles.length - mias.length;
+      const cuando = conRango
+        ? (plan.desde === diaMas(hoyLocal(), 1) ? 'para mañana' : `entre el ${bonita(plan.desde)} y el ${bonita(plan.hasta)}`)
+        : 'para hoy';
+
+      if (!mias.length) {
+        return {
+          etiqueta: 'Agenda',
+          voz: `No tienes nada ${cuando}.` + (ajenas && ctx.veElEquipo ? ` Tu equipo tiene ${ajenas}.` : ''),
+          nota_al_pie: ajenas && ctx.veElEquipo
+            ? 'Una tarea es de quien tenga el lead a su nombre. Estas están repartidas entre tus asesores.' : null,
+          acciones: ajenas && ctx.veElEquipo ? ['Abrir la agenda'] : [],
+        };
+      }
+      const vencidas = mias.filter(t => Date.parse(t.due_at) < Date.now());
       return {
         etiqueta: 'Agenda',
-        voz: `Tienes ${suyas.length} ${suyas.length === 1 ? 'pendiente' : 'pendientes'}` +
+        voz: `Tienes ${mias.length} ${mias.length === 1 ? 'pendiente' : 'pendientes'} ${cuando}` +
              (vencidas.length ? `, ${vencidas.length} ${vencidas.length === 1 ? 'vencido' : 'vencidos'}.` : '.'),
-        filas: suyas.slice(0, 8).map(t => ({
+        filas: mias.slice(0, 8).map(t => ({
           titulo: t.title,
-          detalle: Date.parse(t.due_at) < Date.now() ? 'Venció ' + haceCuanto(t.due_at) + ' · ' + hora(t.due_at) : 'Hoy ' + hora(t.due_at),
+          detalle: Date.parse(t.due_at) < Date.now()
+            ? 'Venció ' + haceCuanto(t.due_at) + ' · ' + hora(t.due_at)
+            : bonita(String(t.due_at).slice(0, 10)) + ' · ' + hora(t.due_at),
           alerta: Date.parse(t.due_at) < Date.now(),
         })),
+        nota_al_pie: ajenas && ctx.veElEquipo ? `Tu equipo tiene ${ajenas} más a su nombre.` : null,
         acciones: ['Abrir la agenda'],
       };
     }
@@ -339,7 +373,7 @@ export default async function handler(req) {
     // aunque el lead existiera.
     const [leadsRaw, etapasRaw, tablerosRaw] = await Promise.all([
       sb(`/leads?user_id=eq.${quien.userId}&deleted_at=is.null${filtroMios}` +
-         `&select=id,name,stage,pipeline_id&order=updated_at.desc&limit=400`),
+         `&select=id,name,stage,pipeline_id,assigned_to&order=updated_at.desc&limit=400`),
       sb(`/pipeline_stages?user_id=eq.${quien.userId}&select=key,label,pipeline_id&order=position.asc`),
       sb(`/pipelines?user_id=eq.${quien.userId}&select=id,name`),
     ]);
@@ -354,7 +388,8 @@ export default async function handler(req) {
     const leads = leadsRaw.map(l => {
       const etiqueta = rotulo[(l.pipeline_id || '') + '|' + l.stage] || l.stage;
       return { id: l.id, name: l.name, stage: etiqueta, etiquetaEtapa: etiqueta,
-               pipeline_id: l.pipeline_id, tablero: nombreTablero[l.pipeline_id] || null };
+               pipeline_id: l.pipeline_id, tablero: nombreTablero[l.pipeline_id] || null,
+               assigned_to: l.assigned_to || null };
     });
 
     if (!leads.length) {
@@ -374,6 +409,8 @@ export default async function handler(req) {
       userId: quien.userId, actorId: quien.actorId, filtroMios, leads,
       etapasDe: (pid) => etapasRaw.filter(e => e.pipeline_id === pid).map(e => e.label),
       soloLoSuyo: soloMios,
+      esDueno: quien.esDueno === true,
+      veElEquipo: !soloMios,           // dueño y admin ven el trabajo de todos
     });
 
     if (uso) {
