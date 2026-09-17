@@ -102,6 +102,8 @@ const INTENCIONES = [
   'datos_lead',        // teléfono / correo
   'atendidos',         // cuántos leads trabajé en un periodo
   'sin_tocar',         // leads abandonados
+  'pendientes_de',     // la agenda de otra persona del equipo
+  'actividad_equipo',  // quién ha trabajado y quién no, en un periodo
   'ambiguo',           // el nombre se parece a varios
   'fuera_de_alcance',  // pide escribir algo: esta fase no lo hace
   'no_entendido',
@@ -110,7 +112,7 @@ const INTENCIONES = [
 const INSTRUCCIONES = `Clasificas lo que un comercial dijo en voz alta a su CRM. NO respondes su pregunta: solo dices qué pidió.
 
 Devuelve SOLO un objeto JSON:
-{"intencion":"<una de la lista>","lead_id":"<id exacto o null>","candidatos":["id","id"],"dias":<número o null>,"desde":"AAAA-MM-DD","hasta":"AAAA-MM-DD"}
+{"intencion":"<una de la lista>","lead_id":"<id exacto o null>","persona_id":"<id exacto de alguien del equipo o null>","candidatos":["id","id"],"dias":<número o null>,"desde":"AAAA-MM-DD","hasta":"AAAA-MM-DD"}
 
 Intenciones: ${INTENCIONES.join(', ')}.
 
@@ -120,13 +122,18 @@ Reglas:
 - Si no se parece a ninguno, "no_entendido".
 - Si pide CREAR, MOVER, ASIGNAR, BORRAR o MANDAR algo: "fuera_de_alcance".
 - Para periodos ("la semana pasada", "mañana", "este mes", "el viernes") calcula "desde" y "hasta" a partir de la fecha de hoy que te doy. La semana va de lunes a domingo. Esto vale TAMBIÉN para "pendientes": si dijo "para mañana" pon desde y hasta en el día de mañana. Si no mencionó ningún día, deja desde y hasta en null.
-- Para "sin_tocar", "dias" es el umbral que pidieron; si no dijeron, 7.`;
+- Para "sin_tocar", "dias" es el umbral que pidieron; si no dijeron, 7.
+- Si pregunta por la agenda de OTRA persona del equipo ("qué tiene pendiente Maira"), usa "pendientes_de" y pon su id en "persona_id". Si no hay equipo en la lista, no uses esta intención.
+- Si pregunta quién ha trabajado, quién no ha tocado sus leads o cómo va el equipo, usa "actividad_equipo".`;
 
 async function clasificar(texto, contexto, apiKey) {
   const prompt = INSTRUCCIONES +
     `\n\nHOY ES ${contexto.hoy} (${contexto.diaSemana}).` +
     `\n\nSUS LEADS (id · nombre · etapa):\n` +
     contexto.leads.map(l => `${l.id} · ${l.name} · ${l.stage}`).join('\n') +
+    (contexto.equipo && contexto.equipo.length
+      ? `\n\nSU EQUIPO (id · nombre):\n` + contexto.equipo.map(m => `${m.id} · ${m.nombre}`).join('\n')
+      : '\n\n(No tiene equipo o no puede ver el de nadie más.)') +
     `\n\nLO QUE DIJO:\n"${texto}"`;
 
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -184,9 +191,11 @@ async function responder(plan, ctx) {
       if (!mias.length) {
         return {
           etiqueta: 'Agenda',
-          voz: `No tienes nada ${cuando}.` + (ajenas && ctx.veElEquipo ? ` Tu equipo tiene ${ajenas}.` : ''),
+          voz: `No tienes nada ${cuando}.` +
+               (ajenas && ctx.veElEquipo ? ` Tu equipo tiene ${ajenas} ${ajenas === 1 ? 'tarea' : 'tareas'}.` : ''),
+          filas: ajenas && ctx.veElEquipo ? repartoPorPersona(visibles.filter(t => !esMia(t)), duenoDe, ctx.equipo) : null,
           nota_al_pie: ajenas && ctx.veElEquipo
-            ? 'Una tarea es de quien tenga el lead a su nombre. Estas están repartidas entre tus asesores.' : null,
+            ? 'Una tarea es de quien tenga el lead a su nombre.' : null,
           acciones: ajenas && ctx.veElEquipo ? ['Abrir la agenda'] : [],
         };
       }
@@ -202,7 +211,8 @@ async function responder(plan, ctx) {
             : bonita(String(t.due_at).slice(0, 10)) + ' · ' + hora(t.due_at),
           alerta: Date.parse(t.due_at) < Date.now(),
         })),
-        nota_al_pie: ajenas && ctx.veElEquipo ? `Tu equipo tiene ${ajenas} más a su nombre.` : null,
+        nota_al_pie: ajenas && ctx.veElEquipo
+          ? `Tu equipo tiene ${ajenas} ${ajenas === 1 ? 'tarea' : 'tareas'} más a su nombre.` : null,
         acciones: ['Abrir la agenda'],
       };
     }
@@ -280,7 +290,8 @@ async function responder(plan, ctx) {
       const mios = new Set(leads.map(l => l.id));
       const cuenta = new Set(act
         .filter(a => a.lead_id && mios.has(a.lead_id))
-        .filter(a => !ctx.soloLoSuyo || !a.metadata?.actor || a.metadata.actor === actorId)
+        // Mismo cuidado: el id está en actor_id, no en actor.
+        .filter(a => !ctx.soloLoSuyo || !a.metadata?.actor_id || a.metadata.actor_id === actorId)
         .map(a => a.lead_id));
       return {
         etiqueta: 'Números',
@@ -306,6 +317,85 @@ async function responder(plan, ctx) {
       };
     }
 
+    // Consultas de quien dirige. Solo para quien ve el trabajo de todos: a un
+    // perfil de Ventas no le toca saber la agenda de sus compañeros.
+    case 'pendientes_de': {
+      if (!ctx.veElEquipo) return soloParaJefes();
+      const p = (ctx.equipo || []).find(m => m.id === plan.persona_id);
+      if (!p) return { etiqueta: 'No entendí', voz: 'No encontré a esa persona en tu equipo.',
+                       aviso: 'Dime el nombre como aparece en Configuración → Equipo.' };
+      const conRango = !!(plan.desde && plan.hasta);
+      const hasta = (conRango ? plan.hasta : hoyLocal()) + 'T23:59:59Z';
+      let q = `/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null` +
+              `&due_at=lte.${encodeURIComponent(hasta)}&select=title,due_at,lead_id&order=due_at.asc&limit=200`;
+      if (conRango) q += `&due_at=gte.${encodeURIComponent(plan.desde + 'T00:00:00Z')}`;
+      const todas = await sb(q);
+      const suyos = new Set(leads.filter(l => l.assigned_to === p.id).map(l => l.id));
+      const suyas = todas.filter(t => t.lead_id && suyos.has(t.lead_id));
+      const cuando = conRango
+        ? (plan.desde === diaMas(hoyLocal(), 1) ? 'para mañana' : `entre el ${bonita(plan.desde)} y el ${bonita(plan.hasta)}`)
+        : 'para hoy';
+      if (!suyas.length) return { etiqueta: 'Equipo', voz: `${p.nombre} no tiene nada ${cuando}.` };
+      const venc = suyas.filter(t => Date.parse(t.due_at) < Date.now());
+      return {
+        etiqueta: 'Equipo',
+        voz: `${p.nombre} tiene ${suyas.length} ${suyas.length === 1 ? 'pendiente' : 'pendientes'} ${cuando}` +
+             (venc.length ? `, ${venc.length} ${venc.length === 1 ? 'vencido' : 'vencidos'}.` : '.'),
+        filas: suyas.slice(0, 8).map(t => ({
+          titulo: t.title,
+          detalle: Date.parse(t.due_at) < Date.now()
+            ? 'Venció ' + haceCuanto(t.due_at) + ' · ' + hora(t.due_at)
+            : bonita(String(t.due_at).slice(0, 10)) + ' · ' + hora(t.due_at),
+          alerta: Date.parse(t.due_at) < Date.now(),
+        })),
+        acciones: ['Abrir la agenda'],
+      };
+    }
+
+    case 'actividad_equipo': {
+      if (!ctx.veElEquipo) return soloParaJefes();
+      const equipo = ctx.equipo || [];
+      if (!equipo.length) return { etiqueta: 'Equipo', voz: 'Todavía no tienes equipo en la cuenta.' };
+      const desde = plan.desde || diaMas(hoyLocal(), -7);
+      const hasta = plan.hasta || hoyLocal();
+      const act = await sb(`/lead_activities?user_id=eq.${userId}` +
+        `&type=in.(llamada,email,reunion,nota)` +
+        `&created_at=gte.${desde}T00:00:00Z&created_at=lte.${hasta}T23:59:59Z` +
+        `&select=lead_id,metadata&limit=3000`);
+      // Por persona, cuántos leads distintos tocó. Solo cuenta lo que quedó
+      // registrado a nombre de alguien: las notas que escribe el sistema no
+      // llevan autor y atribuírselas a alguien sería inventar trabajo.
+      const porPersona = {};
+      equipo.forEach(m => { porPersona[m.id] = new Set(); });
+      // `metadata.actor` es el NOMBRE de la persona; el id vive en `actor_id`.
+      // Comparar el nombre contra un id no casa NUNCA, y esta consulta habría
+      // dicho que nadie trabajó — con cuatro personas que sí lo hicieron hoy.
+      // Se acepta el nombre como respaldo por si alguna fila vieja no trae id.
+      const porNombre = {};
+      equipo.forEach(m => { porNombre[m.nombre] = m.id; });
+      act.forEach(a => {
+        const md = a.metadata || {};
+        const id = md.actor_id || porNombre[md.actor];
+        if (id && porPersona[id] && a.lead_id) porPersona[id].add(a.lead_id);
+      });
+      const tabla = equipo
+        .map(m => ({ nombre: m.nombre, n: porPersona[m.id].size }))
+        .sort((a, b) => a.n - b.n);
+      const quietos = tabla.filter(t => t.n === 0);
+      return {
+        etiqueta: 'Equipo',
+        voz: quietos.length
+          ? `${quietos.length === 1 ? 'Una persona no registró' : quietos.length + ' personas no registraron'} nada entre el ${bonita(desde)} y el ${bonita(hasta)}: ${quietos.map(q => q.nombre).join(', ')}.`
+          : `Todos registraron actividad entre el ${bonita(desde)} y el ${bonita(hasta)}.`,
+        filas: tabla.map(t => ({
+          titulo: t.nombre,
+          detalle: t.n === 0 ? 'Sin actividad registrada' : `${t.n} ${t.n === 1 ? 'lead atendido' : 'leads atendidos'}`,
+          alerta: t.n === 0,
+        })),
+        nota_al_pie: 'Cuento los leads distintos a los que cada quien le registró una llamada, un correo, una reunión o una nota.',
+      };
+    }
+
     case 'ambiguo': {
       const cand = (plan.candidatos || []).map(id => leads.find(l => l.id === id)).filter(Boolean).slice(0, 3);
       if (!cand.length) return sinLead();
@@ -328,6 +418,28 @@ async function responder(plan, ctx) {
       return { etiqueta: 'No entendí', voz: 'No te entendí. ¿Me lo repites?',
                aviso: 'Prueba con «qué tengo pendiente hoy» o «en qué fase está» y el nombre de un lead.' };
   }
+}
+
+// «Tu equipo tiene 30» no le sirve a nadie para decidir nada. De quién son, sí.
+function repartoPorPersona(tareas, duenoDe, equipo) {
+  const nombre = {};
+  (equipo || []).forEach(m => { nombre[m.id] = m.nombre; });
+  const cuenta = {};
+  tareas.forEach(t => {
+    const d = t.lead_id ? duenoDe[t.lead_id] : null;
+    const k = d || '(sin responsable)';
+    cuenta[k] = (cuenta[k] || 0) + 1;
+  });
+  return Object.entries(cuenta)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([k, n]) => ({ titulo: nombre[k] || k.replace('(sin responsable)', 'Sin responsable'),
+                        detalle: n + (n === 1 ? ' tarea' : ' tareas') }));
+}
+
+function soloParaJefes() {
+  return { etiqueta: 'No disponible', voz: 'Eso solo lo puede consultar quien dirige la cuenta.',
+           aviso: 'Tu perfil ve su propia gestión, no la de tus compañeros.' };
 }
 
 function sinLead() {
@@ -371,12 +483,19 @@ export default async function handler(req) {
     // correcto: quien habla no está mirando la pantalla. Atarlo al ámbito hacía
     // que desde «Mi cuenta» —donde no hay leads— respondiera siempre lo mismo
     // aunque el lead existiera.
-    const [leadsRaw, etapasRaw, tablerosRaw] = await Promise.all([
+    const [leadsRaw, etapasRaw, tablerosRaw, equipoRaw] = await Promise.all([
       sb(`/leads?user_id=eq.${quien.userId}&deleted_at=is.null${filtroMios}` +
          `&select=id,name,stage,pipeline_id,assigned_to&order=updated_at.desc&limit=400`),
       sb(`/pipeline_stages?user_id=eq.${quien.userId}&select=key,label,pipeline_id&order=position.asc`),
       sb(`/pipelines?user_id=eq.${quien.userId}&select=id,name`),
+      // Solo se pide si quien pregunta puede ver el trabajo de los demás.
+      soloMios ? Promise.resolve([])
+               : sb(`/team_members?owner_user_id=eq.${quien.userId}&status=eq.active` +
+                    `&member_user_id=not.is.null&select=member_user_id,member_name,member_email`),
     ]);
+    const equipo = (equipoRaw || []).map(m => ({
+      id: m.member_user_id, nombre: m.member_name || m.member_email,
+    }));
 
     // Cada lead lleva su etapa traducida por SU tablero: dos tableros pueden
     // usar la misma clave con rótulos distintos.
@@ -402,7 +521,7 @@ export default async function handler(req) {
     const hoy = hoyLocal();
     const diaSemana = new Intl.DateTimeFormat('es-CO', { timeZone: TZ, weekday: 'long' }).format(new Date());
 
-    const { plan, uso, modelo } = await clasificar(texto, { hoy, diaSemana, leads }, apiKey);
+    const { plan, uso, modelo } = await clasificar(texto, { hoy, diaSemana, leads, equipo }, apiKey);
     if (!plan) return jsonResp({ etiqueta: 'No entendí', voz: 'No te entendí. ¿Me lo repites?' });
 
     const resp = await responder(plan, {
@@ -411,6 +530,7 @@ export default async function handler(req) {
       soloLoSuyo: soloMios,
       esDueno: quien.esDueno === true,
       veElEquipo: !soloMios,           // dueño y admin ven el trabajo de todos
+      equipo,
     });
 
     if (uso) {
