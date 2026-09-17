@@ -2538,20 +2538,27 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 #voz-hoja.abierta{transform:translateY(0)}
 @media (min-width:860px){#voz-hoja{left:auto;right:20px;width:380px;border-radius:22px;bottom:20px;max-height:70vh}}
 #voz-asa{width:38px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:0 auto;cursor:pointer;flex-shrink:0}
-#voz-estado{display:flex;align-items:center;gap:11px}
+/* Los de arriba no se encogen. En una columna flex con overflow, los hijos
+   se aplastan por defecto: con dos renglones de texto dictado, el segundo
+   se montaba encima de la tarjeta de respuesta. */
+#voz-estado{display:flex;align-items:center;gap:11px;flex-shrink:0}
 .voz-onda{display:flex;align-items:center;gap:3px;height:26px}
 .voz-onda i{display:block;width:3px;border-radius:99px;background:#7C8BFF;height:6px}
 #voz-estado.escuchando .voz-onda i{animation:vozPulso 1s ease-in-out infinite}
 .voz-onda i:nth-child(2){animation-delay:.12s}.voz-onda i:nth-child(3){animation-delay:.24s}
 .voz-onda i:nth-child(4){animation-delay:.36s}.voz-onda i:nth-child(5){animation-delay:.48s}
 @keyframes vozPulso{0%,100%{height:6px}50%{height:24px}}
-@media (prefers-reduced-motion:reduce){#voz-estado.escuchando .voz-onda i{animation:none;height:15px}#voz-hoja{transition:none}#voz-fab{transition:none}}
+/* Pensando: la onda sigue viva pero calmada. Ocho segundos de quietud se
+   leen como que se colgó. */
+#voz-estado.pensando .voz-onda i{animation:vozLatir 1.6s ease-in-out infinite;opacity:.65}
+@keyframes vozLatir{0%,100%{height:6px}50%{height:13px}}
+@media (prefers-reduced-motion:reduce){#voz-estado.escuchando .voz-onda i,#voz-estado.pensando .voz-onda i{animation:none;height:15px}#voz-hoja{transition:none}#voz-fab{transition:none}}
 #voz-estado-txt{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#98A2FF}
 #voz-fijado{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0B0D18;background:#98A2FF;border-radius:99px;padding:3px 9px;display:none}
 #voz-fijado.on{display:block}
-#voz-dicho{font-size:19px;font-weight:500;line-height:1.35;min-height:26px;color:#fff}
+#voz-dicho{font-size:19px;font-weight:500;line-height:1.35;min-height:26px;color:#fff;flex-shrink:0}
 #voz-dicho:empty::after{content:'\2026';color:rgba(255,255,255,.3)}
-#voz-respuesta{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:15px 16px;display:none;flex-direction:column;gap:11px}
+#voz-respuesta{flex-shrink:0;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:15px 16px;display:none;flex-direction:column;gap:11px}
 #voz-respuesta.visible{display:flex}
 .voz-txt{font-size:14.5px;color:rgba(255,255,255,.93);line-height:1.5}
 .voz-flojo{font-size:12.5px;color:rgba(255,255,255,.55);line-height:1.5}

@@ -32180,6 +32180,21 @@ function vozCerrar() {
   try { speechSynthesis.cancel(); } catch {}
 }
 
+// iOS solo deja hablar si speechSynthesis se estrenó DENTRO de un gesto del
+// usuario. La respuesta llega después de una espera, cuando el gesto ya
+// caducó, así que en el teléfono no sonaba nada mientras en el escritorio sí.
+// Se desbloquea con un enunciado vacío al apretar el micrófono.
+let _vozDesbloqueada = false;
+function vozDesbloquearHabla() {
+  if (_vozDesbloqueada || !('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+    _vozDesbloqueada = true;
+  } catch {}
+}
+
 // La voz que contesta: la del propio teléfono. Sin servidor y sin coste.
 function vozHablar(texto) {
   if (!('speechSynthesis' in window) || !texto) return;
@@ -32245,8 +32260,10 @@ function vozPintar(d) {
 
 async function vozPreguntar(texto) {
   const et = document.getElementById('voz-estado-txt');
-  document.getElementById('voz-estado')?.classList.remove('escuchando');
-  if (et) et.textContent = 'Un momento';
+  const est = document.getElementById('voz-estado');
+  est?.classList.remove('escuchando');
+  est?.classList.add('pensando');
+  if (et) et.textContent = 'Buscando';
   document.getElementById('voz-dicho').textContent = texto;
   document.getElementById('voz-respuesta')?.classList.remove('visible');
   try {
@@ -32257,9 +32274,11 @@ async function vozPreguntar(texto) {
       body: JSON.stringify({ texto }),
     });
     const d = await leerRespuesta(r);
+    est?.classList.remove('pensando');
     if (!r.ok) { vozPintar({ etiqueta: 'Ups', voz: d.error || 'No se pudo procesar.' }); return; }
     vozPintar(d);
   } catch (e) {
+    est?.classList.remove('pensando');
     vozPintar({ etiqueta: 'Sin red', voz: 'No pude conectarme. Revisa la señal y vuelve a intentarlo.' });
   }
 }
@@ -32337,6 +32356,7 @@ function vozEnchufar() {
   fab.addEventListener('contextmenu', e => e.preventDefault());
   fab.addEventListener('pointerdown', async e => {
     e.preventDefault();
+    vozDesbloquearHabla();
     try { fab.setPointerCapture(e.pointerId); } catch {}
     if (_vozPermiso !== true) {
       fab.classList.add('pulsado');
