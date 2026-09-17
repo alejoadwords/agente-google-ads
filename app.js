@@ -32128,12 +32128,260 @@ const SOP_SUGERENCIAS = [
   'Quiero hablar con el equipo',
 ];
 
+// ══ HABLARLE AL CRM (beta) ══════════════════════════════════════════════════
+//
+// Mantener pulsado, hablar, soltar. El reconocimiento corre en el propio
+// teléfono (gratis, sin servidor); lo que se dijo viaja como texto a /api/voz,
+// que decide qué se pidió y consulta la base. Fase 1: solo consulta.
+//
+// El gesto es el de WhatsApp a propósito: los comerciales ya lo tienen en el
+// dedo. Y mantener pulsado resuelve algo real — el reconocedor del navegador
+// corta solo en cuanto haces una pausa para pensar, y con el dedo puesto manda
+// quien habla.
+
+let _vozReco = null, _vozEscuchando = false, _vozFijado = false, _vozCancelado = false;
+let _vozTexto = '', _vozYInicio = 0, _vozLeadAbierto = null;
+
+const VozReco = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function vozMicPermitido() {
+  try {
+    const pp = document.permissionsPolicy || document.featurePolicy;
+    if (pp && typeof pp.allowsFeature === 'function') return pp.allowsFeature('microphone');
+  } catch {}
+  return true;
+}
+
+// Solo se pinta el botón si el servidor dice que esta persona está en la beta.
+// Se pregunta una vez por sesión.
+async function vozArrancar() {
+  if (!VozReco || !vozMicPermitido()) return;
+  try {
+    const r = await fetchAuth('/api/voz');
+    const d = await r.json();
+    if (!r.ok || !d.habilitado) return;
+  } catch { return; }
+  document.getElementById('voz-zona')?.classList.add('viva');
+  document.getElementById('voz-zona')?.setAttribute('aria-hidden', 'false');
+  vozEnchufar();
+  sopEsquivar();                       // que las dos burbujas no se pisen
+}
+
+function vozAbrir() {
+  document.getElementById('voz-hoja')?.classList.add('abierta');
+  document.getElementById('voz-zona')?.classList.add('oculto');
+  const r = document.getElementById('voz-respuesta');
+  if (r) { r.classList.remove('visible'); r.innerHTML = ''; }
+  const d = document.getElementById('voz-dicho');
+  if (d) d.textContent = '';
+}
+
+function vozCerrar() {
+  document.getElementById('voz-hoja')?.classList.remove('abierta');
+  document.getElementById('voz-zona')?.classList.remove('oculto');
+  document.getElementById('voz-candado')?.classList.remove('on', 'cerca');
+  document.getElementById('voz-fijado')?.classList.remove('on');
+  _vozFijado = false;
+  try { speechSynthesis.cancel(); } catch {}
+}
+
+// La voz que contesta: la del propio teléfono. Sin servidor y sin coste.
+function vozHablar(texto) {
+  if (!('speechSynthesis' in window) || !texto) return;
+  if (localStorage.getItem('acuarius_voz_muda') === '1') return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(texto).slice(0, 500));
+    const vs = speechSynthesis.getVoices();
+    const v = vs.find(x => /es[-_]CO/i.test(x.lang)) || vs.find(x => /es[-_]MX/i.test(x.lang)) || vs.find(x => /^es/i.test(x.lang));
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'es-ES'; }
+    u.rate = 1.03;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+function vozPintar(d) {
+  const caja = document.getElementById('voz-respuesta');
+  if (!caja) return;
+  _vozLeadAbierto = d.lead_id || null;
+  const p = [];
+  if (d.aviso) p.push('<div class="voz-aviso"><p>' + esc(d.aviso) + '</p></div>');
+  if (d.voz) p.push('<div class="voz-txt">' + esc(d.voz) + '</div>');
+  if (d.cifra) p.push('<div><div class="voz-cifra">' + esc(d.cifra) + '</div>' +
+    (d.cifra_pie ? '<div class="voz-cifra-pie">' + esc(d.cifra_pie) + '</div>' : '') + '</div>');
+  if (Array.isArray(d.filas) && d.filas.length) {
+    p.push('<div>' + d.filas.map(f =>
+      '<div class="voz-fila"><i class="voz-punto' + (f.alerta ? ' rojo' : '') + '"></i>' +
+      '<div class="voz-fila-c"><b>' + esc(f.titulo || '') + '</b>' +
+      (f.detalle ? '<span>' + esc(f.detalle) + '</span>' : '') + '</div></div>').join('') + '</div>');
+  }
+  if (d.escalera && Array.isArray(d.escalera.etapas)) {
+    const i = d.escalera.etapas.indexOf(d.escalera.actual);
+    p.push('<div>' + d.escalera.etapas.map((e, n) =>
+      '<div class="voz-paso ' + (n < i ? 'hecho' : n === i ? 'aqui' : '') + '"><i></i>' + esc(e) + '</div>').join('') + '</div>');
+  }
+  if (d.nota_al_pie) p.push('<div class="voz-flojo">' + esc(d.nota_al_pie) + '</div>');
+
+  const btns = [];
+  (d.opciones || []).forEach(o => btns.push({ txt: o.texto || o, lead: o.lead_id || null }));
+  (d.acciones || []).forEach(a => btns.push({ txt: a, lead: d.lead_id || null, tel: d.telefono || null }));
+  if (btns.length) {
+    p.push('<div class="voz-acciones">' + btns.map((b, n) =>
+      '<button class="voz-acc' + (n === 0 ? ' primaria' : '') + '" data-n="' + n + '">' + esc(b.txt) + '</button>').join('') + '</div>');
+  }
+  caja.innerHTML = p.join('');
+  caja.classList.add('visible');
+  const et = document.getElementById('voz-estado-txt');
+  if (et) et.textContent = d.etiqueta || 'Listo';
+
+  caja.querySelectorAll('.voz-acc').forEach(el => el.addEventListener('click', () => {
+    const b = btns[Number(el.dataset.n)];
+    if (!b) return;
+    if (/llamar/i.test(b.txt) && b.tel) { location.href = 'tel:' + b.tel; return; }
+    if (/agenda/i.test(b.txt)) { vozCerrar(); navGo('crm'); setTimeout(() => crmSetView('tareas'), 140); return; }
+    if (/tablero/i.test(b.txt)) { vozCerrar(); navGo('crm'); setTimeout(() => crmSetView('kanban'), 140); return; }
+    if (b.lead) { vozCerrar(); crmOpenDetail(b.lead); return; }
+    // una opción de desambiguación: se vuelve a preguntar con el nombre exacto
+    vozPreguntar(b.txt);
+  }));
+
+  vozHablar(d.voz);
+}
+
+async function vozPreguntar(texto) {
+  const et = document.getElementById('voz-estado-txt');
+  document.getElementById('voz-estado')?.classList.remove('escuchando');
+  if (et) et.textContent = 'Un momento';
+  document.getElementById('voz-dicho').textContent = texto;
+  document.getElementById('voz-respuesta')?.classList.remove('visible');
+  try {
+    const r = await fetchAuth('/api/voz', {
+      method: 'POST',
+      body: JSON.stringify({
+        texto,
+        client_id: crmAmbitoCliente() || null,
+        pipeline_id: (typeof crmPipelineId !== 'undefined' ? crmPipelineId : null),
+      }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { vozPintar({ etiqueta: 'Ups', voz: d.error || 'No se pudo procesar.' }); return; }
+    vozPintar(d);
+  } catch (e) {
+    vozPintar({ etiqueta: 'Sin red', voz: 'No pude conectarme. Revisa la señal y vuelve a intentarlo.' });
+  }
+}
+
+function vozEscuchar() {
+  _vozTexto = ''; _vozCancelado = false;
+  vozAbrir();
+  document.getElementById('voz-estado')?.classList.add('escuchando');
+  document.getElementById('voz-estado-txt').textContent = 'Te escucho';
+  try {
+    _vozReco = new VozReco();
+    _vozReco.lang = 'es-CO';
+    _vozReco.interimResults = true;
+    _vozReco.continuous = true;
+    _vozReco.onresult = ev => {
+      _vozTexto = Array.from(ev.results).map(x => x[0].transcript).join('').trim();
+      document.getElementById('voz-dicho').textContent = _vozTexto;
+    };
+    _vozReco.onerror = ev => {
+      _vozEscuchando = false;
+      document.getElementById('voz-estado')?.classList.remove('escuchando');
+      vozPintar(ev.error === 'not-allowed'
+        ? { etiqueta: 'Sin permiso', voz: 'El navegador no me dejó usar el micrófono.',
+            aviso: 'Permítelo en los ajustes del sitio y vuelve a mantener pulsado.' }
+        : { etiqueta: 'No se oyó', voz: 'No alcancé a oírte.',
+            aviso: 'Mantén pulsado un poco más y habla cerca del teléfono.' });
+    };
+    _vozReco.onend = () => {
+      if (!_vozEscuchando && !_vozCancelado && _vozTexto) vozPreguntar(_vozTexto);
+      else if (!_vozEscuchando && !_vozCancelado && !_vozTexto) {
+        document.getElementById('voz-estado-txt').textContent = 'No se oyó';
+      }
+    };
+    _vozReco.start();
+    _vozEscuchando = true;
+  } catch { _vozEscuchando = false; }
+}
+
+function vozParar() {
+  _vozEscuchando = false;
+  try { _vozReco && _vozReco.stop(); } catch {}
+  document.getElementById('voz-estado')?.classList.remove('escuchando');
+  document.getElementById('voz-fijado')?.classList.remove('on');
+  document.getElementById('voz-candado')?.classList.remove('on', 'cerca');
+  _vozFijado = false;
+}
+
+function vozEnchufar() {
+  const fab = document.getElementById('voz-fab');
+  const pista = document.getElementById('voz-pista');
+  const candado = document.getElementById('voz-candado');
+  if (!fab || fab._enchufado) return;
+  fab._enchufado = true;
+
+  fab.addEventListener('contextmenu', e => e.preventDefault());
+  fab.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { fab.setPointerCapture(e.pointerId); } catch {}
+    _vozYInicio = e.clientY;
+    fab.classList.add('pulsado');
+    candado?.classList.add('on');
+    if (pista) pista.textContent = 'Desliza arriba para fijar';
+    vozEscuchar();
+  });
+  fab.addEventListener('pointermove', e => {
+    if (!_vozEscuchando || _vozFijado) return;
+    const dy = _vozYInicio - e.clientY;
+    candado?.classList.toggle('cerca', dy > 46);
+    if (dy > 70) {
+      _vozFijado = true;
+      document.getElementById('voz-fijado')?.classList.add('on');
+      candado?.classList.remove('on', 'cerca');
+      fab.classList.remove('pulsado');
+      document.getElementById('voz-zona')?.classList.remove('oculto');
+      if (pista) pista.textContent = 'Toca para terminar';
+    }
+  });
+  fab.addEventListener('pointerup', () => {
+    fab.classList.remove('pulsado');
+    if (pista) pista.textContent = 'Mantén pulsado';
+    if (_vozFijado) return;
+    candado?.classList.remove('on', 'cerca');
+    vozParar();
+  });
+  fab.addEventListener('pointercancel', () => {
+    fab.classList.remove('pulsado');
+    candado?.classList.remove('on', 'cerca');
+    _vozCancelado = true; vozParar(); vozCerrar();
+  });
+  fab.addEventListener('click', () => { if (_vozFijado) { _vozFijado = false; vozParar(); } });
+  fab.addEventListener('keydown', e => {
+    if ((e.key === ' ' || e.key === 'Enter') && !_vozEscuchando) { e.preventDefault(); vozEscuchar(); }
+  });
+  fab.addEventListener('keyup', e => {
+    if ((e.key === ' ' || e.key === 'Enter') && _vozEscuchando) { e.preventDefault(); vozParar(); }
+  });
+
+  const asa = document.getElementById('voz-asa');
+  asa?.addEventListener('click', vozCerrar);
+  asa?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vozCerrar(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('voz-hoja')?.classList.contains('abierta')) vozCerrar();
+  });
+  try { speechSynthesis.getVoices(); } catch {}
+}
+
 // La burbuja solo aparece con sesión: sin ella el asistente no puede mirar la
 // cuenta y ofrecería un soporte a ciegas.
 function sopMostrarBurbuja() {
   const b = document.getElementById('sop-burbuja');
   if (b) b.classList.toggle('visible', !!(typeof clerkInstance !== 'undefined' && clerkInstance?.user));
   sopEsquivar();
+  if (typeof clerkInstance !== 'undefined' && clerkInstance?.user) vozArrancar();
 }
 
 // ── Que la burbuja no tape lo que la persona vino a pulsar ───────────────────
