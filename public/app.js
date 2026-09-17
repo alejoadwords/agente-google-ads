@@ -32196,18 +32196,29 @@ function vozDesbloquearHabla() {
 }
 
 // La voz que contesta: la del propio teléfono. Sin servidor y sin coste.
-function vozHablar(texto) {
-  if (!('speechSynthesis' in window) || !texto) return;
+//
+// En iOS esto falla de varias formas que no avisan: el gesto caducó, el
+// interruptor de silencio está puesto, la lista de voces todavía no cargó. Por
+// eso NO se confía en que suene: se intenta, se mira si arrancó de verdad, y
+// si no, la tarjeta ofrece un botón para oírlo. Un toque siempre funciona,
+// porque un toque es un gesto nuevo.
+let _vozSonando = false;
+function vozHablar(texto, alFallar) {
+  _vozSonando = false;
+  if (!('speechSynthesis' in window) || !texto) { if (alFallar) alFallar(); return; }
   if (localStorage.getItem('acuarius_voz_muda') === '1') return;
   try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(String(texto).slice(0, 500));
+    if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(texto).slice(0, 600));
     const vs = speechSynthesis.getVoices();
     const v = vs.find(x => /es[-_]CO/i.test(x.lang)) || vs.find(x => /es[-_]MX/i.test(x.lang)) || vs.find(x => /^es/i.test(x.lang));
     if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'es-ES'; }
     u.rate = 1.03;
+    u.onstart = () => { _vozSonando = true; };
     speechSynthesis.speak(u);
-  } catch {}
+    // Si en un segundo no arrancó, es que el navegador lo bloqueó en silencio.
+    setTimeout(() => { if (!_vozSonando && alFallar) alFallar(); }, 1000);
+  } catch { if (alFallar) alFallar(); }
 }
 
 function vozPintar(d) {
@@ -32234,6 +32245,7 @@ function vozPintar(d) {
 
   const btns = [];
   (d.opciones || []).forEach(o => btns.push({ txt: o.texto || o, lead: o.lead_id || null }));
+  if (d.voz && 'speechSynthesis' in window) btns.push({ txt: '🔊 Escuchar', hablar: d.voz });
   (d.acciones || []).forEach(a => btns.push({ txt: a, lead: d.lead_id || null, tel: d.telefono || null }));
   if (btns.length) {
     p.push('<div class="voz-acciones">' + btns.map((b, n) =>
@@ -32247,6 +32259,7 @@ function vozPintar(d) {
   caja.querySelectorAll('.voz-acc').forEach(el => el.addEventListener('click', () => {
     const b = btns[Number(el.dataset.n)];
     if (!b) return;
+    if (b.hablar) { vozHablar(b.hablar); return; }
     if (/llamar/i.test(b.txt) && b.tel) { location.href = 'tel:' + b.tel; return; }
     if (/agenda/i.test(b.txt)) { vozCerrar(); navGo('crm'); setTimeout(() => crmSetView('tareas'), 140); return; }
     if (/tablero/i.test(b.txt)) { vozCerrar(); navGo('crm'); setTimeout(() => crmSetView('kanban'), 140); return; }
@@ -32255,7 +32268,14 @@ function vozPintar(d) {
     vozPreguntar(b.txt);
   }));
 
-  vozHablar(d.voz);
+  vozHablar(d.voz, () => {
+    const b = caja.querySelector('.voz-acc');
+    const escuchar = [...caja.querySelectorAll('.voz-acc')].find(x => x.textContent.includes('Escuchar'));
+    if (escuchar) {
+      escuchar.classList.add('primaria');
+      if (b && b !== escuchar) b.classList.remove('primaria');
+    }
+  });
 }
 
 async function vozPreguntar(texto) {
