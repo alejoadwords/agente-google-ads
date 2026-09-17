@@ -2524,17 +2524,17 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 /* ── Hablarle al CRM: micrófono, hoja y respuesta ───────────────────────── */
 /* La pista va AL LADO, no encima: la burbuja de soporte sube 76px para no
    tapar el micrófono, y con la pista arriba seguiría pisándola. */
-#voz-zona{position:fixed;right:20px;bottom:20px;z-index:9400;display:none;flex-direction:row;align-items:center;gap:9px;transition:opacity .2s var(--ease)}
+#voz-zona{position:fixed;right:20px;bottom:20px;z-index:9403;display:none;flex-direction:row;align-items:center;gap:9px;transition:opacity .2s var(--ease)}
 #voz-zona.viva{display:flex}
 #voz-zona.oculto{opacity:0;pointer-events:none}
 #voz-pista{font-size:11px;font-weight:600;color:var(--muted);background:var(--bg-card);border:1px solid var(--border);border-radius:99px;padding:4px 11px;white-space:nowrap;box-shadow:0 2px 8px rgba(13,15,28,.07)}
 #voz-fab{width:60px;height:60px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 8px 26px var(--blue-glow);display:grid;place-items:center;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .16s var(--ease-mover),box-shadow .16s var(--ease-mover)}
 #voz-fab svg{width:25px;height:25px;pointer-events:none}
 #voz-fab.pulsado{transform:scale(1.2);box-shadow:0 0 0 14px var(--blue-dim),0 8px 26px var(--blue-glow)}
-#voz-candado{position:fixed;right:33px;bottom:100px;width:38px;height:38px;border-radius:50%;background:var(--bg-card);border:1px solid var(--border);display:none;place-items:center;color:var(--muted);box-shadow:0 4px 14px rgba(13,15,28,.12);z-index:9401}
+#voz-candado{position:fixed;right:33px;bottom:100px;z-index:9404;width:38px;height:38px;border-radius:50%;background:var(--bg-card);border:1px solid var(--border);display:none;place-items:center;color:var(--muted);box-shadow:0 4px 14px rgba(13,15,28,.12);z-index:9401}
 #voz-candado.on{display:grid} #voz-candado.cerca{background:var(--blue);color:#fff;border-color:var(--blue)}
 #voz-candado svg{width:17px;height:17px}
-#voz-hoja{position:fixed;left:0;right:0;bottom:0;z-index:9402;background:#0B0D18;color:#fff;border-radius:22px 22px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));transform:translateY(102%);transition:transform .34s var(--ease-mover);display:flex;flex-direction:column;gap:13px;max-height:82vh;overflow-y:auto}
+#voz-hoja{position:fixed;left:0;right:0;bottom:0;z-index:9402;background:#0B0D18;color:#fff;border-radius:22px 22px 0 0;padding:18px 18px calc(92px + env(safe-area-inset-bottom));transform:translateY(102%);transition:transform .34s var(--ease-mover);display:flex;flex-direction:column;gap:13px;max-height:82vh;overflow-y:auto}
 #voz-hoja.abierta{transform:translateY(0)}
 @media (min-width:860px){#voz-hoja{left:auto;right:20px;width:380px;border-radius:22px;bottom:20px;max-height:70vh}}
 #voz-asa{width:38px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:0 auto;cursor:pointer;flex-shrink:0}
@@ -2574,9 +2574,6 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .voz-acc:focus-visible{outline:2px solid #98A2FF;outline-offset:2px}
 .voz-aviso{display:flex;gap:9px;background:rgba(180,83,9,.2);border:1px solid rgba(251,191,36,.3);border-radius:12px;padding:10px 12px}
 .voz-aviso p{margin:0;font-size:12.5px;color:#FDE68A;line-height:1.45}
-#sop-burbuja{position:fixed;right:20px;bottom:20px;z-index:9500;width:52px;height:52px;border-radius:50%;border:none;background:var(--blue);color:#fff;box-shadow:0 6px 22px rgba(30,43,204,.34);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform var(--dur-fast) var(--ease),bottom var(--dur-base) var(--ease-mover)}
-#sop-burbuja:hover{transform:translateY(-2px)}
-#sop-burbuja.visible{display:flex}
 #sop-panel{position:fixed;right:20px;bottom:20px;z-index:9600;width:min(390px,calc(100vw - 32px));height:min(560px,calc(100vh - 40px));background:var(--bg-card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden}
 #sop-panel.abierto{display:flex}
 .sop-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--blue);color:#fff;flex-shrink:0}
@@ -2590,7 +2587,6 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .sop-msg.bot{align-self:flex-start;background:var(--bg-subtle);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
 .sop-msg.equipo{align-self:flex-start;background:rgba(16,185,129,.10);border:1px solid rgba(16,185,129,.32);color:var(--text);border-bottom-left-radius:4px}
 .sop-equipo-tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#047857;margin-bottom:4px}
-#sop-punto{position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:#10B981;border:2px solid var(--bg)}
 .sop-msg.error{align-self:stretch;background:var(--danger-bg);color:var(--danger);border:1px solid rgba(220,38,38,.3);text-align:center;font-size:12.5px}
 .sop-ticket{align-self:stretch;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.32);color:#047857;border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.5}
 .sop-sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
@@ -2789,6 +2785,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <button id="alerts-btn" onclick="openAlertsPanel()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Alertas de campañas">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span id="alerts-badge" style="display:none;position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px">0</span>
+    </button>
+    <!-- Soporte. Vivía flotando en la esquina de abajo y competía con el botón
+         principal de cada pantalla —enviar en el inbox, eliminar en la ficha— y
+         ahora con el micrófono. Aquí no le estorba a nada y se encuentra donde
+         la gente ya busca la ayuda. -->
+    <button id="sop-btn" onclick="sopAbrir()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="¿Necesitas ayuda?" aria-label="Abrir el soporte">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      <span id="sop-punto-hdr" style="display:none;position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:var(--blue)"></span>
     </button>
     <span class="hdr-user" id="hdr-user"></span>
     <div class="hdr-avatar" id="hdr-avatar">AC</div>
@@ -4776,9 +4780,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div id="voz-respuesta"></div>
 </div>
 
-<button id="sop-burbuja" onclick="sopAbrir()" title="¿Necesitas ayuda?" aria-label="Abrir el soporte">
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-9 8.4 8.9 8.9 0 01-3.8-.9L3 20.5l1.5-4.4A8.4 8.4 0 0112 3.1a8.4 8.4 0 019 8.4z"/></svg>
-</button>
+
 <div id="sop-panel" aria-live="polite">
   <div class="sop-head">
     <div>

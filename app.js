@@ -32097,7 +32097,8 @@ let _sopVistos = 0;       // cuántos mensajes del hilo se han visto ya
 // abrir el chat — que es exactamente lo que pasaba mandándolo al correo.
 function sopMarcarLeido() {
   try { localStorage.setItem('acuarius_soporte_vistos', String(_sopVistos)); } catch {}
-  document.getElementById('sop-punto')?.remove();
+  const _pt = document.getElementById('sop-punto-hdr');
+  if (_pt) _pt.style.display = 'none';
 }
 
 async function sopRevisarRespuestas() {
@@ -32111,13 +32112,9 @@ async function sopRevisarRespuestas() {
     let vistos = 0;
     try { vistos = parseInt(localStorage.getItem('acuarius_soporte_vistos') || '0', 10) || 0; } catch {}
     const hayEquipo = (d.mensajes || []).some(m => m.role === 'equipo');
-    const burbuja = document.getElementById('sop-burbuja');
-    if (!burbuja || !hayEquipo || total <= vistos) return;
-    if (!document.getElementById('sop-punto')) {
-      const p = document.createElement('span');
-      p.id = 'sop-punto';
-      burbuja.appendChild(p);
-    }
+    const punto = document.getElementById('sop-punto-hdr');
+    if (!punto || !hayEquipo || total <= vistos) return;
+    punto.style.display = 'block';
   } catch {}
 }
 
@@ -32164,12 +32161,10 @@ async function vozArrancar() {
   document.getElementById('voz-zona')?.classList.add('viva');
   document.getElementById('voz-zona')?.setAttribute('aria-hidden', 'false');
   vozEnchufar();
-  sopEsquivar();                       // que las dos burbujas no se pisen
 }
 
 function vozAbrir() {
   document.getElementById('voz-hoja')?.classList.add('abierta');
-  document.getElementById('voz-zona')?.classList.add('oculto');
   const r = document.getElementById('voz-respuesta');
   if (r) { r.classList.remove('visible'); r.innerHTML = ''; }
   const d = document.getElementById('voz-dicho');
@@ -32271,6 +32266,26 @@ async function vozPreguntar(texto) {
   }
 }
 
+// Conceder el permiso ABORTA la grabación que lo disparó: en iOS el primer
+// «mantén pulsado» siempre moría con un «no se oyó» y, como la hoja tapaba el
+// micrófono, no había por dónde reintentar. Así que el permiso se pide aparte,
+// antes de grabar nada, y se dice qué hacer después.
+let _vozPermiso = null;
+
+async function vozAsegurarPermiso() {
+  if (_vozPermiso === true) return true;
+  try {
+    const st = await navigator.permissions?.query?.({ name: 'microphone' });
+    if (st && st.state === 'granted') { _vozPermiso = true; return true; }
+  } catch {}
+  try {
+    const flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+    flujo.getTracks().forEach(t => t.stop());   // se suelta enseguida: el punto
+    _vozPermiso = true;                          // rojo encendido asusta, con razón
+    return true;
+  } catch { _vozPermiso = false; return false; }
+}
+
 function vozEscuchar() {
   _vozTexto = ''; _vozCancelado = false;
   vozAbrir();
@@ -32322,9 +32337,23 @@ function vozEnchufar() {
   fab._enchufado = true;
 
   fab.addEventListener('contextmenu', e => e.preventDefault());
-  fab.addEventListener('pointerdown', e => {
+  fab.addEventListener('pointerdown', async e => {
     e.preventDefault();
     try { fab.setPointerCapture(e.pointerId); } catch {}
+    if (_vozPermiso !== true) {
+      fab.classList.add('pulsado');
+      vozAbrir();
+      document.getElementById('voz-estado-txt').textContent = 'Permiso';
+      document.getElementById('voz-dicho').textContent = 'Pidiendo el micrófono…';
+      const ok = await vozAsegurarPermiso();
+      fab.classList.remove('pulsado');
+      document.getElementById('voz-dicho').textContent = '';
+      vozPintar(ok
+        ? { etiqueta: 'Listo', voz: 'Ya tengo el micrófono. Mantén pulsado otra vez y háblame.' }
+        : { etiqueta: 'Sin permiso', voz: 'No me diste acceso al micrófono.',
+            aviso: 'Puedes darlo en los ajustes del sitio, en la barra de direcciones del navegador.' });
+      return;
+    }
     _vozYInicio = e.clientY;
     fab.classList.add('pulsado');
     candado?.classList.add('on');
@@ -32378,89 +32407,14 @@ function vozEnchufar() {
 // La burbuja solo aparece con sesión: sin ella el asistente no puede mirar la
 // cuenta y ofrecería un soporte a ciegas.
 function sopMostrarBurbuja() {
-  const b = document.getElementById('sop-burbuja');
-  if (b) b.classList.toggle('visible', !!(typeof clerkInstance !== 'undefined' && clerkInstance?.user));
-  sopEsquivar();
-  if (typeof clerkInstance !== 'undefined' && clerkInstance?.user) vozArrancar();
+  const hay = !!(typeof clerkInstance !== 'undefined' && clerkInstance?.user);
+  const b = document.getElementById('sop-btn');
+  if (b) b.style.display = hay ? 'block' : 'none';
+  if (hay) vozArrancar();
 }
-
-// ── Que la burbuja no tape lo que la persona vino a pulsar ───────────────────
-//
-// Vive fija en la esquina inferior derecha, y esa esquina es justo donde las
-// pantallas ponen su botón principal: Enviar en el inbox, Eliminar en la ficha
-// del lead. Tapar el botón que alguien viene a pulsar es peor que no tener el
-// soporte a mano.
-//
-// No se resuelve con una lista de pantallas: esa lista se queda vieja el día
-// que alguien añada otro cajón, y nadie se entera porque no falla nada — solo
-// se ve mal. Así que se mira QUÉ HAY DEBAJO y se sube hasta quedar libre.
-const SOP_ALTURAS = [20, 96, 172];
-
-function sopTapaAlgo(r) {
-  const m = 6;
-  const puntos = [
-    [r.left + r.width / 2, r.top + r.height / 2],
-    [r.left + m, r.top + m], [r.right - m, r.top + m],
-    [r.left + m, r.bottom - m], [r.right - m, r.bottom - m],
-  ];
-  return puntos.some(([x, y]) => {
-    const el = document.elementFromPoint(x, y);
-    return !!(el && el.closest('button, a[href], input, textarea, select, [role="button"], [onclick]'));
-  });
-}
-
-function sopEsquivar() {
-  const b = document.getElementById('sop-burbuja');
-  if (!b || !b.classList.contains('visible')) return;
-
-  // NO se mueve para medir. El intento anterior la iba colocando en cada
-  // escalón y midiendo ahí, y eso dejaba a la burbuja arrancando la animación
-  // desde el último sitio donde se la probó en vez de desde donde estaba de
-  // verdad: se veía caer desde arriba o aparecer de la nada. Como está fija a
-  // la esquina, el rectángulo de cada candidata se calcula con aritmética y la
-  // burbuja se toca UNA sola vez, ya con el destino decidido.
-  const w = b.offsetWidth || 52;
-  const h = b.offsetHeight || 52;
-  const derecha = 20;                    // el `right` del CSS
-  const previa = b.style.visibility;
-  // Oculta —que no quitada— para que elementFromPoint no se encuentre con ella
-  // misma: un elemento con visibility:hidden no recibe el impacto.
-  b.style.visibility = 'hidden';
-  let elegido = SOP_ALTURAS[SOP_ALTURAS.length - 1];
-  try {
-    for (const alto of SOP_ALTURAS) {
-      const r = {
-        left: window.innerWidth - derecha - w, right: window.innerWidth - derecha,
-        top: window.innerHeight - alto - h,    bottom: window.innerHeight - alto,
-        width: w, height: h,
-      };
-      if (!sopTapaAlgo(r)) { elegido = alto; break; }
-    }
-  } catch {
-    elegido = SOP_ALTURAS[0];
-  } finally {
-    b.style.visibility = previa;
-  }
-  const destino = elegido + 'px';
-  if (b.style.bottom !== destino) b.style.bottom = destino;
-}
-
-// Se recalcula tras cualquier clic —abrir un cajón, cambiar de módulo, cerrar
-// un modal— y al cambiar el tamaño. 350 ms porque el cajón del lead entra con
-// una transición de 280: medir antes daría la posición de la pantalla anterior.
-let _sopReloj = null;
-function sopRevisarPronto() {
-  clearTimeout(_sopReloj);
-  _sopReloj = setTimeout(sopEsquivar, 350);
-}
-alDOMListo(() => {
-  document.addEventListener('click', sopRevisarPronto, true);
-  window.addEventListener('resize', sopRevisarPronto);
-});
 
 async function sopAbrir() {
   document.getElementById('sop-panel')?.classList.add('abierto');
-  document.getElementById('sop-burbuja')?.classList.remove('visible');
   setTimeout(() => document.getElementById('sop-input')?.focus(), 90);
   // El hilo vive en el servidor: así la respuesta del equipo aparece aquí
   // mismo, y la conversación sigue donde empezó aunque se recargue o se cambie
