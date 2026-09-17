@@ -84,6 +84,28 @@ Ver [[project_meta_acceso_avanzado]].
 - Hoy se avisa al **entrar un lead** y al **haber actividad**. El aviso de
   **tarea vencida todavía no existe**: no prometerlo.
 
+## «A mis asesores no les llega el resumen de tareas» / «solo le llega a uno»
+
+- **Lo primero: mirar el MX del cliente.** `dig +short MX sudominio.com`. Si
+  sale `*.mail.protection.outlook.com`, es Microsoft 365 y la causa probable
+  es su filtro, no nuestro envío: Microsoft decide buzón por buzón según el
+  historial con el remitente, así que al que lleva meses recibiéndonos le
+  entra y a los recién creados se los lleva a Correo no deseado o a la
+  cuarentena del administrador. Ver [[project-entregabilidad-correo]].
+- **Comprobar que sí sale** disparando el cron (avisar antes: manda el correo
+  de verdad al equipo del cliente):
+
+```bash
+curl -s -X GET "https://app.acuarius.app/api/cron-tasks" -H "x-acuarius-secret: $CRON_SECRET"
+```
+
+  Devuelve `{cuentas, correos, fallidos, errores}`. Con `fallidos: []` el envío
+  salió y el problema está del lado de ellos. Desde el 17-09-2026 cada fallo
+  queda además en `error_log`.
+- **Ojo a la expectativa**: el resumen sale **a las 7:00 de Colombia, de lunes
+  a viernes**, y nada más. **No hay aviso al crear ni al asignar una tarea.**
+  Si lo que echan de menos es enterarse en el momento, eso todavía no existe.
+
 ## «Le dejo una nota al comercial y no se entera»
 
 - Mirar primero **cuál de las dos notas usó**. La «Nota» de *Registrar
