@@ -353,10 +353,20 @@ function updateUserUI(u){
   setTimeout(initReferralButton, 100);
 }
 
+// El programa de referidos queda GUARDADO, no borrado: decisión de Alejandro
+// del 17-09-2026, para retomarlo más adelante. Se apagan las dos puertas de
+// entrada —la tarjeta de la barra lateral y la pestaña de Configuración— y no
+// se toca nada más: los endpoints, las tablas y los ocho códigos ya emitidos
+// siguen donde estaban. Volver a encenderlo es poner esto en true.
+//
+// No se corta la atribución de `?ref=`: si alguien ya repartió su enlace, que
+// su referido siga contando. Lo que se retira es la promesa, no el registro.
+const REFERIDOS_ACTIVOS = false;
+
 function initReferralButton() {
   const btn = document.getElementById('sb-referral-btn');
   if (!btn) return;
-  btn.style.display = 'flex';
+  btn.style.display = REFERIDOS_ACTIVOS ? 'flex' : 'none';
 }
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
@@ -14473,11 +14483,21 @@ async function callMetaAPI(endpoint, method = 'GET', params = {}) {
 }
 
 
+// La pestaña de Referidos se esconde al abrir Configuración, no en el HTML:
+// así el día que se retome basta con el interruptor, sin volver a tocar el
+// marcado.
+function ocultarPestanaReferidos() {
+  if (REFERIDOS_ACTIVOS) return;
+  const tab = document.querySelector('.cfg-nav-item[data-tab="referral"]');
+  if (tab) tab.style.display = 'none';
+}
+
 function openSettings() {
   const panel = document.getElementById('settings-panel');
   const overlay = document.getElementById('settings-overlay');
   panel.style.display = 'flex';
   overlay.style.display = 'block';
+  ocultarPestanaReferidos();
 
   // Bind nav buttons via event delegation (works on all browsers/devices)
   const nav = panel.querySelector('.cfg-nav');
@@ -14552,6 +14572,9 @@ function closeSettings() {
 }
 
 function switchSettingsTab(tab) {
+  // Con el programa apagado, la pestaña no existe: quien llegue por una URL
+  // vieja aterriza en el perfil en vez de en una sección vacía.
+  if (tab === 'referral' && !REFERIDOS_ACTIVOS) tab = 'perfil';
   if (tab === 'notificaciones' && typeof pushPintar === 'function') pushPintar();
   // All cfg-sec-* section IDs (redesigned settings panel)
   const sections = ['perfil','plan','integraciones','notificaciones','seguridad','equipo','referral'];
