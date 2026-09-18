@@ -14,6 +14,10 @@ import { campaignHtml } from './_campaign-email.js';
 // que una audiencia de 4.000 salía a mil personas sin decirlo. Ver _paginado.js.
 import { traerTodo } from './_paginado.js';
 
+// La conexión de WhatsApp del cliente: de ahí salen el waba_id y el token con
+// los que se le pregunta a Meta por el estado de una plantilla.
+import { conexionWhatsapp, plantillasDeMeta } from './_whatsapp.js';
+
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
 // Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
@@ -235,6 +239,34 @@ async function resolveAudience(userId, clientId, audience, channel) {
   return { leads, truncado };
 }
 
+/**
+ * ¿Puede salir esta campaña de WhatsApp? Devuelve null si sí, o el error a
+ * enseñar. Se pregunta a Meta en el momento porque una plantilla aprobada se
+ * puede pausar por calidad de un día para otro: fiarnos de una copia nuestra
+ * sería enterarnos del bloqueo con la campaña ya encolada.
+ */
+async function revisarPlantilla(userId, clientId, wa) {
+  if (!wa || !wa.name) {
+    return {
+      error: 'Esta campaña no usa una plantilla aprobada, así que WhatsApp solo la entregará a quien te haya escrito en las últimas 24 horas. Elige una plantilla para llegar a toda tu audiencia.',
+      sin_plantilla: true,
+    };
+  }
+  const conn = await conexionWhatsapp(userId, clientId);
+  if (!conn) return { error: 'No hay un canal de WhatsApp conectado en esta cuenta.' };
+  if (!conn.waba_id || !conn.access_token) {
+    return { error: 'Este canal se conectó antes de que gestionáramos plantillas. Vuelve a conectarlo en Ajustes → Canales.' };
+  }
+  const res = await plantillasDeMeta(conn, 'name,status,language');
+  if (!res.ok) return { error: 'No se pudo comprobar la plantilla con Meta: ' + res.aviso };
+  const t = res.plantillas.find(x => x.name === wa.name && x.language === wa.language);
+  if (!t) return { error: `La plantilla «${wa.name}» (${wa.language}) ya no existe en tu cuenta de WhatsApp.` };
+  if (t.status !== 'APPROVED') {
+    return { error: `La plantilla «${wa.name}» está en estado ${t.status}. Solo se pueden enviar las aprobadas.`, estado: t.status };
+  }
+  return null;
+}
+
 // Emails de campaña enviados este mes (para el cupo)
 async function monthlySent(userId) {
   const monthStart = new Date();
@@ -446,6 +478,15 @@ export default async function handler(req) {
     const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     if (!adminUser && quota === 0) return jsonResp({ error: 'Las campañas masivas son parte del plan Pro.', upgrade: true }, 403);
 
+    // WhatsApp: sin plantilla aprobada, Meta solo deja escribirle a quien te
+    // escribió en las últimas 24 h. Encolar 50.000 destinatarios contra una
+    // plantilla que no está aprobada gasta la cola entera en rechazos, así que
+    // se comprueba ANTES, contra Meta, no contra lo que guardamos.
+    if (c.channel === 'whatsapp') {
+      const problema = await revisarPlantilla(userId, clientId, c.wa_template);
+      if (problema) return jsonResp(problema, 400);
+    }
+
     const { leads, truncado } = await resolveAudience(userId, clientId, c.audience, c.channel);
     if (!leads.length) return jsonResp({ error: 'La audiencia quedó vacía con esos filtros' }, 400);
     // Antes que enviar media campaña en silencio, no enviarla y decir por qué.
@@ -500,6 +541,18 @@ export default async function handler(req) {
     // puede cambiar un correo ya revisado.
     if ('html' in body) out.html = body.html ? String(body.html).slice(0, 400000) : null;
     if ('template_id' in body) out.template_id = body.template_id || null;
+    // Plantilla de WhatsApp: { name, language, header:[campos], body:[campos] }.
+    // Los campos son nombres del lead (nombre, empresa…) o texto fijo entre
+    // comillas, uno por cada hueco {{n}} de la plantilla.
+    if ('wa_template' in body) {
+      const t = body.wa_template;
+      out.wa_template = (t && t.name) ? {
+        name: String(t.name).slice(0, 512),
+        language: String(t.language || 'es').slice(0, 16),
+        header: Array.isArray(t.header) ? t.header.slice(0, 10).map(String) : [],
+        body: Array.isArray(t.body) ? t.body.slice(0, 10).map(String) : [],
+      } : null;
+    }
     return out;
   }
 

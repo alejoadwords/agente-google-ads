@@ -153,10 +153,113 @@ async function enviarLote(sobres) {
 async function indiceDeWhatsapp(userId) {
   const convs = await sb(`/chat_conversations?user_id=eq.${encodeURIComponent(userId)}&select=id,contact_id,channel,connection_id&order=last_message_at.desc&limit=1000`);
   const conns = await sb(`/channel_connections?user_id=eq.${encodeURIComponent(userId)}&select=*`);
+  const lista = conns || [];
   return {
     convs: convs || [],
-    conexiones: Object.fromEntries((conns || []).map(c => [c.id, c])),
+    conexiones: Object.fromEntries(lista.map(c => [c.id, c])),
+    // La conexión por la que salen las plantillas: no depende de que exista
+    // una conversación previa, que es justo lo que las hace útiles.
+    wa: lista.find(c => c.channel === 'whatsapp' && c.is_active && c.access_token && c.external_id) || null,
   };
+}
+
+// ── El techo de Meta ─────────────────────────────────────────────────────────
+// Un número nuevo solo puede iniciar conversación con 250 personas distintas
+// cada 24 horas. La escalera sigue en 2.000, 10.000, 100.000 e ilimitado, y se
+// sube por verificación del negocio o enviando con buena calidad.
+//
+// Pasarse no da un error claro: Meta estrangula, la calificación de calidad
+// cae, las plantillas se pausan y el número acaba restringido. O sea que el
+// castigo de ignorar esto no lo paga la campaña — lo paga el cliente, con su
+// número, durante semanas.
+//
+// El tope real se guarda por conexión en el perfil de la cuenta, para poder
+// subirlo cuando Meta suba el escalón sin tocar código.
+const TOPE_DIARIO = 250;
+const ENVIOS_KEY = '__wa_envios__';
+
+async function cupoDeHoy(userId, connId) {
+  const filas = await sb(`/user_profiles?user_id=eq.${encodeURIComponent(userId)}&agent_key=eq.${ENVIOS_KEY}&select=profile_data&limit=1`);
+  const blob = filas?.[0]?.profile_data || {};
+  const dia = new Date().toISOString().slice(0, 10);
+  const conn = blob[connId] || {};
+  // El límite de Meta es una ventana móvil de 24 h; aquí se cuenta por día UTC.
+  // Es una aproximación, y a propósito por lo bajo: en el peor caso se envía de
+  // menos, que es el error que no cuesta nada.
+  return {
+    blob, dia,
+    tope: Number(conn.tope) > 0 ? Number(conn.tope) : TOPE_DIARIO,
+    usados: Number(conn[dia]) || 0,
+  };
+}
+
+async function anotarEnvios(userId, connId, cupo, cuantos) {
+  if (!cuantos) return;
+  const conn = { ...(cupo.blob[connId] || {}), [cupo.dia]: cupo.usados + cuantos };
+  // Se tiran los días viejos: si no, este blob crece para siempre.
+  for (const k of Object.keys(conn)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(k) && k < cupo.dia) delete conn[k];
+  }
+  await sb(`/user_profiles?on_conflict=user_id,agent_key`, 'POST', {
+    user_id: userId, agent_key: ENVIOS_KEY,
+    profile_data: { ...cupo.blob, [connId]: conn },
+    updated_at: new Date().toISOString(),
+  }, 'resolution=merge-duplicates,return=minimal').catch(e => console.error('[cron-campaigns] cupo wa:', e.message));
+}
+
+// Los valores que entran en los huecos {{1}}, {{2}}… de la plantilla.
+// Meta RECHAZA el mensaje si un parámetro llega vacío, así que un lead al que
+// le falte un dato se salta con su motivo en vez de quemar un intento.
+function parametrosDe(campos, lead) {
+  const valores = {
+    nombre: lead.name, empresa: lead.company, email: lead.email, telefono: lead.phone,
+    etapa: lead.stage, fuente: lead.source,
+    valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
+  };
+  const out = [];
+  for (const campo of (campos || [])) {
+    // Un campo entre comillas es texto fijo, no un campo del lead.
+    const literal = /^".*"$/.test(String(campo));
+    const v = literal ? String(campo).slice(1, -1) : valores[String(campo).toLowerCase()];
+    const texto = String(v == null ? '' : v).trim();
+    if (!texto) return { falta: campo };
+    // Meta no admite saltos de línea ni tabulaciones dentro de un parámetro.
+    out.push({ type: 'text', text: texto.replace(/\s+/g, ' ').slice(0, 1024) });
+  }
+  return { parametros: out };
+}
+
+async function enviarPlantilla(conn, telefono, plantilla, lead) {
+  const componentes = [];
+  for (const [tipo, campos] of [['header', plantilla.header], ['body', plantilla.body]]) {
+    if (!campos?.length) continue;
+    const r = parametrosDe(campos, lead);
+    if (r.falta) return { status: 'skipped', detail: `sin dato para la plantilla: ${r.falta}` };
+    componentes.push({ type: tipo, parameters: r.parametros });
+  }
+  const res = await fetch(`https://graph.facebook.com/v23.0/${conn.external_id}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: telefono,
+      type: 'template',
+      template: {
+        name: plantilla.name,
+        language: { code: plantilla.language || 'es' },
+        ...(componentes.length ? { components: componentes } : {}),
+      },
+    }),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (d.error) {
+    const codigo = d.error.code;
+    // 131049/131047 son de ventana y ritmo: pasajeros, se reintentan. 132xxx
+    // son de la plantilla (no existe, no aprobada, parámetros mal): definitivos.
+    const pasajero = codigo === 131049 || codigo === 131047 || codigo === 130429 || codigo === 80007;
+    return { status: pasajero ? 'reintentar' : 'failed', detail: `Meta ${codigo}: ${String(d.error.message || '').slice(0, 140)}` };
+  }
+  return { status: 'sent', resend_id: d.messages?.[0]?.id || null };
 }
 
 async function sendWhatsapp(campaign, lead, indice) {
@@ -238,13 +341,42 @@ export default async function handler(req, res) {
         // no hay endpoint de lote. Lo que se ahorró aquí son las consultas
         // repetidas del índice, que antes iban dentro del bucle.
         const indice = await indiceDeWhatsapp(c.user_id);
+        const plantilla = (c.wa_template && c.wa_template.name) ? c.wa_template : null;
+        // Con plantilla NO hace falta conversación previa: es lo que convierte
+        // esto en una campaña de verdad y no en responderle a quien ya escribió.
+        const cupo = plantilla && indice.wa ? await cupoDeHoy(c.user_id, indice.wa.id) : null;
+        let enviadosHoy = 0;
+
         for (const rcpt of pending) {
           const lead = byId[rcpt.lead_id];
-          const r = (!lead || lead.deleted_at)
-            ? { status: 'skipped', detail: 'lead eliminado' }
-            : await sendWhatsapp(c, lead, indice);
+          let r;
+          if (!lead || lead.deleted_at) {
+            r = { status: 'skipped', detail: 'lead eliminado' };
+          } else if (plantilla) {
+            if (!indice.wa) {
+              r = { status: 'failed', detail: 'no hay un canal de WhatsApp conectado' };
+            } else if (cupo.usados + enviadosHoy >= cupo.tope) {
+              // Se acabó el cupo del día. Los que faltan NO se tocan: siguen
+              // pendientes y salen mañana. Forzar el techo de Meta es como se
+              // pierde el número del cliente.
+              console.warn(`[cron-campaigns] cupo diario de WhatsApp agotado (${cupo.tope}); el resto sigue mañana`);
+              break;
+            } else {
+              const tel = String(lead.phone || '').replace(/\D/g, '');
+              r = tel.length < 7
+                ? { status: 'skipped', detail: 'teléfono inválido' }
+                : await enviarPlantilla(indice.wa, tel, plantilla, lead);
+              if (r.status === 'sent') enviadosHoy++;
+            }
+          } else {
+            r = await sendWhatsapp(c, lead, indice);
+          }
+          // 'reintentar' no es un estado de la cola: la fila se queda pendiente
+          // y vuelve en la próxima corrida.
+          if (r.status === 'reintentar') continue;
           resueltos.set(rcpt.id, r);
         }
+        if (cupo && enviadosHoy) await anotarEnvios(c.user_id, indice.wa.id, cupo, enviadosHoy);
       } else {
         // Primero se aparta lo que ni siquiera hay que enviar, y lo que queda se
         // manda de cien en cien.
