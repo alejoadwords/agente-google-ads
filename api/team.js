@@ -40,6 +40,165 @@ async function filaDelEquipo(cuenta, id) {
   return filas?.[0] || null;
 }
 
+// ── QUÉ SE LLEVA CONSIGO QUIEN SE VA ────────────────────────────────────────
+// Un asesor no solo tiene leads. También puede ser el destino fijo de un
+// formulario web o estar dentro del reparto de una rama de un conector. Si se
+// le quita sin mirar eso, sus leads quedan apuntando a un fantasma —fuera del
+// filtro «Míos» de todos, sin que nadie los llame— y los leads NUEVOS de esa
+// fuente dejan de asignarse a nadie, en silencio.
+//
+// Las tareas y la agenda no se cuentan aparte: `activities` no tiene
+// responsable propio, una tarea es de quien tenga su lead. Al mover los leads
+// se mueven con ellos.
+const CARGA_VACIA = { total: 0, leads: 0, abiertos: 0, formularios: 0, reglas: 0, fuentes: 0 };
+
+async function cargaDe(cuenta, suyo) {
+  const cuenta1 = (ruta) => fetch(`${SUPABASE_URL}/rest/v1${ruta}`, {
+    headers: { ...sbHeaders(), Prefer: 'count=exact', Range: '0-0' },
+  }).then(r => Number((r.headers.get('content-range') || '0-0/0').split('/')[1]) || 0).catch(() => 0);
+
+  const base = `user_id=eq.${encodeURIComponent(cuenta)}&assigned_to=eq.${encodeURIComponent(suyo)}`;
+  const [leads, abiertos, formularios, forms] = await Promise.all([
+    cuenta1(`/leads?${base}&deleted_at=is.null&select=id`),
+    cuenta1(`/leads?${base}&deleted_at=is.null&stage=not.in.(ganado,perdido,won,lost)&select=id`),
+    cuenta1(`/lead_forms?user_id=eq.${encodeURIComponent(cuenta)}&assigned_to=eq.${encodeURIComponent(suyo)}&select=id`),
+    fetch(`${SUPABASE_URL}/rest/v1/lead_forms?user_id=eq.${encodeURIComponent(cuenta)}&reglas=not.is.null&select=id,reglas`, { headers: sbHeaders() })
+      .then(r => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
+
+  const reglas = (forms || []).filter(f => reglaNombra(f.reglas, suyo)).length;
+
+  // La regla general de la cuenta pesa más que todo lo anterior: en Certain,
+  // una sola persona es el destino fijo de SEIS fuentes. Quitarla sin tocar
+  // eso deja seis orígenes de leads sin asignar a nadie, en silencio.
+  const fuentes = (Object.values((await reglasDeCuenta(cuenta)).reglas || {}))
+    .filter(r => r && r.fijo === suyo).length;
+
+  return { total: leads + formularios + reglas + fuentes, leads, abiertos, formularios, reglas, fuentes };
+}
+
+async function reglasDeCuenta(cuenta) {
+  const filas = await fetch(
+    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${encodeURIComponent(cuenta)}&agent_key=eq.__assign_rules__&select=profile_data&limit=1`,
+    { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  return filas?.[0]?.profile_data || {};
+}
+
+// ¿Las reglas de destino de este conector nombran a esta persona? Mira tanto
+// el reparto fijo («quien») como las listas de turnos («entre»).
+function reglaNombra(reglas, suyo) {
+  if (!reglas || typeof reglas !== 'object') return false;
+  const ramas = [...(Array.isArray(reglas.casos) ? reglas.casos : []), reglas.sino].filter(Boolean);
+  return ramas.some(c => {
+    const r = c && c.reparto;
+    if (!r) return false;
+    if (r.quien === suyo) return true;
+    return Array.isArray(r.entre) && r.entre.includes(suyo);
+  });
+}
+
+// Cambia a la persona dentro de una regla. En una lista de turnos NO se
+// duplica al destino si ya estaba: repartir entre [A, A, B] le daría a A el
+// doble de leads sin que nadie lo hubiera pedido.
+function reglaCambiada(reglas, suyo, destino) {
+  const toca = (c) => {
+    const r = c && c.reparto;
+    if (!r) return c;
+    if (r.quien === suyo) return { ...c, reparto: { ...r, quien: destino } };
+    if (Array.isArray(r.entre) && r.entre.includes(suyo)) {
+      const sin = r.entre.filter(x => x !== suyo);
+      return { ...c, reparto: { ...r, entre: sin.includes(destino) ? sin : [...sin, destino] } };
+    }
+    return c;
+  };
+  return {
+    ...reglas,
+    casos: Array.isArray(reglas.casos) ? reglas.casos.map(toca) : reglas.casos,
+    sino: reglas.sino ? toca(reglas.sino) : reglas.sino,
+  };
+}
+
+async function miembroActivo(cuenta, memberUserId) {
+  if (!memberUserId) return null;
+  const filas = await fetch(
+    `${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}` +
+    `&member_user_id=eq.${encodeURIComponent(memberUserId)}&status=eq.active&select=member_user_id,member_name,member_email&limit=1`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  return filas?.[0] || null;
+}
+
+// Nombre con el que se sella `assigned_name`. La ficha del lead lo enseña tal
+// cual, así que dejarlo desfasado se ve en pantalla enseguida.
+async function nombreDe(cuenta, quienId) {
+  if (quienId === cuenta) {
+    const u = await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(quienId)}&select=name,email&limit=1`,
+      { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    return u?.[0]?.name || u?.[0]?.email || 'Dueño de la cuenta';
+  }
+  const m = await miembroActivo(cuenta, quienId);
+  return m?.member_name || m?.member_email || 'Sin nombre';
+}
+
+async function traspasar(cuenta, suyo, destino) {
+  const nombre = await nombreDe(cuenta, destino);
+  const movido = { leads: 0, formularios: 0, reglas: 0, fuentes: 0, hacia: nombre };
+
+  const rLeads = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(cuenta)}&assigned_to=eq.${encodeURIComponent(suyo)}&deleted_at=is.null`,
+    { method: 'PATCH', headers: { ...sbHeaders(), Prefer: 'return=representation' },
+      // updated_at a propósito: la inactividad de un lead cuelga de ese campo y
+      // un traspaso es actividad — si no, el nuevo responsable hereda leads que
+      // ya nacen marcados como olvidados.
+      body: JSON.stringify({ assigned_to: destino, assigned_name: nombre, updated_at: new Date().toISOString() }) }
+  );
+  if (rLeads.ok) movido.leads = ((await rLeads.json()) || []).length;
+
+  const rForms = await fetch(
+    `${SUPABASE_URL}/rest/v1/lead_forms?user_id=eq.${encodeURIComponent(cuenta)}&assigned_to=eq.${encodeURIComponent(suyo)}`,
+    { method: 'PATCH', headers: { ...sbHeaders(), Prefer: 'return=representation' },
+      body: JSON.stringify({ assigned_to: destino }) }
+  );
+  if (rForms.ok) movido.formularios = ((await rForms.json()) || []).length;
+
+  // Las reglas de destino van una por una: cada conector tiene su jsonb y no
+  // hay forma de reescribirlas en bloque sin pisar las ramas que no le tocan.
+  const forms = await fetch(
+    `${SUPABASE_URL}/rest/v1/lead_forms?user_id=eq.${encodeURIComponent(cuenta)}&reglas=not.is.null&select=id,reglas`,
+    { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  for (const f of forms || []) {
+    if (!reglaNombra(f.reglas, suyo)) continue;
+    const ok = await fetch(`${SUPABASE_URL}/rest/v1/lead_forms?id=eq.${f.id}`, {
+      method: 'PATCH', headers: sbHeaders(),
+      body: JSON.stringify({ reglas: reglaCambiada(f.reglas, suyo, destino) }),
+    });
+    if (ok.ok) movido.reglas++;
+  }
+
+  // Y la regla general de la cuenta: si el que se va era el destino «fijo» de
+  // una fuente, los leads nuevos de esa fuente se quedarían sin dueño.
+  try {
+    const blobs = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${encodeURIComponent(cuenta)}&agent_key=eq.__assign_rules__&select=profile_data&limit=1`,
+      { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const blob = blobs?.[0]?.profile_data;
+    const reglas = blob && blob.reglas;
+    const cuantas = reglas ? Object.values(reglas).filter(r => r && r.fijo === suyo).length : 0;
+    if (cuantas) {
+      const nuevas = {};
+      for (const [k, r] of Object.entries(reglas)) nuevas[k] = (r && r.fijo === suyo) ? { ...r, fijo: destino } : r;
+      await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?on_conflict=user_id,agent_key`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ user_id: cuenta, agent_key: '__assign_rules__', profile_data: { ...blob, reglas: nuevas } }),
+      });
+      movido.fuentes = cuantas;
+    }
+  } catch { /* la regla general es una mejora, no puede tumbar el traspaso */ }
+
+  return movido;
+}
+
 let _lastPlan = 'free';
 let _seatsExtra = 0;
 async function getUserId(req) {
@@ -261,6 +420,16 @@ export default async function handler(req) {
   }
 
   // GET — listar el equipo + asientos
+  // Qué tiene asignado alguien, para poder preguntar a quién pasa antes de
+  // quitarlo. Va aparte del listado porque son cuatro consultas y no tienen
+  // por qué correr cada vez que se abre la pestaña de Equipo.
+  if (req.method === 'GET' && url.searchParams.get('carga')) {
+    const fila = await filaDelEquipo(cuenta, url.searchParams.get('carga'));
+    if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    const carga = fila.member_user_id ? await cargaDe(cuenta, fila.member_user_id) : CARGA_VACIA;
+    return jsonResp({ carga });
+  }
+
   if (req.method === 'GET') {
     // member_user_id es imprescindible: sin él, cualquier selector de "quién
     // atiende" se queda sin equipo que ofrecer y solo muestra al que mira.
@@ -370,8 +539,42 @@ export default async function handler(req) {
     if (!puedeTocarA(quien, fila)) {
       return jsonResp({ error: 'No puedes quitarte a ti mismo del equipo.', sin_permiso: true }, 403);
     }
+
+    const suyo = fila.member_user_id;
+    const carga = suyo ? await cargaDe(cuenta, suyo) : CARGA_VACIA;
+    // El dueño no tiene fila en team_members: el navegador lo pide con
+    // `al_dueno` y aquí se resuelve a su propio id, que es el de la cuenta.
+    const destino = url.searchParams.get('al_dueno')
+      ? cuenta
+      : url.searchParams.get('reasignar_a');
+
+    // Quien se va con cartera NO se puede quitar a ciegas. Sin esto, sus leads
+    // se quedaban apuntando a alguien que ya no existe: no salen en el filtro
+    // «Míos» de nadie, nadie los llama y nadie se entera. Se corta aquí, en el
+    // servidor, para que un navegador viejo tampoco pueda hacerlo.
+    if (carga.total > 0 && !destino) {
+      return jsonResp({
+        error: 'Esta persona tiene trabajo asignado. Hay que decir a quién pasa antes de quitarla.',
+        hay_que_reasignar: true,
+        carga,
+      }, 409);
+    }
+
+    if (carga.total > 0) {
+      // El destino tiene que ser del equipo, o el propio dueño. Sin esta
+      // comprobación se podría mandar la cartera a un id inventado, que es
+      // exactamente el agujero que estamos tapando.
+      const valido = destino === cuenta || !!(await miembroActivo(cuenta, destino));
+      if (!valido) return jsonResp({ error: 'Esa persona no está en tu equipo.' }, 400);
+      if (destino === suyo) return jsonResp({ error: 'No se puede reasignar a la misma persona que se va.' }, 400);
+
+      const movido = await traspasar(cuenta, suyo, destino);
+      await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${id}&owner_user_id=eq.${encodeURIComponent(cuenta)}`, { method: 'DELETE', headers: sbHeaders() });
+      return jsonResp({ ok: true, movido });
+    }
+
     await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${id}&owner_user_id=eq.${encodeURIComponent(cuenta)}`, { method: 'DELETE', headers: sbHeaders() });
-    return jsonResp({ ok: true });
+    return jsonResp({ ok: true, movido: null });
   }
 
   return jsonResp({ error: 'Método no permitido' }, 405);

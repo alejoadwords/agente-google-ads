@@ -29205,10 +29205,117 @@ async function teamInvite() {
   finally { btn.disabled = false; btn.textContent = 'Enviar invitación'; }
 }
 
+// Quitar a alguien del equipo. Si tiene trabajo asignado NO se le quita a
+// ciegas: sus leads quedarían apuntando a una persona que ya no existe, fuera
+// del filtro «Míos» de todos, y nadie los volvería a llamar. El servidor lo
+// corta igual (409) por si el navegador está viejo; esto es la cara amable.
 async function teamRemove(id) {
-  if (!confirm('¿Quitar a esta persona del equipo? Perderá el acceso a tus leads de inmediato.')) return;
-  await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
-  teamRenderSettings();
+  const m = (crmTeam || []).find(x => x.id === id);
+  const quien = m ? (m.member_name || m.member_email) : 'esta persona';
+
+  // Una invitación sin canjear no tiene nada asignado: no hay a quién pasarle.
+  if (m && m.status !== 'active') {
+    if (!confirm('¿Revocar la invitación de ' + quien + '? El enlace que recibió dejará de funcionar.')) return;
+    await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    showToast('Invitación revocada');
+    teamRenderSettings();
+    return;
+  }
+
+  let carga = null;
+  try {
+    const r = await fetchAuth('/api/team?carga=' + encodeURIComponent(id));
+    const d = await r.json();
+    if (r.ok) carga = d.carga;
+  } catch { /* sin el dato se sigue: el servidor tiene la última palabra */ }
+
+  if (carga && carga.total === 0) {
+    if (!confirm('¿Quitar a ' + quien + ' del equipo? No tiene nada asignado. Perderá el acceso de inmediato.')) return;
+    await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    showToast(quien + ' ya no está en el equipo');
+    teamRenderSettings();
+    return;
+  }
+
+  teamModalTraspaso(m, carga);
+}
+
+function teamModalTraspaso(m, carga) {
+  document.getElementById('team-traspaso')?.remove();
+  const quien = m.member_name || m.member_email;
+  const c = carga || { total: 0, leads: 0, abiertos: 0, formularios: 0, reglas: 0, fuentes: 0 };
+
+  // A quién se le puede pasar: el resto del equipo activo, y el dueño.
+  const otros = (crmTeam || []).filter(x => x.id !== m.id && x.status === 'active' && x.member_user_id);
+  // `toca_el_plan` es el booleano de «soy el dueño» que manda el servidor.
+  // Comparar la etiqueta visible rompería el día que se reescriba el texto.
+  const soyDueno = !!(_teamYo && _teamYo.toca_el_plan);
+  const hayDestino = soyDueno || otros.length > 0;
+
+  const linea = (n, uno, varios) => n
+    ? '<li><b>' + n + '</b> ' + (n === 1 ? uno : varios) + '</li>' : '';
+
+  const wrap = document.createElement('div');
+  wrap.id = 'team-traspaso';
+  wrap.className = 'tt-bg';
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+  wrap.innerHTML =
+    '<div class="tt-caja" role="dialog" aria-modal="true" aria-labelledby="tt-h">' +
+      '<h3 class="tt-h" id="tt-h">¿A quién le pasas lo de ' + esc(quien) + '?</h3>' +
+      '<p class="tt-s">Antes de quitarla del equipo hay que darle un responsable a lo que tiene. ' +
+      'Si no, sus leads dejarían de aparecer en la cartera de todos y nadie volvería a llamarlos.</p>' +
+      '<ul class="tt-lista">' +
+        linea(c.leads, 'lead asignado', 'leads asignados') +
+        (c.abiertos ? '<li class="tt-ojo">' + c.abiertos + ' de ellos ' + (c.abiertos === 1 ? 'sigue' : 'siguen') + ' sin cerrar</li>' : '') +
+        linea(c.formularios, 'formulario web que le manda los leads', 'formularios web que le mandan los leads') +
+        linea(c.reglas, 'regla de reparto que la nombra', 'reglas de reparto que la nombran') +
+        linea(c.fuentes, 'fuente de leads que le llega siempre a ella', 'fuentes de leads que le llegan siempre a ella') +
+      '</ul>' +
+      // Sin nadie a quien pasárselo, el desplegable vacío solo confunde: se
+      // quita y queda la única frase que importa.
+      (hayDestino
+        ? '<label class="tt-l" for="tt-destino">Pasarle todo a</label>' +
+          '<select class="tt-sel" id="tt-destino">' +
+            (soyDueno ? '<option value="__dueno__">Yo (dueño de la cuenta)</option>' : '') +
+            otros.map(x => '<option value="' + esc(x.member_user_id) + '">' +
+              esc(x.member_name || x.member_email) + '</option>').join('') +
+          '</select>'
+        : '<div class="tt-aviso">No queda nadie más en el equipo a quien pasárselo. ' +
+          'Invita a alguien y vuelve, o cambia de responsable esos leads desde el pipeline.</div>') +
+      (hayDestino ? '<div class="tt-nota">Las tareas y las citas de esos leads se van con ellos: una tarea es de quien tenga el lead.</div>' : '') +
+      '<div class="tt-btns">' +
+        '<button class="btn-ghost" onclick="document.getElementById(\'team-traspaso\').remove()">' +
+          (hayDestino ? 'Cancelar' : 'Entendido') + '</button>' +
+        (hayDestino ? '<button class="btn-pri" id="tt-ok" onclick="teamConfirmarTraspaso(\'' + m.id + '\')">Pasar y quitar</button>' : '') +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(wrap);
+}
+
+async function teamConfirmarTraspaso(id) {
+  const sel = document.getElementById('tt-destino');
+  const btn = document.getElementById('tt-ok');
+  if (!sel || !btn) return;
+  // El dueño no tiene fila en team_members, así que el servidor lo reconoce
+  // por su propio id: aquí se manda vacío y allá se resuelve a la cuenta.
+  const destino = sel.value === '__dueno__' ? '' : sel.value;
+  btn.disabled = true; btn.textContent = 'Pasando…';
+  try {
+    const r = await fetchAuth('/api/team?id=' + encodeURIComponent(id) +
+      '&reasignar_a=' + encodeURIComponent(destino) + (destino ? '' : '&al_dueno=1'), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo completar el traspaso.');
+    document.getElementById('team-traspaso')?.remove();
+    const mv = d.movido || {};
+    showToast('Listo: ' + (mv.leads || 0) + ' leads pasaron a ' + (mv.hacia || 'su nuevo responsable'));
+    teamRenderSettings();
+    // La cartera abierta detrás sigue mostrando al responsable viejo hasta que
+    // se recarga: se recarga sola en vez de dejar la pantalla mintiendo.
+    if (typeof crmLoadLeads === 'function') { try { await crmLoadLeads(); crmRender(); } catch {} }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Pasar y quitar';
+    showToast(e.message, 'error');
+  }
 }
 
 // Deja el detalle en solo lectura cuando el lead es de otra persona, y lo dice

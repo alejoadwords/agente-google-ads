@@ -1039,6 +1039,23 @@ textarea.seop-input{resize:vertical;min-height:70px}
    Leads se queda: ese lleva al CRM, que es justo a donde queremos llevar. */
 body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 
+/* ── Traspaso al quitar a alguien del equipo ─────────────────────────────── */
+.tt-bg{position:fixed;inset:0;z-index:10000;background:rgba(13,15,28,.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:pautaFondo .18s var(--ease)}
+.tt-caja{width:min(460px,100%);box-sizing:border-box;background:var(--bg-card);border-radius:var(--rxl);box-shadow:var(--shadow-lg);padding:24px 26px;max-height:88vh;overflow-y:auto}
+.tt-h{margin:0 0 8px;font-size:var(--fs-lg);font-weight:700;letter-spacing:-.3px}
+.tt-s{margin:0 0 16px;font-size:var(--fs-base);color:var(--muted);line-height:1.5}
+.tt-lista{margin:0 0 18px;padding:14px 16px 14px 32px;background:var(--bg-subtle);border-radius:var(--r);font-size:var(--fs-base);line-height:1.7}
+.tt-lista li{color:var(--muted)}
+.tt-lista li b{color:var(--text)}
+.tt-lista li.tt-ojo{color:var(--warning);font-weight:600;list-style:none;margin-left:-16px}
+.tt-l{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px}
+.tt-sel{width:100%;box-sizing:border-box;font-family:var(--font);font-size:var(--fs-base);color:var(--text);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;min-height:42px;cursor:pointer}
+.tt-aviso{margin-top:10px;background:var(--danger-bg);border-radius:var(--r);padding:11px 13px;font-size:var(--fs-sm);color:#991B1B;line-height:1.5}
+.tt-nota{margin-top:12px;font-size:var(--fs-sm);color:var(--muted2);line-height:1.5}
+.tt-btns{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
+.tt-btns button{min-height:40px}
+@media (max-width:480px){ .tt-btns{flex-direction:column-reverse} .tt-btns button{width:100%} }
+
 /* ── Plataformas de pauta ────────────────────────────────────────────────────
    La tabla va partida en dos mitades con fondo distinto: gris «En la
    plataforma», azul «En tu CRM». La mitad azul es la que no tiene nadie más, y
