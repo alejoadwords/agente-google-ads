@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-17-motor-campanas-rapido",
+   "fecha": "2026-09-17",
+   "tipo": "mejora",
+   "titulo": "Las campañas ahora salen unas sesenta veces más rápido",
+   "texto": "El motor enviaba 80 correos cada diez minutos, así que una campaña a 20.000 personas tardaba casi dos días en terminar. No era un límite del correo: era que por cada destinatario hacíamos tres viajes al servidor, uno detrás de otro. Ahora los correos salen de cien en cien y los registros se guardan por tandas, con lo que una corrida despacha hasta 5.000 destinatarios. Esa misma campaña de 20.000 ahora sale en menos de una hora. Y si el proveedor de correo se satura un momento, esos destinatarios quedan en espera para el siguiente intento en lugar de darse por fallidos."
+  },
+  {
    "id": "2026-09-17-tope-mil-contactos",
    "fecha": "2026-09-17",
    "tipo": "arreglo",

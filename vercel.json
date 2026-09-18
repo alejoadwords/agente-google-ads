@@ -11,6 +11,9 @@
     },
     "api/social-publish.js": {
       "maxDuration": 60
+    },
+    "api/cron-campaigns.js": {
+      "maxDuration": 120
     }
   },
   "rewrites": [
