@@ -10047,6 +10047,7 @@ function novIr(destino) {
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
+        case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
@@ -35032,4 +35033,548 @@ function lpCerrarEditor() {
     document.getElementById('crm-btn-paginas')?.classList.toggle('active', v === 'paginas');
     if (v === 'paginas') lpRender();
   };
+})();
+
+// ══ PLATAFORMAS DE PAUTA ═════════════════════════════════════════════════════
+// Marketing › Plataformas de pauta. La pantalla une dos mundos: lo que dice la
+// red publicitaria y lo que pasó con esos leads dentro del CRM. La mitad de la
+// red la enseña cualquiera; la del CRM es la única razón para tenerla.
+//
+// Todo el cálculo vive en api/pauta.js: aquí solo se pinta. Así el navegador
+// nunca ve los tokens de Google ni de Meta.
+
+let pautaDatos = null;
+let pautaVista = 'campanas';       // campanas | conexiones | cartera
+let pautaDias = 30;
+let pautaCargando = false;
+
+function pautaPlata(n, moneda) {
+  if (n === null || n === undefined) return '—';
+  try {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency', currency: moneda || 'COP', maximumFractionDigits: 0,
+    }).format(n);
+  } catch { return '$' + Math.round(n).toLocaleString('es-CO'); }
+}
+// Una fecha ISO no la lee nadie de un vistazo. Se parte a mano en vez de usar
+// new Date(): un 'YYYY-MM-DD' se interpreta como UTC y en Bogotá retrocede un día.
+function pautaFecha(iso) {
+  const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+             'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const p = String(iso || '').split('-');
+  if (p.length !== 3) return String(iso || '');
+  return Number(p[2]) + ' de ' + (M[Number(p[1]) - 1] || '');
+}
+function pautaNum(n) {
+  return (n === null || n === undefined) ? '—' : Number(n).toLocaleString('es-CO');
+}
+function pautaRedChip(red) {
+  if (red === 'google') return '<span class="pauta-red pauta-red-g">Google</span>';
+  if (red === 'meta') return '<span class="pauta-red pauta-red-m">Meta</span>';
+  return '<span class="pauta-red pauta-red-n">—</span>';
+}
+function pautaEstadoChip(e) {
+  const s = String(e || '').toLowerCase();
+  if (s === 'enabled' || s === 'active') return '<span class="pauta-pill pauta-pill-ok">Activa</span>';
+  if (s === 'paused') return '<span class="pauta-pill pauta-pill-off">Pausada</span>';
+  if (!s) return '<span style="color:var(--muted2)">—</span>';
+  return '<span class="pauta-pill pauta-pill-off">' + esc(s) + '</span>';
+}
+
+function pautaRender() {
+  const host = document.getElementById('crm-pauta-view');
+  if (!host) return;
+  const cliente = crmAmbitoCliente();
+  const hayCartera = !cliente;
+
+  host.innerHTML =
+    '<div class="pauta-head">' +
+      '<div style="flex:1;min-width:0">' +
+        '<h2 class="pauta-h1">Plataformas de pauta</h2>' +
+        '<p class="pauta-sub">Lo que gastas en cada campaña y lo que pasó con esos leads dentro del CRM.</p>' +
+      '</div>' +
+      '<div class="pauta-tabs">' +
+        '<button class="pauta-tab' + (pautaVista === 'campanas' ? ' active' : '') + '" onclick="pautaIr(\'campanas\')">Campañas</button>' +
+        (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
+        '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pauta-filtros">' +
+      '<select class="pauta-sel" id="pauta-rango" onchange="pautaDias=Number(this.value);pautaCargar()" aria-label="Período">' +
+        [7, 30, 90].map(d => '<option value="' + d + '"' + (pautaDias === d ? ' selected' : '') + '>Últimos ' + d + ' días</option>').join('') +
+      '</select>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost" onclick="pautaCargar()">' + icn('refresh', 13) + ' Actualizar</button>' +
+    '</div>' +
+    '<div id="pauta-cuerpo"></div>';
+
+  pautaCargar();
+}
+
+function pautaIr(v) {
+  pautaVista = v;
+  pautaRender();
+}
+
+// El aviso de carga fallida es explícito: una pantalla de pauta en blanco y una
+// cuenta sin campañas se verían igual, y son cosas muy distintas.
+function pautaError(msg) {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) +
+    '<div style="flex:1">' + esc(msg) + '</div>' +
+    '<button class="btn-ghost" onclick="pautaCargar()">Reintentar</button></div>';
+}
+
+async function pautaCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c || pautaCargando) return;
+  pautaCargando = true;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus campañas…</div>';
+
+  const hasta = new Date();
+  const desde = new Date(hasta.getTime() - (pautaDias - 1) * 86400000);
+  const f = (d) => d.toISOString().slice(0, 10);
+  const cliente = crmAmbitoCliente();
+
+  let qs = 'desde=' + f(desde) + '&hasta=' + f(hasta);
+  if (cliente) qs += '&client_id=' + encodeURIComponent(cliente);
+  if (pautaVista === 'cartera') qs += '&cartera=1';
+
+  try {
+    const r = await fetchAuth('/api/pauta?' + qs);
+    const d = await r.json();
+    if (!r.ok) { pautaCargando = false; pautaError(d.error || 'No pudimos leer tus campañas.'); return; }
+    pautaDatos = d;
+    pautaCargando = false;
+    if (pautaVista === 'cartera') pautaPintarCartera(d);
+    else if (pautaVista === 'conexiones') pautaPintarConexiones(d);
+    else pautaPintarCampanas(d);
+  } catch (e) {
+    pautaCargando = false;
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function pautaPintarCampanas(d) {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+
+  if (!d.conexiones.length) {
+    c.innerHTML = emptyAgua('trend', 'Todavía no hay ninguna cuenta de pauta conectada',
+      'Conecta Google Ads o Meta y aquí verás, campaña por campaña, cuánto invertiste y qué pasó con esos leads en tu CRM.',
+      '<button class="btn-pri" onclick="pautaIr(\'conexiones\')">Conectar una cuenta</button>');
+    return;
+  }
+
+  const m = d.moneda;
+  const t = d.totales;
+  const rotos = d.conexiones.filter(x => x.error);
+
+  const kpi = (etq, val, pie, azul) =>
+    '<div class="pauta-kpi' + (azul ? ' crm' : '') + '">' +
+      '<div class="pauta-kpi-etq">' + etq + '</div>' +
+      '<div class="pauta-kpi-val">' + val + '</div>' +
+      '<div class="pauta-kpi-pie">' + pie + '</div>' +
+    '</div>';
+
+  let html = '';
+
+  // Una conexión caída no tumba la pantalla, pero tampoco se calla: sus cifras
+  // faltan en los totales y quien mira tiene que saberlo.
+  if (rotos.length) {
+    html += '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) +
+      '<div style="flex:1"><b>Falta la cuenta de ' + rotos.map(x => esc(x.red === 'google' ? 'Google Ads' : 'Meta Ads')).join(' y ') + '.</b> ' +
+      esc(rotos[0].error) + ' Los números de abajo no la incluyen.</div>' +
+      '<button class="btn-ghost" onclick="pautaIr(\'conexiones\')">Revisar</button></div>';
+  }
+
+  if (d.moneda_mixta) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 16) +
+      '<div style="flex:1"><b>Tus cuentas facturan en monedas distintas.</b> Sumarlas daría un número que no significa nada, así que los totales van en blanco. Cada campaña sí muestra su propia moneda.</div></div>';
+  }
+
+  html += '<div class="pauta-kpis">' +
+    kpi('Inversión', d.moneda_mixta ? '—' : pautaPlata(t.inversion, m), 'en ' + d.campanas.length + (d.campanas.length === 1 ? ' campaña' : ' campañas')) +
+    kpi('Leads en el CRM', pautaNum(t.leads), 'de ' + pautaNum(Math.round(t.conv_plataforma)) + ' que reporta la red', true) +
+    kpi('CPL real', pautaPlata(t.cpl_real, m), 'sobre los que sí entraron', true) +
+    kpi('En proceso', pautaNum(t.en_proceso), 'sin cerrar todavía') +
+    kpi('Ganados', '<span style="color:var(--success)">' + pautaNum(t.ganados) + '</span>',
+        t.leads ? (Math.round(t.ganados / t.leads * 1000) / 10) + '% de los leads' : 'sin leads aún') +
+    kpi('Ingresos', pautaPlata(t.ingresos, m), 'valor de lo ganado') +
+  '</div>';
+
+  // Lo que no se puede atribuir se dice, no se reparte: un CPL inventado se ve
+  // igual de bien que uno real y sobre él se deciden presupuestos.
+  if (d.sin_campana.leads) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 16) +
+      '<div style="flex:1"><b>' + d.sin_campana.leads + (d.sin_campana.leads === 1 ? ' lead no está' : ' leads no están') + ' contados arriba</b> — entraron sin el dato de campaña, o por una fuente que no lo manda. ' +
+      'Las cifras de esta pantalla solo hablan de los leads que sí traen campaña.</div>' +
+      '<button class="btn-ghost" onclick="pautaDetalle(\'sin-campana\')">Ver esos ' + d.sin_campana.leads + '</button></div>';
+  }
+
+  const fila = (x) =>
+    '<tr onclick="pautaDetalle(' + JSON.stringify(x.id || x.nombre).replace(/"/g, '&quot;') + ')" tabindex="0" class="pauta-fila">' +
+      '<td class="pauta-td"><div class="pauta-camp">' + pautaRedChip(x.red) +
+        '<span class="pauta-camp-n">' + esc(x.nombre) + '</span></div></td>' +
+      '<td class="pauta-td">' + pautaEstadoChip(x.estado) + '</td>' +
+      '<td class="pauta-td num">' + pautaPlata(x.inversion, x.moneda || m) + '</td>' +
+      '<td class="pauta-td num" style="color:var(--muted)" title="' +
+        (x.red === 'google' ? 'Google reporta conversiones, no leads del formulario' : 'Leads del formulario que reporta Meta') + '">' +
+        pautaNum(Math.round(x.conv)) + '</td>' +
+      '<td class="pauta-td crm num" style="font-weight:700">' + pautaNum(x.crm.leads) + '</td>' +
+      '<td class="pauta-td crm num">' + pautaNum(x.crm.en_proceso) + '</td>' +
+      '<td class="pauta-td crm num"' + (x.crm.ganados ? ' style="font-weight:700;color:var(--success)"' : ' style="color:var(--muted2)"') + '>' + pautaNum(x.crm.ganados) + '</td>' +
+      '<td class="pauta-td crm num">' + (x.crm.ingresos ? pautaPlata(x.crm.ingresos, x.moneda || m) : '<span style="color:var(--muted2)">—</span>') + '</td>' +
+      '<td class="pauta-td crm num">' + (x.cpl_real === null ? '<span style="color:var(--muted2)">no calculable</span>' : pautaPlata(x.cpl_real, x.moneda || m)) + '</td>' +
+    '</tr>';
+
+  const filaSin = d.sin_campana.leads ?
+    '<tr onclick="pautaDetalle(\'sin-campana\')" tabindex="0" class="pauta-fila">' +
+      '<td class="pauta-td"><div class="pauta-camp">' + pautaRedChip(null) +
+        '<span style="font-style:italic;color:var(--muted)">Sin campaña identificada</span></div></td>' +
+      '<td class="pauta-td" style="color:var(--muted2)">—</td>' +
+      '<td class="pauta-td num" style="color:var(--muted2)">—</td>' +
+      '<td class="pauta-td num" style="color:var(--muted2)">—</td>' +
+      '<td class="pauta-td crm num" style="font-weight:700;color:var(--muted)">' + d.sin_campana.leads + '</td>' +
+      '<td class="pauta-td crm num" style="color:var(--muted)">' + d.sin_campana.en_proceso + '</td>' +
+      '<td class="pauta-td crm num" style="color:var(--muted2)">' + d.sin_campana.ganados + '</td>' +
+      '<td class="pauta-td crm num" style="color:var(--muted2)">—</td>' +
+      '<td class="pauta-td crm num" style="color:var(--muted2)">no calculable</td>' +
+    '</tr>' : '';
+
+  html += '<div class="pauta-tabla-caja">' +
+    '<table class="pauta-tabla">' +
+      '<thead>' +
+        '<tr><th colspan="4" class="pauta-grupo">En la plataforma</th>' +
+            '<th colspan="5" class="pauta-grupo crm">En tu CRM</th></tr>' +
+        '<tr>' +
+          '<th class="pauta-th">Campaña</th>' +
+          '<th class="pauta-th">Estado</th>' +
+          '<th class="pauta-th num">Inversión</th>' +
+          '<th class="pauta-th num">Conv.</th>' +
+          '<th class="pauta-th crm num">Leads</th>' +
+          '<th class="pauta-th crm num">En proceso</th>' +
+          '<th class="pauta-th crm num">Ganados</th>' +
+          '<th class="pauta-th crm num">Ingresos</th>' +
+          '<th class="pauta-th crm num">CPL real</th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' + d.campanas.map(fila).join('') + filaSin +
+        '<tr class="pauta-total">' +
+          '<td class="pauta-td">Total</td><td class="pauta-td"></td>' +
+          '<td class="pauta-td num">' + (d.moneda_mixta ? '—' : pautaPlata(t.inversion, m)) + '</td>' +
+          '<td class="pauta-td num">' + pautaNum(Math.round(t.conv_plataforma)) + '</td>' +
+          '<td class="pauta-td crm num">' + pautaNum(t.leads) + '</td>' +
+          '<td class="pauta-td crm num">' + pautaNum(t.en_proceso) + '</td>' +
+          '<td class="pauta-td crm num" style="color:var(--success)">' + pautaNum(t.ganados) + '</td>' +
+          '<td class="pauta-td crm num">' + pautaPlata(t.ingresos, m) + '</td>' +
+          '<td class="pauta-td crm num">' + pautaPlata(t.cpl_real, m) + '</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>' +
+    '<div class="pauta-pie">' + icn('chart', 13) +
+      ' Clic en una campaña para ver sus leads uno por uno y en qué etapa quedó cada uno.</div>' +
+  '</div>';
+
+  if (!d.campanas.length && !d.sin_campana.leads) {
+    html = (rotos.length ? html.split('<div class="pauta-kpis">')[0] : '') +
+      emptyAgua('trend', 'No hubo campañas en este período',
+        'Tus cuentas están conectadas, pero no registraron inversión en los últimos ' + pautaDias + ' días. Prueba con un rango más amplio.', '');
+  }
+
+  c.innerHTML = html;
+}
+
+function pautaPintarConexiones(d) {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  const cliente = crmAmbitoCliente();
+  const porRed = {};
+  (d.conexiones || []).forEach(x => { porRed[x.red] = x; });
+
+  const tarjeta = (red, titulo, sub, cuerpo, pie) =>
+    '<div class="pauta-conx' + (red === 'meta' && !porRed.meta ? ' ojo' : (porRed[red] ? ' viva' : '')) + '">' +
+      '<div class="pauta-conx-top">' +
+        '<div class="pauta-conx-logo ' + red + '">' + (red === 'google' ? 'G' : red === 'meta' ? 'M' : red === 'tiktok' ? 'T' : 'in') + '</div>' +
+        '<div style="flex:1;min-width:0"><div class="pauta-conx-t">' + titulo + '</div>' +
+        '<div class="pauta-conx-s">' + sub + '</div></div>' +
+      '</div>' + cuerpo + (pie || '') +
+    '</div>';
+
+  const viva = (x, nombreRed) => tarjeta(x.red, nombreRed +
+      (x.error ? ' <span class="pauta-pill pauta-pill-mal">Permiso caducado</span>'
+               : ' <span class="pauta-pill pauta-pill-ok">Conectada</span>'),
+    esc(x.cuenta || x.account_id || ''),
+    // Aquí NO va el número de leads: el que tenemos es el de toda la cuenta, y
+    // con dos redes conectadas ambas tarjetas dirían la misma cifra como si
+    // cada una la hubiera traído. Los leads por red están en Campañas.
+    '<div class="pauta-conx-cifras una">' +
+      '<div><b>' + x.campanas + '</b><span>campañas con inversión en el período</span></div>' +
+    '</div>' +
+    (x.error ? '<div class="pauta-conx-nota mal">' + esc(x.error) + '</div>' : ''),
+    '<div class="pauta-conx-btns">' +
+      '<button class="btn-ghost" onclick="' + (x.red === 'google' ? 'connectGoogleAds()' : 'connectMetaAds()') + '">Volver a conectar</button>' +
+    '</div>');
+
+  let html = '';
+
+  if (cliente) {
+    html += '<div class="pauta-aviso">' + icn('users', 15) +
+      '<div style="flex:1">Estás viendo las conexiones de este cliente. Cada cliente tiene las suyas: cambia de cliente arriba para conectar otro.</div></div>';
+  }
+
+  html += '<div class="pauta-conxs">';
+
+  html += porRed.google ? viva(porRed.google, 'Google Ads') : tarjeta('google', 'Google Ads',
+    'Búsqueda, PMax y Display · campañas y conversiones',
+    '<div class="pauta-conx-nota">Al conectarla leemos tus campañas en <b>solo lectura</b>. Acuarius nunca pausa ni cambia nada en tu cuenta.</div>',
+    '<div class="pauta-conx-btns"><button class="btn-pri" onclick="connectGoogleAds()">Conectar Google Ads</button></div>');
+
+  // Meta se cuenta de frente. Ni se esconde la tarjeta ni se deja pareciendo
+  // rota: quien la mire tiene que saber que la revisión es de Meta, que no es
+  // culpa suya y que sus leads sí siguen entrando.
+  html += porRed.meta ? viva(porRed.meta, 'Meta Ads') : tarjeta('meta',
+    'Meta Ads <span class="pauta-pill pauta-pill-ojo">En revisión de Meta</span>',
+    'Facebook e Instagram · campañas y leads',
+    '<div class="pauta-conx-nota ojo">' +
+      '<b>Todavía no puedes conectar tu cuenta de Meta.</b><br>' +
+      'Meta exige revisar la aplicación antes de dar acceso a cuentas que no sean la nuestra. La solicitud está enviada. ' +
+      'No es un problema de tu cuenta ni algo que puedas arreglar tú — te avisamos el día que se abra.' +
+    '</div>' +
+    '<div class="pauta-conx-nota">' + icn('check', 13) + ' Mientras tanto, los leads de tus formularios de Meta <b>sí entran</b> al CRM por el webhook.</div>',
+    '<div class="pauta-conx-btns"><button class="btn-ghost" disabled style="opacity:.55;cursor:not-allowed">Conectar Meta Ads</button></div>');
+
+  ['tiktok', 'linkedin'].forEach(r => {
+    html += tarjeta(r, r === 'tiktok' ? 'TikTok Ads' : 'LinkedIn Ads',
+      'Listo para conectar en cuanto lo pida un cliente',
+      '', '<div class="pauta-conx-btns"><button class="btn-ghost" onclick="showToast(\'Escríbenos por soporte y lo activamos para tu cuenta\',\'info\')">Conectar</button></div>');
+  });
+
+  html += '</div>';
+
+  html += '<div class="pauta-pasos">' +
+    '<div class="pauta-pasos-t">Qué pasa cuando conectas una cuenta</div>' +
+    '<div class="pauta-pasos-g">' +
+      ['<b>Autorizas con tu cuenta</b>OAuth, sin guardar contraseñas. Eliges qué cuenta publicitaria y a qué cliente pertenece.',
+       '<b>Leemos tus campañas</b>Solo lectura: inversión, impresiones, clics y conversiones. Acuarius no toca nada de tu cuenta.',
+       '<b>Cada lead recuerda de dónde vino</b>Campaña, conjunto y anuncio quedan en su ficha, con el id. Así sabes qué pasó con los leads de cada campaña, no solo cuántos llegaron.']
+      .map((t, i) => {
+        const p = t.split('</b>');
+        return '<div class="pauta-paso"><div class="pauta-paso-n">' + (i + 1) + '</div><div>' +
+          '<div class="pauta-paso-t">' + p[0].replace('<b>', '') + '</div>' +
+          '<div class="pauta-paso-d">' + p[1] + '</div></div></div>';
+      }).join('') +
+    '</div></div>';
+
+  c.innerHTML = html;
+}
+
+function pautaPintarCartera(d) {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  if (!d.clientes || !d.clientes.length) {
+    c.innerHTML = emptyAgua('users', 'Ningún cliente tiene pauta conectada todavía',
+      'Entra a un cliente y conecta su cuenta de Google Ads o Meta. Aquí verás la cartera entera de un vistazo.', '');
+    return;
+  }
+
+  const fila = (x) =>
+    '<tr class="pauta-fila" onclick="pautaEntrarCliente(' + JSON.stringify(x.client_id) + ')" tabindex="0">' +
+      '<td class="pauta-td"><b>' + esc(x.cliente) + '</b></td>' +
+      '<td class="pauta-td">' + (x.redes.length ? x.redes.map(pautaRedChip).join(' ') : '<span style="color:var(--muted2)">sin conectar</span>') + '</td>' +
+      // Con un permiso caducado la celda va en BLANCO, nunca en cero: un cero
+      // diría que la campaña no gastó, y eso sería una afirmación falsa.
+      '<td class="pauta-td num">' + (x.inversion === null ? '<span style="color:var(--muted2)">—</span>' : pautaPlata(x.inversion, x.moneda)) + '</td>' +
+      '<td class="pauta-td num" style="font-weight:700">' + pautaNum(x.leads) + '</td>' +
+      '<td class="pauta-td num">' + (x.cpl_real === null ? '<span style="color:var(--muted2)">—</span>' : pautaPlata(x.cpl_real, x.moneda)) + '</td>' +
+      '<td class="pauta-td num">' + pautaNum(x.en_proceso) + '</td>' +
+      '<td class="pauta-td num"' + (x.ganados ? ' style="font-weight:700;color:var(--success)"' : ' style="color:var(--muted2)"') + '>' + pautaNum(x.ganados) + '</td>' +
+      '<td class="pauta-td">' + (x.errores.length
+        ? '<span class="pauta-pill pauta-pill-mal">Permiso caducado</span>'
+        : '<span class="pauta-pill pauta-pill-ok">Al día</span>') + '</td>' +
+    '</tr>';
+
+  c.innerHTML =
+    '<div class="pauta-tabla-caja">' +
+      '<table class="pauta-tabla">' +
+        '<thead><tr>' +
+          '<th class="pauta-th">Cliente</th><th class="pauta-th">Cuentas</th>' +
+          '<th class="pauta-th num">Inversión</th><th class="pauta-th num">Leads</th>' +
+          '<th class="pauta-th num">CPL real</th><th class="pauta-th num">En proceso</th>' +
+          '<th class="pauta-th num">Ganados</th><th class="pauta-th">Estado</th>' +
+        '</tr></thead>' +
+        '<tbody>' + d.clientes.map(fila).join('') + '</tbody>' +
+      '</table>' +
+      '<div class="pauta-pie">' + icn('alert', 13) +
+        ' Un permiso caducado deja la columna en blanco, nunca en cero: un cero diría que la campaña no gastó.</div>' +
+    '</div>';
+}
+
+// Entrar a un cliente desde la cartera reutiliza la misma puerta que el panel
+// de clientes: así el contexto queda igual que si se hubiera entrado por allí,
+// y el resto del CRM lo ve como cualquier otra entrada.
+function pautaEntrarCliente(id) {
+  if (!id) return;
+  const c = (typeof agencyClients !== 'undefined' ? agencyClients : []).find(x => x.id === id);
+  if (!c) { showToast('Entra a ese cliente desde el panel de clientes', 'info'); return; }
+  openLeadsForClient(c);
+  setTimeout(() => crmSetView('pauta'), 160);
+}
+
+// ── El detalle: qué pasó con los leads de UNA campaña ───────────────────────
+async function pautaDetalle(clave) {
+  document.getElementById('pauta-panel')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'pauta-panel';
+  wrap.className = 'pauta-panel-bg';
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+  wrap.innerHTML = '<div class="pauta-panel"><div class="pauta-cargando">' + icn('refresh', 15) + ' Buscando sus leads…</div></div>';
+  document.body.appendChild(wrap);
+
+  const hasta = new Date();
+  const desde = new Date(hasta.getTime() - (pautaDias - 1) * 86400000);
+  const f = (x) => x.toISOString().slice(0, 10);
+  let qs = 'campana=' + encodeURIComponent(clave) + '&desde=' + f(desde) + '&hasta=' + f(hasta);
+  const cliente = crmAmbitoCliente();
+  if (cliente) qs += '&client_id=' + encodeURIComponent(cliente);
+
+  let d;
+  try {
+    const r = await fetchAuth('/api/pauta?' + qs);
+    d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo abrir la campaña');
+  } catch (e) {
+    wrap.querySelector('.pauta-panel').innerHTML =
+      '<div class="pauta-aviso pauta-aviso-mal" style="margin:22px">' + icn('alert', 16) +
+      '<div style="flex:1">' + esc(e.message) + '</div>' +
+      '<button class="btn-ghost" onclick="document.getElementById(\'pauta-panel\').remove()">Cerrar</button></div>';
+    return;
+  }
+
+  const m = d.campana.moneda;
+  const cn = d.crm;
+  const sinCampana = d.campana.id === 'sin-campana';
+
+  const cifra = (v, e) => '<div><div class="pauta-cif">' + v + '</div><div class="pauta-cif-e">' + e + '</div></div>';
+
+  wrap.querySelector('.pauta-panel').innerHTML =
+    '<div class="pauta-panel-top">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          pautaRedChip(d.campana.red) + pautaEstadoChip(d.campana.estado) +
+          (d.campana.id && !sinCampana ? '<span style="font-size:11.5px;color:var(--muted2)">id ' + esc(d.campana.id) + '</span>' : '') +
+        '</div>' +
+        '<h3 class="pauta-panel-h">' + esc(d.campana.nombre) + '</h3>' +
+        '<div class="pauta-panel-s">Del ' + pautaFecha(d.desde) + ' al ' + pautaFecha(d.hasta) + '</div>' +
+      '</div>' +
+      '<button class="pauta-x" onclick="document.getElementById(\'pauta-panel\').remove()" aria-label="Cerrar">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+      '</button>' +
+    '</div>' +
+
+    '<div class="pauta-panel-cuerpo">' +
+
+      (sinCampana ? '' :
+      '<div class="pauta-dos">' +
+        '<div class="pauta-caja"><div class="pauta-caja-t">Lo que dice la red</div>' +
+          '<div class="pauta-cifs">' +
+            cifra(pautaPlata(d.campana.inversion, m), 'Inversión') +
+            cifra(pautaNum(d.campana.impresiones), 'Impresiones') +
+            cifra(pautaNum(d.campana.clics), 'Clics') +
+            cifra(pautaNum(Math.round(d.campana.conv)), d.campana.red === 'google' ? 'Conversiones' : 'Leads del form') +
+          '</div></div>' +
+        '<div class="pauta-caja crm"><div class="pauta-caja-t crm">Lo que dice tu CRM</div>' +
+          '<div class="pauta-cifs">' +
+            cifra(pautaNum(cn.leads), 'Entraron') +
+            cifra(pautaPlata(d.cpl_real, m), 'CPL real') +
+            cifra(pautaNum(cn.en_proceso), 'En proceso') +
+            cifra('<span style="color:var(--success)">' + pautaNum(cn.ganados) + '</span>', 'Ganados') +
+          '</div></div>' +
+      '</div>' +
+      // El descuadre entre la red y el CRM es información, no un error que
+      // haya que esconder: casi siempre son duplicados que se fundieron.
+      (Math.round(d.campana.conv) > cn.leads && d.campana.conv ?
+        '<div class="pauta-aviso">' + icn('alert', 15) + '<div style="flex:1"><b>La red reporta ' +
+        pautaNum(Math.round(d.campana.conv)) + ' y en el CRM hay ' + cn.leads + '.</b> ' +
+        'La diferencia suele ser gente que ya estaba en tu base: al repetirse el teléfono o el correo, se suma a su ficha en vez de crear una nueva.</div></div>' : '')) +
+
+      '<div class="pauta-dos-b">' +
+
+        '<div class="pauta-caja">' +
+          '<div class="pauta-caja-t">' + (cn.leads === 1 ? 'Qué pasó con él' : 'Qué pasó con los ' + cn.leads) + '</div>' +
+          (d.embudo.length ? '<div class="pauta-embudo">' + d.embudo.map(e => {
+            // Ganado y perdido llevan su propio color: con el degradado de la
+            // marca en todas, una etapa de fracaso se lee como un logro.
+            const t = ['ganado', 'won'].includes(e.key) ? ' bien'
+                    : ['perdido', 'lost', 'descartado'].includes(e.key) ? ' mal' : '';
+            return '<div><div class="pauta-emb-l' + t + '"><span>' + esc(e.etiqueta) + '</span>' +
+            '<b>' + e.n + '</b><i>' + e.pct + '%</i></div>' +
+            '<div class="pauta-emb-b"><div class="' + t.trim() + '" style="width:' + e.pct + '%"></div></div></div>';
+          }).join('') + '</div>'
+            : '<div class="pauta-vacio">Sin leads en este período.</div>') +
+          (d.motivos.length ? '<div class="pauta-motivos"><div class="pauta-motivos-t">Por qué se perdieron</div>' +
+            d.motivos.map(x => '<div class="pauta-motivo"><span>' + esc(x.motivo) + '</span><b>' + x.n + '</b></div>').join('') +
+            '</div>' : '') +
+        '</div>' +
+
+        '<div class="pauta-caja">' +
+          '<div class="pauta-caja-t">Dentro de la campaña</div>' +
+          (d.desglose.length ?
+            '<table class="pauta-tabla chica"><thead><tr>' +
+              '<th class="pauta-th">Conjunto · anuncio</th>' +
+              '<th class="pauta-th num">Leads</th>' +
+              '<th class="pauta-th num">Avanzaron</th>' +
+            '</tr></thead><tbody>' +
+            d.desglose.map(x => '<tr><td class="pauta-td">' + esc(x.etiqueta) + '</td>' +
+              '<td class="pauta-td num">' + x.leads + '</td>' +
+              '<td class="pauta-td num" style="font-weight:700">' + x.avanzados + '</td></tr>').join('') +
+            '</tbody></table>'
+            : '<div class="pauta-vacio">Estos leads no traen conjunto ni anuncio guardados.</div>') +
+        '</div>' +
+
+      '</div>' +
+
+      '<div class="pauta-caja">' +
+        '<div class="pauta-caja-t">' + (d.leads.length === 1 ? 'El único lead' : 'Los ' + d.leads.length + ' leads') + ' de esta campaña ' +
+          '<span style="font-weight:400;color:var(--muted2)">· ordenados por días sin tocar</span></div>' +
+        (d.leads.length ?
+        '<table class="pauta-tabla chica"><thead><tr>' +
+          '<th class="pauta-th">Lead</th><th class="pauta-th">Etapa</th>' +
+          '<th class="pauta-th">Responsable</th><th class="pauta-th">Conjunto</th>' +
+          '<th class="pauta-th num">Sin tocar</th>' +
+        '</tr></thead><tbody>' +
+        d.leads.slice(0, 60).map(l =>
+          '<tr><td class="pauta-td"><a href="#" onclick="event.preventDefault();document.getElementById(\'pauta-panel\').remove();crmOpenDetail(' +
+            JSON.stringify(l.id) + ')" style="font-weight:600;color:var(--text);text-decoration:none">' + esc(l.nombre || 'Sin nombre') + '</a></td>' +
+          '<td class="pauta-td">' + esc(l.etapa_etiqueta || l.etapa || '—') + '</td>' +
+          '<td class="pauta-td" style="color:var(--muted)">' + esc(l.responsable || 'Sin asignar') + '</td>' +
+          '<td class="pauta-td" style="color:var(--muted)">' + esc(l.conjunto || '—') + '</td>' +
+          '<td class="pauta-td num">' + (l.cerrado ? '<span style="color:var(--muted2)">cerrado</span>'
+            : '<b' + (l.dias_sin_tocar >= 7 ? ' style="color:var(--danger)"' : '') + '>' + l.dias_sin_tocar + ' días</b>') + '</td></tr>').join('') +
+        '</tbody></table>' +
+        (d.leads.length > 60 ? '<div class="pauta-pie">Mostrando 60 de ' + d.leads.length + '.</div>' : '')
+        : '<div class="pauta-vacio">Ningún lead cayó en esta campaña dentro del período.</div>') +
+      '</div>' +
+
+    '</div>';
+}
+
+// La vista se cuelga al final, como la de Páginas: sin tocar crmSetView.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const pv = document.getElementById('crm-pauta-view');
+    if (pv) pv.style.display = v === 'pauta' ? 'flex' : 'none';
+    document.getElementById('crm-btn-pauta')?.classList.toggle('active', v === 'pauta');
+    if (v === 'pauta') pautaRender();
+  };
+  if (typeof NAV_TABS !== 'undefined' && NAV_TABS.marketing && !NAV_TABS.marketing.includes('pauta')) {
+    // Va primero: es la pantalla que se abre para saber si la pauta funciona.
+    NAV_TABS.marketing.unshift('pauta');
+    NAV_TAB2MOD.pauta = 'marketing';
+    NAV_TAB_LABELS.pauta = 'Plataformas de pauta';
+    if (!NAV_ALL_TABS.includes('pauta')) NAV_ALL_TABS.push('pauta');
+  }
 })();
