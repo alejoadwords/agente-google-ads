@@ -2,6 +2,13 @@ export const config = { runtime: 'edge' };
 
 import { enviarPushA } from './_push.js';
 import { soloSusLeads } from './_perfiles.js';
+import { traerTodo } from './_paginado.js';
+
+// Cuántos contactos puede traer el tablero de una vez. Es holgado para
+// cualquier cuenta de hoy —la mayor tiene 185— y existe para que la función no
+// intente cargar en memoria una base que no cabe. Si se toca, tocar también el
+// aviso de public/app.js: el número aparece en pantalla.
+const TECHO_TABLERO = 20000;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -431,9 +438,12 @@ export default async function handler(req) {
     let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}${filtroMios}&select=*&order=stage_position.asc,created_at.desc`;
     if (pipelineId) query += `&pipeline_id=eq.${encodeURIComponent(pipelineId)}`;
     if (stage) query += `&stage=eq.${encodeURIComponent(stage)}`;
-    const res = await fetch(query, { headers: sbHeaders() });
-    const rows = await res.json();
-    return jsonResp({ leads: rows || [], actor_id: actorId, es_miembro: esMiembro, solo_mios: soloLosMios });
+    // Esta consulta no tenía límite y PostgREST devolvía mil filas calladamente:
+    // una cuenta con 3.000 contactos veía 1.000 y creía que esos eran todos.
+    // Ahora se traen todos hasta el techo, y si se llega al techo se avisa.
+    const { filas, truncado } = await traerTodo(query, sbHeaders(), { techo: TECHO_TABLERO });
+    return jsonResp({ leads: filas || [], actor_id: actorId, es_miembro: esMiembro, solo_mios: soloLosMios,
+                      truncado, techo: TECHO_TABLERO });
   }
 
   // GET single lead

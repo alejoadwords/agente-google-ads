@@ -1,572 +1,565 @@
 {
-  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
-  "novedades": [
-    {
-      "id": "2026-09-16-soporte-en-la-cabecera",
-      "fecha": "2026-09-16",
-      "tipo": "mejora",
-      "titulo": "La ayuda se mudó a la barra de arriba",
-      "texto": "El botón de soporte flotaba en la esquina de abajo a la derecha, que es justo donde cada pantalla pone su botón principal: enviar un mensaje en Conversaciones, eliminar desde la ficha de un lead. Se solapaban. Ahora vive arriba, junto a la campana y la Academia, en el computador y en el celular. Es el mismo soporte de siempre y tus conversaciones abiertas siguen ahí."
-    },
-    {
-      "id": "2026-09-16-burbuja-soporte-esquiva",
-      "fecha": "2026-09-16",
-      "tipo": "arreglo",
-      "titulo": "El botón de ayuda ya no se te pone encima de los botones",
-      "texto": "La burbuja de soporte vive en la esquina de abajo a la derecha, que es justo donde varias pantallas ponen su botón principal: enviar un mensaje en Conversaciones, o eliminar desde la ficha de un lead. Se solapaban. Ahora la burbuja mira qué hay debajo y sube sola lo justo para dejarlo libre, y vuelve a su sitio cuando cierras el panel. No tienes que hacer nada."
-    },
-    {
-      "id": "2026-09-15-conector-reglas-destino",
-      "fecha": "2026-09-15",
-      "tipo": "nuevo",
-      "titulo": "Un solo formulario en tu web, varios tableros en Acuarius",
-      "texto": "Si tu web repite el mismo formulario en todas sus páginas y dentro le preguntas al visitante qué quiere —comprar o arrendar, un servicio u otro—, ahora Acuarius puede repartir según esa respuesta. En Fuentes de leads, al editar una conexión, marca «El mismo formulario alimenta varios tableros»: dices qué campo decide y, para cada respuesta, a qué tablero va, quién lo atiende y con qué etiqueta. Cada rama lleva su propio turno de reparto, así que arriendo y venta pueden repartirse entre personas distintas. Lo que no coincida cae en el tablero por defecto con la etiqueta que elijas.",
-      "accion": {
-        "texto": "Ir a Fuentes de leads",
-        "ir": "fuentes"
-      }
-    },
-    {
-      "id": "2026-09-15-conector-webhook",
-      "fecha": "2026-09-15",
-      "tipo": "mejora",
-      "titulo": "Conectar tu formulario por webhook, sin script",
-      "texto": "Elementor, WPForms y casi todos los constructores traen una acción de Webhook. En «Ver código» de cada conexión ahora te damos también esa dirección: los envíos entran desde el servidor de tu web, no desde el navegador, así que no se pierden y no se cuelan los que tu propio formulario rechaza por spam. Además ya entendemos el formato de Elementor, que manda los campos como form_fields[correo] — antes esos envíos llegaban sin datos de contacto y se rechazaban. Usa el script o el webhook, no los dos, o cada envío entraría dos veces."
-    },
-    {
-      "id": "2026-09-15-ventas-solo-sus-leads",
-      "fecha": "2026-09-15",
-      "tipo": "mejora",
-      "titulo": "El perfil de Ventas ve en el tablero solo los leads que le asignaron",
-      "texto": "Hasta ayer, un perfil de Ventas veía en el pipeline todos los leads de la cuenta aunque solo pudiera gestionar los suyos. Ya no: ve únicamente los que tienen su nombre, y lo mismo en su agenda, en el historial de cada lead y en el copiloto. Quien entra nuevo empieza con el tablero vacío hasta que le repartan su cartera, y por eso se lo decimos en pantalla en vez de dejarlo en blanco. Los perfiles de Administrador y Mercadeo siguen viendo la cuenta completa. Si eres administrador, reparte desde el tablero o activa el reparto automático en Configuración → Equipo.",
-      "accion": {
-        "texto": "Ver mi equipo",
-        "ir": "ajustes-equipo"
-      }
-    },
-    {
-      "id": "2026-09-14-seguridad-anuncios",
-      "fecha": "2026-09-14",
-      "tipo": "arreglo",
-      "titulo": "Los datos de tus cuentas publicitarias ahora exigen tu sesión",
-      "texto": "Las pantallas de Google Ads y Meta Ads identificaban la cuenta por un dato que viajaba en la dirección, sin comprobar quién estaba preguntando. Lo corregimos: ahora la cuenta se toma de tu sesión iniciada y ese dato de la dirección se ignora. No tienes que hacer nada y nada cambia en lo que ves. Si algún panel de anuncios no carga, cierra sesión y vuelve a entrar."
-    },
-    {
-      "id": "2026-09-14-perfiles-menu",
-      "fecha": "2026-09-14",
-      "tipo": "mejora",
-      "titulo": "Cada quien ve solo lo suyo: el menú se adapta al perfil",
-      "texto": "Quien tiene perfil de Ventas ya no ve las secciones de Marketing ni los agentes: su menú queda con CRM, Conversaciones y Análisis. Mercadeo ve todo eso más Marketing y los agentes, pero no la pestaña de Equipo. Y en los informes, un perfil de Ventas cuenta solo su propia gestión —sus leads y sus tareas—, no la de sus compañeros. En el tablero sigue viendo todos los leads de la cuenta, como siempre; lo que cambia es de quién son los números.",
-      "accion": {
-        "texto": "Ver mi equipo",
-        "ir": "ajustes-equipo"
-      }
-    },
-    {
-      "id": "2026-09-14-plan-del-dueno",
-      "fecha": "2026-09-14",
-      "tipo": "arreglo",
-      "titulo": "Tu equipo ve la aplicación como tu cuenta, no como la suya",
-      "texto": "Quien entraba invitado veía la aplicación según SU plan —normalmente el de prueba— y no según el de la cuenta en la que trabaja. Por eso no le salía el selector de cliente que ve el dueño y podía toparse con límites que no son los de esa cuenta. Ahora el plan que manda es el del dueño: tu equipo ve el mismo selector, los mismos clientes y los mismos topes que tú. Y a un invitado ya no se le arranca una prueba propia que no necesita.",
-      "accion": {
-        "texto": "Ver mi equipo",
-        "ir": "ajustes-equipo"
-      }
-    },
-    {
-      "id": "2026-09-14-invitacion-por-correo",
-      "fecha": "2026-09-14",
-      "tipo": "arreglo",
-      "titulo": "Quien se registra con el correo invitado entra a tu equipo, aunque no use el enlace",
-      "texto": "El correo de invitación decía que bastaba con crear la cuenta usando ese mismo email, pero no era así: si la persona se registraba por su cuenta en vez de tocar el enlace, terminaba con una cuenta suelta y vacía, y su invitación se quedaba en «Invitado» para siempre. Ahora, al entrar, la invitación se aplica sola. Solo funciona con el correo verificado, para que nadie pueda entrar a tu equipo registrándose con el correo de otra persona.",
-      "accion": {
-        "texto": "Ver mi equipo",
-        "ir": "ajustes-equipo"
-      }
-    },
-    {
-      "id": "2026-09-14-marketing-del-equipo",
-      "fecha": "2026-09-14",
-      "tipo": "arreglo",
-      "titulo": "Tu equipo ya ve las campañas, automatizaciones y páginas de la cuenta",
-      "texto": "Quien entraba invitado veía Campañas, Automatizaciones y Páginas vacías: la aplicación le mostraba su propia cuenta en vez de la tuya. Ya no. Además, ahora el perfil manda: quien tiene Marketing puede crear y editar, y quien no lo tiene puede seguir viendo los reportes de Análisis pero no toca nada. De paso, el cupo de correos de una campaña se lee del plan del dueño de la cuenta, no del de quien la envía.",
-      "accion": {
-        "texto": "Ver mi equipo",
-        "ir": "ajustes-equipo"
-      }
-    },
-    {
-      "id": "2026-09-14-perfiles-de-acceso",
-      "fecha": "2026-09-14",
-      "tipo": "nuevo",
-      "titulo": "Perfiles de acceso: elige qué ve cada persona de tu equipo",
-      "texto": "Al invitar a alguien ahora eliges su perfil: Administrador ve y hace todo, incluido invitar y cambiar perfiles; Mercadeo entra a CRM, Marketing, Conversaciones, Análisis y los agentes, pero no toca el equipo; y Ventas trabaja los leads y las conversaciones, sin Marketing ni agentes, y en los reportes solo ve su propia gestión. El perfil se cambia cuando quieras desde Configuración → Equipo, sin reenviar la invitación. A quien ya estaba en tu equipo le quedó el perfil de Ventas.",
-      "accion": {
-        "texto": "Ver mi equipo",
-        "ir": "ajustes-equipo"
-      }
-    },
-    {
-      "id": "2026-09-02-ya-la-hice",
-      "fecha": "2026-09-02",
-      "tipo": "nuevo",
-      "titulo": "«Ya la hice», directo desde el correo",
-      "texto": "El resumen diario de tareas ahora trae un enlace «Ya la hice» en cada una. Lo tocas desde el correo, confirmas en una pantalla y queda marcada, sin entrar a la aplicación ni buscar el lead. Si te equivocas, la misma pantalla te deja deshacerlo. Además, en la ficha del lead las tareas hechas se quedan a la vista, tildadas: si marcaste una por error, la destildas y vuelve a estar pendiente.",
-      "accion": {
-        "texto": "Ver mis tareas",
-        "ir": "tareas"
-      }
-    },
-    {
-      "id": "2026-09-02-tareas-en-la-ficha",
-      "fecha": "2026-09-02",
-      "tipo": "nuevo",
-      "titulo": "Marca la tarea como hecha desde la ficha del lead",
-      "texto": "Al abrir un lead ahora ves arriba sus tareas pendientes, con la vencida en rojo, y la marcas hecha con un toque. Antes solo se podía desde Tareas o desde la Agenda: si llamabas al cliente desde su ficha no tenías dónde apuntarlo, y al día siguiente la tarjeta te decía que ibas atrasado con algo que ya habías hecho. También puedes moverla a mañana. Si el lead lo lleva otro comercial ves sus tareas pero no las puedes tocar, igual que el resto de la ficha.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-09-01-limites-reales",
-      "fecha": "2026-09-01",
-      "tipo": "correccion",
-      "titulo": "Los planes ahora dicen exactamente lo que incluyen",
-      "texto": "La descripción de los planes estaba desactualizada: decía «imágenes ilimitadas» donde hay un tope, «10.000 correos al mes» cuando las campañas ya no tienen cupo, y no mencionaba los videos. Ya coincide con lo que la plataforma hace de verdad. También arreglamos los botones de «ver planes», que no llevaban a ninguna parte."
-    },
-    {
-      "id": "2026-09-01-aviso-nota-responsable",
-      "fecha": "2026-09-01",
-      "tipo": "arreglo",
-      "titulo": "Las notas de la dirección vuelven a avisarle al comercial",
-      "texto": "Cuando dejabas una «Nota al responsable» en un lead, la nota quedaba guardada pero el correo al comercial no salía: desde el 31 de agosto el aviso se estaba quedando por el camino. Ya vuelve a llegar. Además la campana se actualiza sola cada pocos minutos, así que si tu comercial tiene la app abierta toda la mañana, la nota que escribes ahora le aparece sin tener que recargar. Y si algún aviso no sale, ahora nos enteramos el mismo día en vez de esperar a que alguien lo reporte.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-09-01-avisarme-y-analitica",
-      "fecha": "2026-09-01",
-      "tipo": "correccion",
-      "titulo": "El botón «Avisarme cuando esté disponible» ya funciona",
-      "texto": "En la ventana de los agentes que aún no están listos, el botón para pedir aviso no llevaba a ninguna parte: el enlace estaba roto y quien lo pulsaba no nos avisaba de nada. Ya abre el correo como debía. De paso corregimos la analítica de la plataforma, que llevaba tiempo sin registrar visitas por una regla de rutas mal puesta."
-    },
-    {
-      "id": "2026-09-01-conexiones-al-abrir",
-      "fecha": "2026-09-01",
-      "tipo": "correccion",
-      "titulo": "Tus conexiones de Meta, Google y LinkedIn se cargan bien al abrir la app",
-      "texto": "Si tenías conectada una cuenta publicitaria, al abrir Acuarius la pantalla de Ajustes podía quedarse sin mostrarla hasta que entrabas y volvías a salir. Era un problema de orden de carga: la app intentaba pintar esas conexiones antes de que la pantalla existiera. Ya se espera a que esté lista."
-    },
-    {
-      "id": "2026-09-01-tareas-de-leads-cerrados",
-      "fecha": "2026-09-01",
-      "tipo": "arreglo",
-      "titulo": "Al cerrar un lead, sus tareas se cierran con él",
-      "texto": "Cuando marcabas un lead como ganado o perdido, sus tareas de seguimiento se quedaban abiertas para siempre: el comercial seguía viendo «llamar a este cliente» de alguien que ya había dicho que no, y la cuenta de tareas vencidas crecía sola sin que nadie pudiera hacer nada. Ahora esas tareas se anulan solas al cerrar el lead. Se anulan, no se marcan como hechas: nadie las hizo, y contarlas como completadas falsearía el reporte de productividad de tu equipo.",
-      "accion": {
-        "texto": "Ver mis tareas",
-        "ir": "tareas"
-      }
-    },
-    {
-      "id": "2026-09-01-duplicar-y-destino",
-      "fecha": "2026-09-01",
-      "tipo": "nuevo",
-      "titulo": "Duplicar una página y elegir a qué tablero entran sus leads",
-      "texto": "En la lista de páginas hay un botón «Duplicar»: crea una copia como borrador para probar otro titular u otra oferta. La copia nace con su propio formulario, así los leads de cada versión se pueden distinguir y se ve cuál convierte. Y dentro de Ajustes hay un grupo nuevo, «Dónde entran los leads», para elegir el cliente y el tablero al que llegan los contactos de esa página; si no eliges ninguno, entran al principal como siempre. Los formularios web también pueden ahora apuntar a un tablero concreto.",
-      "accion": {
-        "texto": "Ver mis páginas",
-        "ir": "paginas"
-      }
-    },
-    {
-      "id": "2026-09-01-errores-vigilados",
-      "fecha": "2026-09-01",
-      "tipo": "mejora",
-      "titulo": "Si algo falla, ahora nos enteramos nosotros primero",
-      "texto": "Hasta ahora, cuando algo se rompía dentro de Acuarius no había forma de saberlo hasta que alguien lo contaba. Ya no: los fallos quedan registrados —los del servidor y los que ocurren en tu pantalla— y se avisa al equipo en cuanto aparece uno nuevo. No cambia nada de lo que ves; cambia el tiempo que tardamos en arreglarlo."
-    },
-    {
-      "id": "2026-09-01-ajustes-pagina",
-      "fecha": "2026-09-01",
-      "tipo": "nuevo",
-      "titulo": "Ajustes de página: dirección, vista previa al compartir y medición",
-      "texto": "Dentro del constructor hay un botón «Ajustes». Ahí se cambia la dirección del enlace, se escribe la descripción y la imagen que verá quien reciba el enlace por WhatsApp —con una vista previa de cómo va a llegar la tarjeta—, se elige si tras enviar el formulario se muestra un mensaje o se va a una página de gracias, y se pega el píxel de Meta o el identificador de Google Analytics. El evento de lead se dispara solo al enviarse el formulario. Además, las páginas publicadas ahora se arman en el servidor: antes, al compartir el enlace llegaba una tarjeta vacía porque el robot de WhatsApp no ejecuta JavaScript.",
-      "accion": {
-        "texto": "Ver mis páginas",
-        "ir": "paginas"
-      }
-    },
-    {
-      "id": "2026-09-01-constructor-paginas",
-      "fecha": "2026-09-01",
-      "tipo": "mejora",
-      "titulo": "El constructor de páginas ahora tiene bloques y nuestra cara",
-      "texto": "Se pueden arrastrar secciones ya hechas al lienzo: portada, beneficios, formulario, testimonios, preguntas frecuentes, llamado a la acción, botón de WhatsApp y pie, más piezas sueltas como título, texto, imagen, botón o lista. Cada una llega con su diseño listo y se adapta al celular sola. El editor además cambió de aspecto: los colores, la tipografía y los botones son los de Acuarius, los dispositivos están en español y hay botones de deshacer y rehacer a la vista.",
-      "accion": {
-        "texto": "Ver mis páginas",
-        "ir": "paginas"
-      }
-    },
-    {
-      "id": "2026-09-01-seguimiento-programado",
-      "fecha": "2026-09-01",
-      "tipo": "arreglo",
-      "titulo": "Un lead con visita agendada ya no sale como «sin actividad»",
-      "texto": "El Pulso avisaba de leads abandonados que en realidad tenían una tarea programada para dentro de dos o tres días. Ahora, si un lead tiene una tarea pendiente para hoy o más adelante, no aparece como inactivo: ni en el Pulso, ni en el filtro «Sin actividad», ni en el aviso de su tarjeta, ni dispara las automatizaciones de reactivación. En la vista de lista esos leads se marcan como «Con seguimiento». Si la tarea ya venció, el aviso vuelve: ahí el lead sí necesita atención."
-    },
-    {
-      "id": "2026-08-31-paginas-aterrizaje",
-      "fecha": "2026-08-31",
-      "tipo": "nuevo",
-      "titulo": "Páginas de aterrizaje para tus anuncios",
-      "texto": "Nueva sección en Marketing → Páginas. Eliges uno de los tres diseños —captar con formulario, agendar una cita o entregar una guía—, cambias textos e imágenes con el mismo constructor visual de los correos, y publicas. Te queda un enlace listo para pegar en tu anuncio de Google o Meta, y quien llena el formulario entra directo a tu CRM: se deduplica contra tus contactos y dispara tus automatizaciones, igual que cualquier otro formulario. En la lista ves las visitas de cada página."
-    },
-    {
-      "id": "2026-08-31-avisos-push",
-      "fecha": "2026-08-31",
-      "tipo": "nuevo",
-      "titulo": "Avisos en el móvil cuando entra un lead",
-      "texto": "En Configuración → Notificaciones puedes activar los avisos de este dispositivo. Te llega uno cuando entra un lead nuevo asignado a ti y cuando la dirección te deja una nota en un lead, y al tocarlo se abre esa ficha directamente. Hay un botón de prueba para comprobar que llegan. En iPhone hay que añadir antes Acuarius a la pantalla de inicio: Apple no permite avisos desde el navegador. Los activas y desactivas por dispositivo, así que puedes tenerlos en el móvil y no en el portátil."
-    },
-    {
-      "id": "2026-08-31-app-instalable",
-      "fecha": "2026-08-31",
-      "tipo": "nuevo",
-      "titulo": "Acuarius se instala como app en el móvil y en el escritorio",
-      "texto": "Ya puedes añadir Acuarius a la pantalla de inicio y abrirla como una app: sin barra del navegador, con su icono y a pantalla completa. En Android y en el escritorio verás un aviso para instalarla con un toque; en iPhone se hace desde Compartir → Añadir a inicio, porque Apple no permite hacerlo automáticamente. Es el paso previo a los avisos de leads nuevos y tareas vencidas, que llegan pronto."
-    },
-    {
-      "id": "2026-08-31-tareas-de-la-ficha",
-      "fecha": "2026-08-31",
-      "tipo": "correccion",
-      "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
-      "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
-    },
-    {
-      "id": "2026-08-31-responder-correos",
-      "fecha": "2026-08-31",
-      "tipo": "correccion",
-      "titulo": "Ahora puedes responder a los correos que te enviamos",
-      "texto": "Los avisos de Acuarius salían desde un dominio que solo puede enviar, no recibir: si respondías a un aviso de lead, a una alerta o a un reporte, tu mensaje rebotaba y no llegaba a nadie. Ya no: todas las notificaciones llevan una dirección de respuesta real y contestarlas funciona. Los correos que la plataforma envía a TUS contactos no cambian: esas respuestas siguen siendo tuyas."
-    },
-    {
-      "id": "2026-08-28-firma-propuestas",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "Tus propuestas se firman, ya no solo se aceptan",
-      "texto": "El botón de la propuesta pasa a ser «Aceptar y firmar»: el cliente pone su nombre, su correo, opcionalmente su documento, y dibuja su firma con el dedo o el ratón. Queda guardada junto con la fecha, la IP desde la que firmó y una huella del contenido exacto que aceptó, así que si la propuesta se edita después se nota. Es una firma electrónica y tiene la misma validez que firmar a mano. A ti te llega un correo diciendo quién firmó y cuándo.",
-      "accion": {
-        "texto": "Ir a Propuestas",
-        "ir": "marketing"
-      }
-    },
-    {
-      "id": "2026-08-28-resenas-google",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "Pide reseñas de Google solo, cuando ganas un negocio",
-      "texto": "En CRM → Reseñas de Google pegas el enlace de tu ficha —uno por cliente si trabajas varios— y en el constructor de automatizaciones aparece un paso nuevo, «Pedir reseña», que se lo manda al cliente por correo o WhatsApp. Hay una plantilla lista: cuando un negocio pasa a Ganado, espera 48 horas y lo pide. El enlace que recibe el cliente es tuyo y lo lleva a Google, así que en su ficha queda registrado quién fue de verdad a dejar la reseña. Se pide una sola vez por lead.",
-      "accion": {
-        "texto": "Ir a Automatizaciones",
-        "ir": "marketing"
-      }
-    },
-    {
-      "id": "2026-08-28-enlaces-en-notas",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "Enlaces dentro de las notas del historial",
-      "texto": "Al registrar una nota, una llamada o cualquier actividad puedes convertir un texto concreto en enlace: selecciónalo, pulsa «Enlace» y pega la dirección. Así una nota como «se le recomendó la propiedad 121513436» lleva directo a la ficha de esa propiedad, en vez de dejar una URL larga en medio de la frase. Las direcciones que pegues sueltas también se vuelven clicables solas, y los enlaces viajan igual en el correo de las notas al responsable.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-28-proxima-tarea-tarjeta",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "Cada tarjeta del pipeline dice su cierre y su próxima tarea",
-      "texto": "Bajo el nombre del lead aparecen dos líneas: «Cierre: 14/08/26», la fecha esperada de cierre, y «Próxima tarea: 14/08/26», la tarea pendiente más cercana que tenga, la lleve quien la lleve. Las dos van etiquetadas y con el mismo formato para que no se confundan entre sí. Si alguna ya se pasó de fecha, sale en rojo y con un triángulo de alerta. Lo que no existe no se muestra, para no llenar el tablero de líneas vacías. La de tareas se actualiza sola al completar o aplazar una.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-28-cerrados-sin-seguimiento",
-      "fecha": "2026-08-28",
-      "tipo": "arreglo",
-      "titulo": "Los negocios cerrados dejan de pedir seguimiento",
-      "texto": "Un lead marcado como ganado o perdido seguía generando tareas de primer contacto en la vista de Tareas y en el resumen diario por correo: se recordaba llamar a clientes cuyo negocio se había cerrado semanas atrás. Ya no aparecen ahí, ni en el Pulso, ni en el aviso «sin actividad» de la ficha. Vale tanto para las etapas Ganado y Perdido como para las etapas de cierre propias de tu proceso.",
-      "accion": {
-        "texto": "Ver mis tareas",
-        "ir": "tareas"
-      }
-    },
-    {
-      "id": "2026-08-28-filtros-y-cierre",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "Panel de filtros en el pipeline y fecha esperada de cierre",
-      "texto": "Los filtros salieron de la barra y viven ahora en un panel propio: fuente, comercial, etiquetas, estado y —lo nuevo— rangos de fecha. Puedes ver qué leads entraron hoy, en los últimos 7 o 30 días, este mes, o entre dos fechas cualesquiera. El botón Filtros muestra cuántos tienes puestos y se limpian todos de un golpe. Además, cada lead puede llevar una fecha esperada de cierre. Se ve en su tarjeta del tablero y en la ficha, donde se cambia con un clic sin abrir el formulario. Si la fecha ya pasó y el negocio sigue abierto, sale en rojo y con un triángulo de alerta, en la tarjeta, en la ficha y en la lista. Y se puede filtrar por ella: las vencidas o las que cierran este mes.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-28-cupos-servidor",
-      "fecha": "2026-08-28",
-      "tipo": "mejora",
-      "titulo": "Los cupos ahora los lleva la plataforma, no tu navegador",
-      "texto": "El contador de imágenes y de mensajes de IA vivía en tu navegador, así que podía decir una cosa distinta en cada equipo desde el que entraras. Ahora lo lleva la plataforma: el número que ves es el mismo en el móvil, en el portátil y en el del compañero de equipo, y el consumo del equipo suma en la cuenta del titular. Si llegas al cupo, el aviso te dice cuánto llevas y de cuánto es el tope."
-    },
-    {
-      "id": "2026-08-28-pipeline-lista",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "El pipeline, también en lista",
-      "texto": "Arriba del pipeline hay un conmutador Tablero / Lista. La lista muestra los mismos leads que el tablero —con los mismos filtros— en una tabla que puedes ordenar pulsando cualquier encabezado. Y con el botón «Columnas» eliges qué se ve: empresa, estado, etiquetas, score, fecha de creación, última actividad, motivo de cierre… incluidos los campos propios que tengan tus leads. Tu elección se recuerda.",
-      "accion": {
-        "texto": "Ver el pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-28-listas-exclusion",
-      "fecha": "2026-08-28",
-      "tipo": "nuevo",
-      "titulo": "Listas de contactos, y a quién no enviarle",
-      "texto": "Nueva sección en Marketing → Listas. Agrupa contactos por etiqueta, etapa o fuente, y la lista se mantiene sola: si entra un contacto que cumple, entra a la lista. En el asistente de campañas hay ahora un bloque «No enviar a» donde excluyes listas o etiquetas enteras —y puedes crear la lista ahí mismo sin salir—. Además, quien haya rebotado o marcado tu correo como spam queda fuera de todos los envíos automáticamente: seguir escribiéndoles quemaba la reputación del remitente. En el resumen previo verás cuántos quedaron fuera y por qué motivo.",
-      "accion": {
-        "texto": "Ir a Listas",
-        "ir": "listas"
-      }
-    },
-    {
-      "id": "2026-08-28-imagenes-correo",
-      "fecha": "2026-08-28",
-      "tipo": "arreglo",
-      "titulo": "Las imágenes del constructor ya llegan al correo",
-      "texto": "Las imágenes que ponías en un correo diseñado se guardaban dentro del propio HTML, y Gmail no muestra imágenes incrustadas: llegaba un recuadro vacío. Ahora se suben y el correo lleva su enlace, que es lo que sí se ve. Si en un diseño viejo quedó alguna incrustada, se sube sola al volver a guardarlo, y si algo falla el revisor previo frena el envío en vez de dejarte mandar un correo con un hueco. Formatos: PNG, JPG, WebP o GIF, hasta 2 MB.",
-      "accion": {
-        "texto": "Ir a Plantillas",
-        "ir": "plantillas"
-      }
-    },
-    {
-      "id": "2026-08-28-revision-envio",
-      "fecha": "2026-08-28",
-      "tipo": "mejora",
-      "titulo": "El último paso antes de enviar ahora te dice qué va a salir mal",
-      "texto": "La pantalla de envío se rehízo entera. Cada dato lleva su botón «Editar» que te lleva justo al paso donde se corrige, sin perder lo avanzado. Al lado va el correo tal como llega, con el envío de prueba a mano. Los destinatarios ya no son un número suelto: dice a cuántos les llega, a cuántos no y por qué —sin correo, dados de baja— y si te pasas del cupo del mes. Y antes de enviar revisamos el correo: un botón sin enlace, una variable que no existe, huecos de imagen o textos de ejemplo sin cambiar, o un correo tan pesado que Gmail lo recorta. Lo que seguro sale mal frena el envío; lo dudoso solo te avisa.",
-      "accion": {
-        "texto": "Ir a Campañas",
-        "ir": "marketing"
-      }
-    },
-    {
-      "id": "2026-08-28-campana-con-diseno",
-      "fecha": "2026-08-28",
-      "tipo": "arreglo",
-      "titulo": "Al usar una plantilla diseñada, la campaña ya no pierde lo que subes",
-      "texto": "Si aplicabas una plantilla diseñada, el asistente seguía mostrando el mensaje, la imagen de cabecera y el botón — pero esos campos ya no se enviaban, porque el diseño manda. Quien subía una imagen ahí la perdía sin que nada se lo dijera. Ahora, al aplicar un diseño, esos campos desaparecen y en su lugar aparece una tarjeta que dice de qué plantilla sale el contenido, con tres salidas: editar el diseño ahí mismo con el constructor, cambiar de plantilla o volver al correo sencillo de siempre. El correo de prueba y todo lo demás siguen igual.",
-      "accion": {
-        "texto": "Ir a Campañas",
-        "ir": "marketing"
-      }
-    },
-    {
-      "id": "2026-08-28-nota-en-la-ficha",
-      "fecha": "2026-08-28",
-      "tipo": "mejora",
-      "titulo": "La nota al responsable también desde la ficha del lead",
-      "texto": "Ya no hace falta volver al tablero: el botón «Nota al responsable» está también dentro de la ficha, junto a Llamar y Agendar. Va aparte de la nota de siempre para que no se confundan: la de Registrar actividad solo queda en el historial y no avisa a nadie; esta le llega al comercial por correo y en la campana. En el historial se distinguen a simple vista, y las dirigidas dicen quién avisó y si ya la vio.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-27-respuestas-whatsapp",
-      "fecha": "2026-08-27",
-      "tipo": "mejora",
-      "titulo": "Tus respuestas de WhatsApp, también fuera del inbox",
-      "texto": "Las respuestas rápidas que tu equipo usa al contestar una conversación ahora se administran desde Marketing → Plantillas, en la pestaña de WhatsApp: crear, editar, buscar y ver cuántas veces se ha usado cada una. Y aparecen en el asistente al montar una campaña de WhatsApp, donde también puedes guardar como respuesta lo que acabas de escribir. Son las mismas de siempre, no una copia: lo que cambies aquí lo ve el comercial en el inbox.",
-      "accion": {
-        "texto": "Ir a Plantillas",
-        "ir": "plantillas"
-      }
-    },
-    {
-      "id": "2026-08-27-plantillas-correo",
-      "fecha": "2026-08-27",
-      "tipo": "nuevo",
-      "titulo": "Plantillas de correo, con constructor visual",
-      "texto": "Nueva sección en Marketing → Plantillas. Escribe un correo una vez y reutilízalo en todas las campañas que quieras. Al diseñar arrancas eligiendo entre seis bases —bienvenida, promoción, seguimiento, novedades, invitación y envío de propuesta— con su estructura, sus huecos de imagen y textos de ejemplo que cambias a tu gusto; o empiezas en blanco y arrastras bloques, columnas, imágenes y botones. En el asistente de campañas eliges una plantilla guardada o guardas como plantilla lo que acabas de escribir. Y bajo el asunto y el mensaje hay un botón que despliega las siete variables disponibles y las mete donde tengas el cursor.",
-      "accion": {
-        "texto": "Ir a Plantillas",
-        "ir": "plantillas"
-      }
-    },
-    {
-      "id": "2026-08-27-pagina-gracias",
-      "fecha": "2026-08-27",
-      "tipo": "mejora",
-      "titulo": "La pantalla después de pagar ahora explica qué hacer",
-      "texto": "Quien compra un plan llega a una página que le dice lo único que de verdad importa: que use el mismo correo de la compra para entrar o crear su cuenta, porque el plan se activa cruzando ese dato. Además trae los tres primeros pasos —cuenta, primer cliente, conectar Google Ads— y el acceso directo a la Academia.",
-      "accion": {
-        "texto": "Ver la página",
-        "ir": "/success.html"
-      }
-    },
-    {
-      "id": "2026-08-27-privacidad-publicidad",
-      "fecha": "2026-08-27",
-      "tipo": "mejora",
-      "titulo": "Actualizamos la política de privacidad: cómo hacemos nuestra publicidad",
-      "texto": "Añadimos una sección que explica que Acuarius se anuncia en Meta y Google, y qué usamos para eso: medición en nuestro sitio público acuarius.app y tu correo cifrado para armar o excluir públicos. Nunca usamos para nuestra publicidad los datos de tus clientes, tus conversaciones ni las métricas de tus cuentas conectadas, y dentro de la aplicación no cargamos píxeles publicitarios. Puedes oponerte escribiendo a privacidad@acuarius.app.",
-      "accion": {
-        "texto": "Leer la política",
-        "ir": "/privacy.html"
-      }
-    },
-    {
-      "id": "2026-08-27-inactividad-real",
-      "fecha": "2026-08-27",
-      "tipo": "arreglo",
-      "titulo": "«Sin actividad» ahora cuenta lo que de verdad hace tu equipo",
-      "texto": "El aviso de leads sin actividad miraba solo la última vez que se editó la ficha, no el trabajo registrado en ella. Si llamabas a un cliente y lo anotabas, el lead seguía apareciendo como abandonado al día siguiente. Ahora registrar una llamada, un correo, una reunión, una nota o una tarea cuenta como contacto, y con ello se corrigen también el aviso de la tarjeta, el filtro «Sin actividad» y las automatizaciones de reactivación, que podían escribirle a clientes recién atendidos.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-27-notas-direccion",
-      "fecha": "2026-08-27",
-      "tipo": "nuevo",
-      "titulo": "Deja notas a tus comerciales desde la ficha del lead",
-      "texto": "En cada tarjeta del pipeline hay un icono de nota. El dueño de la cuenta y los administradores pueden escribir ahí una instrucción para quien lleva ese lead: le llega un correo con la nota y un enlace directo a la ficha, y además le aparece el aviso en la campana del encabezado. La nota queda en el historial del lead junto a las llamadas y los correos.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-27-pipeline-tres-fichas",
-      "fecha": "2026-08-27",
-      "tipo": "arreglo",
-      "titulo": "El tablero ya no aplasta las fichas cuando una etapa tiene muchos leads",
-      "texto": "Las columnas con muchos leads —normalmente Cierre perdido— encogían las fichas hasta cortar los nombres. Ahora cada columna muestra tres fichas completas y el resto se ve deslizando dentro de esa misma columna, sin que el tablero entero se mueva. El botón Agregar queda fijo abajo, así que ya no hay que bajar hasta el final de la lista para crear un lead.",
-      "accion": {
-        "texto": "Ir al pipeline",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-26-catalogos-admin",
-      "fecha": "2026-08-26",
-      "tipo": "mejora",
-      "titulo": "Las listas de la cuenta las cambia solo quien manda",
-      "texto": "Las fuentes de leads, los motivos de cierre y las etiquetas los sigue viendo y usando todo el equipo, pero cambiar las listas queda reservado al dueño de la cuenta y a los miembros con rol de administrador. Un comercial pone las etiquetas que existen; crear, renombrar o borrar es cosa de quien manda, porque de esas listas dependen los filtros, las campañas y los informes de todos.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-24-borrar-cosas",
-      "fecha": "2026-08-24",
-      "tipo": "mejora",
-      "titulo": "Ya puedes borrar etiquetas, chatbots y actividades",
-      "texto": "Tres cosas que solo se podían crear: las etiquetas (en CRM → Etiquetas, y al quitarlas se les retiran también a los leads que las llevan), los chatbots que ya no usas, y una llamada o nota registrada por error en la ficha del lead.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-24-motivos-cierre",
-      "fecha": "2026-08-24",
-      "tipo": "mejora",
-      "titulo": "Los motivos de cierre ya son tuyos, no los que traía la plataforma",
-      "texto": "Puedes renombrar, quitar y añadir los motivos de ganada y perdida. Quitar uno no toca las oportunidades ya cerradas: conservan el suyo y tus informes no cambian. En CRM → Motivos de cierre, o desde el enlace del propio cierre.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-20-chat-web",
-      "fecha": "2026-08-20",
-      "tipo": "nuevo",
-      "titulo": "Chat en vivo en tu propia web",
-      "texto": "Pega una línea en tu sitio y aparece una burbuja con tus colores. Quien escriba llega al mismo inbox que WhatsApp o Instagram, lo atiende tu agente y entra al CRM cuando deja su contacto. Puedes fijar horario de atención: fuera de él avisa que nadie está conectado y pide un contacto. En Conversaciones → Canales.",
-      "accion": {
-        "texto": "Ir a Conversaciones",
-        "ir": "conversaciones"
-      }
-    },
-    {
-      "id": "2026-08-19-filtro-comercial",
-      "fecha": "2026-08-19",
-      "tipo": "nuevo",
-      "titulo": "Filtra el pipeline por comercial y reasigna desde el tablero",
-      "texto": "Elige un ejecutivo en la barra de filtros y verás solo sus leads, tanto en el tablero como en Contactos, donde además hay una columna con quién lleva cada uno. Pulsa sobre su nombre para cambiar de responsable sin abrir el lead; los que no tiene nadie salen marcados para que no se pierdan.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-18-equipo-pipelines",
-      "fecha": "2026-08-18",
-      "tipo": "arreglo",
-      "titulo": "Tu equipo ya ve los mismos clientes y pipelines que tú",
-      "texto": "A los comerciales invitados les llegaba la cartera vacía, así que veían un tablero genérico en vez de tus procesos de venta. Ya ven exactamente lo mismo que el dueño de la cuenta.",
-      "accion": {
-        "texto": "Ir al CRM",
-        "ir": "crm"
-      }
-    },
-    {
-      "id": "2026-08-18-academia",
-      "fecha": "2026-08-18",
-      "tipo": "nuevo",
-      "titulo": "La Academia, completa: 23 videos en 8 categorías",
-      "texto": "Ya están los tutoriales de CRM, Marketing, Conversaciones y Análisis, además de los de agentes y primeros pasos. Todos de menos de 4 minutos y con subtítulos.",
-      "accion": {
-        "texto": "Ver la Academia",
-        "ir": "academia"
-      }
-    },
-    {
-      "id": "2026-08-18-google-cuentas",
-      "fecha": "2026-08-18",
-      "tipo": "mejora",
-      "titulo": "Elegir tu cuenta de Google Ads ya no es una lotería",
-      "texto": "Si administras un centro de clientes, la lista ya no repite cuentas ni las muestra sin nombre: salen ordenadas alfabéticamente y con buscador por nombre o ID.",
-      "accion": {
-        "texto": "Ir a Integraciones",
-        "ir": "integraciones"
-      }
-    },
-    {
-      "id": "2026-08-12-tareas",
-      "fecha": "2026-08-12",
-      "tipo": "nuevo",
-      "titulo": "Tareas de seguimiento que no se te escapan",
-      "texto": "Al asignarse un lead se crea sola la tarea de primer contacto, y cada mañana te llega por correo lo que tienes vencido y lo de hoy.",
-      "accion": {
-        "texto": "Ver mis tareas",
-        "ir": "tareas"
-      }
-    }
-  ]
+ "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
+ "novedades": [
+  {
+   "id": "2026-09-17-tope-mil-contactos",
+   "fecha": "2026-09-17",
+   "tipo": "arreglo",
+   "titulo": "Las campañas ya no se quedaban en los primeros 1.000 contactos",
+   "texto": "Cuando una audiencia pasaba de 1.000 personas, el envío salía solo a las primeras mil y la pantalla decía que todo había ido bien. Lo mismo ocurría con el tablero, con las listas de exclusión, con la tasa de apertura y —lo más delicado— con la lista de correos que ya habían rebotado: pasados los mil rebotes volvíamos a escribirles. Todo eso ya se lee completo. Y si alguna vez una audiencia es tan grande que no cabe de una vez, ahora te lo decimos antes de enviar en lugar de mandar media campaña en silencio."
+  },
+  {
+   "id": "2026-09-15-conector-reglas-destino",
+   "fecha": "2026-09-15",
+   "tipo": "nuevo",
+   "titulo": "Un solo formulario en tu web, varios tableros en Acuarius",
+   "texto": "Si tu web repite el mismo formulario en todas sus páginas y dentro le preguntas al visitante qué quiere —comprar o arrendar, un servicio u otro—, ahora Acuarius puede repartir según esa respuesta. En Fuentes de leads, al editar una conexión, marca «El mismo formulario alimenta varios tableros»: dices qué campo decide y, para cada respuesta, a qué tablero va, quién lo atiende y con qué etiqueta. Cada rama lleva su propio turno de reparto, así que arriendo y venta pueden repartirse entre personas distintas. Lo que no coincida cae en el tablero por defecto con la etiqueta que elijas.",
+   "accion": {
+    "texto": "Ir a Fuentes de leads",
+    "ir": "fuentes"
+   }
+  },
+  {
+   "id": "2026-09-15-conector-webhook",
+   "fecha": "2026-09-15",
+   "tipo": "mejora",
+   "titulo": "Conectar tu formulario por webhook, sin script",
+   "texto": "Elementor, WPForms y casi todos los constructores traen una acción de Webhook. En «Ver código» de cada conexión ahora te damos también esa dirección: los envíos entran desde el servidor de tu web, no desde el navegador, así que no se pierden y no se cuelan los que tu propio formulario rechaza por spam. Además ya entendemos el formato de Elementor, que manda los campos como form_fields[correo] — antes esos envíos llegaban sin datos de contacto y se rechazaban. Usa el script o el webhook, no los dos, o cada envío entraría dos veces."
+  },
+  {
+   "id": "2026-09-15-ventas-solo-sus-leads",
+   "fecha": "2026-09-15",
+   "tipo": "mejora",
+   "titulo": "El perfil de Ventas ve en el tablero solo los leads que le asignaron",
+   "texto": "Hasta ayer, un perfil de Ventas veía en el pipeline todos los leads de la cuenta aunque solo pudiera gestionar los suyos. Ya no: ve únicamente los que tienen su nombre, y lo mismo en su agenda, en el historial de cada lead y en el copiloto. Quien entra nuevo empieza con el tablero vacío hasta que le repartan su cartera, y por eso se lo decimos en pantalla en vez de dejarlo en blanco. Los perfiles de Administrador y Mercadeo siguen viendo la cuenta completa. Si eres administrador, reparte desde el tablero o activa el reparto automático en Configuración → Equipo.",
+   "accion": {
+    "texto": "Ver mi equipo",
+    "ir": "ajustes-equipo"
+   }
+  },
+  {
+   "id": "2026-09-14-seguridad-anuncios",
+   "fecha": "2026-09-14",
+   "tipo": "arreglo",
+   "titulo": "Los datos de tus cuentas publicitarias ahora exigen tu sesión",
+   "texto": "Las pantallas de Google Ads y Meta Ads identificaban la cuenta por un dato que viajaba en la dirección, sin comprobar quién estaba preguntando. Lo corregimos: ahora la cuenta se toma de tu sesión iniciada y ese dato de la dirección se ignora. No tienes que hacer nada y nada cambia en lo que ves. Si algún panel de anuncios no carga, cierra sesión y vuelve a entrar."
+  },
+  {
+   "id": "2026-09-14-perfiles-menu",
+   "fecha": "2026-09-14",
+   "tipo": "mejora",
+   "titulo": "Cada quien ve solo lo suyo: el menú se adapta al perfil",
+   "texto": "Quien tiene perfil de Ventas ya no ve las secciones de Marketing ni los agentes: su menú queda con CRM, Conversaciones y Análisis. Mercadeo ve todo eso más Marketing y los agentes, pero no la pestaña de Equipo. Y en los informes, un perfil de Ventas cuenta solo su propia gestión —sus leads y sus tareas—, no la de sus compañeros. En el tablero sigue viendo todos los leads de la cuenta, como siempre; lo que cambia es de quién son los números.",
+   "accion": {
+    "texto": "Ver mi equipo",
+    "ir": "ajustes-equipo"
+   }
+  },
+  {
+   "id": "2026-09-14-plan-del-dueno",
+   "fecha": "2026-09-14",
+   "tipo": "arreglo",
+   "titulo": "Tu equipo ve la aplicación como tu cuenta, no como la suya",
+   "texto": "Quien entraba invitado veía la aplicación según SU plan —normalmente el de prueba— y no según el de la cuenta en la que trabaja. Por eso no le salía el selector de cliente que ve el dueño y podía toparse con límites que no son los de esa cuenta. Ahora el plan que manda es el del dueño: tu equipo ve el mismo selector, los mismos clientes y los mismos topes que tú. Y a un invitado ya no se le arranca una prueba propia que no necesita.",
+   "accion": {
+    "texto": "Ver mi equipo",
+    "ir": "ajustes-equipo"
+   }
+  },
+  {
+   "id": "2026-09-14-invitacion-por-correo",
+   "fecha": "2026-09-14",
+   "tipo": "arreglo",
+   "titulo": "Quien se registra con el correo invitado entra a tu equipo, aunque no use el enlace",
+   "texto": "El correo de invitación decía que bastaba con crear la cuenta usando ese mismo email, pero no era así: si la persona se registraba por su cuenta en vez de tocar el enlace, terminaba con una cuenta suelta y vacía, y su invitación se quedaba en «Invitado» para siempre. Ahora, al entrar, la invitación se aplica sola. Solo funciona con el correo verificado, para que nadie pueda entrar a tu equipo registrándose con el correo de otra persona.",
+   "accion": {
+    "texto": "Ver mi equipo",
+    "ir": "ajustes-equipo"
+   }
+  },
+  {
+   "id": "2026-09-14-marketing-del-equipo",
+   "fecha": "2026-09-14",
+   "tipo": "arreglo",
+   "titulo": "Tu equipo ya ve las campañas, automatizaciones y páginas de la cuenta",
+   "texto": "Quien entraba invitado veía Campañas, Automatizaciones y Páginas vacías: la aplicación le mostraba su propia cuenta en vez de la tuya. Ya no. Además, ahora el perfil manda: quien tiene Marketing puede crear y editar, y quien no lo tiene puede seguir viendo los reportes de Análisis pero no toca nada. De paso, el cupo de correos de una campaña se lee del plan del dueño de la cuenta, no del de quien la envía.",
+   "accion": {
+    "texto": "Ver mi equipo",
+    "ir": "ajustes-equipo"
+   }
+  },
+  {
+   "id": "2026-09-14-perfiles-de-acceso",
+   "fecha": "2026-09-14",
+   "tipo": "nuevo",
+   "titulo": "Perfiles de acceso: elige qué ve cada persona de tu equipo",
+   "texto": "Al invitar a alguien ahora eliges su perfil: Administrador ve y hace todo, incluido invitar y cambiar perfiles; Mercadeo entra a CRM, Marketing, Conversaciones, Análisis y los agentes, pero no toca el equipo; y Ventas trabaja los leads y las conversaciones, sin Marketing ni agentes, y en los reportes solo ve su propia gestión. El perfil se cambia cuando quieras desde Configuración → Equipo, sin reenviar la invitación. A quien ya estaba en tu equipo le quedó el perfil de Ventas.",
+   "accion": {
+    "texto": "Ver mi equipo",
+    "ir": "ajustes-equipo"
+   }
+  },
+  {
+   "id": "2026-09-02-ya-la-hice",
+   "fecha": "2026-09-02",
+   "tipo": "nuevo",
+   "titulo": "«Ya la hice», directo desde el correo",
+   "texto": "El resumen diario de tareas ahora trae un enlace «Ya la hice» en cada una. Lo tocas desde el correo, confirmas en una pantalla y queda marcada, sin entrar a la aplicación ni buscar el lead. Si te equivocas, la misma pantalla te deja deshacerlo. Además, en la ficha del lead las tareas hechas se quedan a la vista, tildadas: si marcaste una por error, la destildas y vuelve a estar pendiente.",
+   "accion": {
+    "texto": "Ver mis tareas",
+    "ir": "tareas"
+   }
+  },
+  {
+   "id": "2026-09-02-tareas-en-la-ficha",
+   "fecha": "2026-09-02",
+   "tipo": "nuevo",
+   "titulo": "Marca la tarea como hecha desde la ficha del lead",
+   "texto": "Al abrir un lead ahora ves arriba sus tareas pendientes, con la vencida en rojo, y la marcas hecha con un toque. Antes solo se podía desde Tareas o desde la Agenda: si llamabas al cliente desde su ficha no tenías dónde apuntarlo, y al día siguiente la tarjeta te decía que ibas atrasado con algo que ya habías hecho. También puedes moverla a mañana. Si el lead lo lleva otro comercial ves sus tareas pero no las puedes tocar, igual que el resto de la ficha.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-09-01-limites-reales",
+   "fecha": "2026-09-01",
+   "tipo": "correccion",
+   "titulo": "Los planes ahora dicen exactamente lo que incluyen",
+   "texto": "La descripción de los planes estaba desactualizada: decía «imágenes ilimitadas» donde hay un tope, «10.000 correos al mes» cuando las campañas ya no tienen cupo, y no mencionaba los videos. Ya coincide con lo que la plataforma hace de verdad. También arreglamos los botones de «ver planes», que no llevaban a ninguna parte."
+  },
+  {
+   "id": "2026-09-01-aviso-nota-responsable",
+   "fecha": "2026-09-01",
+   "tipo": "arreglo",
+   "titulo": "Las notas de la dirección vuelven a avisarle al comercial",
+   "texto": "Cuando dejabas una «Nota al responsable» en un lead, la nota quedaba guardada pero el correo al comercial no salía: desde el 31 de agosto el aviso se estaba quedando por el camino. Ya vuelve a llegar. Además la campana se actualiza sola cada pocos minutos, así que si tu comercial tiene la app abierta toda la mañana, la nota que escribes ahora le aparece sin tener que recargar. Y si algún aviso no sale, ahora nos enteramos el mismo día en vez de esperar a que alguien lo reporte.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-09-01-avisarme-y-analitica",
+   "fecha": "2026-09-01",
+   "tipo": "correccion",
+   "titulo": "El botón «Avisarme cuando esté disponible» ya funciona",
+   "texto": "En la ventana de los agentes que aún no están listos, el botón para pedir aviso no llevaba a ninguna parte: el enlace estaba roto y quien lo pulsaba no nos avisaba de nada. Ya abre el correo como debía. De paso corregimos la analítica de la plataforma, que llevaba tiempo sin registrar visitas por una regla de rutas mal puesta."
+  },
+  {
+   "id": "2026-09-01-conexiones-al-abrir",
+   "fecha": "2026-09-01",
+   "tipo": "correccion",
+   "titulo": "Tus conexiones de Meta, Google y LinkedIn se cargan bien al abrir la app",
+   "texto": "Si tenías conectada una cuenta publicitaria, al abrir Acuarius la pantalla de Ajustes podía quedarse sin mostrarla hasta que entrabas y volvías a salir. Era un problema de orden de carga: la app intentaba pintar esas conexiones antes de que la pantalla existiera. Ya se espera a que esté lista."
+  },
+  {
+   "id": "2026-09-01-tareas-de-leads-cerrados",
+   "fecha": "2026-09-01",
+   "tipo": "arreglo",
+   "titulo": "Al cerrar un lead, sus tareas se cierran con él",
+   "texto": "Cuando marcabas un lead como ganado o perdido, sus tareas de seguimiento se quedaban abiertas para siempre: el comercial seguía viendo «llamar a este cliente» de alguien que ya había dicho que no, y la cuenta de tareas vencidas crecía sola sin que nadie pudiera hacer nada. Ahora esas tareas se anulan solas al cerrar el lead. Se anulan, no se marcan como hechas: nadie las hizo, y contarlas como completadas falsearía el reporte de productividad de tu equipo.",
+   "accion": {
+    "texto": "Ver mis tareas",
+    "ir": "tareas"
+   }
+  },
+  {
+   "id": "2026-09-01-duplicar-y-destino",
+   "fecha": "2026-09-01",
+   "tipo": "nuevo",
+   "titulo": "Duplicar una página y elegir a qué tablero entran sus leads",
+   "texto": "En la lista de páginas hay un botón «Duplicar»: crea una copia como borrador para probar otro titular u otra oferta. La copia nace con su propio formulario, así los leads de cada versión se pueden distinguir y se ve cuál convierte. Y dentro de Ajustes hay un grupo nuevo, «Dónde entran los leads», para elegir el cliente y el tablero al que llegan los contactos de esa página; si no eliges ninguno, entran al principal como siempre. Los formularios web también pueden ahora apuntar a un tablero concreto.",
+   "accion": {
+    "texto": "Ver mis páginas",
+    "ir": "paginas"
+   }
+  },
+  {
+   "id": "2026-09-01-errores-vigilados",
+   "fecha": "2026-09-01",
+   "tipo": "mejora",
+   "titulo": "Si algo falla, ahora nos enteramos nosotros primero",
+   "texto": "Hasta ahora, cuando algo se rompía dentro de Acuarius no había forma de saberlo hasta que alguien lo contaba. Ya no: los fallos quedan registrados —los del servidor y los que ocurren en tu pantalla— y se avisa al equipo en cuanto aparece uno nuevo. No cambia nada de lo que ves; cambia el tiempo que tardamos en arreglarlo."
+  },
+  {
+   "id": "2026-09-01-ajustes-pagina",
+   "fecha": "2026-09-01",
+   "tipo": "nuevo",
+   "titulo": "Ajustes de página: dirección, vista previa al compartir y medición",
+   "texto": "Dentro del constructor hay un botón «Ajustes». Ahí se cambia la dirección del enlace, se escribe la descripción y la imagen que verá quien reciba el enlace por WhatsApp —con una vista previa de cómo va a llegar la tarjeta—, se elige si tras enviar el formulario se muestra un mensaje o se va a una página de gracias, y se pega el píxel de Meta o el identificador de Google Analytics. El evento de lead se dispara solo al enviarse el formulario. Además, las páginas publicadas ahora se arman en el servidor: antes, al compartir el enlace llegaba una tarjeta vacía porque el robot de WhatsApp no ejecuta JavaScript.",
+   "accion": {
+    "texto": "Ver mis páginas",
+    "ir": "paginas"
+   }
+  },
+  {
+   "id": "2026-09-01-constructor-paginas",
+   "fecha": "2026-09-01",
+   "tipo": "mejora",
+   "titulo": "El constructor de páginas ahora tiene bloques y nuestra cara",
+   "texto": "Se pueden arrastrar secciones ya hechas al lienzo: portada, beneficios, formulario, testimonios, preguntas frecuentes, llamado a la acción, botón de WhatsApp y pie, más piezas sueltas como título, texto, imagen, botón o lista. Cada una llega con su diseño listo y se adapta al celular sola. El editor además cambió de aspecto: los colores, la tipografía y los botones son los de Acuarius, los dispositivos están en español y hay botones de deshacer y rehacer a la vista.",
+   "accion": {
+    "texto": "Ver mis páginas",
+    "ir": "paginas"
+   }
+  },
+  {
+   "id": "2026-09-01-seguimiento-programado",
+   "fecha": "2026-09-01",
+   "tipo": "arreglo",
+   "titulo": "Un lead con visita agendada ya no sale como «sin actividad»",
+   "texto": "El Pulso avisaba de leads abandonados que en realidad tenían una tarea programada para dentro de dos o tres días. Ahora, si un lead tiene una tarea pendiente para hoy o más adelante, no aparece como inactivo: ni en el Pulso, ni en el filtro «Sin actividad», ni en el aviso de su tarjeta, ni dispara las automatizaciones de reactivación. En la vista de lista esos leads se marcan como «Con seguimiento». Si la tarea ya venció, el aviso vuelve: ahí el lead sí necesita atención."
+  },
+  {
+   "id": "2026-08-31-paginas-aterrizaje",
+   "fecha": "2026-08-31",
+   "tipo": "nuevo",
+   "titulo": "Páginas de aterrizaje para tus anuncios",
+   "texto": "Nueva sección en Marketing → Páginas. Eliges uno de los tres diseños —captar con formulario, agendar una cita o entregar una guía—, cambias textos e imágenes con el mismo constructor visual de los correos, y publicas. Te queda un enlace listo para pegar en tu anuncio de Google o Meta, y quien llena el formulario entra directo a tu CRM: se deduplica contra tus contactos y dispara tus automatizaciones, igual que cualquier otro formulario. En la lista ves las visitas de cada página."
+  },
+  {
+   "id": "2026-08-31-avisos-push",
+   "fecha": "2026-08-31",
+   "tipo": "nuevo",
+   "titulo": "Avisos en el móvil cuando entra un lead",
+   "texto": "En Configuración → Notificaciones puedes activar los avisos de este dispositivo. Te llega uno cuando entra un lead nuevo asignado a ti y cuando la dirección te deja una nota en un lead, y al tocarlo se abre esa ficha directamente. Hay un botón de prueba para comprobar que llegan. En iPhone hay que añadir antes Acuarius a la pantalla de inicio: Apple no permite avisos desde el navegador. Los activas y desactivas por dispositivo, así que puedes tenerlos en el móvil y no en el portátil."
+  },
+  {
+   "id": "2026-08-31-app-instalable",
+   "fecha": "2026-08-31",
+   "tipo": "nuevo",
+   "titulo": "Acuarius se instala como app en el móvil y en el escritorio",
+   "texto": "Ya puedes añadir Acuarius a la pantalla de inicio y abrirla como una app: sin barra del navegador, con su icono y a pantalla completa. En Android y en el escritorio verás un aviso para instalarla con un toque; en iPhone se hace desde Compartir → Añadir a inicio, porque Apple no permite hacerlo automáticamente. Es el paso previo a los avisos de leads nuevos y tareas vencidas, que llegan pronto."
+  },
+  {
+   "id": "2026-08-31-tareas-de-la-ficha",
+   "fecha": "2026-08-31",
+   "tipo": "correccion",
+   "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
+   "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
+  },
+  {
+   "id": "2026-08-31-responder-correos",
+   "fecha": "2026-08-31",
+   "tipo": "correccion",
+   "titulo": "Ahora puedes responder a los correos que te enviamos",
+   "texto": "Los avisos de Acuarius salían desde un dominio que solo puede enviar, no recibir: si respondías a un aviso de lead, a una alerta o a un reporte, tu mensaje rebotaba y no llegaba a nadie. Ya no: todas las notificaciones llevan una dirección de respuesta real y contestarlas funciona. Los correos que la plataforma envía a TUS contactos no cambian: esas respuestas siguen siendo tuyas."
+  },
+  {
+   "id": "2026-08-28-firma-propuestas",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "Tus propuestas se firman, ya no solo se aceptan",
+   "texto": "El botón de la propuesta pasa a ser «Aceptar y firmar»: el cliente pone su nombre, su correo, opcionalmente su documento, y dibuja su firma con el dedo o el ratón. Queda guardada junto con la fecha, la IP desde la que firmó y una huella del contenido exacto que aceptó, así que si la propuesta se edita después se nota. Es una firma electrónica y tiene la misma validez que firmar a mano. A ti te llega un correo diciendo quién firmó y cuándo.",
+   "accion": {
+    "texto": "Ir a Propuestas",
+    "ir": "marketing"
+   }
+  },
+  {
+   "id": "2026-08-28-resenas-google",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "Pide reseñas de Google solo, cuando ganas un negocio",
+   "texto": "En CRM → Reseñas de Google pegas el enlace de tu ficha —uno por cliente si trabajas varios— y en el constructor de automatizaciones aparece un paso nuevo, «Pedir reseña», que se lo manda al cliente por correo o WhatsApp. Hay una plantilla lista: cuando un negocio pasa a Ganado, espera 48 horas y lo pide. El enlace que recibe el cliente es tuyo y lo lleva a Google, así que en su ficha queda registrado quién fue de verdad a dejar la reseña. Se pide una sola vez por lead.",
+   "accion": {
+    "texto": "Ir a Automatizaciones",
+    "ir": "marketing"
+   }
+  },
+  {
+   "id": "2026-08-28-enlaces-en-notas",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "Enlaces dentro de las notas del historial",
+   "texto": "Al registrar una nota, una llamada o cualquier actividad puedes convertir un texto concreto en enlace: selecciónalo, pulsa «Enlace» y pega la dirección. Así una nota como «se le recomendó la propiedad 121513436» lleva directo a la ficha de esa propiedad, en vez de dejar una URL larga en medio de la frase. Las direcciones que pegues sueltas también se vuelven clicables solas, y los enlaces viajan igual en el correo de las notas al responsable.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-28-proxima-tarea-tarjeta",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "Cada tarjeta del pipeline dice su cierre y su próxima tarea",
+   "texto": "Bajo el nombre del lead aparecen dos líneas: «Cierre: 14/08/26», la fecha esperada de cierre, y «Próxima tarea: 14/08/26», la tarea pendiente más cercana que tenga, la lleve quien la lleve. Las dos van etiquetadas y con el mismo formato para que no se confundan entre sí. Si alguna ya se pasó de fecha, sale en rojo y con un triángulo de alerta. Lo que no existe no se muestra, para no llenar el tablero de líneas vacías. La de tareas se actualiza sola al completar o aplazar una.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-28-cerrados-sin-seguimiento",
+   "fecha": "2026-08-28",
+   "tipo": "arreglo",
+   "titulo": "Los negocios cerrados dejan de pedir seguimiento",
+   "texto": "Un lead marcado como ganado o perdido seguía generando tareas de primer contacto en la vista de Tareas y en el resumen diario por correo: se recordaba llamar a clientes cuyo negocio se había cerrado semanas atrás. Ya no aparecen ahí, ni en el Pulso, ni en el aviso «sin actividad» de la ficha. Vale tanto para las etapas Ganado y Perdido como para las etapas de cierre propias de tu proceso.",
+   "accion": {
+    "texto": "Ver mis tareas",
+    "ir": "tareas"
+   }
+  },
+  {
+   "id": "2026-08-28-filtros-y-cierre",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "Panel de filtros en el pipeline y fecha esperada de cierre",
+   "texto": "Los filtros salieron de la barra y viven ahora en un panel propio: fuente, comercial, etiquetas, estado y —lo nuevo— rangos de fecha. Puedes ver qué leads entraron hoy, en los últimos 7 o 30 días, este mes, o entre dos fechas cualesquiera. El botón Filtros muestra cuántos tienes puestos y se limpian todos de un golpe. Además, cada lead puede llevar una fecha esperada de cierre. Se ve en su tarjeta del tablero y en la ficha, donde se cambia con un clic sin abrir el formulario. Si la fecha ya pasó y el negocio sigue abierto, sale en rojo y con un triángulo de alerta, en la tarjeta, en la ficha y en la lista. Y se puede filtrar por ella: las vencidas o las que cierran este mes.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-28-cupos-servidor",
+   "fecha": "2026-08-28",
+   "tipo": "mejora",
+   "titulo": "Los cupos ahora los lleva la plataforma, no tu navegador",
+   "texto": "El contador de imágenes y de mensajes de IA vivía en tu navegador, así que podía decir una cosa distinta en cada equipo desde el que entraras. Ahora lo lleva la plataforma: el número que ves es el mismo en el móvil, en el portátil y en el del compañero de equipo, y el consumo del equipo suma en la cuenta del titular. Si llegas al cupo, el aviso te dice cuánto llevas y de cuánto es el tope."
+  },
+  {
+   "id": "2026-08-28-pipeline-lista",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "El pipeline, también en lista",
+   "texto": "Arriba del pipeline hay un conmutador Tablero / Lista. La lista muestra los mismos leads que el tablero —con los mismos filtros— en una tabla que puedes ordenar pulsando cualquier encabezado. Y con el botón «Columnas» eliges qué se ve: empresa, estado, etiquetas, score, fecha de creación, última actividad, motivo de cierre… incluidos los campos propios que tengan tus leads. Tu elección se recuerda.",
+   "accion": {
+    "texto": "Ver el pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-28-listas-exclusion",
+   "fecha": "2026-08-28",
+   "tipo": "nuevo",
+   "titulo": "Listas de contactos, y a quién no enviarle",
+   "texto": "Nueva sección en Marketing → Listas. Agrupa contactos por etiqueta, etapa o fuente, y la lista se mantiene sola: si entra un contacto que cumple, entra a la lista. En el asistente de campañas hay ahora un bloque «No enviar a» donde excluyes listas o etiquetas enteras —y puedes crear la lista ahí mismo sin salir—. Además, quien haya rebotado o marcado tu correo como spam queda fuera de todos los envíos automáticamente: seguir escribiéndoles quemaba la reputación del remitente. En el resumen previo verás cuántos quedaron fuera y por qué motivo.",
+   "accion": {
+    "texto": "Ir a Listas",
+    "ir": "listas"
+   }
+  },
+  {
+   "id": "2026-08-28-imagenes-correo",
+   "fecha": "2026-08-28",
+   "tipo": "arreglo",
+   "titulo": "Las imágenes del constructor ya llegan al correo",
+   "texto": "Las imágenes que ponías en un correo diseñado se guardaban dentro del propio HTML, y Gmail no muestra imágenes incrustadas: llegaba un recuadro vacío. Ahora se suben y el correo lleva su enlace, que es lo que sí se ve. Si en un diseño viejo quedó alguna incrustada, se sube sola al volver a guardarlo, y si algo falla el revisor previo frena el envío en vez de dejarte mandar un correo con un hueco. Formatos: PNG, JPG, WebP o GIF, hasta 2 MB.",
+   "accion": {
+    "texto": "Ir a Plantillas",
+    "ir": "plantillas"
+   }
+  },
+  {
+   "id": "2026-08-28-revision-envio",
+   "fecha": "2026-08-28",
+   "tipo": "mejora",
+   "titulo": "El último paso antes de enviar ahora te dice qué va a salir mal",
+   "texto": "La pantalla de envío se rehízo entera. Cada dato lleva su botón «Editar» que te lleva justo al paso donde se corrige, sin perder lo avanzado. Al lado va el correo tal como llega, con el envío de prueba a mano. Los destinatarios ya no son un número suelto: dice a cuántos les llega, a cuántos no y por qué —sin correo, dados de baja— y si te pasas del cupo del mes. Y antes de enviar revisamos el correo: un botón sin enlace, una variable que no existe, huecos de imagen o textos de ejemplo sin cambiar, o un correo tan pesado que Gmail lo recorta. Lo que seguro sale mal frena el envío; lo dudoso solo te avisa.",
+   "accion": {
+    "texto": "Ir a Campañas",
+    "ir": "marketing"
+   }
+  },
+  {
+   "id": "2026-08-28-campana-con-diseno",
+   "fecha": "2026-08-28",
+   "tipo": "arreglo",
+   "titulo": "Al usar una plantilla diseñada, la campaña ya no pierde lo que subes",
+   "texto": "Si aplicabas una plantilla diseñada, el asistente seguía mostrando el mensaje, la imagen de cabecera y el botón — pero esos campos ya no se enviaban, porque el diseño manda. Quien subía una imagen ahí la perdía sin que nada se lo dijera. Ahora, al aplicar un diseño, esos campos desaparecen y en su lugar aparece una tarjeta que dice de qué plantilla sale el contenido, con tres salidas: editar el diseño ahí mismo con el constructor, cambiar de plantilla o volver al correo sencillo de siempre. El correo de prueba y todo lo demás siguen igual.",
+   "accion": {
+    "texto": "Ir a Campañas",
+    "ir": "marketing"
+   }
+  },
+  {
+   "id": "2026-08-28-nota-en-la-ficha",
+   "fecha": "2026-08-28",
+   "tipo": "mejora",
+   "titulo": "La nota al responsable también desde la ficha del lead",
+   "texto": "Ya no hace falta volver al tablero: el botón «Nota al responsable» está también dentro de la ficha, junto a Llamar y Agendar. Va aparte de la nota de siempre para que no se confundan: la de Registrar actividad solo queda en el historial y no avisa a nadie; esta le llega al comercial por correo y en la campana. En el historial se distinguen a simple vista, y las dirigidas dicen quién avisó y si ya la vio.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-27-respuestas-whatsapp",
+   "fecha": "2026-08-27",
+   "tipo": "mejora",
+   "titulo": "Tus respuestas de WhatsApp, también fuera del inbox",
+   "texto": "Las respuestas rápidas que tu equipo usa al contestar una conversación ahora se administran desde Marketing → Plantillas, en la pestaña de WhatsApp: crear, editar, buscar y ver cuántas veces se ha usado cada una. Y aparecen en el asistente al montar una campaña de WhatsApp, donde también puedes guardar como respuesta lo que acabas de escribir. Son las mismas de siempre, no una copia: lo que cambies aquí lo ve el comercial en el inbox.",
+   "accion": {
+    "texto": "Ir a Plantillas",
+    "ir": "plantillas"
+   }
+  },
+  {
+   "id": "2026-08-27-plantillas-correo",
+   "fecha": "2026-08-27",
+   "tipo": "nuevo",
+   "titulo": "Plantillas de correo, con constructor visual",
+   "texto": "Nueva sección en Marketing → Plantillas. Escribe un correo una vez y reutilízalo en todas las campañas que quieras. Al diseñar arrancas eligiendo entre seis bases —bienvenida, promoción, seguimiento, novedades, invitación y envío de propuesta— con su estructura, sus huecos de imagen y textos de ejemplo que cambias a tu gusto; o empiezas en blanco y arrastras bloques, columnas, imágenes y botones. En el asistente de campañas eliges una plantilla guardada o guardas como plantilla lo que acabas de escribir. Y bajo el asunto y el mensaje hay un botón que despliega las siete variables disponibles y las mete donde tengas el cursor.",
+   "accion": {
+    "texto": "Ir a Plantillas",
+    "ir": "plantillas"
+   }
+  },
+  {
+   "id": "2026-08-27-pagina-gracias",
+   "fecha": "2026-08-27",
+   "tipo": "mejora",
+   "titulo": "La pantalla después de pagar ahora explica qué hacer",
+   "texto": "Quien compra un plan llega a una página que le dice lo único que de verdad importa: que use el mismo correo de la compra para entrar o crear su cuenta, porque el plan se activa cruzando ese dato. Además trae los tres primeros pasos —cuenta, primer cliente, conectar Google Ads— y el acceso directo a la Academia.",
+   "accion": {
+    "texto": "Ver la página",
+    "ir": "/success.html"
+   }
+  },
+  {
+   "id": "2026-08-27-privacidad-publicidad",
+   "fecha": "2026-08-27",
+   "tipo": "mejora",
+   "titulo": "Actualizamos la política de privacidad: cómo hacemos nuestra publicidad",
+   "texto": "Añadimos una sección que explica que Acuarius se anuncia en Meta y Google, y qué usamos para eso: medición en nuestro sitio público acuarius.app y tu correo cifrado para armar o excluir públicos. Nunca usamos para nuestra publicidad los datos de tus clientes, tus conversaciones ni las métricas de tus cuentas conectadas, y dentro de la aplicación no cargamos píxeles publicitarios. Puedes oponerte escribiendo a privacidad@acuarius.app.",
+   "accion": {
+    "texto": "Leer la política",
+    "ir": "/privacy.html"
+   }
+  },
+  {
+   "id": "2026-08-27-inactividad-real",
+   "fecha": "2026-08-27",
+   "tipo": "arreglo",
+   "titulo": "«Sin actividad» ahora cuenta lo que de verdad hace tu equipo",
+   "texto": "El aviso de leads sin actividad miraba solo la última vez que se editó la ficha, no el trabajo registrado en ella. Si llamabas a un cliente y lo anotabas, el lead seguía apareciendo como abandonado al día siguiente. Ahora registrar una llamada, un correo, una reunión, una nota o una tarea cuenta como contacto, y con ello se corrigen también el aviso de la tarjeta, el filtro «Sin actividad» y las automatizaciones de reactivación, que podían escribirle a clientes recién atendidos.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-27-notas-direccion",
+   "fecha": "2026-08-27",
+   "tipo": "nuevo",
+   "titulo": "Deja notas a tus comerciales desde la ficha del lead",
+   "texto": "En cada tarjeta del pipeline hay un icono de nota. El dueño de la cuenta y los administradores pueden escribir ahí una instrucción para quien lleva ese lead: le llega un correo con la nota y un enlace directo a la ficha, y además le aparece el aviso en la campana del encabezado. La nota queda en el historial del lead junto a las llamadas y los correos.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-27-pipeline-tres-fichas",
+   "fecha": "2026-08-27",
+   "tipo": "arreglo",
+   "titulo": "El tablero ya no aplasta las fichas cuando una etapa tiene muchos leads",
+   "texto": "Las columnas con muchos leads —normalmente Cierre perdido— encogían las fichas hasta cortar los nombres. Ahora cada columna muestra tres fichas completas y el resto se ve deslizando dentro de esa misma columna, sin que el tablero entero se mueva. El botón Agregar queda fijo abajo, así que ya no hay que bajar hasta el final de la lista para crear un lead.",
+   "accion": {
+    "texto": "Ir al pipeline",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-26-catalogos-admin",
+   "fecha": "2026-08-26",
+   "tipo": "mejora",
+   "titulo": "Las listas de la cuenta las cambia solo quien manda",
+   "texto": "Las fuentes de leads, los motivos de cierre y las etiquetas los sigue viendo y usando todo el equipo, pero cambiar las listas queda reservado al dueño de la cuenta y a los miembros con rol de administrador. Un comercial pone las etiquetas que existen; crear, renombrar o borrar es cosa de quien manda, porque de esas listas dependen los filtros, las campañas y los informes de todos.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-24-borrar-cosas",
+   "fecha": "2026-08-24",
+   "tipo": "mejora",
+   "titulo": "Ya puedes borrar etiquetas, chatbots y actividades",
+   "texto": "Tres cosas que solo se podían crear: las etiquetas (en CRM → Etiquetas, y al quitarlas se les retiran también a los leads que las llevan), los chatbots que ya no usas, y una llamada o nota registrada por error en la ficha del lead.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-24-motivos-cierre",
+   "fecha": "2026-08-24",
+   "tipo": "mejora",
+   "titulo": "Los motivos de cierre ya son tuyos, no los que traía la plataforma",
+   "texto": "Puedes renombrar, quitar y añadir los motivos de ganada y perdida. Quitar uno no toca las oportunidades ya cerradas: conservan el suyo y tus informes no cambian. En CRM → Motivos de cierre, o desde el enlace del propio cierre.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-20-chat-web",
+   "fecha": "2026-08-20",
+   "tipo": "nuevo",
+   "titulo": "Chat en vivo en tu propia web",
+   "texto": "Pega una línea en tu sitio y aparece una burbuja con tus colores. Quien escriba llega al mismo inbox que WhatsApp o Instagram, lo atiende tu agente y entra al CRM cuando deja su contacto. Puedes fijar horario de atención: fuera de él avisa que nadie está conectado y pide un contacto. En Conversaciones → Canales.",
+   "accion": {
+    "texto": "Ir a Conversaciones",
+    "ir": "conversaciones"
+   }
+  },
+  {
+   "id": "2026-08-19-filtro-comercial",
+   "fecha": "2026-08-19",
+   "tipo": "nuevo",
+   "titulo": "Filtra el pipeline por comercial y reasigna desde el tablero",
+   "texto": "Elige un ejecutivo en la barra de filtros y verás solo sus leads, tanto en el tablero como en Contactos, donde además hay una columna con quién lleva cada uno. Pulsa sobre su nombre para cambiar de responsable sin abrir el lead; los que no tiene nadie salen marcados para que no se pierdan.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-18-equipo-pipelines",
+   "fecha": "2026-08-18",
+   "tipo": "arreglo",
+   "titulo": "Tu equipo ya ve los mismos clientes y pipelines que tú",
+   "texto": "A los comerciales invitados les llegaba la cartera vacía, así que veían un tablero genérico en vez de tus procesos de venta. Ya ven exactamente lo mismo que el dueño de la cuenta.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-08-18-academia",
+   "fecha": "2026-08-18",
+   "tipo": "nuevo",
+   "titulo": "La Academia, completa: 23 videos en 8 categorías",
+   "texto": "Ya están los tutoriales de CRM, Marketing, Conversaciones y Análisis, además de los de agentes y primeros pasos. Todos de menos de 4 minutos y con subtítulos.",
+   "accion": {
+    "texto": "Ver la Academia",
+    "ir": "academia"
+   }
+  },
+  {
+   "id": "2026-08-18-google-cuentas",
+   "fecha": "2026-08-18",
+   "tipo": "mejora",
+   "titulo": "Elegir tu cuenta de Google Ads ya no es una lotería",
+   "texto": "Si administras un centro de clientes, la lista ya no repite cuentas ni las muestra sin nombre: salen ordenadas alfabéticamente y con buscador por nombre o ID.",
+   "accion": {
+    "texto": "Ir a Integraciones",
+    "ir": "integraciones"
+   }
+  },
+  {
+   "id": "2026-08-12-tareas",
+   "fecha": "2026-08-12",
+   "tipo": "nuevo",
+   "titulo": "Tareas de seguimiento que no se te escapan",
+   "texto": "Al asignarse un lead se crea sola la tarea de primer contacto, y cada mañana te llega por correo lo que tienes vencido y lo de hoy.",
+   "accion": {
+    "texto": "Ver mis tareas",
+    "ir": "tareas"
+   }
+  }
+ ]
 }

@@ -10,6 +10,10 @@ import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
 
 import { campaignHtml } from './_campaign-email.js';
 
+// PostgREST corta en 1.000 filas aunque se le pida más. Aquí eso significaba
+// que una audiencia de 4.000 salía a mil personas sin decirlo. Ver _paginado.js.
+import { traerTodo } from './_paginado.js';
+
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
 // Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
@@ -47,6 +51,11 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 // (las campanas masivas son de pago). Las automatizaciones nunca consumieron cupo:
 // monthlySent solo cuenta envios con campaign_id.
 const EMAIL_QUOTAS = { free: 0, pro: Infinity, individual: Infinity, agency: Infinity, agencia: Infinity, trial: Infinity };
+
+// Hasta dónde llega una audiencia antes de que prefiramos parar y decirlo. Son
+// 100 viajes a la base: por encima de esto el envío hay que repensarlo, no
+// resolverlo trayendo más filas a una función que dura segundos.
+const TECHO_AUDIENCIA = 100000;
 
 function sbHeaders(prefer) {
   return {
@@ -158,12 +167,13 @@ async function leadsByIds(userId, clientId, ids, channel, select) {
 // direcciones de la propia audiencia, así que nadie ve datos de nadie.
 async function correosQuemados() {
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/email_events?event=in.(bounced,complained)&select=to_email&limit=20000`,
-      { headers: sbHeaders() }
+    // Esta lista es lo único que impide reescribirle a una dirección que ya
+    // rebotó. Cortada en mil, a partir del rebote 1.001 volvíamos a escribirle
+    // a todos los anteriores — que es exactamente como se quema un dominio.
+    const { filas } = await traerTodo(
+      `${SUPABASE_URL}/rest/v1/email_events?event=in.(bounced,complained)&select=to_email`,
+      sbHeaders(), { techo: 100000 }
     );
-    if (!r.ok) return new Set();
-    const filas = await r.json();
     return new Set((filas || []).map(f => String(f.to_email || '').toLowerCase()).filter(Boolean));
   } catch { return new Set(); }
 }
@@ -184,36 +194,45 @@ async function idsExcluidos(userId, clientId, audience) {
     if (Array.isArray(sub.lead_ids) && sub.lead_ids.length) {
       filas = await leadsByIds(userId, clientId, sub.lead_ids, null, 'id');
     } else if (Object.keys(sub).length) {
-      filas = await fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, sub, null)}&select=id&limit=10000`,
-        { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
+      // Una exclusión cortada es peor que ninguna: se le escribe a quien pidió
+      // que no le escribieran y nadie se entera hasta que se queja.
+      filas = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, sub, null)}&select=id`,
+        sbHeaders(), { techo: 100000 }).then(r => r.filas).catch(() => []);
     }
     (filas || []).forEach(l => fuera.add(l.id));
   }
 
   if (etiquetas.length) {
     const q = audienceQuery(userId, clientId, { tags: etiquetas }, null);
-    const filas = await fetch(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id&limit=10000`,
-      { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
+    const filas = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id`,
+      sbHeaders(), { techo: 100000 }).then(r => r.filas).catch(() => []);
     (filas || []).forEach(l => fuera.add(l.id));
   }
   return fuera;
 }
 
+// Devuelve { leads, truncado }. `truncado` no es decorativo: si viene true la
+// audiencia está incompleta y NO se puede encolar la campaña, porque enviarla
+// dejaría fuera a gente sin que nadie lo sepa.
 async function resolveAudience(userId, clientId, audience, channel) {
   const a = await normalizeAudience(userId, audience);
-  let base;
+  let base, truncado = false;
   if (Array.isArray(a.lead_ids) && a.lead_ids.length) {
     base = await leadsByIds(userId, clientId, a.lead_ids, channel, 'id,name,email,phone');
   } else {
     const q = audienceQuery(userId, clientId, a, channel);
-    base = await fetch(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone&limit=10000`, { headers: sbHeaders() }).then(r => r.json()) || [];
+    const r = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone`,
+      sbHeaders(), { techo: TECHO_AUDIENCIA });
+    base = r.filas || [];
+    truncado = r.truncado;
   }
   // Las exclusiones se aplican sobre la audiencia YA resuelta, no dentro de la
   // consulta: mezclarlas en el filtro haría imposible contar cuántos se quitan y
   // por qué, que es justo lo que hay que enseñar antes de enviar.
   const fuera = await idsExcluidos(userId, clientId, audience);
   const quemados = channel === 'email' ? await correosQuemados() : new Set();
-  return base.filter(l => !fuera.has(l.id) && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase())));
+  const leads = base.filter(l => !fuera.has(l.id) && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase())));
+  return { leads, truncado };
 }
 
 // Emails de campaña enviados este mes (para el cupo)
@@ -268,12 +287,14 @@ export default async function handler(req) {
     const channel = url.searchParams.get('channel') === 'whatsapp' ? 'whatsapp' : 'email';
     const a = await normalizeAudience(userId, audience);
     const hasIds = Array.isArray(a.lead_ids) && a.lead_ids.length;
-    const [leads, all] = await Promise.all([
+    const [resuelta, all] = await Promise.all([
       resolveAudience(userId, clientId, a, channel),
       hasIds
         ? leadsByIds(userId, clientId, a.lead_ids, null, 'id,email,phone,tags')
-        : fetch(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, a, null)}&select=id,email,phone,tags&limit=10000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []),
+        : traerTodo(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, a, null)}&select=id,email,phone,tags`,
+            sbHeaders(), { techo: TECHO_AUDIENCIA }).then(r => r.filas || []),
     ]);
+    const leads = resuelta.leads;
     const breakdown = { matched: all.length, unsubscribed: 0, missing: 0, excluidos: 0, rebotados: 0 };
     const fuera = await idsExcluidos(userId, clientId, audience);
     const quemados = channel === 'email' ? await correosQuemados() : new Set();
@@ -285,13 +306,19 @@ export default async function handler(req) {
         else if (quemados.has(String(l.email).toLowerCase())) breakdown.rebotados++;
       } else if (!l.phone) breakdown.missing++;
     }
-    return jsonResp({ count: leads.length, sample: leads.slice(0, 5).map(l => l.name), breakdown });
+    // `truncado` viaja hasta la pantalla: el wizard tiene que poder avisar
+    // ANTES de enviar, no después. Ver el aviso en public/app.js.
+    return jsonResp({ count: leads.length, sample: leads.slice(0, 5).map(l => l.name), breakdown,
+                      truncado: resuelta.truncado, techo: TECHO_AUDIENCIA });
   }
 
   // GET ?stats=1&id= — aperturas de una campaña (join sent → opened por resend_id)
   if (req.method === 'GET' && url.searchParams.get('stats') && url.searchParams.get('id')) {
     const id = url.searchParams.get('id');
-    const sent = await fetch(`${SUPABASE_URL}/rest/v1/email_events?campaign_id=eq.${id}&event=eq.sent&select=resend_id&limit=10000`, { headers: sbHeaders() }).then(r => r.json());
+    // Sin paginar, una campaña de más de mil envíos calculaba su tasa de
+    // apertura sobre los primeros mil y el porcentaje salía inventado.
+    const sent = (await traerTodo(`${SUPABASE_URL}/rest/v1/email_events?campaign_id=eq.${id}&event=eq.sent&select=resend_id`,
+      sbHeaders(), { techo: TECHO_AUDIENCIA })).filas;
     const ids = (sent || []).map(s => s.resend_id).filter(Boolean);
     let opened = 0;
     for (let i = 0; i < ids.length; i += 100) {
@@ -385,7 +412,7 @@ export default async function handler(req) {
       toEmail = u?.email_addresses?.[0]?.email_address;
     }
     if (!toEmail) return jsonResp({ error: 'No se pudo obtener tu email' }, 500);
-    const sampleRows = await resolveAudience(userId, clientId, c.audience, 'email');
+    const sampleRows = (await resolveAudience(userId, clientId, c.audience, 'email')).leads;
     const lead = sampleRows[0] || { name: 'Ana Ejemplo', email: toEmail, phone: '', stage: 'nuevo', source: 'demo', company: 'Empresa Demo', value: 0 };
     const render = (t) => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => ({
       nombre: lead.name || '', empresa: lead.company || '', email: lead.email || '', telefono: lead.phone || '',
@@ -419,8 +446,17 @@ export default async function handler(req) {
     const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     if (!adminUser && quota === 0) return jsonResp({ error: 'Las campañas masivas son parte del plan Pro.', upgrade: true }, 403);
 
-    const leads = await resolveAudience(userId, clientId, c.audience, c.channel);
+    const { leads, truncado } = await resolveAudience(userId, clientId, c.audience, c.channel);
     if (!leads.length) return jsonResp({ error: 'La audiencia quedó vacía con esos filtros' }, 400);
+    // Antes que enviar media campaña en silencio, no enviarla y decir por qué.
+    // Una campaña incompleta no se puede "completar" después: los que sí la
+    // recibieron la recibirían dos veces.
+    if (truncado) {
+      return jsonResp({
+        error: `Esta audiencia supera los ${TECHO_AUDIENCIA.toLocaleString('es-CO')} contactos que podemos preparar de una vez. Segméntala con etiquetas y envíala por partes — así no queda nadie fuera sin que te des cuenta.`,
+        audiencia_truncada: true, techo: TECHO_AUDIENCIA,
+      }, 413);
+    }
 
     if (c.channel === 'email' && !adminUser) {
       const used = await monthlySent(userId);

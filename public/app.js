@@ -17462,6 +17462,12 @@ async function crmLoadLeads() {
     const data = await res.json();
     if (mio !== crmAmbito()) return false;   // respuesta caducada: descartar
     crmLeads = data.leads || [];
+    // El servidor avisa cuando no cupo todo. Callarlo seria lo de antes con
+    // otro numero: el cliente veria una parte de su base creyendola completa.
+    if (data.truncado) {
+      showToast('Estas viendo ' + (data.leads || []).length.toLocaleString('es-CO') +
+                ' contactos de una base mayor. Escribenos para ampliar el limite.', 'error');
+    }
     if (data.actor_id) crmMiId = data.actor_id;
     crmSoyMiembro = !!data.es_miembro;
     crmLeadsLoaded = true;
@@ -27483,7 +27489,10 @@ function cmpPreview() {
       el.innerHTML = '🎯 <b>' + d.count + '</b> destinatarios' +
         (d.sample?.length ? ' · ej: ' + d.sample.slice(0, 3).map(esc).join(', ') : '') +
         (excl.length ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:4px">Excluidos: ' + excl.join(' · ') + '</div>' : '') +
-        (_cmpChannel === 'email' && cmpQuota && cmpQuota.limit > 0 ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">Cupo restante del mes: ' + Math.max(0, cmpQuota.limit - (cmpQuota.used || 0)).toLocaleString('es-CO') + '</div>' : '');
+        (_cmpChannel === 'email' && cmpQuota && cmpQuota.limit > 0 ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">Cupo restante del mes: ' + Math.max(0, cmpQuota.limit - (cmpQuota.used || 0)).toLocaleString('es-CO') + '</div>' : '') +
+        // Se avisa aqui, donde todavia se puede segmentar, y no al final: al
+        // encolar el servidor la rechaza, pero para entonces ya escribiste todo.
+        (d.truncado ? '<div style="font-size:11.5px;color:var(--danger);margin-top:4px;font-weight:600">Esta audiencia supera las ' + (d.techo || 0).toLocaleString('es-CO') + ' personas que podemos preparar de una vez. Segmentala con etiquetas para enviarla por partes.</div>' : '');
     } catch { el.textContent = 'No se pudo calcular la audiencia'; }
   }, 350);
 }
