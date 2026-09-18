@@ -51,13 +51,64 @@ async function sb(path, method = 'GET', body = null, prefer) {
   return text ? JSON.parse(text) : null;
 }
 
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ── Cuánto trabajo cabe en una corrida ───────────────────────────────────────
+// Eran 50 trabajos cada diez minutos: 7.200 al día para TODOS los clientes
+// juntos. Una automatización sobre unos miles de contactos tardaba días y
+// mientras tanto nadie más avanzaba, porque la cola es única.
+//
+// Igual que en las campañas, el cuello no era el trabajo en sí sino los viajes
+// de red: un flujo de cinco pasos hacía trece idas y vueltas, una detrás de
+// otra. Ahora los logs se escriben por tandas, la automatización y el lead se
+// leen una vez para todo el lote, y los trabajos de leads distintos avanzan a
+// la vez.
+const PRESUPUESTO = 600;  // trabajos por corrida
+const EN_PARALELO = 8;    // trabajos simultáneos (de leads distintos)
+const LOTE_LOGS   = 400;  // filas por escritura de bitácora
+const TOPE_POSTGREST = 1000;
+
+// ── Bitácora por tandas ──────────────────────────────────────────────────────
+// Antes cada paso de cada flujo era una escritura suelta. Un flujo de cinco
+// pasos, cinco viajes solo para dejar constancia. Se acumulan y se vuelcan
+// juntos: la firma no cambia, así que los 18 sitios que llaman siguen igual.
+let _bitacora = [];
 async function log(automationId, userId, leadId, stepIndex, action, result, detail) {
-  try {
-    await sb('/automation_logs', 'POST', {
-      automation_id: automationId, user_id: userId, lead_id: leadId,
-      step_index: stepIndex, action, result, detail: (detail || '').slice(0, 500),
-    }, 'return=minimal');
-  } catch (e) { console.error('[automations] log error:', e.message); }
+  _bitacora.push({
+    automation_id: automationId, user_id: userId, lead_id: leadId,
+    step_index: stepIndex, action, result, detail: (detail || '').slice(0, 500),
+  });
+  if (_bitacora.length >= LOTE_LOGS) await volcarBitacora();
+}
+
+async function volcarBitacora() {
+  if (!_bitacora.length) return;
+  const pendientes = _bitacora;
+  _bitacora = [];
+  for (let i = 0; i < pendientes.length; i += LOTE_LOGS) {
+    try {
+      await sb('/automation_logs', 'POST', pendientes.slice(i, i + LOTE_LOGS), 'return=minimal');
+    } catch (e) { console.error('[automations] log error:', e.message); }
+  }
+}
+
+// ── Turno para Resend ────────────────────────────────────────────────────────
+// Resend admite unas 2 peticiones por segundo. Con los trabajos corriendo en
+// paralelo, varios podrían llamar a la vez y ganarse un 429 que marca el paso
+// como fallido. Este turno los pone en fila —solo a ellos— sin frenar el resto.
+let _turno = Promise.resolve();
+let _ultimoEnvio = 0;
+function fetchResend(url, opciones) {
+  const mio = _turno.then(async () => {
+    const falta = 500 - (Date.now() - _ultimoEnvio);
+    if (falta > 0) await esperar(falta);
+    _ultimoEnvio = Date.now();
+    return fetch(url, opciones);
+  });
+  // La cola no se puede romper por un fallo de un envío: el siguiente tiene que
+  // poder tomar su turno igual.
+  _turno = mio.then(() => {}, () => {});
+  return mio;
 }
 
 // ── Variables {{...}} con datos del lead ─────────────────────────────────────
@@ -79,7 +130,7 @@ async function actionSendEmail(step, lead, auto, job) {
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
     bodyTxt.split('\n').map(p => '<p style="margin:0 0 14px">' + p + '</p>').join('') +
     '</div>';
-  const r = await fetch('https://api.resend.com/emails', {
+  const r = await fetchResend('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
@@ -128,7 +179,7 @@ async function actionSendNps(step, lead, auto) {
     '<p style="margin:10px 0 0;font-size:11.5px;color:#9ca3af;text-align:center">0 = Nada probable &nbsp;·&nbsp; 10 = Muy probable</p>' +
     '</div>';
   const subject = renderVars(step.subject || '¿Nos recomendarías? — 5 segundos', lead);
-  const r = await fetch('https://api.resend.com/emails', {
+  const r = await fetchResend('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
@@ -190,7 +241,7 @@ async function actionPedirResena(step, lead, auto) {
       '<p style="margin:0 0 18px"><a href="' + enlace + '" style="display:inline-block;background:#1E2BCC;color:#fff;' +
       'padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Dejar mi reseña</a></p>' +
       '<p style="margin:0;font-size:12px;color:#9ca3af">Si el botón no funciona, copia este enlace: ' + enlace + '</p></div>';
-    const r = await fetch('https://api.resend.com/emails', {
+    const r = await fetchResend('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -293,7 +344,7 @@ async function actionNotifyOwner(step, lead, auto) {
     '<p style="margin:18px 0 0;font-size:13px;color:#888">Lead: ' + (lead.name || '—') +
     (lead.email ? ' · ' + lead.email : '') + (lead.phone ? ' · ' + lead.phone : '') +
     ' · Etapa: ' + (lead.stage || '—') + '</p></div>';
-  const r = await fetch('https://api.resend.com/emails', {
+  const r = await fetchResend('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -442,30 +493,86 @@ function compileSteps(steps) {
 }
 
 // ── Procesador de jobs ───────────────────────────────────────────────────────
-async function processJobs() {
-  const now = new Date().toISOString();
-  const jobs = await sb(`/automation_jobs?status=eq.pending&run_at=lte.${encodeURIComponent(now)}&select=*&order=run_at.asc&limit=50`);
-  let processed = 0;
+// La cola, paginada: PostgREST corta en 1.000 filas, así que pedir el
+// presupuesto de golpe habría devuelto mil sin decirlo.
+async function colaDeTrabajos() {
+  const ahora = encodeURIComponent(new Date().toISOString());
+  const filas = [];
+  while (filas.length < PRESUPUESTO) {
+    const pido = Math.min(TOPE_POSTGREST, PRESUPUESTO - filas.length);
+    const pagina = await sb(`/automation_jobs?status=eq.pending&run_at=lte.${ahora}` +
+                            `&select=*&order=run_at.asc&limit=${pido}&offset=${filas.length}`);
+    if (!pagina?.length) break;
+    filas.push(...pagina);
+    if (pagina.length < pido) break;
+  }
+  return filas;
+}
 
-  for (const job of (jobs || [])) {
+// Lee muchas filas por id en tandas y devuelve un índice. Sustituye a leer la
+// misma automatización una vez por cada trabajo que la usa.
+async function porIds(tabla, ids, extra) {
+  const indice = {};
+  const limpios = [...new Set(ids)].filter(Boolean);
+  for (let i = 0; i < limpios.length; i += 200) {
+    const filas = await sb(`${tabla}?id=in.(${limpios.slice(i, i + 200).join(',')})&${extra}`);
+    for (const f of (filas || [])) indice[f.id] = f;
+  }
+  return indice;
+}
+
+async function processJobs() {
+  const jobs = await colaDeTrabajos();
+  if (!jobs.length) return 0;
+
+  const autos = await porIds('/automations', jobs.map(j => j.automation_id), 'select=*');
+  const leads = await porIds('/leads', jobs.map(j => j.lead_id), 'deleted_at=is.null&select=*');
+
+  // Los trabajos del MISMO lead van en fila: dos flujos tocando a la vez las
+  // notas o la etapa del mismo contacto se pisarían, y el que escriba último
+  // borra al otro. Los de leads distintos avanzan en paralelo, que es de donde
+  // sale la velocidad.
+  const porLead = new Map();
+  for (const j of jobs) {
+    if (!porLead.has(j.lead_id)) porLead.set(j.lead_id, []);
+    porLead.get(j.lead_id).push(j);
+  }
+  const grupos = [...porLead.values()];
+
+  let processed = 0, siguiente = 0;
+  async function obrero() {
+    while (siguiente < grupos.length) {
+      for (const job of grupos[siguiente++]) {
+        if (await ejecutarTrabajo(job, autos[job.automation_id], leads[job.lead_id])) processed++;
+      }
+    }
+  }
+  try {
+    await Promise.all(Array.from({ length: Math.min(EN_PARALELO, grupos.length) }, obrero));
+  } finally {
+    // Lo que quede en la bitácora se escribe pase lo que pase: un fallo a mitad
+    // no puede llevarse por delante el registro de lo que sí se hizo.
+    await volcarBitacora();
+  }
+  return processed;
+}
+
+async function ejecutarTrabajo(job, auto, lead) {
+  {
     try {
-      const autos = await sb(`/automations?id=eq.${job.automation_id}&select=*`);
-      const auto = autos?.[0];
       if (!auto || !auto.active) {
         await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
-        continue;
+        return false;
       }
       if (!(await userIsPaid(auto.user_id))) {
         await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
         await log(auto.id, job.user_id, job.lead_id, job.step_index, 'run', 'skipped', 'Plan Free — las automatizaciones requieren plan Pro');
-        continue;
+        return false;
       }
-      const leads = await sb(`/leads?id=eq.${job.lead_id}&deleted_at=is.null&select=*`);
-      const lead = leads?.[0];
       if (!lead) {
         await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
         await log(auto.id, job.user_id, job.lead_id, job.step_index, 'run', 'cancelled', 'Lead eliminado');
-        continue;
+        return false;
       }
 
       const steps = compileSteps(auto.steps || []);
@@ -588,14 +695,14 @@ async function processJobs() {
       if (jobDone) {
         await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'done', step_index: i }, 'return=minimal');
       }
-      processed++;
+      return true;
     } catch (e) {
       console.error('[automations] job error:', job.id, e.message);
       await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { status: 'failed' }, 'return=minimal').catch(() => {});
       await log(job.automation_id, job.user_id, job.lead_id, job.step_index, 'run', 'failed', e.message);
+      return false;
     }
   }
-  return processed;
 }
 
 // ── Triggers de inactividad ──────────────────────────────────────────────────

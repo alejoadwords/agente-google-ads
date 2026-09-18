@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-17-motor-automatizaciones-rapido",
+   "fecha": "2026-09-17",
+   "tipo": "mejora",
+   "titulo": "Las automatizaciones ya no hacen cola detrás de las demás",
+   "texto": "El motor avanzaba 50 trabajos cada diez minutos, y esa cola la compartían todas las cuentas: si alguien lanzaba un flujo sobre miles de contactos, los demás esperaban su turno durante horas. Ahora despacha hasta 600 por corrida —doce veces más— porque los contactos de un lote se leen juntos, el registro de actividad se guarda por tandas y los flujos de contactos distintos avanzan a la vez. Los de un mismo contacto siguen yendo en orden, para que dos flujos no se pisen las notas ni la etapa."
+  },
+  {
    "id": "2026-09-17-motor-campanas-rapido",
    "fecha": "2026-09-17",
    "tipo": "mejora",
