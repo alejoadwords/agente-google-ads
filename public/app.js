@@ -368,6 +368,37 @@ function initReferralButton() {
   if (!btn) return;
   btn.style.display = REFERIDOS_ACTIVOS ? 'flex' : 'none';
 }
+
+// ── AGENTES DE MARKETING — APAGADOS ─────────────────────────────────────────
+// Los seis agentes de chat (Consultor, Google Ads, Meta Ads, TikTok, LinkedIn,
+// SEO y Contenido) se retiran de la vista el 17-09-2026. No es que se usaran
+// poco: `ai_usage` no tiene ni una consulta con origen 'agente' en toda su
+// historia, y `chat_history` está vacía. Sus funciones se van a reubicar como
+// pantallas dentro de Marketing —plataformas de pauta, SEO, redes—, que es
+// donde la gente las buscaba.
+//
+// El interruptor real vive en index.html, porque de él depende descargar o no
+// los prompts. Aquí solo se lee, para que haya una sola verdad.
+//
+// Lo que NO se toca: /api/chat, que además de los agentes alimenta propuestas,
+// reportes, el estudio de contenido y la sugerencia de próxima acción del CRM.
+const AGENTES_ACTIVOS = window.AGENTES_ACTIVOS === true;
+
+// Se esconde la puerta, no se tapia la habitación: la vista del chat sigue
+// existiendo y `showView` desvía a Inicio a quien llegue por un camino viejo.
+function ocultarAgentes() {
+  if (AGENTES_ACTIVOS) return;
+  // Lo que se re-dibuja (las tarjetas del panel de clientes) se apaga por CSS,
+  // que sobrevive al re-dibujo; lo que existe desde el principio, por id.
+  document.body.classList.add('sin-agentes');
+  ['navm-agents', 'sb-agents-group', 'home-consultor-hero', 'home-agents-grid', 'home-cin-wrap',
+   'nav-agent-title']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+}
+alDOMListo(ocultarAgentes);
 async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
 
 // ── THEME ──
@@ -1817,8 +1848,11 @@ function renderClientHomeGreeting(client) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.7"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
   `;
 
-  // Mantener el onclick para que al hacer clic en el hero vaya al consultor con el cliente
-  heroEl.onclick = () => openAgent('consultor');
+  // El hero nace oculto con los agentes apagados, pero aquí ya no dice
+  // «Consultor de Marketing»: es la bienvenida del cliente, y esa se queda.
+  heroEl.style.display = '';
+  if (AGENTES_ACTIVOS) heroEl.onclick = () => openAgent('consultor');
+  else { heroEl.onclick = null; heroEl.style.cursor = 'default'; }
 }
 
 function agencyShowContextBar(client) {
@@ -2850,7 +2884,7 @@ function tourIsAgency() {
 var TOUR_STEPS = [
   {
     title: 'Bienvenido a Acuarius 👋',
-    desc: 'Tu plataforma de marketing con IA para Latinoamérica: agentes expertos, CRM, campañas, automatizaciones y análisis en un solo lugar. Este tour de 1 minuto te muestra el mapa.',
+    desc: 'Tu CRM con IA para Latinoamérica: leads, campañas, conversaciones, automatizaciones y análisis en un solo lugar. Este tour de 1 minuto te muestra el mapa.',
     target: null,
     position: 'center'
   },
@@ -2892,6 +2926,9 @@ var TOUR_STEPS = [
     target: 'navm-agents',
     position: 'right',
     onEnter: function() { tourSidebar(true); },
+    // Sin este filtro el paso se colocaría sobre un elemento oculto: una
+    // burbuja flotando en la esquina apuntando a nada.
+    when: function() { return AGENTES_ACTIVOS; },
   },
   {
     title: 'CRM',
@@ -3473,6 +3510,9 @@ function renderProHomeBanner() {
   // Clic en el hero también abre el modal
   heroEl.style.cursor = 'default';
   heroEl.onclick = null;
+  // El hero nace oculto con los agentes apagados; este aviso ya no habla de
+  // ellos —pide completar el perfil de negocio— y tiene que verse igual.
+  heroEl.style.display = '';
 }
 
 function renderProSetupCard(agentKey) {
@@ -9702,6 +9742,11 @@ function showSocialConnectionModal(igAccts, fbAccts) {
 
 // VIEWS
 function showView(id){
+  // Con los agentes apagados, el chat no se abre por ningún camino: ni por una
+  // tarjeta que se quedara visible, ni por la vista guardada de la sesión
+  // anterior, ni por los ocho sitios del código que entran aquí con 'chat'.
+  // Se corta en la puerta y no en cada ventana.
+  if(id==='chat'&&!AGENTES_ACTIVOS)id='home';
   // Ocultar loader la primera vez que se muestra una vista
   var loader=document.getElementById('app-loader');
   if(loader&&!loader.classList.contains('hidden')){loader.classList.add('hidden');setTimeout(function(){loader.style.display='none';},260);}
@@ -23822,7 +23867,10 @@ function cmdkNorm(s) {
 
 function cmdkCommands() {
   const cmds = [
-    // Agentes
+    // Agentes — el buscador es la última puerta que queda abierta cuando se
+    // esconden las tarjetas: un comando que solo rebota a Inicio es peor que
+    // no tener el comando.
+    ...(AGENTES_ACTIVOS ? [
     { group: 'Agentes', icon: '🎯', label: 'Agente Google Ads',            kw: 'google ads campanas sem',       run: () => openAgent('google-ads') },
     { group: 'Agentes', icon: '📘', label: 'Agente Meta Ads',              kw: 'meta facebook instagram fb ig', run: () => openAgent('meta-ads') },
     { group: 'Agentes', icon: '🎵', label: 'Agente TikTok Ads',            kw: 'tiktok videos',                 run: () => openAgent('tiktok-ads') },
@@ -23830,6 +23878,7 @@ function cmdkCommands() {
     { group: 'Agentes', icon: '🔍', label: 'Agente SEO',                   kw: 'seo posicionamiento organico',  run: () => openAgent('seo') },
     { group: 'Agentes', icon: '✨', label: 'Contenido para Redes',         kw: 'social contenido parrilla posts', run: () => openAgent('social') },
     { group: 'Agentes', icon: '🧭', label: 'Consultor de Marketing',       kw: 'consultor estrategia plan',     run: () => openAgent('consultor') },
+    ] : []),
     // Solo para el equipo de Acuarius
     ...(isAdminUser() ? [{ group: 'Soporte', icon: '🩺', label: 'Diagnosticar una cuenta',
       kw: 'soporte diagnostico cliente cuenta revisar configuracion admin', run: () => dxAbrir() },
@@ -23854,7 +23903,7 @@ function cmdkCommands() {
     { group: 'Ir a', icon: '🗺️', label: 'Roadmap',                         kw: 'roadmap progreso etapas',       run: () => showView('roadmap') },
     { group: 'Ir a', icon: '🏢', label: 'Panel de agencia',                kw: 'agencia clientes panel',        run: () => showView('agency') },
     // Acciones
-    { group: 'Acciones', icon: '💭', label: 'Nueva conversación',          kw: 'nuevo chat conversacion limpiar', run: () => openAgent(currentAgentCtx) },
+    ...(AGENTES_ACTIVOS ? [{ group: 'Acciones', icon: '💭', label: 'Nueva conversación', kw: 'nuevo chat conversacion limpiar', run: () => openAgent(currentAgentCtx) }] : []),
     { group: 'Acciones', icon: '➕', label: 'Crear lead',                  kw: 'nuevo lead contacto crear agregar', run: () => { showView('crm'); setTimeout(() => crmOpenModal(), 150); } },
     { group: 'Acciones', icon: '⚙️', label: 'Configuración',               kw: 'settings ajustes perfil cuenta', run: () => openSettings() },
     { group: 'Acciones', icon: '🔗', label: 'Conectar Google Ads',         kw: 'conectar google api vincular',  run: () => connectGoogleAds() },
@@ -24427,18 +24476,24 @@ async function renderPulso(force) {
   const hasConn = !!(sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || sessionStorage.getItem('meta_access_token'));
   if (!cards.length) {
     if (hasConn) {
-      cards = [{
+      cards = AGENTES_ACTIVOS ? [{
         tone: 'good',
         title: 'Todo en orden',
         body: 'Tus agentes no detectaron nada urgente hoy. Vuelve mañana o pregunta lo que necesites.',
         actLabel: 'Hablar con el consultor →',
         act: () => openAgent('consultor'),
+      }] : [{
+        tone: 'good',
+        title: 'Todo en orden',
+        body: 'No hay nada urgente en tus campañas ni en tu cartera hoy. Vuelve mañana.',
+        actLabel: 'Ver mi cartera →',
+        act: () => navGo('crm'),
       }];
     } else {
       cards = [{
         tone: 'info',
         title: 'Activa tu Pulso diario',
-        body: 'Conecta Google Ads o Meta para que tus agentes vigilen tus campañas y te muestren aquí lo importante cada día.',
+        body: 'Conecta Google Ads o Meta para vigilar tus campañas y ver aquí lo importante cada día.',
         actLabel: 'Conectar ahora →',
         act: () => { try { localStorage.removeItem('acuarius_welcome_connect_shown'); } catch {} showWelcomeConnect(); },
       }];
@@ -24972,7 +25027,7 @@ function seoRenderProject() {
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="seop-btn" onclick="seoRenderSetup(true)">' + icn('gear', 12) + ' Editar</button>' +
-        '<button class="seop-btn" onclick="openAgent(\'seo\')">' + icn('chat', 12) + ' Hablar con el agente</button>' +
+        (AGENTES_ACTIVOS ? '<button class="seop-btn" onclick="openAgent(\'seo\')">' + icn('chat', 12) + ' Hablar con el agente</button>' : '') +
         '<button class="seop-btn primary" id="seop-refresh-btn" onclick="seoUpdatePositions()">' + icn('refresh', 12) + ' Actualizar posiciones</button>' +
       '</div>' +
     '</div>' +

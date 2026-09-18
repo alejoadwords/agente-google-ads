@@ -163,6 +163,12 @@ export async function enqueueAutomations(userId, lead, triggerType, extra) {
 // cómo se llama el campo del otro lado.
 const CAMPOS_PAUTA = {
   'Campaña':    ['campaign_name', 'campaign', 'campaña', 'campana', 'utm_campaign', 'nombre_campana'],
+  // El id va aparte del nombre porque el nombre se puede cambiar en Meta o en
+  // Google en cualquier momento: si se agrupa por nombre, el día que alguien
+  // renombre la campaña los leads viejos quedan colgando de un nombre que ya
+  // no existe y el reporte se parte en dos campañas que son una sola. El id no
+  // se lee bien, pero no cambia nunca — es el que une la campaña con sus leads.
+  'ID de campaña': ['campaign_id', 'campaignid', 'utm_campaign_id', 'id_campana'],
   'Conjunto':   ['adset_name', 'adset', 'ad_set', 'ad_set_name', 'adgroup_name', 'adgroup', 'conjunto', 'conjunto_de_anuncios'],
   'Anuncio':    ['ad_name', 'anuncio', 'creative_name', 'ad'],
   'Plataforma': ['publisher_platform', 'platform', 'plataforma'],

@@ -108,7 +108,7 @@ async function processLeadgen(value) {
   // `field_data` va explícito a propósito: al pasar `fields` Graph deja de
   // devolver los campos por defecto, y sin él se perdería el lead entero sin
   // dar ningún error.
-  const CAMPOS = 'field_data,created_time,campaign_name,adset_name,ad_name,platform';
+  const CAMPOS = 'field_data,created_time,campaign_id,campaign_name,adset_name,ad_name,platform';
   const lead = await fetch(`https://graph.facebook.com/v19.0/${leadgenId}?fields=${CAMPOS}&access_token=${connection.access_token}`)
     .then(r => r.json()).catch(() => null);
   if (!lead || lead.error || !Array.isArray(lead.field_data)) {
@@ -137,6 +137,7 @@ async function processLeadgen(value) {
   // sirven para cruzar con el administrador de anuncios aunque no se lean tan
   // bien como el nombre.
   const pauta = camposDePauta({
+    campaign_id: lead.campaign_id || value.campaign_id || null,
     campaign_name: lead.campaign_name,
     adset_name: lead.adset_name,
     ad_name: lead.ad_name || value.ad_id || null,

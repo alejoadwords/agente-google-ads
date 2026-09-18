@@ -20,7 +20,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Acuarius">
-<title>acuarius — agente google ads</title>
+<title>Acuarius</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1030,6 +1030,11 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .agency-health.gris .agency-health-dot{background:var(--muted2)}
 .agency-card-date{font-size:10px;color:var(--muted2)}
 .agency-card-agents{display:flex;align-items:center;gap:4px}
+/* Agentes apagados (ver AGENTES_ACTIVOS): las tarjetas del panel de clientes se
+   vuelven a dibujar cada vez que se entra, así que esconderlas una sola vez
+   desde JS no sirve — la clase en <body> sí sobrevive al re-dibujo. El botón de
+   Leads se queda: ese lleva al CRM, que es justo a donde queremos llevar. */
+body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .agency-agent-btn{width:28px;height:28px;border-radius:7px;border:1.5px solid;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;background:transparent}
 .agency-agent-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.13)}
 .agency-agent-btn.gads{border-color:#d0e4ff;background:#EFF6FF}
@@ -3050,7 +3055,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="view" id="view-home">
     <div class="home-wrap">
       <div class="home-greeting" id="home-greeting">hola 👋</div>
-      <p class="home-sub">Elige un agente o escribe directamente lo que necesitas</p>
+      <p class="home-sub">Esto es lo que está pasando en tu cuenta hoy</p>
 
       <!-- Pulso — brief diario proactivo -->
       <div class="pulso" id="pulso-section" style="display:none">
@@ -3113,7 +3118,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
 
 
-      <div class="home-cin-wrap">
+      <div class="home-cin-wrap" id="home-cin-wrap">
         <div class="home-cin-box">
           <textarea id="home-cin" placeholder="¿En qué puedo ayudarte hoy?" rows="1"
             oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
@@ -4705,14 +4710,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 </div>
 
-<script src="/prompts/google-ads.js"></script>
-<script src="/prompts/meta-ads.js"></script>
-<script src="/prompts/seo.js"></script>
-<script src="/prompts/tiktok-ads.js"></script>
+<!-- Agentes de marketing — apagados el 17-09-2026 (ver AGENTES_ACTIVOS en app.js).
+     El interruptor vive AQUÍ y no solo en app.js porque de él depende bajar o no
+     los prompts, que son 304 KB (100 KB comprimidos) en cada carga de la app,
+     para todo el mundo. Nadie los usó nunca: cero consultas en ai_usage.
+     Reencenderlos es poner esto en true; el resto del código sigue intacto.
+
+     social.js se carga SIEMPRE, aunque los agentes estén apagados: el guionista
+     de la parrilla del estudio de contenido lee SYSTEM_SOCIAL y seguiría vivo.
+     Sin él no fallaría a la vista —hay un typeof de por medio— sino en silencio,
+     mandando un prompt vacío. -->
 <script src="/prompts/social.js"></script>
-<script src="/prompts/consultor.js"></script>
-<script src="/prompts/linkedin-ads.js"></script>
-<script src="/prompts/actualizaciones-2026.js"></script>
+<script>
+window.AGENTES_ACTIVOS = false;
+if (window.AGENTES_ACTIVOS) {
+  // document.write y no createElement porque estos prompts definen constantes
+  // globales que app.js espera ya declaradas: hay que respetar el orden de
+  // ejecución del parser, y una inyección asíncrona no lo garantiza.
+  ['google-ads', 'meta-ads', 'seo', 'tiktok-ads', 'consultor', 'linkedin-ads', 'actualizaciones-2026']
+    .forEach(function (p) { document.write('<script src="/prompts/' + p + '.js"><\/script>'); });
+}
+</script>
 <!-- LIENZO — panel de resultados del workspace -->
 <div class="lienzo-panel" id="lienzo-panel">
   <div class="lienzo-header">
@@ -5866,7 +5884,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="tour-tooltip" id="tour-tooltip">
     <div class="tour-tooltip-step" id="tour-step-label">paso 1 de 7</div>
     <div class="tour-tooltip-title" id="tour-title">Bienvenido a Acuarius</div>
-    <div class="tour-tooltip-desc" id="tour-desc">Tu plataforma de agentes de marketing con IA.</div>
+    <div class="tour-tooltip-desc" id="tour-desc">Tu CRM con IA y tus herramientas de marketing.</div>
     <div class="tour-tooltip-footer">
       <button class="tour-btn-skip" onclick="tourSkip()">omitir tour</button>
       <div class="tour-dots" id="tour-dots"></div>
