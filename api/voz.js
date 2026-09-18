@@ -19,7 +19,7 @@
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, soloSusLeads } from './_perfiles.js';
-import { registrarUso, cuentaDe } from './_uso-ia.js';
+import { registrarUso, cuentaDe, costoDe } from './_uso-ia.js';
 import { HERRAMIENTAS, ejecutar, hoyLocal } from './_voz-herramientas.js';
 
 const CORS = {
@@ -96,6 +96,7 @@ CÓMO HABLAS
 
 async function conversar(texto, ctx, apiKey) {
   const mensajes = [{ role: 'user', content: texto }];
+  const usadas = [];              // qué consultó, en orden: sirve para el estudio
   const usoTotal = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   let modelo = null;
 
@@ -140,16 +141,17 @@ async function conversar(texto, ctx, apiKey) {
     // fila, se parseaba ese trozo suelto y la respuesta entera se perdía.
     // Fallaba toda pregunta cuya respuesta tuviera detalle, que son casi todas.
     const respuesta = pedidos.find(p => p.name === 'responder');
-    if (respuesta) return { card: respuesta.input, uso: usoTotal, modelo };
+    if (respuesta) return { card: respuesta.input, uso: usoTotal, modelo, usadas, vueltas: vuelta + 1 };
 
     if (!pedidos.length || d.stop_reason !== 'tool_use') {
       const txt = (d.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-      return { card: txt ? { voz: txt, etiqueta: 'Respuesta' } : null, uso: usoTotal, modelo };
+      return { card: txt ? { voz: txt, etiqueta: 'Respuesta' } : null, uso: usoTotal, modelo, usadas, vueltas: vuelta + 1 };
     }
 
     mensajes.push({ role: 'assistant', content: d.content });
     const resultados = [];
     for (const p of pedidos) {
+      usadas.push(p.name);
       let salida;
       try { salida = await ejecutar(p.name, p.input, ctx); }
       catch (e) { salida = { error: 'No se pudo consultar: ' + (e && e.message ? e.message : 'fallo') }; }
@@ -157,7 +159,17 @@ async function conversar(texto, ctx, apiKey) {
     }
     mensajes.push({ role: 'user', content: resultados });
   }
-  return { card: null, uso: usoTotal, modelo };   // se acabaron las vueltas
+  return { card: null, uso: usoTotal, modelo, usadas, vueltas: MAX_VUELTAS };
+}
+
+// Apuntar la pregunta no puede costarle un segundo a quien espera la
+// respuesta, ni tumbarla si falla: va suelta y con el fallo a la consola.
+function apuntarPregunta(fila) {
+  fetch(`${SUPABASE_URL}/rest/v1/voz_consultas`, {
+    method: 'POST',
+    headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+    body: JSON.stringify(fila),
+  }).catch(e => console.error('[voz] no se pudo apuntar la pregunta:', e && e.message));
 }
 
 export default async function handler(req) {
@@ -220,11 +232,26 @@ export default async function handler(req) {
       nombre: quien.nombre || 'el dueño de la cuenta',
     };
 
-    const { card, uso, modelo } = await conversar(texto, ctx, apiKey);
+    const arranco = Date.now();
+    const { card, uso, modelo, usadas, vueltas } = await conversar(texto, ctx, apiKey);
+    const ms = Date.now() - arranco;
 
     if (uso && (uso.input_tokens || uso.output_tokens)) {
       await registrarUso({ userId: await cuentaDe(userId), actorId: userId, origen: 'voz', modelo, uso }).catch(() => {});
     }
+    // Se guarda QUÉ se preguntó, para saber si un enrutador gratis puede
+    // atender lo frecuente sin llamar al modelo. Hoy no lo sabemos: `ai_usage`
+    // mide el gasto, no las preguntas, y elegir qué frases programar a ciegas
+    // sería adivinar. Estudio temporal, solo de quien está en la beta.
+    apuntarPregunta({
+      user_id: quien.userId, actor_id: quien.actorId, texto,
+      herramientas: usadas, vueltas, ms,
+      etiqueta: card && card.etiqueta ? String(card.etiqueta).slice(0, 40) : null,
+      respondio: !!(card && card.voz),
+      tokens_in: uso.input_tokens, tokens_out: uso.output_tokens,
+      cache_write: uso.cache_creation_input_tokens, cache_read: uso.cache_read_input_tokens,
+      costo: costoDe(modelo, uso),
+    });
 
     if (!card || !card.voz) {
       return jsonResp({
