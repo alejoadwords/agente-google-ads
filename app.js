@@ -15269,6 +15269,29 @@ async function selectAdsAccount(accountId) {
   renderActiveAccount();
   renderAccountSelector(); // re-render para marcar el activo
 
+  // Y en el SERVIDOR. Hasta hoy la cuenta elegida vivía solo en el navegador,
+  // así que ninguna función sabía cuál leer: Plataformas de pauta decía «no hay
+  // ninguna cuenta conectada» con la cuenta conectada delante.
+  try {
+    await fetchAuth('/api/pauta', {
+      method: 'POST',
+      body: JSON.stringify({
+        plataforma: 'google_ads',
+        account_id: acc.id,
+        account_name: acc.name || acc.id,
+        client_id: crmAmbitoCliente() || '',
+      }),
+    });
+  } catch { /* si falla, la cuenta sigue elegida en este navegador */ }
+
+  if (!AGENTES_ACTIVOS) {
+    // Sin agentes no hay a quién avisarle del cambio, y el camino viejo cerraba
+    // Ajustes y saltaba al chat: quien elegía una cuenta acababa en Inicio sin
+    // saber por qué.
+    showToast('Cuenta activa: ' + (acc.name || acc.id));
+    return;
+  }
+
   // Verificar si esta cuenta tiene perfil guardado
   const savedProfile = await dbLoadProfile('google-ads');
 
@@ -35167,6 +35190,16 @@ function pautaPintarCampanas(d) {
     return;
   }
 
+  // Conectada pero sin decir qué cuenta leer: eso NO es «no hay nada
+  // conectado». Decírselo así manda a reconectar lo que ya está conectado.
+  if (d.conexiones.every(x => x.sin_cuenta)) {
+    c.innerHTML = emptyAgua('alert', 'Falta elegir qué cuenta publicitaria leer',
+      'Tu permiso está dado, pero no hemos podido saber cuál de tus cuentas es la de este cliente. ' +
+      'Se elige una vez y queda guardada.',
+      '<button class="btn-pri" onclick="pautaIr(\'conexiones\')">Elegir la cuenta</button>');
+    return;
+  }
+
   const m = d.moneda;
   const t = d.totales;
   const rotos = d.conexiones.filter(x => x.error);
@@ -35187,6 +35220,16 @@ function pautaPintarCampanas(d) {
       '<div style="flex:1"><b>Falta la cuenta de ' + rotos.map(x => esc(x.red === 'google' ? 'Google Ads' : 'Meta Ads')).join(' y ') + '.</b> ' +
       esc(rotos[0].error) + ' Los números de abajo no la incluyen.</div>' +
       '<button class="btn-ghost" onclick="pautaIr(\'conexiones\')">Revisar</button></div>';
+  }
+
+  // Sin cliente asignado, la misma inversión aparecería dentro de todos los
+  // clientes como si fuera de cada uno. Se dice, y se ofrece asignarla.
+  const sueltas = d.conexiones.filter(x => x.sin_cliente && !x.sin_cuenta);
+  if (sueltas.length && crmAmbitoCliente()) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 16) +
+      '<div style="flex:1"><b>Esta cuenta de pauta no está asignada a ningún cliente.</b> ' +
+      'Sus cifras se ven aquí, pero también se verían dentro de los demás clientes como si fueran suyas.</div>' +
+      '<button class="btn-ghost" onclick="pautaIr(\'conexiones\')">Asignarla</button></div>';
   }
 
   if (d.moneda_mixta) {

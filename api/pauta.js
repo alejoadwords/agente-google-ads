@@ -94,7 +94,11 @@ async function conexionesDe(userId, clientId) {
   let ruta = `/platform_connections?user_id=eq.${encodeURIComponent(userId)}` +
     `&platform=in.(google_ads,meta_ads)` +
     `&select=id,platform,account_id,account_name,client_id,label,access_token,refresh_token,token_expires_at,updated_at`;
-  if (clientId) ruta += `&client_id=eq.${encodeURIComponent(clientId)}`;
+  // Una conexión sin cliente asignado es «de la cuenta» y tiene que verse
+  // TAMBIÉN dentro de un cliente. Filtrarla fuera es lo que hacía que la
+  // pantalla dijera «no hay ninguna cuenta conectada» con una conectada
+  // delante. Se muestra, marcada, para que se pueda asignar desde aquí.
+  if (clientId) ruta += `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)`;
   return sb(ruta);
 }
 
@@ -326,6 +330,9 @@ function estadoConexion(r) {
     client_id: r.conexion.client_id || null,
     campanas: r.filas.length,
     sin_cuenta: !!r.sin_cuenta,
+    // Sin cliente asignado, sus cifras salen igual dentro de CADA cliente: la
+    // misma inversión contada varias veces. Se avisa en vez de repartirla.
+    sin_cliente: !r.conexion.client_id,
     error: r.error,
   };
 }
@@ -571,12 +578,19 @@ async function guardarEleccion(quien, req) {
     return jsonResp({ error: 'Tu perfil no puede cambiar las conexiones de pauta. Pídeselo al administrador.' }, 403);
   }
   const body = await req.json().catch(() => ({}));
-  const id = body.conexion_id;
-  if (!id) return jsonResp({ error: 'Falta la conexión.' }, 400);
 
-  const fila = (await sb(`/platform_connections?id=eq.${encodeURIComponent(id)}` +
-    `&user_id=eq.${encodeURIComponent(quien.userId)}&select=id&limit=1`))[0];
-  if (!fila) return jsonResp({ error: 'Esa conexión no es de tu cuenta.' }, 404);
+  // Se puede llamar con el id de la conexión (desde esta pantalla) o con la
+  // plataforma (desde el selector de cuentas de Ajustes, que no conoce el id).
+  let fila;
+  if (body.conexion_id) {
+    fila = (await sb(`/platform_connections?id=eq.${encodeURIComponent(body.conexion_id)}` +
+      `&user_id=eq.${encodeURIComponent(quien.userId)}&select=id&limit=1`))[0];
+  } else if (body.plataforma) {
+    fila = (await sb(`/platform_connections?platform=eq.${encodeURIComponent(body.plataforma)}` +
+      `&user_id=eq.${encodeURIComponent(quien.userId)}&select=id&order=updated_at.desc&limit=1`))[0];
+  }
+  if (!fila) return jsonResp({ error: 'No encontramos esa conexión en tu cuenta.' }, 404);
+  const id = fila.id;
 
   const cambios = { updated_at: new Date().toISOString() };
   if (body.account_id !== undefined) cambios.account_id = body.account_id || null;
