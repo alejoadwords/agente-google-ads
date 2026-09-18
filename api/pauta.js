@@ -6,11 +6,14 @@
 // mitad de la red la enseña cualquiera; la del CRM es la única razón para
 // construir esta pantalla.
 //
-//   GET /api/pauta?client_id=&desde=&hasta=      lista de campañas
-//   GET /api/pauta?campana=<clave>&...           detalle de una campaña
-//   GET /api/pauta?cartera=1&desde=&hasta=       una fila por cliente (agencia)
+//   GET  /api/pauta?client_id=&desde=&hasta=     lista de campañas
+//   GET  /api/pauta?campana=<clave>&...          detalle de una campaña
+//   GET  /api/pauta?cartera=1&desde=&hasta=      una fila por cliente (agencia)
+//   GET  /api/pauta?cuentas=<conexion_id>        cuentas publicitarias a las que llega
+//   POST /api/pauta  {conexion_id, account_id…}  cuál de ellas leer, y de qué cliente
 //
-// Todo es de SOLO LECTURA: nunca escribe en Google ni en Meta.
+// De Google y de Meta solo LEE: nunca crea, pausa ni cambia nada allí. Lo
+// único que escribe es en nuestra propia tabla de conexiones.
 
 export const config = { runtime: 'edge' };
 
@@ -18,7 +21,7 @@ import { quienPregunta, exigeModulo, soloSusLeads } from './_perfiles.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -146,7 +149,15 @@ async function gaql(customerId, token, query) {
   throw new Error('google: ninguna versión de la API respondió');
 }
 
+// Una conexión sin cuenta elegida no es un fallo de permisos ni de red: es que
+// nunca se dijo QUÉ cuenta publicitaria leer. Se distingue a propósito, porque
+// «no se pudo leer» mandaría a reconectar algo que está perfectamente bien.
+class SinCuenta extends Error {
+  constructor() { super('sin-cuenta'); this.sinCuenta = true; }
+}
+
 async function campanasGoogle(fila, desde, hasta) {
+  if (!fila.account_id) throw new SinCuenta();
   const token = await refrescarGoogle(fila);
   if (!token) throw new Error('google-auth:sin token');
   const cid = String(fila.account_id || '').replace(/-/g, '');
@@ -173,6 +184,7 @@ async function campanasGoogle(fila, desde, hasta) {
 
 // ── Meta Ads ────────────────────────────────────────────────────────────────
 async function campanasMeta(fila, desde, hasta) {
+  if (!fila.account_id) throw new SinCuenta();
   const act = String(fila.account_id || '').replace(/^act_/, '');
   const rango = encodeURIComponent(JSON.stringify({ since: desde, until: hasta }));
   const url = `${GRAPH}/act_${act}/insights?level=campaign&time_range=${rango}` +
@@ -291,6 +303,9 @@ async function traerCampanas(conexiones, desde, hasta) {
       return { conexion: c, filas, error: null };
     } catch (e) {
       const msg = String(e.message || e);
+      if (e.sinCuenta) {
+        return { conexion: c, filas: [], sin_cuenta: true, error: 'Falta elegir cuál cuenta publicitaria leer.' };
+      }
       return {
         conexion: c, filas: [],
         error: /auth/.test(msg)
@@ -310,6 +325,7 @@ function estadoConexion(r) {
     account_id: r.conexion.account_id,
     client_id: r.conexion.client_id || null,
     campanas: r.filas.length,
+    sin_cuenta: !!r.sin_cuenta,
     error: r.error,
   };
 }
@@ -502,9 +518,82 @@ async function vistaDeCartera(quien, url) {
   return jsonResp({ desde, hasta, clientes: filas });
 }
 
+// ── elegir qué cuenta publicitaria leer ─────────────────────────────────────
+// Hasta hoy la cuenta se escogía en el navegador y vivía en sessionStorage, así
+// que el servidor no sabía cuál leer y la conexión quedaba a medias. Aquí se
+// elige una vez y se guarda con la conexión.
+async function cuentasDisponibles(quien, url) {
+  const id = url.searchParams.get('cuentas');
+  const fila = (await sb(`/platform_connections?id=eq.${encodeURIComponent(id)}` +
+    `&user_id=eq.${encodeURIComponent(quien.userId)}&select=*&limit=1`))[0];
+  if (!fila) return jsonResp({ error: 'Esa conexión no es de tu cuenta.' }, 404);
+
+  if (fila.platform === 'meta_ads') {
+    const r = await fetch(`${GRAPH}/me/adaccounts?fields=account_id,name&limit=100` +
+      `&access_token=${encodeURIComponent(fila.access_token)}`);
+    const d = await r.json().catch(() => ({}));
+    if (d.error) return jsonResp({ error: 'Meta no nos dejó ver tus cuentas: ' + String(d.error.message || '').slice(0, 120) }, 502);
+    return jsonResp({ cuentas: (d.data || []).map(c => ({ id: 'act_' + c.account_id, nombre: c.name || c.account_id })) });
+  }
+
+  const token = await refrescarGoogle(fila);
+  if (!token) return jsonResp({ error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' }, 502);
+  const mcc = (MCC_ID || '').replace(/-/g, '');
+  const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN };
+  let ids = [];
+  for (const v of [22, 21, 20]) {
+    const r = await fetch(`https://googleads.googleapis.com/v${v}/customers:listAccessibleCustomers`, { headers: h });
+    if (r.ok) { ids = ((await r.json()).resourceNames || []).map(n => n.split('/').pop()); break; }
+  }
+  if (!ids.length) return jsonResp({ cuentas: [] });
+
+  // El nombre se pide cuenta por cuenta: la API no da un listado con nombres.
+  // Si una no contesta se ofrece igual por su número, que ya sirve para elegir.
+  const cuentas = await Promise.all(ids.slice(0, 40).map(async cid => {
+    try {
+      const hh = { ...h, 'Content-Type': 'application/json' };
+      if (mcc) hh['login-customer-id'] = mcc;
+      const r = await fetch(`https://googleads.googleapis.com/v22/customers/${cid}/googleAds:search`, {
+        method: 'POST', headers: hh,
+        body: JSON.stringify({ query: 'SELECT customer.descriptive_name FROM customer LIMIT 1' }),
+      });
+      const d = await r.json();
+      const n = d.results?.[0]?.customer?.descriptiveName;
+      return { id: cid, nombre: n ? n + ' · ' + cid : cid };
+    } catch { return { id: cid, nombre: cid }; }
+  }));
+  return jsonResp({ cuentas });
+}
+
+async function guardarEleccion(quien, req) {
+  // Un comercial no reconfigura de dónde salen los datos de toda la cuenta.
+  if (soloSusLeads(quien.perfil)) {
+    return jsonResp({ error: 'Tu perfil no puede cambiar las conexiones de pauta. Pídeselo al administrador.' }, 403);
+  }
+  const body = await req.json().catch(() => ({}));
+  const id = body.conexion_id;
+  if (!id) return jsonResp({ error: 'Falta la conexión.' }, 400);
+
+  const fila = (await sb(`/platform_connections?id=eq.${encodeURIComponent(id)}` +
+    `&user_id=eq.${encodeURIComponent(quien.userId)}&select=id&limit=1`))[0];
+  if (!fila) return jsonResp({ error: 'Esa conexión no es de tu cuenta.' }, 404);
+
+  const cambios = { updated_at: new Date().toISOString() };
+  if (body.account_id !== undefined) cambios.account_id = body.account_id || null;
+  if (body.account_name !== undefined) cambios.account_name = body.account_name || null;
+  // client_id es texto en la base; '' significa «de la cuenta», no de un cliente.
+  if (body.client_id !== undefined) cambios.client_id = body.client_id || null;
+
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(cambios),
+  });
+  if (!r.ok) return jsonResp({ error: 'No se pudo guardar la elección.' }, 500);
+  return jsonResp({ ok: true });
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'GET') return jsonResp({ error: 'Method not allowed' }, 405);
+  if (req.method !== 'GET' && req.method !== 'POST') return jsonResp({ error: 'Method not allowed' }, 405);
 
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
@@ -514,7 +603,10 @@ export default async function handler(req) {
     const corte = exigeModulo(quien, 'marketing');
     if (corte) return corte;
 
+    if (req.method === 'POST') return await guardarEleccion(quien, req);
+
     const url = new URL(req.url);
+    if (url.searchParams.get('cuentas')) return await cuentasDisponibles(quien, url);
     if (url.searchParams.get('cartera')) return await vistaDeCartera(quien, url);
     if (url.searchParams.get('campana')) return await detalleDeCampana(quien, url);
     return await listaDeCampanas(quien, url);

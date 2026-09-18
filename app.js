@@ -35303,16 +35303,27 @@ function pautaPintarConexiones(d) {
     '</div>';
 
   const viva = (x, nombreRed) => tarjeta(x.red, nombreRed +
-      (x.error ? ' <span class="pauta-pill pauta-pill-mal">Permiso caducado</span>'
-               : ' <span class="pauta-pill pauta-pill-ok">Conectada</span>'),
+      (x.sin_cuenta ? ' <span class="pauta-pill pauta-pill-ojo">Falta elegir la cuenta</span>'
+        : x.error ? ' <span class="pauta-pill pauta-pill-mal">Permiso caducado</span>'
+                  : ' <span class="pauta-pill pauta-pill-ok">Conectada</span>'),
     esc(x.cuenta || x.account_id || ''),
     // Aquí NO va el número de leads: el que tenemos es el de toda la cuenta, y
     // con dos redes conectadas ambas tarjetas dirían la misma cifra como si
     // cada una la hubiera traído. Los leads por red están en Campañas.
-    '<div class="pauta-conx-cifras una">' +
-      '<div><b>' + x.campanas + '</b><span>campañas con inversión en el período</span></div>' +
-    '</div>' +
-    (x.error ? '<div class="pauta-conx-nota mal">' + esc(x.error) + '</div>' : ''),
+    // Una conexión a la que le falta elegir cuenta NO se enseña como rota: se
+    // enseña con la pregunta que falta por responder.
+    (x.sin_cuenta
+      ? '<div class="pauta-conx-nota ojo"><b>Falta decir qué cuenta publicitaria leer.</b><br>' +
+        'Autorizaste el acceso, pero no elegiste cuál de tus cuentas es la de este cliente.</div>' +
+        '<div id="pauta-cuentas-' + x.id + '"><button class="btn-pri" onclick="pautaCargarCuentas(' +
+        JSON.stringify(String(x.id)) + ')">Elegir la cuenta</button></div>'
+      : '<div class="pauta-conx-cifras una">' +
+          '<div><b>' + x.campanas + '</b><span>campañas con inversión en el período</span></div>' +
+        '</div>' +
+        (x.error ? '<div class="pauta-conx-nota mal">' + esc(x.error) + '</div>' : '') +
+        '<div class="pauta-conx-cambiar"><button class="pauta-link" onclick="pautaCargarCuentas(' +
+        JSON.stringify(String(x.id)) + ')">Cambiar de cuenta</button>' +
+        '<div id="pauta-cuentas-' + x.id + '"></div></div>'),
     '<div class="pauta-conx-btns">' +
       '<button class="btn-ghost" onclick="' + (x.red === 'google' ? 'connectGoogleAds()' : 'connectMetaAds()') + '">Volver a conectar</button>' +
     '</div>');
@@ -35368,6 +35379,72 @@ function pautaPintarConexiones(d) {
     '</div></div>';
 
   c.innerHTML = html;
+}
+
+// Pedirle a la red a qué cuentas llega este permiso. Se pide al pulsar y no al
+// pintar: son varias llamadas a Google y no tiene sentido hacerlas cada vez que
+// alguien abre la pestaña.
+async function pautaCargarCuentas(conexionId) {
+  const caja = document.getElementById('pauta-cuentas-' + conexionId);
+  if (!caja) return;
+  caja.innerHTML = '<div class="pauta-cargando" style="padding:14px 0">' + icn('refresh', 14) + ' Buscando tus cuentas…</div>';
+  try {
+    const r = await fetchAuth('/api/pauta?cuentas=' + encodeURIComponent(conexionId));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudieron listar tus cuentas.');
+    if (!d.cuentas.length) {
+      caja.innerHTML = '<div class="pauta-conx-nota mal">Este permiso no llega a ninguna cuenta publicitaria. ' +
+        'Revisa con qué usuario autorizaste.</div>';
+      return;
+    }
+    caja.innerHTML =
+      '<div class="pauta-elige">' +
+        '<label class="pauta-elige-l" for="pc-' + conexionId + '">Cuenta publicitaria</label>' +
+        '<select class="pauta-sel" id="pc-' + conexionId + '">' +
+          d.cuentas.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nombre) + '</option>').join('') +
+        '</select>' +
+        pautaSelectorCliente(conexionId) +
+        '<button class="btn-pri" onclick="pautaGuardarConexion(' + JSON.stringify(String(conexionId)) + ')">Guardar</button>' +
+      '</div>';
+  } catch (e) {
+    caja.innerHTML = '<div class="pauta-conx-nota mal">' + esc(e.message) + '</div>';
+  }
+}
+
+// En una cuenta de agencia hay que decir de QUÉ cliente es esta inversión: sin
+// eso, al entrar a un cliente su pantalla saldría vacía aunque la cuenta esté
+// conectada, y nadie entendería por qué.
+function pautaSelectorCliente(conexionId) {
+  const cl = (typeof agencyClients !== 'undefined' ? agencyClients : []) || [];
+  if (!cl.length) return '';
+  const actual = crmAmbitoCliente();
+  return '<label class="pauta-elige-l" for="pcl-' + conexionId + '">Es del cliente</label>' +
+    '<select class="pauta-sel" id="pcl-' + conexionId + '">' +
+      '<option value="">Mi cuenta (ningún cliente)</option>' +
+      cl.map(c => '<option value="' + esc(c.id) + '"' + (c.id === actual ? ' selected' : '') + '>' +
+        esc(c.client_name || c.name || c.id) + '</option>').join('') +
+    '</select>';
+}
+
+async function pautaGuardarConexion(conexionId) {
+  const sel = document.getElementById('pc-' + conexionId);
+  const selCl = document.getElementById('pcl-' + conexionId);
+  if (!sel) return;
+  const cuerpo = {
+    conexion_id: conexionId,
+    account_id: sel.value,
+    account_name: sel.options[sel.selectedIndex]?.text || sel.value,
+  };
+  if (selCl) cuerpo.client_id = selCl.value;
+  try {
+    const r = await fetchAuth('/api/pauta', { method: 'POST', body: JSON.stringify(cuerpo) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
+    showToast('Cuenta guardada');
+    pautaCargar();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
 }
 
 function pautaPintarCartera(d) {
