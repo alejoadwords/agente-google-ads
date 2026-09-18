@@ -133,6 +133,10 @@ async function manejar(req) {
     agent_id: agent_id || null,      // sin agente = lo atiende el equipo
     channel: 'whatsapp',
     external_id: String(phone_number_id),
+    // El waba_id llegaba en el alta y se tiraba. Toda la API de plantillas
+    // cuelga de él —crearlas, listarlas, ver si las aprobaron— y sin guardarlo
+    // la única salida era volver a pedirle al cliente que reconectara.
+    waba_id: String(waba_id),
     access_token: token,
     channel_name: nombre || 'WhatsApp',
     is_active: true,
@@ -149,8 +153,10 @@ async function manejar(req) {
 
   let res;
   if (previa?.[0]?.id) {
-    // Al reconectar no se pisa quién atiende el canal si ya estaba decidido
-    const cambios = { access_token: token, channel_name: fila.channel_name, is_active: true };
+    // Al reconectar no se pisa quién atiende el canal si ya estaba decidido.
+    // El waba_id SÍ se refresca: las conexiones creadas antes de que se
+    // guardara lo tienen vacío, y reconectar es la única vía para poblarlo.
+    const cambios = { access_token: token, channel_name: fila.channel_name, is_active: true, waba_id: fila.waba_id };
     if (agent_id !== undefined) cambios.agent_id = agent_id || null;
     res = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(previa[0].id)}`, {
       method: 'PATCH', headers: sb(), body: JSON.stringify(cambios),
