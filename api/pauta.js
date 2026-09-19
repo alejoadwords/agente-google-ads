@@ -27,7 +27,6 @@ const CORS = {
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const DEV_TOKEN = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-const MCC_ID = process.env.GOOGLE_ADS_MCC_ID;
 const GRAPH = 'https://graph.facebook.com/v19.0';
 
 // Las etapas cerradas son las mismas que usa el pipeline en el navegador. Si
@@ -93,7 +92,7 @@ function claveDeLead(l) {
 async function conexionesDe(userId, clientId) {
   let ruta = `/platform_connections?user_id=eq.${encodeURIComponent(userId)}` +
     `&platform=in.(google_ads,meta_ads)` +
-    `&select=id,platform,account_id,account_name,client_id,label,access_token,refresh_token,token_expires_at,updated_at`;
+    `&select=id,platform,account_id,account_name,client_id,label,access_token,refresh_token,token_expires_at,updated_at,extra_data`;
   // Una conexión sin cliente asignado es «de la cuenta» y tiene que verse
   // TAMBIÉN dentro de un cliente. Filtrarla fuera es lo que hacía que la
   // pantalla dijera «no hay ninguna cuenta conectada» con una conectada
@@ -134,10 +133,54 @@ async function refrescarGoogle(fila) {
   return d.access_token;
 }
 
-async function gaql(customerId, token, query) {
-  const mcc = (MCC_ID || '').replace(/-/g, '');
+// Por dónde hay que preguntar por una cuenta publicitaria.
+//
+// Mandábamos SIEMPRE nuestro propio MCC como `login-customer-id`, y eso es
+// falso: el cliente conecta SU cuenta de Google, no la nuestra. La cuenta de
+// Certain cuelga del administrador del cliente, no del nuestro, y Google
+// contestaba USER_PERMISSION_DENIED — un 403 que parecía un permiso caducado
+// cuando el permiso estaba perfecto.
+//
+// La respuesta se guarda en la conexión: averiguarla cuesta una llamada por
+// cada administrador al que llega el usuario, y no tiene sentido repetirlo.
+async function porDondePreguntar(fila, token, cid) {
+  const guardado = fila.extra_data && fila.extra_data.login_customer_id;
+  if (guardado !== undefined && guardado !== null) return guardado || null;
+
+  const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN };
+  const la = await fetch('https://googleads.googleapis.com/v22/customers:listAccessibleCustomers', { headers: h });
+  if (!la.ok) throw new Error('google-auth:no se pudo listar las cuentas accesibles');
+  const alcance = ((await la.json()).resourceNames || []).map(n => n.split('/').pop());
+
+  let elegido = null;
+  if (alcance.includes(cid)) {
+    elegido = '';              // se llega directo: no hace falta cabecera
+  } else {
+    for (const m of alcance) {
+      try {
+        const r = await fetch(`https://googleads.googleapis.com/v22/customers/${m}/googleAds:search`, {
+          method: 'POST',
+          headers: { ...h, 'Content-Type': 'application/json', 'login-customer-id': m },
+          body: JSON.stringify({ query: 'SELECT customer_client.id FROM customer_client' }),
+        });
+        if (!r.ok) continue;
+        const filas = (await r.json()).results || [];
+        if (filas.some(x => String(x.customerClient?.id) === cid)) { elegido = m; break; }
+      } catch { /* un administrador que no contesta no puede parar la búsqueda */ }
+    }
+    if (elegido === null) throw new Error('google-auth:el permiso no llega a esa cuenta');
+  }
+
+  await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?id=eq.${fila.id}`, {
+    method: 'PATCH', headers: sbHeaders(),
+    body: JSON.stringify({ extra_data: { ...(fila.extra_data || {}), login_customer_id: elegido } }),
+  }).catch(() => {});
+  return elegido || null;
+}
+
+async function gaql(customerId, token, query, login) {
   const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
-  if (mcc) h['login-customer-id'] = mcc;
+  if (login) h['login-customer-id'] = login;
   // Se prueban varias versiones porque Google retira las viejas sin avisarnos:
   // atarse a una sola convierte una depreciación en una pantalla en blanco.
   for (const v of [22, 21, 20]) {
@@ -165,11 +208,12 @@ async function campanasGoogle(fila, desde, hasta) {
   const token = await refrescarGoogle(fila);
   if (!token) throw new Error('google-auth:sin token');
   const cid = String(fila.account_id || '').replace(/-/g, '');
+  const login = await porDondePreguntar(fila, token, cid);
   const filas = await gaql(cid, token, `
     SELECT campaign.id, campaign.name, campaign.status, customer.currency_code,
            metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions
     FROM campaign
-    WHERE segments.date BETWEEN '${desde}' AND '${hasta}'`);
+    WHERE segments.date BETWEEN '${desde}' AND '${hasta}'`, login);
 
   return filas.map(f => ({
     red: 'google',
@@ -545,30 +589,54 @@ async function cuentasDisponibles(quien, url) {
 
   const token = await refrescarGoogle(fila);
   if (!token) return jsonResp({ error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' }, 502);
-  const mcc = (MCC_ID || '').replace(/-/g, '');
   const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN };
-  let ids = [];
+  let raices = [];
   for (const v of [22, 21, 20]) {
     const r = await fetch(`https://googleads.googleapis.com/v${v}/customers:listAccessibleCustomers`, { headers: h });
-    if (r.ok) { ids = ((await r.json()).resourceNames || []).map(n => n.split('/').pop()); break; }
+    if (r.ok) { raices = ((await r.json()).resourceNames || []).map(n => n.split('/').pop()); break; }
   }
-  if (!ids.length) return jsonResp({ cuentas: [] });
+  if (!raices.length) return jsonResp({ cuentas: [] });
 
-  // El nombre se pide cuenta por cuenta: la API no da un listado con nombres.
-  // Si una no contesta se ofrece igual por su número, que ya sirve para elegir.
-  const cuentas = await Promise.all(ids.slice(0, 40).map(async cid => {
+  // Hay que BAJAR por la jerarquía. `listAccessibleCustomers` devuelve solo las
+  // cuentas a las que se llega de primera mano —en Certain, 11— y la del
+  // cliente no estaba entre ellas: cuelga de un administrador suyo. Preguntando
+  // solo por las de primera mano, la cuenta que se quiere leer ni aparecía.
+  //
+  // De cada administrador se anota POR DÓNDE se llegó: ese es el
+  // `login-customer-id` que luego hay que mandar, y sin él Google contesta que
+  // no hay permiso aunque lo haya.
+  const vistas = new Map();
+  await Promise.all(raices.map(async raiz => {
     try {
-      const hh = { ...h, 'Content-Type': 'application/json' };
-      if (mcc) hh['login-customer-id'] = mcc;
-      const r = await fetch(`https://googleads.googleapis.com/v22/customers/${cid}/googleAds:search`, {
-        method: 'POST', headers: hh,
-        body: JSON.stringify({ query: 'SELECT customer.descriptive_name FROM customer LIMIT 1' }),
+      const r = await fetch(`https://googleads.googleapis.com/v22/customers/${raiz}/googleAds:search`, {
+        method: 'POST',
+        headers: { ...h, 'Content-Type': 'application/json', 'login-customer-id': raiz },
+        body: JSON.stringify({
+          query: 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, ' +
+                 'customer_client.currency_code, customer_client.status FROM customer_client',
+        }),
       });
-      const d = await r.json();
-      const n = d.results?.[0]?.customer?.descriptiveName;
-      return { id: cid, nombre: n ? n + ' · ' + cid : cid };
-    } catch { return { id: cid, nombre: cid }; }
+      if (!r.ok) return;
+      for (const f of (await r.json()).results || []) {
+        const c = f.customerClient || {};
+        const id = String(c.id || '');
+        // Una cuenta administradora no tiene campañas propias: ofrecerla sería
+        // ofrecer una pantalla que siempre saldría vacía.
+        if (!id || c.manager) continue;
+        if (c.status && c.status !== 'ENABLED') continue;
+        if (!vistas.has(id)) {
+          vistas.set(id, {
+            id,
+            nombre: (c.descriptiveName ? c.descriptiveName + ' · ' : '') + id +
+                    (c.currencyCode ? ' · ' + c.currencyCode : ''),
+            login: id === raiz ? '' : raiz,
+          });
+        }
+      }
+    } catch { /* un administrador que no contesta no puede vaciar la lista */ }
   }));
+
+  const cuentas = [...vistas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   return jsonResp({ cuentas });
 }
 
@@ -595,6 +663,15 @@ async function guardarEleccion(quien, req) {
   const cambios = { updated_at: new Date().toISOString() };
   if (body.account_id !== undefined) cambios.account_id = body.account_id || null;
   if (body.account_name !== undefined) cambios.account_name = body.account_name || null;
+  // Por dónde preguntar por esa cuenta. Se guarda al elegirla porque en ese
+  // momento ya se sabe; si no viene, se borra lo que hubiera para que se
+  // vuelva a averiguar contra la cuenta nueva y no se herede la anterior.
+  if (body.account_id !== undefined) {
+    const previo = (await sb(`/platform_connections?id=eq.${encodeURIComponent(id)}&select=extra_data&limit=1`))[0];
+    cambios.extra_data = { ...((previo && previo.extra_data) || {}) };
+    if (body.login !== undefined && body.login !== null) cambios.extra_data.login_customer_id = body.login;
+    else delete cambios.extra_data.login_customer_id;
+  }
   // client_id es texto en la base; '' significa «de la cuenta», no de un cliente.
   if (body.client_id !== undefined) cambios.client_id = body.client_id || null;
 

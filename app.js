@@ -35993,7 +35993,8 @@ async function pautaCargarCuentas(conexionId) {
       '<div class="pauta-elige">' +
         '<label class="pauta-elige-l" for="pc-' + conexionId + '">Cuenta publicitaria</label>' +
         '<select class="pauta-sel" id="pc-' + conexionId + '">' +
-          d.cuentas.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nombre) + '</option>').join('') +
+          d.cuentas.map(c => '<option value="' + esc(c.id) + '" data-login="' + esc(c.login || '') + '">' +
+            esc(c.nombre) + '</option>').join('') +
         '</select>' +
         pautaSelectorCliente(conexionId) +
         '<button class="btn-pri" onclick="pautaGuardarConexion(' + JSON.stringify(String(conexionId)) + ')">Guardar</button>' +
@@ -36022,10 +36023,14 @@ async function pautaGuardarConexion(conexionId) {
   const sel = document.getElementById('pc-' + conexionId);
   const selCl = document.getElementById('pcl-' + conexionId);
   if (!sel) return;
+  const op = sel.options[sel.selectedIndex];
   const cuerpo = {
     conexion_id: conexionId,
     account_id: sel.value,
-    account_name: sel.options[sel.selectedIndex]?.text || sel.value,
+    account_name: op?.text || sel.value,
+    // Por dónde hay que preguntarle a Google por esa cuenta. Se sabe aquí, al
+    // listarla; averiguarlo después cuesta una llamada por administrador.
+    login: op?.dataset?.login || '',
   };
   if (selCl) cuerpo.client_id = selCl.value;
   try {
