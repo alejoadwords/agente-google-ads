@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-19-crear-plantillas-whatsapp",
+   "fecha": "2026-09-19",
+   "tipo": "nuevo",
+   "titulo": "Crea tus plantillas de WhatsApp y mándalas a aprobar desde Acuarius",
+   "texto": "Ya no hace falta salir a WhatsApp Manager. Desde el asistente de campañas escribes la plantilla —título, mensaje, pie y un botón de enlace si quieres—, ves cómo le llegará al cliente en una vista previa igual a WhatsApp, y la envías a revisión. Mientras escribes te vamos avisando de lo que Meta rechazaría: nombres con mayúsculas o tildes, huecos numerados con saltos, textos que pasan del límite, y sobre todo los ejemplos de cada hueco, que Meta exige y son el olvido que más rechazos causa. También te advertimos de las cosas que suele rechazar aunque no sean reglas fijas, como empezar o terminar el mensaje con un hueco. Meta responde normalmente en unas horas."
+  },
+  {
    "id": "2026-09-19-campanas-whatsapp-plantillas",
    "fecha": "2026-09-19",
    "tipo": "nuevo",

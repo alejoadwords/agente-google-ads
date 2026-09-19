@@ -14,11 +14,12 @@
 
 export const config = { runtime: 'edge' };
 
-import { conexionWhatsapp, plantillasDeMeta, huecosDe, cuentaDe } from './_whatsapp.js';
+import { conexionWhatsapp, plantillasDeMeta, huecosDe, cuentaDe,
+         revisarBorrador, crearPlantilla, borrarPlantilla } from './_whatsapp.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
@@ -50,7 +51,7 @@ async function getUserId(req) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'GET') return jsonResp({ error: 'Método no permitido' }, 405);
+  if (!['GET', 'POST', 'DELETE'].includes(req.method)) return jsonResp({ error: 'Método no permitido' }, 405);
 
   const userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
@@ -73,6 +74,41 @@ export default async function handler(req) {
     // un error genérico.
     return jsonResp({ plantillas: [], motivo: 'sin_waba',
       aviso: 'Este canal se conectó antes de que gestionáramos plantillas. Vuelve a conectarlo en Ajustes → Canales para habilitarlas.' });
+  }
+
+  // ── POST: escribir una plantilla y mandarla a revisión ────────────────────
+  if (req.method === 'POST') {
+    let b;
+    try { b = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+
+    // ?revisar=1 solo revisa y devuelve, sin mandar nada a Meta. Lo usa la
+    // pantalla mientras se escribe: ver el problema al teclear vale mucho más
+    // que verlo tres días después en un rechazo.
+    const { errores, avisos } = revisarBorrador(b);
+    if (url.searchParams.get('revisar')) return jsonResp({ errores, avisos });
+    if (errores.length) return jsonResp({ error: errores[0], errores, avisos }, 400);
+
+    const r = await crearPlantilla(conn, b);
+    if (!r.ok) return jsonResp({ error: 'Meta no la aceptó: ' + r.aviso }, 400);
+    // La categoría que devuelve Meta puede no ser la que se pidió: recategoriza
+    // por el contenido, y eso cambia lo que le cuesta al cliente cada envío.
+    return jsonResp({
+      ok: true, id: r.id, status: r.status, category: r.category,
+      recategorizada: r.category && r.category !== b.category ? r.category : null,
+      avisos,
+    });
+  }
+
+  // ── DELETE: borrar una plantilla ──────────────────────────────────────────
+  // Hace falta de verdad: Meta no deja reutilizar el nombre de una plantilla
+  // rechazada hasta borrarla, así que sin esto el cliente se queda sin poder
+  // rehacerla con el mismo nombre.
+  if (req.method === 'DELETE') {
+    const nombre = url.searchParams.get('name');
+    if (!nombre) return jsonResp({ error: 'Falta el nombre de la plantilla' }, 400);
+    const r = await borrarPlantilla(conn, nombre);
+    if (!r.ok) return jsonResp({ error: 'No se pudo borrar: ' + r.aviso }, 400);
+    return jsonResp({ ok: true });
   }
 
   const res = await plantillasDeMeta(conn);

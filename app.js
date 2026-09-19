@@ -27208,9 +27208,227 @@ const CMP_CAMPOS_WA = [
 
 function cmpWTarjetaPlantillaWA() {
   return '<div id="cmpw-wa-box" style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
-    '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn('chat', 12) + ' Plantilla aprobada de WhatsApp</div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">' +
+      '<div style="font-size:12px;font-weight:800">' + icn('chat', 12) + ' Plantilla aprobada de WhatsApp</div>' +
+      '<button class="btn-sec sm" onclick="waNuevaPlantilla()">Crear plantilla</button>' +
+    '</div>' +
     '<div id="cmpw-wa-cuerpo" style="font-size:12px;color:var(--muted)">Consultando tus plantillas…</div>' +
   '</div>';
+}
+
+// ── Editor de plantillas ─────────────────────────────────────────────────────
+// Escribir la plantilla y mandarla a revisión sin salir de Acuarius.
+//
+// La validación NO se duplica aquí: se le pregunta al servidor con ?revisar=1
+// mientras se escribe. Tener dos copias de las reglas de Meta —una en el
+// navegador y otra en el servidor— termina siempre igual: se desincronizan y la
+// pantalla dice que está bien algo que el servidor rechaza.
+let _waNP = null;
+
+function waNuevaPlantilla() {
+  _waNP = { name: '', category: 'MARKETING', language: 'es', header: '', body: '', footer: '',
+            ejemplos_header: [], ejemplos_body: [], boton: { text: '', url: '' },
+            errores: [], avisos: [], enviando: false, duplicada: false };
+  document.getElementById('wa-np-ov')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'wa-np-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;width:min(860px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;border-bottom:1px solid var(--border)">' +
+      '<div style="font-weight:800;letter-spacing:-.01em">Nueva plantilla de WhatsApp</div>' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'wa-np-ov\').remove()">Cerrar</button>' +
+    '</div>' +
+    '<div id="wa-np-body" style="flex:1;overflow-y:auto;padding:18px"></div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  waNPRender();
+}
+
+const WA_NP_CAMPOS = ['name', 'header', 'body', 'footer'];
+
+function waNPRender() {
+  const c = document.getElementById('wa-np-body');
+  if (!c || !_waNP) return;
+  const n = _waNP;
+  const huecos = (t) => [...new Set([...String(t || '').matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(m => Number(m[1])))].sort((a, b) => a - b);
+  const hH = huecos(n.header), hB = huecos(n.body);
+
+  const ejemplo = (parte, lista) => lista.map((num, i) =>
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">' +
+      '<span style="font-size:11.5px;font-weight:800;color:var(--muted);min-width:42px">{{' + num + '}}</span>' +
+      '<input class="auto-input" style="flex:1" placeholder="Un ejemplo real, ej. María Restrepo" value="' +
+        esc((n['ejemplos_' + parte][i]) || '') + '" oninput="waNPEjemplo(\'' + parte + '\',' + i + ',this.value)">' +
+    '</div>').join('');
+
+  c.innerHTML =
+  // Rejilla propia, no la del asistente: la regla responsiva de `cmpw-grid`
+  // vive en el <style> de ESE overlay, y depender de que siga abierto es como
+  // se rompen las cosas a los tres meses.
+  '<div class="wa-np-grid">' +
+    '<div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:160px">' +
+          '<div class="wa-np-lbl">Nombre interno *</div>' +
+          '<input class="auto-input" value="' + esc(n.name) + '" placeholder="promo_septiembre" oninput="waNPSet(\'name\',this.value)">' +
+          '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Minúsculas, números y guiones bajos. No lo ve el cliente.</div>' +
+        '</div>' +
+        '<div style="min-width:150px">' +
+          '<div class="wa-np-lbl">Tipo *</div>' +
+          '<select class="auto-input" onchange="waNPSet(\'category\',this.value)">' +
+            '<option value="MARKETING"' + (n.category === 'MARKETING' ? ' selected' : '') + '>Marketing — promociones</option>' +
+            '<option value="UTILITY"' + (n.category === 'UTILITY' ? ' selected' : '') + '>Utilidad — avisos y confirmaciones</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="wa-np-lbl" style="margin-top:12px">Título (opcional)</div>' +
+      '<input class="auto-input" value="' + esc(n.header) + '" placeholder="Novedades de {{1}}" oninput="waNPSet(\'header\',this.value)">' +
+      (hH.length ? '<div style="margin-top:4px">' + ejemplo('header', hH) + '</div>' : '') +
+
+      '<div class="wa-np-lbl" style="margin-top:12px">Mensaje *</div>' +
+      '<textarea class="auto-input" rows="6" placeholder="Hola {{1}}, en {{2}} tenemos…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="waNPSet(\'body\',this.value)">' + esc(n.body) + '</textarea>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">' +
+        '<button class="btn-ghost sm" onclick="waNPAddHueco()">Añadir un hueco {{' + (hB.length + 1) + '}}</button>' +
+        '<span style="font-size:11px;color:var(--muted2)">' + n.body.length + '/1024</span>' +
+      '</div>' +
+      (hB.length ? '<div style="margin-top:6px">' +
+        '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Un ejemplo por hueco *</div>' +
+        '<div style="font-size:11px;color:var(--muted2);margin-bottom:2px">Meta los exige para revisar la plantilla. Es el olvido que más rechazos causa.</div>' +
+        ejemplo('body', hB) + '</div>' : '') +
+
+      '<div class="wa-np-lbl" style="margin-top:12px">Pie (opcional)</div>' +
+      '<input class="auto-input" value="' + esc(n.footer) + '" placeholder="Responde SALIR para no recibir más" oninput="waNPSet(\'footer\',this.value)">' +
+
+      '<div class="wa-np-lbl" style="margin-top:12px">Botón de enlace (opcional)</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<input class="auto-input" style="flex:1" value="' + esc(n.boton.text) + '" placeholder="Ver catálogo" oninput="waNPBoton(\'text\',this.value)">' +
+        '<input class="auto-input" style="flex:1.4" value="' + esc(n.boton.url) + '" placeholder="https://…" oninput="waNPBoton(\'url\',this.value)">' +
+      '</div>' +
+    '</div>' +
+
+    '<div>' +
+      '<div class="wa-np-lbl">Así lo verá tu cliente</div>' +
+      waNPBurbuja(n) +
+      '<div id="wa-np-msgs" style="margin-top:12px"></div>' +
+      '<button class="btn-pri" id="wa-np-btn" style="width:100%;margin-top:12px" onclick="waNPEnviar()"' +
+        (n.enviando ? ' disabled' : '') + '>' + (n.enviando ? 'Enviando…' : 'Enviar a revisión') + '</button>' +
+      '<div style="font-size:11px;color:var(--muted2);margin-top:6px;line-height:1.5">' +
+        'Meta la revisa y suele responder en unas horas. Mientras tanto aparecerá como «en revisión» y no se podrá enviar.</div>' +
+    '</div>' +
+  '</div>' +
+  '<style>' +
+    '.wa-np-lbl{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}' +
+    '.wa-np-grid{display:grid;grid-template-columns:minmax(280px,1fr) minmax(240px,300px);gap:24px}' +
+    '@media (max-width:720px){.wa-np-grid{grid-template-columns:1fr}}' +
+  '</style>';
+
+  waNPPintarMensajes();
+}
+
+function waNPBurbuja(n) {
+  const sub = (t, ej) => String(t || '').replace(/\{\{\s*(\d+)\s*\}\}/g, (m, k) =>
+    (ej[Number(k) - 1] || '').trim() || m);
+  const cuerpo = sub(n.body, n.ejemplos_body) || 'Tu mensaje aparecerá aquí…';
+  const titulo = sub(n.header, n.ejemplos_header);
+  return '<div style="background:#E6DDD3;border-radius:12px;padding:14px">' +
+    '<div style="background:#fff;border-radius:9px;padding:9px 11px;box-shadow:0 1px 1px rgba(0,0,0,.12);max-width:100%">' +
+      (titulo ? '<div style="font-weight:800;font-size:12.5px;color:#111b21;margin-bottom:3px">' + esc(titulo) + '</div>' : '') +
+      '<div style="font-size:12.5px;line-height:1.45;color:#111b21;white-space:pre-wrap">' + esc(cuerpo) + '</div>' +
+      (n.footer ? '<div style="font-size:11px;color:#667781;margin-top:5px">' + esc(n.footer) + '</div>' : '') +
+      (n.boton.text ? '<div style="border-top:1px solid #E9EDEF;margin-top:7px;padding-top:6px;text-align:center;color:#1DAA61;font-size:12.5px;font-weight:600">' + esc(n.boton.text) + '</div>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function waNPPintarMensajes() {
+  const c = document.getElementById('wa-np-msgs');
+  if (!c || !_waNP) return;
+  const n = _waNP;
+  const lista = (items, color, titulo) => items.length
+    ? '<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:' + color + ';margin-bottom:3px">' + titulo + '</div>' +
+      items.map(t => '<div style="font-size:11.5px;color:' + color + ';line-height:1.45;margin-top:2px">· ' + esc(t) + '</div>').join('') + '</div>'
+    : '';
+  c.innerHTML = lista(n.errores, 'var(--danger)', 'Hay que arreglar') +
+                lista(n.avisos, 'var(--warning)', 'Meta suele rechazar esto');
+  const btn = document.getElementById('wa-np-btn');
+  if (btn) btn.disabled = n.enviando || n.errores.length > 0;
+}
+
+let _waNPtimer = null;
+function waNPSet(campo, valor) {
+  if (!_waNP) return;
+  _waNP[campo] = valor;
+  // El nombre se normaliza al vuelo: es más amable que rechazarlo después.
+  if (campo === 'name') _waNP.name = valor.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9_]/g, '_');
+  waNPRevisar();
+  if (campo === 'body' || campo === 'header' || campo === 'name') waNPRender();
+  else waNPRenderBurbujaSolo();
+}
+
+function waNPRenderBurbujaSolo() { waNPRender(); }
+
+function waNPEjemplo(parte, i, v) {
+  _waNP['ejemplos_' + parte][i] = v;
+  waNPRevisar();
+  waNPRender();
+}
+
+function waNPBoton(k, v) { _waNP.boton[k] = v; waNPRender(); }
+
+function waNPAddHueco() {
+  const n = [...new Set([..._waNP.body.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(m => Number(m[1])))].length + 1;
+  _waNP.body += '{{' + n + '}}';
+  waNPRevisar();
+  waNPRender();
+}
+
+// Se le pregunta al servidor, con pausa, para no llamar en cada tecla.
+function waNPRevisar() {
+  clearTimeout(_waNPtimer);
+  _waNPtimer = setTimeout(async () => {
+    if (!_waNP) return;
+    try {
+      const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+      const qs = '?revisar=1' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
+      const d = await fetchAuth('/api/whatsapp-templates' + qs, { method: 'POST', body: JSON.stringify(_waNP) }).then(r => r.json());
+      if (!_waNP) return;
+      _waNP.errores = d.errores || [];
+      _waNP.avisos = d.avisos || [];
+      waNPPintarMensajes();
+    } catch {}
+  }, 400);
+}
+
+async function waNPEnviar() {
+  const n = _waNP;
+  if (!n || n.enviando) return;
+  n.enviando = true; waNPRender();
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetchAuth('/api/whatsapp-templates' + qs, { method: 'POST', body: JSON.stringify(n) }).then(r => r.json());
+    if (d.error) {
+      n.enviando = false;
+      n.errores = d.errores && d.errores.length ? d.errores : [d.error];
+      // Meta no deja repetir el nombre de una plantilla que ya existe, ni
+      // siquiera si fue rechazada. Se ofrece el remedio en vez de dejarlo ahí.
+      if (/already exists|ya existe|duplicate/i.test(d.error)) {
+        n.errores = ['Ya existe una plantilla con ese nombre. Cámbialo, o bórrala antes desde WhatsApp Manager.'];
+      }
+      waNPRender();
+      return;
+    }
+    document.getElementById('wa-np-ov')?.remove();
+    _waNP = null;
+    showToast(d.recategorizada
+      ? 'Plantilla enviada. Meta la reclasificó como ' + d.recategorizada + ', lo que cambia su costo por envío.'
+      : 'Plantilla enviada a revisión. Aparecerá como aprobada en cuanto Meta responda.', 'success');
+    cmpWCargarPlantillasWA();
+  } catch (e) {
+    n.enviando = false;
+    n.errores = [e.message || 'No se pudo enviar'];
+    waNPRender();
+  }
 }
 
 async function cmpWCargarPlantillasWA() {
