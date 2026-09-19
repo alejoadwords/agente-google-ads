@@ -27057,6 +27057,8 @@ function cmpBuilderOpen(id) {
     list_id: (c && c.audience && c.audience.list_id) || '',
     lead_ids: (c && c.audience && Array.isArray(c.audience.lead_ids)) ? c.audience.lead_ids.slice() : [],
     schedule: '', count: null, breakdown: null,
+    // La plantilla aprobada de WhatsApp y que campo del lead va en cada hueco.
+    wa_template: (c && c.wa_template) || null,
   };
   _cmpChannel = _cmpW.channel;
   _cmpAudTags = _cmpW.tags;
@@ -27106,6 +27108,10 @@ function cmpWRender() {
   }
   if (w.step === 1) cmpWSyncInbox();
   if (w.step === 2) cmpWSyncEmail();
+  // Las plantillas se preguntan a Meta cada vez que se entra al paso: una
+  // aprobada se puede pausar por calidad de un dia para otro, y enterarse al
+  // encolar es tarde.
+  if (w.step === 2 && w.channel === 'whatsapp') cmpWCargarPlantillasWA();
   if (w.step === 3) {
     cmpWAudRender();
     cmpPreview();
@@ -27180,6 +27186,172 @@ function cmpWSyncInbox() {
 }
 
 // Paso 2 — Contenido: IA + CTA + vista previa del email real
+// ── Plantillas aprobadas de WhatsApp ─────────────────────────────────────────
+// Para escribirle a alguien que NO te escribio en las ultimas 24 horas, Meta
+// exige una plantilla aprobada. Sin plantilla la campana sale igual, pero solo
+// la reciben los que ya estaban conversando — y eso hay que decirlo ANTES de
+// que alguien elija una audiencia de 20.000 personas.
+let _cmpPlantillasWA = null;   // lo que devolvio Meta en esta sesion del asistente
+
+// Campos del lead que pueden ir en un hueco. Son los mismos que sabe resolver
+// el motor de envio (parametrosDe en api/cron-campaigns.js): si aqui se ofrece
+// uno que alli no existe, el envio se salta al lead y nadie entiende por que.
+const CMP_CAMPOS_WA = [
+  ['nombre', 'Nombre del contacto'],
+  ['empresa', 'Empresa'],
+  ['telefono', 'Teléfono'],
+  ['email', 'Correo'],
+  ['etapa', 'Etapa del pipeline'],
+  ['fuente', 'Fuente'],
+  ['valor', 'Valor de la oportunidad'],
+];
+
+function cmpWTarjetaPlantillaWA() {
+  return '<div id="cmpw-wa-box" style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
+    '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn('chat', 12) + ' Plantilla aprobada de WhatsApp</div>' +
+    '<div id="cmpw-wa-cuerpo" style="font-size:12px;color:var(--muted)">Consultando tus plantillas…</div>' +
+  '</div>';
+}
+
+async function cmpWCargarPlantillasWA() {
+  const cont = document.getElementById('cmpw-wa-cuerpo');
+  if (!cont) return;
+  try {
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const d = await fetchAuth('/api/whatsapp-templates' + qs).then(r => r.json());
+    _cmpPlantillasWA = d;
+    cmpWPintarPlantillasWA();
+  } catch (e) {
+    cont.innerHTML = '<span style="color:var(--danger)">No se pudieron consultar las plantillas. Reintenta en un momento.</span>';
+  }
+}
+
+function cmpWPintarPlantillasWA() {
+  const cont = document.getElementById('cmpw-wa-cuerpo');
+  const d = _cmpPlantillasWA;
+  if (!cont || !d) return;
+  const w = _cmpW;
+
+  // Sin canal, sin waba o sin ninguna aprobada: se explica qué falta y qué
+  // pasa si sigue adelante. Es la diferencia entre una campaña que no sale y
+  // una que sale a la décima parte de la gente sin avisar.
+  if (!d.plantillas || !d.plantillas.length) {
+    cont.innerHTML =
+      '<div style="color:var(--muted)">' + esc(d.aviso || 'Esta cuenta todavía no tiene plantillas de WhatsApp.') + '</div>' +
+      cmpWAvisoSinPlantilla();
+    return;
+  }
+
+  const elegida = w.wa_template && w.wa_template.name
+    ? d.plantillas.find(p => p.name === w.wa_template.name && p.language === w.wa_template.language)
+    : null;
+
+  const opciones = ['<option value="">— Sin plantilla —</option>'].concat(
+    d.plantillas.map(p => {
+      const val = esc(p.name + '|' + p.language);
+      const sel = elegida && elegida.name === p.name && elegida.language === p.language ? ' selected' : '';
+      const etiqueta = p.name + ' · ' + p.language +
+        (p.usable ? '' : ' — ' + cmpWEstadoWA(p.status));
+      return '<option value="' + val + '"' + (p.usable ? '' : ' disabled') + sel + '>' + esc(etiqueta) + '</option>';
+    })
+  ).join('');
+
+  cont.innerHTML =
+    '<select class="auto-input" id="cmpw-wa-sel" style="width:100%" onchange="cmpWElegirPlantillaWA()">' + opciones + '</select>' +
+    '<div style="font-size:11px;color:var(--muted2);margin-top:6px">' +
+      d.aprobadas + ' de ' + d.plantillas.length + ' aprobadas. Las demás no se pueden enviar hasta que Meta las apruebe.' +
+    '</div>' +
+    '<div id="cmpw-wa-mapeo" style="margin-top:10px"></div>';
+
+  cmpWPintarMapeoWA();
+}
+
+function cmpWEstadoWA(s) {
+  return ({ PENDING: 'en revisión', REJECTED: 'rechazada', PAUSED: 'pausada por calidad',
+            DISABLED: 'deshabilitada' })[s] || String(s || '').toLowerCase();
+}
+
+function cmpWAvisoSinPlantilla() {
+  return '<div style="margin-top:8px;font-size:11.5px;color:var(--danger);font-weight:600">' +
+    'Sin plantilla, WhatsApp solo entrega el mensaje a quien te haya escrito en las últimas 24 horas. ' +
+    'Al resto de tu audiencia no le llegará nada.</div>';
+}
+
+function cmpWElegirPlantillaWA() {
+  const sel = document.getElementById('cmpw-wa-sel');
+  const w = _cmpW;
+  if (!sel || !sel.value) { w.wa_template = null; cmpWPintarMapeoWA(); return; }
+  const [name, language] = sel.value.split('|');
+  const p = (_cmpPlantillasWA.plantillas || []).find(x => x.name === name && x.language === language);
+  if (!p) return;
+  // Se conserva el mapeo anterior si la plantilla es la misma; si cambia, se
+  // rellena con 'nombre' por defecto, que es el hueco que casi siempre es.
+  const previo = (w.wa_template && w.wa_template.name === name) ? w.wa_template : null;
+  w.wa_template = {
+    name, language,
+    header: Array.from({ length: p.header }, (_, i) => (previo && previo.header[i]) || 'nombre'),
+    body: Array.from({ length: p.body }, (_, i) => (previo && previo.body[i]) || 'nombre'),
+  };
+  cmpWPintarMapeoWA();
+}
+
+function cmpWPintarMapeoWA() {
+  const cont = document.getElementById('cmpw-wa-mapeo');
+  if (!cont) return;
+  const w = _cmpW;
+  if (!w.wa_template) { cont.innerHTML = cmpWAvisoSinPlantilla(); return; }
+  const p = (_cmpPlantillasWA.plantillas || [])
+    .find(x => x.name === w.wa_template.name && x.language === w.wa_template.language);
+  if (!p) { cont.innerHTML = ''; return; }
+
+  const fila = (parte, i) => {
+    const val = w.wa_template[parte][i] || 'nombre';
+    const ops = CMP_CAMPOS_WA.map(([k, t]) =>
+      '<option value="' + k + '"' + (k === val ? ' selected' : '') + '>' + esc(t) + '</option>').join('');
+    return '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">' +
+      '<span style="font-family:var(--font);font-size:11.5px;font-weight:800;color:var(--muted);min-width:64px">' +
+        (parte === 'header' ? 'Título ' : '') + '{{' + (i + 1) + '}}' + '</span>' +
+      '<select class="auto-input" style="flex:1" onchange="cmpWMapearWA(\'' + parte + '\',' + i + ',this.value)">' + ops + '</select>' +
+    '</div>';
+  };
+
+  let html = '';
+  if (p.header || p.body) {
+    html += '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Qué va en cada hueco</div>';
+    for (let i = 0; i < p.header; i++) html += fila('header', i);
+    for (let i = 0; i < p.body; i++) html += fila('body', i);
+  }
+  if (p.cuerpo_texto) {
+    html += '<div style="margin-top:10px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Así se verá</div>' +
+      '<div style="margin-top:4px;padding:9px 11px;border-radius:9px;background:var(--bg);border:1px solid var(--border);font-size:12.5px;white-space:pre-wrap">' +
+      esc(cmpWPreviaWA(p.cuerpo_texto, w.wa_template.body)) + '</div>';
+  }
+  // Meta rechaza el mensaje entero si un hueco llega vacío, así que se avisa de
+  // que un contacto sin ese dato no recibirá la campaña. Es mejor saberlo aquí
+  // que leerlo después en la lista de saltados.
+  if (p.body || p.header) {
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--muted2)">' +
+      'A quien le falte alguno de estos datos no se le enviará: WhatsApp no admite huecos vacíos.</div>';
+  }
+  cont.innerHTML = html;
+}
+
+function cmpWPreviaWA(texto, campos) {
+  const ejemplo = { nombre: 'María Restrepo', empresa: 'Seguros del Norte', telefono: '+57 300 123 4567',
+                    email: 'maria@ejemplo.com', etapa: 'Calificado', fuente: 'WhatsApp', valor: '$4.800.000' };
+  return String(texto).replace(/\{\{\s*(\d+)\s*\}\}/g, (m, n) => {
+    const campo = (campos || [])[Number(n) - 1];
+    return ejemplo[campo] || m;
+  });
+}
+
+function cmpWMapearWA(parte, i, valor) {
+  if (!_cmpW.wa_template) return;
+  _cmpW.wa_template[parte][i] = valor;
+  cmpWPintarMapeoWA();
+}
+
 function cmpWStep2() {
   const w = _cmpW;
   const isEmail = w.channel === 'email';
@@ -27197,6 +27369,8 @@ function cmpWStep2() {
           ? 'Este correo usa un diseño. Edítalo con el constructor o vuelve al correo sencillo.'
           : 'Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio') +
       '</div>' +
+
+      (!isEmail ? cmpWTarjetaPlantillaWA() : '') +
 
       (conDiseno ? cmpWTarjetaDiseno(w) :
       // ── Correo sencillo (se conserva entero) ──────────────────────────────
@@ -27881,6 +28055,8 @@ async function cmpWSave() {
     accent_color: w.accent_color || null, utm: w.utm,
     header_image_url: w.header_image_url || null,
     html: w.html || null, template_id: w.template_id || null,
+    // Solo en WhatsApp. En correo mandarlo seria basura en la fila.
+    ...(w.channel === 'whatsapp' ? { wa_template: w.wa_template || null } : {}),
   };
   if (w.id) payload.id = w.id;
   const d = await fetchAuth('/api/campaigns' + qs, {
