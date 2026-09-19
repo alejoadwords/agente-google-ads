@@ -48,6 +48,9 @@ console.log('\nLos huecos y sus ejemplos\n');
   chk('sin ejemplos no deja enviar (el rechazo más común de Meta)',
       errs({ ejemplos_body: [] }).some(e => /ejemplos/i.test(e)));
   chk('con ejemplos de menos tampoco', errs({ ejemplos_body: ['María'] }).some(e => /ejemplos/i.test(e)));
+  chk('y con un solo hueco lo dice en singular',
+      errs({ body: 'Hola {{1}}, te escribimos por lo que hablamos.', ejemplos_body: [] })
+        .some(e => /Falta el ejemplo del hueco del mensaje/.test(e)));
   chk('los huecos salteados se rechazan: {{1}} y {{3}}',
       errs({ body: 'Hola {{1}}, mira esto {{3}} por favor.', ejemplos_body: ['a', 'b', 'c'] })
         .some(e => /numerados/i.test(e)));

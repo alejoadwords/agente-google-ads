@@ -130,7 +130,11 @@ export function revisarBorrador(b) {
   const ejH = (b.ejemplos_header || []).filter(x => String(x || '').trim());
   const ejB = (b.ejemplos_body || []).filter(x => String(x || '').trim());
   if (nHeader && ejH.length < nHeader) errores.push('Falta el ejemplo del hueco del título.');
-  if (nBody && ejB.length < nBody) errores.push(`Faltan ejemplos: hay ${nBody} huecos en el mensaje.`);
+  if (nBody && ejB.length < nBody) {
+    errores.push(nBody === 1
+      ? 'Falta el ejemplo del hueco del mensaje.'
+      : `Faltan ejemplos: hay ${nBody} huecos en el mensaje.`);
+  }
 
   // Motivos de rechazo frecuentes que no son reglas duras.
   if (/^\s*\{\{\s*\d+\s*\}\}/.test(cuerpo) || /\{\{\s*\d+\s*\}\}\s*$/.test(cuerpo)) {

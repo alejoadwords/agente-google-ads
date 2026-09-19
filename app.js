@@ -27269,7 +27269,7 @@ function waNPRender() {
       '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:160px">' +
           '<div class="wa-np-lbl">Nombre interno *</div>' +
-          '<input class="auto-input" value="' + esc(n.name) + '" placeholder="promo_septiembre" oninput="waNPSet(\'name\',this.value)">' +
+          '<input class="auto-input" id="wa-np-name" value="' + esc(n.name) + '" placeholder="promo_septiembre" oninput="waNPSet(\'name\',this.value)">' +
           '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Minúsculas, números y guiones bajos. No lo ve el cliente.</div>' +
         '</div>' +
         '<div style="min-width:150px">' +
@@ -27282,19 +27282,16 @@ function waNPRender() {
       '</div>' +
 
       '<div class="wa-np-lbl" style="margin-top:12px">Título (opcional)</div>' +
-      '<input class="auto-input" value="' + esc(n.header) + '" placeholder="Novedades de {{1}}" oninput="waNPSet(\'header\',this.value)">' +
-      (hH.length ? '<div style="margin-top:4px">' + ejemplo('header', hH) + '</div>' : '') +
+      '<input class="auto-input" id="wa-np-header" value="' + esc(n.header) + '" placeholder="Novedades de {{1}}" oninput="waNPSet(\'header\',this.value)">' +
+      '<div id="wa-np-ej-header" style="margin-top:4px">' + (hH.length ? ejemplo('header', hH) : '') + '</div>' +
 
       '<div class="wa-np-lbl" style="margin-top:12px">Mensaje *</div>' +
-      '<textarea class="auto-input" rows="6" placeholder="Hola {{1}}, en {{2}} tenemos…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="waNPSet(\'body\',this.value)">' + esc(n.body) + '</textarea>' +
+      '<textarea class="auto-input" id="wa-np-body-txt" rows="6" placeholder="Hola {{1}}, en {{2}} tenemos…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="waNPSet(\'body\',this.value)">' + esc(n.body) + '</textarea>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">' +
-        '<button class="btn-ghost sm" onclick="waNPAddHueco()">Añadir un hueco {{' + (hB.length + 1) + '}}</button>' +
-        '<span style="font-size:11px;color:var(--muted2)">' + n.body.length + '/1024</span>' +
+        '<button class="btn-ghost sm" id="wa-np-add" onclick="waNPAddHueco()">Añadir un hueco {{' + (hB.length + 1) + '}}</button>' +
+        '<span style="font-size:11px;color:var(--muted2)" id="wa-np-cnt">' + n.body.length + '/1024</span>' +
       '</div>' +
-      (hB.length ? '<div style="margin-top:6px">' +
-        '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Un ejemplo por hueco *</div>' +
-        '<div style="font-size:11px;color:var(--muted2);margin-bottom:2px">Meta los exige para revisar la plantilla. Es el olvido que más rechazos causa.</div>' +
-        ejemplo('body', hB) + '</div>' : '') +
+      '<div id="wa-np-ej-body" style="margin-top:6px">' + (hB.length ? waNPBloqueEjemplos(hB, n) : '') + '</div>' +
 
       '<div class="wa-np-lbl" style="margin-top:12px">Pie (opcional)</div>' +
       '<input class="auto-input" value="' + esc(n.footer) + '" placeholder="Responde SALIR para no recibir más" oninput="waNPSet(\'footer\',this.value)">' +
@@ -27308,7 +27305,7 @@ function waNPRender() {
 
     '<div>' +
       '<div class="wa-np-lbl">Así lo verá tu cliente</div>' +
-      waNPBurbuja(n) +
+      '<div id="wa-np-prev">' + waNPBurbuja(n) + '</div>' +
       '<div id="wa-np-msgs" style="margin-top:12px"></div>' +
       '<button class="btn-pri" id="wa-np-btn" style="width:100%;margin-top:12px" onclick="waNPEnviar()"' +
         (n.enviando ? ' disabled' : '') + '>' + (n.enviando ? 'Enviando…' : 'Enviar a revisión') + '</button>' +
@@ -27354,32 +27351,94 @@ function waNPPintarMensajes() {
   if (btn) btn.disabled = n.enviando || n.errores.length > 0;
 }
 
-let _waNPtimer = null;
-function waNPSet(campo, valor) {
-  if (!_waNP) return;
-  _waNP[campo] = valor;
-  // El nombre se normaliza al vuelo: es más amable que rechazarlo después.
-  if (campo === 'name') _waNP.name = valor.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9_]/g, '_');
-  waNPRevisar();
-  if (campo === 'body' || campo === 'header' || campo === 'name') waNPRender();
-  else waNPRenderBurbujaSolo();
+const waNPHuecos = (t) => [...new Set([...String(t || '').matchAll(/\{\{\s*(\d+)\s*\}\}/g)]
+  .map(m => Number(m[1])))].sort((a, b) => a - b);
+
+function waNPBloqueEjemplos(lista, n) {
+  return '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Un ejemplo por hueco *</div>' +
+    '<div style="font-size:11px;color:var(--muted2);margin-bottom:2px">Meta los exige para revisar la plantilla. Es el olvido que más rechazos causa.</div>' +
+    lista.map((num, i) =>
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">' +
+        '<span style="font-size:11.5px;font-weight:800;color:var(--muted);min-width:42px">{{' + num + '}}</span>' +
+        '<input class="auto-input" style="flex:1" placeholder="Un ejemplo real, ej. María Restrepo" value="' +
+          esc(n.ejemplos_body[i] || '') + '" oninput="waNPEjemplo(\'body\',' + i + ',this.value)">' +
+      '</div>').join('');
 }
 
-function waNPRenderBurbujaSolo() { waNPRender(); }
+// Repintar el formulario entero en cada tecla destruia el campo que se estaba
+// usando y el navegador perdia el foco: habia que volver a hacer clic para
+// escribir la siguiente letra. Ahora solo se refresca lo que de verdad cambia,
+// y NUNCA el campo donde alguien esta escribiendo.
+let _waNPtimer = null;
+function waNPActualizar(huecosCambiaron) {
+  const n = _waNP;
+  if (!n) return;
+  const prev = document.getElementById('wa-np-prev');
+  if (prev) prev.innerHTML = waNPBurbuja(n);
+  const cnt = document.getElementById('wa-np-cnt');
+  if (cnt) cnt.textContent = n.body.length + '/1024';
+
+  if (huecosCambiaron) {
+    const hB = waNPHuecos(n.body), hH = waNPHuecos(n.header);
+    const add = document.getElementById('wa-np-add');
+    if (add) add.textContent = 'Añadir un hueco {{' + (hB.length + 1) + '}}';
+    const cajaB = document.getElementById('wa-np-ej-body');
+    if (cajaB) cajaB.innerHTML = hB.length ? waNPBloqueEjemplos(hB, n) : '';
+    const cajaH = document.getElementById('wa-np-ej-header');
+    if (cajaH) {
+      cajaH.innerHTML = hH.length ? hH.map((num, i) =>
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">' +
+          '<span style="font-size:11.5px;font-weight:800;color:var(--muted);min-width:42px">{{' + num + '}}</span>' +
+          '<input class="auto-input" style="flex:1" placeholder="Un ejemplo real" value="' +
+            esc(n.ejemplos_header[i] || '') + '" oninput="waNPEjemplo(\'header\',' + i + ',this.value)">' +
+        '</div>').join('') : '';
+    }
+  }
+  waNPRevisar();
+}
+
+function waNPSet(campo, valor) {
+  const n = _waNP;
+  if (!n) return;
+  const antes = waNPHuecos(campo === 'body' ? n.body : n.header).length;
+  n[campo] = valor;
+  if (campo === 'name') {
+    // El nombre se normaliza al vuelo. Se toca el campo SOLO si el texto
+    // cambio, porque escribir en él mueve el cursor al final.
+    const limpio = valor.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9_]/g, '_');
+    n.name = limpio;
+    if (limpio !== valor) {
+      const el = document.getElementById('wa-np-name');
+      if (el) el.value = limpio;
+    }
+    waNPRevisar();
+    return;
+  }
+  const cambio = (campo === 'body' || campo === 'header') &&
+                 waNPHuecos(valor).length !== antes;
+  waNPActualizar(cambio);
+}
 
 function waNPEjemplo(parte, i, v) {
   _waNP['ejemplos_' + parte][i] = v;
+  // Sin tocar los campos de ejemplo: quien escribe está dentro de uno.
+  const prev = document.getElementById('wa-np-prev');
+  if (prev) prev.innerHTML = waNPBurbuja(_waNP);
   waNPRevisar();
-  waNPRender();
 }
 
-function waNPBoton(k, v) { _waNP.boton[k] = v; waNPRender(); }
+function waNPBoton(k, v) {
+  _waNP.boton[k] = v;
+  const prev = document.getElementById('wa-np-prev');
+  if (prev) prev.innerHTML = waNPBurbuja(_waNP);
+}
 
 function waNPAddHueco() {
-  const n = [...new Set([..._waNP.body.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(m => Number(m[1])))].length + 1;
+  const n = waNPHuecos(_waNP.body).length + 1;
   _waNP.body += '{{' + n + '}}';
-  waNPRevisar();
-  waNPRender();
+  const ta = document.getElementById('wa-np-body-txt');
+  if (ta) { ta.value = _waNP.body; ta.focus(); }
+  waNPActualizar(true);
 }
 
 // Se le pregunta al servidor, con pausa, para no llamar en cada tecla.
