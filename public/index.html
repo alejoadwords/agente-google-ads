@@ -2724,9 +2724,13 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
    que el aviso es el color de marca, no el tamaño. */
 #voz-zona.en-cabecera #voz-fab.pulsado{transform:none;background:var(--blue);color:#fff;box-shadow:0 0 0 3px var(--blue-dim)}
 #voz-candado svg{width:17px;height:17px}
-#voz-hoja{position:fixed;left:0;right:0;bottom:0;z-index:9402;background:#0B0D18;color:#fff;border-radius:22px 22px 0 0;padding:18px 18px calc(92px + env(safe-area-inset-bottom));transform:translateY(102%);transition:transform .34s var(--ease-mover);display:flex;flex-direction:column;gap:13px;max-height:82vh;overflow-y:auto}
-#voz-hoja.abierta{transform:translateY(0)}
-@media (min-width:860px){#voz-hoja{left:auto;right:20px;width:380px;border-radius:22px;bottom:20px;max-height:70vh}}
+#voz-hoja{position:fixed;left:0;right:0;bottom:0;z-index:9402;background:#0B0D18;color:#fff;border-radius:22px 22px 0 0;padding:18px 18px calc(92px + env(safe-area-inset-bottom));transform:translateY(102%);visibility:hidden;transition:transform .34s var(--ease-mover),visibility 0s linear .34s;display:flex;flex-direction:column;gap:13px;max-height:82vh;overflow-y:auto}
+#voz-hoja.abierta{transform:translateY(0);visibility:visible;transition:transform .34s var(--ease-mover),visibility 0s}
+@media (min-width:860px){#voz-hoja{left:auto;right:20px;width:380px;border-radius:22px;bottom:20px;max-height:70vh}
+/* Cerrada tiene que bajar SU alto más la separación del borde: con solo el
+   102% se quedaban 16 px de hoja asomando por la esquina, que parecían una
+   ventana a medio cerrar. Va en :not(.abierta) para no pisar el abierto. */
+#voz-hoja:not(.abierta){transform:translateY(calc(100% + 28px))}}
 #voz-asa{width:38px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:0 auto;cursor:pointer;flex-shrink:0}
 /* Los de arriba no se encogen. En una columna flex con overflow, los hijos
    se aplastan por defecto: con dos renglones de texto dictado, el segundo
