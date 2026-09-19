@@ -32378,6 +32378,7 @@ async function vozArrancar() {
   } catch { return; }
   document.getElementById('voz-zona')?.classList.add('viva');
   document.getElementById('voz-zona')?.setAttribute('aria-hidden', 'false');
+  vozColocar();
   vozEnchufar();
 }
 
@@ -32584,6 +32585,48 @@ function vozParar() {
   _vozFijado = false;
 }
 
+// ¿El micrófono está arriba, en la cabecera, o flotando abajo?
+function vozEnCabecera() {
+  return !!document.getElementById('voz-zona')?.classList.contains('en-cabecera');
+}
+
+// En escritorio el micrófono se muda a la cabecera, al lado de soporte. Se
+// mueve el MISMO elemento en vez de duplicarlo: así los gestos, el permiso y
+// todo lo que ya está enganchado siguen funcionando sin tocarse.
+function vozColocar() {
+  const zona = document.getElementById('voz-zona');
+  if (!zona) return;
+  // Nunca a mitad de un gesto: mover el nodo cortaría la captura del puntero
+  // y la grabación moriría en silencio.
+  if (_vozEscuchando || _vozFijado) return;
+
+  const escritorio = window.innerWidth > 768;
+  const sop = document.getElementById('sop-btn');
+
+  if (escritorio && sop && sop.parentElement) {
+    if (zona.parentElement !== sop.parentElement) sop.parentElement.insertBefore(zona, sop);
+    zona.classList.add('en-cabecera');
+    const fab = document.getElementById('voz-fab');
+    if (fab) fab.title = 'Mantén pulsado para hablarle a Acuarius';
+  } else {
+    if (zona.parentElement !== document.body) document.body.appendChild(zona);
+    zona.classList.remove('en-cabecera');
+  }
+}
+
+// El punto de corte se escucha con matchMedia y no con `resize`: avisa una vez
+// al cruzarlo, en vez de cien veces mientras se arrastra la ventana, y también
+// salta al girar el teléfono.
+try {
+  matchMedia('(max-width: 768px)').addEventListener('change', vozColocar);
+} catch {
+  // Safari viejo no tiene addEventListener en MediaQueryList.
+  window.addEventListener('resize', () => {
+    clearTimeout(window._vozColocarTimer);
+    window._vozColocarTimer = setTimeout(vozColocar, 180);
+  });
+}
+
 function vozEnchufar() {
   const fab = document.getElementById('voz-fab');
   const pista = document.getElementById('voz-pista');
@@ -32612,12 +32655,17 @@ function vozEnchufar() {
     }
     _vozYInicio = e.clientY;
     fab.classList.add('pulsado');
-    candado?.classList.add('on');
-    if (pista) pista.textContent = 'Desliza arriba para fijar';
+    if (!vozEnCabecera()) {
+      candado?.classList.add('on');
+      if (pista) pista.textContent = 'Desliza arriba para fijar';
+    }
     vozEscuchar();
   });
   fab.addEventListener('pointermove', e => {
     if (!_vozEscuchando || _vozFijado) return;
+    // Deslizar para fijar es un gesto de pulgar. En la cabecera el candado no
+    // tiene dónde dibujarse y subir el ratón 70 px lo dispararía sin querer.
+    if (vozEnCabecera()) return;
     const dy = _vozYInicio - e.clientY;
     candado?.classList.toggle('cerca', dy > 46);
     if (dy > 70) {

@@ -2710,6 +2710,19 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 #voz-fab.pulsado{transform:scale(1.2);box-shadow:0 0 0 14px var(--blue-dim),0 8px 26px var(--blue-glow)}
 #voz-candado{position:fixed;right:33px;bottom:100px;z-index:9404;width:38px;height:38px;border-radius:50%;background:var(--bg-card);border:1px solid var(--border);display:none;place-items:center;color:var(--muted);box-shadow:0 4px 14px rgba(13,15,28,.12);z-index:9401}
 #voz-candado.on{display:grid} #voz-candado.cerca{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* En escritorio el micrófono vive en la cabecera, no flotando. Flotando
+   competía con el botón principal de cada pantalla —«Guardar y continuar» del
+   constructor de campañas, «Agregar» del tablero—, que es exactamente el
+   problema por el que soporte ya se había mudado aquí arriba. En el teléfono
+   se queda flotando: es donde el pulgar lo alcanza y donde nació la función. */
+#voz-zona.en-cabecera{position:static;right:auto;bottom:auto;z-index:auto;gap:0}
+#voz-zona.en-cabecera #voz-pista{display:none}
+#voz-zona.en-cabecera #voz-fab{width:auto;height:auto;border-radius:7px;background:none;color:var(--muted2);box-shadow:none;padding:4px 6px;display:block}
+#voz-zona.en-cabecera #voz-fab svg{width:16px;height:16px;display:block}
+#voz-zona.en-cabecera #voz-fab:hover{background:var(--border2)}
+/* Pulsado tiene que verse: en la cabecera no hay sitio para que crezca, así
+   que el aviso es el color de marca, no el tamaño. */
+#voz-zona.en-cabecera #voz-fab.pulsado{transform:none;background:var(--blue);color:#fff;box-shadow:0 0 0 3px var(--blue-dim)}
 #voz-candado svg{width:17px;height:17px}
 #voz-hoja{position:fixed;left:0;right:0;bottom:0;z-index:9402;background:#0B0D18;color:#fff;border-radius:22px 22px 0 0;padding:18px 18px calc(92px + env(safe-area-inset-bottom));transform:translateY(102%);transition:transform .34s var(--ease-mover);display:flex;flex-direction:column;gap:13px;max-height:82vh;overflow-y:auto}
 #voz-hoja.abierta{transform:translateY(0)}
