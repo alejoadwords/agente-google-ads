@@ -231,8 +231,15 @@ function parametrosDe(campos, lead) {
 
 async function enviarPlantilla(conn, telefono, plantilla, lead) {
   const componentes = [];
+  // Cabecera de imagen: la misma para toda la campaña. El handle que se usó al
+  // crear la plantilla NO sirve aquí — era el ejemplo para que Meta la revisara.
+  // En cada envío hay que mandar la imagen otra vez, y por URL.
+  if (plantilla.header_image) {
+    componentes.push({ type: 'header', parameters: [{ type: 'image', image: { link: plantilla.header_image } }] });
+  }
   for (const [tipo, campos] of [['header', plantilla.header], ['body', plantilla.body]]) {
     if (!campos?.length) continue;
+    if (tipo === 'header' && plantilla.header_image) continue; // no puede llevar las dos
     const r = parametrosDe(campos, lead);
     if (r.falta) return { status: 'skipped', detail: `sin dato para la plantilla: ${r.falta}` };
     componentes.push({ type: tipo, parameters: r.parametros });

@@ -5,7 +5,7 @@
 // cubre exactamente eso: lo que la validación tiene que atrapar aquí para que
 // el cliente no lo descubra el jueves.
 
-import { revisarBorrador, componentesDe, LIMITES } from '../api/_whatsapp.js';
+import { revisarBorrador, componentesDe, huecosDe, LIMITES } from '../api/_whatsapp.js';
 
 let fallos = 0;
 const chk = (n, ok, extra) => {
@@ -112,6 +112,40 @@ console.log('\nEl botón de enlace\n');
   chk('sin URL válida no se añade',
       !componentesDe(con({ boton: { text: 'Ver', url: 'ejemplo.com' } })).some(x => x.type === 'BUTTONS'));
   chk('sin botón no aparece la sección', !componentesDe(base).some(x => x.type === 'BUTTONS'));
+}
+
+console.log('\nCabecera con imagen\n');
+{
+  const conImg = con({ header_format: 'IMAGE', header_image: 'https://cdn/x.jpg', header: '', ejemplos_header: [] });
+  chk('con imagen y archivo, sin errores', revisarBorrador(conImg).errores.length === 0,
+      revisarBorrador(conImg).errores.join(' · '));
+  chk('elegir imagen y no subir ninguna es error',
+      revisarBorrador(con({ header_format: 'IMAGE' })).errores.some(e => /no has subido/i.test(e)));
+
+  const c = componentesDe(conImg, 'HANDLE123');
+  const h = c.find(x => x.type === 'HEADER');
+  chk('el componente va como IMAGE', h && h.format === 'IMAGE');
+  chk('y lleva el handle como ejemplo', h.example.header_handle[0] === 'HANDLE123');
+  chk('sin texto: una cabecera es texto O imagen', !h.text);
+  chk('el cuerpo y su ejemplo siguen intactos',
+      c.find(x => x.type === 'BODY').example.body_text[0][1] === 'Seguros del Norte');
+  chk('el pie y el botón se arman igual que con texto',
+      componentesDe({ ...conImg, footer: 'Pie', boton: { text: 'Ver', url: 'https://x.co' } }, 'H')
+        .filter(x => x.type === 'FOOTER' || x.type === 'BUTTONS').length === 2);
+  chk('sin handle no se manda cabecera (Meta la rechazaria)',
+      !componentesDe(conImg, null).some(x => x.type === 'HEADER'));
+
+  // Si se eligio imagen, el texto del titulo no puede colarse
+  const mixto = componentesDe(con({ header_format: 'IMAGE', header: 'Texto viejo' }), 'H');
+  chk('un titulo de texto olvidado no se envia', !mixto.some(x => x.format === 'TEXT'));
+}
+
+console.log('\nLeer el formato de una plantilla que ya existe\n');
+{
+  chk('reconoce una cabecera de imagen',
+      huecosDe([{ type: 'HEADER', format: 'IMAGE' }, { type: 'BODY', text: 'Hola' }]).header_format === 'IMAGE');
+  chk('y una de texto', huecosDe([{ type: 'HEADER', format: 'TEXT', text: 'Hola {{1}}' }]).header_format === 'TEXT');
+  chk('sin cabecera devuelve nulo', huecosDe([{ type: 'BODY', text: 'Hola' }]).header_format === null);
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

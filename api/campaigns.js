@@ -16,7 +16,7 @@ import { traerTodo } from './_paginado.js';
 
 // La conexión de WhatsApp del cliente: de ahí salen el waba_id y el token con
 // los que se le pregunta a Meta por el estado de una plantilla.
-import { conexionWhatsapp, plantillasDeMeta } from './_whatsapp.js';
+import { conexionWhatsapp, plantillasDeMeta, huecosDe } from './_whatsapp.js';
 
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
@@ -257,12 +257,17 @@ async function revisarPlantilla(userId, clientId, wa) {
   if (!conn.waba_id || !conn.access_token) {
     return { error: 'Este canal se conectó antes de que gestionáramos plantillas. Vuelve a conectarlo en Ajustes → Canales.' };
   }
-  const res = await plantillasDeMeta(conn, 'name,status,language');
+  const res = await plantillasDeMeta(conn, 'name,status,language,components');
   if (!res.ok) return { error: 'No se pudo comprobar la plantilla con Meta: ' + res.aviso };
   const t = res.plantillas.find(x => x.name === wa.name && x.language === wa.language);
   if (!t) return { error: `La plantilla «${wa.name}» (${wa.language}) ya no existe en tu cuenta de WhatsApp.` };
   if (t.status !== 'APPROVED') {
     return { error: `La plantilla «${wa.name}» está en estado ${t.status}. Solo se pueden enviar las aprobadas.`, estado: t.status };
+  }
+  // Una plantilla con cabecera de imagen exige la imagen en CADA envío. Sin
+  // ella Meta rechaza uno por uno y la campaña se gasta entera en errores.
+  if (huecosDe(t.components).header_format === 'IMAGE' && !wa.header_image) {
+    return { error: `La plantilla «${wa.name}» lleva una imagen en la cabecera y esta campaña no tiene ninguna. Elígela en el paso de Contenido.`, falta_imagen: true };
   }
   return null;
 }
@@ -551,6 +556,10 @@ export default async function handler(req) {
         language: String(t.language || 'es').slice(0, 16),
         header: Array.isArray(t.header) ? t.header.slice(0, 10).map(String) : [],
         body: Array.isArray(t.body) ? t.body.slice(0, 10).map(String) : [],
+        // Solo si la plantilla tiene cabecera de imagen. Es la misma para toda
+        // la campaña; va por URL en cada envío.
+        ...(t.header_image && /^https?:\/\//i.test(t.header_image)
+          ? { header_image: String(t.header_image).slice(0, 2000) } : {}),
       } : null;
     }
     return out;

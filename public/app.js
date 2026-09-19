@@ -27227,6 +27227,7 @@ let _waNP = null;
 
 function waNuevaPlantilla() {
   _waNP = { name: '', category: 'MARKETING', language: 'es', header: '', body: '', footer: '',
+            header_format: 'TEXT', header_image: '', subiendoImg: false,
             ejemplos_header: [], ejemplos_body: [], boton: { text: '', url: '' },
             errores: [], avisos: [], enviando: false, duplicada: false };
   document.getElementById('wa-np-ov')?.remove();
@@ -27281,9 +27282,17 @@ function waNPRender() {
         '</div>' +
       '</div>' +
 
-      '<div class="wa-np-lbl" style="margin-top:12px">Título (opcional)</div>' +
-      '<input class="auto-input" id="wa-np-header" value="' + esc(n.header) + '" placeholder="Novedades de {{1}}" oninput="waNPSet(\'header\',this.value)">' +
-      '<div id="wa-np-ej-header" style="margin-top:4px">' + (hH.length ? ejemplo('header', hH) : '') + '</div>' +
+      '<div class="wa-np-lbl" style="margin-top:12px">Cabecera (opcional)</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:5px">' +
+        ['TEXT', 'IMAGE'].map(f =>
+          '<button class="' + (n.header_format === f ? 'btn-sec' : 'btn-ghost') + ' sm" ' +
+            'style="' + (n.header_format === f ? 'font-weight:800' : '') + '" ' +
+            'onclick="waNPFormatoCabecera(\'' + f + '\')">' + (f === 'TEXT' ? 'Texto' : 'Imagen') + '</button>').join('') +
+      '</div>' +
+      (n.header_format === 'IMAGE'
+        ? '<div id="wa-np-img">' + waNPCajaImagen(n) + '</div>'
+        : '<input class="auto-input" id="wa-np-header" value="' + esc(n.header) + '" placeholder="Novedades de {{1}}" oninput="waNPSet(\'header\',this.value)">' +
+          '<div id="wa-np-ej-header" style="margin-top:4px">' + (hH.length ? ejemplo('header', hH) : '') + '</div>') +
 
       '<div class="wa-np-lbl" style="margin-top:12px">Mensaje *</div>' +
       '<textarea class="auto-input" id="wa-np-body-txt" rows="6" placeholder="Hola {{1}}, en {{2}} tenemos…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="waNPSet(\'body\',this.value)">' + esc(n.body) + '</textarea>' +
@@ -27322,6 +27331,68 @@ function waNPRender() {
   waNPPintarMensajes();
 }
 
+// ── Cabecera con imagen ──────────────────────────────────────────────────────
+// WhatsApp admite JPG y PNG hasta 5 MB. Se comprueba aquí y también en el
+// servidor: aquí para decirlo al instante, allá porque es donde manda.
+const WA_IMG = { tipos: ['image/jpeg', 'image/png'], max: 5 * 1024 * 1024 };
+
+function waNPCajaImagen(n) {
+  if (n.subiendoImg) return '<div style="font-size:12px;color:var(--muted)">Subiendo la imagen…</div>';
+  if (n.header_image) {
+    return '<div style="display:flex;align-items:center;gap:10px">' +
+      '<img src="' + esc(n.header_image) + '" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="waNPQuitarImagen()">Quitar</button>' +
+    '</div>';
+  }
+  return '<input type="file" id="wa-np-file" accept="image/jpeg,image/png" ' +
+      'style="font-size:12px" onchange="waNPSubirImagen(this)">' +
+    '<div style="font-size:11px;color:var(--muted2);margin-top:3px">JPG o PNG, hasta 5 MB. La misma imagen para toda la campaña.</div>';
+}
+
+function waNPFormatoCabecera(f) {
+  _waNP.header_format = f;
+  // Cambiar de tipo limpia el otro: una cabecera es texto O imagen, y dejar
+  // restos del anterior hace que Meta reciba algo que nadie escribió.
+  if (f === 'IMAGE') { _waNP.header = ''; _waNP.ejemplos_header = []; }
+  else { _waNP.header_image = ''; }
+  waNPRender();
+}
+
+function waNPQuitarImagen() { _waNP.header_image = ''; waNPRender(); }
+
+async function waNPSubirImagen(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (!WA_IMG.tipos.includes(f.type)) {
+    _waNP.errores = ['WhatsApp solo admite JPG y PNG en la cabecera.'];
+    waNPPintarMensajes(); input.value = ''; return;
+  }
+  if (f.size > WA_IMG.max) {
+    _waNP.errores = ['La imagen pasa de 5 MB, que es el máximo de WhatsApp.'];
+    waNPPintarMensajes(); input.value = ''; return;
+  }
+  _waNP.subiendoImg = true;
+  const caja = document.getElementById('wa-np-img');
+  if (caja) caja.innerHTML = waNPCajaImagen(_waNP);
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(',')[1]);
+      r.onerror = () => rej(new Error('No se pudo leer el archivo'));
+      r.readAsDataURL(f);
+    });
+    const d = await fetchAuth('/api/upload-media', {
+      method: 'POST', body: JSON.stringify({ base64, mediaType: f.type, fileName: f.name }),
+    }).then(r => r.json());
+    if (!d.url) throw new Error(d.error || 'No se pudo subir la imagen');
+    _waNP.header_image = d.url;
+  } catch (e) {
+    _waNP.errores = [e.message || 'No se pudo subir la imagen'];
+  }
+  _waNP.subiendoImg = false;
+  waNPRender();
+}
+
 function waNPBurbuja(n) {
   const sub = (t, ej) => String(t || '').replace(/\{\{\s*(\d+)\s*\}\}/g, (m, k) =>
     (ej[Number(k) - 1] || '').trim() || m);
@@ -27329,6 +27400,8 @@ function waNPBurbuja(n) {
   const titulo = sub(n.header, n.ejemplos_header);
   return '<div style="background:#E6DDD3;border-radius:12px;padding:14px">' +
     '<div style="background:#fff;border-radius:9px;padding:9px 11px;box-shadow:0 1px 1px rgba(0,0,0,.12);max-width:100%">' +
+      (n.header_format === 'IMAGE' && n.header_image
+        ? '<img src="' + esc(n.header_image) + '" alt="" style="width:100%;max-height:150px;object-fit:cover;border-radius:6px;margin-bottom:6px;display:block">' : '') +
       (titulo ? '<div style="font-weight:800;font-size:12.5px;color:#111b21;margin-bottom:3px">' + esc(titulo) + '</div>' : '') +
       '<div style="font-size:12.5px;line-height:1.45;color:#111b21;white-space:pre-wrap">' + esc(cuerpo) + '</div>' +
       (n.footer ? '<div style="font-size:11px;color:#667781;margin-top:5px">' + esc(n.footer) + '</div>' : '') +
@@ -27594,8 +27667,19 @@ function cmpWPintarMapeoWA() {
   };
 
   let html = '';
+  // Una plantilla con cabecera de imagen necesita la imagen en CADA envío: el
+  // archivo que se subió al crearla solo sirvió para que Meta la revisara.
+  if (p.header_format === 'IMAGE') {
+    html += '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Imagen de la cabecera *</div>';
+    html += w.wa_template.header_image
+      ? '<div style="display:flex;align-items:center;gap:10px;margin-top:4px">' +
+          '<img src="' + esc(w.wa_template.header_image) + '" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">' +
+          '<button class="btn-ghost sm" onclick="cmpWQuitarImagenWA()">Cambiar</button></div>'
+      : '<input type="file" accept="image/jpeg,image/png" style="font-size:12px;margin-top:4px" onchange="cmpWSubirImagenWA(this)">' +
+        '<div style="font-size:11px;color:var(--danger);margin-top:3px;font-weight:600">Sin imagen no se puede enviar esta plantilla.</div>';
+  }
   if (p.header || p.body) {
-    html += '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Qué va en cada hueco</div>';
+    html += '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-top:8px">Qué va en cada hueco</div>';
     for (let i = 0; i < p.header; i++) html += fila('header', i);
     for (let i = 0; i < p.body; i++) html += fila('body', i);
   }
@@ -27621,6 +27705,37 @@ function cmpWPreviaWA(texto, campos) {
     const campo = (campos || [])[Number(n) - 1];
     return ejemplo[campo] || m;
   });
+}
+
+function cmpWQuitarImagenWA() {
+  if (!_cmpW.wa_template) return;
+  _cmpW.wa_template.header_image = '';
+  cmpWPintarMapeoWA();
+}
+
+async function cmpWSubirImagenWA(input) {
+  const f = input.files && input.files[0];
+  if (!f || !_cmpW.wa_template) return;
+  if (!WA_IMG.tipos.includes(f.type)) { showToast('WhatsApp solo admite JPG y PNG.', 'error'); input.value = ''; return; }
+  if (f.size > WA_IMG.max) { showToast('La imagen pasa de 5 MB.', 'error'); input.value = ''; return; }
+  input.disabled = true;
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(',')[1]);
+      r.onerror = () => rej(new Error('No se pudo leer el archivo'));
+      r.readAsDataURL(f);
+    });
+    const d = await fetchAuth('/api/upload-media', {
+      method: 'POST', body: JSON.stringify({ base64, mediaType: f.type, fileName: f.name }),
+    }).then(r => r.json());
+    if (!d.url) throw new Error(d.error || 'No se pudo subir la imagen');
+    _cmpW.wa_template.header_image = d.url;
+    cmpWPintarMapeoWA();
+  } catch (e) {
+    input.disabled = false;
+    showToast(e.message || 'No se pudo subir la imagen', 'error');
+  }
 }
 
 function cmpWMapearWA(parte, i, valor) {

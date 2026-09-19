@@ -61,8 +61,9 @@ export function huecosDe(components) {
     for (const m of String(texto || '').matchAll(/\{\{\s*(\d+)\s*\}\}/g)) vistos.add(Number(m[1]));
     return vistos.size ? Math.max(...vistos) : 0;
   };
-  const out = { header: 0, body: 0, cuerpo_texto: '' };
+  const out = { header: 0, body: 0, cuerpo_texto: '', header_format: null };
   for (const c of (components || [])) {
+    if (c.type === 'HEADER') out.header_format = c.format || 'TEXT';
     if (c.type === 'HEADER' && c.format === 'TEXT') out.header = cuenta(c.text);
     if (c.type === 'BODY') { out.body = cuenta(c.text); out.cuerpo_texto = c.text || ''; }
   }
@@ -114,7 +115,13 @@ export function revisarBorrador(b) {
     return Math.max(...unicos);
   };
 
-  const encabezado = String(b.header || '').trim();
+  // La cabecera es de texto o de imagen, nunca las dos. Con imagen no hay
+  // huecos que revisar: lo que hace falta es el archivo.
+  const conImagen = b.header_format === 'IMAGE';
+  const encabezado = conImagen ? '' : String(b.header || '').trim();
+  if (conImagen && !b.header_image) {
+    errores.push('Elegiste cabecera con imagen pero no has subido ninguna.');
+  }
   if (encabezado.length > LIMITES.header) errores.push(`El título pasa de ${LIMITES.header} caracteres.`);
   const nHeader = revisarHuecos(encabezado, 'el título');
   if (nHeader > 1) errores.push('El título admite un solo hueco.');
@@ -151,17 +158,28 @@ export function revisarBorrador(b) {
 }
 
 /** Traduce el borrador al formato de componentes que espera Meta. */
-export function componentesDe(b) {
+export function componentesDe(b, handleImagen) {
   const comps = [];
-  const encabezado = String(b.header || '').trim();
-  if (encabezado) {
-    const c = { type: 'HEADER', format: 'TEXT', text: encabezado };
-    const n = [...new Set(variablesDe(encabezado))].length;
-    // `header_text` es un arreglo plano; `body_text` es un arreglo DE
-    // arreglos. Confundirlos da un error de Meta que no dice cuál de los dos.
-    if (n) c.example = { header_text: (b.ejemplos_header || []).slice(0, n).map(String) };
-    comps.push(c);
+
+  // La cabecera es lo ÚNICO que cambia entre texto e imagen. El cuerpo, el pie
+  // y el botón se arman una sola vez: tenerlos dos veces garantiza que alguien
+  // arregle uno y se olvide del otro.
+  if (b.header_format === 'IMAGE') {
+    // El handle va como EJEMPLO: le dice a Meta qué va a ir ahí para poder
+    // revisarla. La imagen de cada envío se manda aparte, por URL.
+    if (handleImagen) comps.push({ type: 'HEADER', format: 'IMAGE', example: { header_handle: [handleImagen] } });
+  } else {
+    const encabezado = String(b.header || '').trim();
+    if (encabezado) {
+      const c = { type: 'HEADER', format: 'TEXT', text: encabezado };
+      const n = [...new Set(variablesDe(encabezado))].length;
+      // `header_text` es un arreglo plano; `body_text` es un arreglo DE
+      // arreglos. Confundirlos da un error de Meta que no dice cuál de los dos.
+      if (n) c.example = { header_text: (b.ejemplos_header || []).slice(0, n).map(String) };
+      comps.push(c);
+    }
   }
+
   const cuerpo = String(b.body || '').trim();
   const cBody = { type: 'BODY', text: cuerpo };
   const nB = [...new Set(variablesDe(cuerpo))].length;
@@ -180,8 +198,75 @@ export function componentesDe(b) {
   return comps;
 }
 
+// ── Imagen de cabecera ───────────────────────────────────────────────────────
+// Para crear una plantilla con imagen, Meta no acepta una URL: exige un
+// "handle" que solo se consigue subiendo el archivo a su API de carga. Son dos
+// llamadas —abrir la sesión y mandar los bytes— y el handle vale para crear la
+// plantilla, no para enviarla. En cada envío hay que pasar la imagen otra vez,
+// esa sí por URL. Son dos cosas distintas y se confunden con facilidad.
+export const IMAGEN = {
+  tipos: ['image/jpeg', 'image/png'],
+  max: 5 * 1024 * 1024,
+};
+
+export async function subirImagenAMeta(conn, urlImagen) {
+  const appId = process.env.META_APP_ID;
+  if (!appId) return { ok: false, aviso: 'Falta META_APP_ID en la configuración.' };
+
+  let bytes, tipo;
+  try {
+    const img = await fetch(urlImagen);
+    if (!img.ok) return { ok: false, aviso: `No se pudo leer la imagen (${img.status}).` };
+    tipo = (img.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    bytes = new Uint8Array(await img.arrayBuffer());
+  } catch (e) {
+    return { ok: false, aviso: 'No se pudo leer la imagen: ' + String(e.message || e).slice(0, 120) };
+  }
+  if (!IMAGEN.tipos.includes(tipo)) {
+    return { ok: false, aviso: `WhatsApp solo admite JPG y PNG en la cabecera (llegó ${tipo || 'desconocido'}).` };
+  }
+  if (bytes.length > IMAGEN.max) {
+    return { ok: false, aviso: 'La imagen pasa de 5 MB, que es el máximo de WhatsApp.' };
+  }
+
+  // 1. Abrir la sesión de carga.
+  const q = new URLSearchParams({
+    file_name: 'cabecera.' + (tipo === 'image/png' ? 'png' : 'jpg'),
+    file_length: String(bytes.length),
+    file_type: tipo,
+    access_token: conn.access_token,
+  });
+  const ini = await fetch(`${GRAPH}/${encodeURIComponent(appId)}/uploads?${q}`, { method: 'POST' });
+  const dIni = await ini.json().catch(() => ({}));
+  if (!ini.ok || !dIni.id) {
+    return { ok: false, aviso: 'Meta no abrió la carga: ' + String(dIni.error?.message || ini.status).slice(0, 160) };
+  }
+
+  // 2. Mandar los bytes. Ojo: aquí la cabecera es `OAuth`, no `Bearer` — es de
+  //    las pocas llamadas de Meta que lo pide así, y con Bearer da 401.
+  const sub = await fetch(`${GRAPH}/${dIni.id}`, {
+    method: 'POST',
+    headers: { Authorization: `OAuth ${conn.access_token}`, file_offset: '0' },
+    body: bytes,
+  });
+  const dSub = await sub.json().catch(() => ({}));
+  if (!sub.ok || !dSub.h) {
+    return { ok: false, aviso: 'Meta no aceptó la imagen: ' + String(dSub.error?.message || sub.status).slice(0, 160) };
+  }
+  return { ok: true, handle: dSub.h };
+}
+
 /** Crea la plantilla en Meta y la deja en revisión. */
 export async function crearPlantilla(conn, borrador) {
+  // Con imagen hay un paso antes: subirla y quedarse con el handle. Si eso
+  // falla no se crea nada — una plantilla con cabecera de imagen y sin handle
+  // la rechaza Meta, y el cliente se queda con el nombre ocupado para nada.
+  let handle = null;
+  if (borrador.header_format === 'IMAGE') {
+    const sub = await subirImagenAMeta(conn, borrador.header_image);
+    if (!sub.ok) return { ok: false, aviso: sub.aviso };
+    handle = sub.handle;
+  }
   const r = await fetch(`${GRAPH}/${encodeURIComponent(conn.waba_id)}/message_templates`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/json' },
@@ -189,7 +274,7 @@ export async function crearPlantilla(conn, borrador) {
       name: borrador.name,
       language: borrador.language || 'es',
       category: borrador.category,
-      components: componentesDe(borrador),
+      components: componentesDe(borrador, handle),
     }),
   });
   const d = await r.json().catch(() => ({}));

@@ -168,13 +168,30 @@ console.log('\nSin plantilla sigue haciendo falta la conversación\n');
       m.cola[0]?.detail);
 }
 
+console.log('\nEnviar una plantilla con imagen de cabecera\n');
+{
+  const conImg = { name: 'promo_visual', language: 'es', header: [], body: ['nombre'],
+                   header_image: 'https://cdn.ejemplo.com/promo.jpg' };
+  const m = montar(3, { plantilla: conImg });
+  await cron(peticion, respuesta());
+  const s = m.est.enviados[0];
+  const cab = (s.template.components || []).find(c => c.type === 'header');
+  chk('lleva un componente de cabecera', !!cab);
+  chk('con la imagen por URL, no con el handle de creación',
+      cab.parameters[0].type === 'image' && /promo\.jpg/.test(cab.parameters[0].image.link));
+  chk('y el cuerpo sigue con sus huecos',
+      (s.template.components || []).find(c => c.type === 'body').parameters[0].text === 'Persona 0');
+  chk('salen los 3', m.cola.filter(r => r.status === 'sent').length === 3);
+}
+
 console.log('\nY lo que dice el código fuente\n');
 {
   const camp = readFileSync(new URL('../api/campaigns.js', import.meta.url), 'utf8');
   const cron = readFileSync(new URL('../api/cron-campaigns.js', import.meta.url), 'utf8');
   chk('encolar comprueba la plantilla contra Meta', /await revisarPlantilla\(/.test(camp));
   chk('y rechaza si no está aprobada', /Solo se pueden enviar las aprobadas/.test(camp));
-  chk('el estado se pregunta a Meta, no a una copia nuestra', /plantillasDeMeta\(conn, 'name,status,language'\)/.test(camp));
+  chk('el estado se pregunta a Meta, no a una copia nuestra', /plantillasDeMeta\(conn, 'name,status,language,components'\)/.test(camp));
+  chk('y se bloquea encolar una plantilla de imagen sin imagen', /falta_imagen: true/.test(camp));
   chk('el techo diario está declarado', /const TOPE_DIARIO = 250/.test(cron));
   chk('la campaña guarda su plantilla', /out\.wa_template/.test(camp));
 }
