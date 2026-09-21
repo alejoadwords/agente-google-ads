@@ -190,7 +190,10 @@ async function avisarComercial(com, lead, fuente) {
 // propio (un formulario o un conector asignado a alguien). Pasa por aquí y no
 // por un PATCH suelto para que ese comercial reciba igual su correo y su tarea
 // de primer contacto: si no, un lead asignado a dedo entraría mudo.
-export async function asignarLead(userId, lead, fuente, forzado = null, entre = null, forzarTurnos = false) {
+// `sinPrimerContacto`: el lead SÍ se asigna, pero no se le crea el pendiente de
+// llamarlo. Es para las entradas en las que la persona no está esperando una
+// llamada — una reserva ya trae su hora acordada.
+export async function asignarLead(userId, lead, fuente, forzado = null, entre = null, forzarTurnos = false, sinPrimerContacto = false) {
   try {
     if (!lead?.id || lead.assigned_to) return null;
     let com;
@@ -219,8 +222,10 @@ export async function asignarLead(userId, lead, fuente, forzado = null, entre = 
     }).catch(() => {});
     // La tarea antes del aviso: así el correo llega cuando el pendiente ya
     // existe y el comercial lo encuentra al entrar.
-    const { crearTareaPrimerContacto } = await import('./_followup.js');
-    await crearTareaPrimerContacto(userId, lead, com).catch(() => {});
+    if (!sinPrimerContacto) {
+      const { crearTareaPrimerContacto } = await import('./_followup.js');
+      await crearTareaPrimerContacto(userId, lead, com).catch(() => {});
+    }
     // Al dueño no se le manda el correo de «te asignaron un lead». Ese aviso
     // existe para contarle a otra persona que algo cayó en su cartera; a quien
     // es la cuenta entera no le dice nada nuevo, y con un canal activo serían

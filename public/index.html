@@ -1375,6 +1375,21 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .rsv-check input{margin:0;accent-color:var(--blue)}
 .rsv-solo{border-radius:var(--r);width:100%;box-sizing:border-box}
 
+/* El estado de un aviso: listo, pendiente de algo, o mal. Los tres se ven
+   distinto de un vistazo — un estado que hay que leer entero para saber si va
+   bien no sirve de estado. */
+.rsv-estado{font-size:var(--fs-sm);line-height:1.55;background:var(--bg-subtle);
+  border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;color:var(--text-2)}
+.rsv-estado b{color:var(--text)}
+.rsv-estado svg{vertical-align:-2px;margin-right:4px}
+.rsv-estado.ok{background:var(--success-bg);border-color:var(--success);color:var(--text-2)}
+.rsv-estado.ok svg{color:var(--success)}
+.rsv-estado.aviso{background:var(--warning-bg);border-color:var(--warning)}
+.rsv-estado.aviso svg{color:var(--warning)}
+.rsv-estado.malo{background:var(--danger-bg);border-color:var(--danger)}
+.rsv-estado.malo svg{color:var(--danger)}
+.rsv-estado .rsv-nota{margin-top:6px}
+
 .rsv-modal-cuerpo{padding:18px 22px;overflow-y:auto}
 .rsv-modal-pie{display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)}
 

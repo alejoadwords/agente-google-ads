@@ -48,9 +48,16 @@ console.log('\nNINGUN endpoint lee el cliente sin acotarlo\n');
   const sueltos = [];
   for (const f of readdirSync(new URL('../api', import.meta.url))) {
     if (!f.endsWith('.js')) continue;
-    lee('api/' + f).split('\n').forEach((l, i) => {
+    const lineas = lee('api/' + f).split('\n');
+    lineas.forEach((l, i) => {
       if (!/searchParams\.get\('client_id'\)/.test(l)) return;
-      const acotada = /alcanceDeCliente\(|clienteDelMiembro \|\||clienteDe\(userId\)\) \|\|/.test(l);
+      // El alcance puede ir en la MISMA línea o en las siguientes: separar el
+      // «qué pidió» del «qué puede» es más legible y además permite responder
+      // 403 en vez de recortar en silencio. Lo que se exige es que el valor
+      // crudo no llegue a una consulta sin pasar por el alcance, no una forma
+      // concreta de escribirlo.
+      const ventana = lineas.slice(i, i + 8).join('\n');
+      const acotada = /alcanceDeCliente\(|clienteDelMiembro \|\||clienteDe\(userId\)\) \|\|/.test(ventana);
       if (!acotada) sueltos.push(`${f}:${i + 1}`);
     });
   }

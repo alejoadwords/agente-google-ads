@@ -273,7 +273,8 @@ export async function intakeLead(userId, clientId, data) {
         data.repartoClave || created.source,
         data.assignedTo || null,
         data.repartoEntre || null,
-        data.repartoTurnos === true
+        data.repartoTurnos === true,
+        data.sinPrimerContacto === true
       );
       // Sin equipo no hay a quién asignar, pero el lead sigue necesitando que
       // alguien lo llame. En una cuenta de una sola persona el dueño ES el
@@ -284,7 +285,11 @@ export async function intakeLead(userId, clientId, data) {
       // sin equipo recibía los leads de su pauta y no se le creaba ni un
       // pendiente, con la casilla marcada y el plazo puesto. El propio ajuste
       // decide si se crea; aquí solo se deja de bloquear el camino.
-      if (!com) {
+      //
+      // `sinPrimerContacto` la salta: hay entradas en las que la persona no
+      // está esperando que la llamen. Quien reserva una cita ya tiene su hora
+      // acordada, y el pendiente solo ensucia la lista de tareas de alguien.
+      if (!com && data.sinPrimerContacto !== true) {
         const { crearTareaPrimerContacto } = await import('./_followup.js');
         await crearTareaPrimerContacto(userId, created, null).catch(() => {});
       }

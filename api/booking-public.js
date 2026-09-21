@@ -168,6 +168,10 @@ async function manejarGet(url, neg) {
     acento: neg.acento || '#1E2BCC',
     zona,
     mensaje_confirmacion: neg.mensaje_confirmacion || null,
+    // La página solo promete el recordatorio si el negocio lo tiene puesto.
+    // Anunciarlo siempre sería mentirle al cliente del negocio, que es quien
+    // menos culpa tiene de cómo esté configurado esto.
+    recordatorio: (Array.isArray(neg.recordatorios) ? neg.recordatorios : [24, 2]).length > 0,
   };
 
   const servId = url.searchParams.get('service_id');
@@ -284,6 +288,9 @@ async function reservar(req, url, neg, contexto) {
       source: neg.lead_source || 'reserva',
       sourceLabel: 'Reserva en línea',
       pipelineId: neg.pipeline_id || null,
+      // Nada de tarea «Primer contacto»: esta persona no espera una llamada,
+      // ya tiene hora. El pendiente solo ensuciaría la lista de alguien.
+      sinPrimerContacto: true,
     });
     lead = r.lead;
   } catch (e) {

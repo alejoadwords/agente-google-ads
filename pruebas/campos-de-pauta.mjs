@@ -93,7 +93,16 @@ chk('meta.js respeta el tablero del canal', /pipelineId: connection\.pipeline_id
 // asignarLead salía con `return null` antes de crear la tarea de primer
 // contacto, asi que una cuenta de una sola persona recibia los leads de su
 // pauta sin ningun pendiente — con la casilla marcada y el plazo puesto.
-chk('si no hay comercial, igual se crea la tarea', /if \(!com\) \{[\s\S]{0,200}crearTareaPrimerContacto\(userId, created, null\)/.test(intake));
+chk('si no hay comercial, igual se crea la tarea',
+    /if \(!com && data\.sinPrimerContacto !== true\) \{[\s\S]{0,200}crearTareaPrimerContacto\(userId, created, null\)/.test(intake));
+// La excepción: hay entradas en las que la persona NO espera una llamada.
+// Quien reserva una cita ya tiene su hora, y el pendiente solo ensuciaría la
+// lista de tareas de alguien. Se pide explícitamente, nunca por defecto.
+chk('salvo que la entrada pida saltársela', /data\.sinPrimerContacto === true/.test(leer('api/_assign.js')) === false
+    && /sinPrimerContacto/.test(intake));
+chk('y asignarLead la respeta también cuando SÍ hay comercial',
+    /if \(!sinPrimerContacto\) \{[\s\S]{0,160}crearTareaPrimerContacto/.test(leer('api/_assign.js')));
+chk('las reservas son quien la usa', /sinPrimerContacto: true/.test(leer('api/booking-public.js')));
 chk('se recoge lo que devuelve asignarLead', /const com = await asignarLead\(/.test(intake));
 const followup = leer('api/_followup.js');
 chk('la tarea no necesita responsable', /const quien = comercial\?\.nombre \? /.test(followup));

@@ -9,6 +9,7 @@
 // `api/_social-cuentas.js`.
 
 import { firmarTicket, cuentaDe, listarCuentas, borrarCuentas } from './_social-cuentas.js';
+import { quienPregunta, alcanceDeCliente, clienteAjeno } from './_perfiles.js';
 
 export const config = { runtime: 'edge' };
 
@@ -50,7 +51,16 @@ export default async function handler(req) {
 
   const cuenta = await cuentaDe(quien);
   const url = new URL(req.url);
-  const cliente = url.searchParams.get('client_id') || '';
+  // Un miembro acotado a un cliente NO puede salirse de él cambiando el
+  // parámetro en la barra de direcciones. Sin esto veía las cuentas conectadas
+  // de cualquier cliente de la agencia —y se llevaba un ticket firmado para
+  // operar en su nombre. Mismo criterio que el inbox y Plataformas de pauta.
+  const pedido = url.searchParams.get('client_id') || null;
+  let alcance;
+  try { alcance = await quienPregunta(quien); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  if (clienteAjeno(alcance, pedido)) return jsonResp({ error: 'No tienes acceso a ese cliente.' }, 403);
+  const cliente = alcanceDeCliente(alcance, pedido) || '';
 
   try {
     if (req.method === 'GET') {

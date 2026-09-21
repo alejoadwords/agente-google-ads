@@ -36906,14 +36906,15 @@ function rsvRender() {
     '</div>' +
 
     '<div class="rsv-tabs">' +
-      ['servicios', 'quien', 'horario'].map(v =>
+      ['servicios', 'quien', 'horario', 'avisos'].map(v =>
         '<button class="rsv-tab' + (rsvVista === v ? ' active' : '') + '" onclick="rsvIr(\'' + v + '\')">' +
-        ({ servicios: 'Servicios', quien: 'Quién atiende', horario: 'Horario y página' })[v] + '</button>').join('') +
+        ({ servicios: 'Servicios', quien: 'Quién atiende', horario: 'Horario y página', avisos: 'Recordatorios' })[v] + '</button>').join('') +
     '</div>' +
 
     '<div class="rsv-cuerpo">' +
       (rsvVista === 'servicios' ? rsvPintarServicios(puede)
         : rsvVista === 'quien' ? rsvPintarRecursos(puede)
+        : rsvVista === 'avisos' ? rsvPintarAvisos(puede)
         : rsvPintarHorario(puede)) +
     '</div>';
 }
@@ -37222,6 +37223,223 @@ async function rsvAlternarActivo() {
   if (await rsvGuardarConfig({ activo: !cfg.activo }, true)) {
     showToast(rsvDatos.config.activo ? 'Tu página ya recibe reservas' : 'Página apagada');
     rsvRender();
+  }
+}
+
+// ── Recordatorios ───────────────────────────────────────────────────────────
+//
+// El correo sale siempre. WhatsApp NO se puede mandar sin más: quien reservó no
+// nos ha escrito, así que no hay ventana de 24 horas y Meta exige una plantilla
+// aprobada. Por eso esta pantalla no enseña un interruptor de «WhatsApp sí/no»
+// —sería un interruptor que no hace nada— sino el estado real de la plantilla y
+// qué falta para tenerla.
+let rsvWa = null;          // lo que devuelve /api/whatsapp-templates
+let rsvWaCargando = false;
+
+const RSV_PLANTILLA = 'recordatorio_de_cita';
+
+// La plantilla, escrita entera aquí. Es de UTILIDAD porque es exactamente eso:
+// le recuerda a alguien algo que ya acordó. Meta cobra menos las de utilidad y
+// no exigen el mismo consentimiento que las de marketing — pero recategoriza
+// por el CONTENIDO, así que el texto no puede sonar a promoción. Si alguna vez
+// se cambia, hay que cambiar a la vez el orden de los huecos en
+// api/cron-recordatorios.js: van por posición.
+const RSV_BORRADOR_WA = {
+  name: RSV_PLANTILLA,
+  language: 'es',
+  category: 'UTILITY',
+  body: 'Hola {{1}}, te recordamos tu cita en {{2}}: {{3}}. Si no puedes venir, avísanos con tiempo.',
+  ejemplos_body: ['Camila', 'Barbería Aurora', 'martes 22 de septiembre, 5:00 p. m.'],
+  footer: 'Mensaje automático',
+};
+
+async function rsvCargarWa(forzar) {
+  if (rsvWa && !forzar) return rsvWa;
+  rsvWaCargando = true;
+  try {
+    const c = crmAmbitoCliente();
+    const r = await fetchAuth('/api/whatsapp-templates' + (c ? '?client_id=' + encodeURIComponent(c) : ''));
+    rsvWa = await r.json();
+  } catch (e) {
+    rsvWa = { plantillas: [], motivo: 'red', aviso: 'No se pudo consultar el estado en Meta: ' + (e.message || e) };
+  }
+  rsvWaCargando = false;
+  if (rsvVista === 'avisos') rsvRender();
+  return rsvWa;
+}
+
+/** El estado en el que está el recordatorio por WhatsApp, con su explicación. */
+function rsvEstadoWa() {
+  const cfg = (rsvDatos && rsvDatos.config) || {};
+  const nombre = (cfg.wa_template && cfg.wa_template.name) || RSV_PLANTILLA;
+  if (rsvWaCargando || !rsvWa) return { clave: 'cargando' };
+  if (rsvWa.motivo) return { clave: rsvWa.motivo, aviso: rsvWa.aviso };
+  const p = (rsvWa.plantillas || []).find(x => x.name === nombre);
+  if (!p) return { clave: 'sin_plantilla' };
+  if (p.status === 'REJECTED') return { clave: 'rechazada', p };
+  if (p.status !== 'APPROVED') return { clave: 'en_revision', p };
+  // Aprobada pero recategorizada: cuesta más por mensaje y exige el mismo
+  // consentimiento que la publicidad. Es un problema, no un detalle.
+  if (p.category && p.category !== 'UTILITY') return { clave: 'mal_categoria', p };
+  return { clave: 'lista', p };
+}
+
+function rsvPintarAvisos(puede) {
+  const cfg = (rsvDatos && rsvDatos.config) || {};
+  const horas = Array.isArray(cfg.recordatorios) ? cfg.recordatorios.map(Number) : [24, 2];
+  const elUltimo = horas.length ? Math.min.apply(null, horas) : null;
+  if (!rsvWa && !rsvWaCargando) rsvCargarWa();
+
+  const opcion = (h, rotulo) =>
+    '<label class="rsv-check"><input type="checkbox"' + (horas.indexOf(h) >= 0 ? ' checked' : '') +
+      (puede ? ' onchange="rsvAlternarAviso(' + h + ')"' : ' disabled') + '>' + rotulo + '</label>';
+
+  return '<div class="rsv-cols">' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Cuándo avisamos</h3>' +
+      '<p class="rsv-p">Un recordatorio es lo que más baja las ausencias. Se manda una sola vez por cita, ' +
+        'y quien ya canceló no recibe nada.</p>' +
+      '<div class="rsv-checks">' +
+        opcion(24, 'Un día antes') + opcion(4, '4 horas antes') + opcion(2, '2 horas antes') + opcion(1, '1 hora antes') +
+      '</div>' +
+      (horas.length
+        ? '<div class="rsv-nota">Si se juntan dos, solo sale el más cercano: recibir «es mañana» y ' +
+          '«es en dos horas» seguidos no ayuda a nadie.</div>'
+        : '<div class="rsv-nota rsv-ojo">' + icn('alert', 12) + ' Sin ningún aviso marcado no se manda nada.</div>') +
+    '</section>' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Por correo</h3>' +
+      '<p class="rsv-p">Sale siempre, en todos los avisos que marques, a quien dejó su correo al reservar. ' +
+        'Lleva la dirección y el enlace para cancelar.</p>' +
+      '<div class="rsv-estado ok">' + icn('check', 14) + ' Listo, no hay nada que configurar.</div>' +
+    '</section>' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Por WhatsApp</h3>' +
+      '<p class="rsv-p">Solo en el aviso más cercano' +
+        (elUltimo ? ' (' + (elUltimo === 1 ? '1 hora' : elUltimo + ' horas') + ' antes)' : '') +
+        '. Dos WhatsApp por una misma cita es como se consigue que bloqueen tu número.</p>' +
+      rsvPintarEstadoWa(puede) +
+    '</section>' +
+
+  '</div>';
+}
+
+function rsvPintarEstadoWa(puede) {
+  const e = rsvEstadoWa();
+  const caja = (clase, contenido) => '<div class="rsv-estado ' + clase + '">' + contenido + '</div>';
+  const explica =
+    '<div class="rsv-nota">Meta no deja escribirle a alguien que no te ha escrito antes, salvo con una ' +
+    '<b>plantilla aprobada</b>. Es una sola, la escribimos nosotros y la mandamos a revisar por ti; ' +
+    'Meta suele tardar entre unos minutos y un día.</div>';
+
+  switch (e.clave) {
+    case 'cargando':
+      return caja('', 'Consultando el estado en Meta…');
+
+    case 'sin_canal':
+      return caja('aviso', icn('alert', 14) + ' <b>No tienes un canal de WhatsApp conectado.</b>' +
+        '<div class="rsv-nota">Conéctalo en Ajustes → Canales y vuelve aquí. Los recordatorios por correo ' +
+        'funcionan igual mientras tanto.</div>');
+
+    case 'sin_waba':
+    case 'meta':
+    case 'red':
+      return caja('aviso', icn('alert', 14) + ' ' + esc(String(e.aviso || 'No se pudo consultar Meta.')) +
+        '<div style="margin-top:9px"><button class="btn-ghost sm" onclick="rsvCargarWa(true)">Reintentar</button></div>');
+
+    case 'sin_plantilla':
+      return caja('aviso', icn('alert', 14) + ' <b>Falta crear la plantilla.</b> Sin ella no sale ningún ' +
+        'recordatorio por WhatsApp — los de correo sí.' + explica +
+        (puede ? '<div style="margin-top:11px"><button class="btn-pri sm" id="rsv-wa-crear" ' +
+          'onclick="rsvCrearPlantillaWa()">Crear la plantilla</button></div>' : ''));
+
+    case 'en_revision':
+      return caja('', icn('refresh', 14) + ' <b>Meta la está revisando.</b>' +
+        '<div class="rsv-nota">Suele tardar entre unos minutos y un día. No tienes que hacer nada: ' +
+        'en cuanto la apruebe, los recordatorios empiezan a salir solos.</div>' +
+        '<div style="margin-top:9px"><button class="btn-ghost sm" onclick="rsvCargarWa(true)">Comprobar ahora</button></div>');
+
+    case 'rechazada':
+      return caja('malo', icn('alert', 14) + ' <b>Meta la rechazó.</b>' +
+        (e.p.motivo_rechazo ? '<div class="rsv-nota">Motivo: ' + esc(String(e.p.motivo_rechazo)) + '</div>' : '') +
+        (puede ? '<div style="margin-top:11px"><button class="btn-pri sm" onclick="rsvRehacerPlantillaWa()">Borrarla y volver a intentar</button></div>' : ''));
+
+    case 'mal_categoria':
+      // Esto importa de verdad: una plantilla de marketing cuesta más por
+      // mensaje y exige un consentimiento que quien reservó no dio. Un
+      // recordatorio de una cita acordada NO es publicidad.
+      return caja('malo', icn('alert', 14) + ' <b>Meta la clasificó como ' + esc(String(e.p.category)) + ', no como utilidad.</b>' +
+        '<div class="rsv-nota">Un recordatorio de una cita acordada es de <b>utilidad</b>. Como marketing ' +
+        'cuesta más por mensaje y exige un permiso de publicidad que tu cliente no te dio al reservar. ' +
+        'Conviene rehacerla.</div>' +
+        (puede ? '<div style="margin-top:11px"><button class="btn-pri sm" onclick="rsvRehacerPlantillaWa()">Borrarla y volver a intentar</button></div>' : ''));
+
+    case 'lista':
+      return caja('ok', icn('check', 14) + ' <b>Lista.</b> Es de utilidad y está aprobada.' +
+        '<div class="rsv-nota">Se manda a quien dejó su WhatsApp al reservar. El envío lo cobra Meta a tu ' +
+        'cuenta, no nosotros.</div>');
+
+    default:
+      return caja('', 'Estado desconocido.');
+  }
+}
+
+async function rsvAlternarAviso(h) {
+  const cfg = rsvDatos.config || {};
+  const horas = Array.isArray(cfg.recordatorios) ? cfg.recordatorios.map(Number) : [24, 2];
+  const i = horas.indexOf(h);
+  if (i >= 0) horas.splice(i, 1); else horas.push(h);
+  horas.sort((a, b) => b - a);
+  if (await rsvGuardarConfig({ recordatorios: horas })) rsvRender();
+}
+
+async function rsvCrearPlantillaWa() {
+  const btn = document.getElementById('rsv-wa-crear');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+  try {
+    const c = crmAmbitoCliente();
+    const r = await fetchAuth('/api/whatsapp-templates' + (c ? '?client_id=' + encodeURIComponent(c) : ''), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(RSV_BORRADOR_WA),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+
+    // Se guarda QUÉ plantilla usar antes de nada: si no, el cron no sabría cuál
+    // mandar aunque Meta la apruebe.
+    await rsvGuardarConfig({ wa_template: { name: RSV_BORRADOR_WA.name, language: RSV_BORRADOR_WA.language } }, true);
+
+    if (d.recategorizada && d.recategorizada !== 'UTILITY') {
+      // No se calla: cambia lo que le cuesta cada mensaje al cliente.
+      showToast('Meta la clasificó como ' + d.recategorizada + ', no como utilidad. Míralo abajo.', 'error');
+    } else {
+      showToast('Plantilla enviada a revisión');
+    }
+    await rsvCargarWa(true);
+    rsvRender();
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear la plantilla'; }
+  }
+}
+
+async function rsvRehacerPlantillaWa() {
+  // Meta no deja reutilizar el nombre de una plantilla hasta borrarla, así que
+  // rehacerla son dos pasos, no uno.
+  if (!confirm('Se borra la plantilla y se vuelve a mandar a revisión.\n\nMientras tanto no saldrán recordatorios por WhatsApp; los de correo sí.')) return;
+  try {
+    const c = crmAmbitoCliente();
+    const q = '/api/whatsapp-templates?name=' + encodeURIComponent(RSV_PLANTILLA) + (c ? '&client_id=' + encodeURIComponent(c) : '');
+    const r = await fetchAuth(q, { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    await rsvCrearPlantillaWa();
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
   }
 }
 

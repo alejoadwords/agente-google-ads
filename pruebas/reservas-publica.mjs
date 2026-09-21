@@ -73,12 +73,23 @@ console.log('\nUna reserva no se pierde por lo de después\n');
       (api.match(/registrarError\(/g) || []).length >= 4);
 }
 
-console.log('\nLo que la página NO promete\n');
+console.log('\nLo que la página promete, y solo cuando es verdad\n');
 {
-  // Todavía no hay cron de recordatorios. Prometerlo aquí sería mentirle al
-  // cliente del negocio, que es quien menos culpa tiene.
-  chk('no se promete un recordatorio que aún no se manda',
-      !/recordatorio/i.test(pag), (pag.match(/.{0,40}recordatorio.{0,40}/i) || [])[0]);
+  // El recordatorio se puede apagar por negocio. Anunciarlo siempre sería
+  // mentirle al cliente del negocio, que es quien menos culpa tiene.
+  // Para cada mención se corta el trozo ANTERIOR del archivo, que es donde va
+  // la condición. Con `matchAll` y un `.{0,150}` delante no valía: cada match
+  // consume su contexto y el siguiente arranca ya pasada la condición.
+  const menciones = [];
+  const patron = /recordatorio|recordárte|recordamos/gi;
+  for (let m; (m = patron.exec(pag)) !== null;) {
+    menciones.push(pag.slice(Math.max(0, m.index - 200), m.index + 40));
+  }
+  chk('hay menciones al recordatorio', menciones.length > 0);
+  chk('todas van condicionadas a N.recordatorio',
+      menciones.every(t => /N\.recordatorio/.test(t)),
+      menciones.filter(t => !/N\.recordatorio/.test(t)).join(' ⏎ '));
+  chk('y el servidor manda ese dato', /recordatorio: \(Array\.isArray\(neg\.recordatorios\)/.test(api));
   chk('el correo de confirmación solo sale si hay a dónde mandarlo',
       /if \(!quien\.correo \|\| !process\.env\.RESEND_API_KEY\) return;/.test(api));
 }

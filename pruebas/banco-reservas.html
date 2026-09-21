@@ -40,6 +40,13 @@
   <button onclick="escenario('sinquien')">servicios sin nadie</button>
   <button onclick="escenario('miembro')">como comercial</button>
   <button onclick="escenario('error')">el servidor falla</button>
+  <span>· whatsapp:</span>
+  <button onclick="wa('sin_canal')">sin canal</button>
+  <button onclick="wa('sin_plantilla')">sin plantilla</button>
+  <button onclick="wa('PENDING')">en revisión</button>
+  <button onclick="wa('REJECTED')">rechazada</button>
+  <button onclick="wa('MARKETING')">mal categoría</button>
+  <button onclick="wa('APPROVED')">lista</button>
   <span>·</span>
   <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'400px'">móvil</button>
 </div>
@@ -51,6 +58,10 @@
 let BD = {};
 let PUEDE = true;
 let FALLA = false;
+// Estado de la plantilla de WhatsApp, que es lo que decide toda la pestaña de
+// recordatorios: sin canal, sin plantilla, en revisión, rechazada, mal
+// categorizada o lista.
+let WA = 'sin_plantilla';
 
 function escenario(cual) {
   FALLA = cual === 'error';
@@ -70,6 +81,7 @@ function escenario(cual) {
       horario: cual === 'vacio' ? {} : { 1: [['09:00', '13:00'], ['14:00', '18:00']], 2: [['09:00', '13:00'], ['14:00', '18:00']], 3: [['09:00', '13:00'], ['14:00', '18:00']], 4: [['09:00', '13:00'], ['14:00', '18:00']], 5: [['09:00', '13:00'], ['14:00', '18:00']], 6: [['09:00', '13:00']] },
       excepciones: cual === 'lleno' ? { '2026-12-25': [], '2026-12-24': [['09:00', '13:00']] } : {},
       margen_min: 15, antelacion_min_horas: 2, antelacion_max_dias: 60, paso_min: 30,
+      recordatorios: [24, 2],
       acento: '#1E2BCC', mensaje_confirmacion: '', activo: cual === 'lleno' || cual === 'sinquien',
     },
     servicios: cual === 'vacio' ? [] : servicios.map(s => cual === 'sinquien' ? { ...s, recursos: [] } : s),
@@ -82,6 +94,23 @@ function escenario(cual) {
   if (typeof rsvDatos !== 'undefined') { rsvDatos = null; rsvHorarioBorrador = null; rsvCargar(true); }
 }
 escenario('lleno');
+
+function wa(cual) {
+  WA = cual;
+  if (typeof rsvWa !== 'undefined') { rsvWa = null; rsvVista = 'avisos'; rsvCargarWa(true); }
+}
+
+function respuestaWa() {
+  if (WA === 'sin_canal') return { plantillas: [], motivo: 'sin_canal', aviso: 'No hay un canal de WhatsApp conectado en esta cuenta.' };
+  if (WA === 'sin_plantilla') return { plantillas: [], canal: 'WhatsApp de prueba', aprobadas: 0 };
+  const estado = WA === 'MARKETING' ? 'APPROVED' : WA;
+  return { canal: 'WhatsApp de prueba', aprobadas: estado === 'APPROVED' ? 1 : 0, plantillas: [{
+    name: 'recordatorio_de_cita', language: 'es',
+    category: WA === 'MARKETING' ? 'MARKETING' : 'UTILITY',
+    status: estado, usable: estado === 'APPROVED',
+    motivo_rechazo: WA === 'REJECTED' ? 'INVALID_FORMAT' : null,
+  }] };
+}
 
 function respuesta(ok, cuerpo) {
   return Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(cuerpo) });
@@ -104,6 +133,12 @@ function showToast(m, t) {
 async function fetchAuth(url, opts) {
   opts = opts || {};
   await new Promise(function (r) { setTimeout(r, 120); });
+  if (url.indexOf('/api/whatsapp-templates') === 0) {
+    var met = (opts.method || 'GET');
+    if (met === 'POST') { WA = 'PENDING'; return respuesta(true, { ok: true, status: 'PENDING', category: 'UTILITY' }); }
+    if (met === 'DELETE') { WA = 'sin_plantilla'; return respuesta(true, { ok: true }); }
+    return respuesta(true, respuestaWa());
+  }
   if (FALLA) return respuesta(false, { error: 'No se pudo contactar con la base de datos (HTTP 503)' });
   var m = opts.method || 'GET';
   var q = new URLSearchParams(url.split('?')[1] || '');

@@ -17,6 +17,8 @@
 
 export const config = { runtime: 'edge' };
 
+import { quienPregunta, alcanceDeCliente, clienteAjeno } from './_perfiles.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
@@ -88,7 +90,16 @@ export default async function handler(req) {
   const url = new URL(req.url);
   // `client_id` va como texto y '' es el ámbito «de la cuenta», no NULL: el
   // índice único no distingue dos NULL y dejaría crear filas duplicadas.
-  const cliente = (req.method === 'GET' ? url.searchParams.get('client_id') : null) ?? '';
+  //
+  // Y el que pide el navegador NO se usa tal cual: un miembro acotado a un
+  // cliente leía y escribía la parrilla de cualquier otro con solo cambiar el
+  // parámetro. Mismo criterio que el inbox y Plataformas de pauta.
+  const pedido = (req.method === 'GET' ? url.searchParams.get('client_id') : null) || null;
+  let alcance;
+  try { alcance = await quienPregunta(userId); }
+  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  if (clienteAjeno(alcance, pedido)) return jsonResp({ error: 'No tienes acceso a ese cliente.' }, 403);
+  const cliente = alcanceDeCliente(alcance, pedido) ?? '';
 
   try {
     if (req.method === 'GET') {
@@ -104,7 +115,14 @@ export default async function handler(req) {
     if (req.method === 'PUT') {
       const body = await req.json().catch(() => ({}));
       const data = body.data;
-      const cli = String(body.client_id ?? '');
+      // El cliente de la escritura viene en el CUERPO, así que también hay que
+      // acotarlo: dejarlo pasar permitía sobrescribir la parrilla de cualquier
+      // otro cliente de la agencia con solo cambiar un campo del JSON.
+      const pedidoCli = String(body.client_id ?? '') || null;
+      if (clienteAjeno(alcance, pedidoCli)) {
+        return jsonResp({ error: 'No tienes acceso a ese cliente.' }, 403);
+      }
+      const cli = alcanceDeCliente(alcance, pedidoCli) ?? '';
       if (!data || typeof data !== 'object' || !Array.isArray(data.parrillas)) {
         return jsonResp({ error: 'La parrilla no tiene la forma esperada.' }, 400);
       }
