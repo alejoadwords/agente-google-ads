@@ -258,10 +258,20 @@
     return r;
   }
 
+  // Mismos escalones que la calculadora del landing: de mil en mil hasta
+  // 10.000 y de cinco mil en cinco mil hasta el tope. Antes saltaba de 5.000 a
+  // 10.000, que es justo el tramo donde está la mayoría de los clientes.
+  //
+  // El umbral se mira distinto según la dirección: con >= en los dos sentidos,
+  // al bajar desde 10.000 se restarían 5.000 y ya no se verían los finos.
+  var CORTE_FINO = 10000;
   function pasoContactos(v, dir) {
-    var p = v >= 20000 ? 10000 : v >= 5000 ? 5000 : PASO;
-    if (dir < 0) p = v > 20000 ? 10000 : v > 5000 ? 5000 : PASO;
-    return Math.max(PASO, Math.min(MAX_C, v + dir * p));
+    var p = (dir > 0 ? v >= CORTE_FINO : v > CORTE_FINO) ? 5000 : PASO;
+    var n = v + dir * p;
+    // Bajando no se salta por encima del corte: desde 12.000 aterrizaría en
+    // 7.000 y se perderían los escalones de en medio.
+    if (dir < 0 && v > CORTE_FINO && n < CORTE_FINO) n = CORTE_FINO;
+    return Math.max(PASO, Math.min(MAX_C, n));
   }
 
   // ── Piezas ────────────────────────────────────────────────────────────────
