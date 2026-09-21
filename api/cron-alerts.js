@@ -101,7 +101,9 @@ export default async function handler(req, res) {
           `https://app.acuarius.app/api/admin?action=check-alerts`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            // El secreto identifica al cron: sin él, `check-alerts` ya no
+            // acepta un userId venido de fuera, que era justo el agujero.
+            headers: { 'Content-Type': 'application/json', 'x-admin-secret': process.env.ADMIN_SECRET || '' },
             body: JSON.stringify({ userId }),
           }
         );

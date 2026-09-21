@@ -727,11 +727,9 @@ CREATE INDEX idx_alerts_user_unread ON campaign_alerts(user_id, is_read, is_dism
 */
 
 async function handleGetConnection(req, res) {
-  const { platform } = req.query;
-  // El userId de la URL NO se usa: la identidad sale del token de sesión.
-  const userId = await usuarioDeLaSesion(req);
-  if (!userId) return res.status(401).json({ error: 'No autorizado' });
-  if (!platform) return res.status(400).json({ error: 'platform requerido' });
+  // El router ya impuso el userId de la sesión sobre el de la petición.
+  const { userId, platform } = req.query;
+  if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
   let rows;
   try {
     rows = await supabaseReq(
@@ -759,12 +757,8 @@ async function handleGetConnection(req, res) {
 
 async function handleDisconnectPlatform(req, res) {
   if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).json({ error: 'POST/DELETE only' });
-  const { platform } = req.body || {};
-  // Igual que arriba: sin esto, cualquiera desconectaba la cuenta publicitaria
-  // de otro mandando su id.
-  const userId = await usuarioDeLaSesion(req);
-  if (!userId) return res.status(401).json({ error: 'No autorizado' });
-  if (!platform) return res.status(400).json({ error: 'platform requerido' });
+  const { userId, platform } = req.body || {};
+  if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
   await supabaseReq(`/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${encodeURIComponent(platform)}`, 'DELETE');
   return res.json({ ok: true });
 }
@@ -1156,6 +1150,18 @@ async function usuarioDeLaSesion(req) {
   } catch { return null; }
 }
 
+// Las acciones que la aplicación llama en nombre de quien tiene la sesión.
+// Si añades una aquí abajo, añádela también a esta lista.
+const RUTAS_DE_USUARIO = new Set([
+  'save-recommendation', 'get-recommendations', 'update-recommendation',
+  'save-snapshot', 'get-snapshots',
+  'get-connection', 'disconnect-platform',
+  'check-alerts', 'get-alerts', 'mark-alerts-read', 'dismiss-alert',
+  'refresh-meta-token',
+  'log-api-action', 'save-connection', 'assign-connection',
+  'competitive-search', 'update-preferences', 'save-platform-account',
+]);
+
 // ── ROUTER PRINCIPAL ──────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
@@ -1163,7 +1169,29 @@ export default async function handler(req, res) {
 
   const action = req.query.action;
 
-  // Rutas públicas de usuario (sin admin secret)
+  // ── LA PUERTA ────────────────────────────────────────────
+  // Estas acciones las llama la propia aplicación, así que no llevan el
+  // secreto de admin. Pero SÍ tienen que llevar sesión: antes se creían el
+  // `userId` de la petición, y con eso cualquiera desde fuera leía o tocaba
+  // los datos de otra cuenta con solo saber su id de Clerk.
+  //
+  // Se comprueba AQUÍ y no en cada manejador —son dieciséis— porque así el
+  // que se escriba mañana nace protegido en vez de nacer abierto.
+  //
+  // Se acepta también el secreto de admin: con él llaman el panel y el cron
+  // de alertas, que sí pueden actuar en nombre de otra persona.
+  if (RUTAS_DE_USUARIO.has(action)) {
+    const conSecreto = authCheck(req);
+    const quien = conSecreto
+      ? (req.query?.userId || req.body?.userId || null)
+      : await usuarioDeLaSesion(req);
+    if (!quien) return res.status(401).json({ error: 'No autorizado' });
+    // Se IMPONE sobre lo que viniera: a partir de aquí ningún manejador puede
+    // equivocarse leyendo el userId de la petición, porque ya es el bueno.
+    if (req.query && typeof req.query === 'object') req.query.userId = quien;
+    if (req.body && typeof req.body === 'object') req.body.userId = quien;
+  }
+
   try {
     if (action === 'save-recommendation')   return await handleSaveRecommendation(req, res);
     if (action === 'get-recommendations')   return await handleGetRecommendations(req, res);

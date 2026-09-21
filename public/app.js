@@ -5610,7 +5610,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
         const snapId = _snapshotPendingId;
         _snapshotPendingId = null; _snapshotAgent = null;
         setTimeout(() => {
-          fetch('/api/admin?action=save-snapshot', {
+          fetchAuth('/api/admin?action=save-snapshot', {
             method: 'PATCH',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({id: snapId, analysis: replyFinalProcessed})
@@ -5639,7 +5639,7 @@ async function saveRecommendation(agent, content) {
   const user = window.Clerk?.user || clerkInstance?.user;
   if (!user) return;
   try {
-    await fetch('/api/admin?action=save-recommendation', {
+    await fetchAuth('/api/admin?action=save-recommendation', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({userId: user.id, agent, content})
@@ -5662,7 +5662,7 @@ async function loadRecommendations(agentFilter) {
 
 async function updateRecommendation(id, status) {
   try {
-    await fetch('/api/admin?action=update-recommendation', {
+    await fetchAuth('/api/admin?action=update-recommendation', {
       method: 'PATCH',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({id, status})
@@ -5674,7 +5674,7 @@ async function updateHistorialBadge() {
   const user = window.Clerk?.user || clerkInstance?.user;
   if (!user) return;
   try {
-    const res = await fetch(`/api/admin?action=get-recommendations&userId=${encodeURIComponent(user.id)}`);
+    const res = await fetchAuth(`/api/admin?action=get-recommendations&userId=${encodeURIComponent(user.id)}`);
     if (!res.ok) return;
     const data = await res.json();
     const pending = (data || []).filter(r => r.status === 'pending').length;
@@ -6097,7 +6097,7 @@ async function submitAnalisis() {
   const user = window.Clerk?.user || clerkInstance?.user;
   if (user) {
     try {
-      const res = await fetch('/api/admin?action=save-snapshot', {
+      const res = await fetchAuth('/api/admin?action=save-snapshot', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({userId: user.id, agent, period_label: periodLabel, period_type: periodType, metrics})
@@ -6196,7 +6196,7 @@ async function enrichWithCompetitiveData(userMessage, agentKey) {
 
   try {
     const query = profile.negocio + ' ' + profile.industria + ' ' + (profile.pais || 'Colombia');
-    const res = await fetch('/api/admin?action=competitive-search', {
+    const res = await fetchAuth('/api/admin?action=competitive-search', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ query, type: 'serp' })
@@ -6359,7 +6359,7 @@ async function executeAction(actionData, btn) {
     }
 
     // Audit log
-    fetch('/api/admin?action=log-api-action', {
+    fetchAuth('/api/admin?action=log-api-action', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -6851,7 +6851,7 @@ async function restoreConnectionsFromSupabase() {
 
     // Refrescar token de Meta si expira pronto
     if (mConn.connected) {
-      fetch('/api/admin?action=refresh-meta-token', {
+      fetchAuth('/api/admin?action=refresh-meta-token', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ userId: uid })
       }).catch(() => {});
@@ -7136,7 +7136,7 @@ async function manageCampaignStatus(campaignId, campaignName, newStatus) {
     // Limpiar caché del dashboard para forzar recarga
     Object.keys(localStorage).filter(k => k.startsWith('meta_dashboard_')).forEach(k => localStorage.removeItem(k));
     // Registrar acción en logs
-    if (uid) fetch('/api/admin?action=log-api-action', {
+    if (uid) fetchAuth('/api/admin?action=log-api-action', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid, platform: 'meta_ads', actionType: 'campaign_status_change', entityId: campaignId, entityName: campaignName, newValue: { status: newStatus }, confirmed: true })
     }).catch(() => {});
@@ -7220,11 +7220,11 @@ async function initAlertsBadge() {
   const uid = clerkInstance?.user?.id;
   if (!uid) return;
   try {
-    const r = await fetch(`/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}&unreadOnly=true`);
+    const r = await fetchAuth(`/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}&unreadOnly=true`);
     const alerts = await r.json();
     updateAlertsBadge(Array.isArray(alerts) ? alerts.length : 0);
     // Check nuevas alertas silencioso
-    fetch('/api/admin?action=check-alerts', {
+    fetchAuth('/api/admin?action=check-alerts', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ userId: uid })
     }).then(r => r.json()).then(d => {
@@ -7299,7 +7299,7 @@ async function openAlertsPanel() {
 
   // Marcar como leídas
   if (uid) {
-    fetch('/api/admin?action=mark-alerts-read', {
+    fetchAuth('/api/admin?action=mark-alerts-read', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ userId: uid })
     }).then(() => { const b = document.getElementById('alerts-badge'); if (b) b.style.display = 'none'; }).catch(() => {});
@@ -7354,7 +7354,7 @@ function closeAlertsPanel() {
 
 async function dismissAlert(id, el) {
   el?.remove();
-  fetch('/api/admin?action=dismiss-alert', {
+  fetchAuth('/api/admin?action=dismiss-alert', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ id })
   }).catch(() => {});
@@ -14428,7 +14428,7 @@ async function selectMetaAccount(accountId) {
   // Guardar account_id en Supabase para que los crons de alertas/reportes lo usen
   const uid2 = clerkInstance?.user?.id;
   if (uid2) {
-    fetch('/api/admin?action=save-platform-account', {
+    fetchAuth('/api/admin?action=save-platform-account', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid2, platform: 'meta_ads', accountId: acc.id, accountName: acc.name })
     }).catch(() => {});
@@ -14794,7 +14794,7 @@ async function selectLinkedInAccount(accountId) {
   localStorage.setItem('linkedin_account_id_persist', acc.id);
   const uid2 = clerkInstance?.user?.id;
   if (uid2) {
-    fetch('/api/admin?action=save-platform-account', {
+    fetchAuth('/api/admin?action=save-platform-account', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ userId: uid2, platform: 'linkedin_ads', accountId: acc.id, accountName: acc.name })
     }).catch(() => {});
@@ -14915,7 +14915,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
         const uid = clerkInstance?.user?.id || urlUid;
         if (!uid) return;
         try {
-          const sr = await fetch('/api/admin?action=save-connection', {
+          const sr = await fetchAuth('/api/admin?action=save-connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: uid, platform: 'google_ads', access_token: token, refresh_token: refresh || '', account_name: email || '', expires_in: 3600 }),
