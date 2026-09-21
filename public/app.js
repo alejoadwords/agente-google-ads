@@ -20487,6 +20487,7 @@ async function crmOpenDetail(leadId, leadSuelto) {
   if (!lead) return;
   crmDetailLead = lead;
   crmDetalleAplicarPermiso(lead);
+  crmPintarProceso(lead);
   document.getElementById('crm-d-name').textContent = lead.name;
   // Avatar
   const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
@@ -20789,6 +20790,128 @@ async function crmSuggestNextAction() {
     if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No se pudo generar la sugerencia.</div>'; }
   }
   if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Sugerir próxima acción'; }
+}
+
+// ── El proceso de venta del lead ────────────────────────────────────────────
+//
+// Cuál es se leía en ninguna parte: la ficha enseñaba la etapa, que solo
+// significa algo dentro de un proceso. Y moverlo de proceso no se podía.
+function crmPintarProceso(lead) {
+  const cont = document.getElementById('crm-d-proceso');
+  if (!cont) return;
+  const actual = (crmPipelines || []).find(p => p.id === lead.pipeline_id);
+  // Solo el dueño y un administrador mueven de proceso. Es la misma regla que
+  // aplica el servidor; esconder el botón no es el permiso, es la cortesía.
+  const puede = !!(window._miPerfil && window._miPerfil.gestiona_equipo);
+  // Los de SU cliente, no los de todos: un proceso pertenece a un cliente y
+  // mover el lead a uno ajeno le cambiaría la cartera sin decirlo.
+  const candidatos = (crmPipelines || []).filter(p =>
+    p.id !== lead.pipeline_id && (p.client_id || null) === (lead.client_id || null));
+
+  cont.innerHTML =
+    '<span class="nom">' + esc(actual ? actual.name : 'Sin proceso asignado') + '</span>' +
+    (puede && candidatos.length ? '<button onclick="crmMoverProcesoAbrir()">Cambiar</button>' : '');
+}
+
+function crmMoverProcesoAbrir() {
+  const lead = crmDetailLead;
+  if (!lead) return;
+  const candidatos = (crmPipelines || []).filter(p =>
+    p.id !== lead.pipeline_id && (p.client_id || null) === (lead.client_id || null));
+  if (!candidatos.length) { showToast('No hay otro proceso al que moverlo', 'error'); return; }
+
+  document.getElementById('crm-mover-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'crm-mover-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:460px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">Mover a otro proceso</div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div style="padding:18px 22px">' +
+      '<label style="display:block;font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;' +
+        'text-transform:uppercase;color:var(--muted);margin-bottom:6px">Llevar «' + esc(lead.name || 'este lead') + '» a</label>' +
+      '<select class="auto-input" id="crm-mover-sel" onchange="crmMoverProcesoPrevia()">' +
+        '<option value="">Elige el proceso…</option>' +
+        candidatos.map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('') +
+      '</select>' +
+      '<div id="crm-mover-aviso" style="margin-top:12px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="crm-mover-ok" onclick="crmMoverProceso()" disabled>Mover</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+/**
+ * Antes de mover, se le pregunta al servidor qué va a pasar con la etapa.
+ *
+ * Cada proceso tiene las suyas: si la del lead no existe en el destino, entra
+ * en la primera. Eso cambia dónde aparece en el tablero, así que se dice ANTES
+ * y no después.
+ */
+// Cajita de estado propia. Se podría tomar prestada la de Reservas, pero
+// entonces renombrar una clase allí rompería esto en silencio.
+function cajaEstado(tono, html) {
+  return '<div style="font-size:var(--fs-sm);line-height:1.55;border-radius:var(--r);padding:11px 13px;' +
+    'background:var(--' + tono + '-bg);border:1px solid var(--' + tono + ');color:var(--text-2)">' + html + '</div>';
+}
+
+async function crmMoverProcesoPrevia() {
+  const sel = document.getElementById('crm-mover-sel');
+  const aviso = document.getElementById('crm-mover-aviso');
+  const ok = document.getElementById('crm-mover-ok');
+  if (!sel || !aviso) return;
+  if (!sel.value) { aviso.innerHTML = ''; if (ok) ok.disabled = true; return; }
+  aviso.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--muted2)">Comprobando…</div>';
+  try {
+    const r = await fetchAuth('/api/leads', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: crmDetailLead.id, pipeline_id: sel.value, previsualizar: true }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    const p = d.previsualizacion;
+    aviso.innerHTML = p.cambia_etapa
+      ? cajaEstado('warning', icn('alert', 14) + ' Su etapa actual <b>no existe</b> en «' + esc(p.destino) +
+             '», así que entrará en <b>' + esc(p.etapa_nueva_label) + '</b>.')
+      : cajaEstado('success', icn('check', 14) + ' Conserva su etapa actual, que también existe en «' +
+             esc(p.destino) + '».');
+    if (ok) ok.disabled = false;
+  } catch (e) {
+    aviso.innerHTML = cajaEstado('danger', icn('alert', 14) + ' ' + esc(String(e.message || e)));
+    if (ok) ok.disabled = true;
+  }
+}
+
+async function crmMoverProceso() {
+  const sel = document.getElementById('crm-mover-sel');
+  const ok = document.getElementById('crm-mover-ok');
+  if (!sel || !sel.value || !crmDetailLead) return;
+  if (ok) { ok.disabled = true; ok.textContent = 'Moviendo…'; }
+  try {
+    const r = await fetchAuth('/api/leads', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: crmDetailLead.id, pipeline_id: sel.value }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    document.getElementById('crm-mover-overlay')?.remove();
+    showToast('Movido a «' + d.destino + '»' + (d.cambia_etapa ? ', en ' + d.etapa_nueva_label : ''));
+    // Se cierra la ficha y se recarga: el lead pudo salirse del tablero que se
+    // está mirando, y dejarlo abierto con datos viejos engaña más que ayuda.
+    crmCloseDetail();
+    await crmLoadLeads();
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (ok) { ok.disabled = false; ok.textContent = 'Mover'; }
+  }
 }
 
 async function crmChangeStage(newStage) {

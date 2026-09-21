@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Mover de proceso</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Mover un lead de proceso de venta, con el CSS y las funciones REALES.
+
+  Lo que hay que mirar son los dos avisos: cuando la etapa se conserva y cuando
+  NO existe en el proceso destino. Ese segundo caso cambia dónde aparece el lead
+  en el tablero, y si no se dice antes, el usuario cree que lo perdió.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+  Abrir:         http://localhost:4173/pruebas/banco-mover-pipeline.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);padding:28px}
+  .ficha{max-width:340px;background:var(--bg,#fff);border:1px solid var(--border,#E4E6F0);
+    border-radius:14px;padding:16px 18px}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+  .banco span{opacity:.6}
+  #toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0D0F1C;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13px;z-index:9999;display:none}
+  #toast.err{background:var(--danger,#DC2626)}
+</style>
+</head>
+<body>
+
+<div class="ficha">
+  <div class="crm-detail-section">
+    <div class="crm-detail-section-title">Proceso de venta</div>
+    <div class="crm-d-proceso" id="crm-d-proceso"></div>
+    <div class="crm-detail-section-title" style="margin-top:6px">Etapa</div>
+    <select class="crm-detail-stage-select" id="crm-d-stage"><option>Nuevo</option></select>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div class="banco">
+  <span>BANCO ·</span>
+  <button onclick="conLead('contactado')">etapa que SÍ existe en el destino</button>
+  <button onclick="conLead('periodo-de-prueba')">etapa que NO existe</button>
+  <button onclick="conLead('contactado', false)">como comercial (sin permiso)</button>
+</div>
+
+<script>
+// Dos procesos del mismo cliente, con etapas distintas — el caso que importa.
+var crmPipelines = [
+  { id: 'p1', name: 'Registro de clientes', client_id: null },
+  { id: 'p2', name: 'Arriendo', client_id: null },
+  { id: 'p3', name: 'De otro cliente', client_id: 'cli_otro' },
+];
+var ETAPAS = { p2: [{ key: 'visita', label: 'Visita al inmueble' }, { key: 'contactado', label: 'Contactado' }] };
+var crmDetailLead = null;
+
+function conLead(etapa, admin) {
+  window._miPerfil = { gestiona_equipo: admin !== false, perfil: admin === false ? 'ventas' : 'admin' };
+  crmDetailLead = { id: 'l1', name: 'Camila Restrepo', stage: etapa, pipeline_id: 'p1', client_id: null };
+  crmPintarProceso(crmDetailLead);
+  document.getElementById('crm-mover-overlay')?.remove();
+}
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    return js.slice(a, js.indexOf(hasta, a));
+  };
+
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    js.slice(js.indexOf('const ICN_PATHS = {'), js.indexOf('// ── AUTOMATIZACIONES DEL CRM')),
+    // El bloque de mover, tal cual quedó.
+    trozo('// ── El proceso de venta del lead ─', 'async function crmChangeStage('),
+    // Lo que sale a la red y a otras pantallas, sustituido.
+    `
+    function showToast(m, t) {
+      var e = document.getElementById('toast');
+      e.textContent = m; e.className = t === 'error' ? 'err' : ''; e.style.display = 'block';
+      clearTimeout(window._tt); window._tt = setTimeout(function () { e.style.display = 'none'; }, 2600);
+    }
+    function crmCloseDetail() {}
+    async function crmLoadLeads() {}
+    async function fetchAuth(url, opts) {
+      await new Promise(function (r) { setTimeout(r, 200); });
+      var b = JSON.parse(opts.body);
+      var destino = crmPipelines.filter(function (p) { return p.id === b.pipeline_id; })[0];
+      var etapas = ETAPAS[b.pipeline_id] || [];
+      var misma = etapas.filter(function (e) { return e.key === crmDetailLead.stage; })[0];
+      var nueva = misma || etapas[0];
+      var resumen = {
+        nombre: crmDetailLead.name, destino: destino.name,
+        etapa_actual: crmDetailLead.stage, etapa_nueva: nueva.key,
+        etapa_nueva_label: nueva.label, cambia_etapa: !misma,
+      };
+      var cuerpo = b.previsualizar ? { previsualizacion: resumen } : Object.assign({ ok: true }, resumen);
+      return { ok: true, status: 200, json: function () { return Promise.resolve(cuerpo); } };
+    }
+    `,
+  ].join('\n');
+
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  conLead('contactado');
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend',
+    '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>

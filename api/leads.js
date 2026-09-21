@@ -783,6 +783,23 @@ export default async function handler(req) {
       }
     }
 
+    // ── Mover el lead a otro proceso de venta ────────────────────────────
+    //
+    // La lógica vive en `moverDePipeline`, fuera del handler, para poder
+    // probarla EJECUTÁNDOLA contra la base. Dentro del handler haría falta
+    // fabricar un JWT de Clerk válido, y entonces la prueba de algo que
+    // ESCRIBE se quedaría en leer el código y confiar.
+    if (fields.pipeline_id !== undefined) {
+      if (esMiembro && rolMiembro !== 'admin') {
+        return jsonResp({
+          error: 'Solo un administrador puede mover un lead de proceso de venta.',
+          sin_permiso: true,
+        }, 403);
+      }
+      const r = await moverDePipeline(userId, id, fields.pipeline_id, { previsualizar: !!fields.previsualizar });
+      return jsonResp(r.cuerpo, r.estado);
+    }
+
     // Only allow safe fields
     const allowed = ['name','email','phone','company','stage','stage_position','notes','source','tags','custom_fields','value','assigned_to','assigned_name','close_reason','close_currency','closed_at','expected_close_date'];
     const update = {};
@@ -880,4 +897,98 @@ export default async function handler(req) {
   }
 
   return jsonResp({ error: 'Método no permitido' }, 405);
+}
+
+
+/**
+ * Mueve un lead a otro proceso de venta.
+ *
+ * Dos reglas que un guardado normal no puede saltarse, y por eso `pipeline_id`
+ * NO está entre los campos permitidos del PUT:
+ *
+ * 1. **Cada proceso tiene SUS etapas.** Un lead en «Período de prueba» que
+ *    aterriza en un proceso sin esa etapa desaparece del tablero — la
+ *    aplicación ya avisa de esos leads huérfanos (`crmAvisoEtapasAjenas`) y
+ *    esto no puede fabricarlos. Si la etapa no existe allí, entra en la primera.
+ * 2. **Un proceso pertenece a un cliente.** Moverlo a uno de OTRO cliente le
+ *    cambiaría la cartera sin decirlo, que es una fuga entre clientes.
+ *
+ * `previsualizar` devuelve lo que PASARÍA sin tocar nada, para poder avisar del
+ * cambio de etapa antes de que alguien lo confirme.
+ *
+ * Devuelve { estado, cuerpo } en vez de una Response para poder probarla.
+ */
+export async function moverDePipeline(userId, leadId, destinoId, { previsualizar = false } = {}) {
+  const mal = (error, estado = 400, extra) => ({ estado, cuerpo: { error, ...(extra || {}) } });
+
+  const filas = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(leadId)}&user_id=eq.${encodeURIComponent(userId)}` +
+    `&select=id,name,stage,pipeline_id,client_id&limit=1`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  const lead = filas?.[0];
+  if (!lead) return mal('Lead no encontrado', 404);
+
+  const destinos = await fetch(
+    `${SUPABASE_URL}/rest/v1/pipelines?id=eq.${encodeURIComponent(String(destinoId || ''))}` +
+    `&user_id=eq.${encodeURIComponent(userId)}&select=id,name,client_id&limit=1`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  const destino = destinos?.[0];
+  if (!destino) return mal('Ese proceso de venta no existe en tu cuenta.', 404);
+  if ((destino.client_id || null) !== (lead.client_id || null)) {
+    return mal('Ese proceso es de otro cliente. Un lead no cambia de cliente al cambiar de proceso.');
+  }
+  if (destino.id === lead.pipeline_id) return mal('El lead ya está en ese proceso.', 400, { sin_cambios: true });
+
+  // Ordenadas: sin `order`, «la primera» no significa nada.
+  const etapas = await fetch(
+    `${SUPABASE_URL}/rest/v1/pipeline_stages?pipeline_id=eq.${encodeURIComponent(destino.id)}` +
+    `&select=key,label,position&order=position.asc`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  if (!etapas?.length) return mal('Ese proceso todavía no tiene etapas. Configúralas antes de mover leads.');
+
+  const misma = etapas.find(e => e.key === lead.stage);
+  const nueva = misma || etapas[0];
+  const resumen = {
+    nombre: lead.name,
+    destino: destino.name,
+    etapa_actual: lead.stage,
+    etapa_nueva: nueva.key,
+    etapa_nueva_label: nueva.label,
+    cambia_etapa: !misma,
+  };
+  if (previsualizar) return { estado: 200, cuerpo: { previsualizacion: resumen } };
+
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(leadId)}&user_id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: 'PATCH', headers: sbHeaders(),
+      body: JSON.stringify({
+        pipeline_id: destino.id,
+        stage: nueva.key,
+        // Al principio de su nueva columna: conservando la posición anterior
+        // aparecería enterrado entre leads con los que no tiene nada que ver.
+        stage_position: Date.now(),
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+  if (!res.ok) return mal(await res.text(), 500);
+
+  // Queda registrado. Un lead que desaparece de un tablero y reaparece en otro
+  // sin rastro es exactamente lo que nadie entiende tres días después.
+  await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
+    method: 'POST', headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      lead_id: leadId, user_id: userId, type: 'nota',
+      content: `Movido al proceso «${destino.name}»` +
+        (misma ? '' : `. Su etapa «${lead.stage}» no existe ahí, así que entró en «${nueva.label}».`),
+      metadata: { sistema: true, mover_pipeline: true, desde: lead.pipeline_id, hasta: destino.id, etapa: nueva.key },
+    }),
+  }).catch(() => {});
+
+  const actualizado = await res.json().catch(() => []);
+  return { estado: 200, cuerpo: { ok: true, ...resumen, lead: actualizado?.[0] || null } };
 }
