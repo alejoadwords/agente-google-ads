@@ -27,6 +27,28 @@ const CRON_SECRET    = process.env.CRON_SECRET;
 // Supabase se le escribe una vez por lote en vez de una vez por persona. El
 // mismo tiempo de función rinde unas sesenta veces más.
 const PRESUPUESTO  = 5000; // destinatarios por corrida, repartidos entre campañas
+
+// Cuentas a las que soporte les quitó el envío. Se consulta a Clerk, que es
+// donde vive la verdad del plan, y se guarda un momento: cinco campañas por
+// corrida no justifican cinco viajes.
+const _bloqueoCache = new Map();
+async function envioBloqueado(userId) {
+  if (!userId || !process.env.CLERK_SECRET_KEY) return false;
+  const hit = _bloqueoCache.get(userId);
+  if (hit && hit.exp > Date.now()) return hit.v;
+  try {
+    const u = await fetch('https://api.clerk.com/v1/users/' + userId, {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    }).then(r => r.json());
+    const v = !!u?.public_metadata?.envio_bloqueado;
+    _bloqueoCache.set(userId, { v, exp: Date.now() + 60000 });
+    return v;
+  } catch {
+    // Si no se puede preguntar, no se envía. Al revés —enviar por si acaso— es
+    // justo lo que hay que evitar cuando una cuenta está bloqueada por fraude.
+    return true;
+  }
+}
 const LOTE_RESEND  = 100;  // máximo del endpoint /emails/batch
 const LOTE_BASE    = 400;  // filas por escritura a Supabase (la URL tiene límite)
 const LOTE_LEADS   = 200;  // ids por consulta `in.()` — 200 uuid son ~7 KB de URL
@@ -321,6 +343,14 @@ export default async function handler(req, res) {
     const nowIso = new Date().toISOString();
     const campaigns = await sb(`/campaigns?status=in.(queued,sending)&or=(scheduled_at.is.null,scheduled_at.lte.${encodeURIComponent(nowIso)})&select=*&order=queued_at.asc&limit=5`);
     for (const c of (campaigns || [])) {
+      // El bloqueo de una cuenta se comprueba TAMBIÉN aquí. Comprobarlo solo al
+      // encolar no sirve de nada: lo que manda los correos es este cron, y una
+      // campaña ya encolada seguiría saliendo después de bloquear la cuenta.
+      if (await envioBloqueado(c.user_id)) {
+        await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'paused' }, 'return=minimal');
+        console.warn('[campaigns] campaña', c.id, 'detenida: la cuenta tiene el envío bloqueado');
+        continue;
+      }
       if (c.status === 'queued') {
         await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'sending' }, 'return=minimal');
       }

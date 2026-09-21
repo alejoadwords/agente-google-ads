@@ -35,6 +35,7 @@ async function clerkMeta(userId) {
     const u = await r.json();
     const meta = Object.assign({}, u.public_metadata || {});
     meta._email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
+    meta._creada = u.created_at || null;
     _planCache.set(userId, { meta, exp: Date.now() + 60000 });
     return meta;
   } catch { return {}; }
@@ -55,6 +56,19 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 // (las campanas masivas son de pago). Las automatizaciones nunca consumieron cupo:
 // monthlySent solo cuenta envios con campaign_id.
 const EMAIL_QUOTAS = { free: 0, pro: Infinity, individual: Infinity, agency: Infinity, agencia: Infinity, trial: Infinity };
+
+// Tope de correos AL DÍA por cuenta. El cupo mensual no sirve de freno: el
+// 21-09-2026 una cuenta recién creada pagó Agencia, importó 5.000 contactos y
+// disparó una campaña de phishing 22 minutos después de registrarse. Agotó la
+// cuota diaria del proveedor y dejó sin correo a todos los demás — los avisos,
+// las campañas y las invitaciones de equipo de los clientes de verdad.
+const TOPE_DIARIO = { free: 0, trial: 300, pro: 2000, individual: 2000, agency: 5000, agencia: 5000 };
+
+// Una cuenta con pocas horas de vida no dispara una campaña masiva. Quien
+// llega a hacer marketing de verdad prepara su base antes; quien se registra y
+// manda 5.000 correos en veinte minutos no está haciendo marketing.
+const HORAS_DE_GRACIA  = 24;
+const TOPE_CUENTA_NUEVA = 300;
 
 // Hasta dónde llega una audiencia antes de que prefiramos parar y decirlo. Son
 // 100 viajes a la base: por encima de esto el envío hay que repensarlo, no
@@ -283,6 +297,15 @@ async function monthlySent(userId) {
   return parseInt((r.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
 }
 
+async function dailySent(userId) {
+  const desde = new Date(); desde.setUTCHours(0, 0, 0, 0);
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/email_events?user_id=eq.${encodeURIComponent(userId)}&event=eq.sent&campaign_id=not.is.null&created_at=gte.${desde.toISOString()}&select=id&limit=0`,
+    { headers: { ...sbHeaders(), 'Prefer': 'count=exact' } }
+  );
+  return parseInt((r.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   let userId = await getUserId(req);
@@ -485,6 +508,16 @@ export default async function handler(req) {
     const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
     if (!adminUser && quota === 0) return jsonResp({ error: 'Las campañas masivas son parte del plan Pro.', upgrade: true }, 403);
 
+    // Cuenta con el envío bloqueado por soporte. No se le dice el motivo aquí:
+    // esa conversación se tiene por correo, no en un cartelito.
+    const cuentaMeta = await clerkMeta(userId);
+    if (cuentaMeta.envio_bloqueado) {
+      return jsonResp({
+        error: 'El envío de campañas está suspendido en esta cuenta. Escríbenos a soporte@acuarius.app para revisarlo.',
+        bloqueado: true,
+      }, 403);
+    }
+
     // WhatsApp: sin plantilla aprobada, Meta solo deja escribirle a quien te
     // escribió en las últimas 24 h. Encolar 50.000 destinatarios contra una
     // plantilla que no está aprobada gasta la cola entera en rechazos, así que
@@ -504,6 +537,36 @@ export default async function handler(req) {
         error: `Esta audiencia supera los ${TECHO_AUDIENCIA.toLocaleString('es-CO')} contactos que podemos preparar de una vez. Segméntala con etiquetas y envíala por partes — así no queda nadie fuera sin que te des cuenta.`,
         audiencia_truncada: true, techo: TECHO_AUDIENCIA,
       }, 413);
+    }
+
+    // ── Los dos frenos contra el abuso ──────────────────────────────────────
+    // Van aquí, con la audiencia ya resuelta: es el único punto donde se sabe
+    // a cuántas personas se le va a escribir de verdad.
+    if (!adminUser && c.channel === 'email') {
+      const horasDeVida = cuentaMeta._creada
+        ? (Date.now() - Number(cuentaMeta._creada)) / 3600000
+        : 999;
+      if (horasDeVida < HORAS_DE_GRACIA && leads.length > TOPE_CUENTA_NUEVA) {
+        return jsonResp({
+          error: `Las cuentas nuevas pueden enviar hasta ${TOPE_CUENTA_NUEVA} correos por campaña durante las primeras ${HORAS_DE_GRACIA} horas. ` +
+                 'Es una medida antifraude, no un límite de tu plan: mañana desaparece sola. ' +
+                 'Si necesitas enviar antes, escríbenos a soporte@acuarius.app y lo habilitamos.',
+          cuenta_nueva: true, tope: TOPE_CUENTA_NUEVA,
+        }, 403);
+      }
+
+      const topeDia = TOPE_DIARIO[_lastPlan] ?? 0;
+      const hoy = await dailySent(userId);
+      if (hoy + leads.length > topeDia) {
+        const quedan = Math.max(0, topeDia - hoy);
+        return jsonResp({
+          error: `Tu plan envía hasta ${topeDia.toLocaleString('es-CO')} correos al día y hoy llevas ${hoy.toLocaleString('es-CO')}. ` +
+                 (quedan
+                   ? `Te quedan ${quedan.toLocaleString('es-CO')}: segmenta esta campaña o lánzala mañana.`
+                   : 'Lánzala mañana, o escríbenos si necesitas más.'),
+          tope_diario: topeDia, enviados_hoy: hoy, quedan,
+        }, 429);
+      }
     }
 
     if (c.channel === 'email' && !adminUser) {
