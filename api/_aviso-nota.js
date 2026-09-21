@@ -9,6 +9,7 @@
 // la nota se guarde. La nota es el dato; el aviso es una cortesía.
 
 import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -82,7 +83,7 @@ export async function avisarNota({ ownerId, autorId, autorNombre, conv, texto })
     for (const id of ids) {
       const to = emails[id];
       if (!to) continue;
-      const res = await fetch('https://api.resend.com/emails', {
+      const res = await enviarResend('_aviso-nota', {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -11,6 +11,7 @@
 import crypto from 'crypto';
 import { campaignHtml } from './_campaign-email.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { enviarResendLote } from './_correo.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -155,7 +156,7 @@ function armarCorreo(campaign, lead) {
  * después se cruzan las aperturas.
  */
 async function enviarLote(sobres) {
-  const r = await fetch('https://api.resend.com/emails/batch', {
+  const r = await enviarResendLote('cron-campaigns', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(sobres),

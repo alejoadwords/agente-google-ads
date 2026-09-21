@@ -15,6 +15,7 @@
 
 import { emailHtml, bloque, RESPONDER_A, esc } from './_email-layout.js';
 import { abrirConexion } from './_cifrado.js';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -81,7 +82,7 @@ async function porCorreo(neg, cita, lead, horas) {
     pie: negocio,
   });
 
-  const r = await fetch('https://api.resend.com/emails', {
+  const r = await enviarResend('cron-recordatorios', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

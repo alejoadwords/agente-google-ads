@@ -7,6 +7,7 @@
 // vacío se convierte en un correo que nadie abre.
 
 import { emailHtml, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -108,7 +109,7 @@ async function enviar(to, vencidas, hoy) {
     <table style="width:100%;border-collapse:collapse">${await filas(items)}</table>` : '';
   const cuerpo = (await bloque('Vencidas', vencidas, '#B91C1C')) + (await bloque('Para hoy', hoy, '#1E2BCC'));
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await enviarResend('cron-tasks', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

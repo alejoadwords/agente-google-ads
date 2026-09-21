@@ -1,5 +1,6 @@
 // api/hotmart-webhook.js
 // Sin dependencias externas — usa fetch nativo igual que referral.js
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
@@ -84,7 +85,7 @@ async function avisarFalloActivacion({ email, productName, motivo, extra }) {
         '<p style="margin:16px 0 0">Como arreglarlo: verifica que el cliente tenga cuenta en Acuarius con ese mismo email. ' +
         'Si la tiene con otro, asigna el plan a mano desde el panel de admin (escribe en Clerk y la app lo respeta al instante).</p>' +
       '</div>';
-    const r = await fetch('https://api.resend.com/emails', {
+    const r = await enviarResend('hotmart-webhook', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({

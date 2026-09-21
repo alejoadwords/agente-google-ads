@@ -8,6 +8,7 @@
 // Cron: día 1 de cada mes (vercel.json). Fallback de packs: prompts/actualizaciones-2026.js
 
 import crypto from 'crypto';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -175,7 +176,7 @@ export default async function handler(req, res) {
         '<a href="' + no + '" style="display:inline-block;background:#f4f4f8;color:#666;padding:10px 18px;border-radius:9px;text-decoration:none;font-weight:700">✕ Rechazar</a>' +
         '</div>';
     }).join('');
-    await fetch('https://api.resend.com/emails', {
+    await enviarResend('cron-knowledge', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({

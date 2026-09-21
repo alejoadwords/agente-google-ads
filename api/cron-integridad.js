@@ -12,6 +12,7 @@ export const config = { runtime: 'edge' };
 // deja de leer a la semana.
 
 import { emailHtml, bloque, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -93,7 +94,7 @@ export default async function handler(req) {
       (h.detalle.length > 12 ? `<br><i>…y ${h.detalle.length - 12} más</i>` : ''), '#AE3B2A')
   ).join('');
 
-  await fetch('https://api.resend.com/emails', {
+  await enviarResend('cron-integridad', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

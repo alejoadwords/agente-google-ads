@@ -42,6 +42,7 @@ async function clerkMeta(userId) {
 }
 
 import { registrarUso, cuentaDe } from './_uso-ia.js';
+import { enviarResend } from './_correo.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -501,7 +502,7 @@ export default async function handler(req) {
       to: [toEmail], subject: '[PRUEBA] ' + render(c.subject), html,
     };
     if (c.reply_to) payload.reply_to = c.reply_to;
-    const r = await fetch('https://api.resend.com/emails', {
+    const r = await enviarResend('campaigns', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

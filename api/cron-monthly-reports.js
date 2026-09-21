@@ -1,6 +1,7 @@
 // api/cron-monthly-reports.js
 // Genera y envía reportes mensuales el día 1 de cada mes a las 8am UTC
 // Incluye comparativa mes actual vs mes anterior y análisis estratégico más profundo
+import { enviarResend } from './_correo.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -317,7 +318,7 @@ async function processUser(userId) {
       if (RESEND_API_KEY && userEmail && emailReports) {
         const html = buildMonthlyEmail(conn.platform, current, previous, analysis);
         const monthCap = getMonthLabel().charAt(0).toUpperCase() + getMonthLabel().slice(1);
-        await fetch('https://api.resend.com/emails', {
+        await enviarResend('cron-monthly-reports', {
           method:  'POST',
           headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body:    JSON.stringify({

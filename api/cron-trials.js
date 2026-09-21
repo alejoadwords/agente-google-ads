@@ -16,6 +16,7 @@
 // se cuenta y se reporta, para que no vuelva a esconderse.
 //
 // Recorre los usuarios de Clerk por páginas (base pequeña; tope de cordura 10 págs).
+import { enviarResend } from './_correo.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
@@ -25,7 +26,7 @@ const PRO_CHECKOUT = 'https://pay.hotmart.com/G105202218G';
 
 async function sendMail(to, subject, html) {
   if (!RESEND_API_KEY) return false;
-  const r = await fetch('https://api.resend.com/emails', {
+  const r = await enviarResend('cron-trials', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', reply_to: 'ceo@acuarius.app', to: [to], subject, html }),

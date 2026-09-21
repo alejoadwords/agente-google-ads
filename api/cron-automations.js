@@ -6,6 +6,7 @@
 // Los triggers lead_created y stage_changed encolan desde api/leads.js.
 
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { enviarResend } from './_correo.js';
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -99,12 +100,12 @@ async function volcarBitacora() {
 // como fallido. Este turno los pone en fila —solo a ellos— sin frenar el resto.
 let _turno = Promise.resolve();
 let _ultimoEnvio = 0;
-function fetchResend(url, opciones) {
+function fetchResend(opciones) {
   const mio = _turno.then(async () => {
     const falta = 500 - (Date.now() - _ultimoEnvio);
     if (falta > 0) await esperar(falta);
     _ultimoEnvio = Date.now();
-    return fetch(url, opciones);
+    return enviarResend('cron-automations', opciones);
   });
   // La cola no se puede romper por un fallo de un envío: el siguiente tiene que
   // poder tomar su turno igual.
@@ -131,7 +132,7 @@ async function actionSendEmail(step, lead, auto, job) {
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
     bodyTxt.split('\n').map(p => '<p style="margin:0 0 14px">' + p + '</p>').join('') +
     '</div>';
-  const r = await fetchResend('https://api.resend.com/emails', {
+  const r = await fetchResend({
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
@@ -180,7 +181,7 @@ async function actionSendNps(step, lead, auto) {
     '<p style="margin:10px 0 0;font-size:11.5px;color:#9ca3af;text-align:center">0 = Nada probable &nbsp;·&nbsp; 10 = Muy probable</p>' +
     '</div>';
   const subject = renderVars(step.subject || '¿Nos recomendarías? — 5 segundos', lead);
-  const r = await fetchResend('https://api.resend.com/emails', {
+  const r = await fetchResend({
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
@@ -242,7 +243,7 @@ async function actionPedirResena(step, lead, auto) {
       '<p style="margin:0 0 18px"><a href="' + enlace + '" style="display:inline-block;background:#1E2BCC;color:#fff;' +
       'padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Dejar mi reseña</a></p>' +
       '<p style="margin:0;font-size:12px;color:#9ca3af">Si el botón no funciona, copia este enlace: ' + enlace + '</p></div>';
-    const r = await fetchResend('https://api.resend.com/emails', {
+    const r = await fetchResend({
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -345,7 +346,7 @@ async function actionNotifyOwner(step, lead, auto) {
     '<p style="margin:18px 0 0;font-size:13px;color:#888">Lead: ' + (lead.name || '—') +
     (lead.email ? ' · ' + lead.email : '') + (lead.phone ? ' · ' + lead.phone : '') +
     ' · Etapa: ' + (lead.stage || '—') + '</p></div>';
-  const r = await fetchResend('https://api.resend.com/emails', {
+  const r = await fetchResend({
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

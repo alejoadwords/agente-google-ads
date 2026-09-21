@@ -8,6 +8,7 @@
 export const config = { runtime: 'edge' };
 
 import { registrarUso } from './_uso-ia.js';
+import { enviarResend } from './_correo.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -297,7 +298,7 @@ export default async function handler(req) {
       // Notificar al dueño
       const email = await ownerEmail(p.user_id);
       if (email && RESEND_API_KEY) {
-        await fetch('https://api.resend.com/emails', {
+        await enviarResend('proposals', {
           method: 'POST',
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({

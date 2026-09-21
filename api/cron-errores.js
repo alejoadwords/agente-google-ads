@@ -11,6 +11,7 @@ export const config = { runtime: 'edge' };
 // trae algo importante.
 
 import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -69,7 +70,7 @@ export default async function handler(req) {
     ? `<p style="margin:8px 0 0;color:#5B6072">…y ${nuevos.length - 10} más.</p>`
     : '');
 
-  await fetch('https://api.resend.com/emails', {
+  await enviarResend('cron-errores', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

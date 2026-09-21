@@ -8,6 +8,7 @@
 //   POST /api/admin?action=sync
 
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { enviarResend } from './_correo.js';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -1129,7 +1130,7 @@ async function handleTicketUpdate(req, res) {
   if (respuestaNueva && previo?.email && process.env.RESEND_API_KEY) {
     try {
       const { emailHtml, bloque, esc, RESPONDER_A } = await import('./_email-layout.js');
-      const env = await fetch('https://api.resend.com/emails', {
+      const env = await enviarResend('admin', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({

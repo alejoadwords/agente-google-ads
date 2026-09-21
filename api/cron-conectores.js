@@ -10,6 +10,7 @@
 export const config = { runtime: 'edge' };
 
 import { emailHtml, pasos, esc, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -82,7 +83,7 @@ export default async function handler(req) {
         const to = correos.get(c.user_id);
         if (to) {
           const donde = c.origen_url ? esc(c.origen_url.replace(/^https?:\/\//, '')) : 'tu web';
-          await fetch('https://api.resend.com/emails', {
+          await enviarResend('cron-conectores', {
             method: 'POST',
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({

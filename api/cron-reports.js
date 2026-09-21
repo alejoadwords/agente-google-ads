@@ -1,5 +1,6 @@
 // api/cron-reports.js
 // Genera y envía reportes semanales automáticos todos los lunes a las 8am UTC
+import { enviarResend } from './_correo.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -334,7 +335,7 @@ async function processUser(user) {
       // Send email if user has reports enabled
       if (RESEND_API_KEY && userEmail && emailReports) {
         const html = buildWeeklyReportEmail(userEmail, conn.platform, currentMetrics, analysis, prevMetrics || {});
-        await fetch('https://api.resend.com/emails', {
+        await enviarResend('cron-reports', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({

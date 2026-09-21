@@ -5,6 +5,7 @@
 export const config = { runtime: 'nodejs' };
 
 import { emailHtml, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CRON_SECRET         = process.env.CRON_SECRET;
@@ -43,7 +44,7 @@ async function sendAlertEmail(userEmail, alerts) {
     </tr>
   `).join('');
 
-  await fetch('https://api.resend.com/emails', {
+  await enviarResend('cron-alerts', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

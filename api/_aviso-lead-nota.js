@@ -12,6 +12,7 @@
 // decirle «avisado» cuando nadie recibió nada es la peor forma de fallar.
 
 import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
+import { enviarResend } from './_correo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -72,7 +73,7 @@ export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId
     const nombreLead = lead?.name || 'un lead';
     const deQuien = lead?.company ? `${nombreLead} · ${lead.company}` : nombreLead;
 
-    const res = await fetch('https://api.resend.com/emails', {
+    const res = await enviarResend('_aviso-lead-nota', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({

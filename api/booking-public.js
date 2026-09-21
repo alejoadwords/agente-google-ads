@@ -24,6 +24,7 @@ import { intakeLead } from './_lead-intake.js';
 import { getGcalToken, gcalEventBody, gcalRequest } from './_gcal.js';
 import { emailHtml, bloque, RESPONDER_A, esc } from './_email-layout.js';
 import { registrarError } from './_registro-errores.js';
+import { enviarResend } from './_correo.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -439,7 +440,7 @@ async function avisarPorCorreo(neg, cita, servicio, recurso, quien, citaToken, z
     pie: negocio,
   });
 
-  const r = await fetch('https://api.resend.com/emails', {
+  const r = await enviarResend('booking-public', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

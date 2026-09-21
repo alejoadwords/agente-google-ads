@@ -10,6 +10,7 @@ export const config = { runtime: 'edge' };
 
 import { asegurarUsuario } from './_usuario-espejo.js';
 import { quienPregunta, gestionaEquipo, normalizarPerfil, puedeTocarA, paraElCliente, PERFILES } from './_perfiles.js';
+import { enviarResend } from './_correo.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -549,7 +550,7 @@ export default async function handler(req, contexto) {
     // Email de invitación
     if (RESEND_API_KEY) {
       const joinUrl = 'https://app.acuarius.app/join?t=' + token;
-      await fetch('https://api.resend.com/emails', {
+      await enviarResend('team', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
