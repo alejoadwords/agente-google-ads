@@ -42,7 +42,7 @@ async function saveToken(userId, accessToken, expiresIn) {
         'Content-Type':  'application/json',
       },
       body: JSON.stringify({
-        access_token:     accessToken,
+        access_token:     await cifrar(accessToken),
         token_expires_at: expiresAt,
         updated_at:       new Date().toISOString(),
       }),

@@ -114,7 +114,7 @@ async function getGcalToken(userId) {
       method: 'PATCH',
       headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        access_token: fresh.access_token,
+        access_token: await cifrar(fresh.access_token),
         token_expires_at: new Date(Date.now() + (fresh.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString(),
       }),

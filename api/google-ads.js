@@ -46,7 +46,7 @@ async function updateStoredToken(userId, accessToken, expiresIn) {
         'Content-Type':  'application/json',
       },
       body: JSON.stringify({
-        access_token:     accessToken,
+        access_token:     await cifrar(accessToken),
         token_expires_at: new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString(),
         updated_at:       new Date().toISOString(),
       }),

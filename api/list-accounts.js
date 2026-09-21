@@ -44,7 +44,7 @@ async function updateStoredToken(userId, accessToken) {
         'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
         'Content-Type':  'application/json',
       },
-      body: JSON.stringify({ access_token: accessToken, updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ access_token: await cifrar(accessToken), updated_at: new Date().toISOString() }),
     }
   ).catch(() => {});
 }

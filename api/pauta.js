@@ -128,7 +128,7 @@ async function refrescarGoogle(fila) {
   await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?id=eq.${fila.id}`, {
     method: 'PATCH', headers: sbHeaders(),
     body: JSON.stringify({
-      access_token: d.access_token,
+      access_token: await cifrar(d.access_token),
       token_expires_at: new Date(Date.now() + (d.expires_in || 3600) * 1000).toISOString(),
       updated_at: new Date().toISOString(),
     }),

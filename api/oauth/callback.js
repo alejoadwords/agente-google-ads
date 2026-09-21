@@ -26,7 +26,7 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
       body: JSON.stringify({
         user_id:          userId,
         platform:         'google_ads',
-        access_token:     tokens.access_token,
+        access_token:     await cifrar(tokens.access_token),
         ...(tokens.refresh_token ? { refresh_token: await cifrar(tokens.refresh_token) } : {}),
         token_expires_at: expiresAt,
         account_name:     userInfo.email || '',

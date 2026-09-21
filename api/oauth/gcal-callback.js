@@ -20,7 +20,7 @@ async function saveGcalConnection(userId, tokens, email, platform = 'google_cale
     body: JSON.stringify({
       user_id:          userId,
       platform,
-      access_token:     tokens.access_token,
+      access_token:     await cifrar(tokens.access_token),
       // Solo incluir refresh_token si Google lo devolvió (no sobreescribir con null)
       ...(tokens.refresh_token ? { refresh_token: await cifrar(tokens.refresh_token) } : {}),
       token_expires_at: expiresAt,
