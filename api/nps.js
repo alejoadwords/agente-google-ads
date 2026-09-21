@@ -83,7 +83,7 @@ export default async function handler(req) {
   let clienteDelMiembro = null;
     try {
       const tw = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`, { headers: sbHeaders() }).then(r => r.json());
-      if (tw?.[0]?.owner_user_id) userId = tw[0].owner_user_id; clienteDelMiembro = tw[0].client_id || null;
+      if (tw?.[0]?.owner_user_id) { userId = tw[0].owner_user_id; clienteDelMiembro = tw[0].client_id || null; }
     } catch {}
     const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';

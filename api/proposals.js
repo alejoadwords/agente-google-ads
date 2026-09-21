@@ -337,7 +337,7 @@ export default async function handler(req) {
     );
     if (!_tw.ok) throw new Error('HTTP ' + _tw.status);
     const _fila = (await _tw.json())?.[0];
-    if (_fila?.owner_user_id) userId = _fila.owner_user_id; clienteDelMiembro = _fila.client_id || null;
+    if (_fila?.owner_user_id) { userId = _fila.owner_user_id; clienteDelMiembro = _fila.client_id || null; }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }

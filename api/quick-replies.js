@@ -67,7 +67,7 @@ async function manejar(req) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`, { headers: sb() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tw = (await r.json())?.[0];
-    if (tw && tw.owner_user_id) userId = tw.owner_user_id; clienteDelMiembro = tw.client_id || null;
+    if (tw && tw.owner_user_id) { userId = tw.owner_user_id; clienteDelMiembro = tw.client_id || null; }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
