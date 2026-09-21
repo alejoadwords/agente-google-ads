@@ -249,7 +249,11 @@ export default async function handler(req) {
       }
       const item = {
         ...t,
-        lead: lead ? { id: lead.id, name: lead.name, phone: lead.phone, email: lead.email, stage: lead.stage, assigned_name: lead.assigned_name } : null,
+        // `assigned_to` va además del nombre: el filtro por asesor tiene que
+        // agrupar por id. Dos personas pueden llamarse igual, y en Certain hay
+        // un nombre con un tabulador dentro que rompería cualquier comparación
+        // por texto.
+        lead: lead ? { id: lead.id, name: lead.name, phone: lead.phone, email: lead.email, stage: lead.stage, assigned_to: lead.assigned_to || null, assigned_name: lead.assigned_name } : null,
       };
       const vence = t.due_at ? new Date(t.due_at).getTime() : null;
       if (vence === null) out.proximas.push(item);

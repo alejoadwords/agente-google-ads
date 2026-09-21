@@ -32369,6 +32369,66 @@ async function calSave(agentId) {
 
 let tarSoloMias = false;
 let tarData = null;
+// Filtros de la lista. Solo los ve quien puede ver el trabajo de otros: a un
+// comercial que únicamente tiene lo suyo, un desplegable de asesores con su
+// propio nombre dentro no le sirve de nada.
+let tarFiltro = { asesor: '', tipo: '', cuando: '' };
+const TAR_TIPO = { task: 'Tarea', meeting: 'Reunión' };
+const TAR_DIAS_POR_RANGO = { '': 14, vencidas: 14, hoy: 14, manana: 14, semana: 14, mes: 35 };
+
+function tarMandaEnTodo() {
+  return !(window._miPerfil && window._miPerfil.solo_sus_leads);
+}
+function tarHayFiltro() {
+  return !!(tarFiltro.asesor || tarFiltro.tipo || tarFiltro.cuando);
+}
+function tarLimpiar() {
+  tarFiltro = { asesor: '', tipo: '', cuando: '' };
+  tarRender();
+}
+function tarSet(campo, valor) {
+  tarFiltro[campo] = valor;
+  // Cambiar de rango puede necesitar pedirle más días al servidor: «este mes»
+  // no cabe en los 14 días que se traen por defecto.
+  tarRender();
+}
+
+// ¿Esta tarea pasa los filtros? `grupo` es el bloque del que viene, que es lo
+// que hace posible filtrar por «vencidas» sin recalcular fechas.
+function tarPasa(t, grupo) {
+  if (tarFiltro.tipo && (t.type || 'task') !== tarFiltro.tipo) return false;
+  if (tarFiltro.asesor) {
+    const suyo = t.lead?.assigned_to || '__nadie__';
+    if (suyo !== tarFiltro.asesor) return false;
+  }
+  const c = tarFiltro.cuando;
+  if (!c) return true;
+  if (c === 'vencidas') return grupo === 'vencidas';
+  if (c === 'hoy') return grupo === 'hoy';
+  if (!t.due_at) return false;
+  const dias = (new Date(t.due_at) - new Date(new Date().setHours(23, 59, 59, 999))) / 86400000;
+  if (c === 'manana') return grupo === 'proximas' && dias <= 1;
+  if (c === 'semana') return grupo !== 'vencidas' && dias <= 7;
+  if (c === 'mes') return grupo !== 'vencidas' && dias <= 30;
+  return true;
+}
+
+// Quién tiene qué. Se cuenta sobre TODO lo cargado, no sobre lo filtrado: si
+// el recuento cambiara al filtrar, dejaría de servir para comparar.
+function tarPorAsesor() {
+  const m = new Map();
+  for (const g of ['vencidas', 'hoy', 'proximas']) {
+    for (const t of (tarData?.[g] || [])) {
+      const id = t.lead?.assigned_to || '__nadie__';
+      const nom = t.lead?.assigned_name || 'Sin asignar';
+      if (!m.has(id)) m.set(id, { id, nombre: String(nom).replace(/\s+/g, ' ').trim(), total: 0, vencidas: 0 });
+      const e = m.get(id);
+      e.total++;
+      if (g === 'vencidas') e.vencidas++;
+    }
+  }
+  return [...m.values()].sort((a, b) => b.vencidas - a.vencidas || b.total - a.total);
+}
 
 async function tarRender() {
   const view = document.getElementById('crm-tareas-view');
@@ -32377,7 +32437,8 @@ async function tarRender() {
   try {
     const cid = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId
       ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
-    tarData = await fetchAuth('/api/agenda?tareas=1' + (tarSoloMias ? '&mias=1' : '') + cid).then(r => r.json());
+    const dias = TAR_DIAS_POR_RANGO[tarFiltro.cuando] ?? 14;
+    tarData = await fetchAuth('/api/agenda?tareas=1&dias=' + dias + (tarSoloMias ? '&mias=1' : '') + cid).then(r => r.json());
   } catch {
     view.innerHTML = '<div style="font-size:12.5px;color:#B91C1C">No se pudieron cargar las tareas.</div>';
     return;
@@ -32398,10 +32459,68 @@ async function tarRender() {
     return;
   }
 
-  view.innerHTML = cabecera +
-    tarBloque('Vencidas', tarData.vencidas, '#DC2626') +
-    tarBloque('Hoy', tarData.hoy, 'var(--blue)') +
-    tarBloque('Próximas', tarData.proximas, 'var(--muted2)');
+  const filtra = (g) => (tarData[g] || []).filter(t => tarPasa(t, g));
+  const ven = filtra('vencidas'), hoy = filtra('hoy'), pro = filtra('proximas');
+  const quedan = ven.length + hoy.length + pro.length;
+
+  view.innerHTML = cabecera + tarPanelFiltros(quedan) +
+    (quedan
+      ? tarBloque('Vencidas', ven, '#DC2626') +
+        tarBloque('Hoy', hoy, 'var(--blue)') +
+        tarBloque('Próximas', pro, 'var(--muted2)')
+      : '<div class="tar-vacio">Ninguna tarea coincide con este filtro. ' +
+        '<button class="pauta-link" onclick="tarLimpiar()">Quitar los filtros</button></div>');
+}
+
+// El panel solo aparece para quien manda en todo: a un comercial que solo ve
+// lo suyo, un desplegable de asesores con un único nombre no le aporta nada.
+function tarPanelFiltros(quedan) {
+  if (!tarMandaEnTodo()) return '';
+  const gente = tarPorAsesor();
+  const total = (tarData.vencidas?.length || 0) + (tarData.hoy?.length || 0) + (tarData.proximas?.length || 0);
+
+  const sel = (id, campo, etiqueta, opciones) =>
+    '<label class="tar-f"><span>' + etiqueta + '</span>' +
+    '<select id="' + id + '" onchange="tarSet(\'' + campo + '\',this.value)">' +
+      opciones.map(o => '<option value="' + esc(o[0]) + '"' +
+        (tarFiltro[campo] === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') +
+    '</select></label>';
+
+  const tiposPresentes = [...new Set(['vencidas', 'hoy', 'proximas']
+    .flatMap(g => (tarData[g] || []).map(t => t.type || 'task')))];
+
+  return '<div class="tar-filtros">' +
+    sel('tar-f-asesor', 'asesor', 'Asesor',
+      [['', 'Todos (' + total + ')']].concat(gente.map(p => [p.id, p.nombre + ' (' + p.total + ')']))) +
+    (tiposPresentes.length > 1
+      ? sel('tar-f-tipo', 'tipo', 'Tipo',
+          [['', 'Todos']].concat(tiposPresentes.map(t => [t, TAR_TIPO[t] || t])))
+      : '') +
+    sel('tar-f-cuando', 'cuando', 'Vencimiento', [
+      ['', 'Todo lo pendiente'], ['vencidas', 'Solo vencidas'], ['hoy', 'Hoy'],
+      ['manana', 'Hasta mañana'], ['semana', 'Próximos 7 días'], ['mes', 'Próximos 30 días'],
+    ]) +
+    (tarHayFiltro()
+      ? '<button class="btn-ghost sm" onclick="tarLimpiar()">Quitar filtros</button>' +
+        '<span class="tar-cuenta">' + quedan + ' de ' + total + '</span>'
+      : '<span class="tar-cuenta">' + total + ' pendientes</span>') +
+    tarResumenAsesores(gente) +
+  '</div>';
+}
+
+// Quién va atrasado, de un vistazo. Es lo primero que quiere saber quien
+// dirige: no cuántas tareas hay, sino de quién son las que ya se pasaron.
+function tarResumenAsesores(gente) {
+  const conAtraso = gente.filter(p => p.vencidas > 0);
+  if (conAtraso.length < 2) return '';
+  return '<div class="tar-resumen">' +
+    '<span class="tar-resumen-t">Vencidas por asesor</span>' +
+    conAtraso.map(p =>
+      '<button class="tar-chip' + (tarFiltro.asesor === p.id ? ' on' : '') + '" ' +
+        'onclick="tarSet(\'asesor\', tarFiltro.asesor === ' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ' ? \'\' : ' +
+        JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
+        esc(p.nombre.split(' ').slice(0, 2).join(' ')) + '<b>' + p.vencidas + '</b></button>').join('') +
+  '</div>';
 }
 
 function tarBloque(titulo, items, color) {
