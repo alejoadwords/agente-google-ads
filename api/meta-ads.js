@@ -3,6 +3,7 @@
 // GET ?action=get-ad-accounts|get-campaigns|get-adsets|get-ads|get-account-overview
 // POST sin action → legacy proxy para backward compat
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const META_BASE           = 'https://graph.facebook.com/v19.0';
@@ -15,7 +16,7 @@ async function getStoredToken(userId) {
     { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
   );
   const rows = await res.json();
-  return rows?.[0] || null;
+  return await abrirConexion(rows?.[0] || null);
 }
 
 // ── Meta API helpers ─────────────────────────────────────────

@@ -7,6 +7,7 @@
 //   PUT  /api/admin?action=users
 //   POST /api/admin?action=sync
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -738,7 +739,10 @@ async function handleGetConnection(req, res) {
     return res.json({ connected: false });
   }
   if (!rows?.length) return res.json({ connected: false });
-  const c = rows[0];
+  // Se descifra para no cambiarle el contrato al backoffice, que espera un
+  // token utilizable. Que este endpoint lo devuelva en claro es una exposición
+  // aparte, anterior a esto, anotada como tal.
+  const c = await abrirConexion(rows[0]);
   return res.json({
     connected:       true,
     access_token:    c.access_token,
@@ -772,7 +776,8 @@ async function handleCheckAlerts(req, res) {
   const newAlerts = [];
   const today = new Date().toISOString().split('T')[0];
 
-  for (const conn of connections || []) {
+  for (const cifrada of connections || []) {
+    const conn = await abrirConexion(cifrada);
     if (!conn.access_token) continue;
     try {
       if (conn.platform === 'google_ads' && conn.account_id) {
@@ -956,7 +961,7 @@ async function handleRefreshMetaToken(req, res) {
   await supabaseReq(
     `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads`,
     'PATCH',
-    { access_token: data.access_token, token_expires_at: newExpires, updated_at: new Date().toISOString() }
+    { access_token: await cifrar(data.access_token), token_expires_at: newExpires, updated_at: new Date().toISOString() }
   );
 
   return res.json({ ok: true, refreshed: true, daysLeft: Math.round((data.expires_in || 5184000) / 86400) });

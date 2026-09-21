@@ -1,4 +1,6 @@
 export const config = { runtime: 'edge' };
+
+import { descifrar } from './_cifrado.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -45,7 +47,7 @@ async function metaTokenDe(userId) {
       `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads&select=access_token&limit=1`,
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : []));
-    return rows?.[0]?.access_token || null;
+    return await descifrar(rows?.[0]?.access_token || null);
   } catch { return null; }
 }
 

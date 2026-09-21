@@ -1,3 +1,4 @@
+import { cifrar } from './_cifrado.js';
 // api/meta-callback.js
 // Recibe el código de Meta, obtiene long-lived token y lo guarda en Supabase
 
@@ -10,7 +11,7 @@ async function saveMetaConnection(userId, token, expiresIn, userInfo) {
   const payload = {
     user_id:          userId,
     platform:         'meta_ads',
-    access_token:     token,
+    access_token:     await cifrar(token),
     refresh_token:    null,
     token_expires_at: expiresAt,
     account_name:     userInfo.name  || userInfo.email || '',
