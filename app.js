@@ -8126,23 +8126,146 @@ function getStudioKey() {
   return 'acuarius_studio_' + uid + cp;
 }
 
-function loadStudioData() {
+// ── DÓNDE VIVE LA PARRILLA ───────────────────────────────────────────────────
+// Vivía solo en `localStorage`: se perdía al limpiar la caché o al cambiar de
+// equipo, el resto del equipo no la veía y el servidor no podía hacer nada con
+// ella. Ahora vive en la cuenta, y `localStorage` queda como copia local para
+// que el Studio siga respondiendo al instante y sobreviva a un corte de red.
+//
+// `loadStudioData` SIGUE SIENDO SÍNCRONA a propósito: la llaman quince sitios
+// y volverla asíncrona obligaba a tocarlos todos. Lee de una copia en memoria
+// que se llena al entrar al Studio.
+let _studioMem = null;        // la parrilla que está en uso
+let _studioMemKey = null;     // de qué usuario y cliente es, para no mezclar
+let _studioGuardando = null;  // temporizador del guardado diferido
+let _studioPendiente = false; // hay cambios sin subir
+
+function studioLocal() {
   try {
     const raw = localStorage.getItem(getStudioKey());
-    if (!raw) return { version: 2, activeId: null, parrillas: [] };
+    if (!raw) return null;
     const data = JSON.parse(raw);
-    // Migration v1 → v2: v1 stored a plain array of posts
+    // De la v1 a la v2: la v1 guardaba una lista de posts a secas.
     if (Array.isArray(data)) {
-      if (!data.length) return { version: 2, activeId: null, parrillas: [] };
+      if (!data.length) return null;
       const id = 'parrilla_' + Date.now();
       return { version: 2, activeId: id, parrillas: [{ id, name: 'Mi parrilla', createdAt: Date.now(), posts: data }] };
     }
     return data;
-  } catch(e) { return { version: 2, activeId: null, parrillas: [] }; }
+  } catch (e) { return null; }
+}
+
+function loadStudioData() {
+  const clave = getStudioKey();
+  if (_studioMem && _studioMemKey === clave) return _studioMem;
+  // Aún sin sincronizar: se responde con lo que haya en el navegador para que
+  // la pantalla no aparezca vacía mientras llega lo de la cuenta.
+  return studioLocal() || { version: 2, activeId: null, parrillas: [] };
 }
 
 function saveStudioData(data) {
-  try { localStorage.setItem(getStudioKey(), JSON.stringify(data)); } catch(e) {}
+  _studioMem = data;
+  _studioMemKey = getStudioKey();
+  try { localStorage.setItem(getStudioKey(), JSON.stringify(data)); } catch (e) {}
+  studioSubirDiferido();
+}
+
+// Se sube con retraso: arrastrar un post por el calendario dispara muchos
+// guardados seguidos y no tiene sentido mandar uno por cada píxel.
+function studioSubirDiferido() {
+  _studioPendiente = true;
+  clearTimeout(_studioGuardando);
+  _studioGuardando = setTimeout(studioSubir, 900);
+}
+
+// Las imágenes NO viajan dentro de la parrilla: una sola en base64 pesa más
+// que todo el resto junto. Se suben al almacenamiento y en la parrilla queda
+// su URL. Si una falla se queda en el navegador y se sigue guardando el resto:
+// perder el texto de la parrilla por una imagen sería el peor cambio posible.
+async function studioSubirImagenes(data) {
+  let cambio = false;
+  for (const p of data.parrillas || []) {
+    for (const post of p.posts || []) {
+      if (!post.imageBase64 || post.imageUrl) continue;
+      try {
+        const r = await fetchAuth('/api/upload-image', {
+          method: 'POST',
+          // El contrato de upload-image es {type, data}, y corta en 2 MB.
+          body: JSON.stringify({ type: post.imageMediaType || 'image/jpeg', data: post.imageBase64 }),
+        });
+        const d = await r.json();
+        if (r.ok && d.url) { post.imageUrl = d.url; delete post.imageBase64; cambio = true; }
+      } catch { /* se queda local; se reintenta en el próximo guardado */ }
+    }
+  }
+  return cambio;
+}
+
+async function studioSubir() {
+  if (!_studioPendiente) return;
+  const data = loadStudioData();
+  try {
+    if (await studioSubirImagenes(data)) {
+      try { localStorage.setItem(getStudioKey(), JSON.stringify(data)); } catch (e) {}
+    }
+    const r = await fetchAuth('/api/social-studio', {
+      method: 'PUT',
+      body: JSON.stringify({ data, client_id: crmAmbitoCliente() || '' }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'no se pudo guardar');
+    _studioPendiente = false;
+    studioAvisoSync('');
+  } catch (e) {
+    // Que falle el guardado en la cuenta NO se calla: el trabajo sigue en este
+    // navegador, pero quien lo hizo tiene que saber que aún no está a salvo.
+    studioAvisoSync(String(e.message || 'sin conexión'));
+  }
+}
+
+// Trae la parrilla de la cuenta. Si allí no hay nada y aquí sí, sube lo que
+// había en el navegador: es la mudanza de quien ya venía usando el Studio.
+async function studioSincronizar() {
+  const clave = getStudioKey();
+  try {
+    const r = await fetchAuth('/api/social-studio?client_id=' + encodeURIComponent(crmAmbitoCliente() || ''));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'no se pudo leer');
+    const local = studioLocal();
+    if (!d.hay && local && (local.parrillas || []).length) {
+      _studioMem = local; _studioMemKey = clave;
+      _studioPendiente = true;
+      await studioSubir();
+      showToast('Tu parrilla ahora se guarda en tu cuenta');
+      return;
+    }
+    // Si mientras la cuenta respondía ya se editó algo aquí, lo de aquí manda:
+    // pisarlo con lo del servidor le borraría en la cara lo que acaba de hacer.
+    if (_studioPendiente) { await studioSubir(); return; }
+    _studioMem = d.data && Array.isArray(d.data.parrillas) ? d.data : { version: 2, activeId: null, parrillas: [] };
+    _studioMemKey = clave;
+    try { localStorage.setItem(clave, JSON.stringify(_studioMem)); } catch (e) {}
+    studioAvisoSync('');
+  } catch (e) {
+    // Sin conexión con la cuenta se trabaja con la copia local, avisando.
+    _studioMem = studioLocal() || { version: 2, activeId: null, parrillas: [] };
+    _studioMemKey = clave;
+    studioAvisoSync('no se pudo leer tu parrilla de la cuenta');
+  }
+}
+
+function studioAvisoSync(mensaje) {
+  const id = 'studio-aviso-sync';
+  document.getElementById(id)?.remove();
+  if (!mensaje) return;
+  const host = document.querySelector('#view-social-studio .social-studio');
+  if (!host) return;
+  const d = document.createElement('div');
+  d.id = id;
+  d.className = 'studio-aviso';
+  d.innerHTML = icn('alert', 15) +
+    '<span>Trabajando solo en este navegador — ' + esc(mensaje) +
+    '. Lo que hagas se guardará en tu cuenta en cuanto vuelva la conexión.</span>';
+  host.prepend(d);
 }
 
 function getActiveParrilla() {
@@ -8552,10 +8675,17 @@ function renderCalendarView(posts) {
 function buildPostCard(post, netCfg) {
   const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
   const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-  const hasImg = !!post.imageBase64;
+  // La imagen puede estar ya subida (URL) o recién puesta y aún sin subir
+  // (base64). Si la tarjeta solo mirara el base64, al guardarse en la cuenta
+  // —que es cuando la imagen se sube y el base64 se suelta— el post se
+  // quedaría de golpe sin foto en pantalla.
+  const hasImg = !!(post.imageBase64 || post.imageUrl);
   const hasVid = !!post.videoUrl;
+  const srcImg = post.imageBase64
+    ? 'data:' + (post.imageMediaType || 'image/jpeg') + ';base64,' + post.imageBase64
+    : post.imageUrl;
   const imgHtml = hasImg
-    ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" loading="lazy">'
+    ? '<img src="' + esc(srcImg) + '" alt="" loading="lazy"">'
     : hasVid
       ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>' +
         '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
@@ -9767,7 +9897,9 @@ function showView(id){
   if(el)el.classList.add('active');
   if(id==='roadmap')updateProgress();
   if(id==='agency'){agencyRender();setTimeout(function(){renderPulsoAgency();},80);}
-  if(id==='social-studio')setTimeout(renderStudio, 50);
+  // Se trae la parrilla de la cuenta ANTES de pintar; si tarda o falla,
+  // `renderStudio` pinta igual con la copia local y sale el aviso.
+  if(id==='social-studio'){ renderStudio(); studioSincronizar().then(renderStudio); }
   if(id==='home')setTimeout(function(){renderPulso();},80);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}

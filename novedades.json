@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-21-studio-en-tu-cuenta",
+   "fecha": "2026-09-21",
+   "tipo": "mejora",
+   "titulo": "Tu parrilla del Studio ya vive en tu cuenta",
+   "texto": "Hasta ahora lo que armabas en el Studio Social se guardaba solo en el navegador desde el que lo hiciste: si limpiabas la caché, cambiabas de computador o entrabas desde el celular, no estaba. Y tu equipo tampoco lo veía. Ahora la parrilla se guarda en tu cuenta: la abres desde donde sea y quien trabaje contigo ve lo mismo. Lo que ya tenías armado se mueve solo la primera vez que entres, no tienes que hacer nada. Si en algún momento no hay conexión, sigues trabajando igual y te avisamos en pantalla que todavía no quedó guardado en la cuenta."
+  },
+  {
    "id": "2026-09-21-equipo-por-cliente",
    "fecha": "2026-09-21",
    "tipo": "nuevo",
