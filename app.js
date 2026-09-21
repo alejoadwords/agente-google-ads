@@ -10235,6 +10235,7 @@ function novIr(destino) {
         case 'integraciones': openSettings(); setTimeout(() => { try { switchSettingsTab('integraciones'); } catch {} }, 220); break;
         case 'ajustes-equipo': openSettings(); setTimeout(() => { try { switchSettingsTab('equipo'); } catch {} }, 220); break;
         case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
+        case 'reservas':      navGo('crm'); setTimeout(() => crmSetView('reservas'), 150); break;
         case 'crm':           navGo('crm'); break;
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
@@ -37364,7 +37365,11 @@ function rsvEditarRecurso(id) {
             (rsvBorrador.member_user_id === m.member_user_id ? ' selected' : '') + '>' +
             esc(String(m.member_name || m.member_email || '')) + '</option>').join('') +
         '</select>' +
-        '<div class="rsv-nota">Si lo enlazas, sus citas del CRM también le ocupan hueco: no se le puede reservar encima de una reunión.</div></div>' +
+        // Lo que se promete aquí es lo que el sistema hace HOY. Las citas de la
+        // agenda no guardan de qué miembro son, así que decir «no se le puede
+        // reservar encima de una reunión» sería mentira: sus huecos salen de
+        // sus propias reservas, no de su agenda.
+        '<div class="rsv-nota">Sirve para saber de quién es cada cita. Sus horas libres se calculan con las reservas que ya tiene.</div></div>' +
       '<label class="rsv-check rsv-solo"><input type="checkbox" id="rsv-r-activo"' + (rsvBorrador.activo !== false ? ' checked' : '') + '>' +
         'Disponible para reservar</label>' +
     '</div>' +

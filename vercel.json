@@ -37,6 +37,14 @@
       "destination": "/form.html"
     },
     {
+      "source": "/reservar/:token",
+      "destination": "/reservar.html"
+    },
+    {
+      "source": "/cita/:token",
+      "destination": "/reservar.html"
+    },
+    {
       "source": "/l/:slug",
       "destination": "/api/l?slug=:slug"
     },

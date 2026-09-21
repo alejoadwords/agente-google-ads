@@ -16,6 +16,14 @@
    "texto": "Cuando conectabas una página de Facebook o una cuenta de Instagram para publicar desde el Studio, el permiso quedaba guardado en el navegador desde el que la conectaste. Eso significaba perderlo al limpiar la caché, tener que volver a conectar en cada equipo y que tu equipo no la viera. Ahora el permiso se guarda cifrado en tu cuenta y no vuelve a salir de nuestros servidores: al publicar, el navegador solo dice en qué página publicar. Si ya tenías una cuenta conectada, te pediremos conectarla una vez más; después queda disponible desde cualquier equipo y para todo tu equipo."
   },
   {
+   "id": "2026-09-21-reservas",
+   "fecha": "2026-09-21",
+   "tipo": "nuevo",
+   "titulo": "Tus clientes ya pueden agendar solos",
+   "texto": "Nuevo módulo de Reservas dentro del CRM. Armas tus servicios con su duración y su precio, dices quién los presta y a qué horas atiendes, y Acuarius te da un enlace propio para compartir. Quien lo abra elige servicio, profesional, día y hora, y deja sus datos. Esa cita entra a tu agenda, se sincroniza con tu Google Calendar y crea el contacto en tu tablero, todo de una vez. La página nunca ofrece una hora que no quepa entera ni una que ya esté tomada, y si dos personas piden la misma al mismo tiempo solo una la consigue. Cada quien recibe su confirmación por correo con un enlace para cancelar, y al cancelar el turno vuelve a quedar libre para alguien más. Sirve igual para una barbería, un consultorio, una veterinaria o un estudio: los servicios los pones tú.",
+   "accion": { "texto": "Configurar mis reservas", "ir": "reservas" }
+  },
+  {
    "id": "2026-09-21-studio-en-tu-cuenta",
    "fecha": "2026-09-21",
    "tipo": "mejora",
