@@ -39,6 +39,7 @@
   <button onclick="escena('medio')">a medio camino</button>
   <button onclick="escena('ganado')">ganado</button>
   <button onclick="escena('nuevo')">recién entrado, sin historial</button>
+  <button onclick="escena('sin-red')">si fallan las propuestas</button>
   <span>·</span>
   <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'760px'">móvil</button>
 </div>
@@ -75,10 +76,22 @@ var ACTIVIDADES = [
   { id: 'a6', type: 'creacion', created_at: new Date(Date.now() - 12 * 864e5).toISOString(),
     content: 'Lead creado desde el formulario web.', metadata: {} },
 ];
+// Las citas vienen en la MISMA respuesta que las tareas: solo las separa el
+// tipo. Aquí están mezcladas a propósito, como llegan de verdad.
 var TAREAS = [
-  { id: 't1', title: 'Llamar para confirmar la visita', due_at: new Date(Date.now() - 864e5).toISOString(), done: false },
-  { id: 't2', title: 'Enviar fichas de 3 apartamentos', due_at: new Date(Date.now() + 864e5).toISOString(), done: false },
-  { id: 't3', title: 'Primer contacto', due_at: new Date(Date.now() - 5 * 864e5).toISOString(), done: true },
+  { id: 't1', type: 'task', title: 'Llamar para confirmar la visita', due_at: new Date(Date.now() - 864e5).toISOString(), done: false },
+  { id: 't2', type: 'task', title: 'Enviar fichas de 3 apartamentos', due_at: new Date(Date.now() + 864e5).toISOString(), done: false },
+  { id: 't3', type: 'task', title: 'Primer contacto', due_at: new Date(Date.now() - 5 * 864e5).toISOString(), done: true },
+  { id: 'm1', type: 'meeting', title: 'Visita al apartamento de Laureles',
+    due_at: new Date(Date.now() + 2 * 864e5).toISOString(), done: false, booking_token: 'abc123' },
+  { id: 'm2', type: 'meeting', title: 'Reunión para firmar',
+    due_at: new Date(Date.now() - 2 * 864e5).toISOString(), done: false },
+];
+var PROPUESTAS = [
+  { id: 'pr1', title: 'Arriendo Laureles · 2 alcobas', amount: 1800000, currency: 'COP',
+    status: 'viewed', public_token: 'tok1', created_at: new Date(Date.now() - 4 * 864e5).toISOString() },
+  { id: 'pr2', title: 'Borrador sin enviar', amount: null, status: 'draft',
+    public_token: null, created_at: new Date(Date.now() - 864e5).toISOString() },
 ];
 
 function escena(cual) {
@@ -95,8 +108,11 @@ function escena(cual) {
   _crmActividadesLead = cual === 'nuevo' ? [] : ACTIVIDADES;
   _crmTareasLead = cual === 'nuevo' ? [] : TAREAS;
   lfLead = l; crmDetailLead = l; lfFiltro = 'todo'; lfPestana = 'quien';
+  _lfPropsHtml = ''; _lfConvsHtml = '';
+  window._sinRed = cual === 'sin-red';
   lfPintar();
   lfCargarConversaciones(l.id);
+  lfCargarPropuestas(l.id);
 }
 
 (async function montar() {
@@ -110,6 +126,9 @@ function escena(cual) {
     js.slice(js.indexOf('const ICN_PATHS = {'), js.indexOf('// ── AUTOMATIZACIONES DEL CRM')),
     (js.match(/function actTexto\([\s\S]*?\n\}\n/) || [''])[0],
     (js.match(/function fuenteLabel\([\s\S]*?\n\}\n/) || [''])[0],
+    // Vive con las tareas, no con la ficha, pero la ficha depende de él: se
+    // trae el de verdad para que un cambio allí se vea aquí.
+    (js.match(/const lfEsCita = .*\n/) || [''])[0],
     'function crmIsWonStage(k){return k==="ganado"} function crmIsLostStage(k){return k==="perdido"}',
     'var crmActivityType="nota", _crmTareasLead=[], _crmActividadesLead=[], crmDetailLead=null, crmView="kanban";',
     // `fuenteLabel` lee el catálogo de fuentes de la cuenta.
@@ -127,8 +146,17 @@ function escena(cual) {
     'function crmChangeStage(k){lfLead.stage=k;lfPintar();showToast("Etapa: "+k)}',
     'function crmTareaHecha(id,h){showToast(h?"Tarea hecha":"Tarea reabierta")}',
     'function crmOpenConvFromDetail(){showToast("Abriría el inbox")}',
+    // Los estados de la propuesta salen del módulo de propuestas, que en la
+    // aplicación real se carga antes que la ficha.
+    'const PRP_STATUS_META = ' + JSON.stringify({
+      draft: { label: 'Borrador', color: '#6b7280' }, sent: { label: 'Enviada', color: '#F59E0B' },
+      viewed: { label: 'Vista 👀', color: '#3B82F6' }, accepted: { label: 'Aceptada', color: '#8B5CF6' },
+      paid: { label: 'Pagada 💰', color: '#10B981' },
+    }) + ';',
     'async function fetchAuth(u){ if(u.indexOf("chat-conversations")>=0) return {ok:true,json:async()=>' +
       '({conversations:[{id:"c1",channel:"whatsapp",last_message_at:new Date(Date.now()-2*864e5).toISOString()}]})};' +
+      ' if(u.indexOf("proposals")>=0) return window._sinRed ? {ok:false,status:500} :' +
+      ' {ok:true,json:async()=>({proposals:PROPUESTAS})};' +
       ' return {ok:true,json:async()=>({})}; }',
     // La ficha, tal cual quedó.
     js.slice(js.indexOf('// ══ FICHA DEL LEAD A PÁGINA COMPLETA ═')),

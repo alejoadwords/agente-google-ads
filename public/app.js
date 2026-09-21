@@ -20656,6 +20656,12 @@ function crmOpenConvFromDetail(convId, channel) {
 // hecho. Un aviso que miente sobre trabajo hecho enseña a ignorar los avisos.
 let _crmTareasLead = [];
 
+// `/api/agenda?lead_id=` devuelve TODAS las actividades del lead, y las citas
+// son actividades. Sin distinguirlas, una reserva que hizo el propio cliente
+// aparecía en «Tareas» con casilla, como si fuera un pendiente que uno se
+// apunta. Se separan por tipo: es el único campo que las diferencia.
+const lfEsCita = (a) => !!a && a.type === 'meeting';
+
 async function crmCargarTareasLead(leadId) {
   const sec = document.getElementById('crm-d-tareas-section');
   const cont = document.getElementById('crm-d-tareas');
@@ -20701,14 +20707,16 @@ function crmPintarTareasLead() {
       : (vencida ? 'Venció el ' : 'Para el ') +
         cuando.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ' · ' +
         cuando.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    const cita = lfEsCita(t);
     return '<div class="crm-d-tarea' + (t.done ? ' hecha' : vencida ? ' vencida' : '') + '">' +
       '<input type="checkbox"' + (t.done ? ' checked' : '') +
         (puedo ? ' onchange="crmTareaHecha(\'' + esc(t.id) + '\', this.checked)"' : ' disabled') +
         ' title="' + (!puedo ? 'Este lead lo lleva otra persona'
-                     : t.done ? 'Destilda para volver a dejarla pendiente' : 'Marcar como hecha') + '">' +
+                     : t.done ? 'Destilda para volver a dejarla pendiente'
+                     : cita ? 'Marcar la cita como atendida' : 'Marcar como hecha') + '">' +
       '<div class="crm-d-tarea-txt">' +
-        '<div class="crm-d-tarea-tit">' + esc(t.title || 'Tarea') + '</div>' +
-        '<div class="crm-d-tarea-fecha">' + (t.done ? 'Hecha' : esc(fecha)) + '</div>' +
+        '<div class="crm-d-tarea-tit">' + esc(t.title || (cita ? 'Cita' : 'Tarea')) + '</div>' +
+        '<div class="crm-d-tarea-fecha">' + (cita ? 'Cita · ' : '') + (t.done ? 'Hecha' : esc(fecha)) + '</div>' +
       '</div>' +
       (puedo && !t.done ? '<button class="crm-d-tarea-btn" onclick="crmTareaAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana a la misma hora">Mañana</button>' : '') +
     '</div>';
@@ -26994,6 +27002,11 @@ async function prpLoad() {
     _prpList = (await res.json()).proposals || [];
   } catch { _prpList = []; }
   prpRenderList();
+  // La ficha del lead tiene su propia caja de propuestas. Sin esto, se crea una
+  // propuesta, se cierra el modal y la ficha sigue diciendo que no hay ninguna.
+  if (lfLead && _prpLead && lfLead.id === _prpLead.id) {
+    lfCargarPropuestas(lfLead.id).catch(() => {});
+  }
 }
 
 function prpRenderModal() {
@@ -37992,6 +38005,11 @@ async function crmAbrirFicha(leadId) {
   crmDetailLead = lead;
   lfFiltro = 'todo';
   lfPestana = 'quien';
+  // Sin esto, al saltar de un lead a otro la ficha nueva enseñaría un rato las
+  // propuestas y las conversaciones del anterior, que es peor que no enseñar
+  // nada: son datos de otra persona con este nombre encima.
+  _lfPropsHtml = '';
+  _lfConvsHtml = '';
   if (crmView !== 'lead') lfVistaAnterior = crmView;
   crmCloseDetail();
   crmSetView('lead');
@@ -38250,9 +38268,20 @@ async function lfGuardarActividad() {
 
 // ── Columna 3 · Qué falta por hacer ─────────────────────────────────────────
 
+// Lo que llega por red se guarda ya pintado. `lfPintar()` se llama en cada
+// clic de pestaña o de filtro: si estas dos cajas volvieran a nacer con un
+// «Cargando…», se quedarían así para siempre, porque nadie vuelve a pedirlo.
+let _lfPropsHtml = '';
+let _lfConvsHtml = '';
+
 function lfQueFalta(l) {
-  const tareas = (_crmTareasLead || []).filter(t => !t.done);
-  const hechas = (_crmTareasLead || []).filter(t => t.done).length;
+  const todo = _crmTareasLead || [];
+  const tareas = todo.filter(t => !t.done && !lfEsCita(t));
+  const hechas = todo.filter(t => t.done && !lfEsCita(t)).length;
+  // Una cita pasada que nadie cerró es trabajo pendiente, no historial: se
+  // queda en la lista y se pinta en rojo hasta que alguien diga qué pasó.
+  const citas = todo.filter(t => !t.done && lfEsCita(t))
+    .sort((a, b) => new Date(a.due_at || 0) - new Date(b.due_at || 0));
 
   return '<div class="lf-caja">' +
       '<div class="lf-tit">Tareas' +
@@ -38270,6 +38299,33 @@ function lfQueFalta(l) {
         : '<div class="lf-vacio">' + (hechas ? 'Todo al día.' : 'Ninguna tarea pendiente.') + '</div>') +
     '</div>' +
 
+    '<div class="lf-caja">' +
+      '<div class="lf-tit">Citas' +
+        (citas.length ? '<span class="cuenta">' + citas.length + '</span>' : '') +
+        '<button onclick="agnScheduleForLead()">+ Agendar</button></div>' +
+      (citas.length
+        ? citas.map(c => {
+            const pasada = c.due_at && new Date(c.due_at) < new Date();
+            return '<div class="lf-tarea cita' + (pasada ? ' vence' : '') + '">' +
+              '<span class="lf-ico">' + icn('calendar', 14) + '</span>' +
+              '<div><div>' + esc(c.title || 'Cita') + '</div>' +
+              '<div class="cuando">' +
+                (c.due_at ? esc(lfCuando(c.due_at)) : 'Sin fecha') +
+                // Que la reservó el propio cliente cambia cómo se trata: no hay
+                // que confirmarla con él, ya eligió la hora.
+                (c.booking_token ? ' · la reservó el cliente' : '') +
+                (pasada ? ' · sin cerrar' : '') +
+              '</div></div></div>';
+          }).join('')
+        : '<div class="lf-vacio">Ninguna cita agendada.</div>') +
+    '</div>' +
+
+    '<div class="lf-caja">' +
+      '<div class="lf-tit">Propuestas' +
+        '<button onclick="prpOpenForLead()">+ Nueva</button></div>' +
+      '<div id="lf-props">' + (_lfPropsHtml || '<div class="lf-vacio">Cargando…</div>') + '</div>' +
+    '</div>' +
+
     '<div class="lf-caja" style="border-color:var(--violet);background:var(--violet-lt)">' +
       '<div class="lf-tit" style="color:var(--violet)">Próxima acción</div>' +
       '<div id="lf-sugerencia" style="font-size:13px;line-height:1.55;color:var(--text-2)">' +
@@ -38279,7 +38335,7 @@ function lfQueFalta(l) {
 
     '<div class="lf-caja">' +
       '<div class="lf-tit">Conversaciones</div>' +
-      '<div id="lf-convs"><div class="lf-vacio">Cargando…</div></div>' +
+      '<div id="lf-convs">' + (_lfConvsHtml || '<div class="lf-vacio">Cargando…</div>') + '</div>' +
     '</div>';
 }
 
@@ -38312,14 +38368,62 @@ async function lfSugerir() {
   }
 }
 
+/**
+ * Las propuestas de este lead. La lista completa y el editor ya viven en el
+ * modal de propuestas: aquí solo se ve en qué van, que es lo que se pregunta
+ * mirando la ficha.
+ */
+async function lfCargarPropuestas(leadId) {
+  try {
+    const r = await fetchAuth('/api/proposals?lead_id=' + encodeURIComponent(leadId));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const props = (await r.json()).proposals || [];
+    lfGuardarCaja(leadId, 'lf-props', props.length
+      ? props.map(p => {
+          const st = PRP_STATUS_META[p.status] || PRP_STATUS_META.draft;
+          const monto = p.amount
+            ? '$' + Number(p.amount).toLocaleString('es-CO') + ' ' + (p.currency || 'USD') : '';
+          const fecha = p.created_at
+            ? new Date(p.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
+          // Sin token no hay página pública que abrir: es un borrador que
+          // todavía no se ha enviado. Un enlace a /p/undefined daría un 404.
+          const dentro =
+            '<div style="min-width:0"><div>' + esc(p.title || 'Propuesta') + '</div>' +
+            '<div class="cuando">' + esc([monto, fecha].filter(Boolean).join(' · ')) + '</div></div>' +
+            '<span class="lf-estado" style="background:' + st.color + '1A;color:' + st.color + '">' +
+              esc(st.label) + '</span>';
+          return p.public_token
+            ? '<a class="lf-prop" href="/p/' + esc(p.public_token) + '" target="_blank" rel="noopener" ' +
+              'title="Ver la propuesta como la ve el cliente">' + dentro + '</a>'
+            : '<div class="lf-prop">' + dentro + '</div>';
+        }).join('')
+      : '<div class="lf-vacio">Ninguna propuesta todavía.</div>');
+  } catch {
+    // Decir «ninguna» cuando la consulta falló es mentir: el comercial daría
+    // por hecho que no se le mandó nada y volvería a redactarla.
+    lfGuardarCaja(leadId, 'lf-props', '<div class="lf-vacio">No se pudieron cargar.</div>');
+  }
+}
+
+/**
+ * Guarda lo pintado y lo mete en la caja, si la caja sigue ahí. Descarta lo
+ * que llegue tarde de un lead que ya no se está mirando: dos clics rápidos
+ * entre leads dejaban las propuestas del primero bajo el nombre del segundo.
+ */
+function lfGuardarCaja(leadId, id, html) {
+  if (lfLead && lfLead.id !== leadId) return;
+  if (id === 'lf-props') _lfPropsHtml = html; else _lfConvsHtml = html;
+  const caja = document.getElementById(id);
+  if (caja) caja.innerHTML = html;
+}
+
 /** Las conversaciones del inbox atadas a este lead. */
 async function lfCargarConversaciones(leadId) {
-  const caja = document.getElementById('lf-convs');
-  if (!caja) return;
   try {
     const r = await fetchAuth('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId));
-    const convs = r.ok ? ((await r.json()).conversations || []) : [];
-    caja.innerHTML = convs.length
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const convs = (await r.json()).conversations || [];
+    lfGuardarCaja(leadId, 'lf-convs', convs.length
       ? convs.map(c =>
           '<div style="font-size:12.5px;line-height:1.5;padding:5px 0;cursor:pointer" ' +
           'onclick="crmOpenConvFromDetail(\'' + esc(c.id) + '\',\'' + esc(c.channel || '') + '\')">' +
@@ -38327,10 +38431,10 @@ async function lfCargarConversaciones(leadId) {
           '<span style="color:var(--muted)">' +
           (c.last_message_at ? 'Último mensaje ' + esc(lfHace(c.last_message_at)) : 'Sin mensajes') +
           '</span></div>').join('')
-      : '<div class="lf-vacio">Ninguna conversación en el inbox.</div>';
+      : '<div class="lf-vacio">Ninguna conversación en el inbox.</div>');
   } catch {
     // Que falle esto no puede dejar la caja diciendo «Cargando…» para siempre.
-    caja.innerHTML = '<div class="lf-vacio">No se pudieron cargar.</div>';
+    lfGuardarCaja(leadId, 'lf-convs', '<div class="lf-vacio">No se pudieron cargar.</div>');
   }
 }
 
@@ -38355,6 +38459,7 @@ function lfHace(iso) {
     if (v === 'lead' && lfLead) {
       lfPintar();
       lfCargarConversaciones(lfLead.id);
+      lfCargarPropuestas(lfLead.id);
     }
   };
 })();

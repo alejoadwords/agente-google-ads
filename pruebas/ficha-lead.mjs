@@ -108,6 +108,44 @@ console.log('\nLo que no puede fallar callado\n');
       /!crmSoyMiembro \|\|[\s\S]{0,120}gestiona_equipo/.test(bloque));
 }
 
+console.log('\nCitas y propuestas en la tercera columna\n');
+{
+  // `/api/agenda?lead_id=` devuelve TODAS las actividades del lead, citas
+  // incluidas. Antes caían en «Tareas» con casilla: una reserva que hizo el
+  // cliente parecía un pendiente que uno se apuntó.
+  chk('las citas se separan de las tareas por tipo', /a\.type === 'meeting'/.test(js));
+  chk('y no cuentan como tareas pendientes',
+      /filter\(t => !t\.done && !lfEsCita\(t\)\)/.test(bloque));
+  chk('la cita no lleva casilla: no se «marca», se atiende',
+      /class="lf-tarea cita[\s\S]{0,400}<\/div>/.test(bloque) &&
+      !/class="lf-tarea cita[\s\S]{0,300}type="checkbox"/.test(bloque));
+  chk('una cita que ya pasó y nadie cerró se ve como pendiente', /sin cerrar/.test(bloque));
+  chk('se dice cuándo la reservó el propio cliente', /booking_token \? ' · la reservó el cliente'/.test(bloque));
+  chk('las propuestas reutilizan los estados que ya existían',
+      /PRP_STATUS_META\[p\.status\]/.test(bloque));
+  chk('un borrador sin token no enlaza a una página que daría 404',
+      /p\.public_token\s*\n?\s*\? '<a class="lf-prop"/.test(bloque));
+  chk('y al crear una propuesta la ficha se entera', /lfCargarPropuestas\(lfLead\.id\)/.test(js.slice(js.indexOf('async function prpLoad'), js.indexOf('function prpRenderModal'))));
+}
+
+console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
+{
+  // `lfPintar()` corre en cada clic de pestaña o de filtro. Si estas dos cajas
+  // volvieran a nacer con un «Cargando…», se quedarían así para siempre:
+  // nadie vuelve a pedirlas.
+  chk('propuestas y conversaciones se guardan pintadas',
+      /_lfPropsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque) &&
+      /_lfConvsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque));
+  chk('al cambiar de lead se vacían, para no enseñar las del anterior',
+      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';/.test(bloque));
+  chk('y lo que llega tarde de otro lead se descarta',
+      /if \(lfLead && lfLead\.id !== leadId\) return;/.test(bloque));
+  // Decir «ninguna» cuando la consulta falló es peor que no decir nada: se
+  // vuelve a redactar una propuesta que ya se había mandado.
+  chk('un fallo de red no se confunde con «no hay nada»',
+      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 2);
+}
+
 console.log('\nEn el móvil no se aprietan tres columnas\n');
 {
   chk('hay pestañas', /\.lf-pestanas\{display:none/.test(css) && /max-width:820px\)\{[\s\S]{0,120}\.lf-pestanas\{display:flex\}/.test(css));

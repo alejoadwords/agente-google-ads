@@ -23,6 +23,17 @@
    "texto": "Si tenías más de un proceso de venta, el selector para cambiar entre ellos había desaparecido del tablero: tus procesos seguían ahí, pero la pantalla no conseguía cargarlos. El mismo fallo afectaba a los agentes de chat, las propuestas, las respuestas rápidas y la sincronización del catálogo, que respondían «no se pudo verificar tu cuenta». Ya está corregido en todos."
   },
   {
+   "id": "2026-09-21-citas-y-propuestas-en-la-ficha",
+   "fecha": "2026-09-21",
+   "tipo": "mejora",
+   "titulo": "Las citas y las propuestas, en la ficha del contacto",
+   "texto": "La tercera columna de la ficha —lo que falta por hacer— ya no muestra solo las tareas. Ahora tiene su propia caja de citas, con la fecha de cada una y un aviso cuando fue el propio cliente quien la reservó, y otra de propuestas, donde ves el monto y si el cliente ya la abrió, la aceptó o la pagó; al hacer clic se abre tal como él la ve. De paso arreglamos algo que confundía: las citas aparecían mezcladas entre las tareas, con casilla para marcarlas, como si fueran un pendiente más. Y una cita que ya pasó y nadie cerró se queda en rojo, para que no se pierda.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
    "id": "2026-09-21-envios-mas-rapidos",
    "fecha": "2026-09-21",
    "tipo": "mejora",
