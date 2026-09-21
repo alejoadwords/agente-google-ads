@@ -313,6 +313,13 @@ async function guardarConexion(userId, channel, externalId, campos) {
       client_id: body.client_id || null,
       pipeline_id: body.pipeline_id || null,
       external_id: String(external_id),
+      // Solo WhatsApp lo usa. Es la cuenta de negocio de la que cuelgan las
+      // plantillas, y NO es lo mismo que el external_id, que es el número.
+      // Sin esto, un cliente que conecta con sus propias credenciales —hoy el
+      // único camino, porque nuestra app sigue esperando a Meta— se quedaba sin
+      // poder crear ni usar plantillas, y el aviso le decía que reconectara,
+      // cosa que no arreglaba nada.
+      ...(channel === 'whatsapp' && body.waba_id ? { waba_id: String(body.waba_id) } : {}),
       access_token: access_token || null,
       channel_name: channel_name || null,
       avatar_url: avatar_url || null,

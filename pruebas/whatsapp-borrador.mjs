@@ -114,6 +114,26 @@ console.log('\nEl botón de enlace\n');
   chk('sin botón no aparece la sección', !componentesDe(base).some(x => x.type === 'BUTTONS'));
 }
 
+console.log('\nLos dos caminos de conexión guardan el waba_id\n');
+{
+  const { readFileSync } = await import('node:fs');
+  const lee = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+  // Sin waba_id no hay plantillas. Que UN camino lo guarde y el otro no es
+  // justo como la funcion quedo inalcanzable para quien podia usarla.
+  chk('el alta por Meta (registro insertado) lo guarda',
+      /waba_id: String\(waba_id\)/.test(lee('api/whatsapp-onboard.js')));
+  chk('y al reconectar por ahi tambien lo refresca',
+      /waba_id: fila\.waba_id/.test(lee('api/whatsapp-onboard.js')));
+  chk('el alta manual (token propio) lo acepta',
+      /channel === 'whatsapp' && body\.waba_id/.test(lee('api/channel-connections.js')));
+  const front = lee('public/app.js');
+  chk('el formulario manual lo pide', /wa-f-waba-id/.test(front));
+  chk('lo exige antes de guardar', /El WhatsApp Business Account ID es obligatorio/.test(front));
+  chk('y lo valida contra Meta, no solo el telefono',
+      /\$\{wabaId\}\?fields=name&access_token=/.test(front));
+  chk('y lo manda al servidor', /waba_id: wabaId/.test(front));
+}
+
 console.log('\nCabecera con imagen\n');
 {
   const conImg = con({ header_format: 'IMAGE', header_image: 'https://cdn/x.jpg', header: '', ejemplos_header: [] });

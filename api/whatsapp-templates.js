@@ -73,7 +73,7 @@ export default async function handler(req) {
     // los canales manuales, que no tienen token. Decirlo con el remedio, no con
     // un error genérico.
     return jsonResp({ plantillas: [], motivo: 'sin_waba',
-      aviso: 'Este canal se conectó antes de que gestionáramos plantillas. Vuelve a conectarlo en Ajustes → Canales para habilitarlas.' });
+      aviso: 'Para usar plantillas falta el WhatsApp Business Account ID de este canal. Reconéctalo en Ajustes → Canales: te lo pedirá junto al Phone Number ID.'});
   }
 
   // ── POST: escribir una plantilla y mandarla a revisión ────────────────────

@@ -255,7 +255,7 @@ async function revisarPlantilla(userId, clientId, wa) {
   const conn = await conexionWhatsapp(userId, clientId);
   if (!conn) return { error: 'No hay un canal de WhatsApp conectado en esta cuenta.' };
   if (!conn.waba_id || !conn.access_token) {
-    return { error: 'Este canal se conectó antes de que gestionáramos plantillas. Vuelve a conectarlo en Ajustes → Canales.' };
+    return { error: 'Para usar plantillas falta el WhatsApp Business Account ID de este canal. Reconéctalo en Ajustes → Canales: te lo pedirá junto al Phone Number ID.' };
   }
   const res = await plantillasDeMeta(conn, 'name,status,language,components');
   if (!res.ok) return { error: 'No se pudo comprobar la plantilla con Meta: ' + res.aviso };

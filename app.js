@@ -21224,6 +21224,7 @@ let _waConnectAgentId = null;
 function waConnectOpen(agentId) {
   _waConnectAgentId = agentId;
   document.getElementById('wa-f-phone-id').value = '';
+  document.getElementById('wa-f-waba-id').value = '';
   document.getElementById('wa-f-token').value = '';
   document.getElementById('wa-f-name').value = '';
   const err = document.getElementById('wa-connect-error');
@@ -21248,6 +21249,7 @@ function waConnectClose() {
 
 async function waConnectSave() {
   const phoneNumberId = document.getElementById('wa-f-phone-id').value.trim();
+  const wabaId = document.getElementById('wa-f-waba-id').value.trim();
   const token = document.getElementById('wa-f-token').value.trim();
   const name = document.getElementById('wa-f-name').value.trim() || phoneNumberId;
   const errEl = document.getElementById('wa-connect-error');
@@ -21256,6 +21258,7 @@ async function waConnectSave() {
   const showErr = (msg) => { errEl.textContent = msg; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Conectar'; };
 
   if (!phoneNumberId) { showErr('El Phone Number ID es obligatorio.'); document.getElementById('wa-f-phone-id').focus(); return; }
+  if (!wabaId) { showErr('El WhatsApp Business Account ID es obligatorio: sin el no hay plantillas ni campanas.'); document.getElementById('wa-f-waba-id').focus(); return; }
   if (!token) { showErr('El Access Token es obligatorio.'); document.getElementById('wa-f-token').focus(); return; }
 
   btn.disabled = true; btn.textContent = 'Verificando...';
@@ -21265,12 +21268,18 @@ async function waConnectSave() {
     const testRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}?access_token=${token}`);
     const testData = await testRes.json();
     if (testData.error) { showErr('Token o Phone Number ID inválido: ' + testData.error.message); return; }
+    // El WABA se comprueba aqui y no cuando alguien vaya a crear una plantilla
+    // tres semanas despues: un digito mal puesto se arregla en dos segundos hoy
+    // y en media hora de soporte manana.
+    const wabaRes = await fetch(`https://graph.facebook.com/v19.0/${wabaId}?fields=name&access_token=${token}`);
+    const wabaData = await wabaRes.json();
+    if (wabaData.error) { showErr('WhatsApp Business Account ID inválido: ' + wabaData.error.message); document.getElementById('wa-f-waba-id').focus(); return; }
 
     btn.textContent = 'Conectando...';
     const res = await fetchAuth('/api/channel-connections', {
       method: 'POST',
       body: JSON.stringify({ agent_id: _waConnectAgentId, client_id: _canClienteAlConectar || null,
-        channel: 'whatsapp', external_id: phoneNumberId, access_token: token, channel_name: name }),
+        channel: 'whatsapp', external_id: phoneNumberId, waba_id: wabaId, access_token: token, channel_name: name }),
     });
     if (!res.ok) { showErr('Error guardando la conexión. Verifica los datos e intenta de nuevo.'); return; }
     waConnectClose();
