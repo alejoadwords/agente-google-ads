@@ -21,7 +21,7 @@ const chk = (nombre, ok, extra) => {
 const TOPE_POSTGREST = 1000; // lo que hace el servidor de verdad
 
 // ── Backend falso ────────────────────────────────────────────────────────────
-function montar(nDestinatarios, { resendFalla = false } = {}) {
+function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false } = {}) {
   const campana = {
     id: 'camp-1', user_id: 'user-1', channel: 'email', status: 'queued',
     subject: 'Hola {{nombre}}', body: 'Cuerpo para {{nombre}}', html: null,
@@ -39,6 +39,11 @@ function montar(nDestinatarios, { resendFalla = false } = {}) {
     leads['l-00003'].email = null;
     leads['l-00004'].email = 'esto no es un correo';
     leads['l-00005'].tags = ['no-email'];
+  }
+  // Para el caso feo: una cola llena de gente a la que no se puede escribir.
+  // Cada tanda «avanza» contándolos, aunque a Resend no le entre ni uno.
+  if (muchosSaltables) {
+    Object.values(leads).forEach((l, i) => { if (i % 2) l.email = null; });
   }
 
   const cuenta = { resend: 0, escriturasCola: 0, escriturasEventos: 0, consultasLeads: 0, sobresVistos: 0 };
@@ -132,13 +137,41 @@ console.log('\nUna campaña de 1.200 destinatarios\n');
 console.log('\nCuando Resend está saturado (429) — es pasajero\n');
 {
   const m = montar(150, { resendFalla: 429 });
-  await cron(peticion, respuesta());
+  const res429 = respuesta();
+  await cron(peticion, res429);
   chk('nadie queda marcado como enviado', m.cola.filter(r => r.status === 'sent').length === 0);
   chk('los 147 siguen PENDIENTES para reintentar, no perdidos',
       m.cola.filter(r => r.status === 'pending').length === 147,
       `pendientes=${m.cola.filter(r => r.status === 'pending').length}`);
   chk('la campaña NO se cierra con gente sin enviar', m.campana.status !== 'sent', m.campana.status);
   chk('deja de insistirle a Resend: un solo lote', m.cuenta.resend === 1, `fueron ${m.cuenta.resend}`);
+  chk('y no encadena otra tanda', res429.cuerpo.tandas === 1, `tandas=${res429.cuerpo.tandas}`);
+  // EL CASO FEO: media cola sin correo. Cada tanda «avanza» contando saltados,
+  // así que el corte de «no movió a nadie» no la para. Sin el corte por
+  // saturación, esto le pegaba a Resend una vez por tanda durante los 85 s de
+  // la función — justo después de que Resend pidiera que pararan.
+  {
+    const m2 = montar(400, { resendFalla: 429, muchosSaltables: true });
+    const r2 = respuesta();
+    await cron(peticion, r2);
+    chk('con media cola saltable, sigue siendo UN solo intento',
+        m2.cuenta.resend === 1, `fueron ${m2.cuenta.resend}`);
+    chk('y una sola tanda', r2.cuerpo.tandas === 1, `tandas=${r2.cuerpo.tandas}`);
+    chk('a quien no se llegó a intentar se le deja pendiente',
+        m2.cola.filter(r => r.status === 'pending').length > 150,
+        `pendientes=${m2.cola.filter(r => r.status === 'pending').length}`);
+  }
+
+  // Con VARIAS campañas en cola el banco no llega —monta una sola—, pero es
+  // donde más se nota: sin el corte, el bucle pasaba a la campaña siguiente y
+  // le pedía otro lote a Resend, hasta cinco por tanda. Se vigila en el código.
+  {
+    const src = readFileSync(new URL('../api/cron-campaigns.js', import.meta.url), 'utf8');
+    chk('el corte por saturación sale también del bucle de campañas',
+        /if \(saturado\) break;\s*\n\s*\}\s*\n\s*\/\/ Una tanda que no movió/.test(src));
+    chk('y de la tanda', /if \(processed === alEmpezar\) break;\s*\n\s*if \(saturado\) break;/.test(src));
+  }
+
   chk('no se registran envíos que no ocurrieron', m.eventos.length === 0);
 }
 
@@ -175,7 +208,13 @@ console.log('\nY lo que dice el código fuente\n');
   const src = readFileSync(new URL('../api/cron-campaigns.js', import.meta.url), 'utf8');
   chk('ya no queda el tope de 80', !/const BATCH = 80/.test(src));
   chk('el presupuesto por corrida está declarado', /const PRESUPUESTO\s*=\s*5000/.test(src));
-  chk('usa el endpoint de lote', /api\.resend\.com\/emails\/batch/.test(src));
+  // El envío pasa por api/_correo.js desde 8028208, para que un fallo de Resend
+  // quede en el registro en vez de en un console.error que no lee nadie. Lo que
+  // importa sigue siendo lo mismo: UNA petición por cada 100, no una por
+  // persona.
+  chk('usa el endpoint de lote, a través del módulo de correo',
+      /enviarResendLote\('cron-campaigns'/.test(src) &&
+      /RESEND \+ '\/batch'/.test(readFileSync(new URL('../api/_correo.js', import.meta.url), 'utf8')));
   chk('no queda ninguna actualización fila por fila', !/campaign_recipients\?id=eq/.test(src));
   chk('el índice de WhatsApp se carga fuera del bucle', /async function indiceDeWhatsapp/.test(src));
   const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));

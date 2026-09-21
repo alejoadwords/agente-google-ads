@@ -350,6 +350,15 @@ export default async function handler(req, res) {
   }
 
   let processed = 0, closed = 0, tandas = 0;
+  // Resend ha dicho que no acepta más. Corta la corrida ENTERA, no solo el lote.
+  //
+  // El corte de «una tanda que no movió a nadie» no basta: `processed` cuenta
+  // también a los SALTADOS —sin correo, dirección rota, dado de baja—, así que
+  // con Resend saturado bastaban tres de esos para que el motor creyera que
+  // había avanzado y encadenara otra tanda. Y como la pausa entre lotes solo
+  // aplica dentro de una tanda, las llamadas salían seguidas: insistiéndole a
+  // un proveedor que acaba de pedir que pares, durante los 85 s de la función.
+  let saturado = false;
   const T0 = Date.now();
   try {
    while (Date.now() - T0 < LIMITE_MS) {
@@ -460,6 +469,7 @@ export default async function handler(req, res) {
           // cosa y se come la corrida. Se corta aquí y el resto queda pendiente.
           if (res[0]?.status === 'reintentar') {
             console.warn('[cron-campaigns] Resend no acepta más por ahora, se reintenta:', res[0].detail);
+            saturado = true;
             break;
           }
           tanda.forEach((s, j) => {
@@ -521,11 +531,16 @@ export default async function handler(req, res) {
         await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'sent', sent_at: new Date().toISOString() }, 'return=minimal');
         closed++;
       }
+      // El corte va AQUÍ y no en cuanto Resend dice que no: lo que ya salió hay
+      // que alcanzar a registrarlo y a marcarlo en la cola, o se enviaría dos
+      // veces en la próxima corrida.
+      if (saturado) break;
     }
     // Una tanda que no movió ni un destinatario no va a mover nada en la
     // siguiente: o Resend no acepta más, o no quedaba cola. Sin este corte, el
     // bucle daría vueltas en vacío hasta agotar los 85 s contra el proveedor.
     if (processed === alEmpezar) break;
+    if (saturado) break;
    }
     console.log('[cron-campaigns] processed:', processed, 'closed:', closed);
     return res.status(200).json({ ok: true, processed, closed, tandas, ms: Date.now() - T0 });
