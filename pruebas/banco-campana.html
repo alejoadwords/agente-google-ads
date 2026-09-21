@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · La campana de avisos</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Se quitó de la campana la sección «Alertas de campañas», que pedía una tabla
+  inexistente y daba un 500 en cada carga. Este banco comprueba que lo que
+  queda —las notas de dirección— sigue pintándose, con el CSS y las funciones
+  REALES de public/.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+  Abrir:         http://localhost:4173/pruebas/banco-campana.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);padding:24px}
+  .barra{display:flex;align-items:center;gap:14px;background:var(--bg,#fff);border:1px solid var(--border,#E4E6F0);
+    border-radius:12px;padding:12px 16px;max-width:520px}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="barra">
+  <span style="flex:1;font-size:13px;color:var(--muted,#5A607A)">Encabezado de la aplicación (simulado)</span>
+  <button id="alerts-btn" onclick="openAlertsPanel()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2,#9DA3BE)" title="Avisos">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span id="alerts-badge" style="display:none;position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px">0</span>
+  </button>
+</div>
+
+<div class="banco">
+  <span style="opacity:.6">BANCO ·</span>
+  <button onclick="conNotas(2)">2 notas</button>
+  <button onclick="conNotas(0)">sin notas</button>
+  <button onclick="openAlertsPanel()">abrir el panel</button>
+</div>
+
+<script>
+// Notas de mentira, con la forma que devuelve /api/lead-activities?avisos=1.
+let crmAvisos = [];
+function conNotas(n) {
+  crmAvisos = [];
+  for (let i = 0; i < n; i++) {
+    crmAvisos.push({
+      // Los nombres de campo son los que pinta crmAvisosPanel: `lead` y `texto`.
+      // Con otros la nota sale en blanco y el banco mentiría.
+      id: 'n' + i, lead_id: 'l' + i, lead: ['Camila Restrepo', 'Andrés Oliva'][i % 2],
+      empresa: ['Inversiones del Sur', ''][i % 2],
+      texto: ['Llamar antes del viernes, pidió cita presencial.', 'Este cliente ya preguntó dos veces por el precio.'][i % 2],
+      created_at: new Date(Date.now() - (i + 1) * 3600000).toISOString(),
+      autor: 'Dirección',
+    });
+  }
+  refrescarCampana();
+  if (document.getElementById('alerts-panel')?.style.display === 'flex') crmAvisosPanel();
+}
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    const b = js.indexOf(hasta, a);
+    return js.slice(a, b > a ? b : js.length);
+  };
+
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    (js.match(/function timeAgo\([\s\S]*?\n\}\n/) || [''])[0],
+    (js.match(/function crmHace\([\s\S]*?\n\}\n/) || [''])[0],
+    // La campana, tal cual quedó.
+    trozo('// ── La campana de avisos ─', '// ═══════════════════════════════════════════════════════════\n// FIN SPRINT 2'),
+    // Y el pintado de las notas, que es lo único que le queda dentro.
+    trozo('function crmAvisosPanel(', '\n}\n') + '\n}\n',
+    // Lo que sale a la red se sustituye; el pintado es lo que se mira.
+    'var crmAvisoAbrir = function(){};',
+    'var crmAvisosMarcarLeidos = function(){};',
+  ].join('\n');
+
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  conNotas(2);
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend',
+    '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>

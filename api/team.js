@@ -8,6 +8,7 @@
 // (patrón leads_extra en el JWT: seats_extra).
 export const config = { runtime: 'edge' };
 
+import { asegurarUsuario } from './_usuario-espejo.js';
 import { quienPregunta, gestionaEquipo, normalizarPerfil, puedeTocarA, paraElCliente, PERFILES } from './_perfiles.js';
 
 const CORS = {
@@ -333,20 +334,11 @@ function esDeMiCliente(quien, fila) {
   return (fila && fila.client_id) === quien.cliente;
 }
 
-async function asegurarFilaDeUsuario(userId, correo, nombre) {
-  if (!userId || !correo) return;
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/users?on_conflict=id`, {
-      method: 'POST',
-      headers: { ...sbHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
-      body: JSON.stringify({ id: userId, email: correo, name: nombre || null }),
-    });
-  } catch (e) {
-    // No puede tumbar la aceptación de la invitación: sin fila el miembro entra
-    // igual y solo pierde el guardado de preferencias.
-    console.error('[team] fila espejo:', e.message);
-  }
-}
+// La fila espejo de `users` la crea `_usuario-espejo.js`, compartido con
+// profile.js: dos copias acabarían diferenciándose y una de las dos se
+// quedaría sin arreglar.
+const asegurarFilaDeUsuario = (userId, correo, nombre) =>
+  asegurarUsuario(userId, correo, nombre).catch(() => false);
 
 async function vincularPorCorreo(userId) {
   const correo = await clerkEmailVerificado(userId);
@@ -390,7 +382,7 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-export default async function handler(req) {
+export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const userId = await getUserId(req);
   if (userId && _lastPlan === 'free') {
@@ -403,6 +395,13 @@ export default async function handler(req) {
 
   // GET ?me=1 — ¿soy miembro del workspace de alguien? (para el init de la app)
   if (req.method === 'GET' && url.searchParams.get('me')) {
+    // Este es el primer «hola» de CUALQUIER sesión, sea miembro o no, así que
+    // es donde se garantiza la fila espejo de `users`. Sin ella, el primer
+    // guardado de una preferencia se estrellaba contra la clave foránea con un
+    // 500 que no le decía nada a nadie. No se espera: que tarde el arranque por
+    // esto sería peor que el propio fallo.
+    const espejo = asegurarFilaDeUsuario(userId);
+    if (contexto && typeof contexto.waitUntil === 'function') contexto.waitUntil(espejo);
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,owner_name&limit=1`, { headers: sbHeaders() }).then(r => r.json());
     if (rows?.[0]) {
       // El perfil viaja aquí para que el navegador sepa qué menú pintar. No es

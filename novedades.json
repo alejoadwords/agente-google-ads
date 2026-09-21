@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-21-cuenta-nueva-y-campana",
+   "fecha": "2026-09-21",
+   "tipo": "arreglo",
+   "titulo": "Arreglado: ajustes que no se guardaban en cuentas nuevas",
+   "texto": "Si te registraste hace poco y notaste que la aplicación no te guardaba algunas preferencias, ya está resuelto: faltaba un paso al crear la cuenta y por eso algunos ajustes no llegaban a quedarse. No tienes que hacer nada, ni volver a configurar lo que ya tenías. De paso limpiamos la campana de avisos: tenía una sección de «Alertas de campañas» que nunca llegó a mostrar nada. La campana sigue igual para lo que sí usas, las notas que te deja la dirección en tus contactos, y para ver cómo van tus campañas está Marketing → Plataformas de pauta."
+  },
+  {
    "id": "2026-09-21-limites-de-envio",
    "fecha": "2026-09-21",
    "tipo": "mejora",
@@ -20,7 +27,7 @@
    "fecha": "2026-09-21",
    "tipo": "nuevo",
    "titulo": "Tus clientes ya pueden agendar solos",
-   "texto": "Nuevo módulo de Reservas dentro del CRM. Armas tus servicios con su duración y su precio, dices quién los presta y a qué horas atiendes, y Acuarius te da un enlace propio para compartir. Quien lo abra elige servicio, profesional, día y hora, y deja sus datos. Esa cita entra a tu agenda, se sincroniza con tu Google Calendar y crea el contacto en tu tablero, todo de una vez. La página nunca ofrece una hora que no quepa entera ni una que ya esté tomada, y si dos personas piden la misma al mismo tiempo solo una la consigue. Cada quien recibe su confirmación por correo con un enlace para cancelar, y al cancelar el turno vuelve a quedar libre para alguien más. También le recordamos la cita antes de que llegue —tú eliges cuándo: un día antes, unas horas antes o las dos cosas—, y si tienes WhatsApp conectado el recordatorio más cercano puede salir también por ahí. Sirve igual para una barbería, un consultorio, una veterinaria o un estudio: los servicios los pones tú.",
+   "texto": "Nuevo módulo de Reservas, en Marketing. Armas tus servicios con su duración y su precio, dices quién los presta y a qué horas atiendes, y Acuarius te da un enlace propio para compartir. Quien lo abra elige servicio, profesional, día y hora, y deja sus datos. Esa cita entra a tu agenda, se sincroniza con tu Google Calendar y crea el contacto en tu tablero, todo de una vez. La página nunca ofrece una hora que no quepa entera ni una que ya esté tomada, y si dos personas piden la misma al mismo tiempo solo una la consigue. Cada quien recibe su confirmación por correo con un enlace para cancelar, y al cancelar el turno vuelve a quedar libre para alguien más. También le recordamos la cita antes de que llegue —tú eliges cuándo: un día antes, unas horas antes o las dos cosas—, y si tienes WhatsApp conectado el recordatorio más cercano puede salir también por ahí. Sirve igual para una barbería, un consultorio, una veterinaria o un estudio: los servicios los pones tú.",
    "accion": { "texto": "Configurar mis reservas", "ir": "reservas" }
   },
   {

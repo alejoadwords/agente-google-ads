@@ -90,8 +90,14 @@ console.log('\nLo que no se puede perder de vista\n');
       /la hora de cierre tiene que ir después/.test(bloque));
   chk('la vista se cuelga envolviendo crmSetView, sin tocarlo',
       /const _prev = crmSetView;/.test(bloque));
-  chk('la pestaña queda registrada en el menú del CRM',
-      /NAV_TABS\.crm\.push\('reservas'\)/.test(bloque) && /NAV_TAB_LABELS\.reservas/.test(bloque));
+  // En MARKETING: la página de reservas es un canal de captación, como los
+  // formularios. Registrarla solo en NAV_TABS no basta — sin ruta propia la
+  // URL se queda en /crm y un enlace directo no lleva a ninguna parte.
+  chk('la pestaña queda registrada en el menú de Marketing',
+      /NAV_TABS\.marketing\.push\('reservas'\)/.test(bloque) && /NAV_TAB_LABELS\.reservas/.test(bloque));
+  chk('y no en el de CRM', !/NAV_TABS\.crm\.push\('reservas'\)/.test(bloque));
+  chk('tiene su propia URL', /reservas: '\/marketing\/reservas'/.test(js));
+  chk('y su título de pestaña del navegador', /reservas: 'Reservas' \}/.test(js));
   chk('todas las llamadas del módulo van con sesión',
       !/[^h]fetch\(\s*['"`]\/api\//.test(bloque), 'hay un fetch() sin fetchAuth');
 }

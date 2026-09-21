@@ -1,4 +1,10 @@
 export const config = { runtime: 'edge' };
+
+// `user_profiles` y `chat_history` cuelgan de `users` por clave foránea, y esa
+// fila NO la crea el registro: hasta ahora solo aparecía al aceptar una
+// invitación o al sincronizar a mano. Quien se daba de alta y guardaba
+// cualquier preferencia recibía un 500 con un 23503 que no decía nada.
+import { asegurarUsuario } from './_usuario-espejo.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -205,6 +211,7 @@ export default async function handler(req) {
       // on_conflict es obligatorio: sin él PostgREST infiere ON CONFLICT (id)
       // — la PK — y como nunca choca, hace un INSERT plano que revienta contra
       // el índice único (user_id, agent_key) con 409 en el segundo guardado.
+      await asegurarUsuario(userId);
       const res = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?on_conflict=user_id,agent_key`, {
         method: 'POST',
         headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
@@ -264,6 +271,9 @@ export default async function handler(req) {
     // Mismo caso que arriba: user_profiles y chat_history tienen índice único
     // en (user_id, agent_key), que no es la PK. Sin on_conflict, todo guardado
     // posterior al primero fallaba con 409 y el servidor quedaba desactualizado.
+    // Antes de escribir, la fila espejo. Es idempotente y barata: una consulta
+    // que casi siempre dice «ya está».
+    await asegurarUsuario(userId);
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=user_id,agent_key`, {
       method: 'POST',
       headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },

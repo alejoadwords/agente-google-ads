@@ -4764,7 +4764,9 @@ window.onload = async () => {
   // Las notas de dirección también cuentan en la campana, y hay que pedirlas al
   // arrancar: si solo se cargaran al abrir el CRM, quien entra a Inicio no vería
   // el aviso hasta pasar por el tablero, que es justo donde ya no hace falta.
-  setTimeout(function(){ initAlertsBadge(); crmAvisosCargar(); }, 3000);
+  // La campana se pinta aunque la carga de notas falle: antes quien la sacaba
+  // era initAlertsBadge, y sin esto una petición caída la dejaba invisible.
+  setTimeout(function(){ refrescarCampana(); crmAvisosCargar(); }, 3000);
   // Y se vuelven a pedir cada tanto. Un comercial deja la pestaña abierta toda
   // la mañana: si la campana solo se llenara al cargar la página, una nota que
   // la dirección escribe a media mañana no aparecería hasta el día siguiente.
@@ -7225,57 +7227,42 @@ DATOS REALES (últimos 30 días, valores en ${currency}):
   } catch { return ''; }
 }
 
-// ── Alerts (Feature 7D) ──────────────────────────────────────
+// ── La campana de avisos ─────────────────────────────────────
+//
+// Muestra las notas que la dirección dejó en mis leads.
+//
+// Aquí vivía además una sección de «Alertas de campañas» que pedía
+// `/api/admin?action=get-alerts`. Esa consulta iba contra una tabla
+// `campaign_alerts` que NUNCA EXISTIÓ: el endpoint devolvía un 500 en cada
+// carga de la aplicación —26 al día en el registro de errores— y el panel
+// enseñaba siempre «No hay alertas activas» porque la respuesta de error no es
+// una lista. Ni una sola alerta se mostró nunca.
+//
+// Se quita en vez de crear la tabla por dos razones: la pantalla que de verdad
+// vigila la pauta es Marketing → Plataformas de pauta, y además `check-alerts`
+// se disparaba en CADA carga y habría gastado llamadas a la API de Google Ads
+// por cada visita. Si algún día se quieren alertas de campañas, su sitio es un
+// cron y esa pantalla, no un fetch al arrancar.
 let _alertsOpen = false;
-
-async function initAlertsBadge() {
-  const uid = clerkInstance?.user?.id;
-  if (!uid) return;
-  try {
-    const r = await fetchAuth(`/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}&unreadOnly=true`);
-    const alerts = await r.json();
-    updateAlertsBadge(Array.isArray(alerts) ? alerts.length : 0);
-    // Check nuevas alertas silencioso
-    fetchAuth('/api/admin?action=check-alerts', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ userId: uid })
-    }).then(r => r.json()).then(d => {
-      if (d.count > 0) updateAlertsBadge(alerts.length + d.count);
-    }).catch(() => {});
-  } catch {}
-}
-
-// La campana cuenta dos cosas distintas: las alertas de campañas y las notas que
-// la dirección dejó en mis leads. Dos campanas en el encabezado serían peor, así
-// que se suman aquí y el panel las separa en secciones.
-let _alertasCampanas = 0;
-
-function updateAlertsBadge(count) {
-  _alertasCampanas = count > 0 ? count : 0;
-  refrescarCampana();
-}
 
 function refrescarCampana() {
   const btn   = document.getElementById('alerts-btn');
   const badge = document.getElementById('alerts-badge');
   if (!btn || !badge) return;
   const notas = (typeof crmAvisos !== 'undefined' && crmAvisos) ? crmAvisos.length : 0;
-  const total = _alertasCampanas + notas;
   btn.style.display = 'flex';
-  if (total > 0) {
+  if (notas > 0) {
     badge.style.display = 'flex';
-    badge.textContent   = total > 99 ? '99+' : total;
+    badge.textContent   = notas > 99 ? '99+' : notas;
   } else {
     badge.style.display = 'none';
   }
 }
 
-async function openAlertsPanel() {
+function openAlertsPanel() {
   if (_alertsOpen) { closeAlertsPanel(); return; }
   _alertsOpen = true;
-  const uid = clerkInstance?.user?.id;
 
-  // Crear panel si no existe
   let panel = document.getElementById('alerts-panel');
   if (!panel) {
     panel = document.createElement('div');
@@ -7291,96 +7278,17 @@ async function openAlertsPanel() {
       <button onclick="closeAlertsPanel()" style="background:none;border:none;cursor:pointer;color:var(--muted2);font-size:16px;line-height:1;padding:2px">✕</button>
     </div>
     <div style="flex:1;overflow-y:auto">
-      <div id="notas-list" style="padding:12px 12px 0"></div>
-      <div style="display:flex;align-items:center;gap:8px;padding:14px 14px 6px">
-        <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);flex:1">Alertas de campañas</span>
-        <select id="alerts-filter" onchange="reloadAlerts()" style="font-size:11px;border:1px solid var(--border);border-radius:5px;padding:2px 6px;background:var(--bg);color:var(--text)">
-          <option value="all">Todas</option>
-          <option value="google_ads">Google Ads</option>
-          <option value="meta_ads">Meta Ads</option>
-        </select>
-      </div>
-      <div id="alerts-list" style="padding:0 12px 12px"></div>
+      <div id="notas-list" style="padding:12px"></div>
     </div>`;
 
   panel.style.display = 'flex';
-
-  // Las notas se pintan antes de marcarlas leídas: si se marcasen primero, quien
-  // abre el panel las ve desaparecer sin haberlas leído.
   crmAvisosPanel();
-
-  // Marcar como leídas
-  if (uid) {
-    fetchAuth('/api/admin?action=mark-alerts-read', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ userId: uid })
-    }).then(() => { const b = document.getElementById('alerts-badge'); if (b) b.style.display = 'none'; }).catch(() => {});
-  }
-
-  await reloadAlerts();
-}
-
-async function reloadAlerts() {
-  const uid    = clerkInstance?.user?.id;
-  const filter = document.getElementById('alerts-filter')?.value || 'all';
-  const list   = document.getElementById('alerts-list');
-  if (!uid || !list) return;
-  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Cargando...</div>';
-  try {
-    let url = `/api/admin?action=get-alerts&userId=${encodeURIComponent(uid)}`;
-    if (filter !== 'all') url += `&platform=${filter}`;
-    const r      = await fetch(url);
-    const alerts = await r.json();
-    if (!alerts.length) {
-      list.innerHTML = '<div style="text-align:center;padding:32px 16px;color:var(--muted2)"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-size:13px">No hay alertas activas</div></div>';
-      return;
-    }
-    list.innerHTML = alerts.map(a => {
-      const severityColor = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' }[a.severity] || '#9ca3af';
-      const severityLabel = { critical: 'CRÍTICO', warning: 'AVISO', info: 'INFO' }[a.severity] || a.severity;
-      const platform = a.platform === 'google_ads' ? 'Google Ads' : 'Meta Ads';
-      return `<div style="border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:8px;border-left:3px solid ${severityColor}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:10px;font-weight:700;color:${severityColor};background:${severityColor}18;padding:1px 6px;border-radius:10px">${severityLabel}</span>
-          <span style="font-size:10px;color:var(--muted2)">${platform}</span>
-          <span style="font-size:10px;color:var(--muted2);margin-left:auto">${timeAgo(a.created_at)}</span>
-        </div>
-        ${a.campaign_name ? `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">${a.campaign_name}</div>` : ''}
-        <div style="font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:8px">${a.message}</div>
-        <div style="display:flex;gap:6px">
-          <button onclick="alertGoToAgent('${a.platform}','${a.message.replace(/'/g,'')}')" style="flex:1;font-size:11px;padding:4px 8px;background:var(--blue-lt);color:var(--blue);border:1px solid var(--blue-md);border-radius:6px;cursor:pointer">Ver en agente</button>
-          <button onclick="dismissAlert('${a.id}',this.parentElement.parentElement)" style="font-size:11px;padding:4px 8px;background:var(--bg);color:var(--muted2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Descartar</button>
-        </div>
-      </div>`;
-    }).join('');
-  } catch {
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Error al cargar alertas.</div>';
-  }
 }
 
 function closeAlertsPanel() {
   _alertsOpen = false;
   const panel = document.getElementById('alerts-panel');
   if (panel) panel.style.display = 'none';
-}
-
-async function dismissAlert(id, el) {
-  el?.remove();
-  fetchAuth('/api/admin?action=dismiss-alert', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ id })
-  }).catch(() => {});
-}
-
-function alertGoToAgent(platform, message) {
-  closeAlertsPanel();
-  const agentCtx = platform === 'google_ads' ? 'google-ads' : 'meta-ads';
-  openAgent(agentCtx);
-  setTimeout(() => {
-    const msg = `Tengo una alerta en mis campañas: ${message} ¿Qué me recomiendas hacer?`;
-    document.getElementById('inp').value = msg;
-    sendMsg();
-  }, 600);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -26784,6 +26692,7 @@ function agnScheduleForLead() {
   const CRM_SUB = {
     kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda', paginas: '/marketing/paginas',
     campaigns: '/marketing/campanas', plantillas: '/marketing/plantillas', listas: '/marketing/listas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
+    reservas: '/marketing/reservas',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
@@ -26794,7 +26703,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -37651,10 +37560,12 @@ async function rsvBorrarRecurso(id) {
     if (rv) rv.style.display = v === 'reservas' ? 'flex' : 'none';
     if (v === 'reservas') { rsvHorarioBorrador = null; rsvCargar(); }
   };
-  if (typeof NAV_TABS !== 'undefined' && NAV_TABS.crm && !NAV_TABS.crm.includes('reservas')) {
-    // Detrás de Agenda: una reserva acaba siendo una cita de la agenda.
-    NAV_TABS.crm.push('reservas');
-    NAV_TAB2MOD.reservas = 'crm';
+  if (typeof NAV_TABS !== 'undefined' && NAV_TABS.marketing && !NAV_TABS.marketing.includes('reservas')) {
+    // En MARKETING, no en CRM: la página de reservas es un canal de captación,
+    // como los formularios y las páginas de aterrizaje. Que la cita acabe en la
+    // agenda es la consecuencia, no lo que el usuario viene a montar aquí.
+    NAV_TABS.marketing.push('reservas');
+    NAV_TAB2MOD.reservas = 'marketing';
     NAV_TAB_LABELS.reservas = 'Reservas';
     if (!NAV_ALL_TABS.includes('reservas')) NAV_ALL_TABS.push('reservas');
   }

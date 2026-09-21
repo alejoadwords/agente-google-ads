@@ -706,23 +706,6 @@ CREATE TABLE platform_connections (
 );
 CREATE INDEX idx_connections_user ON platform_connections(user_id);
 
-CREATE TABLE campaign_alerts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  platform TEXT NOT NULL,
-  account_id TEXT NOT NULL,
-  campaign_id TEXT,
-  campaign_name TEXT,
-  alert_type TEXT NOT NULL,
-  severity TEXT NOT NULL CHECK (severity IN ('critical', 'warning', 'info')),
-  message TEXT NOT NULL,
-  metric_value NUMERIC,
-  threshold_value NUMERIC,
-  is_read BOOLEAN DEFAULT FALSE,
-  is_dismissed BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_alerts_user_unread ON campaign_alerts(user_id, is_read, is_dismissed);
 
 */
 
@@ -763,170 +746,18 @@ async function handleDisconnectPlatform(req, res) {
   return res.json({ ok: true });
 }
 
-// ── ALERTAS ───────────────────────────────────────────────
-
-async function handleCheckAlerts(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const { userId } = req.body || {};
-  if (!userId) return res.status(400).json({ error: 'userId requerido' });
-
-  const connections = await supabaseReq(
-    `/platform_connections?user_id=eq.${encodeURIComponent(userId)}&select=platform,access_token,account_id`
-  ).catch(() => []);
-
-  const newAlerts = [];
-  const today = new Date().toISOString().split('T')[0];
-
-  for (const cifrada of connections || []) {
-    const conn = await abrirConexion(cifrada);
-    if (!conn.access_token) continue;
-    try {
-      if (conn.platform === 'google_ads' && conn.account_id) {
-        const gRes = await fetch(
-          `${SUPABASE_URL ? '' : 'https://app.acuarius.app'}/api/google-ads?action=get-campaigns&userId=${encodeURIComponent(userId)}&customerId=${conn.account_id.replace(/-/g, '')}&dateRange=LAST_7_DAYS`,
-          { headers: { 'Content-Type': 'application/json' } }
-        );
-        const gData = await gRes.json().catch(() => ({}));
-        const campaigns = gData.campaigns || [];
-
-        for (const c of campaigns) {
-          if (c.status !== 'ENABLED') continue;
-          // zero_conversions: gasto > $20 y 0 conversiones → critical si > $50
-          if (parseFloat(c.cost) > 20 && parseFloat(c.conversions) === 0) {
-            const exists = await supabaseReq(
-              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.zero_conversions&created_at=gte.${today}T00:00:00Z`
-            );
-            if (!exists?.length) {
-              const isCritical = parseFloat(c.cost) > 50;
-              const alert = {
-                user_id: userId, platform: 'google_ads', account_id: conn.account_id,
-                campaign_id: String(c.id), campaign_name: c.name,
-                alert_type: 'zero_conversions', severity: isCritical ? 'critical' : 'warning',
-                message: `Campaña "${c.name}" tiene $${c.cost} gastado en 7 días y 0 conversiones.`,
-                metric_value: 0, threshold_value: 1,
-              };
-              await supabaseReq('/campaign_alerts', 'POST', alert);
-              newAlerts.push(alert);
-            }
-          }
-          // ctr_drop: CTR < 0.5% → critical si < 0.3% con > 5000 impresiones
-          if (parseFloat(c.ctr) < 0.5 && parseInt(c.impressions) > 1000) {
-            const exists = await supabaseReq(
-              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.ctr_drop&created_at=gte.${today}T00:00:00Z`
-            );
-            if (!exists?.length) {
-              const isCritical = parseFloat(c.ctr) < 0.3 && parseInt(c.impressions) > 5000;
-              const alert = {
-                user_id: userId, platform: 'google_ads', account_id: conn.account_id,
-                campaign_id: String(c.id), campaign_name: c.name,
-                alert_type: 'ctr_drop', severity: isCritical ? 'critical' : 'warning',
-                message: `CTR bajo en "${c.name}": ${c.ctr}% (benchmark mínimo 0.5%).`,
-                metric_value: parseFloat(c.ctr), threshold_value: 0.5,
-              };
-              await supabaseReq('/campaign_alerts', 'POST', alert);
-              newAlerts.push(alert);
-            }
-          }
-        }
-      }
-
-      if (conn.platform === 'meta_ads' && conn.account_id) {
-        const mRes = await fetch(
-          `${SUPABASE_URL ? '' : 'https://app.acuarius.app'}/api/meta-ads?action=get-campaigns&userId=${encodeURIComponent(userId)}&adAccountId=${conn.account_id}&datePreset=last_7d`
-        );
-        const mData = await mRes.json().catch(() => ({}));
-        const campaigns = mData.campaigns || [];
-
-        for (const c of campaigns) {
-          if (c.status !== 'ACTIVE') continue;
-          // high_frequency: > 3.5 → critical si > 5
-          if (parseFloat(c.frequency) > 3.5) {
-            const exists = await supabaseReq(
-              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.high_frequency&created_at=gte.${today}T00:00:00Z`
-            );
-            if (!exists?.length) {
-              const isCritical = parseFloat(c.frequency) > 5;
-              const alert = {
-                user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
-                campaign_id: c.id, campaign_name: c.name,
-                alert_type: 'high_frequency', severity: isCritical ? 'critical' : 'warning',
-                message: `Frecuencia alta en "${c.name}": ${c.frequency} (límite recomendado: 3.5). Audiencia posiblemente saturada.`,
-                metric_value: parseFloat(c.frequency), threshold_value: 3.5,
-              };
-              await supabaseReq('/campaign_alerts', 'POST', alert);
-              newAlerts.push(alert);
-            }
-          }
-          // zero_conversions Meta → critical si gasto > $50
-          if (parseFloat(c.spend) > 20 && c.conversions === 0) {
-            const exists = await supabaseReq(
-              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.zero_conversions&created_at=gte.${today}T00:00:00Z`
-            );
-            if (!exists?.length) {
-              const isCritical = parseFloat(c.spend) > 50;
-              const alert = {
-                user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
-                campaign_id: c.id, campaign_name: c.name,
-                alert_type: 'zero_conversions', severity: isCritical ? 'critical' : 'warning',
-                message: `"${c.name}" tiene $${c.spend} gastado y 0 conversiones en 7 días.`,
-                metric_value: 0, threshold_value: 1,
-              };
-              await supabaseReq('/campaign_alerts', 'POST', alert);
-              newAlerts.push(alert);
-            }
-          }
-          // high_cpa: CPA > 3x el presupuesto diario → critical
-          if (parseFloat(c.cpa) > 0 && c.dailyBudget && parseFloat(c.cpa) > parseFloat(c.dailyBudget) * 3) {
-            const exists = await supabaseReq(
-              `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&campaign_id=eq.${c.id}&alert_type=eq.high_cpa&created_at=gte.${today}T00:00:00Z`
-            );
-            if (!exists?.length) {
-              const alert = {
-                user_id: userId, platform: 'meta_ads', account_id: conn.account_id,
-                campaign_id: c.id, campaign_name: c.name,
-                alert_type: 'high_cpa', severity: 'critical',
-                message: `CPA muy alto en "${c.name}": $${c.cpa} (${Math.round(parseFloat(c.cpa)/parseFloat(c.dailyBudget))}x el presupuesto diario).`,
-                metric_value: parseFloat(c.cpa), threshold_value: parseFloat(c.dailyBudget) * 3,
-              };
-              await supabaseReq('/campaign_alerts', 'POST', alert);
-              newAlerts.push(alert);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.error(`check-alerts error for ${conn.platform}:`, e.message);
-    }
-  }
-
-  return res.json({ alerts: newAlerts, count: newAlerts.length });
-}
-
-async function handleGetAlerts(req, res) {
-  const { userId, platform, unreadOnly } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId requerido' });
-  let query = `/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&is_dismissed=eq.false&order=created_at.desc&limit=50`;
-  if (platform && platform !== 'all') query += `&platform=eq.${encodeURIComponent(platform)}`;
-  if (unreadOnly === 'true') query += `&is_read=eq.false`;
-  const alerts = await supabaseReq(query);
-  return res.json(alerts || []);
-}
-
-async function handleMarkAlertsRead(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const { userId } = req.body || {};
-  if (!userId) return res.status(400).json({ error: 'userId requerido' });
-  await supabaseReq(`/campaign_alerts?user_id=eq.${encodeURIComponent(userId)}&is_read=eq.false`, 'PATCH', { is_read: true });
-  return res.json({ ok: true });
-}
-
-async function handleDismissAlert(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const { id } = req.body || {};
-  if (!id) return res.status(400).json({ error: 'id requerido' });
-  await supabaseReq(`/campaign_alerts?id=eq.${id}`, 'PATCH', { is_dismissed: true });
-  return res.json({ ok: true });
-}
+// ── ALERTAS DE CAMPAÑAS: QUITADAS ─────────────────────────
+//
+// Aquí vivían check-alerts, get-alerts, mark-alerts-read y dismiss-alert.
+// Todas leían y escribían en `campaign_alerts`, una tabla que NUNCA se creó:
+// PostgREST devolvía PGRST205 y el endpoint un 500 en cada carga de la
+// aplicación. Ni una alerta llegó nunca a nadie.
+//
+// No se revivieron creando la tabla: `check-alerts` se disparaba en CADA carga
+// y habría gastado llamadas a la API de Google Ads por visita, sin ninguna
+// puerta de gasto. Lo que de verdad vigila la pauta hoy es Marketing →
+// Plataformas de pauta. Si algún día hacen falta alertas, van en un cron y en
+// esa pantalla.
 
 // ── META TOKEN REFRESH ────────────────────────────────────
 
@@ -1156,7 +987,6 @@ const RUTAS_DE_USUARIO = new Set([
   'save-recommendation', 'get-recommendations', 'update-recommendation',
   'save-snapshot', 'get-snapshots',
   'get-connection', 'disconnect-platform',
-  'check-alerts', 'get-alerts', 'mark-alerts-read', 'dismiss-alert',
   'refresh-meta-token',
   'log-api-action', 'save-connection', 'assign-connection',
   'competitive-search', 'update-preferences', 'save-platform-account',
@@ -1202,10 +1032,6 @@ export default async function handler(req, res) {
     if (action === 'get-connection')        return await handleGetConnection(req, res);
     if (action === 'disconnect-platform')   return await handleDisconnectPlatform(req, res);
     // Alertas
-    if (action === 'check-alerts')          return await handleCheckAlerts(req, res);
-    if (action === 'get-alerts')            return await handleGetAlerts(req, res);
-    if (action === 'mark-alerts-read')      return await handleMarkAlertsRead(req, res);
-    if (action === 'dismiss-alert')         return await handleDismissAlert(req, res);
     // Meta token refresh
     if (action === 'refresh-meta-token')    return await handleRefreshMetaToken(req, res);
     // Sprint 3
