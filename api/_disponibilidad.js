@@ -103,14 +103,7 @@ export function franjasLibres(o) {
 
   // El día de la semana se saca del propio día local, no de `new Date(dia)`:
   // interpretar '2026-09-22' como UTC puede caer en la víspera según la zona.
-  // Se mira a mediodía para no caer en la víspera ni en el día siguiente por
-  // culpa del desfase, que es lo que pasa si se mira a las 00:00.
-  const mediodia = instanteDe(zona, dia, '12:00');
-  const nombre = new Intl.DateTimeFormat('en-US', { timeZone: zona, weekday: 'short' })
-    .format(mediodia).toLowerCase().slice(0, 3);
-  const diaSemana = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(nombre);
-
-  const tramos = tramosDelDia(dia, horario, excepciones, diaSemana);
+  const tramos = tramosDelDia(dia, horario, excepciones, diaDeLaSemana(zona, dia));
   if (!tramos.length) return [];
 
   const noAntesDe = ahora.getTime() + antelacionMinHoras * 3600000;
@@ -147,6 +140,50 @@ export function franjasLibres(o) {
   }
   out.sort((a, b) => a.inicio.localeCompare(b.inicio));
   return out;
+}
+
+/**
+ * Los días de la tira, cada uno con si le queda algo. Es lo que pinta el puntito
+ * bajo la fecha en la página pública.
+ *
+ * Se calcula de una vez para los N días en lugar de uno por uno porque el coste
+ * de verdad es traerse lo ocupado de la base, y eso ya viene entero en `ocupado`.
+ * Recorrer los días en memoria no cuesta nada.
+ *
+ * Solo dice SI HAY o NO HAY, no cuántas: enseñar «quedan 2» invita a calcular
+ * mal el momento en que dejan de ser 2, y aquí la cifra caduca en segundos.
+ *
+ * @param desde  '2026-09-21' — primer día de la tira, en la zona del negocio
+ * @param dias   cuántos pintar
+ * @returns [{ dia, cupo: bool, cerrado: bool }]
+ */
+export function diasConCupo(o) {
+  const { desde, dias = 14, zona = 'America/Bogota' } = o || {};
+  if (!desde) return [];
+  const out = [];
+  // Se avanza desde el MEDIODÍA, no desde la medianoche. Un día que cambia de
+  // hora dura 23 o 25 horas, así que sumar 86.400.000 ms deja el resultado
+  // desplazado esa hora; desde el mediodía el desplazamiento nunca llega a
+  // cambiar de fecha, y además hay zonas donde la medianoche no existe (Cuba
+  // salta de 23:59 a 01:00). La prueba comprueba el resultado, no el método.
+  const base = instanteDe(zona, desde, '12:00').getTime();
+  for (let k = 0; k < dias; k++) {
+    const dia = diaLocal(zona, new Date(base + k * 86400000));
+    const libres = franjasLibres({ ...o, dia });
+    const tramos = tramosDelDia(
+      dia, o.horario, o.excepciones,
+      diaDeLaSemana(zona, dia)
+    );
+    out.push({ dia, cupo: libres.length > 0, cerrado: tramos.length === 0 });
+  }
+  return out;
+}
+
+/** 0 = domingo. Se mira a mediodía para que el desfase no cambie de fecha. */
+export function diaDeLaSemana(zona, dia) {
+  const nombre = new Intl.DateTimeFormat('en-US', { timeZone: zona, weekday: 'short' })
+    .format(instanteDe(zona, dia, '12:00')).toLowerCase().slice(0, 3);
+  return ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(nombre);
 }
 
 /**

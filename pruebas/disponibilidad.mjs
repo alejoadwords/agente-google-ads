@@ -7,7 +7,8 @@
 // inventados, incluidos los casos que en producción no se ven nunca hasta que
 // pasan — el cambio de hora, el festivo, la última franja del día.
 
-import { franjasLibres, sigueLibre, instanteDe, diaLocal, desfaseMin, tramosDelDia } from '../api/_disponibilidad.js';
+import { franjasLibres, sigueLibre, instanteDe, diaLocal, desfaseMin, tramosDelDia,
+         diasConCupo, diaDeLaSemana } from '../api/_disponibilidad.js';
 
 let fallos = 0;
 const chk = (n, ok, extra) => {
@@ -171,6 +172,46 @@ console.log('\nEntradas raras no revientan\n');
   chk('dos tramos que se pisan no duplican horas',
       new Set(horas(franjasLibres(base({ dia: '2026-09-22', horario: { 2: [['09:00', '11:00'], ['10:00', '12:00']] } })))).size ===
       horas(franjasLibres(base({ dia: '2026-09-22', horario: { 2: [['09:00', '11:00'], ['10:00', '12:00']] } }))).length);
+}
+
+console.log('\nEl puntito de cupo en la tira de días\n');
+{
+  const tira = diasConCupo(base({ desde: '2026-09-21', dias: 7 }));   // lunes
+  chk('devuelve tantos días como se piden', tira.length === 7, String(tira.length));
+  chk('y en orden, sin saltarse ninguno',
+      tira.map(d => d.dia).join() === '2026-09-21,2026-09-22,2026-09-23,2026-09-24,2026-09-25,2026-09-26,2026-09-27');
+  chk('el domingo sale cerrado y sin cupo',
+      tira[6].cerrado === true && tira[6].cupo === false);
+  chk('un día laborable normal tiene cupo',
+      tira[1].cupo === true && tira[1].cerrado === false);
+
+  // Lleno NO es lo mismo que cerrado: el negocio abre, pero no queda hueco.
+  // Si se pintaran igual, el cliente creería que ese día no atienden.
+  const todoElDia = [
+    { ini: instanteDe(BOG, '2026-09-22', '09:00').getTime(), fin: instanteDe(BOG, '2026-09-22', '13:00').getTime() },
+    { ini: instanteDe(BOG, '2026-09-22', '14:00').getTime(), fin: instanteDe(BOG, '2026-09-22', '18:00').getTime() },
+  ];
+  const lleno = diasConCupo(base({ desde: '2026-09-22', dias: 1, ocupado: todoElDia }));
+  chk('un día lleno no tiene cupo pero NO está cerrado',
+      lleno[0].cupo === false && lleno[0].cerrado === false);
+
+  chk('una excepción vacía sí lo marca cerrado',
+      diasConCupo(base({ desde: '2026-09-22', dias: 1, excepciones: { '2026-09-22': [] } }))[0].cerrado === true);
+
+  chk('sin día de partida no revienta', diasConCupo(base({ desde: null })).length === 0);
+
+  // Cruzando un cambio de hora la tira tiene que seguir siendo días
+  // consecutivos. Es la propiedad que importa; cómo se recorran da igual.
+  // Cuba es el caso incómodo: allí la medianoche del 8 de marzo no existe.
+  const cruce = diasConCupo({ zona: 'America/Havana', horario: HORARIO, minutos: 30, paso: 30,
+                              ahora: LEJOS, desde: '2026-03-06', dias: 4 });
+  chk('cruzando el cambio de hora no repite ni se salta un día',
+      new Set(cruce.map(d => d.dia)).size === 4 &&
+      cruce.map(d => d.dia).join() === '2026-03-06,2026-03-07,2026-03-08,2026-03-09',
+      cruce.map(d => d.dia).join());
+
+  chk('el lunes es 1 y el domingo 0',
+      diaDeLaSemana(BOG, '2026-09-21') === 1 && diaDeLaSemana(BOG, '2026-09-27') === 0);
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservar — boceto</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Los mismos tokens de public/index.html. El acento lo pone el negocio. */
+  --blue:#1E2BCC;--blue-h:#1520B0;--blue-lt:#EEF0FD;--blue-md:#C5CAF8;
+  --text:#0D0F1C;--text-2:#5A607A;--text-3:#9DA3BE;
+  --border:#E4E6F0;--border2:#F0F1F8;
+  --bg:#FFFFFF;--bg-subtle:#F7F8FC;--bg-muted:#F0F1F8;
+  --success:#059669;--success-bg:#E7F7F0;--danger:#DC2626;--danger-bg:#FDECEC;
+  --aqua:#00B8CE;--agua-grad:linear-gradient(135deg,var(--blue),var(--aqua));
+  --font:'Outfit',sans-serif;--r:10px;--rlg:14px;--rxl:18px;
+  --ease:cubic-bezier(0.16,1,0.3,1);
+  --shadow-sm:0 1px 3px rgba(13,15,28,.06),0 1px 2px rgba(13,15,28,.04);
+  --shadow-md:0 4px 12px rgba(13,15,28,.08),0 1px 3px rgba(13,15,28,.05);
+  --shadow-lg:0 12px 40px -8px rgba(13,15,28,.16),0 4px 12px rgba(13,15,28,.06);
+  --acento:#1E2BCC;               /* lo cambia cada negocio */
+  --acento-lt:#EEF0FD;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg-subtle);color:var(--text);
+  -webkit-font-smoothing:antialiased;padding:0 0 120px}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea{font-family:inherit}
+
+/* ── Marco ────────────────────────────────────────────────────────── */
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+
+/* Barra de progreso: 4 pasos, siempre visible arriba */
+.prog{position:sticky;top:0;z-index:20;background:rgba(247,248,252,.92);
+  backdrop-filter:blur(12px);padding:12px 0 10px;border-bottom:1px solid var(--border2)}
+.prog-in{max-width:560px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:8px}
+.prog-back{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  color:var(--text-2);flex:0 0 auto;transition:background var(--dur,.15s)}
+.prog-back:hover{background:var(--bg-muted)}
+.prog-back[hidden]{display:none}
+.prog-bars{flex:1;display:flex;gap:5px}
+.prog-bars i{flex:1;height:4px;border-radius:99px;background:var(--border);transition:background .3s var(--ease)}
+.prog-bars i.on{background:var(--acento)}
+.prog-paso{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.03em;
+  white-space:nowrap;flex:0 0 auto}
+
+/* ── Cabecera del negocio ─────────────────────────────────────────── */
+.neg{padding:22px 0 18px;display:flex;align-items:center;gap:14px}
+.neg-logo{width:52px;height:52px;border-radius:15px;background:var(--agua-grad);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;
+  flex:0 0 auto;box-shadow:var(--shadow-md)}
+.neg h1{font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.neg .sub{font-size:13px;color:var(--text-2);margin-top:3px;display:flex;
+  align-items:center;gap:5px;flex-wrap:wrap}
+.neg .sub svg{opacity:.6}
+
+h2.tit{font-size:15px;font-weight:700;letter-spacing:-.01em;margin:0 0 3px}
+p.ayuda{font-size:13px;color:var(--text-2);margin:0 0 14px}
+
+/* ── Paso 1 · servicios ───────────────────────────────────────────── */
+.serv{display:flex;flex-direction:column;gap:9px}
+.serv button{width:100%;text-align:left;background:var(--bg);border:1.5px solid var(--border);
+  border-radius:var(--rlg);padding:14px 15px;display:flex;align-items:center;gap:13px;
+  transition:border-color .18s var(--ease),transform .18s var(--ease),box-shadow .18s var(--ease)}
+.serv button:hover{border-color:var(--acento);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.serv .ico{width:40px;height:40px;border-radius:12px;background:var(--acento-lt);
+  display:grid;place-items:center;color:var(--acento);flex:0 0 auto}
+.serv .nom{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.serv .det{font-size:12.5px;color:var(--text-2);margin-top:2px}
+.serv .precio{margin-left:auto;text-align:right;flex:0 0 auto}
+.serv .precio b{font-size:14px;font-weight:700;display:block}
+.serv .precio span{font-size:11px;color:var(--text-3)}
+
+/* ── Paso 2 · profesional ─────────────────────────────────────────── */
+.pros{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.pros button{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rlg);
+  padding:16px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;
+  transition:border-color .18s var(--ease),transform .18s var(--ease)}
+.pros button:hover{border-color:var(--acento);transform:translateY(-1px)}
+.pros button.sel{border-color:var(--acento);background:var(--acento-lt)}
+.pros .av{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+  font-weight:700;font-size:15px;color:#fff;background:var(--agua-grad)}
+.pros .av.cualq{background:var(--bg-muted);color:var(--text-2)}
+.pros .nm{font-size:13px;font-weight:600}
+.pros .rol{font-size:11.5px;color:var(--text-3)}
+
+/* ── Paso 3 · día y hora ──────────────────────────────────────────── */
+.dias{display:flex;gap:7px;overflow-x:auto;padding:2px 16px 12px;margin:0 -16px;
+  scrollbar-width:none}
+.dias::-webkit-scrollbar{display:none}
+.dias button{flex:0 0 auto;width:54px;background:var(--bg);border:1.5px solid var(--border);
+  border-radius:var(--r);padding:9px 0 8px;text-align:center;transition:all .18s var(--ease)}
+.dias button .dow{font-size:10.5px;font-weight:700;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.05em}
+.dias button .num{font-size:17px;font-weight:700;margin-top:2px;letter-spacing:-.02em}
+.dias button .pt{width:4px;height:4px;border-radius:50%;background:var(--acento);
+  margin:4px auto 0}
+.dias button.sel{background:var(--acento);border-color:var(--acento);color:#fff}
+.dias button.sel .dow{color:rgba(255,255,255,.75)}
+.dias button.sel .pt{background:rgba(255,255,255,.9)}
+.dias button.cerrado{opacity:.38;cursor:default}
+.dias button.cerrado .pt{background:transparent}
+
+.franja-tit{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;
+  letter-spacing:.06em;margin:16px 0 8px;display:flex;align-items:center;gap:7px}
+.franja-tit::after{content:'';flex:1;height:1px;background:var(--border2)}
+.horas{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
+.horas button{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);
+  padding:11px 0;font-size:14px;font-weight:600;transition:all .15s var(--ease)}
+.horas button:hover{border-color:var(--acento);color:var(--acento)}
+.horas button.sel{background:var(--acento);border-color:var(--acento);color:#fff}
+
+/* Vacío: nunca dejar una pantalla muda */
+.vacio{text-align:center;padding:34px 20px;background:var(--bg);border:1px dashed var(--border);
+  border-radius:var(--rlg);margin-top:14px}
+.vacio .em{width:44px;height:44px;border-radius:50%;background:var(--bg-muted);
+  display:grid;place-items:center;margin:0 auto 11px;color:var(--text-3)}
+.vacio p{font-size:13.5px;color:var(--text-2);line-height:1.5}
+.vacio button.link{color:var(--acento);font-weight:700;font-size:13.5px;margin-top:10px}
+
+/* ── Paso 4 · datos ───────────────────────────────────────────────── */
+.resumen{background:var(--bg);border:1.5px solid var(--acento);border-radius:var(--rlg);
+  padding:14px 15px;margin-bottom:18px}
+.resumen .fila{display:flex;align-items:center;gap:10px;font-size:13.5px;padding:5px 0}
+.resumen .fila svg{color:var(--acento);flex:0 0 auto}
+.resumen .fila b{font-weight:600}
+.resumen .cambiar{margin-left:auto;font-size:12px;font-weight:700;color:var(--acento)}
+
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--text-2);margin:13px 0 5px}
+label .req{color:var(--danger)}
+input,textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);
+  border-radius:var(--r);font-size:15px;background:var(--bg);color:inherit;outline:none;
+  transition:border-color .15s}
+input:focus,textarea:focus{border-color:var(--acento)}
+textarea{min-height:76px;resize:vertical;font-size:14px}
+.btn-pri{width:100%;margin-top:20px;padding:14px;border-radius:12px;background:var(--acento);
+  color:#fff;font-size:15px;font-weight:700;transition:filter .15s}
+.btn-pri:hover{filter:brightness(1.08)}
+.legal{font-size:11.5px;color:var(--text-3);text-align:center;margin-top:11px;line-height:1.5}
+
+/* ── Confirmación ─────────────────────────────────────────────────── */
+.ok{text-align:center;padding:30px 4px 10px}
+.ok .tick{width:64px;height:64px;border-radius:50%;background:var(--success-bg);
+  color:var(--success);display:grid;place-items:center;margin:0 auto 16px;
+  animation:pop .5s var(--ease)}
+@keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+.ok h2{font-size:21px;font-weight:700;letter-spacing:-.02em}
+.ok .cuando{font-size:15px;color:var(--text-2);margin-top:6px;line-height:1.5}
+.tarjeta{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);
+  padding:16px;margin-top:20px;text-align:left;box-shadow:var(--shadow-sm)}
+.tarjeta .fila{display:flex;gap:11px;padding:7px 0;font-size:13.5px;align-items:flex-start}
+.tarjeta .fila svg{color:var(--text-3);flex:0 0 auto;margin-top:1px}
+.avisos{display:flex;gap:8px;margin-top:14px;font-size:12.5px;color:var(--text-2);
+  background:var(--bg-subtle);border-radius:var(--r);padding:11px 13px;line-height:1.5}
+.acciones{display:flex;gap:9px;margin-top:16px}
+.acciones button{flex:1;padding:12px;border-radius:var(--r);font-size:13.5px;font-weight:700;
+  border:1.5px solid var(--border);background:var(--bg);transition:border-color .15s}
+.acciones button:hover{border-color:var(--acento);color:var(--acento)}
+.acciones .cal{background:var(--acento);border-color:var(--acento);color:#fff}
+.acciones .cal:hover{color:#fff;filter:brightness(1.08)}
+
+.firma{text-align:center;margin-top:26px;font-size:11.5px;color:var(--text-3)}
+.firma a{color:var(--text-3);font-weight:700;text-decoration:none}
+
+/* ── Selector de acento, solo del boceto ──────────────────────────── */
+.demo{position:fixed;bottom:0;left:0;right:0;background:var(--text);color:#fff;
+  padding:9px 16px;display:flex;align-items:center;gap:10px;justify-content:center;
+  font-size:11.5px;z-index:50;flex-wrap:wrap}
+.demo span{opacity:.6;letter-spacing:.03em}
+.demo i{width:20px;height:20px;border-radius:50%;cursor:pointer;display:inline-block;
+  border:2px solid transparent}
+.demo i.on{border-color:#fff}
+.paso{display:none}.paso.on{display:block;animation:entra .3s var(--ease)}
+@keyframes entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="prog">
+  <div class="prog-in">
+    <button class="prog-back" id="atras" hidden aria-label="Atrás">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="prog-bars" id="barras"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="prog-paso" id="rotulo">Paso 1 de 4</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="neg" id="cab">
+    <div class="neg-logo">BA</div>
+    <div>
+      <h1>Barbería Aurora</h1>
+      <div class="sub">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Cra. 43A #7-50, Medellín · Reservas en línea
+      </div>
+    </div>
+  </div>
+
+  <!-- 1 · servicio -->
+  <section class="paso on" id="p1">
+    <h2 class="tit">¿Qué te hacemos?</h2>
+    <p class="ayuda">Elige el servicio para ver las horas libres.</p>
+    <div class="serv" id="servicios"></div>
+  </section>
+
+  <!-- 2 · profesional -->
+  <section class="paso" id="p2">
+    <h2 class="tit">¿Con quién?</h2>
+    <p class="ayuda">Si te da igual, te asignamos al primero disponible.</p>
+    <div class="pros" id="profesionales"></div>
+  </section>
+
+  <!-- 3 · día y hora -->
+  <section class="paso" id="p3">
+    <h2 class="tit">¿Cuándo te viene bien?</h2>
+    <p class="ayuda" id="ayuda-hora">Horas en tu hora local (Colombia).</p>
+    <div class="dias" id="dias"></div>
+    <div id="horarios"></div>
+  </section>
+
+  <!-- 4 · datos -->
+  <section class="paso" id="p4">
+    <h2 class="tit">Últimos datos</h2>
+    <p class="ayuda">Te mandamos la confirmación y el recordatorio.</p>
+    <div class="resumen" id="resumen"></div>
+    <label>Nombre <span class="req">*</span></label>
+    <input id="f-nom" placeholder="Tu nombre y apellido">
+    <label>WhatsApp <span class="req">*</span></label>
+    <input id="f-tel" placeholder="+57 300 000 0000" inputmode="tel">
+    <label>Correo</label>
+    <input id="f-mail" placeholder="tucorreo@ejemplo.com" inputmode="email">
+    <label>¿Algo que debamos saber?</label>
+    <textarea id="f-nota" placeholder="Opcional"></textarea>
+    <button class="btn-pri" onclick="confirmar()">Confirmar reserva</button>
+    <div class="legal">Al reservar aceptas recibir la confirmación y el recordatorio por WhatsApp y correo.</div>
+  </section>
+
+  <!-- 5 · listo -->
+  <section class="paso" id="p5">
+    <div class="ok">
+      <div class="tick">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <h2>¡Listo, Camila!</h2>
+      <div class="cuando" id="ok-cuando"></div>
+    </div>
+    <div class="tarjeta">
+      <div class="fila">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div id="ok-quien"></div>
+      </div>
+      <div class="fila">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <div>Cra. 43A #7-50, Medellín<br><span style="color:var(--text-3);font-size:12.5px">Segundo piso, local 204</span></div>
+      </div>
+    </div>
+    <div class="avisos">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div>Te avisamos un día antes y dos horas antes. Si no puedes venir, cancela desde aquí para liberarle el turno a alguien más.</div>
+    </div>
+    <div class="acciones">
+      <button class="cal">Agregar a mi calendario</button>
+      <button>Cambiar hora</button>
+      <button>Cancelar</button>
+    </div>
+    <div class="firma">Con la tecnología de <a href="#">Acuarius</a></div>
+  </section>
+
+</div>
+
+<div class="demo">
+  <span>BOCETO · acento del negocio:</span>
+  <i style="background:#1E2BCC" class="on" onclick="acento(this,'#1E2BCC','#EEF0FD')"></i>
+  <i style="background:#0F766E" onclick="acento(this,'#0F766E','#E6F5F3')"></i>
+  <i style="background:#B45309" onclick="acento(this,'#B45309','#FDF3E4')"></i>
+  <i style="background:#BE185D" onclick="acento(this,'#BE185D','#FCE9F1')"></i>
+  <i style="background:#4338CA" onclick="acento(this,'#4338CA','#EEEDFC')"></i>
+  <span style="margin-left:8px;cursor:pointer;text-decoration:underline" onclick="ir(1)">reiniciar</span>
+</div>
+
+<script>
+/* Datos de mentira, pero con la forma exacta de las tablas reales. */
+var SERVICIOS = [
+  { id:'s1', nom:'Corte clásico',        min:45, precio:'$45.000', desc:'Lavado, corte y peinado' },
+  { id:'s2', nom:'Corte + barba',        min:60, precio:'$65.000', desc:'Lo de arriba más perfilado de barba' },
+  { id:'s3', nom:'Arreglo de barba',     min:30, precio:'$30.000', desc:'Perfilado y toalla caliente' },
+  { id:'s4', nom:'Color',                min:90, precio:'$120.000', desc:'Requiere prueba de mecha previa' }
+];
+var PROS = [
+  { id:null, nom:'Quien esté libre', rol:'El primero disponible', ini:'★' },
+  { id:'r1', nom:'Andrés',  rol:'Barbero',        ini:'A' },
+  { id:'r2', nom:'Valeria', rol:'Barbera · color', ini:'V' },
+  { id:'r3', nom:'Jhon',    rol:'Barbero',        ini:'J' }
+];
+var DOW = ['dom','lun','mar','mié','jue','vie','sáb'];
+var MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+var sel = { serv:null, pro:null, dia:null, hora:null };
+var $ = function (id) { return document.getElementById(id); };
+
+/* ── Paso 1 ── */
+$('servicios').innerHTML = SERVICIOS.map(function (s, i) {
+  return '<button onclick="elegirServ(' + i + ')">' +
+    '<div class="ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg></div>' +
+    '<div><div class="nom">' + s.nom + '</div><div class="det">' + s.desc + '</div></div>' +
+    '<div class="precio"><b>' + s.precio + '</b><span>' + s.min + ' min</span></div></button>';
+}).join('');
+
+function elegirServ(i) { sel.serv = SERVICIOS[i]; pintarPros(); ir(2); }
+
+/* ── Paso 2 ── */
+function pintarPros() {
+  $('profesionales').innerHTML = PROS.map(function (p, i) {
+    return '<button onclick="elegirPro(' + i + ')">' +
+      '<div class="av' + (p.id ? '' : ' cualq') + '">' + p.ini + '</div>' +
+      '<div class="nm">' + p.nom + '</div><div class="rol">' + p.rol + '</div></button>';
+  }).join('');
+}
+function elegirPro(i) { sel.pro = PROS[i]; pintarDias(); ir(3); }
+
+/* ── Paso 3 ── */
+/* Reglas del boceto: domingo cerrado, sábado medio día, y el día 3 de la tira
+   sin cupo — para ver cómo se comporta el vacío, que es el caso feo. */
+function pintarDias() {
+  var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  var html = '';
+  for (var k = 0; k < 14; k++) {
+    var d = new Date(hoy.getTime() + k * 86400000);
+    var cerrado = d.getDay() === 0;
+    html += '<button class="' + (cerrado ? 'cerrado' : '') + '"' +
+      (cerrado ? '' : ' onclick="elegirDia(' + k + ',this)"') + '>' +
+      '<div class="dow">' + (k === 0 ? 'hoy' : DOW[d.getDay()]) + '</div>' +
+      '<div class="num">' + d.getDate() + '</div>' +
+      '<div class="pt"></div></button>';
+  }
+  $('dias').innerHTML = html;
+  $('horarios').innerHTML = '<div class="vacio"><div class="em">' +
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>' +
+    '</div><p>Elige un día para ver las horas libres.</p></div>';
+}
+
+function elegirDia(k, el) {
+  var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  sel.dia = new Date(hoy.getTime() + k * 86400000);
+  Array.prototype.forEach.call($('dias').children, function (b) { b.classList.remove('sel'); });
+  el.classList.add('sel');
+  sel.hora = null;
+  pintarHoras(k);
+}
+
+function pintarHoras(k) {
+  var d = sel.dia, min = sel.serv.min;
+  var tramos = d.getDay() === 6 ? [[9, 13]] : [[9, 13], [14, 18]];
+  var libres = [];
+  if (k !== 3) {                                   /* el día 3 va lleno, a propósito */
+    tramos.forEach(function (t) {
+      for (var m = t[0] * 60; m + min <= t[1] * 60; m += 30) {
+        if (k === 0 && m < new Date().getHours() * 60 + 90) continue;   /* nada del pasado */
+        if (k === 1 && (m === 600 || m === 630 || m === 900)) continue; /* ya cogidas */
+        libres.push(m);
+      }
+    });
+  }
+  if (!libres.length) {
+    $('horarios').innerHTML = '<div class="vacio"><div class="em">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/></svg>' +
+      '</div><p><b>No queda nada el ' + DOW[d.getDay()] + ' ' + d.getDate() + '.</b><br>' +
+      'Prueba otro día de la tira.</p>' +
+      '<button class="link">Avísame si se libera un cupo</button></div>';
+    return;
+  }
+  var man = libres.filter(function (m) { return m < 720; });
+  var tar = libres.filter(function (m) { return m >= 720; });
+  var bloque = function (rot, arr) {
+    if (!arr.length) return '';
+    return '<div class="franja-tit">' + rot + '</div><div class="horas">' + arr.map(function (m) {
+      return '<button onclick="elegirHora(' + m + ',this)">' + hhmm(m) + '</button>';
+    }).join('') + '</div>';
+  };
+  $('horarios').innerHTML = bloque('Mañana', man) + bloque('Tarde', tar);
+}
+
+function hhmm(m) {
+  var h = Math.floor(m / 60), mm = m % 60;
+  var ap = h >= 12 ? 'p. m.' : 'a. m.', h12 = h % 12 === 0 ? 12 : h % 12;
+  return h12 + ':' + String(mm).padStart(2, '0') + ' ' + ap;
+}
+
+function elegirHora(m, el) {
+  sel.hora = m;
+  Array.prototype.forEach.call(document.querySelectorAll('.horas button'), function (b) { b.classList.remove('sel'); });
+  el.classList.add('sel');
+  setTimeout(function () { pintarResumen(); ir(4); }, 180);
+}
+
+/* ── Paso 4 ── */
+function cuando() {
+  var d = sel.dia;
+  return DOW[d.getDay()] + ' ' + d.getDate() + ' de ' + MES[d.getMonth()] +
+    ', ' + hhmm(sel.hora);
+}
+function pintarResumen() {
+  var ic = function (p) { return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' + p + '</svg>'; };
+  $('resumen').innerHTML =
+    '<div class="fila">' + ic('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>') +
+      '<b>' + sel.serv.nom + '</b> · ' + sel.serv.min + ' min<button class="cambiar" onclick="ir(1)">Cambiar</button></div>' +
+    '<div class="fila">' + ic('<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/>') +
+      '<b>' + cuando() + '</b><button class="cambiar" onclick="ir(3)">Cambiar</button></div>' +
+    '<div class="fila">' + ic('<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>') +
+      (sel.pro.id ? 'Con <b>' + sel.pro.nom + '</b>' : 'Con quien esté libre') +
+      '<button class="cambiar" onclick="ir(2)">Cambiar</button></div>';
+}
+
+function confirmar() {
+  $('ok-cuando').innerHTML = '<b>' + cuando() + '</b><br>' + sel.serv.nom + ' · ' + sel.serv.min + ' min';
+  $('ok-quien').innerHTML = sel.pro.id ? 'Te atiende <b>' + sel.pro.nom + '</b>' : 'Te atiende Andrés';
+  ir(5);
+}
+
+/* ── Navegación ── */
+function ir(n) {
+  for (var i = 1; i <= 5; i++) $('p' + i).classList.toggle('on', i === n);
+  Array.prototype.forEach.call($('barras').children, function (b, i) {
+    b.classList.toggle('on', i < Math.min(n, 4));
+  });
+  $('rotulo').textContent = n === 5 ? 'Reserva confirmada' : 'Paso ' + n + ' de 4';
+  $('atras').hidden = n === 1 || n === 5;
+  $('atras').onclick = function () { ir(n - 1); };
+  $('cab').style.display = n === 5 ? 'none' : '';
+  window.scrollTo(0, 0);
+}
+
+function acento(el, c, lt) {
+  document.documentElement.style.setProperty('--acento', c);
+  document.documentElement.style.setProperty('--acento-lt', lt);
+  Array.prototype.forEach.call(el.parentNode.querySelectorAll('i'), function (i) { i.classList.remove('on'); });
+  el.classList.add('on');
+}
+</script>
+</body>
+</html>

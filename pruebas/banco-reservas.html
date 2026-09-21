@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Reservas</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Banco de pruebas de la pantalla de Reservas.
+
+  No es una maqueta: carga el CSS de public/index.html y las FUNCIONES de
+  public/app.js tal cual están, y solo sustituye el servidor por uno de mentira.
+  Si mañana alguien renombra un token o una clase, esto se ve roto aquí antes
+  que en producción.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);color:var(--text,#0D0F1C)}
+  #crm-reservas-view{display:flex;flex-direction:column;padding:18px 22px;max-width:1180px;margin:0 auto}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:var(--text,#111);color:#fff;padding:8px 14px;
+    display:flex;gap:12px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+  .banco button:hover{background:rgba(255,255,255,.26)}
+  .banco span{opacity:.55}
+  #toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--text,#111);color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13px;z-index:9999;display:none}
+  #toast.err{background:var(--danger,#DC2626)}
+</style>
+</head>
+<body>
+<div id="crm-reservas-view"></div>
+<div id="toast"></div>
+<div class="banco">
+  <span>BANCO · estado:</span>
+  <button onclick="escenario('lleno')">configurado</button>
+  <button onclick="escenario('vacio')">recién estrenado</button>
+  <button onclick="escenario('sinquien')">servicios sin nadie</button>
+  <button onclick="escenario('miembro')">como comercial</button>
+  <button onclick="escenario('error')">el servidor falla</button>
+  <span>·</span>
+  <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'400px'">móvil</button>
+</div>
+
+<script>
+// ── El servidor de mentira ──────────────────────────────────────────────────
+// Guarda en memoria lo mismo que guardaría Supabase, para que editar, borrar y
+// guardar se comporten como de verdad.
+let BD = {};
+let PUEDE = true;
+let FALLA = false;
+
+function escenario(cual) {
+  FALLA = cual === 'error';
+  PUEDE = cual !== 'miembro';
+  const servicios = [
+    { id: 's1', nombre: 'Corte clásico', descripcion: 'Lavado, corte y peinado', minutos: 45, precio: 45000, color: '#1E2BCC', activo: true, recursos: ['r1', 'r3'] },
+    { id: 's2', nombre: 'Corte + barba', descripcion: 'Lo de arriba más perfilado de barba', minutos: 60, precio: 65000, color: '#0F766E', activo: true, recursos: ['r1'] },
+    { id: 's3', nombre: 'Color', descripcion: 'Requiere prueba de mecha previa', minutos: 90, precio: 120000, color: '#BE185D', activo: false, recursos: ['r2'] },
+  ];
+  BD = {
+    config: {
+      token: cual === 'vacio' ? 'a1b2c3d4e5f60718293a4b5c6d7e8f90' : 'f0e1d2c3b4a5968778695a4b3c2d1e0f',
+      nombre_negocio: cual === 'vacio' ? '' : 'Barbería Aurora',
+      direccion: cual === 'vacio' ? '' : 'Cra. 43A #7-50, Medellín',
+      detalle_direccion: cual === 'vacio' ? '' : 'Segundo piso, local 204',
+      zona_horaria: 'America/Bogota',
+      horario: cual === 'vacio' ? {} : { 1: [['09:00', '13:00'], ['14:00', '18:00']], 2: [['09:00', '13:00'], ['14:00', '18:00']], 3: [['09:00', '13:00'], ['14:00', '18:00']], 4: [['09:00', '13:00'], ['14:00', '18:00']], 5: [['09:00', '13:00'], ['14:00', '18:00']], 6: [['09:00', '13:00']] },
+      excepciones: cual === 'lleno' ? { '2026-12-25': [], '2026-12-24': [['09:00', '13:00']] } : {},
+      margen_min: 15, antelacion_min_horas: 2, antelacion_max_dias: 60, paso_min: 30,
+      acento: '#1E2BCC', mensaje_confirmacion: '', activo: cual === 'lleno' || cual === 'sinquien',
+    },
+    servicios: cual === 'vacio' ? [] : servicios.map(s => cual === 'sinquien' ? { ...s, recursos: [] } : s),
+    recursos: (cual === 'vacio' || cual === 'sinquien') ? [] : [
+      { id: 'r1', nombre: 'Andrés', member_user_id: 'user_1', activo: true, horario: null },
+      { id: 'r2', nombre: 'Valeria', member_user_id: null, activo: true, horario: { 2: [['10:00', '16:00']] } },
+      { id: 'r3', nombre: 'Jhon', member_user_id: null, activo: false, horario: null },
+    ],
+  };
+  if (typeof rsvDatos !== 'undefined') { rsvDatos = null; rsvHorarioBorrador = null; rsvCargar(true); }
+}
+escenario('lleno');
+
+function respuesta(ok, cuerpo) {
+  return Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(cuerpo) });
+}
+
+// ── Las piezas que se sustituyen, y solo esas ───────────────────────────────
+const STUBS = `
+var crmSetView = function (v) {};
+var NAV_TABS = { crm: [] }, NAV_TAB2MOD = {}, NAV_TAB_LABELS = {}, NAV_ALL_TABS = [];
+var crmTeam = [
+  { status: 'active', member_user_id: 'user_1', member_name: 'Andrés Ríos' },
+  { status: 'active', member_user_id: 'user_2', member_name: 'Valeria Gómez' },
+];
+function crmAmbitoCliente() { return ''; }
+function showToast(m, t) {
+  var e = document.getElementById('toast');
+  e.textContent = m; e.className = t === 'error' ? 'err' : ''; e.style.display = 'block';
+  clearTimeout(window._tt); window._tt = setTimeout(function () { e.style.display = 'none'; }, 2600);
+}
+async function fetchAuth(url, opts) {
+  opts = opts || {};
+  await new Promise(function (r) { setTimeout(r, 120); });
+  if (FALLA) return respuesta(false, { error: 'No se pudo contactar con la base de datos (HTTP 503)' });
+  var m = opts.method || 'GET';
+  var q = new URLSearchParams(url.split('?')[1] || '');
+  var cuerpo = opts.body ? JSON.parse(opts.body) : {};
+  var que = q.get('que') || cuerpo.que || '';
+
+  if (m === 'GET') return respuesta(true, JSON.parse(JSON.stringify(Object.assign({}, BD, { puede_configurar: PUEDE }))));
+  if (!PUEDE) return respuesta(false, { error: 'Solo el administrador de la cuenta puede configurar las reservas.' });
+
+  if (que === 'config') { Object.assign(BD.config, cuerpo); delete BD.config.que; return respuesta(true, { config: BD.config }); }
+  if (que === 'servicio') {
+    if (m === 'DELETE') { BD.servicios = BD.servicios.filter(function (s) { return s.id !== q.get('id'); }); return respuesta(true, { ok: true }); }
+    if (m === 'POST') { var n = Object.assign({ id: 's' + Date.now() }, cuerpo); delete n.que; BD.servicios.push(n); return respuesta(true, { servicio: n }); }
+    var s = BD.servicios.find(function (x) { return x.id === cuerpo.id; });
+    Object.assign(s, cuerpo); delete s.que; return respuesta(true, { servicio: s });
+  }
+  if (que === 'recurso') {
+    if (m === 'DELETE') { BD.recursos = BD.recursos.filter(function (r) { return r.id !== q.get('id'); }); return respuesta(true, { ok: true }); }
+    if (m === 'POST') { var nr = Object.assign({ id: 'r' + Date.now() }, cuerpo); delete nr.que; BD.recursos.push(nr); return respuesta(true, { recurso: nr }); }
+    var r0 = BD.recursos.find(function (x) { return x.id === cuerpo.id; });
+    Object.assign(r0, cuerpo); delete r0.que; return respuesta(true, { recurso: r0 });
+  }
+  return respuesta(false, { error: 'no contemplado en el banco: ' + m + ' ' + que });
+}
+`;
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+
+  // El CSS de verdad, entero.
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    const b = hasta ? js.indexOf(hasta, a) : js.length;
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    return js.slice(a, b > a ? b : js.length);
+  };
+
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('const ICN_PATHS = {', '\n}\n') + '\n}\n',
+    trozo('function emptyAgua(', '// ── AUTOMATIZACIONES DEL CRM'),
+    STUBS,
+    trozo('// ══ RESERVAS ═'),
+  ].join('\n');
+
+  // Se mete como <script> de verdad y no con eval: así los `let` de arriba del
+  // bloque quedan en el ámbito global, que es justo lo que ven los onclick del
+  // HTML que genera el propio módulo. Con eval no los verían y todo lo clicable
+  // fallaría aquí sin fallar en producción.
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+
+  crmSetView('reservas');
+  document.getElementById('crm-reservas-view').style.display = 'flex';
+})().catch(e => {
+  document.getElementById('crm-reservas-view').innerHTML =
+    '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>';
+});
+</script>
+</body>
+</html>

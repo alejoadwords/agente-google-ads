@@ -36740,3 +36740,699 @@ async function pautaDetalle(clave) {
     if (!NAV_ALL_TABS.includes('pauta')) NAV_ALL_TABS.push('pauta');
   }
 })();
+
+
+// ══ RESERVAS ═════════════════════════════════════════════════════════════════
+// La trastienda: qué se ofrece, quién lo presta y cuándo se atiende. Lo que el
+// público ve vive en /reservar/<token> y no pasa por aquí.
+//
+// Una reserva NO es una entidad nueva: es una fila de `activities`, la misma de
+// la agenda. Por eso esta pantalla configura el catálogo y las reglas, y las
+// citas se ven donde ya se veían.
+let rsvDatos = null;          // { config, servicios, recursos, puede_configurar }
+let rsvVista = 'servicios';
+let rsvCargando = false;
+let rsvError = '';
+let rsvBorrador = null;       // el servicio o recurso que se está editando
+
+const RSV_DIAS = [
+  { n: 1, corto: 'Lun', largo: 'Lunes' }, { n: 2, corto: 'Mar', largo: 'Martes' },
+  { n: 3, corto: 'Mié', largo: 'Miércoles' }, { n: 4, corto: 'Jue', largo: 'Jueves' },
+  { n: 5, corto: 'Vie', largo: 'Viernes' }, { n: 6, corto: 'Sáb', largo: 'Sábado' },
+  { n: 0, corto: 'Dom', largo: 'Domingo' },
+];
+// Las que de verdad se usan en LatAm. La lista completa de `Intl` son 400 y
+// buscar la propia entre ellas es peor que no tener selector.
+const RSV_ZONAS = [
+  'America/Bogota', 'America/Mexico_City', 'America/Lima', 'America/Santiago',
+  'America/Argentina/Buenos_Aires', 'America/Caracas', 'America/Guayaquil',
+  'America/La_Paz', 'America/Asuncion', 'America/Montevideo', 'America/Panama',
+  'America/Costa_Rica', 'America/Guatemala', 'America/Santo_Domingo',
+  'America/Havana', 'America/Sao_Paulo', 'Europe/Madrid',
+];
+
+function rsvUrlBase() {
+  const c = crmAmbitoCliente();
+  return '/api/bookings' + (c ? '?client_id=' + encodeURIComponent(c) : '');
+}
+function rsvUrlCon(params) {
+  const c = crmAmbitoCliente();
+  const q = new URLSearchParams(params || {});
+  if (c) q.set('client_id', c);
+  return '/api/bookings?' + q.toString();
+}
+
+async function rsvCargar(forzar) {
+  if (rsvDatos && !forzar) return rsvDatos;
+  rsvCargando = true; rsvError = '';
+  rsvRender();
+  try {
+    const r = await fetchAuth(rsvUrlBase());
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    rsvDatos = d;
+  } catch (e) {
+    // Una carga que falla NO se queda callada: sin esto la pantalla enseñaría
+    // «aún no tienes servicios» con el catálogo entero en la base.
+    rsvError = String(e.message || e);
+    rsvDatos = null;
+  }
+  rsvCargando = false;
+  rsvRender();
+  return rsvDatos;
+}
+
+function rsvIr(v) { rsvVista = v; rsvRender(); }
+
+function rsvEnlace() {
+  const t = rsvDatos && rsvDatos.config && rsvDatos.config.token;
+  return t ? location.origin + '/reservar/' + t : '';
+}
+
+function rsvCopiarEnlace() {
+  const u = rsvEnlace();
+  if (!u) return;
+  navigator.clipboard.writeText(u)
+    .then(() => showToast('Enlace copiado'))
+    .catch(() => showToast('No se pudo copiar. Selecciónalo a mano.', 'error'));
+}
+
+/** Guarda un puñado de campos de la configuración y refresca lo que devuelva. */
+async function rsvGuardarConfig(parcial, silencioso) {
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'config' }), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ que: 'config', ...parcial }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    rsvDatos.config = d.config;
+    if (!silencioso) showToast('Guardado');
+    return true;
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    return false;
+  }
+}
+
+// ── Pantalla ────────────────────────────────────────────────────────────────
+
+function rsvRender() {
+  const host = document.getElementById('crm-reservas-view');
+  if (!host) return;
+
+  if (rsvCargando && !rsvDatos) {
+    host.innerHTML = '<div class="rsv-cargando">Cargando…</div>';
+    return;
+  }
+  if (rsvError) {
+    host.innerHTML =
+      '<div class="rsv-fallo">' +
+        '<div class="rsv-fallo-t">' + icn('alert', 15) + ' No se pudo cargar la configuración de reservas</div>' +
+        '<div class="rsv-fallo-d">' + esc(rsvError) + '</div>' +
+        '<button class="btn-pri sm" onclick="rsvCargar(true)">Reintentar</button>' +
+      '</div>';
+    return;
+  }
+  if (!rsvDatos) { rsvCargar(); return; }
+
+  const cfg = rsvDatos.config || {};
+  const puede = !!rsvDatos.puede_configurar;
+  // «Hay servicios» no basta: uno que nadie presta no se puede reservar. Con la
+  // página encendida y ningún servicio reservable, el cliente entra y se queda
+  // mirando una lista vacía — y el negocio cree que está recibiendo citas.
+  const activos = (rsvDatos.servicios || []).filter(s => s.activo !== false);
+  const reservables = activos.filter(s => (s.recursos || []).length > 0);
+
+  host.innerHTML =
+    '<div class="rsv-head">' +
+      '<div style="flex:1;min-width:0">' +
+        '<h2 class="rsv-h1">Reservas</h2>' +
+        '<p class="rsv-sub">Tus clientes eligen hora en una página propia. Cada reserva entra a la agenda y crea el contacto.</p>' +
+      '</div>' +
+      (puede ? '<div class="rsv-activo">' +
+        '<div class="toggle' + (cfg.activo ? ' on' : '') + '" onclick="rsvAlternarActivo()"></div>' +
+        '<span>' + (cfg.activo ? 'Página activa' : 'Página apagada') + '</span>' +
+      '</div>' : '') +
+    '</div>' +
+
+    (puede && !cfg.activo
+      ? '<div class="rsv-aviso">' + icn('alert', 14) +
+        '<div><b>La página todavía no recibe reservas.</b> Revisa tus servicios y tu horario, ' +
+        'y enciéndela cuando esté como quieres. Mientras tanto quien abra el enlace verá que está cerrada.</div></div>'
+      : '') +
+
+    (puede && cfg.activo && !reservables.length
+      ? '<div class="rsv-aviso">' + icn('alert', 14) +
+        '<div><b>Tu página está encendida pero no se puede reservar nada.</b> ' +
+        (!activos.length
+          ? 'No hay ningún servicio visible.'
+          : 'Tienes ' + activos.length + ' servicio' + (activos.length === 1 ? '' : 's') +
+            ', pero ninguno tiene a nadie que lo preste.') +
+        ' Quien abra el enlace verá una lista vacía.</div></div>'
+      : '') +
+
+    (!puede
+      ? '<div class="rsv-aviso">' + icn('alert', 14) +
+        '<div>Puedes consultar la configuración, pero solo el administrador de la cuenta la cambia.</div></div>'
+      : '') +
+
+    '<div class="rsv-enlace">' +
+      '<div class="rsv-enlace-l">' + icn('file', 14) + '<span>' + (rsvEnlace() ? esc(rsvEnlace()) : 'Sin enlace todavía') + '</span></div>' +
+      '<button class="btn-ghost sm" onclick="rsvCopiarEnlace()">Copiar</button>' +
+      '<a class="btn-ghost sm" href="' + esc(rsvEnlace() || '#') + '" target="_blank" rel="noopener">Ver la página</a>' +
+    '</div>' +
+
+    '<div class="rsv-tabs">' +
+      ['servicios', 'quien', 'horario'].map(v =>
+        '<button class="rsv-tab' + (rsvVista === v ? ' active' : '') + '" onclick="rsvIr(\'' + v + '\')">' +
+        ({ servicios: 'Servicios', quien: 'Quién atiende', horario: 'Horario y página' })[v] + '</button>').join('') +
+    '</div>' +
+
+    '<div class="rsv-cuerpo">' +
+      (rsvVista === 'servicios' ? rsvPintarServicios(puede)
+        : rsvVista === 'quien' ? rsvPintarRecursos(puede)
+        : rsvPintarHorario(puede)) +
+    '</div>';
+}
+
+function rsvMinutosTexto(m) {
+  const n = Number(m) || 0;
+  if (n < 60) return n + ' min';
+  const h = Math.floor(n / 60), r = n % 60;
+  return h + ' h' + (r ? ' ' + r + ' min' : '');
+}
+
+function rsvPrecioTexto(p) {
+  if (p == null || p === '') return 'Sin precio';
+  const n = Number(p);
+  if (!isFinite(n)) return 'Sin precio';
+  try { return n.toLocaleString('es-CO', { maximumFractionDigits: 0 }); } catch (e) { return String(n); }
+}
+
+function rsvPintarServicios(puede) {
+  const servicios = rsvDatos.servicios || [];
+  const recursos = rsvDatos.recursos || [];
+  if (!servicios.length) {
+    return emptyAgua('calendar', 'Todavía no ofreces nada',
+      'Un servicio es lo que el cliente elige al reservar: un corte, una consulta, una sesión. Lleva su duración y, si quieres, su precio.',
+      puede ? '<button class="btn-pri sm" onclick="rsvEditarServicio(null)">Crear el primero</button>' : '');
+  }
+  return '<div class="rsv-barra">' +
+      '<div class="rsv-conteo">' + servicios.length + ' servicio' + (servicios.length === 1 ? '' : 's') + '</div>' +
+      (puede ? '<button class="btn-pri sm" onclick="rsvEditarServicio(null)">+ Nuevo servicio</button>' : '') +
+    '</div>' +
+    '<div class="rsv-rejilla">' + servicios.map(s => {
+      const quien = (s.recursos || []).map(id => (recursos.find(r => r.id === id) || {}).nombre).filter(Boolean);
+      return '<div class="rsv-card' + (s.activo === false ? ' apagada' : '') + '">' +
+        '<div class="rsv-card-top">' +
+          '<span class="rsv-punto" style="background:' + esc(String(s.color || '#1E2BCC')) + '"></span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="rsv-card-nom">' + esc(String(s.nombre || '')) + '</div>' +
+            '<div class="rsv-card-meta">' + rsvMinutosTexto(s.minutos) +
+              (s.precio != null && s.precio !== '' ? ' · $' + esc(rsvPrecioTexto(s.precio)) : '') + '</div>' +
+          '</div>' +
+          (s.activo === false ? '<span class="rsv-chip off">Oculto</span>' : '') +
+        '</div>' +
+        (s.descripcion ? '<div class="rsv-card-desc">' + esc(String(s.descripcion)) + '</div>' : '') +
+        '<div class="rsv-card-quien">' +
+          (quien.length ? icn('users', 12) + ' ' + esc(quien.join(', '))
+            : '<span class="rsv-ojo">' + icn('alert', 12) + ' Sin nadie asignado: nadie podrá reservarlo</span>') +
+        '</div>' +
+        (puede ? '<div class="rsv-card-pie">' +
+          '<button class="btn-ghost sm" onclick="rsvEditarServicio(\'' + esc(String(s.id)) + '\')">Editar</button>' +
+          '<button class="btn-ghost sm rsv-borrar" onclick="rsvBorrarServicio(\'' + esc(String(s.id)) + '\')">Quitar</button>' +
+        '</div>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+}
+
+function rsvPintarRecursos(puede) {
+  const recursos = rsvDatos.recursos || [];
+  if (!recursos.length) {
+    return emptyAgua('users', 'Falta decir quién atiende',
+      'Puede ser una persona (un barbero, una doctora) o un sitio (el consultorio 2, la sala de fotos). Cada uno tiene su propia agenda, así que dos citas nunca se pisan.',
+      puede ? '<button class="btn-pri sm" onclick="rsvEditarRecurso(null)">Agregar</button>' : '');
+  }
+  return '<div class="rsv-barra">' +
+      '<div class="rsv-conteo">' + recursos.length + '</div>' +
+      (puede ? '<button class="btn-pri sm" onclick="rsvEditarRecurso(null)">+ Agregar</button>' : '') +
+    '</div>' +
+    '<div class="rsv-lista">' + recursos.map(r =>
+      '<div class="rsv-fila' + (r.activo === false ? ' apagada' : '') + '">' +
+        '<div class="rsv-av">' + esc(String(r.nombre || '?').trim().charAt(0).toUpperCase()) + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="rsv-fila-nom">' + esc(String(r.nombre || '')) + '</div>' +
+          '<div class="rsv-fila-meta">' +
+            (r.member_user_id ? 'Su agenda se cruza con la del CRM' : 'Solo para reservas') +
+            (r.horario ? ' · Horario propio' : ' · Sigue el horario del negocio') +
+          '</div>' +
+        '</div>' +
+        (r.activo === false ? '<span class="rsv-chip off">Inactivo</span>' : '') +
+        (puede ? '<button class="btn-ghost sm" onclick="rsvEditarRecurso(\'' + esc(String(r.id)) + '\')">Editar</button>' +
+          '<button class="btn-ghost sm rsv-borrar" onclick="rsvBorrarRecurso(\'' + esc(String(r.id)) + '\')">Quitar</button>' : '') +
+      '</div>').join('') + '</div>';
+}
+
+// ── Horario y página ────────────────────────────────────────────────────────
+// El horario se edita sobre una COPIA y se guarda a propósito. Guardar cada
+// tecla haría que un tramo a medio escribir («14:») llegara a la base, y un
+// tramo que el servidor no entiende se descarta: el negocio perdería media
+// tarde sin enterarse.
+let rsvHorarioBorrador = null;
+
+function rsvHorarioActual() {
+  if (!rsvHorarioBorrador) {
+    const h = (rsvDatos && rsvDatos.config && rsvDatos.config.horario) || {};
+    rsvHorarioBorrador = {};
+    RSV_DIAS.forEach(d => { rsvHorarioBorrador[d.n] = JSON.parse(JSON.stringify(h[d.n] || h[String(d.n)] || [])); });
+  }
+  return rsvHorarioBorrador;
+}
+
+function rsvPintarHorario(puede) {
+  const cfg = rsvDatos.config || {};
+  const h = rsvHorarioActual();
+  const dis = puede ? '' : ' disabled';
+
+  const filaDia = (d) => {
+    const tramos = h[d.n] || [];
+    const abierto = tramos.length > 0;
+    return '<div class="rsv-dia' + (abierto ? '' : ' cerrado') + '">' +
+      '<div class="rsv-dia-nom">' +
+        '<div class="toggle' + (abierto ? ' on' : '') + '"' + (puede ? ' onclick="rsvAlternarDia(' + d.n + ')"' : '') + '></div>' +
+        '<span>' + d.largo + '</span>' +
+      '</div>' +
+      '<div class="rsv-dia-tramos">' +
+        (abierto ? tramos.map((t, i) =>
+          '<div class="rsv-tramo">' +
+            '<input type="time" class="auto-input rsv-hora" value="' + esc(String(t[0] || '')) + '"' + dis +
+              ' onchange="rsvTramo(' + d.n + ',' + i + ',0,this.value)">' +
+            '<span class="rsv-a">a</span>' +
+            '<input type="time" class="auto-input rsv-hora" value="' + esc(String(t[1] || '')) + '"' + dis +
+              ' onchange="rsvTramo(' + d.n + ',' + i + ',1,this.value)">' +
+            (puede ? '<button class="rsv-x" title="Quitar este tramo" onclick="rsvQuitarTramo(' + d.n + ',' + i + ')">&#10005;</button>' : '') +
+          '</div>').join('')
+          : '<span class="rsv-cerrado-txt">Cerrado</span>') +
+        (abierto && puede && tramos.length < 6
+          ? '<button class="rsv-mas" onclick="rsvAgregarTramo(' + d.n + ')">+ Otro tramo</button>' : '') +
+      '</div>' +
+    '</div>';
+  };
+
+  const excepciones = (cfg.excepciones && typeof cfg.excepciones === 'object') ? cfg.excepciones : {};
+  const clavesExc = Object.keys(excepciones).sort();
+
+  return '<div class="rsv-cols">' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Cuándo atiendes</h3>' +
+      '<p class="rsv-p">Los tramos de cada día. Quien reserva solo ve horas que caben enteras dentro de uno.</p>' +
+      '<div class="rsv-dias">' + RSV_DIAS.map(filaDia).join('') + '</div>' +
+      (puede ? '<div class="rsv-guardar">' +
+        '<button class="btn-pri sm" onclick="rsvGuardarHorario()">Guardar horario</button>' +
+        '<button class="btn-ghost sm" onclick="rsvHorarioBorrador=null;rsvRender()">Descartar</button>' +
+      '</div>' : '') +
+    '</section>' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Días especiales</h3>' +
+      '<p class="rsv-p">Un festivo, unas vacaciones o un día con horario distinto. Manda sobre el horario de arriba.</p>' +
+      (clavesExc.length
+        ? '<div class="rsv-exc">' + clavesExc.map(dia =>
+            '<div class="rsv-exc-fila">' +
+              '<b>' + esc(rsvFechaLarga(dia)) + '</b>' +
+              '<span>' + (Array.isArray(excepciones[dia]) && excepciones[dia].length
+                ? excepciones[dia].map(t => esc(t[0]) + '–' + esc(t[1])).join(', ')
+                : '<span class="rsv-cerrado-txt">Cerrado</span>') + '</span>' +
+              (puede ? '<button class="rsv-x" onclick="rsvQuitarExcepcion(\'' + esc(dia) + '\')">&#10005;</button>' : '') +
+            '</div>').join('') + '</div>'
+        : '<div class="rsv-vacio-chico">Ninguno. El horario de arriba manda todos los días.</div>') +
+      (puede ? '<div class="rsv-exc-add">' +
+        '<input type="date" class="auto-input" id="rsv-exc-dia">' +
+        '<button class="btn-ghost sm" onclick="rsvAgregarExcepcion()">Cerrar ese día</button>' +
+      '</div>' : '') +
+    '</section>' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Reglas</h3>' +
+      '<div class="rsv-campo">' +
+        '<label>Zona horaria</label>' +
+        '<select class="auto-input"' + dis + ' onchange="rsvGuardarConfig({zona_horaria:this.value})">' +
+          RSV_ZONAS.map(z => '<option value="' + esc(z) + '"' + (cfg.zona_horaria === z ? ' selected' : '') + '>' +
+            esc(z.split('/').pop().replace(/_/g, ' ')) + '</option>').join('') +
+        '</select>' +
+        '<div class="rsv-nota">Las horas se le enseñan al cliente en esta zona. Cambia sola con el horario de verano.</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Respiro entre citas</label>' +
+        '<select class="auto-input"' + dis + ' onchange="rsvGuardarConfig({margen_min:+this.value})">' +
+          [0, 5, 10, 15, 20, 30, 45, 60].map(m => '<option value="' + m + '"' + ((cfg.margen_min | 0) === m ? ' selected' : '') + '>' +
+            (m ? m + ' minutos' : 'Sin respiro') + '</option>').join('') +
+        '</select>' +
+        '<div class="rsv-nota">Se suma al FINAL de cada cita, para recoger, limpiar o respirar.</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Antelación mínima</label>' +
+        '<select class="auto-input"' + dis + ' onchange="rsvGuardarConfig({antelacion_min_horas:+this.value})">' +
+          [0, 1, 2, 4, 8, 12, 24, 48].map(x => '<option value="' + x + '"' + ((cfg.antelacion_min_horas | 0) === x ? ' selected' : '') + '>' +
+            (x ? x + ' hora' + (x === 1 ? '' : 's') + ' antes' : 'Hasta el último minuto') + '</option>').join('') +
+        '</select>' +
+        '<div class="rsv-nota">Nadie puede reservar para dentro de menos tiempo que esto.</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Hasta cuándo se puede reservar</label>' +
+        '<select class="auto-input"' + dis + ' onchange="rsvGuardarConfig({antelacion_max_dias:+this.value})">' +
+          [7, 14, 30, 60, 90, 180, 365].map(x => '<option value="' + x + '"' + ((cfg.antelacion_max_dias | 0) === x ? ' selected' : '') + '>' +
+            x + ' días' + '</option>').join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Cada cuánto se ofrece una hora</label>' +
+        '<select class="auto-input"' + dis + ' onchange="rsvGuardarConfig({paso_min:+this.value})">' +
+          [5, 10, 15, 20, 30, 60].map(x => '<option value="' + x + '"' + ((cfg.paso_min | 0) === x ? ' selected' : '') + '>' +
+            'Cada ' + x + ' min' + '</option>').join('') +
+        '</select>' +
+        '<div class="rsv-nota">Con 30, se ofrece 9:00, 9:30, 10:00… Cuanto más fino, más horas y más desorden.</div>' +
+      '</div>' +
+    '</section>' +
+
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Cómo se ve tu página</h3>' +
+      '<div class="rsv-campo">' +
+        '<label>Nombre del negocio</label>' +
+        '<input class="auto-input" value="' + esc(String(cfg.nombre_negocio || '')) + '" placeholder="Barbería Aurora"' + dis +
+          ' onchange="rsvGuardarConfig({nombre_negocio:this.value})">' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Dirección</label>' +
+        '<input class="auto-input" value="' + esc(String(cfg.direccion || '')) + '" placeholder="Cra. 43A #7-50, Medellín"' + dis +
+          ' onchange="rsvGuardarConfig({direccion:this.value})">' +
+        '<input class="auto-input" style="margin-top:7px" value="' + esc(String(cfg.detalle_direccion || '')) + '" placeholder="Segundo piso, local 204 (opcional)"' + dis +
+          ' onchange="rsvGuardarConfig({detalle_direccion:this.value})">' +
+        '<div class="rsv-nota">Sale en la confirmación. Es lo primero que busca quien va de camino.</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Color</label>' +
+        '<div class="rsv-colores">' +
+          ['#1E2BCC', '#0F766E', '#B45309', '#BE185D', '#4338CA', '#065F46', '#7C3AED', '#0D0F1C'].map(c =>
+            '<button class="rsv-color' + ((cfg.acento || '').toUpperCase() === c ? ' sel' : '') + '" style="background:' + c + '"' +
+            (puede ? ' onclick="rsvGuardarConfig({acento:\'' + c + '\'}).then(rsvRender)"' : '') + '></button>').join('') +
+        '</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Mensaje al confirmar</label>' +
+        '<textarea class="auto-input" placeholder="Llega 5 minutos antes. Si no puedes venir, cancela desde el enlace."' + dis +
+          ' onchange="rsvGuardarConfig({mensaje_confirmacion:this.value})">' + esc(String(cfg.mensaje_confirmacion || '')) + '</textarea>' +
+      '</div>' +
+    '</section>' +
+
+  '</div>';
+}
+
+function rsvFechaLarga(dia) {
+  try {
+    const [a, m, d] = String(dia).split('-').map(Number);
+    return new Date(a, m - 1, d).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+  } catch (e) { return dia; }
+}
+
+function rsvAlternarDia(n) {
+  const h = rsvHorarioActual();
+  h[n] = (h[n] && h[n].length) ? [] : [['09:00', '18:00']];
+  rsvRender();
+}
+function rsvAgregarTramo(n) {
+  const h = rsvHorarioActual();
+  (h[n] = h[n] || []).push(['14:00', '18:00']);
+  rsvRender();
+}
+function rsvQuitarTramo(n, i) {
+  const h = rsvHorarioActual();
+  (h[n] || []).splice(i, 1);
+  rsvRender();
+}
+function rsvTramo(n, i, cual, valor) {
+  const h = rsvHorarioActual();
+  if (h[n] && h[n][i]) h[n][i][cual] = valor;
+}
+
+async function rsvGuardarHorario() {
+  const h = rsvHorarioActual();
+  // Se avisa ANTES de mandarlo: el servidor descarta los tramos que no entiende
+  // y devolvería un «guardado» con medio horario perdido.
+  const malos = [];
+  RSV_DIAS.forEach(d => (h[d.n] || []).forEach(t => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t[0] || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t[1] || '') || t[1] <= t[0]) {
+      malos.push(d.largo);
+    }
+  }));
+  if (malos.length) {
+    showToast('Revisa ' + [...new Set(malos)].join(', ') + ': la hora de cierre tiene que ir después de la de apertura.', 'error');
+    return;
+  }
+  const limpio = {};
+  RSV_DIAS.forEach(d => { if ((h[d.n] || []).length) limpio[d.n] = h[d.n]; });
+  if (await rsvGuardarConfig({ horario: limpio })) {
+    rsvHorarioBorrador = null;
+    rsvRender();
+  }
+}
+
+async function rsvAgregarExcepcion() {
+  const dia = (document.getElementById('rsv-exc-dia') || {}).value;
+  if (!dia) { showToast('Elige la fecha', 'error'); return; }
+  const cfg = rsvDatos.config || {};
+  const exc = Object.assign({}, cfg.excepciones || {});
+  exc[dia] = [];                       // lista vacía = ese día cerramos
+  if (await rsvGuardarConfig({ excepciones: exc })) rsvRender();
+}
+
+async function rsvQuitarExcepcion(dia) {
+  const cfg = rsvDatos.config || {};
+  const exc = Object.assign({}, cfg.excepciones || {});
+  delete exc[dia];
+  if (await rsvGuardarConfig({ excepciones: exc })) rsvRender();
+}
+
+async function rsvAlternarActivo() {
+  const cfg = rsvDatos.config || {};
+  if (await rsvGuardarConfig({ activo: !cfg.activo }, true)) {
+    showToast(rsvDatos.config.activo ? 'Tu página ya recibe reservas' : 'Página apagada');
+    rsvRender();
+  }
+}
+
+// ── Editor de servicio ──────────────────────────────────────────────────────
+
+function rsvCerrarModal() { document.getElementById('rsv-overlay')?.remove(); }
+
+function rsvEditarServicio(id) {
+  const s = id ? (rsvDatos.servicios || []).find(x => x.id === id) : null;
+  rsvBorrador = s
+    ? JSON.parse(JSON.stringify(s))
+    : { nombre: '', descripcion: '', minutos: 30, precio: '', color: '#1E2BCC', activo: true, recursos: [] };
+  const recursos = rsvDatos.recursos || [];
+
+  rsvCerrarModal();
+  const ov = document.createElement('div');
+  ov.id = 'rsv-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) rsvCerrarModal(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">' + (s ? 'Editar servicio' : 'Nuevo servicio') + '</div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">&#10005;</button>' +
+    '</div>' +
+    '<div class="rsv-modal-cuerpo">' +
+      '<div class="rsv-campo"><label>Nombre</label>' +
+        '<input class="auto-input" id="rsv-s-nombre" maxlength="80" placeholder="Corte clásico" value="' + esc(String(rsvBorrador.nombre || '')) + '"></div>' +
+      '<div class="rsv-campo"><label>Descripción</label>' +
+        '<input class="auto-input" id="rsv-s-desc" maxlength="300" placeholder="Lavado, corte y peinado" value="' + esc(String(rsvBorrador.descripcion || '')) + '"></div>' +
+      '<div class="rsv-dos">' +
+        '<div class="rsv-campo"><label>Duración</label>' +
+          '<select class="auto-input" id="rsv-s-min">' +
+            [10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240].map(m =>
+              '<option value="' + m + '"' + ((rsvBorrador.minutos | 0) === m ? ' selected' : '') + '>' + rsvMinutosTexto(m) + '</option>').join('') +
+          '</select></div>' +
+        '<div class="rsv-campo"><label>Precio <span class="rsv-opc">opcional</span></label>' +
+          '<input class="auto-input" id="rsv-s-precio" inputmode="numeric" placeholder="45000" value="' +
+            esc(rsvBorrador.precio == null ? '' : String(rsvBorrador.precio)) + '"></div>' +
+      '</div>' +
+      '<div class="rsv-campo"><label>Quién lo presta</label>' +
+        (recursos.length
+          ? '<div class="rsv-checks">' + recursos.map(r =>
+              '<label class="rsv-check"><input type="checkbox" value="' + esc(String(r.id)) + '"' +
+              ((rsvBorrador.recursos || []).includes(r.id) ? ' checked' : '') + '>' + esc(String(r.nombre || '')) + '</label>').join('') + '</div>' +
+            '<div class="rsv-nota">Un servicio que no presta nadie no se puede reservar.</div>'
+          : '<div class="rsv-nota rsv-ojo">' + icn('alert', 12) + ' Todavía no has dicho quién atiende. ' +
+            'Agrega a alguien en «Quién atiende» o este servicio no se podrá reservar.</div>') +
+      '</div>' +
+      '<div class="rsv-campo"><label>Color</label>' +
+        '<div class="rsv-colores" id="rsv-s-colores">' +
+          ['#1E2BCC', '#0F766E', '#B45309', '#BE185D', '#4338CA', '#065F46', '#7C3AED', '#00B8CE'].map(c =>
+            '<button class="rsv-color' + (String(rsvBorrador.color || '').toUpperCase() === c ? ' sel' : '') + '" data-c="' + c + '" style="background:' + c + '" ' +
+            'onclick="rsvBorrador.color=\'' + c + '\';[...this.parentNode.children].forEach(b=>b.classList.toggle(\'sel\',b===this))"></button>').join('') +
+        '</div></div>' +
+      '<label class="rsv-check rsv-solo"><input type="checkbox" id="rsv-s-activo"' + (rsvBorrador.activo !== false ? ' checked' : '') + '>' +
+        'Se puede reservar desde la página</label>' +
+    '</div>' +
+    '<div class="rsv-modal-pie">' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="rsv-s-guardar" onclick="rsvGuardarServicio(' + (s ? '\'' + esc(String(id)) + '\'' : 'null') + ')">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('rsv-s-nombre')?.focus();
+}
+
+async function rsvGuardarServicio(id) {
+  const nombre = (document.getElementById('rsv-s-nombre') || {}).value || '';
+  if (!nombre.trim()) { showToast('El servicio necesita un nombre', 'error'); return; }
+  const precioTxt = String((document.getElementById('rsv-s-precio') || {}).value || '').replace(/[^\d.]/g, '');
+  const cuerpo = {
+    que: 'servicio',
+    nombre: nombre.trim(),
+    descripcion: (document.getElementById('rsv-s-desc') || {}).value || '',
+    minutos: +(document.getElementById('rsv-s-min') || {}).value || 30,
+    precio: precioTxt === '' ? null : Number(precioTxt),
+    color: rsvBorrador.color || '#1E2BCC',
+    activo: !!(document.getElementById('rsv-s-activo') || {}).checked,
+    recursos: [...document.querySelectorAll('.rsv-checks input:checked')].map(i => i.value),
+  };
+  if (id) cuerpo.id = id;
+
+  const btn = document.getElementById('rsv-s-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'servicio' }), {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    rsvCerrarModal();
+    showToast(id ? 'Servicio actualizado' : 'Servicio creado');
+    await rsvCargar(true);
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+async function rsvBorrarServicio(id) {
+  const s = (rsvDatos.servicios || []).find(x => x.id === id) || {};
+  if (!confirm('¿Quitar «' + (s.nombre || 'este servicio') + '» de la página?\n\nLas citas ya reservadas se quedan como están.')) return;
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'servicio', id }), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Servicio quitado');
+    await rsvCargar(true);
+  } catch (e) { showToast(String(e.message || e), 'error'); }
+}
+
+// ── Editor de quién atiende ─────────────────────────────────────────────────
+
+function rsvEditarRecurso(id) {
+  const r0 = id ? (rsvDatos.recursos || []).find(x => x.id === id) : null;
+  rsvBorrador = r0 ? JSON.parse(JSON.stringify(r0)) : { nombre: '', member_user_id: '', activo: true, horario: null };
+  const miembros = (typeof crmTeam !== 'undefined' ? crmTeam : []).filter(m => m.status === 'active' && m.member_user_id);
+
+  rsvCerrarModal();
+  const ov = document.createElement('div');
+  ov.id = 'rsv-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) rsvCerrarModal(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:480px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">' + (r0 ? 'Editar' : 'Quién atiende') + '</div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">&#10005;</button>' +
+    '</div>' +
+    '<div class="rsv-modal-cuerpo">' +
+      '<div class="rsv-campo"><label>Nombre</label>' +
+        '<input class="auto-input" id="rsv-r-nombre" maxlength="80" placeholder="Andrés · Consultorio 2 · Sala de fotos" value="' +
+          esc(String(rsvBorrador.nombre || '')) + '">' +
+        '<div class="rsv-nota">Puede ser una persona o un sitio. Cada uno lleva su propia agenda.</div></div>' +
+      '<div class="rsv-campo"><label>¿Es alguien de tu equipo?</label>' +
+        '<select class="auto-input" id="rsv-r-miembro">' +
+          '<option value="">No — solo existe para las reservas</option>' +
+          miembros.map(m => '<option value="' + esc(String(m.member_user_id)) + '"' +
+            (rsvBorrador.member_user_id === m.member_user_id ? ' selected' : '') + '>' +
+            esc(String(m.member_name || m.member_email || '')) + '</option>').join('') +
+        '</select>' +
+        '<div class="rsv-nota">Si lo enlazas, sus citas del CRM también le ocupan hueco: no se le puede reservar encima de una reunión.</div></div>' +
+      '<label class="rsv-check rsv-solo"><input type="checkbox" id="rsv-r-activo"' + (rsvBorrador.activo !== false ? ' checked' : '') + '>' +
+        'Disponible para reservar</label>' +
+    '</div>' +
+    '<div class="rsv-modal-pie">' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="rsv-r-guardar" onclick="rsvGuardarRecurso(' + (r0 ? '\'' + esc(String(id)) + '\'' : 'null') + ')">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('rsv-r-nombre')?.focus();
+}
+
+async function rsvGuardarRecurso(id) {
+  const nombre = (document.getElementById('rsv-r-nombre') || {}).value || '';
+  if (!nombre.trim()) { showToast('Necesita un nombre', 'error'); return; }
+  const cuerpo = {
+    que: 'recurso',
+    nombre: nombre.trim(),
+    member_user_id: (document.getElementById('rsv-r-miembro') || {}).value || '',
+    activo: !!(document.getElementById('rsv-r-activo') || {}).checked,
+  };
+  if (id) cuerpo.id = id;
+
+  const btn = document.getElementById('rsv-r-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'recurso' }), {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    rsvCerrarModal();
+    showToast('Guardado');
+    await rsvCargar(true);
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+async function rsvBorrarRecurso(id) {
+  const r0 = (rsvDatos.recursos || []).find(x => x.id === id) || {};
+  if (!confirm('¿Quitar a «' + (r0.nombre || 'este') + '»?\n\nLos servicios que solo prestaba dejarán de poder reservarse.')) return;
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'recurso', id }), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Quitado');
+    await rsvCargar(true);
+  } catch (e) { showToast(String(e.message || e), 'error'); }
+}
+
+// La vista se cuelga al final, igual que Páginas y Plataformas de pauta: sin
+// tocar crmSetView, para no pelearse con los demás envoltorios.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const rv = document.getElementById('crm-reservas-view');
+    if (rv) rv.style.display = v === 'reservas' ? 'flex' : 'none';
+    if (v === 'reservas') { rsvHorarioBorrador = null; rsvCargar(); }
+  };
+  if (typeof NAV_TABS !== 'undefined' && NAV_TABS.crm && !NAV_TABS.crm.includes('reservas')) {
+    // Detrás de Agenda: una reserva acaba siendo una cita de la agenda.
+    NAV_TABS.crm.push('reservas');
+    NAV_TAB2MOD.reservas = 'crm';
+    NAV_TAB_LABELS.reservas = 'Reservas';
+    if (!NAV_ALL_TABS.includes('reservas')) NAV_ALL_TABS.push('reservas');
+  }
+})();
