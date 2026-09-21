@@ -149,18 +149,35 @@ async function getApiVersion(customerId, accessToken) {
   return 19;
 }
 
+// Mismo caso que en api/google-ads.js: `login-customer-id` con NUESTRO
+// administrador solo vale para las cuentas que cuelgan de él. Para la cuenta
+// propia de un cliente, Google responde «no tiene permiso» y el Pulso se queda
+// sin datos de pauta sin decir por qué. Se prueba primero sin administrador —el
+// caso normal— y solo se reintenta con él si el problema es de permisos.
 async function gaqlFetch(customerId, query, accessToken) {
-  const h = {
-    'Authorization': `Bearer ${accessToken}`,
-    'developer-token': DEV_TOKEN,
-    'Content-Type': 'application/json',
+  const cabeceras = (conMcc) => {
+    const h = {
+      'Authorization': `Bearer ${accessToken}`,
+      'developer-token': DEV_TOKEN,
+      'Content-Type': 'application/json',
+    };
+    if (conMcc && MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+    return h;
   };
-  if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
   const ver = await getApiVersion(customerId, accessToken);
-  const res = await fetch(
+  const pedir = (conMcc) => fetch(
     `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,
-    { method: 'POST', headers: h, body: JSON.stringify({ query }) }
+    { method: 'POST', headers: cabeceras(conMcc), body: JSON.stringify({ query }) }
   );
+
+  let res = await pedir(false);
+  if (!res.ok && MCC_ID) {
+    const txt = await res.clone().text().catch(() => '');
+    if (/USER_PERMISSION_DENIED|does not have permission|NOT_ADS_USER/.test(txt)) {
+      const res2 = await pedir(true);
+      if (res2.ok) res = res2;
+    }
+  }
   if (!res.ok) {
     const errTxt = await res.text().catch(() => '');
     throw new Error(`Google Ads ${res.status}: ${errTxt.slice(0, 200)}`);

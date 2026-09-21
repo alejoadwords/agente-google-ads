@@ -80,27 +80,49 @@ async function getApiVersion(customerId, accessToken) {
   return 21; // fallback
 }
 
+// ¿Google dice que no tenemos permiso sobre esta cuenta? Es lo que responde
+// cuando se manda un `login-customer-id` que no es el administrador de esa
+// cuenta — y también cuando hace falta y no se manda.
+export function sinPermisoGA(data) {
+  if (!data || !data.error) return false;
+  const s = JSON.stringify(data.error);
+  return s.includes('USER_PERMISSION_DENIED') ||
+         s.includes('does not have permission') ||
+         s.includes('NOT_ADS_USER');
+}
+
 // ── Google Ads API request con auto-refresh ──────────────────
+//
+// `login-customer-id` se mandaba SIEMPRE con nuestro administrador. Eso vale
+// para las cuentas que cuelgan de él —la de pruebas, que es con la que se
+// probó todo— y falla para las demás: un cliente que conecta SU propia cuenta
+// de Google recibe «The caller does not have permission» y ve su panel vacío.
+//
+// Como no sabemos de antemano si la cuenta es nuestra o suya, se prueba primero
+// SIN el administrador —el caso normal— y solo si Google se queja de permisos
+// se reintenta con él. Cuesta una llamada extra a las cuentas que sí cuelgan
+// del administrador, y le devuelve el panel a todas las demás.
 async function gaqlRequest(customerId, query, accessToken, userId) {
-  const makeHeaders = (token) => {
+  const makeHeaders = (token, conMcc) => {
     const h = {
       'Authorization': `Bearer ${token}`,
       'developer-token': DEV_TOKEN,
       'Content-Type': 'application/json',
     };
-    if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+    if (conMcc && MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
     return h;
   };
 
   const ver = await getApiVersion(customerId, accessToken);
-  const doRequest = (token) =>
+  const doRequest = (token, conMcc) =>
     fetch(`https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`, {
       method: 'POST',
-      headers: makeHeaders(token),
+      headers: makeHeaders(token, conMcc),
       body: JSON.stringify({ query }),
     });
 
-  let res = await doRequest(accessToken);
+  let token = accessToken;
+  let res = await doRequest(token, false);
 
   // Si es 401, intentar refresh
   if (res.status === 401 && userId) {
@@ -108,13 +130,26 @@ async function gaqlRequest(customerId, query, accessToken, userId) {
     if (conn?.refresh_token) {
       const refreshed = await refreshGoogleToken(conn.refresh_token);
       if (refreshed.access_token) {
-        await updateStoredToken(userId, refreshed.access_token, refreshed.expires_in);
-        res = await doRequest(refreshed.access_token);
+        token = refreshed.access_token;
+        await updateStoredToken(userId, token, refreshed.expires_in);
+        res = await doRequest(token, false);
       }
     }
   }
 
-  return res.json();
+  let data = await res.json().catch(() => ({}));
+
+  // Segundo intento, ahora como administrador. Solo si el primero fue un
+  // problema de permisos: cualquier otro error se devuelve tal cual.
+  if (MCC_ID && sinPermisoGA(data)) {
+    const res2 = await doRequest(token, true);
+    const data2 = await res2.json().catch(() => ({}));
+    // Si tampoco, se conserva el error del PRIMER intento: es el que describe
+    // el caso normal y el que el cliente necesita leer.
+    if (!sinPermisoGA(data2)) data = data2;
+  }
+
+  return data;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
