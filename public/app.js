@@ -30595,9 +30595,28 @@ function navSyncSubmenus() {
   navMarkActive();
 }
 
+// Dos entradas del menú NO son paneles dentro del CRM, son vistas propias:
+// el Studio Social y el Proyecto SEO. Mandarlas por `crmSetView` dejaba la
+// cáscara del CRM con todos sus paneles ocultos — una pantalla en blanco con
+// la cabecera y el total del pipeline, y nada más.
+const NAV_VISTAS_PROPIAS = {
+  studio:  () => showView('social-studio'),
+  seoproj: () => (typeof openSeoProject === 'function' ? openSeoProject() : showView('seo-project')),
+};
+
 function navGoTab(mod, tab) {
   navCloseSubs();
   window._navMod = mod;
+  const propia = NAV_VISTAS_PROPIAS[tab];
+  if (propia) {
+    propia();
+    navSyncSubmenus();
+    if (window.innerWidth <= 768 && typeof toggleSidebar === 'function') {
+      const sb = document.getElementById('sidebar');
+      if (sb && sb.classList.contains('open')) toggleSidebar();
+    }
+    return;
+  }
   if (typeof showView === 'function') showView('crm');
   crmSetView(tab);
   navSyncSubmenus();
