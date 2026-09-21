@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha del lead · dos propuestas</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  PROPUESTA, no implementación. Nada de esto está en producción.
+
+  Carga el CSS REAL de public/index.html, así que los colores, las medidas, la
+  tipografía y los botones son los de Acuarius. Lo único inventado son los
+  datos, a propósito: no se usan los de ningún cliente.
+
+  Arrancar:  node pruebas/servidor-boceto.mjs
+  Abrir:     http://localhost:4173/pruebas/banco-ficha-lead.html
+-->
+<style id="estilos-reales"></style>
+<style>
+body{margin:0;font-family:var(--font);background:var(--bg-subtle);color:var(--text);padding-bottom:56px}
+
+/* ── Lo compartido por las dos propuestas ─────────────────────────────── */
+.fx-barra{display:flex;align-items:center;gap:12px;padding:12px 20px;background:var(--bg);
+  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.fx-volver{display:flex;align-items:center;gap:6px;font-size:var(--fs-sm);font-weight:600;
+  color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px}
+.fx-volver:hover{background:var(--bg-muted);color:var(--text)}
+.fx-av{width:36px;height:36px;border-radius:50%;background:var(--agua-grad);color:#fff;display:grid;
+  place-items:center;font-weight:700;font-size:14px;flex-shrink:0}
+.fx-nom{font-size:var(--fs-lg);font-weight:700;letter-spacing:-.02em}
+.fx-sub{font-size:var(--fs-sm);color:var(--muted)}
+.fx-acc{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+
+/* El embudo como barra de progreso. Hoy la etapa es un desplegable: se ve DÓNDE
+   está, pero no cuánto le falta ni por dónde ya pasó. */
+.fx-pasos{display:flex;align-items:center;gap:0;padding:14px 20px;background:var(--bg);
+  border-bottom:1px solid var(--border);overflow-x:auto}
+.fx-paso{display:flex;align-items:center;gap:0;flex:1;min-width:120px}
+.fx-paso .bola{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+  border:2px solid var(--border);background:var(--bg);color:var(--muted2)}
+.fx-paso.hecho .bola{background:var(--blue);border-color:var(--blue);color:#fff}
+.fx-paso.aqui .bola{border-color:var(--blue);background:var(--bg);color:var(--blue);
+  box-shadow:0 0 0 4px var(--blue-ring)}
+.fx-paso .txt{font-size:11.5px;font-weight:600;color:var(--muted2);margin-left:8px;white-space:nowrap}
+.fx-paso.hecho .txt,.fx-paso.aqui .txt{color:var(--text)}
+.fx-paso .linea{flex:1;height:2px;background:var(--border);margin:0 8px;min-width:12px}
+.fx-paso.hecho .linea{background:var(--blue)}
+.fx-cierre{display:flex;gap:8px;margin-left:14px;flex-shrink:0}
+.fx-cierre button{border:1.5px solid var(--border);background:var(--bg);border-radius:99px;
+  padding:5px 12px;font-family:var(--font);font-size:11.5px;font-weight:700;cursor:pointer;color:var(--muted)}
+.fx-cierre .gana:hover{border-color:var(--success);color:var(--success);background:var(--success-bg)}
+.fx-cierre .pierde:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
+
+.fx-caja{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:14px 16px}
+.fx-tit{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted2);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.fx-tit .cuenta{background:var(--bg-muted);color:var(--muted);border-radius:99px;padding:1px 7px;
+  font-size:10px;letter-spacing:0}
+.fx-tit button{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--blue);
+  font-family:var(--font);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none}
+.fx-fila{display:flex;gap:10px;font-size:13px;padding:5px 0}
+.fx-fila .k{color:var(--muted);width:92px;flex-shrink:0;font-weight:600}
+.fx-fila .v{flex:1;word-break:break-word}
+.fx-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg-muted);border-radius:99px;
+  padding:3px 9px;font-size:11.5px;font-weight:600;color:var(--text-2);margin:0 4px 4px 0}
+.fx-vacio{font-size:12.5px;color:var(--muted2);padding:4px 0}
+
+/* Historial */
+.fx-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:12px;overflow-x:auto}
+.fx-tabs button{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;
+  cursor:pointer;font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--muted);
+  margin-bottom:-1px;white-space:nowrap}
+.fx-tabs button.on{color:var(--blue);border-bottom-color:var(--blue)}
+.fx-ev{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--border2)}
+.fx-ev:last-child{border-bottom:none}
+.fx-ev .ico{width:28px;height:28px;border-radius:9px;flex-shrink:0;display:grid;place-items:center;
+  background:var(--bg-subtle);color:var(--muted);border:1px solid var(--border2)}
+.fx-ev .cuerpo{flex:1;min-width:0}
+.fx-ev .cab{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.fx-ev .qui{font-size:13px;font-weight:700}
+.fx-ev .cuando{font-size:11px;color:var(--muted2);margin-left:auto;white-space:nowrap}
+.fx-ev .txt{font-size:13px;color:var(--text-2);line-height:1.55;margin-top:3px;white-space:pre-wrap}
+.fx-dia{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2);
+  padding:12px 0 4px}
+
+/* Registrar actividad */
+.fx-reg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px}
+.fx-reg button{border:1.5px solid var(--border);background:var(--bg);border-radius:9px;padding:6px 11px;
+  font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;color:var(--text-2);
+  display:inline-flex;align-items:center;gap:6px}
+.fx-reg button.on{border-color:var(--blue);background:var(--blue-lt);color:var(--blue)}
+.fx-area{width:100%;min-height:74px;padding:11px 13px;border:1.5px solid var(--border);border-radius:var(--r);
+  font-size:13.5px;font-family:var(--font);resize:vertical;outline:none;box-sizing:border-box;background:var(--bg);color:var(--text)}
+.fx-area:focus{border-color:var(--blue-md)}
+
+/* Tareas */
+.fx-tarea{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);
+  border-radius:var(--r);margin-bottom:7px;background:var(--bg-subtle);font-size:12.5px}
+.fx-tarea.vence{border-color:var(--danger);background:var(--danger-bg)}
+.fx-tarea input{width:16px;height:16px;margin-top:1px;accent-color:var(--blue);flex-shrink:0}
+.fx-tarea .cuando{font-size:11px;color:var(--muted2);margin-top:2px}
+
+/* ── A · Página completa, tres columnas ───────────────────────────────── */
+.fx-a{display:grid;grid-template-columns:320px minmax(0,1fr) 300px;gap:16px;padding:16px 20px;align-items:start}
+.fx-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+/* ── B · Panel ancho, dos columnas, sin salir del tablero ─────────────── */
+.fx-b-fondo{position:relative;height:640px;background:var(--bg-subtle);overflow:hidden;
+  border-top:1px solid var(--border)}
+.fx-b-tablero{display:flex;gap:12px;padding:16px 20px;opacity:.45}
+.fx-b-col{width:190px;flex-shrink:0}
+.fx-b-col .cab{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);padding:0 0 8px}
+.fx-b-tarjeta{background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--blue);
+  border-radius:var(--r);padding:10px 11px;margin-bottom:8px;font-size:12.5px;font-weight:600}
+.fx-b-panel{position:absolute;top:0;right:0;bottom:0;width:820px;max-width:100%;background:var(--bg);
+  border-left:1.5px solid var(--border);box-shadow:-10px 0 30px rgba(13,15,28,.10);
+  display:flex;flex-direction:column}
+.fx-b-cuerpo{flex:1;overflow-y:auto;display:grid;grid-template-columns:300px minmax(0,1fr);
+  gap:14px;padding:14px 16px;align-items:start}
+
+.banco{position:fixed;bottom:0;left:0;right:0;background:var(--text);color:#fff;padding:9px 14px;
+  display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+.banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 11px;
+  font-family:inherit;font-size:12px;cursor:pointer}
+.banco button.on{background:#fff;color:var(--text);font-weight:700}
+.banco span{opacity:.55}
+.oculto{display:none}
+.nota-prop{max-width:900px;margin:0 auto;padding:18px 20px 0;font-size:13px;color:var(--muted);line-height:1.6}
+.nota-prop b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<div class="nota-prop" id="explica"></div>
+
+<!-- ══ A · PÁGINA COMPLETA ══════════════════════════════════════════════ -->
+<div id="vista-a">
+  <div class="fx-barra">
+    <button class="fx-volver">← Pipeline</button>
+    <div class="fx-av">LR</div>
+    <div>
+      <div class="fx-nom">Lucía Ramírez</div>
+      <div class="fx-sub">Arriendo · asignada a María Camila Romero</div>
+    </div>
+    <div class="fx-acc">
+      <button class="btn-ghost sm">Llamar</button>
+      <button class="btn-ghost sm">WhatsApp</button>
+      <button class="btn-ghost sm">Email</button>
+      <button class="btn-ghost sm">Agendar</button>
+      <button class="btn-pri sm">Propuesta</button>
+    </div>
+  </div>
+
+  <div class="fx-pasos" id="pasos-a"></div>
+
+  <div class="fx-a">
+    <!-- 1 · Quién es -->
+    <div class="fx-col">
+      <div class="fx-caja">
+        <div class="fx-tit">Información <button>Editar</button></div>
+        <div class="fx-fila"><span class="k">Email</span><span class="v">lucia.ramirez@ejemplo.com</span></div>
+        <div class="fx-fila"><span class="k">Teléfono</span><span class="v">+57 310 555 0142</span></div>
+        <div class="fx-fila"><span class="k">Empresa</span><span class="v">—</span></div>
+        <div class="fx-fila"><span class="k">Fuente</span><span class="v">Formulario web</span></div>
+        <div class="fx-fila"><span class="k">Valor</span><span class="v"><b>$1.800.000</b></span></div>
+        <div class="fx-fila"><span class="k">Cierre esperado</span><span class="v">1 nov 2026</span></div>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">Etiquetas <button>+ Añadir</button></div>
+        <div>
+          <span class="fx-chip">lead web</span><span class="fx-chip">lead arriendo</span>
+          <span class="fx-chip">formulario</span><span class="fx-chip">propietario</span>
+        </div>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">Proceso de venta <button>Cambiar</button></div>
+        <div style="font-size:13.5px;font-weight:600">Arriendo</div>
+        <div class="fx-tit" style="margin:12px 0 6px">Responsable <button>Cambiar</button></div>
+        <div style="font-size:13.5px">María Camila Romero</div>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">De dónde vino</div>
+        <div class="fx-fila"><span class="k">Página</span><span class="v">certainpezzano.com/contacto</span></div>
+        <div class="fx-fila"><span class="k">Campaña</span><span class="v">adwords · ppc · apartamentos en arriendo</span></div>
+      </div>
+    </div>
+
+    <!-- 2 · Qué ha pasado -->
+    <div class="fx-col">
+      <div class="fx-caja">
+        <div class="fx-tit">Registrar actividad</div>
+        <div class="fx-reg">
+          <button class="on">Nota</button><button>Llamada</button><button>Email</button>
+          <button>Reunión</button><button>Tarea</button>
+        </div>
+        <textarea class="fx-area" placeholder="Queda en el historial, sin avisar a nadie…"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px">
+          <button class="btn-ghost sm">Adjuntar enlace</button>
+          <button class="btn-pri sm">Guardar</button>
+        </div>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">Historial</div>
+        <div class="fx-tabs">
+          <button class="on">Todo</button><button>Notas</button><button>Llamadas</button>
+          <button>Emails</button><button>WhatsApp</button><button>Tareas</button><button>Etapas</button>
+        </div>
+        <div id="hist-a"></div>
+      </div>
+    </div>
+
+    <!-- 3 · Qué falta por hacer -->
+    <div class="fx-col">
+      <div class="fx-caja">
+        <div class="fx-tit">Tareas <span class="cuenta">2</span><button>+ Nueva</button></div>
+        <div class="fx-tarea vence"><input type="checkbox">
+          <div><div>Llamar para confirmar la visita</div><div class="cuando">Venció ayer · María Camila</div></div></div>
+        <div class="fx-tarea"><input type="checkbox">
+          <div><div>Enviar fichas de 3 apartamentos</div><div class="cuando">Mañana · María Camila</div></div></div>
+      </div>
+
+      <div class="fx-caja" style="border-color:var(--violet);background:var(--violet-lt)">
+        <div class="fx-tit" style="color:var(--violet)">Próxima acción</div>
+        <div style="font-size:13px;line-height:1.55;color:var(--text-2)">
+          Pidió arrendar y ya vio la propuesta hace 4 días sin responder.
+          Llámala hoy: en arriendo, el interés se enfría en una semana.</div>
+        <button class="btn-ghost sm" style="margin-top:10px;width:100%">Volver a sugerir</button>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">Citas <span class="cuenta">1</span></div>
+        <div style="font-size:12.5px;line-height:1.5">
+          <b>Visita al inmueble</b><br>
+          <span style="color:var(--muted)">jue 24 de septiembre, 10:00 a. m.</span></div>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">Propuestas <span class="cuenta">1</span><button>+ Nueva</button></div>
+        <div style="font-size:12.5px;line-height:1.5">
+          <b>Apartamentos en arriendo</b><br>
+          <span style="color:var(--muted)">Vista hace 4 días · $1.800.000</span></div>
+      </div>
+
+      <div class="fx-caja">
+        <div class="fx-tit">Conversaciones <span class="cuenta">1</span></div>
+        <div style="font-size:12.5px;line-height:1.5">
+          <b>WhatsApp</b><br><span style="color:var(--muted)">Último mensaje hace 2 días</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ B · PANEL ANCHO ══════════════════════════════════════════════════ -->
+<div id="vista-b" class="oculto">
+  <div class="fx-b-fondo">
+    <div class="fx-b-tablero">
+      <div class="fx-b-col"><div class="cab">Cliente recibido</div>
+        <div class="fx-b-tarjeta">Lucía Ramírez</div></div>
+      <div class="fx-b-col"><div class="cab">Cliente contactado</div>
+        <div class="fx-b-tarjeta">Sheily Naranjo</div><div class="fx-b-tarjeta">Lorena Castellanos</div></div>
+      <div class="fx-b-col"><div class="cab">Presentación de propuesta</div>
+        <div class="fx-b-tarjeta">Daniel Ahumada</div></div>
+      <div class="fx-b-col"><div class="cab">Negociación</div></div>
+    </div>
+
+    <div class="fx-b-panel">
+      <div class="fx-barra" style="position:static">
+        <div class="fx-av">LR</div>
+        <div><div class="fx-nom" style="font-size:var(--fs-md)">Lucía Ramírez</div>
+          <div class="fx-sub">Arriendo · María Camila Romero</div></div>
+        <div class="fx-acc">
+          <button class="btn-ghost sm">Llamar</button>
+          <button class="btn-ghost sm">WhatsApp</button>
+          <button class="btn-pri sm">Propuesta</button>
+          <button class="btn-ghost sm">✕</button>
+        </div>
+      </div>
+      <div class="fx-pasos" id="pasos-b" style="padding:11px 16px"></div>
+      <div class="fx-b-cuerpo">
+        <div class="fx-col">
+          <div class="fx-caja">
+            <div class="fx-tit">Información <button>Editar</button></div>
+            <div class="fx-fila"><span class="k">Email</span><span class="v">lucia.ramirez@ejemplo.com</span></div>
+            <div class="fx-fila"><span class="k">Teléfono</span><span class="v">+57 310 555 0142</span></div>
+            <div class="fx-fila"><span class="k">Fuente</span><span class="v">Formulario web</span></div>
+            <div class="fx-fila"><span class="k">Valor</span><span class="v"><b>$1.800.000</b></span></div>
+            <div style="margin-top:8px">
+              <span class="fx-chip">lead web</span><span class="fx-chip">lead arriendo</span>
+              <span class="fx-chip">formulario</span></div>
+          </div>
+          <div class="fx-caja">
+            <div class="fx-tit">Tareas <span class="cuenta">2</span><button>+ Nueva</button></div>
+            <div class="fx-tarea vence"><input type="checkbox">
+              <div><div>Llamar para confirmar la visita</div><div class="cuando">Venció ayer</div></div></div>
+            <div class="fx-tarea"><input type="checkbox">
+              <div><div>Enviar fichas de 3 apartamentos</div><div class="cuando">Mañana</div></div></div>
+          </div>
+          <div class="fx-caja" style="border-color:var(--violet);background:var(--violet-lt)">
+            <div class="fx-tit" style="color:var(--violet)">Próxima acción</div>
+            <div style="font-size:12.5px;line-height:1.5;color:var(--text-2)">
+              Ya vio la propuesta hace 4 días sin responder. Llámala hoy.</div>
+          </div>
+        </div>
+        <div class="fx-col">
+          <div class="fx-caja">
+            <div class="fx-tit">Registrar actividad</div>
+            <div class="fx-reg">
+              <button class="on">Nota</button><button>Llamada</button><button>Email</button>
+              <button>Reunión</button><button>Tarea</button>
+            </div>
+            <textarea class="fx-area" placeholder="Queda en el historial, sin avisar a nadie…"></textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:9px">
+              <button class="btn-pri sm">Guardar</button></div>
+          </div>
+          <div class="fx-caja">
+            <div class="fx-tit">Historial</div>
+            <div class="fx-tabs">
+              <button class="on">Todo</button><button>Notas</button><button>Llamadas</button>
+              <button>Emails</button><button>Etapas</button></div>
+            <div id="hist-b"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="banco">
+  <span>PROPUESTA ·</span>
+  <button id="bt-a" class="on" onclick="ver('a')">A · Página completa</button>
+  <button id="bt-b" onclick="ver('b')">B · Panel ancho</button>
+  <span>·</span>
+  <button onclick="ver('hoy')">Lo que hay hoy</button>
+</div>
+
+<script>
+var ETAPAS = ['Cliente recibido', 'Cliente contactado', 'Presentación de propuesta', 'Negociación'];
+var AQUI = 2;   // «Presentación de propuesta»
+
+function pintarPasos(id) {
+  var tick = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  document.getElementById(id).innerHTML =
+    ETAPAS.map(function (e, i) {
+      var cls = i < AQUI ? 'hecho' : (i === AQUI ? 'aqui' : '');
+      return '<div class="fx-paso ' + cls + '">' +
+        '<span class="bola">' + (i < AQUI ? tick : '') + '</span>' +
+        '<span class="txt">' + e + '</span>' +
+        (i < ETAPAS.length - 1 ? '<span class="linea"></span>' : '') +
+      '</div>';
+    }).join('') +
+    '<div class="fx-cierre"><button class="gana">Ganado</button><button class="pierde">Perdido</button></div>';
+}
+
+var EVENTOS = [
+  { dia: 'Hoy', ico: '💬', qui: 'WhatsApp · María Camila', cuando: '10:14 a. m.',
+    txt: 'Le mandé las fichas de los tres apartamentos de Laureles. Quedó de responder hoy.' },
+  { dia: 'Hoy', ico: '📄', qui: 'Propuesta vista', cuando: '9:02 a. m.',
+    txt: 'Abrió «Apartamentos en arriendo» por segunda vez. 4 minutos en la página.' },
+  { dia: 'Hace 4 días', ico: '↗', qui: 'Etapa', cuando: '18 sep, 11:49 a. m.',
+    txt: 'De «Cliente contactado» a «Presentación de propuesta».' },
+  { dia: 'Hace 4 días', ico: '📞', qui: 'Llamada · María Camila', cuando: '18 sep, 11:40 a. m.',
+    txt: 'Busca apartamento de 2 alcobas en Laureles, hasta $2.000.000. Se muda en noviembre.' },
+  { dia: 'Hace 4 días', ico: '👤', qui: 'Asignado', cuando: '18 sep, 11:49 a. m.',
+    txt: 'Asignado automáticamente a María Camila Romero.' },
+  { dia: 'Hace 4 días', ico: '⚡', qui: 'Lead creado', cuando: '18 sep, 11:38 a. m.',
+    txt: 'Formulario web · certainpezzano.com/contacto\nCampaña: adwords · ppc · apartamentos en arriendo' },
+];
+
+function pintarHist(id, cuantos) {
+  var html = '', dia = '';
+  EVENTOS.slice(0, cuantos).forEach(function (e) {
+    if (e.dia !== dia) { dia = e.dia; html += '<div class="fx-dia">' + dia + '</div>'; }
+    html += '<div class="fx-ev"><div class="ico">' + e.ico + '</div><div class="cuerpo">' +
+      '<div class="cab"><span class="qui">' + e.qui + '</span><span class="cuando">' + e.cuando + '</span></div>' +
+      '<div class="txt">' + e.txt + '</div></div></div>';
+  });
+  document.getElementById(id).innerHTML = html;
+}
+
+var EXPLICA = {
+  a: '<b>A · Ficha a página completa.</b> Al hacer clic en un lead se abre su ficha ocupando la pantalla, ' +
+     'con «← Pipeline» para volver. Tres columnas: <b>quién es</b>, <b>qué ha pasado</b> y <b>qué falta por hacer</b>. ' +
+     'Arriba, el embudo como barra de progreso — hoy la etapa es un desplegable, y un desplegable no dice por dónde ya pasaste.',
+  b: '<b>B · Panel ancho.</b> El mismo panel de hoy, pero de 380 a 820 px y a dos columnas, sin salir del tablero. ' +
+     'Se sigue viendo el pipeline detrás, así que sirve para ir mirando leads uno tras otro sin perder el sitio.',
+  hoy: '<b>Lo que hay hoy:</b> 380 px con 26 bloques de contenido apilados en vertical. ' +
+     'Las tareas quedan arriba, las notas largas empujan el historial fuera de la vista, y para registrar una llamada hay que bajar. ' +
+     'Pulsa A o B para ver las dos propuestas.',
+};
+
+function ver(cual) {
+  document.getElementById('vista-a').classList.toggle('oculto', cual !== 'a');
+  document.getElementById('vista-b').classList.toggle('oculto', cual !== 'b');
+  document.getElementById('bt-a').classList.toggle('on', cual === 'a');
+  document.getElementById('bt-b').classList.toggle('on', cual === 'b');
+  document.getElementById('explica').innerHTML = EXPLICA[cual] || EXPLICA.hoy;
+  window.scrollTo(0, 0);
+}
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  pintarPasos('pasos-a'); pintarPasos('pasos-b');
+  pintarHist('hist-a', 6); pintarHist('hist-b', 4);
+  ver('a');
+})();
+</script>
+</body>
+</html>
