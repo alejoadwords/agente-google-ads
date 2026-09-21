@@ -62,7 +62,22 @@ const EMAIL_QUOTAS = { free: 0, pro: Infinity, individual: Infinity, agency: Inf
 // disparó una campaña de phishing 22 minutos después de registrarse. Agotó la
 // cuota diaria del proveedor y dejó sin correo a todos los demás — los avisos,
 // las campañas y las invitaciones de equipo de los clientes de verdad.
-const TOPE_DIARIO = { free: 0, trial: 300, pro: 2000, individual: 2000, agency: 5000, agencia: 5000 };
+//
+// El tope NO es un número fijo: sale de los contactos que el plan permite.
+// Vendemos «envíos ilimitados» y eso es verdad — lo que se paga son contactos,
+// no correos. Un número fijo rompería la promesa en cuanto alguien comprara
+// paquetes de contactos: un Agency con 7.000 contactos y un techo de 5.000 no
+// podría escribirle a su propia base. Derivarlo deja pasar siempre el envío
+// completo y sigue frenando al que quiere mandar 20.000 desde un plan de 1.000.
+const CONTACTOS_PLAN = { free: 50, pro: 1000, individual: 1000, trial: 1000, agency: 5000, agencia: 5000 };
+const PAQUETE_CONTACTOS = 1000; // lo que suma cada paquete extra comprado
+const RECORRIDOS_DIA = 3;       // veces que puede recorrer su base entera en un día
+
+function topeDiario(plan, leadsExtra) {
+  if (plan === 'free') return 0; // las campañas masivas son de pago
+  const base = CONTACTOS_PLAN[plan] ?? 1000;
+  return (base + (parseInt(leadsExtra || 0) || 0) * PAQUETE_CONTACTOS) * RECORRIDOS_DIA;
+}
 
 // Una cuenta con pocas horas de vida no dispara una campaña masiva. Quien
 // llega a hacer marketing de verdad prepara su base antes; quien se registra y
@@ -555,12 +570,13 @@ export default async function handler(req) {
         }, 403);
       }
 
-      const topeDia = TOPE_DIARIO[_lastPlan] ?? 0;
+      const topeDia = topeDiario(_lastPlan, cuentaMeta.leads_extra);
       const hoy = await dailySent(userId);
       if (hoy + leads.length > topeDia) {
         const quedan = Math.max(0, topeDia - hoy);
         return jsonResp({
-          error: `Tu plan envía hasta ${topeDia.toLocaleString('es-CO')} correos al día y hoy llevas ${hoy.toLocaleString('es-CO')}. ` +
+          error: `Hoy ya enviaste ${hoy.toLocaleString('es-CO')} correos, y el máximo diario de tu cuenta es ${topeDia.toLocaleString('es-CO')} ` +
+                 `— unas ${RECORRIDOS_DIA} veces tu base completa. ` +
                  (quedan
                    ? `Te quedan ${quedan.toLocaleString('es-CO')}: segmenta esta campaña o lánzala mañana.`
                    : 'Lánzala mañana, o escríbenos si necesitas más.'),

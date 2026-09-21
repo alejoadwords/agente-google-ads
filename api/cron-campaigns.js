@@ -26,7 +26,18 @@ const CRON_SECRET    = process.env.CRON_SECRET;
 // Ahora los tres se agrupan: Resend acepta 100 correos por petición y a
 // Supabase se le escribe una vez por lote en vez de una vez por persona. El
 // mismo tiempo de función rinde unas sesenta veces más.
-const PRESUPUESTO  = 5000; // destinatarios por corrida, repartidos entre campañas
+const PRESUPUESTO  = 5000; // destinatarios por TANDA, repartidos entre campañas
+
+// La función tiene 120 s. Antes se hacía UNA tanda de 5.000 y lo que sobrara
+// esperaba a la próxima vuelta del cron: diez minutos parado. Para una tienda
+// que manda una promo relámpago a 7.000 contactos eso son 5.000 correos en un
+// minuto y los otros 2.000 diez minutos después — la mitad de su clientela se
+// entera cuando la promo ya va por la mitad.
+//
+// Ahora se encadenan tandas mientras quede cola y quede tiempo. El corte es
+// por reloj, no por número: 85 s deja 35 de margen para cerrar las escrituras
+// pendientes, que es lo que NO se puede dejar a medias.
+const LIMITE_MS = 85000;
 
 // Cuentas a las que soporte les quitó el envío. Se consulta a Clerk, que es
 // donde vive la verdad del plan, y se guarda un momento: cinco campañas por
@@ -337,11 +348,16 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  let processed = 0, closed = 0;
+  let processed = 0, closed = 0, tandas = 0;
+  const T0 = Date.now();
   try {
+   while (Date.now() - T0 < LIMITE_MS) {
+    tandas++;
+    const alEmpezar = processed;
     // Programación: una campaña con scheduled_at futuro espera su hora
     const nowIso = new Date().toISOString();
     const campaigns = await sb(`/campaigns?status=in.(queued,sending)&or=(scheduled_at.is.null,scheduled_at.lte.${encodeURIComponent(nowIso)})&select=*&order=queued_at.asc&limit=5`);
+    if (!campaigns?.length) break;
     for (const c of (campaigns || [])) {
       // El bloqueo de una cuenta se comprueba TAMBIÉN aquí. Comprobarlo solo al
       // encolar no sirve de nada: lo que manda los correos es este cron, y una
@@ -354,7 +370,8 @@ export default async function handler(req, res) {
       if (c.status === 'queued') {
         await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'sending' }, 'return=minimal');
       }
-      const cupo = PRESUPUESTO - processed;
+      if (Date.now() - T0 > LIMITE_MS) break;
+      const cupo = PRESUPUESTO - (processed - alEmpezar);
       if (cupo <= 0) break; // el presupuesto se reparte entre campañas, no por campaña
       const pending = await colaPendiente(c.id, cupo);
       if (!pending?.length) {
@@ -429,6 +446,12 @@ export default async function handler(req, res) {
           sobres.push({ rcpt, lead, payload: armado.payload });
         }
         for (let i = 0; i < sobres.length; i += LOTE_RESEND) {
+          // Se corta por reloj ANTES de mandar, nunca después: lo que ya salió
+          // hay que alcanzar a registrarlo o se enviaría dos veces.
+          if (Date.now() - T0 > LIMITE_MS) {
+            console.warn('[cron-campaigns] se acabó el tiempo de la función, el resto sigue pendiente');
+            break;
+          }
           const tanda = sobres.slice(i, i + LOTE_RESEND);
           if (i > 0) await esperar(PAUSA_RESEND);
           const res = await enviarLote(tanda.map(s => s.payload));
@@ -498,8 +521,13 @@ export default async function handler(req, res) {
         closed++;
       }
     }
+    // Una tanda que no movió ni un destinatario no va a mover nada en la
+    // siguiente: o Resend no acepta más, o no quedaba cola. Sin este corte, el
+    // bucle daría vueltas en vacío hasta agotar los 85 s contra el proveedor.
+    if (processed === alEmpezar) break;
+   }
     console.log('[cron-campaigns] processed:', processed, 'closed:', closed);
-    return res.status(200).json({ ok: true, processed, closed });
+    return res.status(200).json({ ok: true, processed, closed, tandas, ms: Date.now() - T0 });
   } catch (e) {
     console.error('[cron-campaigns] error:', e);
     return res.status(500).json({ error: e.message });
