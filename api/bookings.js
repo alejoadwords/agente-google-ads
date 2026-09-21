@@ -11,6 +11,7 @@
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, alcanceDeCliente, clienteAjeno, normalizarPerfil, exigeModulo } from './_perfiles.js';
+import { iconoValido, ICONO_POR_DEFECTO } from './_iconos-reserva.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -118,6 +119,40 @@ export function limpiarExcepciones(x) {
       .map(t => [t[0], t[1]]);
   }
   return out;
+}
+
+// ── La dirección pública ────────────────────────────────────────────────────
+//
+// `/reservar/barberia-aurora` en vez de 32 caracteres de hexadecimal. El token
+// sigue existiendo y siguiendo funcionando: los enlaces ya repartidos no se
+// pueden romper por un cambio de estética.
+//
+// Un slug adivinable NO es un problema: la página de reservas está hecha para
+// repartirse. El token de cada CITA sí sigue siendo aleatorio, porque ese deja
+// cancelar.
+const RESERVADAS = new Set([
+  'api', 'app', 'www', 'admin', 'acuarius', 'reservar', 'cita', 'citas', 'form',
+  'formulario', 'login', 'logout', 'signup', 'p', 'l', 'privacy', 'terms',
+  'academia', 'soporte', 'ayuda', 'null', 'undefined', 'nuevo', 'test',
+]);
+
+export function limpiarSlug(x) {
+  return String(x || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // fuera tildes y eñes
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+export function revisarSlug(x) {
+  const s = limpiarSlug(x);
+  if (!s) return { error: 'La dirección necesita al menos una letra o un número.' };
+  if (s.length < 3) return { error: 'Muy corta: mínimo 3 caracteres.' };
+  // Un slug de solo hexadecimal y 24+ chars se confundiría con un token.
+  if (/^[a-f0-9]{24,}$/.test(s)) return { error: 'Esa dirección se parece demasiado a un identificador. Ponle palabras.' };
+  if (RESERVADAS.has(s)) return { error: 'Esa dirección está reservada. Prueba con otra.' };
+  return { slug: s };
 }
 
 function zonaValida(z) {
@@ -293,6 +328,40 @@ export default async function handler(req) {
       if ('direccion' in body) cambios.direccion = String(body.direccion || '').trim().slice(0, 200) || null;
       if ('detalle_direccion' in body) cambios.detalle_direccion = String(body.detalle_direccion || '').trim().slice(0, 200) || null;
       if ('mensaje_confirmacion' in body) cambios.mensaje_confirmacion = String(body.mensaje_confirmacion || '').trim().slice(0, 500) || null;
+      // El título manda sobre el nombre del negocio en la página pública: un
+      // estudio puede querer «Reservar espacio» y no su razón social.
+      if ('titulo' in body) cambios.titulo = String(body.titulo || '').trim().slice(0, 80) || null;
+      if ('pregunta' in body) cambios.pregunta = String(body.pregunta || '').trim().slice(0, 80) || null;
+      if ('logo_url' in body) {
+        const u = String(body.logo_url || '').trim();
+        // Solo del almacenamiento propio: una URL cualquiera dejaría poner la
+        // imagen de otro sitio en una página que lleva nuestra marca.
+        if (u && !u.startsWith(`${SUPABASE_URL}/storage/v1/object/public/`)) {
+          return jsonResp({ error: 'Esa imagen no viene de aquí. Súbela desde el botón.' }, 400);
+        }
+        cambios.logo_url = u || null;
+      }
+      if ('slug' in body) {
+        const pedido = String(body.slug || '').trim();
+        if (!pedido) cambios.slug = null;
+        else {
+          const r = revisarSlug(pedido);
+          if (r.error) return jsonResp({ error: r.error }, 400);
+          // Único en toda la plataforma: es una URL. El índice de la base lo
+          // garantiza; esto solo sirve para dar un mensaje entendible en vez
+          // de un 409 en crudo.
+          const ocupada = await fetch(
+            `${SUPABASE_URL}/rest/v1/booking_settings?slug=eq.${encodeURIComponent(r.slug)}&select=user_id,client_id&limit=1`,
+            { headers: sbHeaders() }
+          ).then(x => (x.ok ? x.json() : [])).catch(() => []);
+          const suya = ocupada?.[0] &&
+            ocupada[0].user_id === userId && (ocupada[0].client_id || '') === (cliente || '');
+          if (ocupada?.[0] && !suya) {
+            return jsonResp({ error: 'Esa dirección ya la está usando otro negocio. Prueba con otra.' }, 409);
+          }
+          cambios.slug = r.slug;
+        }
+      }
       if ('acento' in body) {
         const c = String(body.acento || '').trim();
         if (!/^#[0-9a-fA-F]{6}$/.test(c)) return jsonResp({ error: 'El color debe ir en formato #RRGGBB' }, 400);
@@ -348,6 +417,9 @@ export default async function handler(req) {
           campos.precio = p;
         }
         if ('color' in body && /^#[0-9a-fA-F]{6}$/.test(String(body.color))) campos.color = String(body.color).toUpperCase();
+        // Una clave inventada se cae al icono por defecto en vez de dejar el
+        // servicio sin dibujo.
+        if ('icono' in body) campos.icono = iconoValido(body.icono) ? String(body.icono) : ICONO_POR_DEFECTO;
         if ('activo' in body) campos.activo = !!body.activo;
         if ('orden' in body) campos.orden = entero(body.orden, 0, 999, 0);
 

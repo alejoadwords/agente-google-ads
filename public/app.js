@@ -36690,6 +36690,31 @@ const RSV_ZONAS = [
   ['Europe/Madrid', 'Madrid'],
 ];
 
+// Los iconos que puede llevar un servicio. Las CLAVES son las de
+// api/_iconos-reserva.js y los trazos, los de public/reservar.html; hay una
+// prueba que compara las tres listas. Todos con unas tijeras era decirle a una
+// veterinaria que la herramienta no es para ella.
+const RSV_ICONOS = {
+  cita:     ['Cita o reunión', '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/>'],
+  tijeras:  ['Peluquería o barbería', '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>'],
+  belleza:  ['Estética o spa', '<path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>'],
+  salud:    ['Consulta médica', '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'],
+  mascota:  ['Veterinaria o mascotas', '<circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="5" cy="11" r="2"/><circle cx="19" cy="11" r="2"/><path d="M12 11c-3 0-5 2.6-5 5.2A2.8 2.8 0 009.8 19h4.4a2.8 2.8 0 002.8-2.8c0-2.6-2-5.2-5-5.2z"/>'],
+  camara:   ['Fotografía o video', '<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2h3l2-3h6l2 3h3a2 2 0 012 2z"/><circle cx="12" cy="13" r="3.5"/>'],
+  espacio:  ['Alquiler de un espacio', '<path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 001 1h12a1 1 0 001-1V9.5"/><path d="M10 21v-6h4v6"/>'],
+  asesoria: ['Asesoría o consultoría', '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>'],
+  clase:    ['Clase o formación', '<path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2.5 9 2.5 12 0v-5"/>'],
+  taller:   ['Taller o reparación', '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>'],
+  deporte:  ['Entrenamiento o deporte', '<path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/>'],
+  comida:   ['Restaurante o catering', '<path d="M4 2v7a3 3 0 006 0V2M7 9v13"/><path d="M18 2c-1.7 0-3 2-3 5s1.3 4.5 3 4.5V22"/>'],
+};
+
+function rsvIcono(clave, tam) {
+  const par = RSV_ICONOS[clave] || RSV_ICONOS.cita;
+  return '<svg width="' + (tam || 16) + '" height="' + (tam || 16) + '" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + par[1] + '</svg>';
+}
+
 function rsvUrlBase() {
   const c = crmAmbitoCliente();
   return '/api/bookings' + (c ? '?client_id=' + encodeURIComponent(c) : '');
@@ -36724,8 +36749,11 @@ async function rsvCargar(forzar) {
 function rsvIr(v) { rsvVista = v; rsvRender(); }
 
 function rsvEnlace() {
-  const t = rsvDatos && rsvDatos.config && rsvDatos.config.token;
-  return t ? location.origin + '/reservar/' + t : '';
+  const c = (rsvDatos && rsvDatos.config) || {};
+  // La dirección amigable si la puso; si no, el token de siempre. Las dos
+  // funcionan: los enlaces ya repartidos no se pueden romper.
+  const id = c.slug || c.token;
+  return id ? location.origin + '/reservar/' + id : '';
 }
 
 function rsvCopiarEnlace() {
@@ -36819,6 +36847,8 @@ function rsvRender() {
 
     '<div class="rsv-enlace">' +
       '<div class="rsv-enlace-l">' + icn('file', 14) + '<span>' + (rsvEnlace() ? esc(rsvEnlace()) : 'Sin enlace todavía') + '</span></div>' +
+      (puede ? '<button class="btn-ghost sm" onclick="rsvEditarDireccion()">' +
+        (cfg.slug ? 'Cambiar dirección' : 'Personalizar') + '</button>' : '') +
       '<button class="btn-ghost sm" onclick="rsvCopiarEnlace()">Copiar</button>' +
       '<a class="btn-ghost sm" href="' + esc(rsvEnlace() || '#') + '" target="_blank" rel="noopener">Ver la página</a>' +
     '</div>' +
@@ -36867,7 +36897,8 @@ function rsvPintarServicios(puede) {
       const quien = (s.recursos || []).map(id => (recursos.find(r => r.id === id) || {}).nombre).filter(Boolean);
       return '<div class="rsv-card' + (s.activo === false ? ' apagada' : '') + '">' +
         '<div class="rsv-card-top">' +
-          '<span class="rsv-punto" style="background:' + esc(String(s.color || '#1E2BCC')) + '"></span>' +
+          '<span class="rsv-punto-ico" style="color:' + esc(String(s.color || '#1E2BCC')) + '">' +
+            rsvIcono(s.icono, 17) + '</span>' +
           '<div style="flex:1;min-width:0">' +
             '<div class="rsv-card-nom">' + esc(String(s.nombre || '')) + '</div>' +
             '<div class="rsv-card-meta">' + rsvMinutosTexto(s.minutos) +
@@ -37041,9 +37072,37 @@ function rsvPintarHorario(puede) {
     '<section class="rsv-bloque">' +
       '<h3 class="rsv-h3">Cómo se ve tu página</h3>' +
       '<div class="rsv-campo">' +
+        '<label>Tu logo</label>' +
+        '<div class="rsv-logo-fila">' +
+          (cfg.logo_url
+            ? '<img class="rsv-logo" src="' + esc(String(cfg.logo_url)) + '" alt="">'
+            : '<div class="rsv-logo rsv-logo-vacio">' + icn('plus', 18) + '</div>') +
+          (puede ? '<div>' +
+            '<input type="file" id="rsv-logo-arch" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="rsvSubirLogo(this)">' +
+            '<button class="btn-ghost sm" onclick="document.getElementById(\'rsv-logo-arch\').click()">' +
+              (cfg.logo_url ? 'Cambiar' : 'Subir imagen') + '</button>' +
+            (cfg.logo_url ? ' <button class="btn-ghost sm rsv-borrar" onclick="rsvGuardarConfig({logo_url:\'\'}).then(rsvRender)">Quitar</button>' : '') +
+            '<div class="rsv-nota">Cuadrada se ve mejor. Si no pones ninguna, salen las iniciales.</div>' +
+          '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
         '<label>Nombre del negocio</label>' +
         '<input class="auto-input" value="' + esc(String(cfg.nombre_negocio || '')) + '" placeholder="Barbería Aurora"' + dis +
           ' onchange="rsvGuardarConfig({nombre_negocio:this.value})">' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Título de la página <span class="rsv-opc">opcional</span></label>' +
+        '<input class="auto-input" value="' + esc(String(cfg.titulo || '')) + '" placeholder="' +
+          esc(String(cfg.nombre_negocio || 'Reservar una cita')) + '"' + dis +
+          ' onchange="rsvGuardarConfig({titulo:this.value})">' +
+        '<div class="rsv-nota">Manda sobre el nombre del negocio. Para poner «Reservar espacio» o «Agenda tu consulta».</div>' +
+      '</div>' +
+      '<div class="rsv-campo">' +
+        '<label>Qué le preguntas al entrar <span class="rsv-opc">opcional</span></label>' +
+        '<input class="auto-input" value="' + esc(String(cfg.pregunta || '')) + '" placeholder="¿Qué necesitas?"' + dis +
+          ' onchange="rsvGuardarConfig({pregunta:this.value})">' +
+        '<div class="rsv-nota">La primera línea, sobre la lista de servicios. «¿Qué espacio quieres?», «¿Para qué es la consulta?»…</div>' +
       '</div>' +
       '<div class="rsv-campo">' +
         '<label>Dirección</label>' +
@@ -37361,6 +37420,128 @@ async function rsvRehacerPlantillaWa() {
   }
 }
 
+// ── La dirección pública ────────────────────────────────────────────────────
+
+function rsvEditarDireccion() {
+  const cfg = (rsvDatos && rsvDatos.config) || {};
+  // Se propone a partir del nombre del negocio: casi siempre es la buena y
+  // nadie quiere inventarse una dirección desde cero.
+  const sugerida = cfg.slug || rsvASlug(cfg.nombre_negocio || cfg.titulo || '');
+
+  rsvCerrarModal();
+  const ov = document.createElement('div');
+  ov.id = 'rsv-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) rsvCerrarModal(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">La dirección de tu página</div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">&#10005;</button>' +
+    '</div>' +
+    '<div class="rsv-modal-cuerpo">' +
+      '<div class="rsv-campo"><label>Dirección</label>' +
+        '<div class="rsv-dir">' +
+          '<span>' + esc(location.origin.replace(/^https?:\/\//, '')) + '/reservar/</span>' +
+          '<input class="auto-input" id="rsv-slug" maxlength="40" placeholder="barberia-aurora" ' +
+            'value="' + esc(String(sugerida)) + '" oninput="rsvVistaSlug()">' +
+        '</div>' +
+        '<div class="rsv-nota" id="rsv-slug-nota">Minúsculas, números y guiones. Sin tildes ni espacios.</div>' +
+      '</div>' +
+      (cfg.slug ? '' :
+        '<div class="rsv-estado aviso">' + icn('alert', 14) +
+        ' El enlace largo que ya tengas repartido <b>seguirá funcionando</b>. Los dos llevan a la misma página.</div>') +
+      (cfg.slug ?
+        '<div class="rsv-estado aviso">' + icn('alert', 14) +
+        ' Si la cambias, <b>los enlaces con la dirección anterior dejan de funcionar</b>. El enlace largo sigue valiendo siempre.</div>' : '') +
+    '</div>' +
+    '<div class="rsv-modal-pie">' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="rsv-slug-ok" onclick="rsvGuardarDireccion()">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  rsvVistaSlug();
+  document.getElementById('rsv-slug')?.focus();
+}
+
+/** Las mismas reglas que el servidor, para avisar mientras se escribe. */
+function rsvASlug(x) {
+  return String(x || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+}
+
+function rsvVistaSlug() {
+  const inp = document.getElementById('rsv-slug');
+  const nota = document.getElementById('rsv-slug-nota');
+  const btn = document.getElementById('rsv-slug-ok');
+  if (!inp || !nota) return;
+  const limpio = rsvASlug(inp.value);
+  const corto = limpio.length < 3;
+  // Se enseña cómo va a quedar ANTES de guardar: quien escribe «Barbería
+  // Aurora» tiene que ver que se convierte en «barberia-aurora».
+  nota.innerHTML = !limpio
+    ? 'Escribe algo: minúsculas, números y guiones.'
+    : corto ? 'Muy corta: mínimo 3 caracteres.'
+    : 'Quedará: <b>' + esc(location.origin + '/reservar/' + limpio) + '</b>';
+  nota.classList.toggle('rsv-ojo', !limpio || corto);
+  if (btn) btn.disabled = !limpio || corto;
+}
+
+async function rsvGuardarDireccion() {
+  const inp = document.getElementById('rsv-slug');
+  const btn = document.getElementById('rsv-slug-ok');
+  if (!inp) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'config' }), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ que: 'config', slug: rsvASlug(inp.value) }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    rsvDatos.config = d.config;
+    rsvCerrarModal();
+    showToast('Tu página ya vive en esa dirección');
+    rsvRender();
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+async function rsvSubirLogo(input) {
+  const f = input && input.files && input.files[0];
+  if (!f) return;
+  // El contrato de upload-image es {type, data}, y corta en 2 MB. Se avisa aquí
+  // en vez de dejar que el servidor devuelva un error después de la espera.
+  if (f.size > 2 * 1024 * 1024) { showToast('La imagen pesa más de 2 MB. Prueba con una más pequeña.', 'error'); input.value = ''; return; }
+  showToast('Subiendo…');
+  try {
+    const data = await new Promise((ok, mal) => {
+      const fr = new FileReader();
+      fr.onload = () => ok(String(fr.result).split(',')[1]);
+      fr.onerror = () => mal(new Error('No se pudo leer el archivo'));
+      fr.readAsDataURL(f);
+    });
+    const r = await fetchAuth('/api/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: f.type, data }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    if (await rsvGuardarConfig({ logo_url: d.url }, true)) {
+      showToast('Logo actualizado');
+      rsvRender();
+    }
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+  }
+  input.value = '';
+}
+
 // ── Editor de servicio ──────────────────────────────────────────────────────
 
 function rsvCerrarModal() { document.getElementById('rsv-overlay')?.remove(); }
@@ -37369,7 +37550,7 @@ function rsvEditarServicio(id) {
   const s = id ? (rsvDatos.servicios || []).find(x => x.id === id) : null;
   rsvBorrador = s
     ? JSON.parse(JSON.stringify(s))
-    : { nombre: '', descripcion: '', minutos: 30, precio: '', color: '#1E2BCC', activo: true, recursos: [] };
+    : { nombre: '', descripcion: '', minutos: 30, precio: '', color: '#1E2BCC', icono: 'cita', activo: true, recursos: [] };
   const recursos = rsvDatos.recursos || [];
 
   rsvCerrarModal();
@@ -37407,6 +37588,16 @@ function rsvEditarServicio(id) {
           : '<div class="rsv-nota rsv-ojo">' + icn('alert', 12) + ' Todavía no has dicho quién atiende. ' +
             'Agrega a alguien en «Quién atiende» o este servicio no se podrá reservar.</div>') +
       '</div>' +
+      '<div class="rsv-campo"><label>Icono</label>' +
+        '<div class="rsv-iconos" id="rsv-s-iconos">' +
+          Object.keys(RSV_ICONOS).map(k =>
+            '<button class="rsv-ico-op' + ((rsvBorrador.icono || 'cita') === k ? ' sel' : '') + '" ' +
+            'title="' + esc(RSV_ICONOS[k][0]) + '" data-k="' + k + '" ' +
+            'onclick="rsvBorrador.icono=\'' + k + '\';[...this.parentNode.children].forEach(b=>b.classList.toggle(\'sel\',b===this))">' +
+            rsvIcono(k, 18) + '</button>').join('') +
+        '</div>' +
+        '<div class="rsv-nota">El que verá tu cliente en la lista. Pasa el ratón para ver a qué es cada uno.</div>' +
+      '</div>' +
       '<div class="rsv-campo"><label>Color</label>' +
         '<div class="rsv-colores" id="rsv-s-colores">' +
           ['#1E2BCC', '#0F766E', '#B45309', '#BE185D', '#4338CA', '#065F46', '#7C3AED', '#00B8CE'].map(c =>
@@ -37435,6 +37626,7 @@ async function rsvGuardarServicio(id) {
     minutos: +(document.getElementById('rsv-s-min') || {}).value || 30,
     precio: precioTxt === '' ? null : Number(precioTxt),
     color: rsvBorrador.color || '#1E2BCC',
+    icono: rsvBorrador.icono || 'cita',
     activo: !!(document.getElementById('rsv-s-activo') || {}).checked,
     recursos: [...document.querySelectorAll('.rsv-checks input:checked')].map(i => i.value),
   };

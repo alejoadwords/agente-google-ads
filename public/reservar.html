@@ -44,6 +44,10 @@ input,textarea{font-family:inherit}
 .neg-logo{width:52px;height:52px;border-radius:15px;background:var(--agua-grad);
   display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;
   flex:0 0 auto;box-shadow:var(--shadow-md)}
+/* `cover` y no `contain`: un logo cuadrado llena el hueco y uno alargado se
+   recorta por los lados, que es preferible a dejar franjas de degradado
+   asomando por debajo. */
+.neg-logo-img{object-fit:cover;background:var(--bg)}
 .neg h1{font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 .neg .sub{font-size:13px;color:var(--text-2);margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 
@@ -176,7 +180,9 @@ textarea{min-height:76px;resize:vertical;font-size:14px}
 (function () {
 'use strict';
 
-var RUTA = location.pathname.match(/\/(reservar|cita)\/([a-f0-9]{24,64})/i) || [];
+// La dirección puede ser el token de siempre o una amigable («/reservar/
+// barberia-aurora»). Las citas siguen usando token, que es aleatorio.
+var RUTA = location.pathname.match(/\/(reservar|cita)\/([A-Za-z0-9-]{3,64})/) || [];
 var MODO = RUTA[1] || '';
 var TOKEN = RUTA[2] || '';
 
@@ -196,8 +202,26 @@ function ico(p, s) {
   return '<svg width="' + (s || 15) + '" height="' + (s || 15) + '" viewBox="0 0 24 24" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
 }
+// Los iconos que puede llevar un servicio. Las CLAVES tienen que coincidir con
+// las de api/_iconos-reserva.js — hay una prueba que compara las dos listas.
+// Están duplicadas a propósito: esta página es autónoma para abrir rápido en el
+// móvil de alguien que va por la calle.
+var ICONOS = {
+  cita:     '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  tijeras:  '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>',
+  belleza:  '<path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>',
+  salud:    '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  mascota:  '<circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="5" cy="11" r="2"/><circle cx="19" cy="11" r="2"/><path d="M12 11c-3 0-5 2.6-5 5.2A2.8 2.8 0 009.8 19h4.4a2.8 2.8 0 002.8-2.8c0-2.6-2-5.2-5-5.2z"/>',
+  camara:   '<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2h3l2-3h6l2 3h3a2 2 0 012 2z"/><circle cx="12" cy="13" r="3.5"/>',
+  espacio:  '<path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 001 1h12a1 1 0 001-1V9.5"/><path d="M10 21v-6h4v6"/>',
+  asesoria: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>',
+  clase:    '<path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2.5 9 2.5 12 0v-5"/>',
+  taller:   '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>',
+  deporte:  '<path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/>',
+  comida:   '<path d="M4 2v7a3 3 0 006 0V2M7 9v13"/><path d="M18 2c-1.7 0-3 2-3 5s1.3 4.5 3 4.5V22"/>',
+};
+
 var I = {
-  tijeras: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>',
   user: '<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>',
@@ -273,12 +297,14 @@ function montar() {
   $('prog').hidden = false;
   $('todo').innerHTML =
     '<div class="neg" id="cab">' +
-      '<div class="neg-logo">' + esc(iniciales(N.nombre)) + '</div>' +
+      (N.logo
+        ? '<img class="neg-logo neg-logo-img" src="' + esc(N.logo) + '" alt="' + esc(N.nombre) + '">'
+        : '<div class="neg-logo">' + esc(iniciales(N.marca || N.nombre)) + '</div>') +
       '<div><h1>' + esc(N.nombre) + '</h1>' +
         (N.direccion ? '<div class="sub">' + ico(I.pin, 13) + esc(N.direccion) + '</div>' : '') +
       '</div></div>' +
 
-    '<section class="paso on" id="p1"><h2 class="tit">¿Qué necesitas?</h2>' +
+    '<section class="paso on" id="p1"><h2 class="tit">' + esc(N.pregunta || '¿Qué necesitas?') + '</h2>' +
       '<p class="ayuda">Elige el servicio para ver las horas libres.</p>' +
       '<div class="serv" id="servicios"></div></section>' +
 
@@ -316,7 +342,7 @@ function montar() {
 
   $('servicios').innerHTML = SERVICIOS.map(function (s, i) {
     return '<button data-i="' + i + '">' +
-      '<div class="ico">' + ico(I.tijeras, 19) + '</div>' +
+      '<div class="ico">' + ico(ICONOS[s.icono] || ICONOS.cita, 19) + '</div>' +
       '<div><div class="nom">' + esc(s.nombre) + '</div>' +
       (s.descripcion ? '<div class="det">' + esc(s.descripcion) + '</div>' : '') + '</div>' +
       '<div class="precio">' + (s.precio != null && s.precio !== '' ? '<b>$' + miles(s.precio) + '</b>' : '') +
@@ -466,7 +492,7 @@ function cuandoTexto() {
 
 function pintarResumen() {
   $('resumen').innerHTML =
-    '<div class="fila">' + ico(I.tijeras) + '<b>' + esc(sel.serv.nombre) + '</b> · ' + duracion(sel.serv.minutos) +
+    '<div class="fila">' + ico(ICONOS[sel.serv.icono] || ICONOS.cita) + '<b>' + esc(sel.serv.nombre) + '</b> · ' + duracion(sel.serv.minutos) +
       '<button class="cambiar" data-ir="1">Cambiar</button></div>' +
     '<div class="fila">' + ico(I.cal) + '<b>' + esc(cuandoTexto()) + '</b>' +
       '<button class="cambiar" data-ir="3">Cambiar</button></div>' +

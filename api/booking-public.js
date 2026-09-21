@@ -47,6 +47,8 @@ const jsonResp = (d, s = 200) =>
   new Response(JSON.stringify(d), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 const esToken = (t) => /^[a-f0-9]{24,64}$/i.test(String(t || ''));
+// La dirección pública: o el token de siempre, o un slug de 3 a 40 caracteres.
+const esDireccion = (t) => esToken(t) || /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/i.test(String(t || ''));
 
 function nuevoToken() {
   const b = new Uint8Array(16);
@@ -59,8 +61,19 @@ const sb = (path) => fetch(`${SUPABASE_URL}/rest/v1${path}`, { headers: sbHeader
 
 // ── Datos del negocio ───────────────────────────────────────────────────────
 
-async function cargarNegocio(token) {
-  const filas = await sb(`/booking_settings?token=eq.${encodeURIComponent(token)}&select=*&limit=1`);
+/**
+ * El negocio, por su dirección amigable o por su token.
+ *
+ * Los dos siguen valiendo a propósito: cuando alguien se pone una dirección
+ * bonita, los enlaces que ya repartió con el token no pueden dejar de
+ * funcionar. Un cliente con la cita apuntada en el móvil no se entera de que
+ * cambiamos de estética.
+ */
+async function cargarNegocio(id) {
+  const v = String(id || '');
+  // Un token es hexadecimal y largo; cualquier otra cosa se busca como slug.
+  const campo = /^[a-f0-9]{24,64}$/i.test(v) ? 'token' : 'slug';
+  const filas = await sb(`/booking_settings?${campo}=eq.${encodeURIComponent(v.toLowerCase())}&select=*&limit=1`);
   return filas?.[0] || null;
 }
 
@@ -73,7 +86,7 @@ async function cargarCatalogo(neg) {
   const cliente = neg.client_id || null;
   const [servicios, recursos] = await Promise.all([
     sb(`/booking_services?user_id=eq.${encodeURIComponent(neg.user_id)}&${filtroCliente(cliente)}` +
-       `&activo=is.true&select=id,nombre,descripcion,minutos,precio,color,orden,booking_service_resources(resource_id)` +
+       `&activo=is.true&select=id,nombre,descripcion,minutos,precio,color,icono,orden,booking_service_resources(resource_id)` +
        `&order=orden.asc,created_at.asc`),
     sb(`/booking_resources?user_id=eq.${encodeURIComponent(neg.user_id)}&${filtroCliente(cliente)}` +
        `&activo=is.true&select=id,nombre,horario,orden&order=orden.asc,created_at.asc`),
@@ -143,7 +156,7 @@ export default async function handler(req, contexto) {
   if (citaTok) return manejarCita(req, url, citaTok);
 
   const token = url.searchParams.get('token');
-  if (!esToken(token)) return jsonResp({ error: 'Página de reservas no encontrada' }, 404);
+  if (!esDireccion(token)) return jsonResp({ error: 'Página de reservas no encontrada' }, 404);
 
   const neg = await cargarNegocio(token).catch(() => null);
   if (!neg) return jsonResp({ error: 'Página de reservas no encontrada' }, 404);
@@ -162,7 +175,15 @@ async function manejarGet(url, neg) {
   const ahora = new Date();
 
   const negocio = {
-    nombre: neg.nombre_negocio || 'Reservar una cita',
+    // El título manda sobre el nombre del negocio: hay quien quiere «Reservar
+    // espacio» y no su razón social.
+    nombre: neg.titulo || neg.nombre_negocio || 'Reservar una cita',
+    // Las iniciales salen del NOMBRE DEL NEGOCIO, no del título. Si no, un
+    // título como «Reservar espacio» daba un círculo con «RE», que no
+    // identifica a nadie.
+    marca: neg.nombre_negocio || neg.titulo || '',
+    logo: neg.logo_url || null,
+    pregunta: neg.pregunta || null,
     direccion: neg.direccion || null,
     detalle_direccion: neg.detalle_direccion || null,
     acento: neg.acento || '#1E2BCC',

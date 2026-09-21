@@ -62,6 +62,14 @@
    }
   },
   {
+   "id": "2026-09-21-reservas-a-tu-estilo",
+   "fecha": "2026-09-21",
+   "tipo": "mejora",
+   "titulo": "Tu página de reservas, con tu cara",
+   "texto": "Tu página de reservas ya no tiene que parecerse a la de nadie. Puedes darle una dirección con tu nombre —app.acuarius.app/reservar/tu-negocio en vez del enlace largo— y el enlace anterior sigue funcionando, así que no se te rompe nada de lo que ya repartiste. Puedes subir tu logo, cambiar el título por lo que uses tú («Reservar espacio», «Agenda tu consulta») y cambiar la pregunta con la que recibes a tu cliente. Y cada servicio elige su propio icono entre doce: consulta médica, veterinaria, fotografía, alquiler de un espacio, clase, taller, entrenamiento… antes salían todos con unas tijeras, que solo le servía a una peluquería.",
+   "accion": { "texto": "Personalizarla", "ir": "reservas" }
+  },
+  {
    "id": "2026-09-21-cuenta-nueva-y-campana",
    "fecha": "2026-09-21",
    "tipo": "arreglo",

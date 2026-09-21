@@ -1305,6 +1305,31 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .rsv-card.apagada{opacity:.6}
 .rsv-card-top{display:flex;align-items:flex-start;gap:9px}
 .rsv-punto{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:5px}
+/* El icono del servicio hereda su color del propio servicio: el color ya no es
+   un punto suelto, es de qué color se dibuja lo que representa. */
+.rsv-punto-ico{width:30px;height:30px;border-radius:9px;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;background:var(--bg-subtle);border:1px solid var(--border2)}
+
+.rsv-iconos{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:7px}
+.rsv-ico-op{width:100%;aspect-ratio:1;border:1.5px solid var(--border);border-radius:var(--r);
+  background:var(--bg);color:var(--text-2);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;transition:all .15s var(--ease)}
+.rsv-ico-op:hover{border-color:var(--blue-md);color:var(--text)}
+.rsv-ico-op.sel{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
+
+.rsv-logo-fila{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.rsv-logo{width:56px;height:56px;border-radius:15px;object-fit:cover;flex-shrink:0;
+  border:1px solid var(--border);background:var(--bg-subtle)}
+.rsv-logo-vacio{display:flex;align-items:center;justify-content:center;color:var(--muted2);
+  border-style:dashed}
+
+/* El prefijo de la URL va pegado al campo: se lee como una dirección entera,
+   no como un rótulo y un hueco sin relación. */
+.rsv-dir{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:var(--r);
+  background:var(--bg-subtle);padding-left:11px;overflow:hidden}
+.rsv-dir span{font-size:var(--fs-sm);color:var(--muted2);white-space:nowrap}
+.rsv-dir .auto-input{border:none;background:var(--bg);border-radius:0;flex:1;min-width:0}
+.rsv-dir .auto-input:focus{border:none;outline:none}
 .rsv-card-nom{font-size:var(--fs-base);font-weight:700;letter-spacing:-.01em}
 .rsv-card-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:2px}
 .rsv-card-desc{font-size:var(--fs-sm);color:var(--text-2);line-height:1.5}

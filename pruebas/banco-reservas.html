@@ -67,14 +67,18 @@ function escenario(cual) {
   FALLA = cual === 'error';
   PUEDE = cual !== 'miembro';
   const servicios = [
-    { id: 's1', nombre: 'Corte clásico', descripcion: 'Lavado, corte y peinado', minutos: 45, precio: 45000, color: '#1E2BCC', activo: true, recursos: ['r1', 'r3'] },
-    { id: 's2', nombre: 'Corte + barba', descripcion: 'Lo de arriba más perfilado de barba', minutos: 60, precio: 65000, color: '#0F766E', activo: true, recursos: ['r1'] },
-    { id: 's3', nombre: 'Color', descripcion: 'Requiere prueba de mecha previa', minutos: 90, precio: 120000, color: '#BE185D', activo: false, recursos: ['r2'] },
+    { id: 's1', nombre: 'Sesión de fotos', descripcion: 'Estudio, 20 fotos editadas', minutos: 60, precio: 300000, color: '#1E2BCC', icono: 'camara', activo: true, recursos: ['r1', 'r3'] },
+    { id: 's2', nombre: 'Consulta veterinaria', descripcion: 'Revisión general', minutos: 30, precio: 65000, color: '#0F766E', icono: 'mascota', activo: true, recursos: ['r1'] },
+    { id: 's3', nombre: 'Alquiler de sala', descripcion: 'Por hora, con equipo', minutos: 60, precio: 120000, color: '#BE185D', icono: 'espacio', activo: false, recursos: ['r2'] },
   ];
   BD = {
     config: {
       token: cual === 'vacio' ? 'a1b2c3d4e5f60718293a4b5c6d7e8f90' : 'f0e1d2c3b4a5968778695a4b3c2d1e0f',
-      nombre_negocio: cual === 'vacio' ? '' : 'Barbería Aurora',
+      nombre_negocio: cual === 'vacio' ? '' : 'Estudio Aurora',
+      slug: cual === 'vacio' ? null : 'estudio-aurora',
+      titulo: cual === 'vacio' ? '' : 'Reservar espacio',
+      pregunta: cual === 'vacio' ? '' : '¿Qué quieres reservar?',
+      logo_url: null,
       direccion: cual === 'vacio' ? '' : 'Cra. 43A #7-50, Medellín',
       detalle_direccion: cual === 'vacio' ? '' : 'Segundo piso, local 204',
       zona_horaria: 'America/Bogota',
@@ -133,6 +137,9 @@ function showToast(m, t) {
 async function fetchAuth(url, opts) {
   opts = opts || {};
   await new Promise(function (r) { setTimeout(r, 120); });
+  if (url.indexOf('/api/upload-image') === 0) {
+    return respuesta(true, { url: 'https://ejemplo.test/storage/v1/object/public/logo.png' });
+  }
   if (url.indexOf('/api/whatsapp-templates') === 0) {
     var met = (opts.method || 'GET');
     if (met === 'POST') { WA = 'PENDING'; return respuesta(true, { ok: true, status: 'PENDING', category: 'UTILITY' }); }

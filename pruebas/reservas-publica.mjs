@@ -25,8 +25,12 @@ console.log('\nLas rutas llegan a la página\n');
   // El catch-all devuelve 200 con el shell de la app para cualquier ruta que no
   // sea /api: sin estas dos reglas, un enlace de reservas no daría error — se
   // abriría la aplicación, que es peor porque parece que funciona.
-  chk('la página lee el token de la propia URL',
-      /\/\(reservar\|cita\)\\\/\(\[a-f0-9\]\{24,64\}\)/.test(pag));
+  chk('la página lee la dirección de la propia URL',
+      /\/\(reservar\|cita\)\\\/\(\[A-Za-z0-9-\]\{3,64\}\)/.test(pag));
+  // Los enlaces que ya se repartieron con el token de 32 caracteres NO pueden
+  // dejar de funcionar porque alguien se ponga una dirección bonita.
+  chk('el servidor resuelve por token Y por dirección amigable',
+      /const campo = \/\^\[a-f0-9\]\{24,64\}\$\/i\.test\(v\) \? 'token' : 'slug'/.test(api));
 }
 
 console.log('\nEl endpoint es público, pero no ingenuo\n');
@@ -103,6 +107,15 @@ console.log('\nDetalles que se ven\n');
       /puede\.length <= 1/.test(pag));
   chk('las horas se enseñan en reloj de 12 h', /hour12: true/.test(pag));
   chk('el acento del negocio se aplica a la página', /aplicarAcento/.test(pag));
+  // Las iniciales son del NOMBRE DEL NEGOCIO, no del título: con «Reservar
+  // espacio» salía un círculo con «RE», que no identifica a nadie.
+  chk('las iniciales salen del nombre del negocio', /iniciales\(N\.marca \|\| N\.nombre\)/.test(pag));
+  chk('y el servidor lo manda aparte del título', /marca: neg\.nombre_negocio \|\| neg\.titulo/.test(api));
+  chk('si hay logo, se usa el logo', /N\.logo[\s\S]{0,80}neg-logo-img/.test(pag));
+  chk('la pregunta del primer paso la elige el negocio',
+      /esc\(N\.pregunta \|\| '¿Qué necesitas\?'\)/.test(pag));
+  chk('cada servicio lleva su icono, no unas tijeras para todos',
+      /ICONOS\[s\.icono\] \|\| ICONOS\.cita/.test(pag));
   chk('y solo si es un color de verdad', /\^#\[0-9a-f\]\{6\}\$/i.test(pag));
   chk('hay enlace para meterla en el calendario', /calendar\.google\.com\/calendar\/render/.test(pag));
   chk('todo lo que entra del servidor se escapa antes de pintarlo',
