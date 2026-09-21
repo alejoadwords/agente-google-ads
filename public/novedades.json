@@ -2,12 +2,11 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
-   "id": "2026-09-21-ficha-del-contacto",
-   "fecha": "2026-09-21",
-   "tipo": "mejora",
-   "titulo": "La ficha del contacto, por fin con sitio",
-   "texto": "La ficha de un contacto ya no es solo el panel de la derecha. Ese se queda para mirar rápido —quién es y llamarlo—, y desde él, con «Abrir ficha», entras a la ficha completa: tres columnas con quién es, todo lo que ha pasado y lo que falta por hacer. Arriba verás el embudo como una barra de progreso, así que de un vistazo sabes por dónde va y cuánto le falta; puedes mover la etapa haciendo clic en ella. El historial se agrupa por día y puedes filtrarlo por notas, llamadas, correos o cambios de etapa. Cada ficha tiene además su propia dirección, así que puedes pasarle el enlace a alguien de tu equipo y le abre ese contacto. En el celular las tres columnas se convierten en tres pestañas.",
-   "accion": { "texto": "Ir al CRM", "ir": "crm" }
+   "id": "2026-09-22-encuesta-a-tu-medida",
+   "fecha": "2026-09-22",
+   "tipo": "nuevo",
+   "titulo": "La encuesta de satisfacción, a tu medida",
+   "texto": "Hasta ahora la encuesta NPS era la misma para todos: una pregunta fija del 0 al 10 y poco más. Ahora la armas tú. En Análisis › Satisfacción encontrarás «Personalizar encuesta»: puedes cambiar todos los textos del correo y de la página que ve tu cliente, añadir hasta 8 preguntas propias —escritas o de escala del 1 al 5 o del 1 al 10— y ponerle tu logo y tu color, para que la encuesta no parezca nuestra sino tuya. Todo lo que respondan se carga solo en el reporte: cada escala con su promedio y su gráfico, y las respuestas escritas listadas. Si manejas varios clientes, cada uno tiene su propia encuesta. Y si más adelante reescribes una pregunta, las respuestas anteriores siguen mostrando a qué se contestó, así que el histórico no se te desordena."
   },
   {
    "id": "2026-09-22-variable-asesor",
@@ -125,6 +124,17 @@
    "tipo": "nuevo",
    "titulo": "Mueve un lead de un proceso de venta a otro",
    "texto": "Si manejas varios procesos de venta, ahora puedes mover un lead de uno a otro sin volver a crearlo. Está en la ficha del contacto, arriba de la etapa: ahí también se ve por fin en qué proceso está, que antes no se leía en ninguna parte. Antes de mover te decimos qué va a pasar con su etapa: si el proceso de destino tiene una etapa igual, la conserva; si no la tiene, te avisamos en cuál va a entrar, para que no te lo encuentres donde no lo buscabas. El cambio queda anotado en su historial. Solo lo pueden hacer el dueño de la cuenta y los administradores, y únicamente entre procesos del mismo cliente.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
+   "id": "2026-09-21-ficha-del-contacto",
+   "fecha": "2026-09-21",
+   "tipo": "mejora",
+   "titulo": "La ficha del contacto, por fin con sitio",
+   "texto": "La ficha de un contacto ya no es solo el panel de la derecha. Ese se queda para mirar rápido —quién es y llamarlo—, y desde él, con «Abrir ficha», entras a la ficha completa: tres columnas con quién es, todo lo que ha pasado y lo que falta por hacer. Arriba verás el embudo como una barra de progreso, así que de un vistazo sabes por dónde va y cuánto le falta; puedes mover la etapa haciendo clic en ella. El historial se agrupa por día y puedes filtrarlo por notas, llamadas, correos o cambios de etapa. Cada ficha tiene además su propia dirección, así que puedes pasarle el enlace a alguien de tu equipo y le abre ese contacto. En el celular las tres columnas se convierten en tres pestañas.",
    "accion": {
     "texto": "Ir al CRM",
     "ir": "crm"

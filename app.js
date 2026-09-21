@@ -31718,9 +31718,12 @@ function crmRenderNpsView() {
   const view = document.getElementById('crm-nps-view');
   if (!view) return;
   view.innerHTML =
-    '<div style="margin-bottom:16px;max-width:860px">' +
+    '<div style="margin-bottom:16px;max-width:860px;display:flex;align-items:flex-start;gap:12px">' +
+      '<div style="flex:1">' +
       '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Satisfacción (NPS)</div>' +
       '<div style="font-size:var(--fs-sm);color:var(--muted)">Respuestas de tus encuestas NPS · se envían con el paso "Encuesta NPS" de las automatizaciones</div>' +
+    '</div>' +
+      '<button class="btn-ghost sm" style="flex:none" onclick="npsCfgAbrir()">' + icn('gear', 12) + ' Personalizar encuesta</button>' +
     '</div>' +
     '<div id="crm-nps-full" style="max-width:860px"></div>';
   crmRenderNps('crm-nps-full');
@@ -38353,5 +38356,215 @@ function lfHace(iso) {
       lfPintar();
       lfCargarConversaciones(lfLead.id);
     }
+  };
+})();
+
+// ─── ENCUESTA NPS — personalización y reporte ────────────────────────────────
+// La encuesta era fija salvo tres textos del correo, y esos vivían en el paso
+// de la automatización: quien tenía cuatro automatizaciones que la enviaban
+// tenía cuatro encuestas distintas sin saberlo. Ahora es de la cuenta (y de
+// cada cliente, en las agencias), con preguntas propias además de la nota.
+
+let _npsCfg = null;
+
+const NPS_TIPOS = [
+  ['texto',    'Respuesta escrita'],
+  ['escala5',  'Escala 1 a 5'],
+  ['escala10', 'Escala 1 a 10'],
+];
+
+async function npsCfgAbrir() {
+  document.getElementById('nps-cfg-overlay')?.remove();
+  try {
+    const cli = crmAmbitoCliente();
+    const r = await fetchAuth('/api/nps?config=1' + (cli ? '&client_id=' + encodeURIComponent(cli) : ''), { noCache: true });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'no se pudo leer');
+    _npsCfg = d.config;
+  } catch (e) {
+    showToast('No pudimos abrir la encuesta: ' + (e.message || 'intenta de nuevo'), 'error');
+    return;
+  }
+  const ov = document.createElement('div');
+  ov.id = 'nps-cfg-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:660px;height:min(90vh,760px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Personalizar la encuesta</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + esc(npsAmbitoTexto()) + '</div></div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div id="nps-cfg-cuerpo" style="flex:1;overflow:auto;padding:16px 18px"></div>' +
+    '<div style="display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="npsCfgRestaurar()">Volver a la de siempre</button>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri" id="nps-cfg-guardar" onclick="npsCfgGuardar()">Guardar</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  npsCfgPintar();
+}
+
+function npsAmbitoTexto() {
+  const n = typeof pipeAmbitoNombre === 'function' ? pipeAmbitoNombre() : '';
+  return n ? 'Se aplica a las encuestas de ' + n : 'Se aplica a las encuestas de esta cuenta';
+}
+
+function npsCfgPintar() {
+  const c = document.getElementById('nps-cfg-cuerpo');
+  if (!c || !_npsCfg) return;
+  const campo = (clave, etiqueta, ayuda, filas) =>
+    '<div class="auto-field"><label class="auto-label">' + esc(etiqueta) + '</label>' +
+    (filas
+      ? '<textarea class="auto-input" rows="' + filas + '" oninput="npsCfgSet(\'' + clave + '\',this.value)">' + esc(_npsCfg[clave] || '') + '</textarea>'
+      : '<input class="auto-input" value="' + esc(_npsCfg[clave] || '') + '" oninput="npsCfgSet(\'' + clave + '\',this.value)">') +
+    (ayuda ? '<div class="auto-vars-hint">' + ayuda + '</div>' : '') + '</div>';
+  const titulo = t => '<div style="font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px">' + t + '</div>';
+
+  c.innerHTML =
+    titulo('El correo que recibe') +
+    campo('asunto', 'Asunto', 'Puedes usar {{nombre}}, {{empresa}} y {{asesor}}.') +
+    campo('intro', 'Texto de entrada', null, 2) +
+    campo('pregunta', 'La pregunta de la nota', 'La del 0 al 10. Es la que calcula tu NPS.') +
+    '<div style="display:flex;gap:10px">' +
+      '<div style="flex:1">' + campo('etiquetaMin', 'Debajo del 0') + '</div>' +
+      '<div style="flex:1">' + campo('etiquetaMax', 'Debajo del 10') + '</div>' +
+    '</div>' +
+
+    titulo('Preguntas adicionales') +
+    '<div style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px">Se muestran en la página, después de que elija su nota. Máximo 8.</div>' +
+    '<div id="nps-cfg-preguntas"></div>' +
+    '<button class="btn-ghost sm" style="margin-top:8px" onclick="npsCfgAgregar()">' + icn('plus', 11) + ' Añadir pregunta</button>' +
+
+    titulo('La página que se abre') +
+    campo('gracias', 'Título', 'Escribe {nota} donde quieras que aparezca la nota que eligió.') +
+    campo('piePromotor', 'Si puso 9 o 10') +
+    campo('pieNeutro', 'Si puso 7 u 8') +
+    campo('pieDetractor', 'Si puso 6 o menos') +
+    campo('comentarioPlaceholder', 'Texto guía del comentario') +
+    campo('boton', 'Texto del botón') +
+    campo('finalTitulo', 'Al terminar — título') +
+    campo('finalTexto', 'Al terminar — texto') +
+
+    titulo('Tu marca') +
+    campo('logoUrl', 'Logo (enlace https a una imagen)', 'Si lo dejas vacío sale el logo de Acuarius.') +
+    '<div class="auto-field"><label class="auto-label">Color de los botones</label>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<input type="color" value="' + esc(_npsCfg.color) + '" oninput="npsCfgSet(\'color\',this.value)" style="width:44px;height:32px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer">' +
+        '<input class="auto-input" style="flex:1" value="' + esc(_npsCfg.color) + '" oninput="npsCfgSet(\'color\',this.value)">' +
+      '</div></div>';
+  npsCfgPintarPreguntas();
+}
+
+function npsCfgPintarPreguntas() {
+  const c = document.getElementById('nps-cfg-preguntas');
+  if (!c) return;
+  if (!_npsCfg.preguntas.length) {
+    c.innerHTML = '<div style="font-size:12px;color:var(--muted2);border:1px dashed var(--border);border-radius:10px;padding:12px;text-align:center">Todavía no hay preguntas extra. Solo se pregunta la nota.</div>';
+    return;
+  }
+  c.innerHTML = _npsCfg.preguntas.map((p, i) =>
+    '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 11px;margin-bottom:8px;background:var(--panel)">' +
+      '<div style="display:flex;gap:7px;align-items:center">' +
+        '<input class="auto-input" style="flex:1" placeholder="¿Qué quieres preguntar?" value="' + esc(p.texto) + '" oninput="npsCfgPregSet(' + i + ',\'texto\',this.value)">' +
+        '<select class="auto-input" style="width:150px;flex:none" onchange="npsCfgPregSet(' + i + ',\'tipo\',this.value)">' +
+          NPS_TIPOS.map(([v, t]) => '<option value="' + v + '"' + (p.tipo === v ? ' selected' : '') + '>' + t + '</option>').join('') +
+        '</select>' +
+        '<button class="btn-ghost sm" title="Quitar" onclick="npsCfgQuitar(' + i + ')">&#10005;</button>' +
+      '</div>' +
+      '<label style="display:inline-flex;align-items:center;gap:6px;margin-top:7px;font-size:11.5px;color:var(--muted);cursor:pointer">' +
+        '<input type="checkbox"' + (p.obligatoria ? ' checked' : '') + ' onchange="npsCfgPregSet(' + i + ',\'obligatoria\',this.checked)"> Obligatoria' +
+      '</label>' +
+    '</div>').join('');
+}
+
+function npsCfgSet(clave, valor) { if (_npsCfg) _npsCfg[clave] = valor; }
+function npsCfgPregSet(i, clave, valor) { if (_npsCfg?.preguntas[i]) _npsCfg.preguntas[i][clave] = valor; }
+function npsCfgQuitar(i) { _npsCfg.preguntas.splice(i, 1); npsCfgPintarPreguntas(); }
+function npsCfgAgregar() {
+  if (_npsCfg.preguntas.length >= 8) { showToast('Ocho preguntas es el máximo. Una encuesta más larga casi nadie la termina.', 'warning'); return; }
+  _npsCfg.preguntas.push({ id: 'p' + Date.now().toString(36).slice(-6), tipo: 'texto', texto: '', obligatoria: false });
+  npsCfgPintarPreguntas();
+}
+function npsCfgRestaurar() {
+  if (!confirm('¿Volver a la encuesta de siempre? Se pierden tus textos y tus preguntas.')) return;
+  _npsCfg = { preguntas: [] };   // el servidor rellena lo que falte con los valores por defecto
+  npsCfgGuardar();
+}
+
+async function npsCfgGuardar() {
+  const btn = document.getElementById('nps-cfg-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const cli = crmAmbitoCliente();
+    const r = await fetchAuth('/api/nps' + (cli ? '?client_id=' + encodeURIComponent(cli) : ''), {
+      method: 'PUT', body: JSON.stringify({ config: _npsCfg }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'no se pudo guardar');
+    _npsCfg = d.config;   // el servidor manda: devuelve lo que de verdad quedó
+    document.getElementById('nps-cfg-overlay')?.remove();
+    showToast('Encuesta guardada');
+    if (document.getElementById('crm-nps-full')) crmRenderNps('crm-nps-full');
+  } catch (e) {
+    showToast('No pudimos guardar: ' + (e.message || 'intenta de nuevo'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+// ── El reporte de las preguntas extra ───────────────────────────────────────
+// Una escala se promedia y se reparte; el texto se lista. El enunciado sale de
+// la copia que viajó con cada respuesta, así que reescribir una pregunta no
+// reetiqueta lo que ya contestó la gente.
+function npsPreguntasHtml(d) {
+  if (!d.preguntas || !d.preguntas.length) return '';
+  return '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Preguntas de la encuesta</div>' +
+    d.preguntas.map(q => {
+      const cab = '<div style="font-size:13px;font-weight:700;margin-bottom:5px">' + esc(q.texto) +
+        '<span style="font-weight:500;color:var(--muted2);margin-left:7px;font-size:11.5px">' +
+        q.respondidas + ' de ' + q.enviadas + ' respondieron</span></div>';
+      if (q.max) {
+        const tope = Math.max(1, ...q.reparto);
+        return '<div style="padding:10px 0;border-top:1px solid var(--border)">' + cab +
+          '<div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">' +
+            '<div style="text-align:center;min-width:64px">' +
+              '<div style="font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--blue)">' + (q.promedio === null ? '—' : q.promedio) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--muted2)">de ' + q.max + '</div></div>' +
+            '<div style="flex:1;min-width:180px;display:flex;align-items:flex-end;gap:3px;height:52px">' +
+              q.reparto.map((n, i) =>
+                '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="' + (i + 1) + ': ' + n + '">' +
+                  '<div style="width:100%;background:var(--blue);border-radius:3px 3px 0 0;height:' + Math.round((n / tope) * 34) + 'px;min-height:' + (n ? 3 : 0) + 'px"></div>' +
+                  '<div style="font-size:9.5px;color:var(--muted2)">' + (i + 1) + '</div>' +
+                '</div>').join('') +
+            '</div>' +
+          '</div></div>';
+      }
+      return '<div style="padding:10px 0;border-top:1px solid var(--border)">' + cab +
+        (q.textos && q.textos.length
+          ? q.textos.slice(0, 6).map(t =>
+              '<div style="display:flex;gap:10px;padding:5px 0;font-size:12.5px">' +
+                '<span style="color:var(--text);flex:1">' + esc(t.texto) + '</span>' +
+                '<span style="color:var(--muted2);flex-shrink:0">' + esc(t.name || 'Anónimo') + '</span>' +
+              '</div>').join('')
+          : '<div style="font-size:12px;color:var(--muted2)">Sin respuestas todavía.</div>') +
+        '</div>';
+    }).join('') + '</div>';
+}
+
+// El widget ya existía; se le cuelga el bloque de preguntas detrás sin tocarlo.
+(function () {
+  const _prev = crmRenderNps;
+  crmRenderNps = async function (targetId) {
+    await _prev(targetId);
+    const box = document.getElementById(targetId || 'crm-nps-section');
+    if (!box || !box.innerHTML) return;
+    try {
+      const cli = crmAmbitoCliente();
+      const d = await fetchAuth('/api/nps' + (cli ? '?client_id=' + encodeURIComponent(cli) : '')).then(r => r.json());
+      box.insertAdjacentHTML('beforeend', npsPreguntasHtml(d));
+    } catch {}
   };
 })();
