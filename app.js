@@ -27394,9 +27394,9 @@ const CMP_CAMPOS_WA = [
   ['etapa', 'Etapa del pipeline'],
   ['fuente', 'Fuente'],
   ['valor', 'Valor de la oportunidad'],
-  // Si el contacto no tiene asesor, Meta rechaza el mensaje por parámetro
-  // vacío: el motor lo salta y lo dice, no lo manda a medias.
-  ['asesor', 'Asesor asignado'],
+  // Nunca llega vacío —sin asesor pone «nuestro equipo»—, así que este
+  // parámetro no hace que Meta rechace el mensaje ni salta a nadie.
+  ['asesor', 'Asesor asignado (o «nuestro equipo»)'],
 ];
 
 function cmpWTarjetaPlantillaWA() {
@@ -34561,7 +34561,7 @@ const CAMPO_VARIABLES = [
   { v: 'etapa',    d: 'Etapa del pipeline' },
   { v: 'fuente',   d: 'De dónde llegó' },
   { v: 'valor',    d: 'Valor del deal, ya con formato' },
-  { v: 'asesor',   d: 'Nombre del asesor asignado al contacto' },
+  { v: 'asesor',   d: 'Nombre del asesor asignado · si no tiene, pone «nuestro equipo»' },
 ];
 
 // Botón + panel de variables para un campo. destinoId es el input o textarea.

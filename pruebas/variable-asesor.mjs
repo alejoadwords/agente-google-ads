@@ -14,7 +14,11 @@ function sacarFuncion(fichero, firma) {
     if (s[k] === '{') d++;
     else if (s[k] === '}') { d--; if (d === 0) { j = k; break; } }
   }
-  return eval('(' + s.slice(i, j + 1) + ')');
+  // La función usa constantes del módulo (SIN_ASESOR). Se sacan del MISMO
+  // fichero en vez de repetirlas aquí: si mañana cambia el texto de reserva,
+  // la prueba lo sigue sola en lugar de mentir.
+  const consts = (s.match(/^const [A-Z_]+ = .*;$/gm) || []).join('\n');
+  return eval('(() => { ' + consts + '\n return (' + s.slice(i, j + 1) + '); })()');
 }
 const renderCampanas = sacarFuncion('api/cron-campaigns.js', 'function renderVars(text, lead) {');
 const renderAutos    = sacarFuncion('api/cron-automations.js', 'function renderVars(text, lead) {');
@@ -35,17 +39,20 @@ ok(!vc.includes('{{asesor}}'), 'no queda la variable literal en el texto');
 // un lead SIN asesor: no revienta y no deja la llave a la vista
 const sin = { name:'X', assigned_name:null };
 const r = renderCampanas('Te atiende {{asesor}}.', sin);
-ok(r === 'Te atiende .', 'sin asesor queda vacío y no revienta → ' + JSON.stringify(r));
+ok(r === 'Te atiende nuestro equipo.', 'sin asesor cae el texto de reserva → ' + JSON.stringify(r));
+ok(renderAutos('Te atiende {{asesor}}.', sin) === 'Te atiende nuestro equipo.', 'y en automatizaciones igual');
+ok(renderCampanas('Hola {{nombre}}, de {{empresa}}.', {name:'X'}) === 'Hola X, de .',
+   'las DEMÁS variables siguen quedando vacías: la reserva es solo para asesor');
 
 // la plantilla de WhatsApp: Meta rechaza vacíos, así que debe SALTAR el lead
 const wa = src('api/cron-campaigns.js');
-ok(/asesor: String\(lead\.assigned_name/.test(wa), 'WhatsApp: el parámetro asesor existe y va limpio');
-ok(/if \(!texto\) return \{ falta: campo \}/.test(wa), 'WhatsApp: un parámetro vacío salta el lead con su motivo');
+ok(/asesor: String\(lead\.assigned_name.*\|\| SIN_ASESOR/.test(wa), 'WhatsApp: el parámetro asesor lleva reserva');
+ok(/if \(!texto\) return \{ falta: campo \}/.test(wa), 'WhatsApp: los demás parámetros vacíos siguen saltando el lead');
 
 // las listas del navegador
 const app = src('public/app.js');
-ok(/\{ v: 'asesor',\s+d: 'Nombre del asesor asignado al contacto' \}/.test(app), 'navegador: está en CAMPO_VARIABLES (chips + validador + GrapesJS)');
-ok(/\['asesor', 'Asesor asignado'\]/.test(app), 'navegador: está en CMP_CAMPOS_WA');
+ok(/\{ v: 'asesor',/.test(app) && /nuestro equipo/.test(app), 'navegador: está en CAMPO_VARIABLES y avisa de la reserva');
+ok(/\['asesor', 'Asesor asignado \(o «nuestro equipo»\)'\]/.test(app), 'navegador: está en CMP_CAMPOS_WA');
 ok(/asesor: 'Carlos Asesor'/.test(app), 'navegador: la previsualización de WhatsApp lo muestra');
 
 // el validador no debe marcarlo como desconocido

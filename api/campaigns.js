@@ -509,7 +509,7 @@ export default async function handler(req) {
     const render = (t) => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => ({
       nombre: lead.name || '', empresa: lead.company || '', email: lead.email || '', telefono: lead.phone || '',
       etapa: lead.stage || '', fuente: lead.source || '', valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
-      asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
+      asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim() || 'nuestro equipo',
     })[k.toLowerCase()] ?? m);
     const html = campaignHtml(c, render(c.body), 'https://app.acuarius.app/api/unsubscribe?test=1', c.html ? render(c.html) : null);
     const payload = {

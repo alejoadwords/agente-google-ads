@@ -18,6 +18,9 @@ const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
 
+// Con qué se rellena {{asesor}} cuando el contacto no tiene uno asignado.
+const SIN_ASESOR = 'nuestro equipo';
+
 // Antes esto era `BATCH = 80` y el motor tardaba diez meses en recorrer una
 // base de tres millones. El cuello nunca fue Resend: era hacer TRES viajes de
 // red por destinatario —enviar, registrar el envío y marcar la fila— uno detrás
@@ -121,7 +124,11 @@ function renderVars(text, lead) {
     // desde `assigned_to` obligaría a una consulta a Clerk por cada lead.
     // Se le colapsan los espacios: hay nombres guardados con un TABULADOR
     // dentro («Patricia Maria\tPerez Charris») que saldrían así en el correo.
-    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
+    //
+    // Y es la ÚNICA variable con texto de reserva. Las demás vacías dejan un
+    // hueco que no se nota; esta se usa en frases como «te atiende {{asesor}}»,
+    // donde el hueco deja «te atiende .» — peor que no personalizar.
+    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim() || SIN_ASESOR,
   };
   return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => vars[k.toLowerCase()] !== undefined ? vars[k.toLowerCase()] : m);
 }
@@ -257,9 +264,10 @@ function parametrosDe(campos, lead) {
     nombre: lead.name, empresa: lead.company, email: lead.email, telefono: lead.phone,
     etapa: lead.stage, fuente: lead.source,
     valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
-    // Meta rechaza el mensaje si un parámetro llega vacío, así que un lead sin
-    // asesor asignado se salta con su motivo en vez de quemar el intento.
-    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
+    // Con texto de reserva este parámetro ya nunca llega vacío, así que un
+    // contacto sin asesor deja de saltarse: recibe el mensaje con «nuestro
+    // equipo». Meta solo rechaza los parámetros en blanco.
+    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim() || SIN_ASESOR,
   };
   const out = [];
   for (const campo of (campos || [])) {

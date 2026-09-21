@@ -12,6 +12,9 @@ const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
 
+// Con qué se rellena {{asesor}} cuando el contacto no tiene uno asignado.
+const SIN_ASESOR = 'nuestro equipo';
+
 // ── Gate por plan en ejecución: si el dueño ya no es Pro/Agency (downgrade),
 // sus automatizaciones no corren ────────────────────────────────────────────
 const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
@@ -123,7 +126,11 @@ function renderVars(text, lead) {
     // desde `assigned_to` obligaría a una consulta a Clerk por cada lead.
     // Se le colapsan los espacios: hay nombres guardados con un TABULADOR
     // dentro («Patricia Maria\tPerez Charris») que saldrían así en el correo.
-    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
+    //
+    // Y es la ÚNICA variable con texto de reserva. Las demás vacías dejan un
+    // hueco que no se nota; esta se usa en frases como «te atiende {{asesor}}»,
+    // donde el hueco deja «te atiende .» — peor que no personalizar.
+    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim() || SIN_ASESOR,
   };
   return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => vars[k.toLowerCase()] !== undefined ? vars[k.toLowerCase()] : m);
 }

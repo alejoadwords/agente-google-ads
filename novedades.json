@@ -6,7 +6,7 @@
    "fecha": "2026-09-22",
    "tipo": "nuevo",
    "titulo": "Personaliza tus mensajes con el nombre del asesor",
-   "texto": "Ya puedes usar {{asesor}} en tus correos, tus campañas de WhatsApp, tus plantillas y tus automatizaciones: se reemplaza por el nombre del asesor asignado a cada contacto. Sirve para que un envío masivo se lea como un mensaje personal — «Hola Ana, te atiende Carolina» — sin escribir una campaña por asesor. Si un contacto no tiene asesor asignado, en correo el espacio queda vacío y en WhatsApp ese contacto se salta y te lo decimos, porque Meta rechaza los mensajes con un dato en blanco. La encuentras en el botón «Insertar variable», junto a las demás."
+   "texto": "Ya puedes usar {{asesor}} en tus correos, tus campañas de WhatsApp, tus plantillas y tus automatizaciones: se reemplaza por el nombre del asesor asignado a cada contacto. Sirve para que un envío masivo se lea como un mensaje personal — «Hola Ana, te atiende Carolina» — sin escribir una campaña por asesor. Si un contacto todavía no tiene asesor asignado, en su lugar se escribe «nuestro equipo», así que la frase se lee bien igual y no se queda nadie sin recibir el mensaje. La encuentras en el botón «Insertar variable», junto a las demás."
   },
   {
    "id": "2026-09-22-selector-pipeline",
