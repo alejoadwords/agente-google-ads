@@ -20964,14 +20964,28 @@ async function actBorrar(id, leadId) {
   } catch (e) { showToast('No se pudo eliminar la actividad', 'error'); }
 }
 
+// El historial, sin pintar. Lo piden DOS sitios con formatos distintos: el
+// panel lo enseña compacto y la ficha a página completa como una línea de
+// tiempo. Traer el dato es lo mismo; dibujarlo, no.
+let _crmActividadesLead = [];
+
+async function crmTraerActividades(leadId) {
+  try {
+    const res = await fetchAuth(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    _crmActividadesLead = (await res.json()).activities || [];
+  } catch (e) {
+    console.error('crmTraerActividades', e);
+    _crmActividadesLead = [];
+  }
+  return _crmActividadesLead;
+}
+
 async function crmLoadActivities(leadId) {
   const list = document.getElementById('crm-activity-list');
   if (!list) return;
   try {
-    const res = await fetchAuth(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const acts = data.activities || [];
+    const acts = await crmTraerActividades(leadId);
     if (acts.length === 0) {
       list.innerHTML = `<div style="font-size:12px;color:var(--muted)">Sin actividad registrada.</div>`;
       return;
@@ -20998,7 +21012,7 @@ async function crmLoadActivities(leadId) {
         : '';
       return '<div class="crm-activity-item"><div class="crm-activity-dot" style="background:' + (dirigida ? 'var(--blue)' : (typeColors[a.type] || 'var(--blue)')) + '"></div><div class="crm-activity-content"><div class="crm-activity-text">' + etiqueta + ' ' + actTexto(a.content || '') + '</div>' + quienAviso + dueDate + '<div class="crm-activity-time">' + new Date(a.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>' + papelera + '</div>';
     }).join('');
-  } catch(e) { console.error('crmLoadActivities', e); }
+  } catch (e) { console.error('crmLoadActivities', e); }
 }
 
 function crmSetActType(type, btn) {
@@ -26822,6 +26836,9 @@ function agnScheduleForLead() {
     kanban: '/crm', list: '/crm/contactos', tareas: '/crm/tareas', agenda: '/crm/agenda', paginas: '/marketing/paginas',
     campaigns: '/marketing/campanas', plantillas: '/marketing/plantillas', listas: '/marketing/listas', autos: '/marketing/automatizaciones', sources: '/marketing/fuentes', proposals: '/marketing/propuestas',
     reservas: '/marketing/reservas',
+    // La ficha lleva el id en la ruta, así que su dirección se arma aparte en
+    // `currentPath()`. Aquí solo queda anotada para que el reverso la reconozca.
+    lead: '/crm/lead',
     inbox: '/conversaciones', agents: '/conversaciones/chatbots',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
@@ -26832,7 +26849,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas', lead: 'Lead' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -26840,6 +26857,11 @@ function agnScheduleForLead() {
 
   function currentPath() {
     if (currentView === 'chat') return '/agente/' + (typeof currentAgentCtx !== 'undefined' ? currentAgentCtx : 'google-ads');
+    // La ficha de un lead lleva SU id: es lo que deja pegar el enlace en un
+    // chat y que el botón atrás del navegador funcione.
+    if (currentView === 'crm' && typeof crmView !== 'undefined' && crmView === 'lead') {
+      return typeof lfLead !== 'undefined' && lfLead ? '/crm/lead/' + lfLead.id : '/crm';
+    }
     if (currentView === 'crm') return CRM_SUB[typeof crmView !== 'undefined' ? crmView : 'kanban'] || '/crm';
     return VIEW_PATHS[currentView] || '/';
   }
@@ -26872,6 +26894,19 @@ function agnScheduleForLead() {
         if (typeof crmInit === 'function') crmInit();
         const sub = CRM_LEGACY[p.slice(6)] || 'kanban';
         setTimeout(function () { crmSetView(sub); }, 60);
+      } else if (/^\/crm\/lead\/[0-9a-f-]{8,}$/i.test(p)) {
+        // Enlace directo a una ficha. Los leads pueden no estar cargados
+        // todavía, así que se espera a que lleguen antes de abrirla.
+        showView('crm');
+        if (typeof crmInit === 'function') crmInit();
+        const idLead = p.split('/').pop();
+        let vueltas = 0;
+        const reloj = setInterval(function () {
+          if (typeof crmLeadsLoaded !== 'undefined' && crmLeadsLoaded) {
+            clearInterval(reloj);
+            crmAbrirFicha(idLead);
+          } else if (++vueltas > 60) clearInterval(reloj);   // 12 s y se rinde
+        }, 200);
       } else if (Object.values(CRM_SUB).indexOf(p) !== -1) {
         // Rutas canónicas v2: /crm/*, /marketing/*, /conversaciones/*, /analisis/*
         showView('crm');
@@ -37903,4 +37938,420 @@ async function rsvBorrarRecurso(id) {
     NAV_TAB_LABELS.reservas = 'Reservas';
     if (!NAV_ALL_TABS.includes('reservas')) NAV_ALL_TABS.push('reservas');
   }
+})();
+
+
+// ══ FICHA DEL LEAD A PÁGINA COMPLETA ═════════════════════════════════════════
+//
+// El panel lateral se queda para mirar rápido: 380 px bastan para saber quién
+// es y llamarlo. Esta página es para TRABAJAR el lead, y por eso son tres
+// columnas que responden a tres preguntas distintas:
+//
+//   quién es  ·  qué ha pasado  ·  qué falta por hacer
+//
+// Antes todo eso iba apilado en 380 px y el historial —lo que se mira para
+// saber si el lead sigue vivo— quedaba debajo de todo.
+let lfLead = null;
+// A dónde vuelve el botón «← Volver». Se guarda al abrir y no se adivina: se
+// puede llegar a la ficha desde el tablero, desde la lista o desde una URL
+// pegada en un chat, y las tres tienen que volver a su sitio.
+let lfVistaAnterior = 'kanban';
+let lfFiltro = 'todo';
+let lfPestana = 'quien';   // solo en móvil
+
+const LF_TIPOS = {
+  nota:         ['Nota', 'edit'],
+  llamada:      ['Llamada', 'chat'],
+  email:        ['Email', 'file'],
+  reunion:      ['Reunión', 'users'],
+  tarea:        ['Tarea', 'check'],
+  stage_change: ['Etapa', 'trend'],
+  creacion:     ['Creado', 'sparkles'],
+};
+
+/**
+ * Abre la ficha. Recibe el id y no el lead entero: así vale igual desde el
+ * tablero, desde la lista y desde una URL pegada en un chat.
+ */
+async function crmAbrirFicha(leadId) {
+  const lead = (crmLeads || []).find(l => l.id === leadId);
+  if (!lead) {
+    // Puede venir de una URL y no estar en la vista actual (otro proceso, otro
+    // cliente). Decirlo es mejor que abrir una ficha en blanco.
+    showToast('Ese lead no está en la vista actual. Cambia de proceso o de cliente para verlo.', 'error');
+    return;
+  }
+  lfLead = lead;
+  // Las acciones que ya existen —agendar, propuesta, consultor, nota, mover de
+  // proceso— trabajan sobre `crmDetailLead`. Apuntarlo al mismo lead es lo que
+  // deja reutilizarlas enteras en vez de escribir una segunda versión de cada
+  // una, que acabaría diferenciándose.
+  crmDetailLead = lead;
+  lfFiltro = 'todo';
+  lfPestana = 'quien';
+  if (crmView !== 'lead') lfVistaAnterior = crmView;
+  crmCloseDetail();
+  crmSetView('lead');
+  lfPintar();                                   // se pinta con lo que ya hay
+  await Promise.all([                           // y se completa al llegar
+    crmTraerActividades(leadId),
+    crmCargarTareasLead(leadId),
+  ]);
+  lfPintar();
+}
+
+function lfCerrar() {
+  lfLead = null;
+  crmSetView(lfVistaAnterior || 'kanban');
+}
+
+// ── El embudo como barra de progreso ────────────────────────────────────────
+//
+// La etapa era un desplegable: dice DÓNDE está, no por dónde ya pasó ni cuánto
+// le falta. Ganado y perdido van aparte, al final: no son un paso más del
+// camino, son las dos formas de salirse de él.
+function lfEmbudo() {
+  const etapas = (crmStages || []).filter(s => !crmIsWonStage(s.key) && !crmIsLostStage(s.key));
+  const aqui = etapas.findIndex(s => s.key === lfLead.stage);
+  const cerrado = crmIsWonStage(lfLead.stage) || crmIsLostStage(lfLead.stage);
+  const tick = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+  return '<div class="lf-pasos">' +
+    etapas.map((s, i) => {
+      // Con el lead cerrado, TODO el camino queda hecho: llegó al final por una
+      // puerta o por la otra, y dejarlo a medias diría que se quedó a medias.
+      const cls = cerrado || i < aqui ? 'hecho' : (i === aqui ? 'aqui' : '');
+      return '<div class="lf-paso ' + cls + '" onclick="crmChangeStage(\'' + esc(s.key) + '\')" ' +
+        'style="cursor:pointer" title="Mover a ' + esc(s.label) + '">' +
+        '<span class="bola">' + (cerrado || i < aqui ? tick : '') + '</span>' +
+        '<span class="txt">' + esc(s.label) + '</span>' +
+        (i < etapas.length - 1 ? '<span class="linea"></span>' : '') +
+      '</div>';
+    }).join('') +
+    '<div class="lf-cierre">' +
+      lfBotonCierre('ganado', 'Ganado', 'gana') +
+      lfBotonCierre('perdido', 'Perdido', 'pierde') +
+    '</div>' +
+  '</div>';
+}
+
+function lfBotonCierre(cual, rotulo, clase) {
+  const etapa = (crmStages || []).find(s =>
+    cual === 'ganado' ? crmIsWonStage(s.key) : crmIsLostStage(s.key));
+  if (!etapa) return '';
+  const puesta = lfLead.stage === etapa.key;
+  return '<button class="' + clase + (puesta ? ' puesto' : '') + '" ' +
+    'onclick="crmChangeStage(\'' + esc(etapa.key) + '\')">' + rotulo + '</button>';
+}
+
+// ── El dibujo ───────────────────────────────────────────────────────────────
+
+function lfPintar() {
+  const host = document.getElementById('crm-lead-view');
+  if (!host || !lfLead) return;
+  const l = lfLead;
+  const proceso = (crmPipelines || []).find(p => p.id === l.pipeline_id);
+  const iniciales = (l.name || '?').split(' ').filter(Boolean).slice(0, 2)
+    .map(w => w[0]).join('').toUpperCase();
+
+  host.innerHTML =
+    '<div class="lf-barra">' +
+      '<button class="lf-volver" onclick="lfCerrar()">← Volver</button>' +
+      '<div class="lf-av">' + esc(iniciales) + '</div>' +
+      '<div style="min-width:0">' +
+        '<div class="lf-nom">' + esc(l.name || 'Sin nombre') + '</div>' +
+        '<div class="lf-sub">' + esc(proceso ? proceso.name : 'Sin proceso') +
+          (l.assigned_name ? ' · ' + esc(l.assigned_name) : ' · sin responsable') + '</div>' +
+      '</div>' +
+      '<div class="lf-acc">' + lfAcciones(l) + '</div>' +
+    '</div>' +
+    lfEmbudo() +
+    '<div class="lf-pestanas">' +
+      [['quien', 'Quién es'], ['pasado', 'Qué ha pasado'], ['hacer', 'Qué falta']]
+        .map(([k, t]) => '<button class="' + (lfPestana === k ? 'on' : '') + '" ' +
+          'onclick="lfPestana=\'' + k + '\';lfPintar()">' + t + '</button>').join('') +
+    '</div>' +
+    '<div class="lf-a">' +
+      '<div class="lf-col' + (lfPestana === 'quien' ? ' visible' : '') + '">' + lfQuienEs(l) + '</div>' +
+      '<div class="lf-col' + (lfPestana === 'pasado' ? ' visible' : '') + '">' + lfQuePaso(l) + '</div>' +
+      '<div class="lf-col tercera' + (lfPestana === 'hacer' ? ' visible' : '') + '">' + lfQueFalta(l) + '</div>' +
+    '</div>';
+}
+
+/** Las mismas acciones del panel: se reutilizan sus funciones, no se copian. */
+function lfAcciones(l) {
+  const tel = (l.phone || '').replace(/\s/g, '');
+  const b = [];
+  if (tel) b.push('<a class="btn-ghost sm" href="tel:' + esc(tel) + '">Llamar</a>');
+  if (tel) b.push('<a class="btn-ghost sm" target="_blank" rel="noopener" href="https://wa.me/' +
+    esc(tel.replace(/\D/g, '')) + '">WhatsApp</a>');
+  if (l.email) b.push('<a class="btn-ghost sm" href="mailto:' + esc(l.email) + '">Email</a>');
+  // Las acciones que ya existen se reutilizan tal cual. Todas trabajan sobre
+  // `crmDetailLead`, que la ficha deja apuntando al mismo lead al abrirse.
+  b.push('<button class="btn-ghost sm" onclick="crmSendLeadToConsultor()">Enviar al Consultor</button>');
+  b.push('<button class="btn-ghost sm" onclick="agnScheduleForLead()">Agendar</button>');
+  b.push('<button class="btn-pri sm" onclick="prpOpenForLead()">Propuesta</button>');
+  return b.join('');
+}
+
+function lfQuienEs(l) {
+  const fila = (k, v) => '<div class="lf-fila"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+  const proceso = (crmPipelines || []).find(p => p.id === l.pipeline_id);
+  const puedeMover = !crmSoyMiembro ||
+    !!(window._miPerfil && window._miPerfil.gestiona_equipo);
+  const cf = l.custom_fields || {};
+  const pagina = cf['Página'] || cf.pagina || null;
+  const campana = cf['Campaña'] || cf.campana || null;
+
+  return '<div class="lf-caja">' +
+      '<div class="lf-tit">Información</div>' +
+      fila('Email', l.email ? '<a href="mailto:' + esc(l.email) + '">' + esc(l.email) + '</a>' : '—') +
+      fila('Teléfono', esc(l.phone || '—')) +
+      fila('Empresa', esc(l.company || '—')) +
+      fila('Fuente', esc(fuenteLabel(l.source))) +
+      (l.value ? fila('Valor', '<b>$' + Number(l.value).toLocaleString('es-CO') + '</b>') : '') +
+      fila('Cierre esperado', l.expected_close_date
+        ? esc(new Date(l.expected_close_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }))
+        : '<span style="color:var(--muted2)">sin fecha</span>') +
+    '</div>' +
+
+    '<div class="lf-caja">' +
+      '<div class="lf-tit">Etiquetas</div>' +
+      ((l.tags || []).length
+        ? (l.tags || []).map(t => '<span class="lf-chip">' + esc(t) + '</span>').join('')
+        : '<div class="lf-vacio">Sin etiquetas.</div>') +
+    '</div>' +
+
+    '<div class="lf-caja">' +
+      '<div class="lf-tit">Proceso de venta' +
+        (puedeMover ? '<button onclick="crmMoverProcesoAbrir()">Cambiar</button>' : '') +
+      '</div>' +
+      '<div style="font-size:13.5px;font-weight:600">' + esc(proceso ? proceso.name : 'Sin proceso') + '</div>' +
+      '<div class="lf-tit" style="margin:12px 0 6px">Responsable</div>' +
+      '<div style="font-size:13.5px">' + esc(l.assigned_name || 'Sin asignar') + '</div>' +
+    '</div>' +
+
+    // De dónde vino. Solo si hay algo: una caja vacía ocupa sitio y no dice nada.
+    (pagina || campana
+      ? '<div class="lf-caja"><div class="lf-tit">De dónde vino</div>' +
+        (pagina ? fila('Página', esc(String(pagina))) : '') +
+        (campana ? fila('Campaña', esc(String(campana))) : '') + '</div>'
+      : '');
+}
+
+// ── Columna 2 · Qué ha pasado ───────────────────────────────────────────────
+
+function lfQuePaso(l) {
+  return '<div class="lf-caja">' +
+      '<div class="lf-tit">Registrar actividad</div>' +
+      '<div class="lf-reg">' +
+        ['nota', 'llamada', 'email', 'reunion', 'tarea'].map(t =>
+          '<button class="' + (crmActivityType === t ? 'on' : '') + '" ' +
+          'onclick="crmActivityType=\'' + t + '\';lfPintar()">' + LF_TIPOS[t][0] + '</button>').join('') +
+      '</div>' +
+      '<textarea class="lf-area" id="lf-texto" placeholder="' +
+        (crmActivityType === 'tarea'
+          ? 'Qué hay que hacer…'
+          : 'Queda en el historial, sin avisar a nadie…') + '"></textarea>' +
+      (crmActivityType === 'tarea'
+        ? '<div style="margin-top:9px"><label class="lf-tit" style="margin:0 0 5px">Para cuándo</label>' +
+          '<input type="datetime-local" class="lf-area" id="lf-vence" style="min-height:0;padding:9px 11px"></div>'
+        : '') +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px">' +
+        '<button class="btn-pri sm" onclick="lfGuardarActividad()">Guardar</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="lf-caja">' +
+      '<div class="lf-tit">Historial</div>' +
+      '<div class="lf-tabs">' +
+        lfFiltros().map(([k, t]) =>
+          '<button class="' + (lfFiltro === k ? 'on' : '') + '" ' +
+          'onclick="lfFiltro=\'' + k + '\';lfPintar()">' + t + '</button>').join('') +
+      '</div>' +
+      lfHistorial() +
+    '</div>';
+}
+
+/**
+ * Los filtros se calculan de lo que HAY, no de una lista fija: una pestaña
+ * «Llamadas» que siempre está vacía es una pestaña que enseña a no usar las
+ * pestañas.
+ */
+function lfFiltros() {
+  const hay = new Set((_crmActividadesLead || []).map(a => a.type));
+  return [['todo', 'Todo']].concat(
+    Object.keys(LF_TIPOS).filter(t => hay.has(t)).map(t => [t, LF_TIPOS[t][0]]));
+}
+
+function lfHistorial() {
+  const todo = _crmActividadesLead || [];
+  const acts = lfFiltro === 'todo' ? todo : todo.filter(a => a.type === lfFiltro);
+  if (!acts.length) {
+    return '<div class="lf-vacio">' +
+      (todo.length ? 'Nada de ese tipo todavía.' : 'Sin actividad registrada.') + '</div>';
+  }
+  let dia = '';
+  return acts.map(a => {
+    const cuando = new Date(a.created_at);
+    const suDia = lfDia(cuando);
+    const cabecera = suDia !== dia ? (dia = suDia, '<div class="lf-dia">' + esc(suDia) + '</div>') : '';
+    const meta = LF_TIPOS[a.type] || ['Actividad', 'chart'];
+    // Una nota dirigida se ve distinta de una nota suelta: si no, dos meses
+    // después nadie sabe cuál llevó aviso. Misma regla que en el panel.
+    const dirigida = a.type === 'nota' && a.metadata && a.metadata.para;
+    return cabecera +
+      '<div class="lf-ev"><div class="ico">' + icn(meta[1], 14) + '</div><div class="cuerpo">' +
+        '<div class="cab"><span class="qui">' +
+          (dirigida ? 'Nota al responsable' : esc(meta[0])) +
+          (a.metadata && a.metadata.actor ? ' · ' + esc(a.metadata.actor) : '') +
+        '</span><span class="cuando">' +
+          cuando.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) +
+        '</span></div>' +
+        '<div class="txt">' + actTexto(a.content || '') + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+/** «Hoy», «Ayer» o la fecha. Un montón de fechas iguales no agrupa nada. */
+function lfDia(d) {
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const suyo = new Date(d); suyo.setHours(0, 0, 0, 0);
+  const dias = Math.round((hoy - suyo) / 864e5);
+  if (dias === 0) return 'Hoy';
+  if (dias === 1) return 'Ayer';
+  if (dias < 7) return 'Hace ' + dias + ' días';
+  return suyo.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+async function lfGuardarActividad() {
+  const txt = (document.getElementById('lf-texto') || {}).value || '';
+  if (!txt.trim()) { showToast('Escribe algo primero', 'error'); return; }
+  const vence = (document.getElementById('lf-vence') || {}).value || null;
+  try {
+    const r = await fetchAuth('/api/lead-activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lead_id: lfLead.id, type: crmActivityType, content: txt.trim(),
+        ...(crmActivityType === 'tarea' && vence ? { metadata: { due_date: new Date(vence).toISOString() } } : {}),
+      }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || ('HTTP ' + r.status));
+    showToast('Guardado');
+    await Promise.all([crmTraerActividades(lfLead.id), crmCargarTareasLead(lfLead.id)]);
+    lfPintar();
+  } catch (e) { showToast(String(e.message || e), 'error'); }
+}
+
+// ── Columna 3 · Qué falta por hacer ─────────────────────────────────────────
+
+function lfQueFalta(l) {
+  const tareas = (_crmTareasLead || []).filter(t => !t.done);
+  const hechas = (_crmTareasLead || []).filter(t => t.done).length;
+
+  return '<div class="lf-caja">' +
+      '<div class="lf-tit">Tareas' +
+        (tareas.length ? '<span class="cuenta">' + tareas.length + '</span>' : '') +
+        '<button onclick="agnScheduleForLead()">+ Nueva</button></div>' +
+      (tareas.length
+        ? tareas.map(t => {
+            const vencida = t.due_at && new Date(t.due_at) < new Date();
+            return '<div class="lf-tarea' + (vencida ? ' vence' : '') + '">' +
+              '<input type="checkbox" onchange="crmTareaHecha(\'' + esc(t.id) + '\', this.checked)">' +
+              '<div><div>' + esc(t.title || 'Tarea') + '</div>' +
+              (t.due_at ? '<div class="cuando">' + esc(lfCuando(t.due_at)) + '</div>' : '') +
+              '</div></div>';
+          }).join('')
+        : '<div class="lf-vacio">' + (hechas ? 'Todo al día.' : 'Ninguna tarea pendiente.') + '</div>') +
+    '</div>' +
+
+    '<div class="lf-caja" style="border-color:var(--violet);background:var(--violet-lt)">' +
+      '<div class="lf-tit" style="color:var(--violet)">Próxima acción</div>' +
+      '<div id="lf-sugerencia" style="font-size:13px;line-height:1.55;color:var(--text-2)">' +
+        '<span class="lf-vacio">El Copiloto mira el lead y te dice qué hacer ahora.</span></div>' +
+      '<button class="btn-ghost sm" style="margin-top:10px;width:100%" onclick="lfSugerir()">Sugerir</button>' +
+    '</div>' +
+
+    '<div class="lf-caja">' +
+      '<div class="lf-tit">Conversaciones</div>' +
+      '<div id="lf-convs"><div class="lf-vacio">Cargando…</div></div>' +
+    '</div>';
+}
+
+function lfCuando(iso) {
+  const d = new Date(iso);
+  const dias = Math.round((d.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
+  const hora = new Date(iso).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+  if (dias < 0) return 'Venció hace ' + Math.abs(dias) + (Math.abs(dias) === 1 ? ' día' : ' días');
+  if (dias === 0) return 'Hoy a las ' + hora;
+  if (dias === 1) return 'Mañana a las ' + hora;
+  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ' · ' + hora;
+}
+
+/**
+ * La sugerencia del Copiloto. Se reutiliza la del panel, que ya tiene el prompt
+ * y la puerta de gasto; solo se copia el resultado a esta pantalla.
+ */
+async function lfSugerir() {
+  const caja = document.getElementById('lf-sugerencia');
+  if (!caja) return;
+  caja.innerHTML = '<span class="lf-vacio">Pensando…</span>';
+  try {
+    await crmSuggestNextAction();
+    const del = document.getElementById('crm-d-suggest-result');
+    caja.innerHTML = del && del.innerHTML.trim()
+      ? del.innerHTML
+      : '<span class="lf-vacio">No hubo respuesta. Inténtalo otra vez.</span>';
+  } catch (e) {
+    caja.innerHTML = '<span class="lf-vacio">' + esc(String(e.message || e)) + '</span>';
+  }
+}
+
+/** Las conversaciones del inbox atadas a este lead. */
+async function lfCargarConversaciones(leadId) {
+  const caja = document.getElementById('lf-convs');
+  if (!caja) return;
+  try {
+    const r = await fetchAuth('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId));
+    const convs = r.ok ? ((await r.json()).conversations || []) : [];
+    caja.innerHTML = convs.length
+      ? convs.map(c =>
+          '<div style="font-size:12.5px;line-height:1.5;padding:5px 0;cursor:pointer" ' +
+          'onclick="crmOpenConvFromDetail(\'' + esc(c.id) + '\',\'' + esc(c.channel || '') + '\')">' +
+          '<b>' + esc(lfCanal(c.channel)) + '</b><br>' +
+          '<span style="color:var(--muted)">' +
+          (c.last_message_at ? 'Último mensaje ' + esc(lfHace(c.last_message_at)) : 'Sin mensajes') +
+          '</span></div>').join('')
+      : '<div class="lf-vacio">Ninguna conversación en el inbox.</div>';
+  } catch {
+    // Que falle esto no puede dejar la caja diciendo «Cargando…» para siempre.
+    caja.innerHTML = '<div class="lf-vacio">No se pudieron cargar.</div>';
+  }
+}
+
+const lfCanal = (c) => ({ whatsapp: 'WhatsApp', messenger: 'Messenger', instagram: 'Instagram',
+  tiktok: 'TikTok', web: 'Chat web' })[c] || (c || 'Conversación');
+
+function lfHace(iso) {
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (min < 60) return 'hace ' + Math.max(1, min) + ' min';
+  if (min < 1440) return 'hace ' + Math.round(min / 60) + ' h';
+  const d = Math.round(min / 1440);
+  return 'hace ' + d + (d === 1 ? ' día' : ' días');
+}
+
+// La vista se cuelga al final, como las demás: sin tocar crmSetView.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const lv = document.getElementById('crm-lead-view');
+    if (lv) lv.style.display = v === 'lead' ? 'flex' : 'none';
+    if (v === 'lead' && lfLead) {
+      lfPintar();
+      lfCargarConversaciones(lfLead.id);
+    }
+  };
 })();

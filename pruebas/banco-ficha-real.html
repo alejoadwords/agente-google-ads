@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Ficha del lead</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  La ficha a página completa, montada con el CSS y las FUNCIONES reales de
+  public/. Lo único de mentira es el servidor.
+
+  Se mira: las tres columnas, el embudo (con el lead a medio camino y cerrado),
+  el historial agrupado por día y sus filtros, y las tres pestañas del móvil.
+
+  Arrancar:  node pruebas/servidor-boceto.mjs
+  Abrir:     http://localhost:4173/pruebas/banco-ficha-real.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC)}
+  #crm-lead-view{display:flex;flex-direction:column}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 11px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+  .banco span{opacity:.55}
+  #toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0D0F1C;color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13px;z-index:9999;display:none}
+</style>
+</head>
+<body>
+
+<div id="crm-lead-view"></div>
+<div id="crm-d-suggest-result" style="display:none"></div>
+<div id="toast"></div>
+
+<div class="banco">
+  <span>BANCO ·</span>
+  <button onclick="escena('medio')">a medio camino</button>
+  <button onclick="escena('ganado')">ganado</button>
+  <button onclick="escena('nuevo')">recién entrado, sin historial</button>
+  <span>·</span>
+  <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'760px'">móvil</button>
+</div>
+
+<script>
+// ── Datos de mentira, con la forma exacta de los reales ──────────────────────
+var crmStages = [
+  { key: 'nuevo', label: 'Cliente recibido' },
+  { key: 'contactado', label: 'Cliente contactado' },
+  { key: 'propuesta', label: 'Presentación de propuesta' },
+  { key: 'negociacion', label: 'Negociación' },
+  { key: 'ganado', label: 'Ganado' },
+  { key: 'perdido', label: 'Perdido' },
+];
+var crmPipelines = [{ id: 'p1', name: 'Arriendo', client_id: null }, { id: 'p2', name: 'Venta', client_id: null }];
+var crmSoyMiembro = false;
+var crmLeadsLoaded = true;
+var crmLeads = [];
+
+var ACTIVIDADES = [
+  { id: 'a1', type: 'llamada', created_at: new Date(Date.now() - 3 * 36e5).toISOString(),
+    content: 'Busca apartamento de 2 alcobas en Laureles, hasta $2.000.000. Se muda en noviembre.',
+    metadata: { actor: 'María Camila' } },
+  { id: 'a2', type: 'nota', created_at: new Date(Date.now() - 5 * 36e5).toISOString(),
+    content: 'Le mandé las fichas de los tres apartamentos. Quedó de responder hoy.',
+    metadata: { actor: 'María Camila' } },
+  { id: 'a3', type: 'nota', created_at: new Date(Date.now() - 26 * 36e5).toISOString(),
+    content: 'Llamarla antes del viernes, pidió cita presencial.',
+    metadata: { para: 'user_1', actor: 'Dirección' } },
+  { id: 'a4', type: 'stage_change', created_at: new Date(Date.now() - 4 * 864e5).toISOString(),
+    content: 'Etapa cambiada de "Cliente contactado" a "Presentación de propuesta"', metadata: {} },
+  { id: 'a5', type: 'email', created_at: new Date(Date.now() - 4 * 864e5).toISOString(),
+    content: 'Enviada la propuesta «Apartamentos en arriendo».', metadata: {} },
+  { id: 'a6', type: 'creacion', created_at: new Date(Date.now() - 12 * 864e5).toISOString(),
+    content: 'Lead creado desde el formulario web.', metadata: {} },
+];
+var TAREAS = [
+  { id: 't1', title: 'Llamar para confirmar la visita', due_at: new Date(Date.now() - 864e5).toISOString(), done: false },
+  { id: 't2', title: 'Enviar fichas de 3 apartamentos', due_at: new Date(Date.now() + 864e5).toISOString(), done: false },
+  { id: 't3', title: 'Primer contacto', due_at: new Date(Date.now() - 5 * 864e5).toISOString(), done: true },
+];
+
+function escena(cual) {
+  var l = {
+    id: 'l1', name: 'Lucía Ramírez', email: 'lucia.ramirez@ejemplo.com', phone: '+57 310 555 0142',
+    company: null, source: 'formulario', value: 1800000, expected_close_date: '2026-11-01',
+    tags: ['lead web', 'lead arriendo', 'formulario', 'propietario'],
+    stage: cual === 'ganado' ? 'ganado' : (cual === 'nuevo' ? 'nuevo' : 'propuesta'),
+    pipeline_id: 'p1', client_id: null, assigned_name: 'María Camila Romero',
+    custom_fields: { 'Página': 'certainpezzano.com/contacto', 'Campaña': 'adwords · ppc · apartamentos en arriendo' },
+  };
+  if (cual === 'nuevo') { l.name = 'Andrés Oliva'; l.tags = ['lead web']; l.value = null; l.expected_close_date = null; }
+  crmLeads = [l];
+  _crmActividadesLead = cual === 'nuevo' ? [] : ACTIVIDADES;
+  _crmTareasLead = cual === 'nuevo' ? [] : TAREAS;
+  lfLead = l; crmDetailLead = l; lfFiltro = 'todo'; lfPestana = 'quien';
+  lfPintar();
+  lfCargarConversaciones(l.id);
+}
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    js.slice(js.indexOf('const ICN_PATHS = {'), js.indexOf('// ── AUTOMATIZACIONES DEL CRM')),
+    (js.match(/function actTexto\([\s\S]*?\n\}\n/) || [''])[0],
+    (js.match(/function fuenteLabel\([\s\S]*?\n\}\n/) || [''])[0],
+    'function crmIsWonStage(k){return k==="ganado"} function crmIsLostStage(k){return k==="perdido"}',
+    'var crmActivityType="nota", _crmTareasLead=[], _crmActividadesLead=[], crmDetailLead=null, crmView="kanban";',
+    // `fuenteLabel` lee el catálogo de fuentes de la cuenta.
+    'var crmSources=[{key:"formulario",label:"Formulario web"},{key:"manual",label:"Manual"}];',
+    'function showToast(m,t){var e=document.getElementById("toast");e.textContent=m;e.style.display="block";' +
+      'clearTimeout(window._t);window._t=setTimeout(function(){e.style.display="none"},2400)}',
+    'function crmCloseDetail(){} function crmSetView(v){} function crmSuggestNextAction(){' +
+      'document.getElementById("crm-d-suggest-result").innerHTML=' +
+      '"Ya vio la propuesta hace 4 días sin responder. Llámala hoy: en arriendo el interés se enfría en una semana.";' +
+      'return Promise.resolve()}',
+    'function crmMoverProcesoAbrir(){showToast("Abriría el selector de proceso")}',
+    'function agnScheduleForLead(){showToast("Abriría el agendador")}',
+    'function prpOpenForLead(){showToast("Abriría la propuesta")}',
+    'function crmSendLeadToConsultor(){showToast("Iría al Consultor")}',
+    'function crmChangeStage(k){lfLead.stage=k;lfPintar();showToast("Etapa: "+k)}',
+    'function crmTareaHecha(id,h){showToast(h?"Tarea hecha":"Tarea reabierta")}',
+    'function crmOpenConvFromDetail(){showToast("Abriría el inbox")}',
+    'async function fetchAuth(u){ if(u.indexOf("chat-conversations")>=0) return {ok:true,json:async()=>' +
+      '({conversations:[{id:"c1",channel:"whatsapp",last_message_at:new Date(Date.now()-2*864e5).toISOString()}]})};' +
+      ' return {ok:true,json:async()=>({})}; }',
+    // La ficha, tal cual quedó.
+    js.slice(js.indexOf('// ══ FICHA DEL LEAD A PÁGINA COMPLETA ═')),
+  ].join('\n');
+
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  escena('medio');
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend',
+    '<pre style="color:#B91C1C;white-space:pre-wrap;padding:20px">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>

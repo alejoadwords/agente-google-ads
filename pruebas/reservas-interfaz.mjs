@@ -85,7 +85,11 @@ console.log('\nLos tres catálogos de iconos dicen lo mismo\n');
   // por defecto y nadie se enteraría.
   const claves = (txt, re) => new Set([...txt.matchAll(re)].map(m => m[1]));
   const srv = claves(lee('api/_iconos-reserva.js'), /^\s{2}([a-z]+):\s*'/gm);
-  const panel = claves(js.slice(js.indexOf('const RSV_ICONOS = {')), /^\s{2}([a-z]+):\s*\['/gm);
+  // El trozo se ACOTA al objeto. Antes cogía hasta el final del archivo, así
+  // que cualquier constante posterior con la misma forma —`LF_TIPOS`, de la
+  // ficha del lead— entraba como si fuera un icono de reservas.
+  const iniPanel = js.indexOf('const RSV_ICONOS = {');
+  const panel = claves(js.slice(iniPanel, js.indexOf('\n};', iniPanel)), /^\s{2}([a-z]+):\s*\['/gm);
   // `\s*` y no `\s{2,}`: las claves van alineadas con relleno, pero la más
   // larga no lleva ninguno. Con dos espacios obligatorios la prueba se
   // inventaba que faltaba «asesoria».
@@ -165,7 +169,7 @@ console.log('\nLo que no se puede perder de vista\n');
       /NAV_TABS\.marketing\.push\('reservas'\)/.test(bloque) && /NAV_TAB_LABELS\.reservas/.test(bloque));
   chk('y no en el de CRM', !/NAV_TABS\.crm\.push\('reservas'\)/.test(bloque));
   chk('tiene su propia URL', /reservas: '\/marketing\/reservas'/.test(js));
-  chk('y su título de pestaña del navegador', /reservas: 'Reservas' \}/.test(js));
+  chk('y su título de pestaña del navegador', /reservas: 'Reservas'/.test(js));
   chk('todas las llamadas del módulo van con sesión',
       !/[^h]fetch\(\s*['"`]\/api\//.test(bloque), 'hay un fetch() sin fetchAuth');
 }
