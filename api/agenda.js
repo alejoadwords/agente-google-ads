@@ -6,6 +6,7 @@
 export const config = { runtime: 'edge' };
 
 import { soloSusLeads } from './_perfiles.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -88,7 +89,7 @@ async function getGcalToken(userId) {
     `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_calendar&select=access_token,refresh_token,token_expires_at,account_name`,
     { headers: sbHeaders() }
   );
-  const conn = (await r.json())?.[0];
+  const conn = await abrirConexion((await r.json())?.[0]);
   if (!conn?.access_token) return null;
 
   const exp = conn.token_expires_at ? new Date(conn.token_expires_at).getTime() : 0;

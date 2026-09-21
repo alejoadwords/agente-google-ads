@@ -18,6 +18,7 @@
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, exigeModulo, soloSusLeads } from './_perfiles.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -98,7 +99,9 @@ async function conexionesDe(userId, clientId) {
   // pantalla dijera «no hay ninguna cuenta conectada» con una conectada
   // delante. Se muestra, marcada, para que se pueda asignar desde aquí.
   if (clientId) ruta += `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)`;
-  return sb(ruta);
+  // Los tokens salen descifrados de aquí: quien use la fila más abajo no
+  // tiene por qué saber que en la base están guardados cifrados.
+  return Promise.all((await sb(ruta)).map(abrirConexion));
 }
 
 // ── Google Ads ──────────────────────────────────────────────────────────────

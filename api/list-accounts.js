@@ -1,6 +1,7 @@
 // api/list-accounts.js
 // Lista todas las cuentas de Google Ads accesibles con el token del usuario
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -12,7 +13,7 @@ async function getStoredConnection(userId) {
       { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
     );
     const rows = await r.json();
-    return rows?.[0] || null;
+    return await abrirConexion(rows?.[0] || null);
   } catch { return null; }
 }
 

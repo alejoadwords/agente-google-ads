@@ -1,6 +1,7 @@
 // api/oauth/callback.js
 // Recibe el código de Google, obtiene tokens y los guarda en Supabase
 
+import { cifrar } from '../_cifrado.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -26,7 +27,7 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
         user_id:          userId,
         platform:         'google_ads',
         access_token:     tokens.access_token,
-        ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
+        ...(tokens.refresh_token ? { refresh_token: await cifrar(tokens.refresh_token) } : {}),
         token_expires_at: expiresAt,
         account_name:     userInfo.email || '',
         updated_at:       new Date().toISOString(),

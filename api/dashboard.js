@@ -13,6 +13,7 @@ const META_BASE           = 'https://graph.facebook.com/v19.0';
 const CACHE_TTL_MS        = 60 * 60 * 1000; // 60 minutes
 
 import { registrarUso, cuentaDe } from './_uso-ia.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -94,7 +95,7 @@ async function getConnection(userId, platform) {
     { headers: sbHeaders() }
   );
   const rows = await res.json();
-  return rows?.[0] || null;
+  return await abrirConexion(rows?.[0] || null);
 }
 
 async function incrementViews(id) {

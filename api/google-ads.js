@@ -3,6 +3,7 @@
 // GET  ?action=get-campaigns|get-keywords|get-account-overview|get-ads  (nuevas acciones)
 // POST sin action → legacy GAQL proxy para backward compat
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const DEV_TOKEN           = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
@@ -16,7 +17,7 @@ async function getStoredToken(userId) {
     { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
   );
   const rows = await res.json();
-  return rows?.[0] || null;
+  return await abrirConexion(rows?.[0] || null);
 }
 
 async function refreshGoogleToken(refreshToken) {

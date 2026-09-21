@@ -3,6 +3,7 @@
 // El frontend lo llama al iniciar sesión para garantizar un token fresco sin pedir
 // al usuario que se reconecte.
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -12,7 +13,7 @@ async function getConnection(userId) {
     { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
   );
   const rows = await r.json();
-  return rows?.[0] || null;
+  return await abrirConexion(rows?.[0] || null);
 }
 
 async function doRefresh(refreshToken) {
