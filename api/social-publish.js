@@ -1,41 +1,43 @@
-// api/social-publish.js
-// Publica posts en Instagram y Facebook Pages via Meta Graph API
+// api/social-publish.js — publica en Instagram y Facebook
 //
-// Body:
-// {
-//   network: 'instagram' | 'facebook',
-//   pageToken: string,           — token de la página (page-scoped, permanente)
-//   pageId: string,              — ID de la página de Facebook
-//   igUserId: string,            — ID cuenta Instagram Business (solo para IG)
-//   imageUrl: string,            — URL pública de la imagen (requerida para IG, opcional para FB)
-//   videoUrl: string,            — URL pública del video (para reels)
-//   caption: string,             — Caption / descripción del post
-//   isCarousel: boolean,         — Si es carrusel con múltiples imágenes
-//   carouselImageUrls: string[], — URLs de cada slide del carrusel
-// }
+// El token de la página NO llega en la petición: llega el id de la página y
+// aquí se busca el token cifrado de esa cuenta. Antes lo mandaba el navegador,
+// que es lo que convertía este endpoint en un proxy abierto a la API de
+// Facebook —sin sesión, con cualquier token que le pasaran— y obligaba a tener
+// el token guardado en `localStorage`.
 
-const GRAPH = 'https://graph.facebook.com/v19.0';
+import { cuentaDe, tokenDeCuenta } from './_social-cuentas.js';
 
-// Espera hasta que el media container de IG esté listo (para videos)
-async function waitForMediaReady(creationId, pageToken, maxAttempts = 12, delayMs = 5000) {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, delayMs));
-    const statusRes  = await fetch(`${GRAPH}/${creationId}?fields=status_code&access_token=${pageToken}`);
-    const statusData = await statusRes.json();
-    if (statusData.status_code === 'FINISHED') return true;
-    if (statusData.status_code === 'ERROR')    throw new Error('Error procesando media en Instagram');
-  }
-  throw new Error('Tiempo de espera agotado procesando media en Instagram');
+async function usuarioDeLaSesion(req) {
+  const auth = req.headers.authorization || req.headers.Authorization || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  try {
+    const [hB64, pB64, sB64] = auth.slice(7).split('.');
+    if (!sB64) return null;
+    const cabecera = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const llave = jwks.keys?.find(k => k.kid === cabecera.kid);
+    if (!llave) return null;
+    const ck = await crypto.subtle.importKey('jwk', llave, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const firma = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, firma, new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const cuerpo = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (cuerpo.exp && cuerpo.exp < Math.floor(Date.now() / 1000)) return null;
+    return cuerpo.sub || null;
+  } catch { return null; }
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const quien = await usuarioDeLaSesion(req);
+  if (!quien) return res.status(401).json({ error: 'No autorizado' });
+
   const {
     network,
-    pageToken,
-    pageId,
-    igUserId,
+    pageId: pageIdPedido,
+    clientId,
     imageUrl,
     imageBase64,
     imageMediaType,
@@ -45,8 +47,20 @@ export default async function handler(req, res) {
     carouselImageUrls = [],
   } = req.body;
 
-  if (!network)    return res.status(400).json({ error: 'network requerido' });
-  if (!pageToken)  return res.status(400).json({ error: 'pageToken requerido' });
+  if (!network) return res.status(400).json({ error: 'network requerido' });
+
+  // El token sale de la base, nunca de la petición. Si la cuenta no es de
+  // quien pide, aquí no aparece nada y se corta con un mensaje claro.
+  const duena = await cuentaDe(quien);
+  const cuenta = await tokenDeCuenta(duena, clientId || '', network, pageIdPedido || '');
+  if (!cuenta || !cuenta.pageToken) {
+    return res.status(400).json({ error: 'No hay una cuenta conectada para esa red. Vuelve a conectarla desde el Studio.' });
+  }
+  // La página y la cuenta de IG también salen de la base: si vinieran de la
+  // petición podrían no corresponder al token y el fallo sería incomprensible.
+  const pageToken = cuenta.pageToken;
+  const pageId    = cuenta.pageId;
+  const igUserId  = cuenta.igUserId;
 
   try {
 

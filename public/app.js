@@ -7554,8 +7554,16 @@ let studioCurrentWeek = 0;
 let studioCurrentView = 'calendar';
 
 // ─── Social Publishing — conexiones por cliente ───────────────────────────────
-// Almacena tokens de páginas FB + cuentas IG por usuario+cliente en localStorage.
-// Formato: { instagram:[{pageId,pageName,pageToken,igUserId,igUsername},...], facebook:[...] }
+// Las cuentas conectadas viven en la CUENTA, no en el navegador. El token de
+// la página nunca llega hasta aquí: el servidor lo guarda cifrado y lo busca
+// él mismo al publicar. Antes estaba en `localStorage`, a la vista de
+// cualquier script, y se perdía al limpiar la caché.
+//
+// `loadSocialConnections` sigue siendo síncrona porque la llaman seis sitios:
+// lee de una copia en memoria que llena `socialSincronizar()`.
+
+const SOCIAL_VACIO = { instagram: [], facebook: [] };
+let _socialMem = null, _socialMemKey = null;
 
 function getSocialPubKey() {
   const uid = clerkInstance?.user?.id || 'anon';
@@ -7564,14 +7572,40 @@ function getSocialPubKey() {
 }
 
 function loadSocialConnections() {
-  try {
-    const raw = localStorage.getItem(getSocialPubKey());
-    return raw ? JSON.parse(raw) : { instagram: [], facebook: [] };
-  } catch { return { instagram: [], facebook: [] }; }
+  if (_socialMem && _socialMemKey === getSocialPubKey()) return _socialMem;
+  return SOCIAL_VACIO;
 }
 
-function saveSocialConnections(data) {
-  try { localStorage.setItem(getSocialPubKey(), JSON.stringify(data)); } catch {}
+// Trae de la cuenta las cuentas conectadas. Devuelve true si hay alguna.
+async function socialSincronizar() {
+  const clave = getSocialPubKey();
+  try {
+    const r = await fetchAuth('/api/social-connections?client_id=' + encodeURIComponent(crmAmbitoCliente() || ''));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'no se pudo leer');
+    _socialMem = d.conexiones || SOCIAL_VACIO;
+    _socialMemKey = clave;
+    socialAvisarViejas();
+    return ((_socialMem.instagram || []).length + (_socialMem.facebook || []).length) > 0;
+  } catch (e) {
+    _socialMem = SOCIAL_VACIO;
+    _socialMemKey = clave;
+    return false;
+  } finally {
+    try { updateStudioConnectBtn(); } catch (e) {}
+  }
+}
+
+// Quien conectó antes tiene el token guardado en este navegador y ya no sirve:
+// el servidor no lo conoce. Se le dice, y se borra para no dejarlo ahí tirado.
+function socialAvisarViejas() {
+  let viejo = null;
+  try { viejo = localStorage.getItem(getSocialPubKey()); } catch (e) {}
+  if (!viejo) return;
+  try { localStorage.removeItem(getSocialPubKey()); } catch (e) {}
+  const hay = (_socialMem.instagram || []).length + (_socialMem.facebook || []).length;
+  if (hay) return;
+  showToast('Por seguridad tus cuentas de redes ya no se guardan en este navegador. Vuelve a conectarlas una vez desde el Studio.', 'warning');
 }
 
 function getSocialAccount(network) {
@@ -7581,26 +7615,38 @@ function getSocialAccount(network) {
   return list.length > 0 ? list[0] : null;
 }
 
-function connectSocialNetwork(network) {
-  const uid      = clerkInstance?.user?.id || '';
-  const clientId = agencyActiveClientId || '';
-  window.location.href =
-    '/api/social-connect?network=' + network +
-    '&clientId=' + encodeURIComponent(clientId) +
-    '&userId='   + encodeURIComponent(uid);
+async function connectSocialNetwork(network) {
+  // El ticket lo firma el servidor con nuestra sesión ya verificada. Antes se
+  // mandaba el userId en la URL y cambiándolo se le podía colgar una cuenta de
+  // Facebook a otra persona.
+  try {
+    const r = await fetchAuth('/api/social-connections?ticket=1&client_id=' +
+      encodeURIComponent(crmAmbitoCliente() || ''), { noCache: true });
+    const d = await r.json();
+    if (!r.ok || !d.ticket) throw new Error(d.error || 'no se pudo preparar la conexión');
+    window.location.href = '/api/social-connect?network=' + encodeURIComponent(network) +
+      '&t=' + encodeURIComponent(d.ticket);
+  } catch (e) {
+    showToast('No pudimos empezar la conexión: ' + (e.message || 'intenta de nuevo'), 'error');
+  }
 }
 
-function disconnectSocialNetwork(network) {
+async function disconnectSocialNetwork(network) {
   if (!confirm('¿Desconectar la cuenta de ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '?')) return;
-  const conns = loadSocialConnections();
-  conns[network] = [];
-  saveSocialConnections(conns);
+  try {
+    const r = await fetchAuth('/api/social-connections?network=' + encodeURIComponent(network) +
+      '&client_id=' + encodeURIComponent(crmAmbitoCliente() || ''), { method: 'DELETE' });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))).error) || 'no se pudo desconectar');
+  } catch (e) {
+    showToast('No pudimos desconectar la cuenta: ' + (e.message || 'intenta de nuevo'), 'error');
+    return;
+  }
+  await socialSincronizar();
   updateStudioConnectBtn();
   const modal = document.getElementById('social-conn-modal');
   if (modal) { modal.remove(); openSocialConnectionsModal(); }
 }
 
-// Actualiza el label del botón "Conectar redes" según cuentas activas
 function updateStudioConnectBtn() {
   const lbl  = document.getElementById('studio-connect-label');
   const btn  = document.getElementById('studio-connect-btn');
@@ -7989,9 +8035,9 @@ async function publishPostNow(postId) {
 
       const body = {
         network,
-        pageToken:         acct.pageToken,
+        // Va el id de la página, no el token: el servidor busca el suyo.
         pageId:            acct.pageId,
-        igUserId:          acct.igUserId || null,
+        clientId:          crmAmbitoCliente() || '',
         imageUrl:          sharedImageUrl,
         imageBase64:       useDirect ? post.imageBase64              : null,
         imageMediaType:    useDirect ? (post.imageMediaType || 'image/jpeg') : null,
@@ -9899,7 +9945,9 @@ function showView(id){
   if(id==='agency'){agencyRender();setTimeout(function(){renderPulsoAgency();},80);}
   // Se trae la parrilla de la cuenta ANTES de pintar; si tarda o falla,
   // `renderStudio` pinta igual con la copia local y sale el aviso.
-  if(id==='social-studio'){ renderStudio(); studioSincronizar().then(renderStudio); }
+  // Parrilla y cuentas conectadas: ambas viven ahora en la cuenta, así que
+  // hay que traerlas al entrar. Se pinta antes para no dejar la vista en blanco.
+  if(id==='social-studio'){ renderStudio(); socialSincronizar(); studioSincronizar().then(renderStudio); }
   if(id==='home')setTimeout(function(){renderPulso();},80);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
@@ -14296,90 +14344,40 @@ function generateBasicImage() {
     const network  = params.get('social_network') || 'instagram';
     const clientId = params.get('social_client')  || '';
 
-    // Los tokens se guardaron en sessionStorage por la página intermedia del callback
-    // (evita URLs largas con tokens de Facebook que pueden truncarse)
-    let accounts = [];
-    try {
-      const pending = sessionStorage.getItem('acuarius_social_pending');
-      if (pending) {
-        const parsed = JSON.parse(pending);
-        accounts = parsed.accounts || [];
-        sessionStorage.removeItem('acuarius_social_pending');
-      }
-      // Fallback legacy: leer de URL
-      if (!accounts.length) {
-        accounts = JSON.parse(params.get('social_accounts') || '[]');
-      }
-    } catch {}
-
-    if (!accounts.length) {
-      // Esperar a que Clerk cargue antes de mostrar el toast
-      const waitAndWarn = () => showToast('Conexión completada pero no se encontraron páginas Facebook ni cuentas Instagram vinculadas. Verifica que tu cuenta tenga páginas de Facebook con Instagram Business asociado.', 'warning');
-      if (clerkInstance?.user?.id) { waitAndWarn(); }
-      else { let t=0; const iv=setInterval(()=>{ t++; if(clerkInstance?.user?.id||t>40){clearInterval(iv);waitAndWarn();} },200); }
-      return;
-    }
-
-    const doSave = () => {
-      const conns = loadSocialConnections();
-
-      // Instagram: cuentas con igUserId
-      const igAccts = accounts.filter(a => a.igUserId).map(a => ({
-        pageId:     a.pageId,
-        pageName:   a.pageName,
-        pageToken:  a.pageToken,
-        igUserId:   a.igUserId,
-        igUsername: a.igUsername || null,
-      }));
-
-      // Facebook: todas las páginas con token
-      const fbAccts = accounts.map(a => ({
-        pageId:    a.pageId,
-        pageName:  a.pageName,
-        pageToken: a.pageToken,
-      }));
-
-      if (igAccts.length > 0) conns.instagram = igAccts;
-      if (fbAccts.length > 0) conns.facebook  = fbAccts;
-
-      saveSocialConnections(conns);
+    // Ya no vuelve ningún token: el servidor guardó la conexión cifrada y aquí
+    // solo se relee. Antes llegaban por sessionStorage y se quedaban en el
+    // navegador.
+    const avisar = async () => {
+      const hay = await socialSincronizar();
       updateStudioConnectBtn();
-
-      // Modal de confirmación
-      showSocialConnectionModal(igAccts, fbAccts);
-    };
-
-    // CLAVE: esperar a que Clerk tenga el user.id antes de guardar,
-    // si no la clave de localStorage queda como "anon" y los tokens se pierden
-    const waitForClerkAndSave = () => {
-      if (clerkInstance?.user?.id) {
-        // Clerk ya cargó → guardar de inmediato
-        doSave();
-      } else {
-        // Clerk aún no cargó → polling cada 200ms, máx 8s
-        let attempts = 0;
-        const iv = setInterval(() => {
-          attempts++;
-          if (clerkInstance?.user?.id || attempts > 40) {
-            clearInterval(iv);
-            doSave();
-          }
-        }, 200);
+      if (!hay) {
+        showToast('Conexión completada pero no encontramos páginas de Facebook ni cuentas de Instagram vinculadas. Revisa que tu cuenta tenga una página de Facebook con Instagram Business asociado.', 'warning');
+        return;
       }
+      const conns = loadSocialConnections();
+      showSocialConnectionModal(conns.instagram || [], conns.facebook || []);
     };
 
-    // Si hay clientId específico, esperar también a que agencyActiveClientId coincida
-    if (clientId && clientId !== agencyActiveClientId) {
-      let attempts = 0;
+    // Hay que esperar a Clerk: sin sesión la lectura sale 401 y parecería que
+    // la conexión no se guardó, cuando sí está.
+    const cuandoHaySesion = () => {
+      if (clerkInstance?.user?.id) return avisar();
+      let intentos = 0;
       const iv = setInterval(() => {
-        attempts++;
-        if (agencyActiveClientId === clientId || attempts > 30) {
-          clearInterval(iv);
-          waitForClerkAndSave();
-        }
+        intentos++;
+        if (clerkInstance?.user?.id || intentos > 40) { clearInterval(iv); avisar(); }
+      }, 200);
+    };
+
+    // Y si la conexión era de un cliente concreto, a que la vista esté en él.
+    if (clientId && clientId !== agencyActiveClientId) {
+      let intentos = 0;
+      const iv = setInterval(() => {
+        intentos++;
+        if (agencyActiveClientId === clientId || intentos > 30) { clearInterval(iv); cuandoHaySesion(); }
       }, 300);
     } else {
-      waitForClerkAndSave();
+      cuandoHaySesion();
     }
   }
 

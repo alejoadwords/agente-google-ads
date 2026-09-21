@@ -1,8 +1,13 @@
 // api/social-callback.js
 // Callback OAuth para publicación social
 // Obtiene token long-lived, páginas FB y sus cuentas IG vinculadas
-// Devuelve una página HTML intermedia que guarda los datos en sessionStorage
-// y redirige al app — evita pasar tokens largos en la URL
+//
+// Los tokens de página se guardan CIFRADOS en `social_connections` y no salen
+// de ahí. Antes esta función devolvía una página que los metía en el
+// `sessionStorage` del navegador: quedaban a la vista de cualquier script, se
+// perdían al cerrar la pestaña y el equipo no los compartía.
+
+import { abrirTicket, guardarCuentas } from './_social-cuentas.js';
 
 export default async function handler(req, res) {
   const { code, state, error } = req.query;
@@ -18,7 +23,15 @@ export default async function handler(req, res) {
 
   let parsedState = {};
   try { parsedState = JSON.parse(state || '{}'); } catch {}
-  const { network = 'instagram', clientId = '', userId = '' } = parsedState;
+  const { network = 'instagram', t = '' } = parsedState;
+
+  // El ticket es lo único que dice de quién es esta conexión, y lo firmamos
+  // nosotros. Sin él no se guarda nada: antes bastaba con editar la URL.
+  const ticket = await abrirTicket(t);
+  if (!ticket) {
+    return res.redirect(`${REDIRECT_BASE}/?social_error=sesion`);
+  }
+  const { userId, clientId } = ticket;
 
   const appId     = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
@@ -96,32 +109,17 @@ export default async function handler(req, res) {
       igUsername: a.igUsername || null,
     }));
 
-    // 6. Devolver página HTML intermedia que:
-    //    - Guarda los datos en sessionStorage (evita URL larga)
-    //    - Redirige al app con solo los flags necesarios
-    const payload = JSON.stringify({
-      accounts: accountsFinal,
-      network,
-      clientId,
-      userId,
-    });
+    // 6. Guardar en la cuenta, con el token cifrado
+    if (!accountsFinal.length) {
+      return res.redirect(`${REDIRECT_BASE}/?social_error=sin_paginas`);
+    }
+    await guardarCuentas(userId, clientId, network, accountsFinal);
 
-    const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Conectando…</title></head>
-<body>
-<script>
-try {
-  sessionStorage.setItem('acuarius_social_pending', ${JSON.stringify(payload)});
-} catch(e) {}
-window.location.replace('${REDIRECT_BASE}/?social_connected=true&social_network=${encodeURIComponent(network)}&social_client=${encodeURIComponent(clientId)}');
-</script>
-<p style="font-family:sans-serif;text-align:center;margin-top:80px">Conectando red social… <a href="${REDIRECT_BASE}">volver al app</a></p>
-</body>
-</html>`;
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(html);
+    return res.redirect(
+      `${REDIRECT_BASE}/?social_connected=true` +
+      `&social_network=${encodeURIComponent(network)}` +
+      `&social_client=${encodeURIComponent(clientId)}`
+    );
 
   } catch (err) {
     console.error('social-callback error:', err);

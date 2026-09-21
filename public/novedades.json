@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-21-redes-en-tu-cuenta",
+   "fecha": "2026-09-21",
+   "tipo": "mejora",
+   "titulo": "Tus cuentas de Instagram y Facebook, guardadas con cifrado",
+   "texto": "Cuando conectabas una página de Facebook o una cuenta de Instagram para publicar desde el Studio, el permiso quedaba guardado en el navegador desde el que la conectaste. Eso significaba perderlo al limpiar la caché, tener que volver a conectar en cada equipo y que tu equipo no la viera. Ahora el permiso se guarda cifrado en tu cuenta y no vuelve a salir de nuestros servidores: al publicar, el navegador solo dice en qué página publicar. Si ya tenías una cuenta conectada, te pediremos conectarla una vez más; después queda disponible desde cualquier equipo y para todo tu equipo."
+  },
+  {
    "id": "2026-09-21-studio-en-tu-cuenta",
    "fecha": "2026-09-21",
    "tipo": "mejora",
