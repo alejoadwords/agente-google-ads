@@ -22,6 +22,50 @@
     return null;
   }
 
+  /* ── De dónde vino esta persona ───────────────────────────────────────────
+   * El problema que resuelve: alguien entra por un anuncio a la portada
+   * —con su gclid y sus utm— y rellena el formulario tres páginas después. En
+   * ese momento la URL ya no tiene nada, así que el lead llegaba sin origen y
+   * la campaña que lo trajo quedaba sin crédito.
+   *
+   * Se guarda en sessionStorage y GANA EL PRIMERO: si vuelve a entrar por otro
+   * anuncio en la misma sesión, el crédito es del que lo trajo. Sobrescribir
+   * dejaría que el último anuncio se llevara leads que no generó.
+   *
+   * sessionStorage y no localStorage a propósito: una visita de hace tres
+   * semanas no explica el formulario de hoy. */
+  var LLAVE = '_acuarius_origen';
+  var PARAMS = ['gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid', 'msclkid',
+                'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+                'campaignid', 'adgroupid', 'creative', 'keyword', 'matchtype'];
+
+  function origen() {
+    var guardado = null;
+    try { guardado = JSON.parse(sessionStorage.getItem(LLAVE) || 'null'); } catch (e) {}
+    if (guardado && guardado._url) return guardado;
+
+    var hay = {};
+    try {
+      var p = new URLSearchParams(location.search);
+      for (var i = 0; i < PARAMS.length; i++) {
+        var v = (p.get(PARAMS[i]) || '').trim();
+        if (v) hay[PARAMS[i]] = v.slice(0, 200);
+      }
+    } catch (e) {}
+    if (!Object.keys(hay).length) return guardado || null;
+
+    hay._url = location.href.slice(0, 500);
+    if (document.referrer) hay._ref = document.referrer.slice(0, 300);
+    // Si falla el guardado (modo privado, cookies bloqueadas) se sigue igual:
+    // en la página de aterrizaje el dato viaja, que es el caso más común.
+    try { sessionStorage.setItem(LLAVE, JSON.stringify(hay)); } catch (e) {}
+    return hay;
+  }
+
+  // Se llama al cargar, no al enviar: para cuando alguien rellena el
+  // formulario, la URL de aterrizaje puede llevar rato perdida.
+  try { origen(); } catch (e) {}
+
   function harvest(form) {
     var data = {};
     var extras = [];
@@ -37,6 +81,8 @@
     }
     if (extras.length) data.mensaje = extras.join(' · ');
     data._page = location.href;
+    var o = origen();
+    if (o) data._origen = o;
     return data;
   }
 

@@ -171,7 +171,19 @@ const CAMPOS_PAUTA = {
   'ID de campaña': ['campaign_id', 'campaignid', 'utm_campaign_id', 'id_campana'],
   'Conjunto':   ['adset_name', 'adset', 'ad_set', 'ad_set_name', 'adgroup_name', 'adgroup', 'conjunto', 'conjunto_de_anuncios'],
   'Anuncio':    ['ad_name', 'anuncio', 'creative_name', 'ad'],
-  'Plataforma': ['publisher_platform', 'platform', 'plataforma'],
+  'Plataforma': ['publisher_platform', 'platform', 'plataforma', 'utm_source'],
+  // El identificador del clic. Google y Meta lo ponen en la URL de destino
+  // aunque no haya UTM ninguna: es lo único que llega cuando el cliente no
+  // etiquetó sus anuncios a mano. Sirve para dos cosas — decir de qué red
+  // vino, y poder cruzarlo después contra la cuenta publicitaria.
+  'Clic de anuncio': ['gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid', 'msclkid'],
+};
+
+// De qué red es cada identificador de clic. Con esto, un lead que llega solo
+// con un `gclid` ya dice «Google» en su ficha en vez de no decir nada.
+const RED_DEL_CLIC = {
+  gclid: 'Google', wbraid: 'Google', gbraid: 'Google',
+  fbclid: 'Meta', ttclid: 'TikTok', msclkid: 'Microsoft',
 };
 
 // Saca los campos de pauta de un payload plano. Devuelve {} si no hay ninguno:
@@ -187,6 +199,17 @@ export function camposDePauta(body) {
       const v = plano[a];
       if (v !== undefined && v !== null && String(v).trim() !== '') {
         out[destino] = String(v).trim().slice(0, 120);
+        break;
+      }
+    }
+  }
+  // Si vino un identificador de clic pero nadie dijo de qué red, se deduce.
+  // Un lead con un gclid y sin plataforma es un lead de Google al que nadie
+  // le puso la etiqueta, no un lead de origen desconocido.
+  if (out['Clic de anuncio'] && !out['Plataforma']) {
+    for (const [param, red] of Object.entries(RED_DEL_CLIC)) {
+      if (plano[param] !== undefined && String(plano[param] || '').trim() !== '') {
+        out['Plataforma'] = red;
         break;
       }
     }

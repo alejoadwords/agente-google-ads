@@ -6,7 +6,7 @@
 //                sin crear nada). Acepta JSON y form-urlencoded.
 export const config = { runtime: 'edge' };
 
-import { intakeLead, pick } from './_lead-intake.js';
+import { intakeLead, pick, camposDePauta } from './_lead-intake.js';
 import { decidirDestino, desanidarCorchetes, rotulo, esRuido, paginaCorta, campana } from './_reglas-destino.js';
 import { registrarError } from './_registro-errores.js';
 
@@ -152,7 +152,28 @@ export default async function handler(req, contexto) {
   // envío. Va a campos propios y no a la nota porque así se puede ver como
   // columna en la lista y filtrar por ella.
   const referencia = pick(body, 'referer_title', 'referencia', 'inmueble', 'producto', 'sku');
-  const camposPropios = referencia ? { referencia: referencia.slice(0, 120) } : null;
+
+  // De dónde vino esta persona. El conector manda `_origen` con lo que traía la
+  // URL de aterrizaje —gclid, utm, campaignid—, guardado desde que entró aunque
+  // rellenara el formulario tres páginas después.
+  //
+  // Va a CAMPOS PROPIOS, no a la nota. Antes la campaña se escribía en la nota
+  // como texto libre y ahí el reporte de pauta no la ve: cuenta los leads por
+  // `custom_fields['Campaña']` y por `['ID de campaña']`. El dato se capturaba
+  // y se tiraba donde nadie podía usarlo.
+  const orig = (body && typeof body._origen === 'object' && body._origen) ? body._origen : {};
+  const desdeUrl = {};
+  try {
+    // Los parámetros de la propia URL del envío también cuentan: es el caso de
+    // quien aterriza y rellena sin moverse de página.
+    const u = new URL(String(page || ''));
+    for (const [k, v] of u.searchParams.entries()) if (v) desdeUrl[k] = v;
+  } catch {}
+  const pauta = camposDePauta({ ...desdeUrl, ...orig, ...body });
+
+  const camposPropios = (referencia || Object.keys(pauta).length)
+    ? { ...(referencia ? { referencia: referencia.slice(0, 120) } : {}), ...pauta }
+    : null;
 
   // El trabajo de verdad, en una sola promesa que se pueda cronometrar.
   const trabajo = (async () => {
