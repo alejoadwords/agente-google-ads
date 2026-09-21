@@ -21,7 +21,7 @@ const chk = (nombre, ok, extra) => {
 const TOPE_POSTGREST = 1000; // lo que hace el servidor de verdad
 
 // ── Backend falso ────────────────────────────────────────────────────────────
-function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false } = {}) {
+function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false, cuotaUsada = 0 } = {}) {
   const campana = {
     id: 'camp-1', user_id: 'user-1', channel: 'email', status: 'queued',
     subject: 'Hola {{nombre}}', body: 'Cuerpo para {{nombre}}', html: null,
@@ -47,6 +47,7 @@ function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false }
   }
 
   const cuenta = { resend: 0, escriturasCola: 0, escriturasEventos: 0, consultasLeads: 0, sobresVistos: 0 };
+  const cuota = { enviados: cuotaUsada, porCuenta: {} };
   const eventos = [];
 
   globalThis.fetch = async (url, opciones = {}) => {
@@ -55,6 +56,15 @@ function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false }
     const cuerpo = opciones.body ? JSON.parse(opciones.body) : null;
     const ok = (data) => ({ ok: true, status: 200, text: async () => JSON.stringify(data), json: async () => data });
 
+    // La cuota del día. El banco la lleva en memoria para poder moverla.
+    if (u.includes('/rest/v1/email_cuota')) {
+      return ok([{ enviados: cuota.enviados, por_cuenta: cuota.porCuenta }]);
+    }
+    if (u.includes('/rest/v1/rpc/contar_correos')) {
+      cuota.enviados += cuerpo.p_cuantos;
+      if (cuerpo.p_cuenta) cuota.porCuenta[cuerpo.p_cuenta] = (cuota.porCuenta[cuerpo.p_cuenta] || 0) + cuerpo.p_cuantos;
+      return ok(cuota.enviados);
+    }
     if (u.startsWith('https://api.resend.com/emails/batch')) {
       cuenta.resend++;
       cuenta.sobresVistos += cuerpo.length;
@@ -97,11 +107,17 @@ function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false }
     }
     return ok([]);
   };
-  return { campana, cola, cuenta, eventos };
+  return { campana, cola, cuenta, eventos, cuota };
 }
 
 const peticion = { headers: { authorization: 'Bearer secreto' } };
 const respuesta = () => { const r = {}; r.status = () => r; r.json = (d) => { r.cuerpo = d; return r; }; return r; };
+
+// Las pruebas de caudal miden el MOTOR. El tope diario se prueba aparte, con
+// su propio bloque: mezclarlos haría que un cambio de política rompiera ocho
+// aserciones que no hablan de política.
+process.env.EMAIL_TOPE_DIARIO = '1000000';
+process.env.EMAIL_RESERVA = '0';
 
 const { default: cron } = await import('../api/cron-campaigns.js');
 
@@ -132,6 +148,55 @@ console.log('\nUna campaña de 1.200 destinatarios\n');
 
   chk('la campaña queda cerrada', m.campana.status === 'sent');
   chk('las estadísticas cuadran', m.campana.stats.sent === enviados && m.campana.stats.skipped === 3);
+}
+
+console.log('\nEl tope diario del proveedor\n');
+{
+  // El 21-09-2026 una cuenta creada tres horas antes mandó 200 correos y dejó a
+  // TODA la plataforma sin correo el resto del día. El cupo por plan que ya
+  // existía es MENSUAL y por cliente: no protegía de esto.
+  const conTope = async (tope, reserva, opciones = {}) => {
+    process.env.EMAIL_TOPE_DIARIO = String(tope);
+    process.env.EMAIL_RESERVA = String(reserva);
+    const m = montar(500, opciones);
+    const r = respuesta();
+    await cron(peticion, r);
+    process.env.EMAIL_TOPE_DIARIO = '1000000';
+    process.env.EMAIL_RESERVA = '0';
+    return { m, r };
+  };
+
+  // 100 al día, 40 reservados para lo transaccional → 60 para campañas, y
+  // ninguna cuenta se lleva más de la mitad: 30.
+  const a = await conTope(100, 40);
+  const enviados = a.m.cola.filter(x => x.status === 'sent').length;
+  chk('una sola campaña NO se lleva el día entero', enviados === 30, `envió ${enviados}`);
+  chk('el resto queda PENDIENTE, no perdido',
+      a.m.cola.filter(x => x.status === 'pending').length === 500 - 30 - 3,
+      `pendientes=${a.m.cola.filter(x => x.status === 'pending').length}`);
+  chk('la campaña no se cierra: le falta gente', a.m.campana.status !== 'sent', a.m.campana.status);
+
+  // Y lo que de verdad importaba: queda sitio para las confirmaciones de cita.
+  chk('quedan los 40 reservados para lo transaccional',
+      a.m.cuota.enviados === 30 && 100 - a.m.cuota.enviados >= 40, `gastados=${a.m.cuota.enviados}`);
+
+  // El último lote se recorta: pedirle 100 a Resend cuando caben 30 es gastar
+  // el tope de los demás para que te rechacen 70.
+  chk('el lote se recorta al hueco, no se manda de más',
+      a.m.cuenta.sobresVistos === 30, `sobres=${a.m.cuenta.sobresVistos}`);
+
+  // Con el día ya gastado por otros, esta campaña no manda NADA.
+  const b = await conTope(100, 40, { cuotaUsada: 60 });
+  chk('con el día agotado no sale ni uno',
+      b.m.cola.filter(x => x.status === 'sent').length === 0,
+      `envió ${b.m.cola.filter(x => x.status === 'sent').length}`);
+  chk('y no se le pide nada a Resend', b.m.cuenta.resend === 0, `fueron ${b.m.cuenta.resend}`);
+
+  // Subir el plan tiene que notarse sin tocar código.
+  const c = await conTope(50000, 2000);
+  chk('con un tope alto vuelve a enviar a caudal',
+      c.m.cola.filter(x => x.status === 'sent').length === 497,
+      `envió ${c.m.cola.filter(x => x.status === 'sent').length}`);
 }
 
 console.log('\nCuando Resend está saturado (429) — es pasajero\n');

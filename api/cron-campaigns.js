@@ -11,7 +11,7 @@
 import crypto from 'crypto';
 import { campaignHtml } from './_campaign-email.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
-import { enviarResendLote } from './_correo.js';
+import { enviarResendLote, huecoParaCampana } from './_correo.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -455,14 +455,35 @@ export default async function handler(req, res) {
           if (armado.status !== 'listo') { resueltos.set(rcpt.id, armado); continue; }
           sobres.push({ rcpt, lead, payload: armado.payload });
         }
-        for (let i = 0; i < sobres.length; i += LOTE_RESEND) {
+        // Cuánto le queda HOY a esta cuenta. El cupo por plan es mensual y por
+        // cliente; esto es lo que impide que una sola campaña se lleve el tope
+        // DIARIO del proveedor y deje sin correo a todos los demás — que es
+        // exactamente lo que pasó el 21-09-2026.
+        //
+        // `null` = no se pudo consultar. Entonces se sigue: quedarse sin mandar
+        // nada por una consulta caída es peor que pasarse un poco del tope.
+        let hueco = await huecoParaCampana(c.user_id);
+        if (hueco === 0) {
+          console.warn('[cron-campaigns] cuota diaria de correo agotada para', c.user_id, '— el resto sigue pendiente');
+          saturado = true;
+        }
+        for (let i = 0; i < sobres.length && !saturado;) {
           // Se corta por reloj ANTES de mandar, nunca después: lo que ya salió
           // hay que alcanzar a registrarlo o se enviaría dos veces.
           if (Date.now() - T0 > LIMITE_MS) {
             console.warn('[cron-campaigns] se acabó el tiempo de la función, el resto sigue pendiente');
             break;
           }
-          const tanda = sobres.slice(i, i + LOTE_RESEND);
+          // El último lote se recorta al hueco que quede: mandar 100 cuando
+          // caben 30 es gastar el tope de los demás para que Resend rechace 70.
+          const cabe = hueco == null ? LOTE_RESEND : Math.min(LOTE_RESEND, hueco);
+          if (cabe <= 0) {
+            console.warn('[cron-campaigns] cuota diaria de correo agotada, el resto sigue pendiente');
+            saturado = true;
+            break;
+          }
+          const tanda = sobres.slice(i, i + cabe);
+          if (hueco != null) hueco -= tanda.length;
           if (i > 0) await esperar(PAUSA_RESEND);
           const res = await enviarLote(tanda.map(s => s.payload));
           // Si Resend está saturado, seguir mandándole lotes solo empeora la
@@ -472,6 +493,7 @@ export default async function handler(req, res) {
             saturado = true;
             break;
           }
+          i += tanda.length;
           tanda.forEach((s, j) => {
             const r = res[j] || { status: 'failed', detail: 'sin respuesta de Resend' };
             resueltos.set(s.rcpt.id, r);
