@@ -111,6 +111,9 @@
   .tarjeta .cabe{font-size:1.24cqw;letter-spacing:.14em;text-transform:uppercase;color:var(--gris-2);margin-bottom:.6cqw}
   .tarjeta .plan{font-family:var(--display);font-size:1.95cqw;font-weight:800;letter-spacing:-.02em;color:var(--azul);margin-bottom:.3cqw}
   .tarjeta .val{font-family:var(--display);font-size:4.3cqw;font-weight:800;letter-spacing:-.045em;color:var(--azul);line-height:1;display:flex;align-items:flex-start;justify-content:center;gap:.3cqw}
+  /* "A medida" no es una cifra: a 4.3cqw se sale de la tarjeta. Mismo
+     criterio que la calculadora de acuarius.app. */
+  .tarjeta .val.es-texto{font-size:2.5cqw;letter-spacing:-.02em;white-space:nowrap}
   .tarjeta .val sup{font-size:2.4cqw;margin-top:.7cqw}
   .tarjeta .val small{font-size:1.6cqw;font-weight:700;align-self:flex-end;margin-bottom:1cqw;color:var(--gris)}
   .tarjeta .modo{font-size:1.35cqw;font-weight:700;color:var(--tinta);margin-top:.45cqw}
@@ -255,6 +258,11 @@
     var r = (e.plan === 'auto') ? barato : costeDe(e.plan, u, e.contactos);
     r.masBarato = barato;
     r.esElMasBarato = r.totalMes <= barato.totalMes;
+    // Por encima del tope el precio deja de salir de la tabla, igual que en
+    // acuarius.app. Cotizar aquí un número que la web dice que no aplica es
+    // la peor forma de empezar: el cliente llega con una cifra que no vamos
+    // a cobrarle.
+    r.personalizado = (u >= MAX_U || e.contactos >= MAX_C);
     return r;
   }
 
@@ -482,7 +490,9 @@
     var todos = e.destacados.length ? e.destacados : ['Acceso completo a la plataforma'];
     var items = todos.slice(0, TOPE);
     var resto = todos.length - items.length;
-    var chk = '<li class="top">' + TICK + '<span>' + esc(c.plan.nombre) + ' · ' + c.plan.usuarios + ' usuarios y ' + fmt(c.plan.contactos) + ' contactos incluidos</span></li>';
+    var chk = '<li class="top">' + TICK + '<span>' + (c.personalizado
+      ? 'Plan a tu medida · ' + fmt(e.usuarios) + ' usuarios y ' + fmt(e.contactos) + ' contactos'
+      : esc(c.plan.nombre) + ' · ' + c.plan.usuarios + ' usuarios y ' + fmt(c.plan.contactos) + ' contactos incluidos') + '</span></li>';
     items.forEach(function (i) { chk += '<li>' + TICK + '<span>' + esc(i) + '</span></li>'; });
     if (resto > 0) chk += '<li>' + TICK + '<span>y ' + resto + ' funciones más incluidas</span></li>';
     // Los complementos NO se repiten aquí: ya están desglosados en la tarjeta.
@@ -502,24 +512,38 @@
       '<div class="precio-fila">' +
         '<ul class="chk" style="margin:0;padding:0">' + chk + '</ul>' +
         '<div class="tarjeta">' +
-          '<div class="cabe">Plan recomendado</div>' +
-          '<div class="plan">' + esc(c.plan.nombre) + '</div>' +
-          '<div class="val"><sup>$</sup>' + fmt(e.anual ? c.efectivoAnual : c.totalMes) + '<small>/mes</small></div>' +
-          '<div class="modo">' + (e.anual ? 'facturado anualmente' : 'facturación mensual') + '</div>' +
-          '<div class="barra"></div>' +
-          '<div class="desglose">' + desglose +
-            (e.anual
-              ? fila('<b>Pago inicial del plan</b>', '<b>$' + fmt(c.planAnual) + '</b>', 'total')
-              : fila('<b>Total mensual</b>', '<b>$' + fmt(c.totalMes) + ' USD</b>', 'total')) +
-          '</div>' +
-          '<div class="setup">' +
-            '<div class="setup-fila"><span>Setup inicial <i>pago único</i></span><b>$' + fmt(SETUP) + '</b></div>' +
-            '<div class="setup-pie">Configuración del CRM a tu medida y capacitación del equipo</div>' +
-          '</div>' +
+          '<div class="cabe">' + (c.personalizado ? 'Tu volumen' : 'Plan recomendado') + '</div>' +
+          '<div class="plan">' + (c.personalizado ? 'Personalizado' : esc(c.plan.nombre)) + '</div>' +
+          (c.personalizado
+            ? '<div class="val es-texto">A medida</div>' +
+              '<div class="modo">según volumen y acompañamiento</div>' +
+              '<div class="barra"></div>' +
+              '<div class="desglose"><p style="font-size:1.4cqw;line-height:1.5;color:var(--gris);margin:0;text-align:left">' +
+                'A partir de ' + fmt(MAX_U) + ' usuarios o ' + fmt(MAX_C) + ' contactos el precio deja de salir ' +
+                'de la tabla. Lo armamos contigo, con el setup y el acompañamiento que necesites.</p></div>'
+            : '<div class="val"><sup>$</sup>' + fmt(e.anual ? c.efectivoAnual : c.totalMes) + '<small>/mes</small></div>' +
+              '<div class="modo">' + (e.anual ? 'facturado anualmente' : 'facturación mensual') + '</div>' +
+              '<div class="barra"></div>' +
+              '<div class="desglose">' + desglose +
+                (e.anual
+                  ? fila('<b>Pago inicial del plan</b>', '<b>$' + fmt(c.planAnual) + '</b>', 'total')
+                  : fila('<b>Total mensual</b>', '<b>$' + fmt(c.totalMes) + ' USD</b>', 'total')) +
+              '</div>' +
+              // El setup tiene precio fijo solo cuando el plan lo tiene. Con un
+              // acuerdo a medida se negocia junto con el resto: dejar aquí un
+              // número suelto sería la única cifra de la lámina, y la que se
+              // llevaría el cliente.
+              '<div class="setup">' +
+                '<div class="setup-fila"><span>Setup inicial <i>pago único</i></span><b>$' + fmt(SETUP) + '</b></div>' +
+                '<div class="setup-pie">Configuración del CRM a tu medida y capacitación del equipo</div>' +
+              '</div>') +
           // Con complementos el desglose ya ocupa varias filas: la linea del
           // pago anual se omite para que la tarjeta no se recorte. El ahorro
           // anual sigue estando en la lamina de Planes.
-          (hayExtras
+          // Con un acuerdo a medida no hay «2 meses gratis» que prometer: el
+          // ahorro se pacta. Hoy `hayExtras` ya sería cierto en ese caso, pero
+          // depender de esa coincidencia es cómo vuelve un número fantasma.
+          (c.personalizado || hayExtras
             ? ''
             : e.anual
               ? '<div class="ahorro">2 meses gratis · ahorras $' + fmt(c.plan.base * 2) + '</div>'
