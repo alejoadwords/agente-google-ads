@@ -3,6 +3,7 @@ export const config = { runtime: 'edge' };
 import { upsertLeadFromConversation, sugerirRespuesta } from './_inbox-engine.js';
 import { getPolicy } from './_channel-policy.js';
 import { enviarPorCanal } from './_enviar-canal.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
@@ -300,7 +301,7 @@ export default async function handler(req) {
       { headers: sbHeaders() }
     );
     const connRows = await connRes.json();
-    const conn = connRows?.[0];
+    const conn = await abrirConexion(connRows?.[0]);
 
     // Save message
     const msgRes = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {

@@ -10,6 +10,7 @@
 
 import crypto from 'crypto';
 import { campaignHtml } from './_campaign-email.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -153,7 +154,9 @@ async function enviarLote(sobres) {
 async function indiceDeWhatsapp(userId) {
   const convs = await sb(`/chat_conversations?user_id=eq.${encodeURIComponent(userId)}&select=id,contact_id,channel,connection_id&order=last_message_at.desc&limit=1000`);
   const conns = await sb(`/channel_connections?user_id=eq.${encodeURIComponent(userId)}&select=*`);
-  const lista = conns || [];
+  // Los tokens salen descifrados: el resto del cron no tiene por qué
+  // saber que en la base se guardan cifrados.
+  const lista = await Promise.all((conns || []).map(abrirConexion));
   return {
     convs: convs || [],
     conexiones: Object.fromEntries(lista.map(c => [c.id, c])),

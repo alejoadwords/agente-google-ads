@@ -22,6 +22,7 @@
 export const config = { runtime: 'edge' };
 
 import { processIncoming, cleanForUser } from './_inbox-engine.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -112,7 +113,10 @@ async function canalDe(key) {
     `${SUPABASE_URL}/rest/v1/channel_connections?channel=eq.webchat&external_id=eq.${encodeURIComponent(key)}&select=*`,
     { headers: sb() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-  return filas?.[0] || null;
+  // OJO: en webchat `access_token` NO es un token, es la configuración
+  // del widget en JSON. Pasa por descifrar igual —deja intacto lo
+  // que no lleva la marca— y nunca se cifra al guardarlo.
+  return await abrirConexion(filas?.[0] || null);
 }
 
 export default async function handler(req) {

@@ -7,6 +7,7 @@
 export const config = { runtime: 'edge' };
 
 import { enviarPorCanal } from './_enviar-canal.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -70,7 +71,7 @@ export default async function handler(req) {
       const conn = conv.connection_id ? await fetch(
         `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${conv.connection_id}&select=*`,
         { headers: sb() }
-      ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null) : null;
+      ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).then(abrirConexion).catch(() => null) : null;
 
       const adjunto = p.adjunto_url ? {
         url: p.adjunto_url, tipo: p.adjunto_tipo, nombre: p.adjunto_nombre, mime: p.adjunto_mime,

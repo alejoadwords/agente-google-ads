@@ -9,6 +9,7 @@ export const config = { runtime: 'edge' };
 
 import { intakeLead, camposDePauta, ambitoDeTrabajo } from '../_lead-intake.js';
 import { processIncoming } from '../_inbox-engine.js';
+import { abrirConexion, cifrar } from '../_cifrado.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -102,7 +103,7 @@ async function processLeadgen(value) {
     `${SUPABASE_URL}/rest/v1/channel_connections?external_id=eq.${encodeURIComponent(pageId)}&is_active=eq.true&select=*&limit=1`,
     { headers: sb() }
   ).then(r => r.json()).catch(() => []);
-  const connection = connRows?.[0];
+  const connection = await abrirConexion(connRows?.[0]);
   if (!connection || !connection.access_token) return;
 
   // `field_data` va explícito a propósito: al pasar `fields` Graph deja de

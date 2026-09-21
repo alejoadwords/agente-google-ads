@@ -12,6 +12,7 @@ import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
 import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto } from './_qualify.js';
 import { registrarUso } from './_uso-ia.js';
+import { abrirConexion, cifrar } from './_cifrado.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -229,7 +230,7 @@ export async function sugerirRespuesta(userId, conversationId) {
   const connection = conv.connection_id ? await fetch(
     `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${conv.connection_id}&select=*`,
     { headers: sb() }
-  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null) : null;
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).then(abrirConexion).catch(() => null) : null;
 
   // El agente del canal; si el canal es manual, el que quedó ligado a la
   // conversación cuando se escaló.
@@ -550,7 +551,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   const connection = await fetch(
     `${SUPABASE_URL}/rest/v1/channel_connections?channel=eq.${encodeURIComponent(channel)}&external_id=eq.${encodeURIComponent(externalId)}&is_active=eq.true&select=*`,
     { headers: sb() }
-  ).then(r => r.json()).then(r => r?.[0]).catch(() => null);
+  ).then(r => r.json()).then(r => r?.[0]).then(abrirConexion).catch(() => null);
   if (!connection) return { ok: false, reason: 'canal no conectado' };
 
   // Un canal puede atenderse de dos formas: con un agente que contesta solo, o

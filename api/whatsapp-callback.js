@@ -1,3 +1,4 @@
+import { cifrar } from './_cifrado.js';
 // api/whatsapp-callback.js
 // Vuelta de la conexión de WhatsApp por redirección.
 //
@@ -119,7 +120,7 @@ export default async function handler(req, res) {
         if (previa?.[0]?.id) {
           await fetch(`${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(previa[0].id)}`, {
             method: 'PATCH', headers: sb(),
-            body: JSON.stringify({ access_token: token, channel_name: nombre, is_active: true }),
+            body: JSON.stringify({ access_token: await cifrar(token), channel_name: nombre, is_active: true }),
           });
         } else {
           await fetch(`${SUPABASE_URL}/rest/v1/channel_connections`, {
@@ -130,7 +131,7 @@ export default async function handler(req, res) {
               client_id: clientId || null, // de qué cliente son estas conversaciones
               channel: 'whatsapp',
               external_id: String(n.id),
-              access_token: token,
+              access_token: await cifrar(token),
               channel_name: nombre,
               is_active: true,
             }),

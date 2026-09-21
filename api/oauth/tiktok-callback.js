@@ -1,3 +1,4 @@
+import { cifrar } from '../_cifrado.js';
 // api/oauth/tiktok-callback.js
 // Canjea el código de TikTok por un token y deja la cuenta conectada como canal
 // del agente (channel_connections, channel='tiktok'). A partir de ahí los DMs
@@ -36,7 +37,7 @@ async function saveConnection({ userId, agentId, accessToken, refreshToken, open
     channel: 'tiktok',
     external_id: openId,
     channel_name: displayName || 'TikTok',
-    access_token: accessToken,
+    access_token: await cifrar(accessToken),
     is_active: true,
   };
   if (refreshToken) row.refresh_token = refreshToken;

@@ -5,6 +5,7 @@
 //    evalúa condiciones y registra todo en automation_logs.
 // Los triggers lead_created y stage_changed encolan desde api/leads.js.
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -278,7 +279,7 @@ async function actionSendWhatsapp(step, lead) {
   });
   if (!conv) return { result: 'skipped', detail: 'Sin conversación de Inbox para ' + lead.phone + ' — WhatsApp requiere una conversación iniciada por el contacto' };
   const conns = await sb(`/channel_connections?id=eq.${conv.connection_id}&select=*`);
-  const conn = conns?.[0];
+  const conn = await abrirConexion(conns?.[0]);
   if (!conn) return { result: 'failed', detail: 'Conexión del canal no encontrada' };
   const text = renderVars(step.body, lead);
   try {

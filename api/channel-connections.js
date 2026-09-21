@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-import { descifrar } from './_cifrado.js';
+import { descifrar, cifrar} from './_cifrado.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -238,7 +238,7 @@ export default async function handler(req) {
 
     const res = await guardarConexion(userId, channel, externalId, {
       agent_id,
-      access_token: pagina.access_token,
+      access_token: await cifrar(pagina.access_token),
       channel_name: nombre,
       is_active: true,
     });
@@ -322,7 +322,7 @@ async function guardarConexion(userId, channel, externalId, campos) {
       // poder crear ni usar plantillas, y el aviso le decía que reconectara,
       // cosa que no arreglaba nada.
       ...(channel === 'whatsapp' && body.waba_id ? { waba_id: String(body.waba_id) } : {}),
-      access_token: access_token || null,
+      access_token: access_token ? await cifrar(access_token) : null,
       channel_name: channel_name || null,
       avatar_url: avatar_url || null,
       is_active: true,

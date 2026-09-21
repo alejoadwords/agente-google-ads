@@ -4,6 +4,7 @@
 // plantillas y el gate de las campañas. El guion bajo evita que Vercel lo
 // publique como ruta. Solo se importa desde funciones EDGE.
 
+import { abrirConexion, cifrar } from './_cifrado.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -30,7 +31,7 @@ export async function conexionWhatsapp(userId, clientId) {
     `&channel=eq.whatsapp&is_active=eq.true${scope}&select=id,external_id,waba_id,access_token,channel_name&limit=1`,
     { headers: sbHeaders() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-  return filas?.[0] || null;
+  return await abrirConexion(filas?.[0] || null);
 }
 
 /**

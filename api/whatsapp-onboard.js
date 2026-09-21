@@ -8,6 +8,8 @@
 // guarda el canal. El usuario no copia ni pega nada.
 export const config = { runtime: 'edge' };
 
+import { cifrar } from './_cifrado.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -137,7 +139,7 @@ async function manejar(req) {
     // cuelga de él —crearlas, listarlas, ver si las aprobaron— y sin guardarlo
     // la única salida era volver a pedirle al cliente que reconectara.
     waba_id: String(waba_id),
-    access_token: token,
+    access_token: await cifrar(token),
     channel_name: nombre || 'WhatsApp',
     is_active: true,
   };
@@ -156,7 +158,7 @@ async function manejar(req) {
     // Al reconectar no se pisa quién atiende el canal si ya estaba decidido.
     // El waba_id SÍ se refresca: las conexiones creadas antes de que se
     // guardara lo tienen vacío, y reconectar es la única vía para poblarlo.
-    const cambios = { access_token: token, channel_name: fila.channel_name, is_active: true, waba_id: fila.waba_id };
+    const cambios = { access_token: await cifrar(token), channel_name: fila.channel_name, is_active: true, waba_id: fila.waba_id };
     if (agent_id !== undefined) cambios.agent_id = agent_id || null;
     res = await fetch(`${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(previa[0].id)}`, {
       method: 'PATCH', headers: sb(), body: JSON.stringify(cambios),
