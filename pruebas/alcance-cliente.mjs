@@ -92,11 +92,35 @@ console.log('\nEl inbox, que no filtraba nada\n');
 console.log('\nAlta y cambio del alcance\n');
 {
   const t = lee('api/team.js');
-  chk('la invitacion acepta el cliente', /client_id: body\.client_id \? String\(body\.client_id\)/.test(t));
+  chk('la invitacion acepta el cliente', /client_id: alcanceQuePuedeDar\(quien, body\.client_id\)/.test(t));
   chk('vacio = toda la cuenta, como siempre', /status: 'invited', invite_token: token/.test(t));
   chk('el listado del equipo lo devuelve', /role,status,client_id,created_at,joined_at/.test(t));
   chk('y se puede quitar despues, no solo poner',
       /'client_id' in \(body \|\| \{\}\)/.test(t));
+}
+
+console.log('\nNadie da mas acceso del que tiene\n');
+{
+  const t = lee('api/team.js');
+  // Un administrador ACOTADO puede gestionar el equipo de su cliente. Si ademas
+  // pudiera invitar a alguien SIN acotar, la frontera entera seria decorativa:
+  // bastaria crear un comodin y entrar con el.
+  chk('existe el limite de lo que se puede conceder',
+      /function alcanceQuePuedeDar\(quien, pedido\)/.test(t));
+  chk('quien esta acotado solo puede dar SU cliente',
+      /if \(quien && quien\.cliente\) return quien\.cliente;/.test(t));
+  chk('se aplica al invitar', /client_id: alcanceQuePuedeDar\(quien, body\.client_id\)/.test(t));
+  chk('y al cambiarle el alcance a otro',
+      /'client_id' in \(body \|\| \{\}\) \? \{ client_id: alcanceQuePuedeDar\(quien, body\.client_id\) \}/.test(t));
+
+  chk('y solo puede tocar a los de su propio cliente',
+      /function esDeMiCliente\(quien, fila\)/.test(t));
+  chk('el guarda esta en los dos sitios que ya comprobaban permisos',
+      (t.match(/if \(!esDeMiCliente\(quien, fila\)\)/g) || []).length === 2);
+  chk('y la fila trae el cliente para poder compararlo',
+      /select=id,member_user_id,member_email,role,status,client_id/.test(t));
+  chk('sigue impedido cambiarse el perfil a uno mismo',
+      /filaObjetivo\.member_user_id === quien\.actorId\) return false/.test(lee('api/_perfiles.js')));
 }
 
 console.log('\nLa pantalla\n');

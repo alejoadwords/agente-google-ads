@@ -34,7 +34,7 @@ function sbHeaders(prefer) {
 // owner_user_id, un id de otra cuenta se podría tocar desde aquí.
 async function filaDelEquipo(cuenta, id) {
   const filas = await fetch(
-    `${SUPABASE_URL}/rest/v1/team_members?id=eq.${encodeURIComponent(id)}&owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,role,status&limit=1`,
+    `${SUPABASE_URL}/rest/v1/team_members?id=eq.${encodeURIComponent(id)}&owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,role,status,client_id&limit=1`,
     { headers: sbHeaders() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
   return filas?.[0] || null;
@@ -307,6 +307,32 @@ async function clerkEmailVerificado(userId) {
  * `ignore-duplicates` a propósito: si la fila ya existe se deja como está. Con
  * merge se le pisaría el plan a alguien que además tiene cuenta propia.
  */
+/**
+ * Que alcance puede CONCEDER quien esta invitando o editando.
+ *
+ * Un administrador acotado a un cliente puede gestionar el equipo de SU cliente
+ * —para eso es administrador— pero no puede dar acceso mas ancho del que el
+ * mismo tiene. Sin esto, la frontera entera es decorativa: bastaria con
+ * invitar a un comodin sin acotar y entrar con el.
+ *
+ * `puedeTocarA` ya impide que alguien se cambie el perfil a si mismo; esto
+ * cierra la otra mitad, que es hacerlo a traves de un tercero.
+ */
+function alcanceQuePuedeDar(quien, pedido) {
+  if (quien && quien.cliente) return quien.cliente;          // acotado: solo el suyo
+  return pedido ? String(pedido).slice(0, 80) : null;        // dueno o sin acotar: el que diga
+}
+
+/**
+ * Y a quien puede tocar: un administrador acotado solo gestiona a los de su
+ * propio cliente. Tocar a alguien de otro cliente —o a alguien sin acotar— le
+ * dejaria echar al equipo del vecino.
+ */
+function esDeMiCliente(quien, fila) {
+  if (!quien || !quien.cliente) return true;                 // sin acotar, como siempre
+  return (fila && fila.client_id) === quien.cliente;
+}
+
 async function asegurarFilaDeUsuario(userId, correo, nombre) {
   if (!userId || !correo) return;
   try {
@@ -515,7 +541,7 @@ export default async function handler(req) {
         // funcionaba antes y sigue siendo el valor por defecto. Con valor, el
         // servidor le fuerza ese cliente en TODOS los endpoints, pida lo que
         // pida el navegador.
-        client_id: body.client_id ? String(body.client_id).slice(0, 80) : null,
+        client_id: alcanceQuePuedeDar(quien, body.client_id),
         status: 'invited', invite_token: token,
       }),
     }).then(r => r.ok ? r.json() : null);
@@ -549,6 +575,9 @@ export default async function handler(req) {
 
     const fila = await filaDelEquipo(cuenta, body.id);
     if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    if (!esDeMiCliente(quien, fila)) {
+      return jsonResp({ error: 'Esa persona pertenece a otro cliente.', sin_permiso: true }, 403);
+    }
     if (!puedeTocarA(quien, fila)) {
       return jsonResp({
         error: 'No puedes cambiarte el perfil a ti mismo. Pídeselo a otro administrador o al dueño.',
@@ -563,7 +592,7 @@ export default async function handler(req) {
           role: perfil,
           // 'client_id' in body distingue «no lo mandes» de «ponlo vacío»:
           // sin eso no habría forma de quitarle el acote a alguien.
-          ...('client_id' in (body || {}) ? { client_id: body.client_id ? String(body.client_id).slice(0, 80) : null } : {}),
+          ...('client_id' in (body || {}) ? { client_id: alcanceQuePuedeDar(quien, body.client_id) } : {}),
         }) }
     );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
@@ -578,6 +607,9 @@ export default async function handler(req) {
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
     const fila = await filaDelEquipo(cuenta, id);
     if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    if (!esDeMiCliente(quien, fila)) {
+      return jsonResp({ error: 'Esa persona pertenece a otro cliente.', sin_permiso: true }, 403);
+    }
     if (!puedeTocarA(quien, fila)) {
       return jsonResp({ error: 'No puedes quitarte a ti mismo del equipo.', sin_permiso: true }, 403);
     }
