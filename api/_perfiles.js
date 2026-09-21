@@ -71,12 +71,46 @@ export function normalizarPerfil(rol) {
  * cuenta como si fueran los suyos. Mejor un error que el tablero de otro.
  */
 export async function quienPregunta(userId) {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}` +
-    `&status=eq.active&select=owner_user_id,member_name,member_email,role,client_id&limit=1`,
-    { headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-  );
-  if (!res.ok) throw new Error('No se pudo verificar la cuenta: HTTP ' + res.status);
+  // Esta consulta la hace CADA endpoint en CADA petición, así que al abrir una
+  // pantalla salen diez a la vez. Un tropiezo de un segundo en Supabase dejaba
+  // media pantalla en blanco con un 503 y un mensaje que no decía nada: 20
+  // veces en tres horas, tres cuentas distintas.
+  //
+  // Un reintento corto. Es una lectura de UNA fila, sin efectos: repetirla no
+  // puede estropear nada, y evita que un parpadeo se le note al usuario.
+  let res = null, fallo = null;
+  for (let intento = 0; intento < 2; intento++) {
+    if (intento) await new Promise(r => setTimeout(r, 200));
+    try {
+      res = await fetch(
+        `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}` +
+        `&status=eq.active&select=owner_user_id,member_name,member_email,role,client_id&limit=1`,
+        { headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (res.ok) break;
+      // El cuerpo dice QUÉ pasó. Sin él solo quedaba «HTTP 500», que no se
+      // puede investigar tres horas después.
+      fallo = 'HTTP ' + res.status + ' ' + (await res.text().catch(() => '')).slice(0, 200);
+      res = null;
+    } catch (e) {
+      fallo = 'sin respuesta: ' + String(e && e.message || e).slice(0, 200);
+      res = null;
+    }
+  }
+  if (!res) {
+    // Se anota del lado del SERVIDOR, con el motivo real. Lo que llega al
+    // navegador sigue siendo el mensaje amable; lo que hace falta para
+    // arreglarlo queda aquí.
+    try {
+      const { registrarError } = await import('./_registro-errores.js');
+      await registrarError({
+        origen: 'api', donde: 'quienPregunta',
+        error: new Error('team_members no respondió tras 2 intentos'),
+        usuario: userId, detalle: fallo || 'sin detalle',
+      });
+    } catch {}
+    throw new Error('No se pudo verificar la cuenta: ' + (fallo || 'sin detalle'));
+  }
   const fila = (await res.json())?.[0];
 
   if (!fila || !fila.owner_user_id) {

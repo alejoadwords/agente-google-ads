@@ -36673,12 +36673,21 @@ const RSV_DIAS = [
 ];
 // Las que de verdad se usan en LatAm. La lista completa de `Intl` son 400 y
 // buscar la propia entre ellas es peor que no tener selector.
+//
+// El rótulo va escrito a mano y NO sale de partir el identificador: los nombres
+// de la IANA son técnicos y van sin tildes, así que salía «Bogota» y
+// «Sao_Paulo». Aquí se elige la zona del propio negocio; verla mal escrita es
+// lo primero que hace dudar de todo lo demás.
 const RSV_ZONAS = [
-  'America/Bogota', 'America/Mexico_City', 'America/Lima', 'America/Santiago',
-  'America/Argentina/Buenos_Aires', 'America/Caracas', 'America/Guayaquil',
-  'America/La_Paz', 'America/Asuncion', 'America/Montevideo', 'America/Panama',
-  'America/Costa_Rica', 'America/Guatemala', 'America/Santo_Domingo',
-  'America/Havana', 'America/Sao_Paulo', 'Europe/Madrid',
+  ['America/Bogota', 'Bogotá'], ['America/Mexico_City', 'Ciudad de México'],
+  ['America/Lima', 'Lima'], ['America/Santiago', 'Santiago de Chile'],
+  ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['America/Caracas', 'Caracas'],
+  ['America/Guayaquil', 'Guayaquil'], ['America/La_Paz', 'La Paz'],
+  ['America/Asuncion', 'Asunción'], ['America/Montevideo', 'Montevideo'],
+  ['America/Panama', 'Panamá'], ['America/Costa_Rica', 'San José'],
+  ['America/Guatemala', 'Guatemala'], ['America/Santo_Domingo', 'Santo Domingo'],
+  ['America/Havana', 'La Habana'], ['America/Sao_Paulo', 'São Paulo'],
+  ['Europe/Madrid', 'Madrid'],
 ];
 
 function rsvUrlBase() {
@@ -36991,8 +37000,8 @@ function rsvPintarHorario(puede) {
       '<div class="rsv-campo">' +
         '<label>Zona horaria</label>' +
         '<select class="auto-input"' + dis + ' onchange="rsvGuardarConfig({zona_horaria:this.value})">' +
-          RSV_ZONAS.map(z => '<option value="' + esc(z) + '"' + (cfg.zona_horaria === z ? ' selected' : '') + '>' +
-            esc(z.split('/').pop().replace(/_/g, ' ')) + '</option>').join('') +
+          RSV_ZONAS.map(([z, rotulo]) => '<option value="' + esc(z) + '"' +
+            (cfg.zona_horaria === z ? ' selected' : '') + '>' + esc(rotulo) + '</option>').join('') +
         '</select>' +
         '<div class="rsv-nota">Las horas se le enseñan al cliente en esta zona. Cambia sola con el horario de verano.</div>' +
       '</div>' +

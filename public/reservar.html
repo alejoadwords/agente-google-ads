@@ -256,6 +256,15 @@ function aplicarAcento(c) {
     'rgb(' + mez(r) + ',' + mez(g) + ',' + mez(b) + ')');
 }
 
+function zonaTexto() {
+  try {
+    var p = new Intl.DateTimeFormat('es-CO', { timeZone: N.zona, timeZoneName: 'long' })
+      .formatToParts(new Date());
+    var n = p.filter(function (x) { return x.type === 'timeZoneName'; })[0];
+    return n ? n.value : '';
+  } catch (e) { return ''; }
+}
+
 function iniciales(t) {
   return String(t || '?').trim().split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase();
 }
@@ -300,7 +309,10 @@ function montar() {
 
   $('atras').onclick = function () { ir(Math.max(1, pasoActual - 1)); };
   $('btn-conf').onclick = confirmar;
-  $('ayuda-hora').textContent = 'Horas de ' + N.zona.split('/').pop().replace(/_/g, ' ') + '.';
+  // El nombre de la zona sale de `Intl`, no de partir el identificador: los de
+  // la IANA son técnicos y van sin tildes («Bogota», «Sao_Paulo»). Si el
+  // navegador no sabe darlo, mejor no decir nada que decirlo mal.
+  $('ayuda-hora').textContent = zonaTexto() ? 'Las horas están en ' + zonaTexto() + '.' : '';
 
   $('servicios').innerHTML = SERVICIOS.map(function (s, i) {
     return '<button data-i="' + i + '">' +

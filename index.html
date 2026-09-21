@@ -1324,19 +1324,30 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .rsv-av{width:34px;height:34px;border-radius:50%;background:var(--agua-grad);color:#fff;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-base)}
 
-.rsv-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px;align-items:start}
-.rsv-bloque{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:16px 18px}
+/* DOS columnas fijas, no `auto-fit`. Con auto-fit una pantalla ancha partía
+   esto en tres o cuatro columnas de ~350 px, y una fila de horario necesita
+   ~455: el nombre del día, dos selectores de hora y la equis. El resultado era
+   que los tramos se salían de la tarjeta y se dibujaban encima de la de al
+   lado —o quedaban tapados por ella, según la altura—. La primera columna va
+   más ancha porque el horario es lo que más sitio pide. */
+.rsv-cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start}
+.rsv-bloque{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:16px 18px;min-width:0}
 .rsv-h3{margin:0 0 3px;font-size:var(--fs-md);font-weight:700;letter-spacing:-.01em}
 .rsv-p{margin:0 0 14px;font-size:var(--fs-sm);color:var(--muted);line-height:1.5}
 
 .rsv-dias{display:flex;flex-direction:column;gap:2px}
-.rsv-dia{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border2)}
+.rsv-dia{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border2);flex-wrap:wrap}
 .rsv-dia:last-child{border-bottom:none}
 .rsv-dia-nom{display:flex;align-items:center;gap:9px;width:132px;flex-shrink:0;font-size:var(--fs-base);
   font-weight:600;padding-top:4px}
 .rsv-dia.cerrado .rsv-dia-nom span{color:var(--muted2)}
-.rsv-dia-tramos{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.rsv-tramo{display:flex;align-items:center;gap:6px}
+/* `flex:1 1 300px`: cuando al lado del nombre del día quedan menos de 300 px,
+   el bloque de tramos baja ENTERO a su propia línea y allí le sobra sitio. Sin
+   la base, lo que se caía de renglón era la equis sola, que queda raro. */
+.rsv-dia-tramos{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+/* Que envuelva es el cinturón: si algún día la tarjeta vuelve a quedarse
+   corta, la equis baja de línea en vez de salirse. */
+.rsv-tramo{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 /* 128 y no 104: el selector de hora del navegador escribe «09:00 a. m.» con su
    propio icono al lado, y con menos ancho el texto sale cortado. */
 .rsv-hora{width:128px;padding:6px 8px;font-size:var(--fs-sm)}
@@ -1393,6 +1404,9 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .rsv-modal-cuerpo{padding:18px 22px;overflow-y:auto}
 .rsv-modal-pie{display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)}
 
+@media (max-width:1100px){
+  .rsv-cols{grid-template-columns:minmax(0,1fr)}
+}
 @media (max-width:768px){
   .rsv-head{flex-direction:column;align-items:stretch;gap:12px}
   .rsv-tabs{overflow-x:auto}
