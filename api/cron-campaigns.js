@@ -117,6 +117,11 @@ function renderVars(text, lead) {
     nombre: lead.name || '', empresa: lead.company || '', email: lead.email || '',
     telefono: lead.phone || '', etapa: lead.stage || '', fuente: lead.source || '',
     valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
+    // El asesor sale de `assigned_name`, que ya viene con la fila: resolverlo
+    // desde `assigned_to` obligaría a una consulta a Clerk por cada lead.
+    // Se le colapsan los espacios: hay nombres guardados con un TABULADOR
+    // dentro («Patricia Maria\tPerez Charris») que saldrían así en el correo.
+    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
   };
   return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => vars[k.toLowerCase()] !== undefined ? vars[k.toLowerCase()] : m);
 }
@@ -252,6 +257,9 @@ function parametrosDe(campos, lead) {
     nombre: lead.name, empresa: lead.company, email: lead.email, telefono: lead.phone,
     etapa: lead.stage, fuente: lead.source,
     valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
+    // Meta rechaza el mensaje si un parámetro llega vacío, así que un lead sin
+    // asesor asignado se salta con su motivo en vez de quemar el intento.
+    asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
   };
   const out = [];
   for (const campo of (campos || [])) {

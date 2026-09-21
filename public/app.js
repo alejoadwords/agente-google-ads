@@ -18365,7 +18365,7 @@ function resRender() {
       'También vale el de <i>Maps</i> (<code>maps.app.goo.gl</code>). Solo se aceptan enlaces de Google, para que nadie mande a tus clientes a otro sitio por error.</div></div>' +
     '<div class="auto-field"><label class="auto-label">Mensaje por defecto</label>' +
       '<textarea class="auto-input" id="res-msg" rows="3" placeholder="Hola {{nombre}}, gracias por confiar en nosotros. ¿Nos ayudas con una reseña? Te toma 30 segundos:">' + esc(actual.mensaje || '') + '</textarea>' +
-      '<div class="auto-vars-hint">Se usa cuando el paso de la automatización no trae uno propio. Puedes usar <b>{{nombre}}</b> y <b>{{empresa}}</b>.</div></div>' +
+      '<div class="auto-vars-hint">Se usa cuando el paso de la automatización no trae uno propio. Puedes usar <b>{{nombre}}</b>, <b>{{empresa}}</b> y <b>{{asesor}}</b>.</div></div>' +
     '<div id="res-error" style="font-size:12.5px;color:#B91C1C;margin-top:4px"></div>';
 }
 
@@ -26096,11 +26096,11 @@ function autoStepFields(s, path) {
   if (s.type === 'send_email') {
     return '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.subject || '') + '" oninput="' + U + '\'subject\',this.value)"></div>' +
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="7" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
-      '<div class="auto-vars-hint">Variables: {{nombre}} {{empresa}} {{email}} {{etapa}} {{valor}}</div></div>';
+      '<div class="auto-vars-hint">Variables: {{nombre}} {{empresa}} {{email}} {{etapa}} {{valor}} {{asesor}}</div></div>';
   }
   if (s.type === 'send_whatsapp') {
     return '<div class="auto-field"><label class="auto-label">Mensaje de WhatsApp</label><textarea class="auto-input" rows="6" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
-      '<div class="auto-vars-hint">Se envía por la conversación del Inbox del lead (requiere chat iniciado) · Variables: {{nombre}} {{empresa}}</div></div>';
+      '<div class="auto-vars-hint">Se envía por la conversación del Inbox del lead (requiere chat iniciado) · Variables: {{nombre}} {{empresa}} {{asesor}}</div></div>';
   }
   if (s.type === 'wait') {
     const opts = [[1,'1 hora'],[4,'4 horas'],[24,'1 día'],[48,'2 días'],[72,'3 días'],[168,'7 días']];
@@ -26127,12 +26127,12 @@ function autoStepFields(s, path) {
       '<div class="auto-field"><label class="auto-label">Fecha límite</label><select class="auto-input" onchange="' + U + '\'offset_days\',parseInt(this.value));autoRefreshNodes()">' +
         opts.map(o => '<option value="' + o[0] + '"' + (parseInt(s.offset_days) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
       '<div class="auto-field"><label class="auto-label">Descripción (opcional)</label><textarea class="auto-input" rows="3" oninput="' + U + '\'description\',this.value)">' + esc(s.description || '') + '</textarea>' +
-      '<div class="auto-vars-hint">La tarea aparece en la Agenda vinculada al lead · Variables: {{nombre}} {{empresa}} {{etapa}}</div></div>';
+      '<div class="auto-vars-hint">La tarea aparece en la Agenda vinculada al lead · Variables: {{nombre}} {{empresa}} {{etapa}} {{asesor}}</div></div>';
   }
   if (s.type === 'notify_owner') {
     return '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.subject || '') + '" placeholder="Actividad de {{nombre}} en tu CRM" oninput="' + U + '\'subject\',this.value)"></div>' +
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="5" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
-      '<div class="auto-vars-hint">Se envía a tu email (el dueño de la cuenta), no al lead · incluye los datos del lead al pie · Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}}</div></div>';
+      '<div class="auto-vars-hint">Se envía a tu email (el dueño de la cuenta), no al lead · incluye los datos del lead al pie · Variables: {{nombre}} {{empresa}} {{etapa}} {{valor}} {{asesor}}</div></div>';
   }
   if (s.type === 'add_tag' || s.type === 'remove_tag') {
     const tagOpts = (typeof crmTags !== 'undefined' ? crmTags : []).map(t => '<option value="' + esc(t.name) + '">').join('');
@@ -27388,6 +27388,9 @@ const CMP_CAMPOS_WA = [
   ['etapa', 'Etapa del pipeline'],
   ['fuente', 'Fuente'],
   ['valor', 'Valor de la oportunidad'],
+  // Si el contacto no tiene asesor, Meta rechaza el mensaje por parámetro
+  // vacío: el motor lo salta y lo dice, no lo manda a medias.
+  ['asesor', 'Asesor asignado'],
 ];
 
 function cmpWTarjetaPlantillaWA() {
@@ -28040,7 +28043,7 @@ function cmpWSyncEmail() {
   const g = id => document.getElementById(id);
   // Si el campo no está en pantalla (paso 4) se usa lo guardado en el borrador.
   const val = (id, deW) => { const el = g(id); return el ? el.value : (_cmpW ? (_cmpW[deW] || '') : ''); };
-  const sample = { nombre: 'Ana', empresa: 'Empresa Demo', etapa: 'contactado', valor: '$1.200.000', email: 'ana@demo.com', telefono: '+57 300 000 0000', fuente: 'importación' };
+  const sample = { nombre: 'Ana', empresa: 'Empresa Demo', etapa: 'contactado', valor: '$1.200.000', email: 'ana@demo.com', telefono: '+57 300 000 0000', fuente: 'importación', asesor: 'Carlos Asesor' };
   const render = t => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => sample[k.toLowerCase()] !== undefined ? sample[k.toLowerCase()] : m);
   const bodyTxt = render(val('cmpw-msg', 'body'));
   if (_cmpW.channel !== 'email') {
@@ -34552,6 +34555,7 @@ const CAMPO_VARIABLES = [
   { v: 'etapa',    d: 'Etapa del pipeline' },
   { v: 'fuente',   d: 'De dónde llegó' },
   { v: 'valor',    d: 'Valor del deal, ya con formato' },
+  { v: 'asesor',   d: 'Nombre del asesor asignado al contacto' },
 ];
 
 // Botón + panel de variables para un campo. destinoId es el input o textarea.

@@ -91,6 +91,7 @@ const TOPE_CUENTA_NUEVA = 300;
 // resolverlo trayendo más filas a una función que dura segundos.
 const TECHO_AUDIENCIA = 100000;
 
+
 function sbHeaders(prefer) {
   return {
     'Content-Type': 'application/json',
@@ -491,10 +492,24 @@ export default async function handler(req) {
     }
     if (!toEmail) return jsonResp({ error: 'No se pudo obtener tu email' }, 500);
     const sampleRows = (await resolveAudience(userId, clientId, c.audience, 'email')).leads;
-    const lead = sampleRows[0] || { name: 'Ana Ejemplo', email: toEmail, phone: '', stage: 'nuevo', source: 'demo', company: 'Empresa Demo', value: 0 };
+    // La audiencia se trae con cuatro columnas —encolar no necesita más, y son
+    // hasta cien mil filas—, así que en el correo de prueba {{empresa}},
+    // {{etapa}}, {{fuente}} y {{valor}} salían en blanco y parecía que las
+    // variables no funcionaban. Para la prueba basta con UN lead completo.
+    let lead = sampleRows[0] || null;
+    if (lead?.id) {
+      const completo = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(lead.id)}&select=*&limit=1`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      if (completo?.[0]) lead = completo[0];
+    }
+    if (!lead) lead = { name: 'Ana Ejemplo', email: toEmail, phone: '', stage: 'nuevo', source: 'demo',
+                        company: 'Empresa Demo', value: 0, assigned_name: 'Carlos Asesor' };
     const render = (t) => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => ({
       nombre: lead.name || '', empresa: lead.company || '', email: lead.email || '', telefono: lead.phone || '',
       etapa: lead.stage || '', fuente: lead.source || '', valor: lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : '',
+      asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim(),
     })[k.toLowerCase()] ?? m);
     const html = campaignHtml(c, render(c.body), 'https://app.acuarius.app/api/unsubscribe?test=1', c.html ? render(c.html) : null);
     const payload = {
