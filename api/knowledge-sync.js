@@ -201,17 +201,20 @@ export default async function handler(req) {
 async function manejar(req) {
   let userId = await getUserId(req);
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sb() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`, { headers: sb() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tw = (await r.json())?.[0];
-    if (tw && tw.owner_user_id) userId = tw.owner_user_id;
+    if (tw && tw.owner_user_id) userId = tw.owner_user_id; clienteDelMiembro = tw.client_id || null;
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || '';
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || '';
   if (!clientId) return jsonResp({ error: 'Falta el cliente' }, 400);
 
   const filtroFuente = `user_id=eq.${encodeURIComponent(userId)}&client_id=eq.${encodeURIComponent(clientId)}`;

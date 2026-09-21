@@ -70,12 +70,15 @@ export default async function handler(req) {
 
   const actorId = userId;
   let actorNombre = null, mando = true, perfilMiembro = null;
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role&limit=1`, { headers: sbHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role,client_id&limit=1`, { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tw = (await r.json())?.[0];
     if (tw && tw.owner_user_id) {
-      userId = tw.owner_user_id;
+      userId = tw.owner_user_id; clienteDelMiembro = tw.client_id || null;
       actorNombre = tw.member_name || tw.member_email || null;
       mando = tw.role === 'admin';
       perfilMiembro = tw.role || null;   // para el corte por módulo, más abajo
@@ -94,7 +97,7 @@ export default async function handler(req) {
   }
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
 
   // ── GET ────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {

@@ -73,14 +73,14 @@ export function normalizarPerfil(rol) {
 export async function quienPregunta(userId) {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}` +
-    `&status=eq.active&select=owner_user_id,member_name,member_email,role&limit=1`,
+    `&status=eq.active&select=owner_user_id,member_name,member_email,role,client_id&limit=1`,
     { headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   if (!res.ok) throw new Error('No se pudo verificar la cuenta: HTTP ' + res.status);
   const fila = (await res.json())?.[0];
 
   if (!fila || !fila.owner_user_id) {
-    return { userId, actorId: userId, esMiembro: false, perfil: 'admin', esDueno: true, nombre: null };
+    return { userId, actorId: userId, esMiembro: false, perfil: 'admin', esDueno: true, nombre: null, cliente: null };
   }
   return {
     userId: fila.owner_user_id,
@@ -89,7 +89,29 @@ export async function quienPregunta(userId) {
     perfil: normalizarPerfil(fila.role),
     esDueno: false,
     nombre: fila.member_name || fila.member_email || null,
+    // A qué cliente está acotado. NULL = a todos, que es como funcionaba antes.
+    cliente: fila.client_id || null,
   };
+}
+
+/**
+ * Con qué cliente se trabaja en esta petición.
+ *
+ * Un miembro acotado a un cliente NO puede salirse de él, pida lo que pida el
+ * navegador. La comprobación vive aquí y no en la pantalla porque la pantalla
+ * se puede saltar: basta cambiar un parámetro en la barra de direcciones.
+ *
+ * Quien no está acotado —el dueño, o un miembro sin cliente— trabaja con el
+ * que pidió, exactamente como hasta ahora.
+ */
+export function alcanceDeCliente(quien, pedido) {
+  if (quien && quien.cliente) return quien.cliente;
+  return pedido || null;
+}
+
+/** ¿Está intentando entrar a un cliente que no es el suyo? */
+export function clienteAjeno(quien, pedido) {
+  return !!(quien && quien.cliente && pedido && pedido !== quien.cliente);
 }
 
 /** ¿Este perfil llega a este módulo? El dueño siempre. */
@@ -167,5 +189,9 @@ export function paraElCliente(quien) {
     solo_lo_suyo: !!p.soloLoSuyoEnReportes,
     solo_sus_leads: !!p.soloSusLeads,
     toca_el_plan: quien.esDueno === true,
+    // La pantalla lo usa para enseñar un solo cliente en el selector en vez de
+    // la cartera entera. No es la defensa —esa está en el servidor— pero sin
+    // esto el miembro vería los nombres de todos los clientes de la agencia.
+    cliente: quien.cliente || null,
   };
 }

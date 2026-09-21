@@ -121,17 +121,20 @@ async function manejar(req) {
   // sobre su propia cuenta en vez de la del dueño, y devolveriamos datos de
   // otra cuenta como si fueran los suyos. Mejor un error que el tablero de
   // otro. (Un array vacio si es valido: significa que no es miembro.)
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`, { headers: sbHeaders() });
     if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id;
+    if (_tw && _tw.owner_user_id) userId = _tw.owner_user_id; clienteDelMiembro = _tw.client_id || null;
   } catch (e) {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
 
   // ── Listar ────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {

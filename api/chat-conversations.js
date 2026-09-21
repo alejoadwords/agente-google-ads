@@ -50,11 +50,37 @@ export default async function handler(req) {
   let actorNombre = null;
 
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
+  let clienteDelMiembro = null;
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,client_id&limit=1`, { headers: sbHeaders() });
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; actorNombre = _tw.member_name || _tw.member_email || null; }
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; clienteDelMiembro = _tw.client_id || null; actorNombre = _tw.member_name || _tw.member_email || null; }
   } catch {}
+
+  // El inbox no tenía NINGÚN filtro de cliente: consultaba por cuenta y ya. En
+  // una agencia eso significa que cualquiera del equipo leía las conversaciones
+  // de todos los clientes.
+  //
+  // La conversación no guarda a quién pertenece —lo guarda el canal por el que
+  // entró—, así que acotar por cliente es traducirlo a «estos canales».
+  //
+  // No se filtra por responsable a propósito: el inbox es de atender, y un
+  // perfil de Ventas está para atender. Si solo viera las conversaciones de sus
+  // propios leads, nadie contestaría a quien escribe por primera vez.
+  let filtroCanales = '';
+  if (clienteDelMiembro) {
+    const canales = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${encodeURIComponent(userId)}` +
+      `&client_id=eq.${encodeURIComponent(clienteDelMiembro)}&select=id`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const ids = (canales || []).map(c => c.id);
+    // Sin canales para ese cliente no hay nada que enseñar. El filtro imposible
+    // es a propósito: preferible una bandeja vacía que la de otro cliente.
+    filtroCanales = ids.length
+      ? `&connection_id=in.(${ids.join(',')})`
+      : '&connection_id=is.null&id=eq.00000000-0000-0000-0000-000000000000';
+  }
 
 
   const url = new URL(req.url);
@@ -62,7 +88,7 @@ export default async function handler(req) {
   // GET ?report=1&from= — datos agregados para el informe de Conversaciones
   if (req.method === 'GET' && url.searchParams.get('report')) {
     const from = url.searchParams.get('from');
-    let cq = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}&select=id,channel,status,unread_count,created_at,last_message_at,lead_id&order=created_at.desc&limit=1000`;
+    let cq = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}${filtroCanales}&select=id,channel,status,unread_count,created_at,last_message_at,lead_id&order=created_at.desc&limit=1000`;
     if (from) cq += `&created_at=gte.${encodeURIComponent(from)}`;
     const convs = await fetch(cq, { headers: sbHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
 
@@ -88,7 +114,7 @@ export default async function handler(req) {
     const channel = url.searchParams.get('channel');
     const agentId = url.searchParams.get('agent_id');
     const leadId = url.searchParams.get('lead_id');
-    let query = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}&select=*&order=last_message_at.desc&limit=50`;
+    let query = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}${filtroCanales}&select=*&order=last_message_at.desc&limit=50`;
     if (status) query += `&status=eq.${encodeURIComponent(status)}`;
     if (channel) query += `&channel=eq.${encodeURIComponent(channel)}`;
     if (agentId) query += `&agent_id=eq.${encodeURIComponent(agentId)}`;
@@ -103,7 +129,7 @@ export default async function handler(req) {
     const convId = url.searchParams.get('messages');
     // Verify ownership
     const check = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${convId}&user_id=eq.${userId}&select=id`,
+      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${convId}&user_id=eq.${userId}${filtroCanales}&select=id`,
       { headers: sbHeaders() }
     );
     const ck = await check.json();
@@ -134,7 +160,7 @@ export default async function handler(req) {
     if (!texto) return jsonResp({ error: 'La nota está vacía' }, 400);
 
     const ck = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}&select=id,lead_id,contact_name,contact_phone`,
+      `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(userId)}${filtroCanales}&select=id,lead_id,contact_name,contact_phone`,
       { headers: sbHeaders() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     if (!ck?.[0]) return jsonResp({ error: 'No autorizado' }, 403);

@@ -5899,6 +5899,13 @@ if (window.AGENTES_ACTIVOS) {
             <label style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">Perfil de acceso</label>
             <select class="auto-input" id="cfg-team-perfil" style="width:100%;margin-bottom:6px" onchange="teamPintarAyudaPerfil()"></select>
             <div id="cfg-team-perfil-ayuda" style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:12px"></div>
+            <!-- Solo aparece si la cuenta tiene cartera de clientes. Sin ella no
+                 hay nada que acotar y el campo sobraría. -->
+            <div id="cfg-team-cliente-wrap" hidden>
+              <label style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">A qué cliente entra</label>
+              <select class="auto-input" id="cfg-team-cliente" style="width:100%;margin-bottom:6px"></select>
+              <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:12px">Si eliges uno, esta persona solo verá ese cliente: sus leads, su bandeja y sus campañas. No sabrá que existen los demás.</div>
+            </div>
             <button class="btn-pri sm" id="cfg-team-invite-btn" onclick="teamInvite()">Enviar invitación</button>
           </div>
 

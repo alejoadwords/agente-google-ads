@@ -17,7 +17,7 @@
 
 export const config = { runtime: 'edge' };
 
-import { quienPregunta, exigeModulo, soloSusLeads } from './_perfiles.js';
+import { quienPregunta, exigeModulo, soloSusLeads, alcanceDeCliente } from './_perfiles.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 
 const CORS = {
@@ -393,7 +393,9 @@ function monedaDe(filas) {
 
 async function listaDeCampanas(quien, url) {
   const { desde, hasta } = rangoPorDefecto(url);
-  const clientId = url.searchParams.get('client_id') || null;
+  // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
+  // el navegador. Ver alcanceDeCliente en _perfiles.js.
+  const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
   const soloDe = soloSusLeads(quien.perfil) ? quien.actorId : null;
 
   const conexiones = await conexionesDe(quien.userId, clientId);
@@ -431,7 +433,9 @@ async function listaDeCampanas(quien, url) {
 
 async function detalleDeCampana(quien, url) {
   const { desde, hasta } = rangoPorDefecto(url);
-  const clientId = url.searchParams.get('client_id') || null;
+  // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
+  // el navegador. Ver alcanceDeCliente en _perfiles.js.
+  const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
   const clave = url.searchParams.get('campana');
   const soloDe = soloSusLeads(quien.perfil) ? quien.actorId : null;
 

@@ -464,7 +464,7 @@ export default async function handler(req) {
   if (req.method === 'GET') {
     // member_user_id es imprescindible: sin él, cualquier selector de "quién
     // atiende" se queda sin equipo que ofrecer y solo muestra al que mira.
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,member_name,role,status,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,member_name,role,status,client_id,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
     const myEmail = await clerkEmail(userId);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
     const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
@@ -511,6 +511,11 @@ export default async function handler(req) {
         // `perfil` es el nombre nuevo; se sigue aceptando `role` por si queda
         // alguna llamada vieja. Lo desconocido cae en el perfil más limitado.
         role: normalizarPerfil(body.perfil || body.role),
+        // A qué cliente queda acotado. Vacío = a toda la cuenta, que es como
+        // funcionaba antes y sigue siendo el valor por defecto. Con valor, el
+        // servidor le fuerza ese cliente en TODOS los endpoints, pida lo que
+        // pida el navegador.
+        client_id: body.client_id ? String(body.client_id).slice(0, 80) : null,
         status: 'invited', invite_token: token,
       }),
     }).then(r => r.ok ? r.json() : null);
@@ -553,7 +558,13 @@ export default async function handler(req) {
 
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/team_members?id=eq.${encodeURIComponent(body.id)}&owner_user_id=eq.${encodeURIComponent(cuenta)}`,
-      { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ role: perfil }) }
+      { method: 'PATCH', headers: sbHeaders(),
+        body: JSON.stringify({
+          role: perfil,
+          // 'client_id' in body distingue «no lo mandes» de «ponlo vacío»:
+          // sin eso no habría forma de quitarle el acote a alguien.
+          ...('client_id' in (body || {}) ? { client_id: body.client_id ? String(body.client_id).slice(0, 80) : null } : {}),
+        }) }
     );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     const filas = await res.json();

@@ -302,8 +302,20 @@ export async function borrarPlantilla(conn, nombre) {
  */
 export async function cuentaDe(userId) {
   const tm = await fetch(
-    `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+    `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`,
     { headers: sbHeaders() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
   return tm?.[0]?.owner_user_id || userId;
+}
+
+/**
+ * A qué cliente está acotado quien pregunta, si es un miembro acotado.
+ * Devuelve null cuando no lo está — que es el caso del dueño y el de siempre.
+ */
+export async function clienteDe(userId) {
+  const tm = await fetch(
+    `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=client_id&limit=1`,
+    { headers: sbHeaders() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  return tm?.[0]?.client_id || null;
 }

@@ -71,10 +71,13 @@ export default async function handler(req) {
 
   // Equipo: si soy miembro activo de un workspace, opero sobre los datos del dueño
   let esMiembro = false, rolMiembro = null;
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,client_id&limit=1`, { headers: sbHeaders() });
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; esMiembro = true; rolMiembro = _tw.role || null; }
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; clienteDelMiembro = _tw.client_id || null; esMiembro = true; rolMiembro = _tw.role || null; }
   } catch {}
 
   // El catálogo es de la cuenta entera: lo ve todo el equipo —lo necesita para
@@ -86,7 +89,7 @@ export default async function handler(req) {
 
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
   const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
 
   if (req.method === 'GET') {

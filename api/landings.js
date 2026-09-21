@@ -14,7 +14,7 @@
 // compartir el enlace. Sus robots no ejecutan JavaScript.
 export const config = { runtime: 'edge' };
 
-import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -99,7 +99,9 @@ export default async function handler(req, contexto) {
   }
 
   if (req.method === 'GET') {
-    const clientId = url.searchParams.get('client_id');
+    // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
+  // el navegador. Ver alcanceDeCliente en _perfiles.js.
+  const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
     const alcance = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '';
     const filas = await fetch(
       `${SUPABASE_URL}/rest/v1/landings?user_id=eq.${encodeURIComponent(userId)}${alcance}&select=id,slug,title,published,visits,form_token,plantilla,updated_at&order=updated_at.desc`,

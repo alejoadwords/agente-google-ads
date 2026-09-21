@@ -165,11 +165,14 @@ export default async function handler(req) {
   let rolMiembro = null;
   // Si esta consulta falla no se puede seguir: sin ella el miembro operaría
   // sobre su propia cuenta (vacía) y parecería que perdió toda su agenda.
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
-    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`, { headers: sbHeaders() });
+    const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,client_id&limit=1`, { headers: sbHeaders() });
     if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);
     const _tw = (await _twRes.json())?.[0];
-    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; rolMiembro = _tw.role || null; }
+    if (_tw && _tw.owner_user_id) { userId = _tw.owner_user_id; clienteDelMiembro = _tw.client_id || null; rolMiembro = _tw.role || null; }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
@@ -180,7 +183,7 @@ export default async function handler(req) {
 
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
   const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
 
   // GET ?gcal_status=1 — estado de la conexión de Google Calendar

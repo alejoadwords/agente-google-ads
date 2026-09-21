@@ -326,19 +326,22 @@ export default async function handler(req) {
   // Un miembro del equipo opera sobre la cuenta del dueño: los datos son de la
   // cuenta, no de la persona. Sin esto el miembro consulta su propia cuenta
   // —vacía— y el módulo le sale en blanco sin ningún error a la vista.
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
     const _tw = await fetch(
-      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`,
       { headers: sbHeaders() }
     );
     if (!_tw.ok) throw new Error('HTTP ' + _tw.status);
     const _fila = (await _tw.json())?.[0];
-    if (_fila?.owner_user_id) userId = _fila.owner_user_id;
+    if (_fila?.owner_user_id) userId = _fila.owner_user_id; clienteDelMiembro = _fila.client_id || null;
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
 
-  const clientId = url.searchParams.get('client_id') || null;
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
 
   // GET ?mp_status=1 — ¿tengo MercadoPago conectado? (para la UI de Propuestas)
   if (req.method === 'GET' && url.searchParams.get('mp_status')) {

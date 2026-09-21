@@ -78,11 +78,14 @@ export default async function handler(req) {
   if (!token && req.method === 'GET') {
     let userId = await getUserId(req);
     if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
     try {
-      const tw = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`, { headers: sbHeaders() }).then(r => r.json());
-      if (tw?.[0]?.owner_user_id) userId = tw[0].owner_user_id;
+      const tw = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`, { headers: sbHeaders() }).then(r => r.json());
+      if (tw?.[0]?.owner_user_id) userId = tw[0].owner_user_id; clienteDelMiembro = tw[0].client_id || null;
     } catch {}
-    const clientId = url.searchParams.get('client_id') || null;
+    const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/nps_responses?user_id=eq.${encodeURIComponent(userId)}${scope}&select=score,comment,responded_at,sent_at,lead_id&order=sent_at.desc&limit=1000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []);
     const answered = rows.filter(r => r.score !== null && r.score !== undefined);

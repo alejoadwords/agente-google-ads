@@ -14,7 +14,7 @@
 
 export const config = { runtime: 'edge' };
 
-import { conexionWhatsapp, plantillasDeMeta, huecosDe, cuentaDe,
+import { conexionWhatsapp, plantillasDeMeta, huecosDe, cuentaDe, clienteDe,
          revisarBorrador, crearPlantilla, borrarPlantilla } from './_whatsapp.js';
 
 const CORS = {
@@ -57,7 +57,9 @@ export default async function handler(req) {
   if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  // Un miembro acotado a un cliente no se sale de el, pida lo que pida el
+  // navegador. Ver alcanceDeCliente en _perfiles.js.
+  const clientId = (await clienteDe(userId)) || url.searchParams.get('client_id') || null;
 
   // Un miembro opera sobre la cuenta del DUEÑO. Sin esto vería su propia
   // cuenta, que no tiene ningún canal, y creería que no hay plantillas.

@@ -941,6 +941,16 @@ function agencyGetStorageKey() {
   return `acuarius_agency_clients_${uid}`;
 }
 
+// Un miembro acotado a un cliente solo ve ESE cliente en la cartera. No es la
+// defensa —esa esta en el servidor, que le fuerza el alcance pida lo que pida—
+// pero sin esto veria los nombres de todos los clientes de la agencia, que es
+// informacion comercial del dueno.
+function agencySoloElMio() {
+  const mio = window._miPerfil && window._miPerfil.cliente;
+  if (!mio) return;
+  agencyClients = (agencyClients || []).filter(c => String(c.id) === String(mio));
+}
+
 async function agencyLoadClients() {
   // La espera de la sesión y el reintento del 401 los resuelve fetchAuth()
   try {
@@ -949,6 +959,7 @@ async function agencyLoadClients() {
       const { data } = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         agencyClients = data;
+        agencySoloElMio();
         agencyPersistLocal();
         return;
       }
@@ -963,6 +974,7 @@ async function agencyLoadClients() {
     const raw = localStorage.getItem(agencyGetStorageKey());
     const localData = raw ? JSON.parse(raw) : [];
     agencyClients = localData;
+    agencySoloElMio();
     // Si hay datos en localStorage pero no en Supabase, subirlos ahora
     if (localData.length > 0) agencyPersistRemote({ silent: true });
   } catch(e) { agencyClients = []; }
@@ -29648,6 +29660,7 @@ function teamApplyMemberUI() {
 
 // ── Sección Equipo en Configuración (solo dueño) ─────────────────────────────
 async function teamRenderSettings() {
+  teamPintarClientes();
   asgRender();
   segLoad();
   const list = document.getElementById('cfg-team-list');
@@ -29750,6 +29763,21 @@ async function teamCambiarPerfil(id, perfil, sel) {
   } finally { if (sel) sel.disabled = false; }
 }
 
+// El selector de «a que cliente entra». Solo tiene sentido con cartera: una
+// cuenta sin clientes no tiene nada que acotar.
+function teamPintarClientes() {
+  const wrap = document.getElementById('cfg-team-cliente-wrap');
+  const sel = document.getElementById('cfg-team-cliente');
+  if (!wrap || !sel) return;
+  const lista = (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients)) ? agencyClients : [];
+  if (!lista.length) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const previo = sel.value;
+  sel.innerHTML = '<option value="">Toda la cuenta — ve todos los clientes</option>' +
+    lista.map(c => '<option value="' + esc(c.id) + '">' + esc(c.name || c.id) + '</option>').join('');
+  if (previo) sel.value = previo;
+}
+
 async function teamInvite() {
   const email = document.getElementById('cfg-team-email').value.trim();
   const name = document.getElementById('cfg-team-name').value.trim();
@@ -29763,6 +29791,8 @@ async function teamInvite() {
       body: JSON.stringify({
         email, name, owner_name: ownerName,
         perfil: (document.getElementById('cfg-team-perfil') || {}).value || 'ventas',
+        // Vacio = a toda la cuenta, que es el valor por defecto de siempre.
+        client_id: (document.getElementById('cfg-team-cliente') || {}).value || null,
       }),
     }).then(r => r.json());
     if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }

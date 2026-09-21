@@ -4,7 +4,7 @@
 // y conector para formularios existentes (public/f.js).
 export const config = { runtime: 'edge' };
 
-import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -163,7 +163,9 @@ export default async function handler(req) {
 
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
+  // el navegador. Ver alcanceDeCliente en _perfiles.js.
+  const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
   const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
 
   if (req.method === 'GET') {

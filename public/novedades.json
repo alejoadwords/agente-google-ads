@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-21-equipo-por-cliente",
+   "fecha": "2026-09-21",
+   "tipo": "nuevo",
+   "titulo": "Da acceso a alguien a un solo cliente",
+   "texto": "Si manejas varios clientes, ahora al invitar a alguien puedes elegir a cuál entra. Esa persona verá únicamente los leads, la bandeja de conversaciones y las campañas de ese cliente: los demás no le aparecen en ninguna parte, ni siquiera sus nombres. Si no eliges ninguno, entra a toda la cuenta como hasta ahora. Puedes cambiarlo cuando quieras sin reenviar la invitación. De paso corregimos algo que se nos había pasado: la bandeja de conversaciones no separaba por cliente, así que quien estaba en tu equipo veía los mensajes de todos. Ya no."
+  },
+  {
    "id": "2026-09-21-trazabilidad-de-pauta",
    "fecha": "2026-09-21",
    "tipo": "mejora",

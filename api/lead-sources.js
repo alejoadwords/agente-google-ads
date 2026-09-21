@@ -116,11 +116,14 @@ async function manejar(req) {
   // falla no se sigue: operar con la identidad equivocada devolvería las
   // fuentes de otra cuenta.
   let esMiembro = false, rolMiembro = null;
+  // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
+  // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
+  let clienteDelMiembro = null;
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role&limit=1`, { headers: sbHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,role,client_id&limit=1`, { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tw = (await r.json())?.[0];
-    if (tw && tw.owner_user_id) { userId = tw.owner_user_id; esMiembro = true; rolMiembro = tw.role || 'vendedor'; }
+    if (tw && tw.owner_user_id) { userId = tw.owner_user_id; clienteDelMiembro = tw.client_id || null; esMiembro = true; rolMiembro = tw.role || 'vendedor'; }
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
   }
@@ -134,7 +137,7 @@ async function manejar(req) {
   }
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
 
   // ── Listar: las de por defecto + las de la cuenta ─────────────────────────
   if (req.method === 'GET') {

@@ -6,7 +6,7 @@
 // de leads con etiqueta 'no-email' (baja) y de leads sin email/teléfono.
 export const config = { runtime: 'edge' };
 
-import { quienPregunta, puedeVer, exigeModulo } from './_perfiles.js';
+import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
 
 import { campaignHtml } from './_campaign-email.js';
 
@@ -312,7 +312,9 @@ export default async function handler(req) {
   }
 
   const url = new URL(req.url);
-  const clientId = url.searchParams.get('client_id') || null;
+  // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
+  // el navegador. Ver alcanceDeCliente en _perfiles.js.
+  const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
   const admin = null; // se resuelve solo cuando hace falta (cupo/gate)
 
   // GET ?preview=1 — conteo de audiencia en vivo para el builder, con
