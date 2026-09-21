@@ -32542,17 +32542,24 @@ function tarFila(t) {
       cuando.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
     : 'Sin fecha';
   const lead = t.lead;
-  return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;background:var(--panel)">' +
-    '<input type="checkbox" onchange="tarHecha(\'' + esc(t.id) + '\')" title="Marcar como hecha" style="cursor:pointer">' +
-    '<div style="flex:1;min-width:0">' +
-      '<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(t.title || 'Tarea') + '</div>' +
-      '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">' + esc(fecha) +
-        (lead?.assigned_name ? ' · ' + esc(lead.assigned_name) : '') +
-        (lead?.phone ? ' · ' + esc(lead.phone) : '') +
+  // Los datos van en trozos sueltos, no en una cadena con puntos: en el
+  // teléfono cada uno tiene que poder saltar de línea por su cuenta. Unidos
+  // con « · » el navegador partía por donde le convenía y salían cuatro
+  // renglones con un dato a medias en cada uno.
+  const dato = (x) => '<span>' + esc(x) + '</span>';
+  return '<div class="tar-fila">' +
+    '<input class="tar-fila-check" type="checkbox" onchange="tarHecha(\'' + esc(t.id) + '\')" title="Marcar como hecha">' +
+    '<div class="tar-fila-txt">' +
+      '<div class="tar-fila-tit">' + esc(t.title || 'Tarea') + '</div>' +
+      '<div class="tar-fila-meta">' + dato(fecha) +
+        (lead?.assigned_name ? dato(String(lead.assigned_name).replace(/\s+/g, ' ').trim()) : '') +
+        (lead?.phone ? dato(lead.phone) : '') +
       '</div>' +
     '</div>' +
-    (lead ? '<button class="btn-ghost sm" onclick="tarAbrirLead(\'' + esc(lead.id) + '\')">' + esc((lead.name || 'Lead').slice(0, 22)) + '</button>' : '') +
-    '<button class="btn-ghost sm" onclick="tarAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana">Mañana</button>' +
+    '<div class="tar-fila-acc">' +
+      (lead ? '<button class="btn-ghost sm" onclick="tarAbrirLead(\'' + esc(lead.id) + '\')">' + esc((lead.name || 'Lead').slice(0, 22)) + '</button>' : '') +
+      '<button class="btn-ghost sm" onclick="tarAplazar(\'' + esc(t.id) + '\')" title="Mover a mañana">Mañana</button>' +
+    '</div>' +
   '</div>';
 }
 
