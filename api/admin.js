@@ -727,8 +727,11 @@ CREATE INDEX idx_alerts_user_unread ON campaign_alerts(user_id, is_read, is_dism
 */
 
 async function handleGetConnection(req, res) {
-  const { userId, platform } = req.query;
-  if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
+  const { platform } = req.query;
+  // El userId de la URL NO se usa: la identidad sale del token de sesión.
+  const userId = await usuarioDeLaSesion(req);
+  if (!userId) return res.status(401).json({ error: 'No autorizado' });
+  if (!platform) return res.status(400).json({ error: 'platform requerido' });
   let rows;
   try {
     rows = await supabaseReq(
@@ -756,8 +759,12 @@ async function handleGetConnection(req, res) {
 
 async function handleDisconnectPlatform(req, res) {
   if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).json({ error: 'POST/DELETE only' });
-  const { userId, platform } = req.body || {};
-  if (!userId || !platform) return res.status(400).json({ error: 'userId y platform requeridos' });
+  const { platform } = req.body || {};
+  // Igual que arriba: sin esto, cualquiera desconectaba la cuenta publicitaria
+  // de otro mandando su id.
+  const userId = await usuarioDeLaSesion(req);
+  if (!userId) return res.status(401).json({ error: 'No autorizado' });
+  if (!platform) return res.status(400).json({ error: 'platform requerido' });
   await supabaseReq(`/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.${encodeURIComponent(platform)}`, 'DELETE');
   return res.json({ ok: true });
 }
@@ -1118,6 +1125,35 @@ async function handleSavePlatformAccount(req, res) {
     { account_id: accountId, account_name: accountName || null, updated_at: new Date().toISOString() }
   );
   return res.json({ ok: true });
+}
+
+// ── SESIÓN DE USUARIO ─────────────────────────────────────
+// Varias acciones de este fichero son «rutas públicas de usuario»: no piden
+// el secreto de admin porque las llama la propia aplicación. El problema era
+// que además se CREÍAN el `userId` de la URL. Con eso, cualquiera desde fuera
+// —sin sesión, sin secreto— pedía `get-connection` con el id de otra persona
+// y recibía su token de Google o de Meta en claro y funcionando.
+//
+// La regla: la identidad sale del JWT de Clerk, nunca de la petición. El
+// `userId` de la URL se ignora.
+async function usuarioDeLaSesion(req) {
+  const auth = req.headers.authorization || req.headers.Authorization || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  try {
+    const [hB64, pB64, sB64] = auth.slice(7).split('.');
+    if (!sB64) return null;
+    const cabecera = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const llave = jwks.keys?.find(k => k.kid === cabecera.kid);
+    if (!llave) return null;
+    const ck = await crypto.subtle.importKey('jwk', llave, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const firma = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, firma, new TextEncoder().encode(`${hB64}.${pB64}`));
+    if (!ok) return null;
+    const cuerpo = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (cuerpo.exp && cuerpo.exp < Math.floor(Date.now() / 1000)) return null;
+    return cuerpo.sub || null;
+  } catch { return null; }
 }
 
 // ── ROUTER PRINCIPAL ──────────────────────────────────────

@@ -6808,9 +6808,9 @@ async function restoreConnectionsFromSupabase() {
 
   try {
     const [gConn, mConn, liConn] = await Promise.all([
-      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=google_ads').then(r => r.json()).catch(() => ({})),
-      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads').then(r => r.json()).catch(() => ({})),
-      fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads').then(r => r.json()).catch(() => ({})),
+      fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=google_ads').then(r => r.json()).catch(() => ({})),
+      fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads').then(r => r.json()).catch(() => ({})),
+      fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads').then(r => r.json()).catch(() => ({})),
     ]);
 
     if (!hasGoogleToken && gConn.connected && gConn.access_token) {
@@ -11461,7 +11461,7 @@ async function launchMetaCampaignFlow() {
     try {
       var uid = clerkInstance?.user?.id;
       if (uid) {
-        var connRes  = await fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads');
+        var connRes  = await fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads');
         var connData = await connRes.json();
         if (connData.connected && connData.access_token) {
           token = connData.access_token;
@@ -14282,7 +14282,7 @@ let metaActiveAccount = null;
           const uid = clerkInstance?.user?.id;
           if (!uid) continue;
           try {
-            const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
+            const r = await fetchAuth(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
             const conn = await r.json();
             if (conn.connected && conn.access_token) {
               sessionStorage.setItem('meta_access_token', conn.access_token);
@@ -14360,7 +14360,7 @@ function disconnectMetaAds() {
   updateMetaUI(false);
   hidePlatformDashboard();
   const uid = clerkInstance?.user?.id;
-  if (uid) fetch('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'meta_ads' }) }).catch(() => {});
+  if (uid) fetchAuth('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'meta_ads' }) }).catch(() => {});
 }
 
 async function loadMetaAccounts() {
@@ -14675,7 +14675,7 @@ let linkedinActiveAccount = null;
         const uid = clerkInstance?.user?.id;
         if (!uid) return;
         try {
-          const r    = await fetch('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads');
+          const r    = await fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads');
           const conn = await r.json();
           if (conn.connected && conn.access_token) {
             sessionStorage.setItem('linkedin_access_token', conn.access_token);
@@ -14728,7 +14728,7 @@ function disconnectLinkedInAds() {
   linkedinAccounts = []; linkedinActiveAccount = null;
   updateLinkedInUI(false);
   const uid = clerkInstance?.user?.id;
-  if (uid) fetch('/api/admin?action=disconnect-platform', {
+  if (uid) fetchAuth('/api/admin?action=disconnect-platform', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ userId: uid, platform: 'linkedin_ads' })
   }).catch(() => {});
@@ -14941,7 +14941,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
         const tryFetch = async (uid) => {
           if (!uid) return false;
           try {
-            const r = await fetch(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
+            const r = await fetchAuth(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
             const conn = await r.json();
             if (conn.connected && conn.access_token) {
               sessionStorage.setItem('ads_access_token', conn.access_token);
@@ -15137,7 +15137,7 @@ function disconnectGoogleAds() {
   updateAdsUI(false);
   hidePlatformDashboard();
   const uid = clerkInstance?.user?.id;
-  if (uid) fetch('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'google_ads' }) }).catch(() => {});
+  if (uid) fetchAuth('/api/admin?action=disconnect-platform', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: uid, platform: 'google_ads' }) }).catch(() => {});
 }
 
 // Carga las cuentas desde la API y muestra el selector
