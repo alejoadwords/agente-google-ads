@@ -10,6 +10,18 @@ desfasada: producción tenía calculadora de precios, la franja de benchmarks,
 vieja más una sección de creativos que nunca llegó a publicarse (sus imágenes
 no existen en el repo del landing).
 
+**Puesta al día el 21-09-2026** y ahora es byte a byte lo que sirve
+acuarius.app. Lo que estaba desfasado esta vez: los escalones de contactos de
+la calculadora, la línea de «15 videos IA al mes» (aquí decía «videos IA
+ilimitados», que ya no es cierto), faltaba `privacy.html` y el `hero-video.mp4`
+era el pesado de 16 MB en vez del recomprimido de 10,5.
+
+Y un aviso: esta copia tenía el enlace de contacto como
+`/cdn-cgi/l/email-protection#…`, que es lo que Cloudflare escribe **al servir**
+la página. O sea que alguien la actualizó guardando el HTML renderizado en vez
+de bajarlo del repo. Ese enlace no funciona fuera de Cloudflare. Bájalo
+siempre del repo, con el comando de abajo.
+
 **Antes de tocar este archivo**, baja el que está vivo y trabaja sobre él:
 
     gh api repos/alejoadwords/acuarius-landing/contents/index.html --jq '.content' | base64 -d > index.html
