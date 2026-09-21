@@ -50,5 +50,45 @@ console.log('\nEl orden de los intentos\n');
       /USER_PERMISSION_DENIED\|does not have permission\|NOT_ADS_USER/.test(dash));
 }
 
+console.log('\nNadie manda el administrador a ciegas\n');
+{
+  // Esta es la que de verdad importa: basta UN sitio sin guardar para que un
+  // cliente con cuenta propia se quede sin esa función, y son once sitios.
+  const guardado = /conMcc|_negConMcc|legacyConMcc/;
+  let aCiegas = [];
+  for (const f of ['api/google-ads.js', 'api/dashboard.js']) {
+    readFileSync(new URL('../' + f, import.meta.url), 'utf8').split('\n').forEach((linea, i) => {
+      if (!linea.includes('login-customer-id')) return;
+      if (linea.trim().startsWith('//') || linea.trim().startsWith('*')) return;
+      if (!guardado.test(linea)) aCiegas.push(`${f}:${i + 1}`);
+    });
+  }
+  chk('ni un solo uso sin comprobar antes de quién es la cuenta',
+      aCiegas.length === 0, aCiegas.join(', '));
+}
+
+console.log('\nLa escritura también\n');
+{
+  const ga = readFileSync(new URL('../api/google-ads.js', import.meta.url), 'utf8');
+  chk('existe el ayudante de mutaciones', /async function llamarGA\(url, token, cuerpo\)/.test(ga));
+  chk('las seis llamadas de crear campaña pasan por él',
+      /const gadsMutate = \(entity, operations\) => llamarGA\(/.test(ga));
+  const cuantas = (ga.match(/await llamarGA\(/g) || []).length;
+  chk('pausar, presupuesto y puja también', cuantas >= 4, cuantas + ' llamadas');
+  chk('y se lee la respuesta del ayudante, no la del fetch',
+      !/await mutateRes\.json\(\)/.test(ga));
+
+  chk('los flujos largos lo resuelven una vez, no por llamada',
+      /async function necesitaMcc\(customerId, token\)/.test(ga) &&
+      /const _conMcc = await necesitaMcc\(/.test(ga) &&
+      /const _negConMcc = await necesitaMcc\(/.test(ga));
+  chk('ante la duda se comporta como antes (con administrador)',
+      /necesitaMcc[\s\S]{0,900}?catch \{[\s\S]{0,220}?return true;/.test(ga));
+
+  chk('la sonda de versión ya no manda administrador',
+      !/const loginId = mccId \|\| customerId/.test(ga) &&
+      !/const loginId = mccId \|\| customerId/.test(readFileSync(new URL('../api/dashboard.js', import.meta.url), 'utf8')));
+}
+
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(fallos ? 1 : 0);

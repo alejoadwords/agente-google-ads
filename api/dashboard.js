@@ -129,11 +129,11 @@ async function refreshGoogleToken(refreshToken) {
 let _dashApiVersion = null;
 async function getApiVersion(customerId, accessToken) {
   if (_dashApiVersion) return _dashApiVersion;
-  const mccId = (MCC_ID || '').replace(/-/g, '');
-  const loginId = mccId || customerId;
+  // Sin `login-customer-id`, igual que en api/google-ads.js: esta sonda solo
+  // busca qué versión existe, y el administrador no cambia esa respuesta — solo
+  // añade una forma de fallar en las cuentas que no cuelgan de él.
   for (const ver of [22, 21, 20, 19, 18]) {
     const h = { 'Authorization': `Bearer ${accessToken}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
-    if (loginId) h['login-customer-id'] = loginId;
     try {
       const r = await fetch(
         `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,

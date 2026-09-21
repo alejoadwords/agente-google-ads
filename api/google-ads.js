@@ -59,11 +59,13 @@ let _detectedApiVersion = null;
 
 async function getApiVersion(customerId, accessToken) {
   if (_detectedApiVersion) return _detectedApiVersion;
-  const mccId = (MCC_ID || '').replace(/-/g, '');
-  const loginId = mccId || customerId;
+  // Aquí NO se manda `login-customer-id`. Esta sonda solo busca qué versión de
+  // la API existe, y eso lo dice el 404 o el UNSUPPORTED_VERSION de la URL. Un
+  // problema de permisos no cambia la respuesta a esa pregunta, así que meter
+  // el administrador solo añade una forma de fallar en las cuentas que no
+  // cuelgan de él.
   for (const ver of [22, 21, 20, 19, 18]) {
     const h = { 'Authorization': `Bearer ${accessToken}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
-    if (loginId) h['login-customer-id'] = loginId;
     try {
       const r = await fetch(
         `https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`,
@@ -150,6 +152,64 @@ async function gaqlRequest(customerId, query, accessToken, userId) {
   }
 
   return data;
+}
+
+/**
+ * Una llamada POST a la API de Google Ads con la misma regla de permisos que
+ * gaqlRequest: primero como dueño directo de la cuenta —el caso normal de un
+ * cliente que conectó la suya— y solo si Google se queja de permisos, como
+ * administrador.
+ *
+ * Reintentar una MUTACIÓN daría miedo si el primer intento hubiera podido
+ * crear algo a medias. No es el caso: `USER_PERMISSION_DENIED` se rechaza
+ * entero, antes de tocar nada. Por eso se reintenta ante ESE error y ante
+ * ningún otro — un 400 por un presupuesto inválido se devuelve tal cual.
+ */
+async function llamarGA(url, token, cuerpo) {
+  const cabeceras = (conMcc) => ({
+    'Authorization': `Bearer ${token}`,
+    'developer-token': DEV_TOKEN,
+    'Content-Type': 'application/json',
+    ...(conMcc && MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
+  });
+  const pedir = (conMcc) => fetch(url, {
+    method: 'POST', headers: cabeceras(conMcc), body: JSON.stringify(cuerpo),
+  });
+
+  let res = await pedir(false);
+  let data = await res.json().catch(() => ({}));
+  if (MCC_ID && sinPermisoGA(data)) {
+    const res2 = await pedir(true);
+    const data2 = await res2.json().catch(() => ({}));
+    // Si por el administrador tampoco, se conserva la respuesta del PRIMER
+    // intento: describe el caso normal y es la que el cliente necesita leer.
+    if (!sinPermisoGA(data2)) { res = res2; data = data2; }
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+
+/**
+ * ¿Hay que identificarse como administrador para tocar esta cuenta?
+ *
+ * Para un flujo que hace media docena de llamadas seguidas —crear una campaña
+ * entera— sale más barato preguntarlo UNA vez con una consulta mínima que
+ * reintentar cada llamada por separado.
+ */
+async function necesitaMcc(customerId, token) {
+  if (!MCC_ID) return false;
+  try {
+    const ver = await getApiVersion(customerId, token);
+    const r = await fetch(`https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'SELECT customer.id FROM customer LIMIT 1' }),
+    });
+    return sinPermisoGA(await r.json().catch(() => ({})));
+  } catch {
+    // Ante la duda, como antes: con administrador. Es lo que funcionaba para
+    // las cuentas que ya operaban.
+    return true;
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -300,15 +360,18 @@ export default async function handler(req, res) {
     if (!rawCid || !query) return res.status(400).json({ error: 'customerId y query requeridos' });
 
     const cleanCid = rawCid.replace(/-/g, '');
-    const makeH = (tok) => {
+    const makeH = (tok, conMcc) => {
       const h = { 'Authorization': `Bearer ${tok}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
-      if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+      if (conMcc && MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
       return h;
     };
     const legacyVer = await getApiVersion(cleanCid, rawToken || '');
+    // Mismo criterio que en el resto: se decide una vez para esta cuenta en vez
+    // de mandar el administrador a ciegas.
+    const legacyConMcc = await necesitaMcc(cleanCid, rawToken || '');
     const doReq = (tok) => fetch(
       `https://googleads.googleapis.com/v${legacyVer}/customers/${cleanCid}/googleAds:search`,
-      { method: 'POST', headers: makeH(tok), body: JSON.stringify({ query }) }
+      { method: 'POST', headers: makeH(tok, legacyConMcc), body: JSON.stringify({ query }) }
     );
 
     // Obtener token inicial: del body, o de Supabase como fallback
@@ -617,19 +680,13 @@ export default async function handler(req, res) {
       if (errs.length) return res.status(400).json({ error: 'Plan inválido', details: errs });
 
       const ver = await getApiVersion(customerId, token);
-      const mutHeaders = {
-        'Authorization': `Bearer ${token}`,
-        'developer-token': DEV_TOKEN,
-        'Content-Type': 'application/json',
-        ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
-      };
-      const gadsMutate = async (entity, operations) => {
-        const r = await fetch(`https://googleads.googleapis.com/v${ver}/customers/${customerId}/${entity}:mutate`, {
-          method: 'POST', headers: mutHeaders, body: JSON.stringify({ operations }),
-        });
-        const data = await r.json();
-        return { ok: r.ok, data };
-      };
+      // Las seis llamadas de creación —presupuesto, campaña, segmentación,
+      // grupos, palabras y anuncios— pasan por aquí, así que arreglar el
+      // permiso en este punto las cubre todas.
+      const gadsMutate = (entity, operations) => llamarGA(
+        `https://googleads.googleapis.com/v${ver}/customers/${customerId}/${entity}:mutate`,
+        token, { operations }
+      );
       const firstErr = (d) => JSON.stringify(d?.error?.details?.[0]?.errors?.slice(0, 3) || d?.error?.message || d).slice(0, 500);
 
       let budgetRes = null, campaignRes = null;
@@ -734,25 +791,17 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
       }
 
-      const mutateRes = await fetch(
+      const mutateRes = await llamarGA(
         `https://googleads.googleapis.com/v${_detectedApiVersion || 21}/customers/${customerId}/campaigns:mutate`,
+        token,
         {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'developer-token': DEV_TOKEN,
-            'Content-Type': 'application/json',
-            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
-          },
-          body: JSON.stringify({
             operations: [{
               updateMask: 'status',
               update: { resourceName: `customers/${customerId}/campaigns/${campaignId}`, status },
             }],
-          }),
-        }
+          }
       );
-      const mutateData = await mutateRes.json();
+      const mutateData = mutateRes.data;
       if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
 
       // Get campaign name for audit log
@@ -780,17 +829,10 @@ export default async function handler(req, res) {
       const budgetData = await gaqlRequest(customerId, budgetQuery, token, userId).catch(() => ({}));
       const oldBudget = formatCost(budgetData.results?.[0]?.campaignBudget?.amountMicros || 0);
 
-      const mutateRes = await fetch(
+      const mutateRes = await llamarGA(
         `https://googleads.googleapis.com/v${_detectedApiVersion || 21}/customers/${customerId}/campaignBudgets:mutate`,
+        token,
         {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'developer-token': DEV_TOKEN,
-            'Content-Type': 'application/json',
-            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
-          },
-          body: JSON.stringify({
             operations: [{
               updateMask: 'amount_micros',
               update: {
@@ -798,10 +840,9 @@ export default async function handler(req, res) {
                 amountMicros: String(newDailyBudgetMicros),
               },
             }],
-          }),
-        }
+          }
       );
-      const mutateData = await mutateRes.json();
+      const mutateData = mutateRes.data;
       if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
 
       return res.json({ ok: true, oldBudget, newBudget: formatCost(newDailyBudgetMicros) });
@@ -831,17 +872,10 @@ export default async function handler(req, res) {
       const keywordText = kwRow.keyword?.text || criterionId;
       const oldBid = formatCost(kwRow.cpcBidMicros || 0);
 
-      const mutateRes = await fetch(
+      const mutateRes = await llamarGA(
         `https://googleads.googleapis.com/v${_detectedApiVersion || 21}/customers/${customerId}/adGroupCriteria:mutate`,
+        token,
         {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'developer-token': DEV_TOKEN,
-            'Content-Type': 'application/json',
-            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
-          },
-          body: JSON.stringify({
             operations: [{
               updateMask: 'cpc_bid_micros',
               update: {
@@ -849,10 +883,9 @@ export default async function handler(req, res) {
                 cpcBidMicros: String(newCpcBidMicros),
               },
             }],
-          }),
-        }
+          }
       );
-      const mutateData = await mutateRes.json();
+      const mutateData = mutateRes.data;
       if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
 
       return res.json({ ok: true, keywordText, oldBid, newBid: formatCost(newCpcBidMicros) });
@@ -871,25 +904,17 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: 'customerId no autorizado para este usuario' });
       }
 
-      const mutateRes = await fetch(
+      const mutateRes = await llamarGA(
         `https://googleads.googleapis.com/v${_detectedApiVersion || 21}/customers/${customerId}/adGroups:mutate`,
+        token,
         {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'developer-token': DEV_TOKEN,
-            'Content-Type': 'application/json',
-            ...(MCC_ID ? { 'login-customer-id': MCC_ID.replace(/-/g, '') } : {}),
-          },
-          body: JSON.stringify({
             operations: [{
               updateMask: 'status',
               update: { resourceName: `customers/${customerId}/adGroups/${adGroupId}`, status },
             }],
-          }),
-        }
+          }
       );
-      const mutateData = await mutateRes.json();
+      const mutateData = mutateRes.data;
       if (!mutateRes.ok) return res.status(mutateRes.status).json({ error: 'Error Google Ads API', details: mutateData });
 
       const nameQuery = `SELECT ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`;
@@ -997,13 +1022,16 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
 
       const cid = customerId.replace(/-/g, '');
 
+      // Se resuelve una vez para todo el flujo: son media docena de llamadas
+      // seguidas y no tiene sentido descubrirlo en cada una.
+      const _conMcc = await necesitaMcc(cid, token);
       const makeHeaders = (t) => {
         const h = {
           'Authorization':   `Bearer ${t}`,
           'developer-token': DEV_TOKEN,
           'Content-Type':    'application/json',
         };
-        if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+        if (_conMcc && MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
         return h;
       };
 
@@ -1138,13 +1166,14 @@ Responde ÚNICAMENTE con este JSON válido sin texto extra ni markdown:
       const validKws = keywords.map(k => String(k).trim().toLowerCase()).filter(Boolean).slice(0, 100);
 
       // Headers helper local para esta acción
+      const _negConMcc = await necesitaMcc(cid, token);
       const negHeaders = () => {
         const h = {
           'Authorization': `Bearer ${token}`,
           'developer-token': DEV_TOKEN,
           'Content-Type': 'application/json',
         };
-        if (MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
+        if (_negConMcc && MCC_ID) h['login-customer-id'] = MCC_ID.replace(/-/g, '');
         return h;
       };
 
