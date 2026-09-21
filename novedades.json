@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-21-preferencias-del-equipo",
+   "fecha": "2026-09-21",
+   "tipo": "arreglo",
+   "titulo": "Guardar preferencias fallaba para los miembros del equipo",
+   "texto": "A quien entraba como parte de un equipo —no como dueño de la cuenta— le podía fallar el guardado de sus preferencias con un error que no explicaba nada. Pasaba porque al aceptar la invitación no se creaba del todo su ficha interna. Ya está corregido para quienes entren de ahora en adelante, y completamos a mano las fichas de quienes ya estaban."
+  },
+  {
    "id": "2026-09-19-imagen-cabecera-whatsapp",
    "fecha": "2026-09-19",
    "tipo": "mejora",

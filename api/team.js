@@ -295,12 +295,39 @@ async function clerkEmailVerificado(userId) {
  * su cuenta con el correo invitado se quedaba con una cuenta suelta y vacía, y
  * su invitación en «Invitado» para siempre.
  */
+/**
+ * La fila espejo del miembro en `users`. Aceptar una invitación no la creaba,
+ * y varias tablas la exigen por clave foránea: user_profiles, chat_history,
+ * activity_logs y billing.
+ *
+ * El síntoma era un 500 al guardar preferencias —«Key (user_id)=(…) is not
+ * present in table users»— que solo le pasaba a los miembros del equipo, nunca
+ * al dueño, porque el dueño sí la tiene desde que se registró.
+ *
+ * `ignore-duplicates` a propósito: si la fila ya existe se deja como está. Con
+ * merge se le pisaría el plan a alguien que además tiene cuenta propia.
+ */
+async function asegurarFilaDeUsuario(userId, correo, nombre) {
+  if (!userId || !correo) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/users?on_conflict=id`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ id: userId, email: correo, name: nombre || null }),
+    });
+  } catch (e) {
+    // No puede tumbar la aceptación de la invitación: sin fila el miembro entra
+    // igual y solo pierde el guardado de preferencias.
+    console.error('[team] fila espejo:', e.message);
+  }
+}
+
 async function vincularPorCorreo(userId) {
   const correo = await clerkEmailVerificado(userId);
   if (!correo) return null;
   const filas = await fetch(
     `${SUPABASE_URL}/rest/v1/team_members?member_email=eq.${encodeURIComponent(correo)}` +
-    `&status=eq.invited&select=id,owner_user_id,owner_name,role&order=created_at.desc&limit=1`,
+    `&status=eq.invited&select=id,owner_user_id,owner_name,role,member_name&order=created_at.desc&limit=1`,
     { headers: sbHeaders() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
   const inv = filas?.[0];
@@ -315,6 +342,7 @@ async function vincularPorCorreo(userId) {
     }),
   });
   if (!res.ok) return null;
+  await asegurarFilaDeUsuario(userId, correo, inv.member_name);
   const hechas = await res.json().catch(() => []);
   return hechas?.length ? { owner_user_id: inv.owner_user_id, role: inv.role, owner_name: inv.owner_name } : null;
 }
@@ -382,10 +410,13 @@ export default async function handler(req) {
     if (inv.status === 'active') return jsonResp({ ok: true, already: true, owner_name: inv.owner_name });
     if (inv.owner_user_id === userId) return jsonResp({ error: 'No puedes unirte a tu propio equipo' }, 400);
     const email = await clerkEmail(userId);
-    await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${inv.id}`, {
+    const rCanje = await fetch(`${SUPABASE_URL}/rest/v1/team_members?id=eq.${inv.id}`, {
       method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
       body: JSON.stringify({ member_user_id: userId, member_email: email || inv.member_email, status: 'active', joined_at: new Date().toISOString() }),
     });
+    // La fila espejo va DESPUÉS de aceptar: si falla, el miembro entra igual y
+    // solo pierde el guardado de preferencias.
+    if (rCanje.ok) await asegurarFilaDeUsuario(userId, email || inv.member_email, inv.member_name);
     return jsonResp({ ok: true, owner_name: inv.owner_name });
   }
 
