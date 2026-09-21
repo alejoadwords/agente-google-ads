@@ -145,6 +145,40 @@ console.log('\nLo que NO deja hacer\n');
   chk('un proceso inventado se rechaza', inventado.estado === 404, JSON.stringify(inventado.cuerpo));
 }
 
+console.log('\nEl botón lo ve quien puede usarlo\n');
+{
+  const app = await import('node:fs').then(m => m.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'));
+  const bloque = app.slice(app.indexOf('// ── El proceso de venta del lead ─'), app.indexOf('async function crmChangeStage('));
+
+  // EL FALLO: `window._miPerfil` SOLO se rellena cuando la persona es miembro
+  // del equipo de alguien — se pone dentro de `if (window._workspace)`. Al
+  // DUEÑO se le queda sin definir, así que preguntarle solo a él escondía el
+  // botón justo a quien más permisos tiene. Se vio abriendo una ficha.
+  //
+  // Las demás propiedades del perfil (`solo_sus_leads`, `solo_lo_suyo`,
+  // `modulos`) RESTRINGEN, así que «sin definir» es lo correcto para el dueño.
+  // La peligrosa es la que CONCEDE, como `gestiona_equipo`.
+  chk('el permiso contempla al dueño, no solo a los miembros',
+      /!crmSoyMiembro \|\|[\s\S]{0,120}gestiona_equipo/.test(bloque));
+  chk('y `_miPerfil` no decide solo', !/const puede = !!\(window\._miPerfil/.test(bloque));
+
+  // Y que el que concede siga siendo el único de esa forma en toda la app.
+  const concesivos = [...app.matchAll(/window\._miPerfil && window\._miPerfil\.(gestiona_equipo|toca_el_plan)/g)]
+    .map(m => app.slice(0, m.index).split('\n').length);
+  const sinDueno = concesivos.filter(n => {
+    const ctx = app.split('\n').slice(n - 6, n + 2).join('\n');
+    return !/crmSoyMiembro|_workspace/.test(ctx);
+  });
+  chk('ningún permiso se concede mirando solo a `_miPerfil`',
+      sinDueno.length === 0, 'líneas: ' + sinDueno.join(', '));
+
+  chk('solo se ofrecen procesos del MISMO cliente',
+      /\(p\.client_id \|\| null\) === \(lead\.client_id \|\| null\)/.test(bloque));
+  chk('y nunca el proceso en el que ya está',
+      /p\.id !== lead\.pipeline_id/.test(bloque));
+  chk('sin candidatos no se enseña el botón', /puede && candidatos\.length/.test(bloque));
+}
+
 console.log('\nLo que el endpoint NO puede dejar pasar\n');
 {
   const src = await import('node:fs').then(m => m.readFileSync(new URL('../api/leads.js', import.meta.url), 'utf8'));

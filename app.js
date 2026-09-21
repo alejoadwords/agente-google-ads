@@ -20802,7 +20802,13 @@ function crmPintarProceso(lead) {
   const actual = (crmPipelines || []).find(p => p.id === lead.pipeline_id);
   // Solo el dueño y un administrador mueven de proceso. Es la misma regla que
   // aplica el servidor; esconder el botón no es el permiso, es la cortesía.
-  const puede = !!(window._miPerfil && window._miPerfil.gestiona_equipo);
+  //
+  // `crmSoyMiembro` y NO `window._miPerfil`: ese solo se rellena cuando la
+  // persona es miembro del equipo de alguien. Al DUEÑO se le queda sin definir,
+  // así que preguntarle a él escondía el botón justo a quien más permisos
+  // tiene. Lo encontró Alejandro abriendo una ficha, no la prueba.
+  const puede = !crmSoyMiembro ||
+    !!(window._miPerfil && window._miPerfil.gestiona_equipo);
   // Los de SU cliente, no los de todos: un proceso pertenece a un cliente y
   // mover el lead a uno ajeno le cambiaría la cartera sin decirlo.
   const candidatos = (crmPipelines || []).filter(p =>
