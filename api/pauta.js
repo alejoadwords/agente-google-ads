@@ -90,7 +90,7 @@ function claveDeLead(l) {
 // ── conexiones ──────────────────────────────────────────────────────────────
 // `client_id` es texto en la base (ver el esquema de pipelines): comparar con
 // eq. y el valor tal cual, sin castear.
-async function conexionesDe(userId, clientId) {
+async function conexionesDe(userId, clientId, sueltasTambien = true) {
   let ruta = `/platform_connections?user_id=eq.${encodeURIComponent(userId)}` +
     `&platform=in.(google_ads,meta_ads)` +
     `&select=id,platform,account_id,account_name,client_id,label,access_token,refresh_token,token_expires_at,updated_at,extra_data`;
@@ -98,7 +98,16 @@ async function conexionesDe(userId, clientId) {
   // TAMBIÉN dentro de un cliente. Filtrarla fuera es lo que hacía que la
   // pantalla dijera «no hay ninguna cuenta conectada» con una conectada
   // delante. Se muestra, marcada, para que se pueda asignar desde aquí.
-  if (clientId) ruta += `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)`;
+  //
+  // Salvo para un miembro ACOTADO a un cliente: para él, «de la cuenta» no
+  // existe. Una conexión sin asignar es casi siempre la de OTRO cliente que
+  // nadie asignó todavía, y enseñársela le pondría delante la inversión y las
+  // campañas de alguien que no es suyo. Prefiere no verla a verla de más.
+  if (clientId && sueltasTambien) {
+    ruta += `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)`;
+  } else if (clientId) {
+    ruta += `&client_id=eq.${encodeURIComponent(clientId)}`;
+  }
   // Los tokens salen descifrados de aquí: quien use la fila más abajo no
   // tiene por qué saber que en la base están guardados cifrados.
   return Promise.all((await sb(ruta)).map(abrirConexion));
@@ -398,7 +407,7 @@ async function listaDeCampanas(quien, url) {
   const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
   const soloDe = soloSusLeads(quien.perfil) ? quien.actorId : null;
 
-  const conexiones = await conexionesDe(quien.userId, clientId);
+  const conexiones = await conexionesDe(quien.userId, clientId, !quien.cliente);
   const [resultados, leads] = await Promise.all([
     traerCampanas(conexiones, desde, hasta),
     leadsDelPeriodo(quien.userId, clientId, desde, hasta, soloDe),
@@ -439,7 +448,7 @@ async function detalleDeCampana(quien, url) {
   const clave = url.searchParams.get('campana');
   const soloDe = soloSusLeads(quien.perfil) ? quien.actorId : null;
 
-  const conexiones = await conexionesDe(quien.userId, clientId);
+  const conexiones = await conexionesDe(quien.userId, clientId, !quien.cliente);
   const [resultados, leads] = await Promise.all([
     traerCampanas(conexiones, desde, hasta),
     leadsDelPeriodo(quien.userId, clientId, desde, hasta, soloDe),
@@ -521,10 +530,18 @@ async function detalleDeCampana(quien, url) {
 async function vistaDeCartera(quien, url) {
   const { desde, hasta } = rangoPorDefecto(url);
 
+  // Esta vista es «todos mis clientes de un vistazo». Para un miembro acotado
+  // eso serían los clientes de OTROS, así que se le encoge a lo suyo. La
+  // pantalla no se lo ofrece —siempre tiene un cliente activo— pero el endpoint
+  // se alcanza escribiendo la dirección a mano, y eso no es una defensa.
+  const soloMio = quien.cliente || null;
+
   const [conexiones, leads, clientes] = await Promise.all([
-    conexionesDe(quien.userId, null),
-    leadsDelPeriodo(quien.userId, null, desde, hasta, null),
-    sb(`/client_dashboards?user_id=eq.${encodeURIComponent(quien.userId)}&select=id,client_name&order=client_name.asc`).catch(() => []),
+    conexionesDe(quien.userId, soloMio, !soloMio),
+    leadsDelPeriodo(quien.userId, soloMio, desde, hasta, null),
+    sb(`/client_dashboards?user_id=eq.${encodeURIComponent(quien.userId)}` +
+       (soloMio ? `&id=eq.${encodeURIComponent(soloMio)}` : '') +
+       `&select=id,client_name&order=client_name.asc`).catch(() => []),
   ]);
 
   const resultados = await traerCampanas(conexiones, desde, hasta);

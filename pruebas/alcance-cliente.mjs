@@ -123,6 +123,26 @@ console.log('\nNadie da mas acceso del que tiene\n');
       /filaObjetivo\.member_user_id === quien\.actorId\) return false/.test(lee('api/_perfiles.js')));
 }
 
+console.log('\nLa pauta no se cuela por la puerta de atras\n');
+{
+  const pa = lee('api/pauta.js');
+  // Una conexion de pauta SIN cliente asignado se enseña dentro de cualquier
+  // cliente a proposito —para poder asignarla desde ahi—. Para el dueño esta
+  // bien; para un miembro acotado es la inversion y las campañas de otro.
+  chk('el ayudante sabe si debe incluir las sueltas',
+      /async function conexionesDe\(userId, clientId, sueltasTambien = true\)/.test(pa));
+  chk('a un acotado NO se le incluyen',
+      /\} else if \(clientId\) \{\s*\n\s*ruta \+= `&client_id=eq\./.test(pa));
+  chk('las dos vistas de campaña lo pasan',
+      (pa.match(/conexionesDe\(quien\.userId, clientId, !quien\.cliente\)/g) || []).length === 2);
+  chk('y la vista de cartera se encoge a lo suyo',
+      /const soloMio = quien\.cliente \|\| null;/.test(pa) &&
+      /conexionesDe\(quien\.userId, soloMio, !soloMio\)/.test(pa));
+  chk('incluidos sus leads y su lista de clientes',
+      /leadsDelPeriodo\(quien\.userId, soloMio, desde, hasta, null\)/.test(pa) &&
+      /soloMio \? `&id=eq\.\$\{encodeURIComponent\(soloMio\)\}` : ''/.test(pa));
+}
+
 console.log('\nLa pantalla\n');
 {
   const app = lee('public/app.js');
