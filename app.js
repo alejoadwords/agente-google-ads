@@ -20500,6 +20500,12 @@ async function crmSaveLead() {
   if (!crmEditingId) {
     const quien = document.getElementById('crm-f-assigned')?.value || null;
     if (quien) { payload.assigned_to = quien; payload.assigned_name = crmNombreResponsable(quien); }
+  } else {
+    // El tablero solo se manda al CREAR, que es cuando decide dónde nace el
+    // lead. Al editar no pinta nada, y mandarlo hacía que el servidor tomara
+    // cualquier edición por un cambio de proceso de venta. El servidor también
+    // lo comprueba; esto evita el viaje.
+    delete payload.pipeline_id;
   }
 
   try {

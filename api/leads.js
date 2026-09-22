@@ -851,14 +851,38 @@ export default async function handler(req) {
     // fabricar un JWT de Clerk válido, y entonces la prueba de algo que
     // ESCRIBE se quedaría en leer el código y confiar.
     if (fields.pipeline_id !== undefined) {
-      if (esMiembro && rolMiembro !== 'admin') {
-        return jsonResp({
-          error: 'Solo un administrador puede mover un lead de proceso de venta.',
-          sin_permiso: true,
-        }, 403);
+      // Que VENGA `pipeline_id` no significa que quieran mover el lead. La
+      // ventana de editar manda el tablero que se está mirando desde el
+      // 14-08-2026 —lo necesita al CREAR, para que el lead no caiga en el
+      // principal—, así que desde que existe esta rama (21-09) CUALQUIER
+      // edición se tomaba por un cambio de proceso:
+      //
+      //   · a un asesor le salía «solo un administrador puede mover un lead»
+      //     mientras cambiaba el valor del negocio — un error que no tenía
+      //     nada que ver con lo que estaba haciendo
+      //   · a la dueña le salía «el lead ya está en ese proceso», y el campo
+      //     que había editado NO se guardaba: esta rama devuelve antes
+      //
+      // Es un movimiento solo si el proceso CAMBIA de verdad.
+      const actuales = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=pipeline_id&limit=1`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      const ahora = actuales?.[0]?.pipeline_id ?? null;
+      const pedido = fields.pipeline_id ?? null;
+
+      if (String(ahora || '') !== String(pedido || '') || fields.previsualizar) {
+        if (esMiembro && rolMiembro !== 'admin') {
+          return jsonResp({
+            error: 'Solo un administrador puede mover un lead de proceso de venta.',
+            sin_permiso: true,
+          }, 403);
+        }
+        const r = await moverDePipeline(userId, id, fields.pipeline_id, { previsualizar: !!fields.previsualizar });
+        return jsonResp(r.cuerpo, r.estado);
       }
-      const r = await moverDePipeline(userId, id, fields.pipeline_id, { previsualizar: !!fields.previsualizar });
-      return jsonResp(r.cuerpo, r.estado);
+      // Mismo proceso: se sigue con la edición normal, sin tocarlo.
+      delete fields.pipeline_id;
     }
 
     // Only allow safe fields
