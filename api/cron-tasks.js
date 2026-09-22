@@ -8,6 +8,7 @@
 
 import { emailHtml, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
+import { yaSeHizo, periodoDe } from './_una-vez.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -192,6 +193,10 @@ export default async function handler(req, res) {
         const vencidas = suyas.filter(t => t.due_at && new Date(t.due_at).getTime() < ahora);
         const hoy = suyas.filter(t => !t.due_at || new Date(t.due_at).getTime() >= ahora);
         if (!vencidas.length && !hoy.length) continue;
+        // Una vez al día por persona: ver api/_una-vez.js
+        if (await yaSeHizo(SUPABASE_URL, SUPABASE_KEY, 'tareas:' + quien, periodoDe('dia'))) {
+          resumen.repetidos = (resumen.repetidos || 0) + 1; continue;
+        }
         const r = await enviar(emailDe[quien], vencidas, hoy);
         if (r.ok) { resumen.correos++; continue; }
         resumen.fallidos.push({ quien, motivo: r.motivo });

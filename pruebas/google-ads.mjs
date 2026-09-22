@@ -54,7 +54,14 @@ console.log('\nNadie manda el administrador a ciegas\n');
 {
   // Esta es la que de verdad importa: basta UN sitio sin guardar para que un
   // cliente con cuenta propia se quede sin esa función, y son once sitios.
-  const guardado = /conMcc|_negConMcc|legacyConMcc/;
+  // Dos guardianes valen, y el segundo es el fuerte:
+  //   · `conMcc` y compañía — la vieja regla de «primero sin, luego con el
+  //     nuestro», que sigue cubriendo los casos 1 y 2.
+  //   · `login`, el administrador que `dondePreguntar()` averiguó para ESA
+  //     cuenta (api/_google-login.js). Es el caso 3, el del cliente con
+  //     administrador propio, y es más preciso que los otros: no adivina.
+  // Lo que NO vale es una constante suelta como MCC_ID metida a mano.
+  const guardado = /conMcc|_negConMcc|legacyConMcc|:\s*login\b/;
   let aCiegas = [];
   for (const f of ['api/google-ads.js', 'api/dashboard.js']) {
     readFileSync(new URL('../' + f, import.meta.url), 'utf8').split('\n').forEach((linea, i) => {
@@ -65,6 +72,15 @@ console.log('\nNadie manda el administrador a ciegas\n');
   }
   chk('ni un solo uso sin comprobar antes de quién es la cuenta',
       aCiegas.length === 0, aCiegas.join(', '));
+
+  // Y que ese `login` sea de verdad el averiguado, no una variable cualquiera
+  // que alguien llamó igual.
+  const ga = readFileSync(new URL('../api/google-ads.js', import.meta.url), 'utf8');
+  chk('el tercer intento existe y usa el módulo compartido',
+      /import \{ dondePreguntar \} from '\.\/_google-login\.js'/.test(ga) &&
+      /const login = await dondePreguntar\(/.test(ga));
+  chk('y solo se intenta si los dos anteriores fallaron por permisos',
+      /if \(sinPermisoGA\(data\) && userId\) \{/.test(ga));
 }
 
 console.log('\nLa escritura también\n');

@@ -2,6 +2,7 @@
 // Genera y envía reportes mensuales el día 1 de cada mes a las 8am UTC
 // Incluye comparativa mes actual vs mes anterior y análisis estratégico más profundo
 import { enviarResend } from './_correo.js';
+import { yaSeHizo, periodoDe } from './_una-vez.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -315,7 +316,11 @@ async function processUser(userId) {
       saved++;
 
       // Enviar email
-      if (RESEND_API_KEY && userEmail && emailReports) {
+      // No se repite el informe del mismo período: guardar el mismo
+      // informe dos veces y mandarlo dos veces es lo que pasaba si el
+      // cron se reintentaba. Ver api/_una-vez.js
+      if (RESEND_API_KEY && userEmail && emailReports &&
+          !(await yaSeHizo(SUPABASE_URL, SUPABASE_SERVICE_KEY, 'informe-mensual:' + (userEmail || ''), periodoDe('mes')))) {
         const html = buildMonthlyEmail(conn.platform, current, previous, analysis);
         const monthCap = getMonthLabel().charAt(0).toUpperCase() + getMonthLabel().slice(1);
         await enviarResend('cron-monthly-reports', {

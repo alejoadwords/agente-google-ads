@@ -1,6 +1,7 @@
 // api/cron-reports.js
 // Genera y envía reportes semanales automáticos todos los lunes a las 8am UTC
 import { enviarResend } from './_correo.js';
+import { yaSeHizo, periodoDe } from './_una-vez.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -333,7 +334,11 @@ async function processUser(user) {
       snapshotsSaved++;
 
       // Send email if user has reports enabled
-      if (RESEND_API_KEY && userEmail && emailReports) {
+      // No se repite el informe del mismo período: guardar el mismo
+      // informe dos veces y mandarlo dos veces es lo que pasaba si el
+      // cron se reintentaba. Ver api/_una-vez.js
+      if (RESEND_API_KEY && userEmail && emailReports &&
+          !(await yaSeHizo(SUPABASE_URL, SUPABASE_SERVICE_KEY, 'informe-semanal:' + (userEmail || ''), periodoDe('semana')))) {
         const html = buildWeeklyReportEmail(userEmail, conn.platform, currentMetrics, analysis, prevMetrics || {});
         await enviarResend('cron-reports', {
           method: 'POST',
