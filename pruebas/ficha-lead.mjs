@@ -227,6 +227,22 @@ console.log('\nEn el móvil no se aprietan tres columnas\n');
   // se montaban unos sobre otros. Medido en el banco: 0 solapes.
   chk('el embudo se desplaza en vez de encogerse',
       /\.lf-paso\{flex:0 0 auto;min-width:0\}/.test(css));
+  // Los botones de cierre vivían DENTRO de la tira que se desplaza: en un
+  // móvil quedaban a 260px del borde derecho, invisibles salvo que a alguien
+  // se le ocurriera arrastrar el embudo hasta el final. Medido en el banco:
+  // x 637→783 en una pantalla de 375.
+  chk('«Ganado» y «Perdido» quedan fuera del desplazamiento',
+      /'<div class="lf-embudo">' \+\s*\n?\s*'<div class="lf-pasos">'/.test(bloque) &&
+      /\.lf-pasos\{[^}]*overflow-x:auto\}/.test(css) &&
+      !/\.lf-embudo\{[^}]*overflow-x:auto/.test(css));
+  chk('y en el móvil bajan a su propia línea, para no comerse la tira',
+      /\.lf-embudo\{flex-wrap:wrap/.test(css) && /\.lf-pasos\{flex:1 1 100%\}/.test(css));
+  // Un ítem flexible sin `min-width:0` no baja de su ancho de contenido. En
+  // «Qué ha pasado» la caja del historial salía 44px por fuera de una pantalla
+  // de 375 y TODA la página se desplazaba en horizontal.
+  chk('las columnas del móvil pueden encogerse',
+      /\.lf-col\.visible > \*\{flex:1 1 100%;min-width:0\}/.test(css) &&
+      /\.lf-col\.tercera > \*\{flex:1 1 280px;min-width:0\}/.test(css));
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

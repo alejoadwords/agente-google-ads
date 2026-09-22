@@ -30,6 +30,13 @@
    "texto": "Si tenías más de un proceso de venta, el selector para cambiar entre ellos había desaparecido del tablero: tus procesos seguían ahí, pero la pantalla no conseguía cargarlos. El mismo fallo afectaba a los agentes de chat, las propuestas, las respuestas rápidas y la sincronización del catálogo, que respondían «no se pudo verificar tu cuenta». Ya está corregido en todos."
   },
   {
+   "id": "2026-09-21-ficha-en-el-celular",
+   "fecha": "2026-09-21",
+   "tipo": "arreglo",
+   "titulo": "La ficha del contacto, arreglada en el celular",
+   "texto": "Dos cosas que en el celular no funcionaban. Los botones de <b>Ganado</b> y <b>Perdido</b> vivían dentro del embudo, que se arrastra de lado, y quedaban muy a la derecha: no se veían a menos que se te ocurriera arrastrar la barra hasta el final. Ahora están en su propia línea, siempre a la vista. Y en la pestaña Â«Qué ha pasadoÂ» el historial se salía un poco de la pantalla y hacía que toda la página se corriera de lado; ya no."
+  },
+  {
    "id": "2026-09-21-satisfaccion-en-la-ficha",
    "fecha": "2026-09-21",
    "tipo": "mejora",

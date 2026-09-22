@@ -1283,8 +1283,12 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 
 /* El embudo como barra de progreso. Hoy la etapa es un desplegable: se ve DÓNDE
    está, pero no cuánto le falta ni por dónde ya pasó. */
-.lf-pasos{display:flex;align-items:center;gap:0;padding:14px 20px;background:var(--bg);
-  border-bottom:1px solid var(--border);overflow-x:auto}
+.lf-embudo{display:flex;align-items:center;gap:0;padding:14px 20px;background:var(--bg);
+  border-bottom:1px solid var(--border)}
+/* Solo la tira de etapas se desplaza. Los botones de cierre quedan fuera: son
+   los dos más importantes de la ficha y no pueden depender de que alguien
+   arrastre el embudo hasta el final para encontrarlos. */
+.lf-pasos{display:flex;align-items:center;gap:0;flex:1;min-width:0;overflow-x:auto}
 .lf-paso{display:flex;align-items:center;gap:0;flex:1;min-width:120px}
 .lf-paso .bola{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
   border:2px solid var(--border);background:var(--bg);color:var(--muted2)}
@@ -1426,7 +1430,10 @@ a.lf-prop:hover{border-color:var(--blue)}
 @media (max-width:1180px){
   .lf-a{grid-template-columns:300px minmax(0,1fr)}
   .lf-col.tercera{grid-column:1 / -1;flex-direction:row;flex-wrap:wrap}
-  .lf-col.tercera > *{flex:1 1 280px}
+  /* `min-width:0` no es adorno: sin él un ítem flexible no baja de su ancho de
+     contenido, y basta una fecha sin espacios o una tira de filtros para que
+     la caja sobresalga y toda la página se desplace en horizontal. */
+  .lf-col.tercera > *{flex:1 1 280px;min-width:0}
 }
 @media (max-width:820px){
   .lf-pestanas{display:flex}
@@ -1435,12 +1442,19 @@ a.lf-prop:hover{border-color:var(--blue)}
      montaban unos sobre otros. Mejor arrastrarlo que no poder leerlo. */
   .lf-paso{flex:0 0 auto;min-width:0}
   .lf-paso .linea{flex:0 0 20px;min-width:20px}
-  .lf-pasos{padding:12px 16px}
-  .lf-cierre{margin-left:10px}
+  /* Y en el móvil bajan a su propia línea: con 375px de ancho, anclarlos a la
+     derecha se comía 158px de la tira y el embudo dejaba de leerse. */
+  .lf-embudo{flex-wrap:wrap;gap:10px;padding:12px 16px}
+  .lf-pasos{flex:1 1 100%}
+  .lf-cierre{margin-left:0}
   .lf-a{grid-template-columns:minmax(0,1fr);padding:14px 16px}
   .lf-col{display:none}
   .lf-col.visible{display:flex;flex-direction:row;flex-wrap:wrap}
-  .lf-col.visible > *{flex:1 1 100%}
+  /* Lo mismo aquí, y aquí se notaba: en «Qué ha pasado» la caja del historial
+     salía 44px por fuera de la pantalla —la empujaban la tira de filtros y la
+     fecha de cada evento, que no parte— y el móvil se desplazaba en
+     horizontal. La tira de filtros ya tiene su propio desplazamiento. */
+  .lf-col.visible > *{flex:1 1 100%;min-width:0}
   .lf-barra{flex-wrap:wrap}
   .lf-acc{width:100%;margin-left:0}
 }

@@ -38100,7 +38100,11 @@ function lfEmbudo() {
   const tick = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>';
 
-  return '<div class="lf-pasos">' +
+  // El embudo se desplaza; los botones de cierre NO. Estaban dentro de la tira
+  // y en un móvil quedaban a 260px del borde derecho, invisibles salvo que a
+  // alguien se le ocurriera arrastrarla hasta el final.
+  return '<div class="lf-embudo">' +
+    '<div class="lf-pasos">' +
     etapas.map((s, i) => {
       // Con el lead cerrado, TODO el camino queda hecho: llegó al final por una
       // puerta o por la otra, y dejarlo a medias diría que se quedó a medias.
@@ -38112,6 +38116,7 @@ function lfEmbudo() {
         (i < etapas.length - 1 ? '<span class="linea"></span>' : '') +
       '</div>';
     }).join('') +
+    '</div>' +
     '<div class="lf-cierre">' +
       lfBotonCierre('ganado', 'Ganado', 'gana') +
       lfBotonCierre('perdido', 'Perdido', 'pierde') +
