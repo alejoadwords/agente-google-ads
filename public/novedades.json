@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-editar-desde-la-ficha",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Arreglos en la ficha del contacto",
+   "texto": "Si abriste una ficha y los botones no respondían —agendar, propuesta, cambiar de proceso o mover de etapa— ya está corregido: la ficha perdía la referencia al contacto y las acciones se quedaban quietas sin avisar. Por eso mover un lead de etapa desde la ficha no guardaba nada y parecía que había que refrescar. Además, la caja de Información ahora tiene su botón «Editar», con el mismo formulario de siempre, para cambiar correo, teléfono, empresa, valor, fecha de cierre y etiquetas sin salir de la ficha."
+  },
+  {
    "id": "2026-09-22-google-ads-permisos",
    "fecha": "2026-09-22",
    "tipo": "arreglo",

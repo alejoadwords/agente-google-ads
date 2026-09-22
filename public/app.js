@@ -20503,6 +20503,14 @@ async function crmSaveLead() {
     }
     crmCloseModal();
     crmRender();
+    // La ficha, si está abierta sobre este lead. `crmLeads[idx] = data.lead`
+    // sustituye el objeto, así que `lfLead` se quedaría apuntando al viejo y
+    // la pantalla seguiría enseñando los datos de antes de guardar.
+    if (leadGuardado && lfLead && lfLead.id === leadGuardado.id) {
+      lfLead = leadGuardado;
+      crmDetailLead = leadGuardado;
+      lfPintar();
+    }
 
     // Mover un lead a Ganado o Perdido desde ESTE formulario no pedía nada: ni
     // importe, ni motivo, ni fecha. Arrastrando la tarjeta sí, y por eso los
@@ -38234,7 +38242,11 @@ function lfQuienEs(l) {
   const campana = cf['Campaña'] || cf.campana || null;
 
   return '<div class="lf-caja">' +
-      '<div class="lf-tit">Información</div>' +
+      // El único sitio donde se puede cambiar lo que dice esta caja. Reutiliza
+      // el mismo formulario del panel y del alta: una segunda versión acabaría
+      // pidiendo campos distintos.
+      '<div class="lf-tit">Información' +
+        '<button onclick="crmEditCurrentLead()" title="Editar los datos del contacto">Editar</button></div>' +
       fila('Email', l.email ? '<a href="mailto:' + esc(l.email) + '">' + esc(l.email) + '</a>' : '—') +
       fila('Teléfono', esc(l.phone || '—')) +
       fila('Empresa', esc(l.company || '—')) +

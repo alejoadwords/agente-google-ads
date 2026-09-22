@@ -115,6 +115,20 @@ console.log('\nNo se duplica lo que ya existía\n');
       /const acts = await crmTraerActividades\(leadId\)/.test(js));
 }
 
+console.log('\nSe puede editar el contacto\n');
+{
+  // La ficha nació de solo lectura: enseñaba el correo y el teléfono sin
+  // ninguna forma de cambiarlos, y el cliente tenía que volver al panel.
+  chk('la caja de Información tiene su botón de editar',
+      /'<div class="lf-tit">Información' \+\s*\n\s*'<button onclick="crmEditCurrentLead\(\)"/.test(bloque));
+  chk('y reutiliza el formulario que ya existía, sin escribir otro',
+      (js.match(/function crmEditCurrentLead\(/g) || []).length === 1);
+  // `crmLeads[idx] = data.lead` SUSTITUYE el objeto: sin volver a apuntarlo,
+  // la ficha seguiría enseñando los datos de antes de guardar.
+  chk('al guardar, la ficha se vuelve a apuntar al lead nuevo',
+      /lfLead && lfLead\.id === leadGuardado\.id[\s\S]{0,160}lfLead = leadGuardado;[\s\S]{0,120}lfPintar\(\);/.test(js));
+}
+
 console.log('\nLo que no puede fallar callado\n');
 {
   chk('un lead que no está en la vista lo dice, no abre una ficha vacía',
