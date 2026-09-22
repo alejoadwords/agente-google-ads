@@ -37,8 +37,22 @@ function sb(prefer) {
   };
 }
 
-const consulta = (path) => fetch(`${SUPABASE_URL}/rest/v1${path}`, { headers: sb() })
-  .then(r => (r.ok ? r.json() : Promise.reject(new Error('Supabase ' + r.status))));
+// Un 5xx de Supabase es casi siempre un tropiezo de su pasarela, no un fallo
+// nuestro: el 22-09-2026 hubo un 504 y un 500 en corridas sueltas, con la
+// consulta resolviéndose en 0,6 ms contra un índice hecho a medida. Perder la
+// corrida entera por eso retrasa los avisos diez minutos y, peor, manda un
+// correo de alerta por algo que se arregla solo. Se reintenta una vez.
+async function consulta(path, reintentos = 1) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1${path}`, { headers: sb() });
+  if (r.ok) return r.json();
+  // Solo los 5xx se reintentan. Un 400 o un 404 no mejoran esperando: son
+  // nuestros, y reintentarlos solo tarda el doble en avisar de lo mismo.
+  if (r.status >= 500 && reintentos > 0) {
+    await new Promise(s => setTimeout(s, 1200));
+    return consulta(path, reintentos - 1);
+  }
+  throw new Error('Supabase ' + r.status);
+}
 
 function cuandoTexto(iso, zona) {
   try {
