@@ -743,6 +743,16 @@ async function _fetchAuthRaw(url, opts = {}) {
     sessionToken = null;
     res = await fetch(url, await withAuth(true));
   }
+  // Una cuenta suspendida no puede quedarse mirando una app a medio pintar:
+  // se le dice, una sola vez, y se le cierra la sesión. Sin esto la suspensión
+  // se notaba como «todo falla», que es la peor forma de enterarse.
+  if (res.status === 403) {
+    try {
+      const d = await res.clone().json();
+      if (d && d.suspendida) { cuentaSuspendida(d.error); return res; }
+    } catch {}
+  }
+
   // Los fallos del servidor SÍ se reportan. El 401 y el 403 no: son permisos,
   // no averías, y llenarían la tabla de ruido. El 404 tampoco: hay endpoints
   // que lo usan para decir «no existe» y es una respuesta legítima.
@@ -39612,4 +39622,34 @@ function existePintar(q, lista) {
           (c.asesor ? esc(c.asesor) : 'sin asignar') + '</span>' +
       '</div>').join('');
   cont.parentNode.insertBefore(div, cont);
+}
+
+// ─── CUENTA SUSPENDIDA ───────────────────────────────────────────────────────
+// Suspender una cuenta existía solo de nombre: se marcaba `status: suspended`
+// y no lo leía nadie, así que seguía funcionando igual. Se vio el 22-09-2026
+// al suspender la cuenta que mandó phishing — y además el `ban` de Clerk es
+// una función de su plan de pago y su `lock` caduca en una hora, así que el
+// corte tiene que hacerlo nuestro código.
+//
+// El servidor ya lo corta; esto es para que la persona lo ENTIENDA en vez de
+// ver una pantalla donde todo falla sin decir por qué.
+let _yaAvisadoSuspendida = false;
+function cuentaSuspendida(mensaje) {
+  if (_yaAvisadoSuspendida) return;
+  _yaAvisadoSuspendida = true;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:var(--bg,#F6F7FB);display:flex;' +
+    'align-items:center;justify-content:center;padding:24px;font-family:var(--font,system-ui)';
+  ov.innerHTML =
+    '<div style="max-width:420px;text-align:center;background:var(--panel,#fff);border:1px solid var(--border,#E5E7EB);' +
+      'border-radius:18px;padding:32px 28px">' +
+      '<div style="font-size:40px;margin-bottom:10px">🔒</div>' +
+      '<div style="font-size:18px;font-weight:800;margin-bottom:8px">Tu cuenta está suspendida</div>' +
+      '<div style="font-size:14px;color:var(--muted,#6b7280);line-height:1.55;margin-bottom:20px">' +
+        esc(mensaje || 'Escríbenos a soporte@acuarius.app y lo revisamos.') + '</div>' +
+      '<a href="mailto:soporte@acuarius.app" class="btn-pri" style="display:inline-block;text-decoration:none">Escribir a soporte</a>' +
+    '</div>';
+  document.body.appendChild(ov);
+  // La sesión se cierra después de que lo lea, no en el mismo instante.
+  setTimeout(() => { try { clerkInstance?.signOut(); } catch (e) {} }, 8000);
 }

@@ -1,7 +1,7 @@
 export const config = { runtime: 'edge' };
 
 import { enviarPushA } from './_push.js';
-import { soloSusLeads } from './_perfiles.js';
+import { soloSusLeads, estaSuspendido } from './_perfiles.js';
 import { traerTodo } from './_paginado.js';
 
 // Cuántos contactos puede traer el tablero de una vez. Es holgado para
@@ -266,6 +266,12 @@ export default async function handler(req) {
   // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
   // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
   let clienteDelMiembro = null;
+  // Una cuenta suspendida no entra. Aquí se comprueba a mano porque este
+  // endpoint resuelve el equipo por su cuenta, sin pasar por quienPregunta().
+  if (await estaSuspendido(userId)) {
+    return jsonResp({ error: 'Esta cuenta está suspendida. Escríbenos a soporte@acuarius.app.', suspendida: true }, 403);
+  }
+
   try {
     const _twRes = await fetch(`${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,member_name,member_email,role,client_id&limit=1`, { headers: sbHeaders() });
     if (!_twRes.ok) throw new Error('HTTP ' + _twRes.status);

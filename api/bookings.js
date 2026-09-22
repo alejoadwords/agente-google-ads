@@ -280,7 +280,12 @@ export default async function handler(req) {
 
   let quien;
   try { quien = await quienPregunta(actor); }
-  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  catch (e) {
+    // Una cuenta suspendida no es un fallo de la base: se le dice, y con su
+    // propio código, para que la pantalla pueda enseñar algo que se entienda.
+    if (e?.suspendida) return jsonResp({ error: e.message, suspendida: true }, 403);
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
 
   const corte = exigeModulo(quien, 'crm');
   if (corte) return corte;

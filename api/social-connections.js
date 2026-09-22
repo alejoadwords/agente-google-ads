@@ -58,7 +58,12 @@ export default async function handler(req) {
   const pedido = url.searchParams.get('client_id') || null;
   let alcance;
   try { alcance = await quienPregunta(quien); }
-  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  catch (e) {
+    // Una cuenta suspendida no es un fallo de la base: se le dice, y con su
+    // propio código, para que la pantalla pueda enseñar algo que se entienda.
+    if (e?.suspendida) return jsonResp({ error: e.message, suspendida: true }, 403);
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
   if (clienteAjeno(alcance, pedido)) return jsonResp({ error: 'No tienes acceso a ese cliente.' }, 403);
   const cliente = alcanceDeCliente(alcance, pedido) || '';
 

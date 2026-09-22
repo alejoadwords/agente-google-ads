@@ -70,6 +70,25 @@ export function normalizarPerfil(rol) {
  * sobre su propia cuenta en vez de la del dueño y le devolveríamos datos de otra
  * cuenta como si fueran los suyos. Mejor un error que el tablero de otro.
  */
+// La lista de cuentas suspendidas, refrescada cada minuto. Si no se puede
+// leer, NO se suspende a nadie: dejar fuera a toda la clientela por un
+// tropiezo de la base sería mucho peor que el problema que resuelve.
+let _suspendidos = null, _suspendidosHasta = 0;
+export async function estaSuspendido(userId) {
+  if (!userId) return false;
+  if (!_suspendidos || Date.now() > _suspendidosHasta) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/users?status=eq.suspended&select=id`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      });
+      if (!r.ok) return false;
+      _suspendidos = new Set((await r.json() || []).map(u => u.id));
+      _suspendidosHasta = Date.now() + 60000;
+    } catch { return false; }
+  }
+  return _suspendidos.has(userId);
+}
+
 export async function quienPregunta(userId) {
   // Esta consulta la hace CADA endpoint en CADA petición, así que al abrir una
   // pantalla salen diez a la vez. Un tropiezo de un segundo en Supabase dejaba
@@ -111,6 +130,23 @@ export async function quienPregunta(userId) {
     } catch {}
     throw new Error('No se pudo verificar la cuenta: ' + (fallo || 'sin detalle'));
   }
+  // ── ¿Está suspendida esta cuenta? ───────────────────────────────────────
+  //
+  // Suspender existía solo de nombre: se marcaba `status: 'suspended'` y no lo
+  // leía nadie, así que la cuenta seguía funcionando igual. Se vio el
+  // 22-09-2026 al suspender la cuenta que mandó phishing — y encima el `ban`
+  // de Clerk es una función de su plan de pago (402) y su `lock` caduca a la
+  // hora, así que el corte tiene que hacerlo nuestro código.
+  //
+  // Se comprueba aquí porque es lo único por lo que pasan todos: doce
+  // endpoints en cada petición. La lista se guarda un minuto — una cuenta
+  // suspendida es rara y esto no puede costar una consulta por llamada.
+  if (await estaSuspendido(userId)) {
+    const e = new Error('Esta cuenta está suspendida. Escríbenos a soporte@acuarius.app.');
+    e.suspendida = true;
+    throw e;
+  }
+
   const fila = (await res.json())?.[0];
 
   if (!fila || !fila.owner_user_id) {

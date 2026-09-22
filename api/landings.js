@@ -79,7 +79,12 @@ export default async function handler(req, contexto) {
   // reporte de Marketing vive dentro de Análisis, al que Ventas sí entra.
   let quien;
   try { quien = await quienPregunta(userId); }
-  catch { return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503); }
+  catch (e) {
+    // Una cuenta suspendida no es un fallo de la base: se le dice, y con su
+    // propio código, para que la pantalla pueda enseñar algo que se entienda.
+    if (e?.suspendida) return jsonResp({ error: e.message, suspendida: true }, 403);
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
   userId = quien.userId;
   if (req.method !== 'GET' && !puedeVer(quien.perfil, 'marketing')) {
     const no = exigeModulo(quien, 'marketing');
