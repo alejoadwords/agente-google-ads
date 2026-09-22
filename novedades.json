@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-equipo-hereda-el-plan",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Tu equipo usa tu plan, siempre",
+   "texto": "Cuando invitas a alguien a tu cuenta, esa persona crea su propio usuario para entrar — y ese usuario arrancaba su propia prueba de 14 días. Al vencerse, dos pantallas (Proyecto SEO y el reporte de posicionamiento en IA) miraban el plan de ESA persona en vez del tuyo y le negaban el acceso, aunque tu cuenta estuviera al día. Ya no: quien está en tu equipo usa tu plan, que es como siempre debió ser. Si a alguien de tu equipo le apareció un aviso de actualizar plan estos días, vuelve a intentarlo."
+  },
+  {
    "id": "2026-09-22-reasignar-no-miente",
    "fecha": "2026-09-22",
    "tipo": "arreglo",

@@ -7,6 +7,20 @@
 const SERPER_KEY = process.env.SERPER_API_KEY;
 const MAX_KEYWORDS = 30; // tope por request para acotar costo
 
+// A qué cuenta pertenece quien pregunta. Un miembro del equipo hereda el plan
+// de su dueño: es la regla del producto y aquí se estaba ignorando.
+async function duenoDe(userId) {
+  if (!userId) return null;
+  try {
+    const r = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}` +
+      `&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+    );
+    return r.ok ? ((await r.json())?.[0]?.owner_user_id || null) : null;
+  } catch { return null; }
+}
+
 // ── Gate por plan (las consultas SERP cuestan dinero real) ──
 const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
@@ -56,6 +70,21 @@ async function isPaidOrAdmin(req) {
       // real se lee aquí, si no todo usuario de pago quedaba como "free".
       const realPlan = u.public_metadata?.plan;
       if (PAID_PLANS.includes(realPlan)) return { ok: true, plan: realPlan };
+
+      // Y si no es de pago, puede ser MIEMBRO de una cuenta que sí lo es: el
+      // plan es del DUEÑO, no de quien abre la pantalla. Sin esto, los siete
+      // asesores de una inmobiliaria con plan Agency se quedaban sin SEO en
+      // cuanto les caducaba su propia prueba — cada uno se registró por su
+      // cuenta al aceptar la invitación y arrancó su prueba de 14 días.
+      const duenoId = await duenoDe(payload.sub);
+      if (duenoId && duenoId !== payload.sub) {
+        const rd = await fetch('https://api.clerk.com/v1/users/' + duenoId, {
+          headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+        });
+        const dueno = await rd.json();
+        const planDueno = dueno?.public_metadata?.plan;
+        if (PAID_PLANS.includes(planDueno)) return { ok: true, plan: planDueno };
+      }
       const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
       if (ADMIN_EMAILS.includes(email)) return { ok: true, plan: 'admin' };
     } catch {}
