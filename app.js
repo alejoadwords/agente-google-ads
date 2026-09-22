@@ -38011,6 +38011,7 @@ async function crmAbrirFicha(leadId) {
   _lfPropsHtml = '';
   _lfConvsHtml = '';
   _lfAutosHtml = '';
+  _lfCampHtml = '';
   if (crmView !== 'lead') lfVistaAnterior = crmView;
   crmCloseDetail();
   crmSetView('lead');
@@ -38275,6 +38276,7 @@ async function lfGuardarActividad() {
 let _lfPropsHtml = '';
 let _lfConvsHtml = '';
 let _lfAutosHtml = '';
+let _lfCampHtml = '';
 
 /**
  * ¿Puede parar una automatización? El servidor exige el módulo Marketing, así
@@ -38338,6 +38340,7 @@ function lfQueFalta(l) {
     // Esta caja se pinta entera desde el cargador y NO tiene estado vacío: en
     // una cuenta que no usa automatizaciones sobraría en todas las fichas.
     '<div id="lf-autos">' + _lfAutosHtml + '</div>' +
+    '<div id="lf-camp">' + _lfCampHtml + '</div>' +
 
     '<div class="lf-caja">' +
       '<div class="lf-tit">Propuestas' +
@@ -38433,6 +38436,7 @@ function lfGuardarCaja(leadId, id, html) {
   if (lfLead && lfLead.id !== leadId) return;
   if (id === 'lf-props') _lfPropsHtml = html;
   else if (id === 'lf-autos') _lfAutosHtml = html;
+  else if (id === 'lf-camp') _lfCampHtml = html;
   else _lfConvsHtml = html;
   const caja = document.getElementById(id);
   if (caja) caja.innerHTML = html;
@@ -38504,6 +38508,60 @@ async function lfCargarAutomatizaciones(leadId) {
   }
 }
 
+/**
+ * Los envíos masivos que le tocaron a este contacto y qué hizo con ellos.
+ *
+ * Contesta dos preguntas que hoy obligan a salir de la ficha: «¿ya le
+ * escribimos?» —para no mandarle a mano lo que le llegó masivo— y «¿por qué no
+ * le llegó?».
+ */
+async function lfCargarCampanas(leadId) {
+  try {
+    const r = await fetchAuth('/api/campaigns?lead_id=' + encodeURIComponent(leadId));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const envios = d.envios || [];
+    if (!envios.length && !d.quemado) return lfGuardarCaja(leadId, 'lf-camp', '');
+
+    lfGuardarCaja(leadId, 'lf-camp',
+      '<div class="lf-caja">' +
+        '<div class="lf-tit">Campañas' +
+          (envios.length ? '<span class="cuenta">' + envios.length + '</span>' : '') + '</div>' +
+        // Un rebote duro o una queja de spam sacan la dirección de TODAS las
+        // campañas siguientes, y hasta ahora eso no se decía en ninguna parte:
+        // el comercial esperaba respuesta a un correo que ya ni salía.
+        (d.quemado
+          ? '<div class="lf-quemado">' + icn('alert', 14) + '<div>' +
+            (d.quemado === 'spam'
+              ? 'Marcó un correo nuestro como spam.'
+              : 'Su correo rebotó.') +
+            ' Ya no recibirá campañas en esta dirección. Confírmasela por otro canal.' +
+            '</div></div>'
+          : '') +
+        (envios.length
+          ? envios.map(e =>
+              '<div class="lf-envio' + (e.malo ? ' malo' : '') + '">' +
+                '<div style="min-width:0">' +
+                  '<div>' + esc(e.nombre) + '</div>' +
+                  '<div class="cuando">' + esc(e.canal) +
+                    (e.cuando ? ' · ' + esc(lfHace(e.cuando)) : '') +
+                    (e.motivo ? ' · ' + esc(e.motivo) : '') + '</div>' +
+                '</div>' +
+                // La reacción manda sobre el estado: «Hizo clic» dice más que
+                // «Enviado», y solo se enseña una cosa para que se lea de un
+                // vistazo.
+                '<span class="lf-estado lf-reaccion' + (e.malo ? ' malo' : '') + '">' +
+                  esc(e.reaccion || e.estado) + '</span>' +
+              '</div>').join('')
+          : '') +
+      '</div>');
+  } catch {
+    lfGuardarCaja(leadId, 'lf-camp',
+      '<div class="lf-caja"><div class="lf-tit">Campañas</div>' +
+      '<div class="lf-vacio">No se pudo consultar qué envíos le tocaron.</div></div>');
+  }
+}
+
 /** Parar un paso programado. El motor va cada 10 min: puede haber salido ya. */
 async function lfPararAuto(jobId) {
   if (!lfLead) return;
@@ -38565,6 +38623,7 @@ function lfHace(iso) {
       lfCargarConversaciones(lfLead.id);
       lfCargarPropuestas(lfLead.id);
       lfCargarAutomatizaciones(lfLead.id);
+      lfCargarCampanas(lfLead.id);
     }
   };
 })();

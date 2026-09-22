@@ -156,6 +156,24 @@ console.log('\nLo que va a pasar solo\n');
       /if \(!pend\.length && !hechas\.length\) return lfGuardarCaja\(leadId, 'lf-autos', ''\)/.test(bloque));
 }
 
+console.log('\nQué envíos masivos le tocaron\n');
+{
+  chk('se consultan sus campañas',
+      /fetchAuth\('\/api\/campaigns\?lead_id=' \+ encodeURIComponent\(leadId\)\)/.test(bloque));
+  chk('y un fallo de la consulta se ve', /No se pudo consultar qué envíos le tocaron/.test(bloque));
+  // Un rebote duro saca la dirección de TODAS las campañas siguientes, y hasta
+  // ahora no se decía en ninguna parte.
+  chk('una dirección quemada se avisa en rojo',
+      /class="lf-quemado"/.test(bloque) && /Ya no recibirá campañas en esta dirección/.test(bloque));
+  chk('y se distingue el rebote de la queja de spam',
+      /d\.quemado === 'spam'/.test(bloque));
+  // «No se le envió» a secas no deja hacer nada; el motivo sí.
+  chk('el motivo de un envío que no salió se enseña', /e\.motivo \? ' · ' \+ esc\(e\.motivo\)/.test(bloque));
+  chk('la reacción manda sobre el estado', /esc\(e\.reaccion \|\| e\.estado\)/.test(bloque));
+  chk('sin envíos ni dirección quemada, la caja no se pinta',
+      /if \(!envios\.length && !d\.quemado\) return lfGuardarCaja\(leadId, 'lf-camp', ''\)/.test(bloque));
+}
+
 console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
 {
   // `lfPintar()` corre en cada clic de pestaña o de filtro. Si estas dos cajas
@@ -164,17 +182,20 @@ console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
   chk('propuestas y conversaciones se guardan pintadas',
       /_lfPropsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque) &&
       /_lfConvsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque));
-  chk('y las automatizaciones también', /'<div id="lf-autos">' \+ _lfAutosHtml \+ '<\/div>'/.test(bloque));
-  chk('al cambiar de lead se vacían las tres, para no enseñar las del anterior',
-      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';\s*\n\s*_lfAutosHtml = '';/.test(bloque));
+  chk('las automatizaciones y las campañas también',
+      /'<div id="lf-autos">' \+ _lfAutosHtml \+ '<\/div>'/.test(bloque) &&
+      /'<div id="lf-camp">' \+ _lfCampHtml \+ '<\/div>'/.test(bloque));
+  chk('al cambiar de lead se vacían las cuatro, para no enseñar las del anterior',
+      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';\s*\n\s*_lfAutosHtml = '';\s*\n\s*_lfCampHtml = '';/.test(bloque));
   chk('y lo que llega tarde de otro lead se descarta',
       /if \(lfLead && lfLead\.id !== leadId\) return;/.test(bloque));
   // Decir «ninguna» cuando la consulta falló es peor que no decir nada: se
   // vuelve a redactar una propuesta que ya se había mandado.
-  // Las tres cajas que salen a la red: propuestas, conversaciones y
-  // automatizaciones. Ninguna puede tragarse un 500 y pintar un vacío.
-  chk('un fallo de red no se confunde con «no hay nada», en las tres',
-      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 3);
+  // Las cuatro cajas que salen a la red: propuestas, conversaciones,
+  // automatizaciones y campañas. Ninguna puede tragarse un 500 y pintar un
+  // vacío: decir «no hay nada» cuando la consulta falló es peor que callar.
+  chk('un fallo de red no se confunde con «no hay nada», en las cuatro',
+      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 4);
 }
 
 console.log('\nEn el móvil no se aprietan tres columnas\n');

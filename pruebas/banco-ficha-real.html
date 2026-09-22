@@ -41,6 +41,7 @@
   <button onclick="escena('nuevo')">recién entrado, sin historial</button>
   <button onclick="escena('sin-red')">si fallan las propuestas</button>
   <button onclick="comoComercial()">como comercial (no puede parar)</button>
+  <button onclick="window._quemado='rebote';escena('medio')">con el correo quemado</button>
   <span>·</span>
   <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'760px'">móvil</button>
 </div>
@@ -107,6 +108,21 @@ var AUTOS = {
       created_at: new Date(Date.now() - 4 * 864e5).toISOString() },
   ],
 };
+// Con la forma EXACTA de lo que devuelve /api/campaigns?lead_id=
+var CAMPANAS = {
+  quemado: null,
+  envios: [
+    { campaign_id: 'c1', nombre: 'Boletín de octubre', canal: 'Correo',
+      estado: 'No se le envió', motivo: 'dado de baja', malo: true, reaccion: '',
+      cuando: new Date(Date.now() - 864e5).toISOString() },
+    { campaign_id: 'c2', nombre: 'Promo de septiembre · apartamentos', canal: 'Correo',
+      estado: 'Enviado', motivo: '', malo: false, reaccion: 'Hizo clic',
+      cuando: new Date(Date.now() - 4 * 864e5).toISOString() },
+    { campaign_id: 'c3', nombre: 'Recordatorio de visita', canal: 'WhatsApp',
+      estado: 'Enviado', motivo: '', malo: false, reaccion: '',
+      cuando: new Date(Date.now() - 9 * 864e5).toISOString() },
+  ],
+};
 var PROPUESTAS = [
   { id: 'pr1', title: 'Arriendo Laureles · 2 alcobas', amount: 1800000, currency: 'COP',
     status: 'viewed', public_token: 'tok1', created_at: new Date(Date.now() - 4 * 864e5).toISOString() },
@@ -128,15 +144,17 @@ function escena(cual) {
   _crmActividadesLead = cual === 'nuevo' ? [] : ACTIVIDADES;
   _crmTareasLead = cual === 'nuevo' ? [] : TAREAS;
   lfLead = l; crmDetailLead = l; lfFiltro = 'todo'; lfPestana = 'quien';
-  _lfPropsHtml = ''; _lfConvsHtml = ''; _lfAutosHtml = '';
+  _lfPropsHtml = ''; _lfConvsHtml = ''; _lfAutosHtml = ''; _lfCampHtml = '';
   window._sinRed = cual === 'sin-red';
   // Una cuenta que no usa automatizaciones: la caja no debe aparecer.
   window._sinAutos = cual === 'nuevo';
+  if (cual !== 'medio') window._quemado = null;
   window._miPerfil = null;
   lfPintar();
   lfCargarConversaciones(l.id);
   lfCargarPropuestas(l.id);
   lfCargarAutomatizaciones(l.id);
+  lfCargarCampanas(l.id);
 }
 
 // Ventas no llega al módulo Marketing: el servidor le rechazaría el «Parar»,
@@ -192,6 +210,9 @@ function comoComercial() {
       ' {ok:true,json:async()=>({proposals:PROPUESTAS})};' +
       ' if(u.indexOf("automations")>=0) return window._sinAutos ? {ok:true,json:async()=>' +
       '({pendientes:[],hechas:[]})} : {ok:true,json:async()=>AUTOS};' +
+      ' if(u.indexOf("campaigns")>=0) return window._sinAutos ? {ok:true,json:async()=>' +
+      '({envios:[],quemado:null})} : {ok:true,json:async()=>' +
+      '({envios:CAMPANAS.envios,quemado:window._quemado||null})};' +
       ' return {ok:true,json:async()=>({})}; }',
     // La ficha, tal cual quedó.
     js.slice(js.indexOf('// ══ FICHA DEL LEAD A PÁGINA COMPLETA ═')),

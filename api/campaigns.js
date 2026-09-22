@@ -323,6 +323,144 @@ async function dailySent(userId) {
   return parseInt((r.headers.get('content-range') || '*/0').split('/')[1] || '0') || 0;
 }
 
+// ── El historial de envíos de un contacto ───────────────────────────────────
+
+const ESTADO_ENVIO = {
+  sent: 'Enviado', failed: 'Falló', skipped: 'No se le envió', pending: 'En cola',
+};
+// Lo que hizo con el correo, de menos a más. Se queda con lo más avanzado: si
+// hizo clic, decir «abierto» se queda corto.
+const ESCALA = ['delivered', 'opened', 'clicked'];
+const REACCION = {
+  delivered: 'Entregado', opened: 'Abierto', clicked: 'Hizo clic',
+  bounced: 'Rebotó', complained: 'Lo marcó como spam',
+};
+
+/**
+ * Qué campañas le tocaron a este lead, en qué acabó cada una y qué hizo con
+ * ella. Devuelve también si su dirección está quemada.
+ *
+ * Exportada aparte del handler para poder ejecutarla de verdad en
+ * pruebas/campanas-ficha.mjs: aquí lo que se puede equivocar en silencio no es
+ * el código, son los dos empalmes de datos que hay debajo.
+ */
+export async function historialDelLead(userId, leadId, quien) {
+  // 0. El lead, que trae su dirección y su cliente. La dirección se busca
+  //    aquí y no se recibe por parámetro: un correo en la barra de
+  //    direcciones acaba en los registros de medio mundo.
+  const lr = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&user_id=eq.${encodeURIComponent(userId)}&select=email,client_id`,
+    { headers: sbHeaders() }
+  );
+  if (!lr.ok) throw new Error('No se pudo leer el contacto');
+  const lead = ((await lr.json()) || [])[0];
+  if (!lead) return { envios: [], quemado: null };
+  if (quien && quien.cliente && String(lead.client_id || '') !== String(quien.cliente)) {
+    return { envios: [], quemado: null };
+  }
+
+  // 1. Las filas de destinatario. OJO: campaign_recipients NO tiene user_id,
+  //    así que esta consulta sola devolvería filas de cualquiera. El alcance
+  //    se pone abajo, comprobando que la campaña sea de esta cuenta.
+  const rr = await fetch(
+    `${SUPABASE_URL}/rest/v1/campaign_recipients?lead_id=eq.${leadId}` +
+    `&select=campaign_id,status,detail,resend_id,processed_at&order=processed_at.desc&limit=25`,
+    { headers: sbHeaders() }
+  );
+  if (!rr.ok) throw new Error('No se pudo leer el historial de campañas');
+  const filas = (await rr.json()) || [];
+
+  // 2. Las campañas, que son las que traen la cuenta y el cliente. Una fila
+  //    cuya campaña no salga aquí NO es de esta cuenta y no se devuelve.
+  const ids = [...new Set(filas.map(f => f.campaign_id).filter(Boolean))];
+  let campanas = [];
+  if (ids.length) {
+    const cr = await fetch(
+      `${SUPABASE_URL}/rest/v1/campaigns?id=in.(${ids.join(',')})&user_id=eq.${encodeURIComponent(userId)}` +
+      `&select=id,name,channel,subject,client_id,sent_at,created_at`,
+      { headers: sbHeaders() }
+    );
+    campanas = cr.ok ? ((await cr.json()) || []) : [];
+  }
+  // Y un miembro acotado a un cliente tampoco ve las campañas de otro.
+  if (quien && quien.cliente) {
+    campanas = campanas.filter(c => String(c.client_id || '') === String(quien.cliente));
+  }
+  const porId = new Map(campanas.map(c => [c.id, c]));
+
+  // 3. Qué hizo con cada correo. El webhook de Resend guarda estos eventos SIN
+  //    lead_id y SIN campaign_id —solo sabe el resend_id—, así que no se
+  //    pueden pedir por lead: hay que empalmarlos por ese id. Pedirlos por
+  //    lead_id devolvería cero, y la caja diría «nadie abrió nada».
+  const envios = filas.filter(f => porId.has(f.campaign_id));
+  const rids = envios.map(f => f.resend_id).filter(Boolean);
+  const reaccion = new Map();
+  for (let i = 0; i < rids.length; i += 100) {
+    const trozo = rids.slice(i, i + 100).map(x => '"' + x + '"').join(',');
+    const er = await fetch(
+      `${SUPABASE_URL}/rest/v1/email_events?resend_id=in.(${trozo})` +
+      `&event=in.(delivered,opened,clicked,bounced,complained)&select=resend_id,event`,
+      { headers: sbHeaders() }
+    );
+    for (const e of (er.ok ? ((await er.json()) || []) : [])) {
+      const antes = reaccion.get(e.resend_id);
+      // Un rebote o una queja mandan sobre cualquier otra cosa: son el final
+      // del camino, no un paso más.
+      if (antes === 'bounced' || antes === 'complained') continue;
+      if (e.event === 'bounced' || e.event === 'complained') { reaccion.set(e.resend_id, e.event); continue; }
+      if (!antes || ESCALA.indexOf(e.event) > ESCALA.indexOf(antes)) reaccion.set(e.resend_id, e.event);
+    }
+  }
+
+  return {
+    // Un rebote duro saca la dirección de TODAS las campañas siguientes, en
+    // silencio. Es lo primero que hay que saber al mirar este contacto.
+    quemado: await correoQuemado(lead.email),
+    envios: envios.map(f => {
+      const c = porId.get(f.campaign_id);
+      const r = f.resend_id ? reaccion.get(f.resend_id) : null;
+      return {
+        campaign_id: f.campaign_id,
+        nombre: c.name || 'Campaña',
+        canal: c.channel === 'whatsapp' ? 'WhatsApp' : 'Correo',
+        asunto: c.subject || '',
+        estado: ESTADO_ENVIO[f.status] || f.status,
+        // «No se le envió» a secas no sirve: el motivo —dado de baja, sin
+        // email, formato inválido— es lo que hay que hacer algo al respecto.
+        motivo: (f.status === 'skipped' || f.status === 'failed') ? (f.detail || '') : '',
+        malo: f.status === 'failed' || f.status === 'skipped' || r === 'bounced' || r === 'complained',
+        reaccion: r ? (REACCION[r] || r) : '',
+        cuando: f.processed_at || c.sent_at || c.created_at,
+      };
+    }),
+  };
+}
+
+/**
+ * ¿La dirección de este lead está quemada? Un rebote duro o una queja de spam
+ * la sacan de TODAS las campañas de aquí en adelante, en silencio. Si no se
+ * dice en la ficha, el comercial sigue esperando una respuesta que no va a
+ * llegar porque el correo ya ni sale.
+ *
+ * NO se filtra por user_id, igual que en correosQuemados(): el webhook guarda
+ * estos eventos sin él, así que filtrar por cuenta no devolvería nada y esto
+ * diría que está limpia siempre. Y es lo correcto: el dominio remitente es
+ * compartido, así que un rebote duro es un hecho del BUZÓN.
+ */
+export async function correoQuemado(email) {
+  const dir = String(email || '').trim().toLowerCase();
+  if (!dir) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/email_events?event=in.(bounced,complained)` +
+      `&to_email=eq.${encodeURIComponent(dir)}&select=event&limit=1`,
+      { headers: sbHeaders() }
+    );
+    const filas = r.ok ? ((await r.json()) || []) : [];
+    return filas.length ? (filas[0].event === 'complained' ? 'spam' : 'rebote') : null;
+  } catch { return null; }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   let userId = await getUserId(req);
@@ -343,6 +481,27 @@ export default async function handler(req) {
     const no = exigeModulo(quien, 'marketing');
     if (no) return no;
   }
+  // GET ?lead_id= — qué envíos masivos le tocaron a este contacto.
+  //
+  // Va ANTES del cupo a propósito: leer el historial de un lead no gasta
+  // correos, y el cupo cuesta una consulta a Clerk en cada llamada. La ficha
+  // pide esto cada vez que se abre un contacto.
+  //
+  // Se lee sin exigir Marketing: es la respuesta a «¿por qué no le llegó?», y
+  // quien la necesita es el comercial que lleva el lead.
+  {
+    const u = new URL(req.url);
+    const leadId = u.searchParams.get('lead_id');
+    if (req.method === 'GET' && leadId) {
+      if (!/^[0-9a-f-]{32,36}$/i.test(leadId)) return jsonResp({ error: 'lead_id inválido' }, 400);
+      try {
+        return jsonResp(await historialDelLead(userId, leadId, quien));
+      } catch (e) {
+        return jsonResp({ error: String(e.message || e) }, 502);
+      }
+    }
+  }
+
   // El cupo de correos es del DUEÑO. Si quien llama es un miembro, su propio
   // token trae SU plan —normalmente free— y el cupo habría salido mal.
   if (quien.esMiembro || _lastPlan === 'free') {

@@ -23,6 +23,13 @@
    "texto": "Si tenías más de un proceso de venta, el selector para cambiar entre ellos había desaparecido del tablero: tus procesos seguían ahí, pero la pantalla no conseguía cargarlos. El mismo fallo afectaba a los agentes de chat, las propuestas, las respuestas rápidas y la sincronización del catálogo, que respondían «no se pudo verificar tu cuenta». Ya está corregido en todos."
   },
   {
+   "id": "2026-09-21-campanas-en-la-ficha",
+   "fecha": "2026-09-21",
+   "tipo": "nuevo",
+   "titulo": "QuÃ© campaÃ±as le tocaron a cada contacto",
+   "texto": "En la ficha del contacto ahora ves los envíos masivos que le llegaron: qué campaña, por qué canal, cuándo, y sobre todo qué hizo con ella —si la abrió, si hizo clic o si rebotó—. Sirve para dos cosas de todos los días: no volver a mandarle a mano lo que ya le llegó masivo, y saber por qué NO le llegó, porque cuando un envío no sale te decimos el motivo (dado de baja, sin correo, formato inválido). Y si su dirección rebotó o marcó un correo como spam, te avisamos en rojo: esa dirección queda fuera de todas las campañas siguientes, así que conviene confirmársela por otro canal en vez de seguir esperando respuesta."
+  },
+  {
    "id": "2026-09-21-automatizaciones-en-la-ficha",
    "fecha": "2026-09-21",
    "tipo": "nuevo",
