@@ -42,6 +42,7 @@
   <button onclick="escena('sin-red')">si fallan las propuestas</button>
   <button onclick="comoComercial()">como comercial (no puede parar)</button>
   <button onclick="window._quemado='rebote';escena('medio')">con el correo quemado</button>
+  <button onclick="muchasEtapas()">9 etapas con nombres largos</button>
   <span>·</span>
   <button onclick="window._nps='detractor';escena('medio')">detractor</button>
   <button onclick="window._nps='promotor';escena('medio')">promotor</button>
@@ -60,6 +61,28 @@ var crmStages = [
   { key: 'ganado', label: 'Ganado' },
   { key: 'perdido', label: 'Perdido' },
 ];
+// Las etapas reales de una inmobiliaria: nueve, con nombres largos. Es el caso
+// en el que los rótulos se montaban unos sobre otros.
+var ETAPAS_LARGAS = [
+  { key: 'nuevo', label: 'Cliente recibido' },
+  { key: 'contactado', label: 'Cliente contactado' },
+  { key: 'propuesta', label: 'Presentación de propuesta' },
+  { key: 'cita', label: 'Cita de inmueble' },
+  { key: 'seleccion', label: 'Selección de inmueble' },
+  { key: 'solicitud', label: 'Ingreso de solicitud' },
+  { key: 'aprobacion', label: 'Aprobación de solicitud' },
+  { key: 'pago', label: 'Pago de adjudicación' },
+  { key: 'envio', label: 'Envío de contrato' },
+  { key: 'ganado', label: 'Ganado' },
+  { key: 'perdido', label: 'Perdido' },
+];
+var ETAPAS_CORTAS = null;
+function muchasEtapas() {
+  if (!ETAPAS_CORTAS) ETAPAS_CORTAS = crmStages;
+  crmStages = crmStages === ETAPAS_LARGAS ? ETAPAS_CORTAS : ETAPAS_LARGAS;
+  lfLead.stage = 'contactado'; crmDetailLead.stage = 'contactado';
+  lfPintar();
+}
 var crmPipelines = [{ id: 'p1', name: 'Arriendo', client_id: null }, { id: 'p2', name: 'Venta', client_id: null }];
 var crmSoyMiembro = false;
 var crmLeadsLoaded = true;

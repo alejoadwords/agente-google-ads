@@ -51,6 +51,27 @@ console.log('\nCada var(--x) y cada clase existen\n');
       pedidos.filter(i => !hay.has(i)).join(', '));
 }
 
+console.log('\nUn clic en el lead abre la ficha\n');
+{
+  // Era el panel, y no es lo que se espera: se hace clic en un lead para
+  // trabajarlo, no para asomarse. El panel se queda para donde el lead llega
+  // suelto —inbox, ⌘K, voz, un aviso de otro cliente— que es donde de verdad
+  // sirve mirar sin salir de lo que estás haciendo.
+  chk('la tarjeta del tablero abre la ficha',
+      /card\.addEventListener\('click', \(\) => crmAbrirFicha\(card\.dataset\.id\)\)/.test(js));
+  chk('y la fila de la lista también',
+      /<tr onclick="crmAbrirFicha\(/.test(js));
+  // Los botones de la tarjeta —llamar, WhatsApp, email, nota— tienen que
+  // seguir parando la propagación: ahora un escape te saca de la vista, no
+  // solo te abre un panel.
+  chk('los botones de la tarjeta no arrastran a la ficha',
+      ['Llamar', 'WhatsApp', 'Email'].every(b =>
+        new RegExp('crm-card-act-btn[^>]*onclick="event\\.stopPropagation\\(\\)[^>]*' + b).test(js)));
+  chk('el panel sigue existiendo para los leads sueltos',
+      /async function crmOpenDetail\(leadId, leadSuelto\)/.test(js) &&
+      /crmOpenDetail\(id, lead\)/.test(js));
+}
+
 console.log('\nEl panel sigue siendo el sitio para mirar rápido\n');
 {
   chk('el panel conserva su botón de abrir la ficha',
@@ -227,6 +248,12 @@ console.log('\nEn el móvil no se aprietan tres columnas\n');
   // se montaban unos sobre otros. Medido en el banco: 0 solapes.
   chk('el embudo se desplaza en vez de encogerse',
       /\.lf-paso\{flex:0 0 auto;min-width:0\}/.test(css));
+  // Y en el escritorio, lo mismo por otra vía: con `min-width:120px` un paso
+  // se encogía por debajo de su texto y «Presentación de propuesta» se montaba
+  // encima de «Cita de inmueble». Medido en el banco con 11 etapas: se rompía
+  // de 1400px para abajo, que es lo que mide la tira con la barra lateral.
+  chk('ningún paso se encoge por debajo de su rótulo',
+      /\.lf-paso\{display:flex;align-items:center;gap:0;flex:1;min-width:max-content\}/.test(css));
   // Los botones de cierre vivían DENTRO de la tira que se desplaza: en un
   // móvil quedaban a 260px del borde derecho, invisibles salvo que a alguien
   // se le ocurriera arrastrar el embudo hasta el final. Medido en el banco:

@@ -1289,7 +1289,14 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
    los dos más importantes de la ficha y no pueden depender de que alguien
    arrastre el embudo hasta el final para encontrarlos. */
 .lf-pasos{display:flex;align-items:center;gap:0;flex:1;min-width:0;overflow-x:auto}
-.lf-paso{display:flex;align-items:center;gap:0;flex:1;min-width:120px}
+/* `min-width:max-content` y no una cifra fija: con 120px un paso se encogía por
+   debajo de su propio texto y los rótulos se montaban unos sobre otros. Se veía
+   con etapas de nombre largo —«Presentación de propuesta», «Aprobación de
+   solicitud»— en cuanto la tira bajaba de 1400px, que es lo que mide con la
+   barra lateral abierta. Ahora ningún paso baja de su texto y la tira se
+   arrastra cuando no caben. Medido en el banco con 11 etapas: 0 solapes de
+   1700px para abajo. */
+.lf-paso{display:flex;align-items:center;gap:0;flex:1;min-width:max-content}
 .lf-paso .bola{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
   border:2px solid var(--border);background:var(--bg);color:var(--muted2)}
 .lf-paso.hecho .bola{background:var(--blue);border-color:var(--blue);color:#fff}

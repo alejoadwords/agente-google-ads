@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-clic-abre-la-ficha",
+   "fecha": "2026-09-22",
+   "tipo": "mejora",
+   "titulo": "Un clic en el contacto abre su ficha completa",
+   "texto": "Hasta ahora, al hacer clic en un contacto del tablero se abría un panel pequeño a la derecha y había que pulsar Â«Abrir fichaÂ» para ver el resto. Ya no: el clic te lleva directo a la ficha completa, con las tres columnas. Lo mismo desde la vista de lista. Los botones de la tarjeta —Llamar, WhatsApp, Email y la nota— siguen haciendo lo suyo sin sacarte de la vista, y Â«VolverÂ» te devuelve al tablero o a la lista, según de dónde vengas. El panel sigue apareciendo donde de verdad sirve para asomarse sin salir de lo que estás haciendo: desde el inbox, desde el buscador y desde los avisos. Arreglamos también el embudo de arriba: si tu proceso tiene muchas etapas con nombres largos, los rótulos se montaban unos sobre otros; ahora se lee cada uno y la barra se arrastra de lado cuando no caben."
+  },
+  {
    "id": "2026-09-22-leads-mas-recientes-primero",
    "fecha": "2026-09-22",
    "tipo": "arreglo",

@@ -19081,7 +19081,11 @@ function crmRenderKanban() {
       card.classList.add('dragging');
     });
     card.addEventListener('dragend', () => card.classList.remove('dragging'));
-    card.addEventListener('click', () => crmOpenDetail(card.dataset.id));
+    // Un clic en la tarjeta abre la FICHA, no el panel. El panel se queda para
+    // los sitios donde el lead llega suelto —el inbox, ⌘K, la voz, un aviso de
+    // otro cliente—, que es donde de verdad sirve mirar rápido sin salir de lo
+    // que estás haciendo.
+    card.addEventListener('click', () => crmAbrirFicha(card.dataset.id));
   });
   crmUpdateLeadsStats();
   crmTopeColumnas();
@@ -20087,7 +20091,7 @@ function crmRenderList() {
       (hayFiltro ? ' que coincidan con los filtros.' : ' aún. Crea el primero.') + '</td></tr>';
   } else {
     cuerpo = filtered.map(l =>
-      '<tr onclick="crmOpenDetail(\'' + esc(l.id) + '\')">' + sel.map(k => crmColCelda(l, k, sel)).join('') + '</tr>'
+      '<tr onclick="crmAbrirFicha(\'' + esc(l.id) + '\')">' + sel.map(k => crmColCelda(l, k, sel)).join('') + '</tr>'
     ).join('');
   }
 
