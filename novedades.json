@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-leads-mas-recientes-primero",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Los leads más recientes, arriba del todo",
+   "texto": "El tablero abría por los contactos más antiguos de cada etapa, que suelen ser los que menos se mueven, y había que bajar para encontrar lo que acababa de entrar. Peor aún: el orden tampoco era del todo cronológico, porque mezclaba dos formas distintas de numerar los contactos según hubieran entrado a mano o por un formulario. Ahora en cada etapa se ve primero lo más reciente, tanto en el tablero como en la lista."
+  },
+  {
    "id": "2026-09-22-cita-al-mover",
    "fecha": "2026-09-22",
    "tipo": "nuevo",

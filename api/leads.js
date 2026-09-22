@@ -438,7 +438,20 @@ export default async function handler(req) {
     // Sin pipeline_id devuelve todos, como antes: asi la app sigue viva si la
     // migracion de pipelines aun no se ha corrido.
     const pipelineId = url.searchParams.get('pipeline_id');
-    let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}${filtroMios}&select=*&order=stage_position.asc,created_at.desc`;
+    // El más reciente arriba. Antes mandaba `stage_position.asc`, que es orden
+    // de creación ASCENDENTE: el tablero abría por los leads más viejos, que
+    // son justo los que menos se tocan.
+    //
+    // `stage_position` sale del orden porque no significa nada para quien mira:
+    // el navegador no lo lee ni deja reordenar una columna a mano, y se escribe
+    // con dos escalas que no se pueden comparar —unas veces `Date.now()`, otras
+    // el mayor de la etapa + 1000—, así que mezclaba lo creado a mano con lo
+    // que entra por formulario en un orden que no era ninguno de los dos.
+    // Se sigue guardando por si algún día se reordena a mano.
+    //
+    // El paginador añade `id.asc` de desempate, así que el orden es estable
+    // entre páginas — ver conOrdenEstable en api/_paginado.js.
+    let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}${filtroMios}&select=*&order=created_at.desc`;
     if (pipelineId) query += `&pipeline_id=eq.${encodeURIComponent(pipelineId)}`;
     if (stage) query += `&stage=eq.${encodeURIComponent(stage)}`;
     // Esta consulta no tenía límite y PostgREST devolvía mil filas calladamente:
