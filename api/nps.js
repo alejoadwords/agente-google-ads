@@ -275,7 +275,12 @@ export default async function handler(req) {
   }
 
   const cfg = await leerNps(SUPABASE_URL, SUPABASE_KEY, resp.user_id, resp.client_id || null);
-  const face = score >= 9 ? '🤩' : score >= 7 ? '🙂' : '😕';
+
+  // Manda la nota GUARDADA, no la del enlace. Solo cuenta la primera respuesta
+  // —insistir cambia el histórico—, así que quien vuelva a pulsar otro número
+  // veía «Anotamos tu 10» mientras en la base seguía su 9. La pantalla mentía.
+  const nota = first ? score : resp.score;
+  const face = nota >= 9 ? '🤩' : nota >= 7 ? '🙂' : '😕';
   // Se contesta sobre la copia que viajó con el envío: si la encuesta cambió
   // entre que se mandó y que la abren, el cliente ve la que le preguntaron.
   const preguntas = Array.isArray(resp.preguntas) && resp.preguntas.length ? resp.preguntas : cfg.preguntas;
@@ -302,8 +307,8 @@ export default async function handler(req) {
 
   return page(
     '<div style="font-size:42px;margin:14px 0 8px">' + face + '</div>' +
-    '<div style="font-size:18px;font-weight:800;margin-bottom:4px">' + esc(cfg.gracias.replace('{nota}', score)) + '</div>' +
-    '<div style="font-size:13.5px;color:#6b7280;margin-bottom:4px">' + esc(pieSegunNota(cfg, score)) + '</div>' +
+    '<div style="font-size:18px;font-weight:800;margin-bottom:4px">' + esc(cfg.gracias.replace('{nota}', nota)) + '</div>' +
+    '<div style="font-size:13.5px;color:#6b7280;margin-bottom:4px">' + esc(pieSegunNota(cfg, nota)) + '</div>' +
     '<form method="POST" action="/api/nps?t=' + esc(token) + '">' +
     preguntas.map(campoDe).join('') +
     '<div style="margin-top:16px"><textarea name="comment" rows="3" placeholder="' + esc(cfg.comentarioPlaceholder) + '" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:inherit;resize:vertical"></textarea></div>' +

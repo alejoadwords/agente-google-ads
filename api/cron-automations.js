@@ -8,6 +8,7 @@
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResend } from './_correo.js';
 import { leerNps } from './_nps.js';
+import { emailHtml } from './_email-layout.js';
 
 // Los textos de la encuesta los escribe el cliente y acaban dentro del HTML
 // de un correo: sin escapar, un `<` suelto ya rompe la maqueta.
@@ -201,15 +202,22 @@ async function actionSendNps(step, lead, auto) {
     '<td style="padding:2px"><a href="' + base + n + '" style="display:block;width:34px;height:34px;line-height:34px;text-align:center;' +
     'background:' + (n <= 6 ? '#FEE2E2' : n <= 8 ? '#FEF3C7' : '#D1FAE5') + ';color:#1a1a2e;font-weight:bold;font-size:14px;' +
     'border-radius:8px;text-decoration:none;font-family:Arial,sans-serif">' + n + '</a></td>';
-  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
-    // Escapados como las etiquetas: son campos de texto plano en la pantalla
-    // de configuración, y un `<` suelto rompía la maqueta del correo.
-    '<p style="margin:0 0 14px">' + escHtml(intro) + '</p>' +
-    '<p style="margin:0 0 16px;font-weight:bold;font-size:16px">' + escHtml(question) + '</p>' +
-    '<table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>' + Array.from({ length: 11 }, (_, n) => btn(n)).join('') + '</tr></table>' +
-    '<p style="margin:10px 0 0;font-size:11.5px;color:#9ca3af;text-align:center">' +
-      escHtml(cfg.etiquetaMin) + ' &nbsp;·&nbsp; ' + escHtml(cfg.etiquetaMax) + '</p>' +
-    '</div>';
+  // Va con la plantilla de la casa, como el resto de los correos: antes salía
+  // como un bloque de texto suelto, sin tarjeta ni cabecera, y desentonaba con
+  // la página de la encuesta —que sí está cuidada—. Y con la marca de la
+  // cuenta: de poco sirve configurar un logo si el correo no lo usa.
+  const html = emailHtml({
+    titulo: question,
+    preheader: intro.slice(0, 100),
+    marca: { logo: cfg.logoUrl || null, color: cfg.color },
+    cuerpo:
+      '<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#5B6072">' + escHtml(intro) + '</p>' +
+      '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>' +
+        Array.from({ length: 11 }, (_, n) => btn(n)).join('') +
+      '</tr></table>' +
+      '<p style="margin:12px 0 0;font-size:11.5px;color:#9ca3af;text-align:center">' +
+        escHtml(cfg.etiquetaMin) + ' &nbsp;·&nbsp; ' + escHtml(cfg.etiquetaMax) + '</p>',
+  });
   const subject = renderVars(step.subject || cfg.asunto, lead);
   const r = await fetchResend({
     method: 'POST',

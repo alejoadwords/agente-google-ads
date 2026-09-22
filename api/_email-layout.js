@@ -22,20 +22,20 @@
 // hay un soporte@acuarius.app, se cambia AQUÍ y en un sitio solo.
 export const RESPONDER_A = 'ceo@acuarius.app';
 
-const AZUL = '#1E2BCC';
-const AZUL_OSCURO = '#1520B0';
+const AZUL_BASE = '#1E2BCC';
+const AZUL_OSCURO_BASE = '#1520B0';
 const FONDO = '#F4F5FB';
 const TEXTO = '#14161F';
 const SUAVE = '#5B6072';
 const BORDE = '#E4E6F2';
-const LOGO = 'https://app.acuarius.app/logo-white.png';
+const LOGO_BASE = 'https://app.acuarius.app/logo-white.png';
 
 export function esc(t) {
   return String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 // Caja de datos: lo que hay que leer de un vistazo (el lead, la nota, la cifra).
-export function bloque(contenido, color = AZUL) {
+export function bloque(contenido, color = AZUL_BASE) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0">
   <tr><td style="border:1px solid ${BORDE};border-left:3px solid ${color};border-radius:10px;padding:14px 16px;background:#FBFBFE;color:${TEXTO};font-size:14px;line-height:1.6">${contenido}</td></tr>
 </table>`;
@@ -46,7 +46,7 @@ export function bloque(contenido, color = AZUL) {
 export function pasos(items) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0">
 ${items.map((t, i) => `  <tr>
-    <td width="26" valign="top" style="padding:4px 0;color:${AZUL};font-size:14px;font-weight:700">${i + 1}.</td>
+    <td width="26" valign="top" style="padding:4px 0;color:${AZUL_BASE};font-size:14px;font-weight:700">${i + 1}.</td>
     <td style="padding:4px 0;color:${TEXTO};font-size:14px;line-height:1.6">${t}</td>
   </tr>`).join('\n')}
 </table>`;
@@ -60,7 +60,16 @@ ${items.map((t, i) => `  <tr>
  * pie      — nota pequeña al final (opcional)
  * preheader— lo que se lee en la bandeja junto al asunto (opcional)
  */
-export function emailHtml({ titulo, intro, cuerpo, cta, pie, preheader }) {
+/**
+ * `marca` deja a un cliente poner SU logo y SU color en los correos que salen
+ * en su nombre —hoy solo la encuesta de satisfacción—. Es opcional: sin ella
+ * sale el logo y el azul de Acuarius, que es lo que quiere el resto de avisos.
+ */
+export function emailHtml({ titulo, intro, cuerpo, cta, pie, preheader, marca }) {
+  const AZUL = marca?.color || AZUL_BASE;
+  const AZUL_OSCURO = marca?.color ? marca.color : AZUL_OSCURO_BASE;
+  const LOGO = marca?.logo || LOGO_BASE;
+  const ANCHO_LOGO = marca?.logo ? 150 : 112;
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
 <body style="margin:0;padding:0;background:${FONDO};-webkit-font-smoothing:antialiased">
@@ -70,7 +79,7 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid ${BORDE};border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
 
       <tr><td style="background:${AZUL};padding:18px 26px">
-        <img src="${LOGO}" alt="Acuarius" width="112" style="display:block;border:0;height:auto;max-width:112px">
+        <img src="${LOGO}" alt="" width="${ANCHO_LOGO}" style="display:block;border:0;height:auto;max-width:${ANCHO_LOGO}px">
       </td></tr>
 
       <tr><td style="padding:26px 26px 8px">
