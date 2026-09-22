@@ -17869,16 +17869,20 @@ async function pipeSave() {
         const d = await r.json();
         s.id = d.stage?.id; s.key = d.stage?.key; s._new = false;
       } else if (s._dirty) {
-        await fetchAuth('/api/pipeline-stages', {
+        const rEd = await fetchAuth('/api/pipeline-stages', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: s.id, label: s.label.trim(), color: s.color, probability: Number(s.probability), al_entrar: s.al_entrar || null }),
         });
+        // Sin esto, renombrar una etapa o cambiarle el color se «guardaba» y al
+        // recargar volvía el nombre viejo, sin una palabra.
+        if (!rEd.ok) throw await motivoDelFallo(rEd, 'guardar la etapa «' + s.label.trim() + '»');
       }
     }
-    await fetchAuth('/api/pipeline-stages', {
+    const rOrden = await fetchAuth('/api/pipeline-stages', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order: _pipeDraft.map(s => s.id).filter(Boolean) }),
     });
+    if (!rOrden.ok) throw await motivoDelFallo(rOrden, 'guardar el orden de las etapas');
     if (!_pipeDraftPipe || _pipeDraftPipe === crmPipelineId) {
       await crmLoadStages();
       await crmLoadLeads();
@@ -18231,8 +18235,8 @@ async function crmEnsureTag(name) {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const res = await fetchAuth('/api/lead-tags' + qs, { method: 'POST', body: JSON.stringify({ name: n }) });
+    if (!res.ok) return null;   // el que llama ya avisa de que no se pudo crear
     const d = await res.json();
-    if (d.tag && !crmTags.find(t => t.name === d.tag.name)) crmTags.push(d.tag);
   } catch {}
   return n;
 }
@@ -20602,10 +20606,10 @@ async function crmSaveLead() {
       crmAvisarTagsIgnoradas(data.tags_ignoradas);
       track('crm_lead_created', { source: data.lead.source || 'manual' });
       // log creation activity
-      await fetchAuth('/api/lead-activities', {
+      fetchAuth('/api/lead-activities', {
         method: 'POST',
         body: JSON.stringify({ lead_id: data.lead.id, type: 'creacion', content: 'Lead creado', metadata: {} }),
-      });
+      }).catch(() => {});
     }
     crmCloseModal();
     crmRender();
@@ -20764,6 +20768,7 @@ async function crmDetailSaveTags(newTags) {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const res = await fetchAuth('/api/leads' + qs, { method: 'PUT', body: JSON.stringify({ id: lead.id, tags: newTags }) });
+    if (!res.ok) throw await motivoDelFallo(res, 'guardar las etiquetas');
     const d = await res.json();
     if (d.lead) { lead.tags = d.lead.tags || newTags; }
     await crmLoadTags(); // refrescar catálogo (colores de etiquetas nuevas)
@@ -21173,10 +21178,10 @@ async function crmChangeStage(newStage) {
       body: JSON.stringify({ id: leadId, stage: newStage }),
     });
     if (!res.ok) throw await motivoDelFallo(res, 'mover');
-    await fetchAuth('/api/lead-activities', {
+    fetchAuth('/api/lead-activities', {
       method: 'POST',
       body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Etapa cambiada de "${oldStage}" a "${newStage}"`, metadata: { from: oldStage, to: newStage } }),
-    });
+    }).catch(() => {});
     await crmLoadActivities(leadId);
   } catch (e) {
     deshacer();
@@ -21315,11 +21320,13 @@ async function crmAddActivity() {
       if (d.activity?.id) metadata.activity_id = d.activity.id;
     }
 
-    await fetchAuth('/api/lead-activities', {
+    const rAct = await fetchAuth('/api/lead-activities', {
       method: 'POST',
       body: JSON.stringify({ lead_id: crmDetailLead.id, type: crmActivityType, content, metadata }),
     });
-    input.value = '';
+    // El cuadro de texto se vacía justo después: si no se guardó, el
+    // comercial pierde lo que acababa de escribir y no se entera.
+    if (!rAct.ok) throw await motivoDelFallo(rAct, 'guardar la actividad');
     if (dueInput) dueInput.value = '';
     await crmLoadActivities(crmDetailLead.id);
     if (esTarea) {
@@ -21373,12 +21380,17 @@ async function crmDeleteCurrentLead() {
   const leadId = crmDetailLead.id;
   crmCloseDetail();
   try {
-    await fetchAuth(`/api/leads?id=${encodeURIComponent(leadId)}`, {
-      method: 'DELETE',
-    });
+    const r = await fetchAuth(`/api/leads?id=${encodeURIComponent(leadId)}`, { method: 'DELETE' });
+    if (!r.ok) throw await motivoDelFallo(r, 'eliminar el contacto');
     crmLeads = crmLeads.filter(l => l.id !== leadId);
     crmRender();
-  } catch(e) { console.error('crmDeleteCurrentLead', e); }
+  } catch (e) {
+    console.error('crmDeleteCurrentLead', e);
+    showToast('No se pudo eliminar: ' + (e.message || 'inténtalo de nuevo'), 'error');
+    // El panel ya se cerró y el lead sigue existiendo: se repinta para que
+    // vuelva a verse en su sitio en vez de dar la impresión de que se borró.
+    crmRender();
+  }
 }
 // ── AGENTES IA / INBOX ───────────────────────────────────────────────────────
 let crmAgents = [];
@@ -22913,9 +22925,8 @@ async function canDesconectar(id) {
 
 async function agDisconnectChannel(connId, agentId) {
   if (!confirm('¿Desconectar este canal? El agente dejará de responder mensajes por este canal.')) return;
-  await fetchAuth(`/api/channel-connections?id=${encodeURIComponent(connId)}`, {
-    method: 'DELETE',
-  });
+  const r = await fetchAuth(`/api/channel-connections?id=${encodeURIComponent(connId)}`, { method: 'DELETE' });
+  if (!r.ok) { showToast('No se pudo desconectar: ' + (await motivoDelFallo(r, 'desconectar el canal')).message, 'error'); return; }
   await crmLoadAgents();
   crmOpenAgentModal(agentId);
 }
@@ -22972,11 +22983,15 @@ async function inboxOpenConv(convId) {
   // Mark as read
   if (conv.unread_count > 0) {
     conv.unread_count = 0;
-    await fetchAuth('/api/chat-conversations', {
+    // Si no se guarda, el contador vuelve al recargar y parece que los
+    // mensajes se «desleen» solos. No corta la navegación: se anota.
+    const rLeido = await fetchAuth('/api/chat-conversations', {
       method: 'PUT',
       body: JSON.stringify({ id: convId, unread_count: 0 }),
     });
-    inboxUpdateBadge();
+    if (!rLeido.ok && typeof errRegistrar === 'function') {
+      errRegistrar('no se pudo marcar como leída: HTTP ' + rLeido.status, '/api/chat-conversations');
+    }
   }
 
   // Load messages
@@ -24025,11 +24040,16 @@ function inboxAvisoEnvio(msg) {
 
 async function inboxCycleStatus(convId, current) {
   const next = current === 'bot' ? 'human' : current === 'human' ? 'resolved' : 'bot';
-  await fetchAuth('/api/chat-conversations', {
+  // Pasar una conversación a «la atiendo yo» y que no se guarde significa
+  // que el agente sigue respondiendo por encima del comercial.
+  const rEstado = await fetchAuth('/api/chat-conversations', {
     method: 'PUT',
     body: JSON.stringify({ id: convId, status: next }),
   });
-  const conv = inboxConversations.find(c => c.id === convId);
+  if (!rEstado.ok) {
+    showToast('No se pudo cambiar el estado: ' + (await motivoDelFallo(rEstado, 'cambiar el estado')).message, 'error');
+    return;
+  }
   if (conv) conv.status = next;
   await inboxOpenConv(convId);
 }
@@ -26236,7 +26256,9 @@ async function crmRenderAutos() {
 
 async function autoToggle(id, active) {
   try {
-    const data = await fetchAuth('/api/automations', { method: 'PUT', body: JSON.stringify({ id, active }) }).then(r => r.json());
+    const res = await fetchAuth('/api/automations', { method: 'PUT', body: JSON.stringify({ id, active }) });
+    if (!res.ok) throw await motivoDelFallo(res, 'cambiar la automatización');
+    const data = await res.json();
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
     crmRenderAutos();
   } catch (e) { alert('Error: ' + e.message); }
@@ -26266,7 +26288,8 @@ async function autoDuplicate(id) {
 async function autoDelete(id) {
   if (!confirm('¿Eliminar esta automatización? Los flujos en curso se cancelan.')) return;
   try {
-    await fetchAuth('/api/automations?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const r = await fetchAuth('/api/automations?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw await motivoDelFallo(r, 'eliminar la automatización');
     crmRenderAutos();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -26948,7 +26971,8 @@ async function agnRender() {
 
 async function agnToggleDone(id, done) {
   try {
-    await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, done }) });
+    const r = await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id, done }) });
+    if (!r.ok) throw await motivoDelFallo(r, 'marcar la actividad');
     agnRender();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -26956,7 +26980,8 @@ async function agnToggleDone(id, done) {
 async function agnDelete(id) {
   if (!confirm('¿Eliminar esta actividad? Si tiene evento en Google Calendar también se elimina.')) return;
   try {
-    await fetchAuth('/api/agenda?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const r = await fetchAuth('/api/agenda?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw await motivoDelFallo(r, 'eliminar la actividad');
     agnRender();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -27408,7 +27433,11 @@ async function prpMarkPaid(id) {
 
 async function prpDelete(id) {
   if (!confirm('¿Eliminar esta propuesta? El link público dejará de funcionar.')) return;
-  await fetchAuth('/api/proposals?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  const r = await fetchAuth('/api/proposals?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!r.ok) {
+    showToast('No se pudo eliminar: ' + (await motivoDelFallo(r, 'eliminar la propuesta')).message, 'error');
+    return;
+  }
   await prpLoad();
 }
 
@@ -28554,7 +28583,8 @@ async function cmpWDeleteList() {
   if (!id) { showToast('Elige primero la lista a eliminar', 'error'); return; }
   const l = _cmpLists.find(x => x.id === id);
   if (!confirm('¿Eliminar la lista "' + (l?.name || '') + '"? Las campañas ya enviadas no se afectan.')) return;
-  await fetchAuth('/api/lead-lists?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  const r = await fetchAuth('/api/lead-lists?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!r.ok) throw await motivoDelFallo(r, 'eliminar la lista');
   if (_cmpW.list_id === id) _cmpW.list_id = '';
   await cmpWLoadLists();
   cmpWAudRender();
@@ -29041,7 +29071,11 @@ async function cmpShowOpens(id) {
 async function cmpDelete(id) {
   const c = cmpList.find(x => x.id === id);
   if (!confirm('¿Eliminar la campaña "' + (c?.name || '') + '"?' + (c?.status === 'sending' || c?.status === 'queued' ? ' Los envíos pendientes se cancelan.' : ''))) return;
-  await fetchAuth('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  const r = await fetchAuth('/api/campaigns?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!r.ok) {
+    showToast('No se pudo eliminar: ' + (await motivoDelFallo(r, 'eliminar la campaña')).message, 'error');
+    return;
+  }
   cmpRender();
 }
 
@@ -29551,7 +29585,11 @@ async function frmSave() {
 async function frmToggle(id) {
   const f = frmList.find(x => x.id === id);
   if (!f) return;
-  await fetchAuth('/api/forms', { method: 'PUT', body: JSON.stringify({ id, active: !f.active }) });
+  const r = await fetchAuth('/api/forms', { method: 'PUT', body: JSON.stringify({ id, active: !f.active }) });
+  if (!r.ok) {
+    showToast('No se pudo cambiar: ' + (await motivoDelFallo(r, 'cambiar el formulario')).message, 'error');
+    return;
+  }
   srcRender();
 }
 
@@ -29563,7 +29601,11 @@ async function frmDelete(id) {
     ? '¿Eliminar la conexión "' + (f?.name || '') + '"? El código que pegaste en tu web dejará de recoger leads.'
     : '¿Eliminar el formulario "' + (f?.name || '') + '"? El link público y el incrustado dejarán de funcionar.';
   if (!confirm(aviso)) return;
-  await fetchAuth('/api/forms?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  const r = await fetchAuth('/api/forms?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!r.ok) {
+    showToast('No se pudo eliminar: ' + (await motivoDelFallo(r, 'eliminar el formulario')).message, 'error');
+    return;
+  }
   srcRender();
 }
 
@@ -30270,7 +30312,11 @@ async function teamRemove(id) {
   // Una invitación sin canjear no tiene nada asignado: no hay a quién pasarle.
   if (m && m.status !== 'active') {
     if (!confirm('¿Revocar la invitación de ' + quien + '? El enlace que recibió dejará de funcionar.')) return;
-    await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const rInv = await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!rInv.ok) {
+      showToast('No se pudo revocar: ' + (await motivoDelFallo(rInv, 'revocar la invitación')).message, 'error');
+      return;
+    }
     showToast('Invitación revocada');
     teamRenderSettings();
     return;
@@ -30285,7 +30331,14 @@ async function teamRemove(id) {
 
   if (carga && carga.total === 0) {
     if (!confirm('¿Quitar a ' + quien + ' del equipo? No tiene nada asignado. Perderá el acceso de inmediato.')) return;
-    await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    // Decir «ya no está en el equipo» sobre un rechazo es de lo peor que
+    // puede hacer esta pantalla: se da por quitado a alguien que sigue
+    // entrando, y los asientos del plan se cuentan por aquí.
+    const rQuitar = await fetchAuth('/api/team?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!rQuitar.ok) {
+      showToast('No se pudo quitar: ' + (await motivoDelFallo(rQuitar, 'quitar del equipo')).message, 'error');
+      return;
+    }
     showToast(quien + ' ya no está en el equipo');
     teamRenderSettings();
     return;
@@ -30839,10 +30892,12 @@ async function impRun() {
   const qs = '?action=import' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
   for (let i = 0; i < leads.length; i += BATCH) {
     try {
-      const d = await fetchAuth('/api/leads' + qs, {
+      const rLote = await fetchAuth('/api/leads' + qs, {
         method: 'POST',
         body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe } }),
-      }).then(r => r.json());
+      });
+      if (!rLote.ok) throw await motivoDelFallo(rLote, 'importar contactos');
+      const d = await rLote.json();
       if (d.result) {
         totals.created += d.result.created; totals.updated += d.result.updated;
         totals.skipped += d.result.skipped; totals.invalid += d.result.invalid;
@@ -32877,10 +32932,13 @@ async function calSave(agentId) {
     },
   };
   try {
-    await fetchAuth('/api/qualify-rules?agent_id=' + encodeURIComponent(agentId), {
+    const rRegla = await fetchAuth('/api/qualify-rules?agent_id=' + encodeURIComponent(agentId), {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ regla }),
     });
+    if (!rRegla.ok) {
+      showToast('No se pudo guardar la regla: ' + (await motivoDelFallo(rRegla, 'guardar la regla')).message, 'error');
+    }
   } catch {}
 }
 
@@ -33093,10 +33151,11 @@ function tarAbrirLead(id) {
 
 async function tarHecha(id) {
   try {
-    await fetchAuth('/api/agenda', {
+    const rHecha = await fetchAuth('/api/agenda', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, done: true }),
     });
+    if (!rHecha.ok) throw await motivoDelFallo(rHecha, 'completar la tarea');
     showToast('Tarea completada', 'success');
     tarRender();
     crmTareasCargar().then(() => crmRender());
@@ -33110,10 +33169,11 @@ async function tarAplazar(id) {
   const base = t.due_at ? new Date(t.due_at) : new Date(new Date().setHours(9, 0, 0, 0));
   base.setDate(base.getDate() + 1);
   try {
-    await fetchAuth('/api/agenda', {
+    const rApl = await fetchAuth('/api/agenda', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, due_at: base.toISOString() }),
     });
+    if (!rApl.ok) throw await motivoDelFallo(rApl, 'aplazar la tarea');
     tarRender();
     crmTareasCargar().then(() => crmRender());
   } catch { showToast('No se pudo aplazar', 'error'); }
@@ -39532,10 +39592,11 @@ async function citaGuardar() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'No se pudo crear la cita');
 
-    await fetchAuth('/api/leads', {
+    const rMover = await fetchAuth('/api/leads', {
       method: 'PUT',
       body: JSON.stringify({ id: ctx.lead.id, stage: ctx.stage.key }),
     });
+    if (!rMover.ok) throw await motivoDelFallo(rMover, 'mover el lead tras agendar');
 
     document.getElementById('cita-modal')?.remove();
     _citaCtx = null;

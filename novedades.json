@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-guardados-que-avisan",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Cuando algo no se guarda, ahora te lo decimos",
+   "texto": "Había acciones del CRM que daban por bueno lo que el servidor rechazaba: eliminar un contacto lo quitaba de la pantalla aunque no se hubiera borrado, marcar una tarea la dejaba tachada, quitar a alguien del equipo anunciaba que ya no estaba, y pausar un formulario cambiaba el interruptor. Al recargar todo volvía a como estaba y no había forma de saber por qué. Revisamos una por una las 30 acciones que escriben datos y ahora todas comprueban la respuesta: si algo no se puede guardar, el cambio se deshace y te decimos el motivo con las palabras del servidor, no un Â«errorÂ» genérico."
+  },
+  {
    "id": "2026-09-22-arrastrar-arreglado",
    "fecha": "2026-09-22",
    "tipo": "arreglo",
