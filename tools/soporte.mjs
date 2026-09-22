@@ -132,7 +132,15 @@ async function radiografia(busqueda) {
   const titulo = (t) => console.log(`\n  ── ${t} ${'─'.repeat(Math.max(0, 60 - t.length))}`);
   console.log(`\n  ${u.name || u.email}`);
   console.log(`  ${u.id}   ${u.email}`);
-  console.log(`  plan ${u.plan}${u.status ? ' · ' + u.status : ''} · alta ${dia(u.created_at)}${u.trial_ends_at ? ' · prueba hasta ' + dia(u.trial_ends_at) : ''}`);
+  // La fecha solo es «la prueba» si el plan es de prueba. En un Pro con
+  // cortesía el espejo conserva la fecha del trial viejo, y leerla como
+  // «prueba hasta 2026-08-19» hacía pensar que la cuenta llevaba un mes
+  // caducada cuando su cortesía llega a 2027. La verdad del plan vive en
+  // Clerk; esto es el espejo, y puede ir por detrás.
+  const vigencia = u.plan === 'trial' && u.trial_ends_at ? ' · prueba hasta ' + dia(u.trial_ends_at)
+    : u.plan_ends_at ? ' · vigencia hasta ' + dia(u.plan_ends_at) + (u.plan_origen ? ' (' + u.plan_origen + ')' : '')
+    : '';
+  console.log(`  plan ${u.plan}${u.status ? ' · ' + u.status : ''} · alta ${dia(u.created_at)}${vigencia}`);
 
   titulo('LEADS');
   console.log(`  ${L.activos} activos · ${L.papelera} en papelera · límite del plan ${limite}`);
