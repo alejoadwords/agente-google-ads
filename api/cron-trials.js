@@ -67,8 +67,21 @@ export default async function handler(req, res) {
   const authHeader = req.headers['authorization'];
   if (authHeader !== `Bearer ${CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
 
-  let expired = 0, reminded = 0, scanned = 0, vencidos = 0, avisados = 0;
+  let expired = 0, reminded = 0, scanned = 0, vencidos = 0, avisados = 0, deEquipo = 0;
   const sinFecha = [];   // planes de pago sin fecha de fin: no se tocan, se reportan
+  // Quien es asesor de otra cuenta NO tiene plan propio: lo cubre la licencia
+  // del dueño. Pero al entrar por invitación se registra como cualquiera y se
+  // lleva su prueba de 14 días, así que este cron le escribiría «tu prueba
+  // terminó, paga $39» a los seis asesores de una agencia que ya paga —y les
+  // dejaría el plan en 'free' en Clerk—. Los gates ya preguntan por el dueño
+  // (8ec9d6c), o sea que no perderían acceso: perderían la confianza.
+  const miembros = new Set();
+  try {
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/team_members?status=eq.active&select=member_user_id`, {
+      headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
+    });
+    if (r.ok) for (const m of await r.json()) if (m.member_user_id) miembros.add(m.member_user_id);
+  } catch { /* sin la lista se sigue como antes; mejor eso que no caducar a nadie */ }
   try {
     for (let page = 0; page < 10; page++) {
       const users = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${page * 100}&order_by=-created_at`, {
@@ -81,6 +94,9 @@ export default async function handler(req, res) {
         const meta = u.public_metadata || {};
         const email = u.email_addresses?.[0]?.email_address;
         const dePago = ['pro', 'agency', 'agencia', 'individual'].includes(meta.plan);
+
+        // Asesor de otra cuenta: ni se le caduca nada ni se le escribe.
+        if (miembros.has(u.id)) { deEquipo++; continue; }
 
         // ── Camino 2: plan de pago o cortesía con fecha de fin ──────────────
         if (dePago) {
@@ -164,9 +180,10 @@ export default async function handler(req, res) {
     // Se registra a propósito: una cuenta de pago sin fecha es exactamente el
     // agujero que este cron vino a tapar, y callarlo lo dejaría abierto otra vez.
     if (sinFecha.length) console.error('[cron-trials] planes de pago SIN fecha de fin:', sinFecha.join(', '));
-    console.log('[cron-trials] revisadas:', scanned, '· pruebas vencidas:', expired, '· recordadas:', reminded,
+    console.log('[cron-trials] revisadas:', scanned, '· asesores de otra cuenta:', deEquipo,
+      '· pruebas vencidas:', expired, '· recordadas:', reminded,
                 '· planes vencidos:', vencidos, '· avisados:', avisados, '· sin fecha:', sinFecha.length);
-    return res.status(200).json({ ok: true, scanned, expired, reminded, vencidos, avisados, sin_fecha: sinFecha });
+    return res.status(200).json({ ok: true, scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo, sin_fecha: sinFecha });
   } catch (e) {
     console.error('[cron-trials] error:', e.message);
     return res.status(500).json({ error: e.message });
