@@ -248,20 +248,33 @@ console.log('\nEn el móvil no se aprietan tres columnas\n');
   // se montaban unos sobre otros. Medido en el banco: 0 solapes.
   chk('el embudo se desplaza en vez de encogerse',
       /\.lf-paso\{flex:0 0 auto;min-width:0\}/.test(css));
+  // Arrastrar el embudo lo estropea como barra de progreso: deja de verse de
+  // un vistazo por dónde va, y las últimas etapas quedan escondidas. Con nueve
+  // etapas de nombre largo caben en dos líneas.
+  chk('cuando no cabe, el embudo se reparte en líneas, no se arrastra',
+      /\.lf-pasos\{[^}]*flex-wrap:wrap\}/.test(css) && !/\.lf-pasos\{[^}]*overflow-x:auto/.test(css));
+  // Una URL pegada no tiene dónde partir. Las tareas de una inmobiliaria la
+  // traen dentro del texto, y se salían del recuadro: medido en el banco con
+  // la tarea real, 0 elementos por fuera.
+  chk('un enlace pegado parte en vez de salirse del recuadro',
+      /\.lf-tarea,\.lf-auto,\.lf-envio,\.lf-prop,\.lf-log,\.lf-nota,\.lf-cita-nps,\.lf-quemado\{overflow-wrap:anywhere\}/.test(css) &&
+      /\.crm-d-tarea-tit\{[^}]*overflow-wrap:anywhere\}/.test(html));
+  // Cajas blancas sobre fondo blanco se desdibujan y las tres columnas se leen
+  // como una lista larga.
+  chk('las cajas se apoyan en un fondo tenue', /#crm-lead-view\{background:var\(--bg-subtle\)\}/.test(css));
   // Y en el escritorio, lo mismo por otra vía: con `min-width:120px` un paso
   // se encogía por debajo de su texto y «Presentación de propuesta» se montaba
   // encima de «Cita de inmueble». Medido en el banco con 11 etapas: se rompía
   // de 1400px para abajo, que es lo que mide la tira con la barra lateral.
   chk('ningún paso se encoge por debajo de su rótulo',
-      /\.lf-paso\{display:flex;align-items:center;gap:0;flex:1;min-width:max-content\}/.test(css));
-  // Los botones de cierre vivían DENTRO de la tira que se desplaza: en un
-  // móvil quedaban a 260px del borde derecho, invisibles salvo que a alguien
-  // se le ocurriera arrastrar el embudo hasta el final. Medido en el banco:
-  // x 637→783 en una pantalla de 375.
-  chk('«Ganado» y «Perdido» quedan fuera del desplazamiento',
+      /\.lf-paso\{display:flex;align-items:center;gap:0;flex:1 1 auto;min-width:max-content\}/.test(css));
+  // Los botones de cierre vivían DENTRO de la tira de etapas. Cuando la tira
+  // se desplazaba quedaban fuera de la pantalla (x 637→783 en un móvil de
+  // 375); ahora que se reparte en líneas, bajarían con las etapas a la
+  // segunda. En los dos casos el arreglo es el mismo: están fuera de la tira.
+  chk('«Ganado» y «Perdido» quedan fuera de la tira de etapas',
       /'<div class="lf-embudo">' \+\s*\n?\s*'<div class="lf-pasos">'/.test(bloque) &&
-      /\.lf-pasos\{[^}]*overflow-x:auto\}/.test(css) &&
-      !/\.lf-embudo\{[^}]*overflow-x:auto/.test(css));
+      /<\/div>' \+\s*\n\s*'<div class="lf-cierre">'/.test(bloque));
   chk('y en el móvil bajan a su propia línea, para no comerse la tira',
       /\.lf-embudo\{flex-wrap:wrap/.test(css) && /\.lf-pasos\{flex:1 1 100%\}/.test(css));
   // Un ítem flexible sin `min-width:0` no baja de su ancho de contenido. En

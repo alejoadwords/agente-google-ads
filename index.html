@@ -1285,10 +1285,13 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
    está, pero no cuánto le falta ni por dónde ya pasó. */
 .lf-embudo{display:flex;align-items:center;gap:0;padding:14px 20px;background:var(--bg);
   border-bottom:1px solid var(--border)}
-/* Solo la tira de etapas se desplaza. Los botones de cierre quedan fuera: son
-   los dos más importantes de la ficha y no pueden depender de que alguien
-   arrastre el embudo hasta el final para encontrarlos. */
-.lf-pasos{display:flex;align-items:center;gap:0;flex:1;min-width:0;overflow-x:auto}
+/* La tira se reparte en varias líneas cuando no cabe, en vez de arrastrarse:
+   un embudo que hay que arrastrar deja de ser una barra de progreso —no se ve
+   de un vistazo por dónde va— y además esconde las últimas etapas. Con nueve
+   etapas de nombre largo caben en dos líneas y se leen todas.
+   Los botones de cierre quedan fuera de esta tira: son los dos más
+   importantes de la ficha. */
+.lf-pasos{display:flex;align-items:center;gap:6px 0;flex:1;min-width:0;flex-wrap:wrap}
 /* `min-width:max-content` y no una cifra fija: con 120px un paso se encogía por
    debajo de su propio texto y los rótulos se montaban unos sobre otros. Se veía
    con etapas de nombre largo —«Presentación de propuesta», «Aprobación de
@@ -1296,7 +1299,7 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
    barra lateral abierta. Ahora ningún paso baja de su texto y la tira se
    arrastra cuando no caben. Medido en el banco con 11 etapas: 0 solapes de
    1700px para abajo. */
-.lf-paso{display:flex;align-items:center;gap:0;flex:1;min-width:max-content}
+.lf-paso{display:flex;align-items:center;gap:0;flex:1 1 auto;min-width:max-content}
 .lf-paso .bola{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
   border:2px solid var(--border);background:var(--bg);color:var(--muted2)}
 .lf-paso.hecho .bola{background:var(--blue);border-color:var(--blue);color:#fff}
@@ -1345,7 +1348,8 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .lf-ev .cab{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .lf-ev .qui{font-size:13px;font-weight:700}
 .lf-ev .cuando{font-size:11px;color:var(--muted2);margin-left:auto;white-space:nowrap}
-.lf-ev .txt{font-size:13px;color:var(--text-2);line-height:1.55;margin-top:3px;white-space:pre-wrap}
+.lf-ev .txt{font-size:13px;color:var(--text-2);line-height:1.55;margin-top:3px;white-space:pre-wrap;
+  overflow-wrap:anywhere}
 .lf-dia{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2);
   padding:12px 0 4px}
 
@@ -1365,6 +1369,12 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .lf-tarea.vence{border-color:var(--danger);background:var(--danger-bg)}
 .lf-tarea input{width:16px;height:16px;margin-top:1px;accent-color:var(--blue);flex-shrink:0}
 .lf-tarea .cuando{font-size:11px;color:var(--muted2);margin-top:2px}
+/* Una URL pegada no tiene dónde partir y se sale del recuadro. Pasa de verdad:
+   las tareas de una inmobiliaria traen el enlace del inmueble dentro del
+   texto. `anywhere` parte donde haga falta; `break-word` habría dejado igual
+   la palabra que no cabe entera. */
+.lf-tarea,.lf-auto,.lf-envio,.lf-prop,.lf-log,.lf-nota,.lf-cita-nps,.lf-quemado{overflow-wrap:anywhere}
+.lf-tarea > div,.lf-auto > div,.lf-envio > div,.lf-prop > div{min-width:0}
 
 /* Citas. Sin casilla: una cita no se «marca», se atiende. El icono ocupa el
    sitio de la casilla para que las dos listas queden alineadas. */
@@ -1422,6 +1432,11 @@ a.lf-prop:hover{border-color:var(--blue)}
 .lf-estado{margin-left:auto;font-size:10px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap}
 
 
+/* Fondo tenue bajo las cajas: en blanco sobre blanco los recuadros se
+   desdibujan y la pantalla se lee como una lista larga en vez de tres
+   columnas. Va en el contenedor y no en `.lf-a` para que cubra también el
+   hueco de abajo cuando el contenido es corto. */
+#crm-lead-view{background:var(--bg-subtle)}
 .lf-a{display:grid;grid-template-columns:320px minmax(0,1fr) 300px;gap:16px;padding:16px 20px;align-items:start}
 .lf-col{display:flex;flex-direction:column;gap:14px;min-width:0}
 
@@ -2904,7 +2919,9 @@ a.lf-prop:hover{border-color:var(--blue)}
 .crm-d-tarea.hecha .crm-d-tarea-tit{text-decoration:line-through;color:var(--muted)}
 .crm-d-tarea input[type=checkbox]{width:18px;height:18px;margin-top:1px;flex-shrink:0;cursor:pointer;accent-color:var(--blue)}
 .crm-d-tarea-txt{flex:1;min-width:0}
-.crm-d-tarea-tit{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35}
+/* Mismo caso que en la ficha: la tarea trae el enlace del inmueble pegado y
+   sin `anywhere` se salía del panel. */
+.crm-d-tarea-tit{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;overflow-wrap:anywhere}
 .crm-d-tarea-fecha{font-size:11px;color:var(--muted);margin-top:2px}
 .crm-d-tarea.vencida .crm-d-tarea-fecha{color:var(--danger);font-weight:600}
 .crm-d-tarea-btn{background:none;border:0;color:var(--muted);font-family:var(--font);font-size:11px;

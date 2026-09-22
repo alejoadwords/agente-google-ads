@@ -108,6 +108,10 @@ var ACTIVIDADES = [
 // Las citas vienen en la MISMA respuesta que las tareas: solo las separa el
 // tipo. Aquí están mezcladas a propósito, como llegan de verdad.
 var TAREAS = [
+  // Tal como la escriben de verdad: el enlace del inmueble pegado, sin
+  // espacios donde partir. Es la que se salía del recuadro.
+  { id: 't0', type: 'task', done: false, due_at: new Date(Date.now() + 864e5).toISOString(),
+    title: 'Contactó por oficina de Gran Boulevard pendiente que conteste. [121514229] (https://https://certainpezzano.com/propiedades/121514229-apartamento-en-arriendo-gran-boulevard/)' },
   { id: 't1', type: 'task', title: 'Llamar para confirmar la visita', due_at: new Date(Date.now() - 864e5).toISOString(), done: false },
   { id: 't2', type: 'task', title: 'Enviar fichas de 3 apartamentos', due_at: new Date(Date.now() + 864e5).toISOString(), done: false },
   { id: 't3', type: 'task', title: 'Primer contacto', due_at: new Date(Date.now() - 5 * 864e5).toISOString(), done: true },
