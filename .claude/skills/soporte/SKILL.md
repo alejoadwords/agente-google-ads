@@ -86,6 +86,7 @@ El arreglo se hace con el criterio de siempre:
 | Síntomas y sus causas | `.claude/skills/soporte/sintomas.md` |
 | Consultas de solo lectura | `.claude/skills/soporte/consultas.md` |
 | Mapa de módulos y endpoints | `.claude/skills/soporte/modulos.md` |
+| Encuestas NPS, de punta a punta | `.claude/skills/soporte/nps.md` |
 | Detalle de cada módulo y sus trampas | índice de memoria (`MEMORY.md`) |
 | Qué se ha publicado y cuándo | `public/novedades.json` |
 | Puesta en marcha de un cliente nuevo | `PUESTA-EN-MARCHA.md` |
