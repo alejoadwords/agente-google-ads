@@ -42,6 +42,7 @@
   <button onclick="escena('sin-red')">si fallan las propuestas</button>
   <button onclick="comoComercial()">como comercial (no puede parar)</button>
   <button onclick="window._quemado='rebote';escena('medio')">con el correo quemado</button>
+  <button onclick="escena('vencido')">con el cierre vencido</button>
   <button onclick="muchasEtapas()">9 etapas con nombres largos</button>
   <span>·</span>
   <button onclick="window._nps='detractor';escena('medio')">detractor</button>
@@ -180,7 +181,9 @@ function escena(cual) {
     stage: cual === 'ganado' ? 'ganado' : (cual === 'nuevo' ? 'nuevo' : 'propuesta'),
     pipeline_id: 'p1', client_id: null, assigned_name: 'María Camila Romero',
     custom_fields: { 'Página': 'certainpezzano.com/contacto', 'Campaña': 'adwords · ppc · apartamentos en arriendo' },
+    notes: 'Prefiere que la llamen después de las 6. Trabaja en el centro.\nBusca con parqueadero cubierto.',
   };
+  if (cual === 'vencido') l.expected_close_date = '2026-09-01';
   if (cual === 'nuevo') { l.name = 'Andrés Oliva'; l.tags = ['lead web']; l.value = null; l.expected_close_date = null; }
   crmLeads = [l];
   _crmActividadesLead = cual === 'nuevo' ? [] : ACTIVIDADES;
@@ -246,6 +249,10 @@ function comoComercial() {
       'return Promise.resolve()}',
     'function crmMoverProcesoAbrir(){showToast("Abriría el selector de proceso")}',
     'function crmEditCurrentLead(){showToast("Abriría el formulario de edición")}',
+    'function crmCopilotToggle(){showToast("Abriría el Copiloto")}',
+    'function crmNotaAbrir(){showToast("Abriría la nota al responsable")}',
+    'async function crmRevelarNotas(){document.querySelectorAll(".crm-nota-btn").forEach(function(b){b.style.display=""})}',
+    'async function crmDeleteCurrentLead(){showToast("Pediría confirmación y borraría")}',
     'function agnScheduleForLead(){showToast("Abriría el agendador")}',
     'function prpOpenForLead(){showToast("Abriría la propuesta")}',
     'function crmSendLeadToConsultor(){showToast("Iría al Consultor")}',

@@ -134,6 +134,32 @@ console.log('\nRegistrar una actividad tiene lo mismo que el panel\n');
   chk('una tarea sigue pidiendo su fecha', /id="lf-vence"/.test(bloque));
 }
 
+console.log('\nLa ficha no perdió nada del panel\n');
+{
+  // Comparación sistemática contra el panel, que es de donde vino la gente.
+  // Cada una de estas faltaba de verdad y se notó usándola.
+  chk('el campo Notas se VE (se escribe al crear y al editar)',
+      /l\.notes[\s\S]{0,120}'<div class="lf-tit">Notas<\/div>'/.test(bloque));
+  chk('está «Nota al responsable», con la clase que revela el permiso',
+      /class="btn-ghost sm crm-nota-btn" style="display:none"/.test(bloque) &&
+      /crmNotaAbrir\(/.test(bloque));
+  // `crmRevelarNotas` es quien la enseña al dueño y a los administradores: sin
+  // llamarla, el botón se queda oculto para todo el mundo.
+  chk('y alguien la revela después de pintar',
+      /if \(typeof crmRevelarNotas === 'function'\) crmRevelarNotas\(\);/.test(bloque));
+  chk('está el Copiloto', /crmCopilotToggle\(\)/.test(bloque));
+  chk('se puede eliminar el contacto', /onclick="lfBorrar\(\)"/.test(bloque));
+  // Borrar cierra el PANEL, no la ficha: se quedaba abierta sobre un fantasma.
+  chk('y al borrarlo la ficha se cierra',
+      /async function lfBorrar\(\)[\s\S]{0,260}lfCerrar\(\);/.test(bloque));
+  // Una fecha de cierre pasada es lo que decide a quién llamar hoy.
+  chk('una fecha de cierre vencida se avisa, no se lee como una fecha más',
+      /lfCierreVencido\(l\) \? '<span class="lf-vencida">'/.test(bloque) &&
+      /\.lf-vencida\{[^}]*color:var\(--danger\)/.test(css));
+  chk('y un lead ya cerrado no la enseña vencida',
+      /crmIsWonStage\(l\.stage\) \|\| crmIsLostStage\(l\.stage\)\) return false;/.test(bloque));
+}
+
 console.log('\nSe puede editar el contacto\n');
 {
   // La ficha nació de solo lectura: enseñaba el correo y el teléfono sin

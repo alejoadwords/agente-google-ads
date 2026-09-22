@@ -38301,6 +38301,10 @@ function lfPintar() {
       '<div class="lf-col' + (lfPestana === 'pasado' ? ' visible' : '') + '">' + lfQuePaso(l) + '</div>' +
       '<div class="lf-col tercera' + (lfPestana === 'hacer' ? ' visible' : '') + '">' + lfQueFalta(l) + '</div>' +
     '</div>';
+
+  // El permiso llega por consulta, así que el botón de «Nota al responsable»
+  // se revela cuando se sepa, sin frenar el pintado. Igual que en el panel.
+  if (typeof crmRevelarNotas === 'function') crmRevelarNotas();
 }
 
 /** Las mismas acciones del panel: se reutilizan sus funciones, no se copian. */
@@ -38315,8 +38319,37 @@ function lfAcciones(l) {
   // `crmDetailLead`, que la ficha deja apuntando al mismo lead al abrirse.
   b.push('<button class="btn-ghost sm" onclick="crmSendLeadToConsultor()">Enviar al Consultor</button>');
   b.push('<button class="btn-ghost sm" onclick="agnScheduleForLead()">Agendar</button>');
+  // El Copiloto vive en un panel `position:fixed` FUERA del panel lateral, así
+  // que se abre igual desde aquí: solo necesita `crmDetailLead`.
+  b.push('<button class="btn-ghost sm" onclick="crmCopilotToggle()">' + icn('sparkles', 12) + ' Copiloto</button>');
+  // Nace oculto y lo revela `crmRevelarNotas()` solo para el dueño y los
+  // administradores, con la clase que esa función busca. Igual que en el panel.
+  b.push('<button class="btn-ghost sm crm-nota-btn" style="display:none" ' +
+    'onclick="crmNotaAbrir(\'' + esc(l.id) + '\')" ' +
+    'title="Deja una instrucción a quien lleva este lead: le llega por correo y en la campana">' +
+    icn('file', 12) + ' Nota al responsable</button>');
   b.push('<button class="btn-pri sm" onclick="prpOpenForLead()">Propuesta</button>');
   return b.join('');
+}
+
+/** ¿Se le pasó la fecha de cierre y sigue abierto? */
+function lfCierreVencido(l) {
+  if (!l.expected_close_date) return false;
+  if (crmIsWonStage(l.stage) || crmIsLostStage(l.stage)) return false;
+  return new Date(l.expected_close_date + 'T23:59:59') < new Date();
+}
+
+/**
+ * Borrar el contacto, y cerrar la ficha detrás.
+ *
+ * `crmDeleteCurrentLead` cierra el PANEL, no la ficha: sin esto se quedaba
+ * abierta enseñando un lead que ya no existe, y cualquier botón habría
+ * trabajado sobre un fantasma.
+ */
+async function lfBorrar() {
+  const id = lfLead && lfLead.id;
+  await crmDeleteCurrentLead();
+  if (id && !(crmLeads || []).some(l => l.id === id)) lfCerrar();
 }
 
 function lfQuienEs(l) {
@@ -38340,9 +38373,23 @@ function lfQuienEs(l) {
       fila('Fuente', esc(fuenteLabel(l.source))) +
       (l.value ? fila('Valor', '<b>$' + Number(l.value).toLocaleString('es-CO') + '</b>') : '') +
       fila('Cierre esperado', l.expected_close_date
-        ? esc(new Date(l.expected_close_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }))
+        // Vencida y el lead abierto: el panel lo avisaba con un triángulo y la
+        // ficha lo enseñaba como una fecha más. Una fecha de cierre pasada es
+        // lo que decide a quién llamar hoy.
+        ? (lfCierreVencido(l) ? '<span class="lf-vencida">' + icn('alert', 12) + ' ' : '<span>') +
+          esc(new Date(l.expected_close_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })) +
+          '</span>'
         : '<span style="color:var(--muted2)">sin fecha</span>') +
     '</div>' +
+
+    // El campo `notes` se escribe al crear y al editar, y la ficha no lo
+    // enseñaba en ningún sitio: lo que alguien apuntó ahí era invisible.
+    (l.notes
+      ? '<div class="lf-caja">' +
+          '<div class="lf-tit">Notas</div>' +
+          '<div class="lf-notas">' + actTexto(l.notes) + '</div>' +
+        '</div>'
+      : '') +
 
     '<div class="lf-caja">' +
       '<div class="lf-tit">Etiquetas</div>' +
@@ -38365,7 +38412,11 @@ function lfQuienEs(l) {
       ? '<div class="lf-caja"><div class="lf-tit">De dónde vino</div>' +
         (pagina ? fila('Página', esc(String(pagina))) : '') +
         (campana ? fila('Campaña', esc(String(campana))) : '') + '</div>'
-      : '');
+      : '') +
+
+    // Al final de la columna y no en la barra de arriba: borrar no se deshace,
+    // y no puede estar a un dedo de «Llamar».
+    '<button class="lf-borrar" onclick="lfBorrar()">Eliminar este contacto</button>';
 }
 
 // ── Columna 2 · Qué ha pasado ───────────────────────────────────────────────

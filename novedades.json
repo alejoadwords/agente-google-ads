@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-la-ficha-completa",
+   "fecha": "2026-09-22",
+   "tipo": "mejora",
+   "titulo": "La ficha ya tiene todo lo que tenía el panel",
+   "texto": "Repasamos una por una las opciones del panel lateral y devolvimos a la ficha las que se habían quedado fuera. Vuelven las <b>Notas</b> del contacto —lo que escribes en ese campo al crearlo o editarlo se ve otra vez; era lo más grave, porque quedaba escrito y no se veía en ninguna parte—, el botón <b>Nota al responsable</b> para dueños y administradores, el <b>Copiloto</b>, el <b>Enlace</b> al registrar actividad y la opción de <b>eliminar</b> el contacto, al final de la primera columna para que no quede junto a los botones de uso diario. Además, si la fecha de cierre ya pasó y el contacto sigue abierto, te lo marcamos en rojo en vez de enseñarla como una fecha cualquiera."
+  },
+  {
    "id": "2026-09-22-editar-contacto-arreglado",
    "fecha": "2026-09-22",
    "tipo": "arreglo",

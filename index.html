@@ -1396,6 +1396,19 @@ body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 .lf-log.fallo{color:var(--danger)}
 .lf-log .cuando{font-size:11px;color:var(--muted2);margin-top:2px}
 
+/* Las notas del contacto: texto libre, tal como lo escribieron. */
+.lf-notas{font-size:13px;line-height:1.6;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Una fecha de cierre que ya pasó con el lead abierto. En el panel llevaba su
+   triángulo rojo y en la ficha salía como una fecha más. */
+.lf-vencida{display:inline-flex;align-items:center;gap:5px;color:var(--danger);font-weight:700}
+
+/* Borrar no se deshace: va al final de la columna, en gris, y solo se tiñe de
+   rojo cuando el puntero está encima. */
+.lf-borrar{width:100%;background:none;border:1px dashed var(--border);border-radius:var(--r);
+  padding:9px;font-family:var(--font);font-size:12px;font-weight:600;color:var(--muted2);cursor:pointer}
+.lf-borrar:hover{border-color:var(--danger);border-style:solid;color:var(--danger);background:var(--danger-bg)}
+
 /* Campañas: qué envíos masivos le tocaron y qué hizo con ellos */
 .lf-envio{display:flex;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--border);
   border-radius:var(--r);margin-bottom:7px;background:var(--bg-subtle);font-size:12.5px}
