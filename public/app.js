@@ -20655,7 +20655,12 @@ function crmDetailRemoveTag(name) {
 function crmCloseDetail() {
   document.getElementById('crm-detail-overlay').classList.remove('open');
   document.getElementById('crm-detail-panel').classList.remove('open');
-  crmDetailLead = null;
+  // Cerrar el PANEL no puede dejar sin lead a la FICHA. Las acciones que se
+  // reutilizan —agendar, propuesta— cierran el panel antes de abrir lo suyo, y
+  // al anular esto aquí la siguiente acción de la ficha se encontraba
+  // `crmDetailLead` en null y no hacía nada, sin decir una palabra. Con la
+  // ficha cerrada (`lfLead` null) se comporta igual que siempre.
+  crmDetailLead = (typeof lfLead !== 'undefined' && lfLead) ? lfLead : null;
 }
 
 async function crmLoadLinkedConversations(leadId) {
@@ -20987,6 +20992,7 @@ async function crmChangeStage(newStage) {
   const lead = crmLeads.find(l => l.id === leadId);
   if (lead) lead.stage = newStage;
   crmRender();
+  lfEmbudoRefrescar();
   if (crmIsWonStage(newStage) || crmIsLostStage(newStage)) {
     closeOpenModal(crmDetailLead, newStage, oldStage, () => {
       crmDetailLead.stage = oldStage;
@@ -20994,6 +21000,7 @@ async function crmChangeStage(newStage) {
       const sel = document.getElementById('crm-d-stage');
       if (sel) sel.value = oldStage;
       crmRender();
+      lfEmbudoRefrescar();
     });
     return;
   }
@@ -21006,6 +21013,7 @@ async function crmChangeStage(newStage) {
     const sel = document.getElementById('crm-d-stage');
     if (sel) sel.value = oldStage;
     crmRender();
+    lfEmbudoRefrescar();
   };
   const etapaDestino = (crmStages || []).find(x => x.key === newStage);
   if (etapaDestino && citaAbrir(crmDetailLead, etapaDestino, oldStage, deshacer)) return;
@@ -38065,6 +38073,12 @@ async function crmAbrirFicha(leadId) {
   // proceso— trabajan sobre `crmDetailLead`. Apuntarlo al mismo lead es lo que
   // deja reutilizarlas enteras en vez de escribir una segunda versión de cada
   // una, que acabaría diferenciándose.
+  // `crmCloseDetail()` pone `crmDetailLead = null`, así que va ANTES de
+  // apuntarlo al lead. Estaba después, y dejaba la ficha con `crmDetailLead`
+  // en null: todas las acciones —agendar, propuesta, cambiar de proceso,
+  // cambiar de etapa— empiezan con `if (!crmDetailLead) return;`, así que no
+  // hacían absolutamente nada y sin decir una palabra.
+  crmCloseDetail();
   crmDetailLead = lead;
   lfFiltro = 'todo';
   lfPestana = 'quien';
@@ -38077,7 +38091,6 @@ async function crmAbrirFicha(leadId) {
   _lfCampHtml = '';
   _lfNpsHtml = '';
   if (crmView !== 'lead') lfVistaAnterior = crmView;
-  crmCloseDetail();
   crmSetView('lead');
   lfPintar();                                   // se pinta con lo que ya hay
   await Promise.all([                           // y se completa al llegar
@@ -38138,6 +38151,30 @@ function lfBotonCierre(cual, rotulo, clase) {
 }
 
 // ── El dibujo ───────────────────────────────────────────────────────────────
+
+/**
+ * Repinta SOLO el embudo de la ficha, si está abierta.
+ *
+ * `crmChangeStage` llamaba a `crmRender()`, que repinta el TABLERO. Mientras el
+ * clic en un lead abría el panel eso bastaba —la etapa era un desplegable y el
+ * navegador lo actualizaba solo—, pero desde que el clic abre la ficha la etapa
+ * se cambia en el embudo, que son divs pintados a mano: nadie los repintaba y
+ * parecía que el cambio no se había hecho hasta refrescar.
+ *
+ * Solo el embudo y no `lfPintar()` entera: repintarla se llevaría por delante
+ * una nota a medio escribir en «Registrar actividad».
+ */
+function lfEmbudoRefrescar() {
+  // Sin mirar `crmView`: basta que el embudo esté en el DOM. Condicionarlo a
+  // un global es justo cómo se rompió esto —repintar un embudo que no se ve no
+  // cuesta nada, y no repintarlo cuesta que el cliente crea que no guardó—.
+  if (!lfLead) return;
+  const viejo = document.querySelector('#crm-lead-view .lf-embudo');
+  if (!viejo) return;
+  const caja = document.createElement('div');
+  caja.innerHTML = lfEmbudo();
+  if (caja.firstElementChild) viejo.replaceWith(caja.firstElementChild);
+}
 
 function lfPintar() {
   const host = document.getElementById('crm-lead-view');
@@ -39124,6 +39161,8 @@ async function citaGuardar() {
     document.getElementById('cita-modal')?.remove();
     _citaCtx = null;
     if (typeof crmLoadLeads === 'function') { await crmLoadLeads(); crmRender(); }
+    // Si se agendó desde la ficha, su embudo también tiene que enterarse.
+    lfEmbudoRefrescar();
     showToast(d.gcal_warning
       ? 'Cita agendada en Acuarius · ' + d.gcal_warning
       : d.gcal_synced ? '📅 Cita agendada y enviada a Google Calendar' : '📅 Cita agendada', 'success');

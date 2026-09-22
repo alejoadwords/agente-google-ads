@@ -216,6 +216,12 @@ function comoComercial() {
   document.getElementById('estilos-reales').textContent =
     (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
 
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    return js.slice(a, js.indexOf(hasta, a));
+  };
+
   const codigo = [
     (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
     js.slice(js.indexOf('const ICN_PATHS = {'), js.indexOf('// ── AUTOMATIZACIONES DEL CRM')),
@@ -238,7 +244,13 @@ function comoComercial() {
     'function agnScheduleForLead(){showToast("Abriría el agendador")}',
     'function prpOpenForLead(){showToast("Abriría la propuesta")}',
     'function crmSendLeadToConsultor(){showToast("Iría al Consultor")}',
-    'function crmChangeStage(k){lfLead.stage=k;lfPintar();showToast("Etapa: "+k)}',
+    // La función REAL de cambiar de etapa, con la red sustituida. Era un
+    // sustituto que repintaba la ficha entera, y por eso el banco no vio que
+    // la de verdad solo repinta el TABLERO: en la ficha no se movía nada.
+    trozo('async function crmChangeStage(', '\n// Una llamada o una nota registrada por error'),
+    'function crmRender(){} function crmRenderKanban(){} function closeOpenModal(){} function crmRenderNps(){}',
+    'function citaAbrir(){return false} async function crmLoadActivities(){}',
+    'var crmLeads=[];',
     'function crmTareaHecha(id,h){showToast(h?"Tarea hecha":"Tarea reabierta")}',
     'function crmOpenConvFromDetail(){showToast("Abriría el inbox")}',
     // Los estados de la propuesta salen del módulo de propuestas, que en la
