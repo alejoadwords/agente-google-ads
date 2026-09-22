@@ -37,10 +37,21 @@ export async function dondePreguntar({ fila, token, customerId, devToken, sbUrl,
   const cid = String(customerId || '').replace(/-/g, '');
   if (!cid || !token || !devToken) return null;
 
-  // Ya se averiguó antes. Se distingue «no hace falta cabecera» (cadena vacía)
-  // de «todavía no se ha mirado» (undefined): sin esa distinción se repetiría
-  // la búsqueda entera en cada carga para las cuentas de primera mano.
-  const guardado = fila?.extra_data?.login_customer_id;
+  // Lo averiguado se guarda POR CUENTA DE GOOGLE, no por conexión.
+  //
+  // La primera versión guardaba un solo `login_customer_id` en la conexión.
+  // Vale para `api/pauta.js`, donde cada conexión es de un cliente. NO vale
+  // aquí: una agencia tiene UNA conexión de Google que sirve a once cuentas,
+  // y cada una puede colgar de un administrador distinto —o de ninguno—. Con
+  // una sola casilla, la primera cuenta que se resolviera dejaría su
+  // administrador puesto para todas las demás.
+  //
+  // Se mira primero el mapa por cuenta y luego la casilla vieja, que se
+  // conserva para no volver a buscar lo que ya se sabía.
+  const extra = fila?.extra_data || {};
+  const porCuenta = extra.login_por_cuenta || {};
+  const guardado = porCuenta[cid] !== undefined ? porCuenta[cid]
+    : (extra.login_customer_id !== undefined && String(fila?.account_id || '') === cid ? extra.login_customer_id : undefined);
   if (guardado !== undefined && guardado !== null) return guardado || null;
 
   const h = { Authorization: `Bearer ${token}`, 'developer-token': devToken };
@@ -67,15 +78,29 @@ export async function dondePreguntar({ fila, token, customerId, devToken, sbUrl,
         if (filas.some(x => String(x.customerClient?.id) === cid)) { elegido = m; break; }
       } catch { /* un administrador que no contesta no puede parar la búsqueda */ }
     }
-    if (elegido === null) return null;   // no se encontró: que el llamador decida
+    // No se encontró camino a esa cuenta. Se anota igualmente: sin esto, cada
+    // carga de la pantalla repetiría la búsqueda entera —una llamada por
+    // administrador— contra Google, para volver a fallar igual.
+    if (elegido === null) {
+      await guardar(fila, cid, null, sbUrl, sbKey);
+      return null;
+    }
   }
 
-  if (fila?.id && sbUrl && sbKey) {
-    await fetch(`${sbUrl}/rest/v1/platform_connections?id=eq.${fila.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', apikey: sbKey, Authorization: `Bearer ${sbKey}` },
-      body: JSON.stringify({ extra_data: { ...(fila.extra_data || {}), login_customer_id: elegido } }),
-    }).catch(() => {});
-  }
+  await guardar(fila, cid, elegido, sbUrl, sbKey);
   return elegido || null;
+}
+
+// `null` significa «se buscó y no hay camino»; se guarda igual para no repetir
+// la búsqueda. La cadena vacía significa «se llega directo, sin cabecera».
+async function guardar(fila, cid, valor, sbUrl, sbKey) {
+  if (!fila?.id || !sbUrl || !sbKey) return;
+  const extra = fila.extra_data || {};
+  await fetch(`${sbUrl}/rest/v1/platform_connections?id=eq.${fila.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', apikey: sbKey, Authorization: `Bearer ${sbKey}` },
+    body: JSON.stringify({
+      extra_data: { ...extra, login_por_cuenta: { ...(extra.login_por_cuenta || {}), [cid]: valor } },
+    }),
+  }).catch(() => {});
 }

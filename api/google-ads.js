@@ -28,7 +28,7 @@ async function getConexionGoogle(userId) {
   if (!userId || !SUPABASE_URL) return null;
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_ads&select=id,extra_data&limit=1`,
+      `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_ads&select=id,account_id,extra_data&limit=1`,
       { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
     );
     return res.ok ? ((await res.json())?.[0] || null) : null;
