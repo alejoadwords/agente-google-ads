@@ -19943,32 +19943,6 @@ function crmSetupDrop(el, stageKey) {
     if (!lead || lead.stage === stageKey) return;
     const oldStage = lead.stage;
     lead.stage = stageKey;
-    // Vigilante: quién le devuelve la etapa vieja a ESTE objeto.
-    //
-    // Va aquí y no después de guardar —donde estaba, y por eso no cazó nada—:
-    // la tarjeta vuelve al instante, o sea mientras aún se espera al servidor.
-    // Un instrumento que llega tarde no mide nada y encima hace creer que no
-    // hay nada que medir.
-    try {
-      let real = stageKey;
-      Object.defineProperty(lead, 'stage', {
-        configurable: true,
-        // `enumerable` sí: sin él el lead dejaría de serializarse con su etapa
-        // y romperíamos justo lo que venimos a mirar.
-        enumerable: true,
-        get() { return real; },
-        set(v) {
-          if (v !== stageKey && typeof errRegistrar === 'function') {
-            const pila = String(new Error('quien').stack || '')
-              .split('\n').slice(1, 7).map(s => s.trim()).join('  <=  ');
-            errRegistrar('devuelve la tarjeta a ' + v + ' (se soltó en ' + stageKey + ') · ' + pila,
-              'tablero/mover');
-          }
-          real = v;
-        },
-      });
-      setTimeout(() => { try { delete lead.stage; lead.stage = real; } catch {} }, 8000);
-    } catch {}
     crmRenderKanban();
     // Ganado/Perdido piden el detalle del cierre antes de confirmar el movimiento
     if (crmIsWonStage(stageKey) || crmIsLostStage(stageKey)) {
@@ -39428,7 +39402,16 @@ function citaSugerida() {
 
 function citaAbrir(lead, stage, prevStage, onCancel) {
   const cfg = etapaAlEntrar(stage.key);
-  if (!cfg) { onCancel?.(); return false; }
+  // Sin cita configurada no hay nada que preguntar: se devuelve `false` y el
+  // que llamó sigue con lo suyo.
+  //
+  // Aquí se llamaba a `onCancel()`, y `onCancel` significa «el usuario dijo
+  // que no», no «no había nada que hacer». Ese callback DESHACE el movimiento
+  // —devuelve la tarjeta a su columna y repinta—, así que en toda cuenta cuyo
+  // destino no tuviera cita configurada, que son casi todas, arrastrar un lead
+  // lo guardaba en el servidor y lo devolvía en pantalla. Al recargar aparecía
+  // movido, y parecía que la aplicación tardaba en confirmar.
+  if (!cfg) return false;
   _citaCtx = { lead, stage, prevStage, onCancel, cfg };
   const sug = citaSugerida();
   const ov = document.createElement('div');
