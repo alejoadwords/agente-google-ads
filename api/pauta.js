@@ -19,6 +19,7 @@ export const config = { runtime: 'edge' };
 
 import { quienPregunta, exigeModulo, soloSusLeads, alcanceDeCliente } from './_perfiles.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { dondePreguntar } from './_google-login.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -155,39 +156,14 @@ async function refrescarGoogle(fila) {
 //
 // La respuesta se guarda en la conexión: averiguarla cuesta una llamada por
 // cada administrador al que llega el usuario, y no tiene sentido repetirlo.
+// Se delega en el módulo compartido: `api/google-ads.js` tenía su propia
+// versión —incompleta— y devolvía «does not have permission» a los clientes
+// con administrador propio. Una sola implementación, probada en los dos.
 async function porDondePreguntar(fila, token, cid) {
-  const guardado = fila.extra_data && fila.extra_data.login_customer_id;
-  if (guardado !== undefined && guardado !== null) return guardado || null;
-
-  const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN };
-  const la = await fetch('https://googleads.googleapis.com/v22/customers:listAccessibleCustomers', { headers: h });
-  if (!la.ok) throw new Error('google-auth:no se pudo listar las cuentas accesibles');
-  const alcance = ((await la.json()).resourceNames || []).map(n => n.split('/').pop());
-
-  let elegido = null;
-  if (alcance.includes(cid)) {
-    elegido = '';              // se llega directo: no hace falta cabecera
-  } else {
-    for (const m of alcance) {
-      try {
-        const r = await fetch(`https://googleads.googleapis.com/v22/customers/${m}/googleAds:search`, {
-          method: 'POST',
-          headers: { ...h, 'Content-Type': 'application/json', 'login-customer-id': m },
-          body: JSON.stringify({ query: 'SELECT customer_client.id FROM customer_client' }),
-        });
-        if (!r.ok) continue;
-        const filas = (await r.json()).results || [];
-        if (filas.some(x => String(x.customerClient?.id) === cid)) { elegido = m; break; }
-      } catch { /* un administrador que no contesta no puede parar la búsqueda */ }
-    }
-    if (elegido === null) throw new Error('google-auth:el permiso no llega a esa cuenta');
-  }
-
-  await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?id=eq.${fila.id}`, {
-    method: 'PATCH', headers: sbHeaders(),
-    body: JSON.stringify({ extra_data: { ...(fila.extra_data || {}), login_customer_id: elegido } }),
-  }).catch(() => {});
-  return elegido || null;
+  return dondePreguntar({
+    fila, token, customerId: cid, devToken: DEV_TOKEN,
+    sbUrl: SUPABASE_URL, sbKey: SUPABASE_KEY,
+  });
 }
 
 async function gaql(customerId, token, query, login) {

@@ -4,6 +4,7 @@
 // POST sin action → legacy GAQL proxy para backward compat
 
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { dondePreguntar } from './_google-login.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const DEV_TOKEN           = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
@@ -18,6 +19,20 @@ async function getStoredToken(userId) {
   );
   const rows = await res.json();
   return await abrirConexion(rows?.[0] || null);
+}
+
+// La fila de la conexión, solo con lo que necesita `dondePreguntar` para
+// guardar el administrador que encuentre. No se amplía `getStoredToken`
+// porque esa descifra tokens y la usan otros cinco sitios.
+async function getConexionGoogle(userId) {
+  if (!userId || !SUPABASE_URL) return null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_ads&select=id,extra_data&limit=1`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    );
+    return res.ok ? ((await res.json())?.[0] || null) : null;
+  } catch { return null; }
 }
 
 async function refreshGoogleToken(refreshToken) {
@@ -149,6 +164,37 @@ async function gaqlRequest(customerId, query, accessToken, userId) {
     // Si tampoco, se conserva el error del PRIMER intento: es el que describe
     // el caso normal y el que el cliente necesita leer.
     if (!sinPermisoGA(data2)) data = data2;
+  }
+
+  // Tercer intento: el administrador DEL CLIENTE.
+  //
+  // Los dos de arriba cubren la cuenta de primera mano y la que cuelga de
+  // nuestro administrador. Faltaba la que cuelga del administrador del propio
+  // cliente —el caso de una inmobiliaria con su propia estructura—, que daba
+  // «The caller does not have permission» 18 veces entre el 16 y el 22-09-2026
+  // desde la ficha de un lead. Se busca cuál es y se guarda en la conexión,
+  // así que esta búsqueda se paga una sola vez por cuenta.
+  if (sinPermisoGA(data) && userId) {
+    try {
+      const fila = await getConexionGoogle(userId);
+      const login = await dondePreguntar({
+        fila, token, customerId, devToken: DEV_TOKEN,
+        sbUrl: SUPABASE_URL, sbKey: SUPABASE_SERVICE_KEY,
+      });
+      if (login) {
+        const res3 = await fetch(`https://googleads.googleapis.com/v${ver}/customers/${customerId}/googleAds:search`, {
+          method: 'POST',
+          headers: { ...makeHeaders(token, false), 'login-customer-id': login },
+          body: JSON.stringify({ query }),
+        });
+        const data3 = await res3.json().catch(() => ({}));
+        if (!sinPermisoGA(data3)) data = data3;
+      }
+    } catch (e) {
+      // Que falle AVERIGUAR el administrador no puede empeorar el error que ya
+      // se iba a devolver: se deja el de antes, que es el que describe el caso.
+      console.error('[google-ads] no se pudo averiguar el administrador:', e?.message);
+    }
   }
 
   return data;
