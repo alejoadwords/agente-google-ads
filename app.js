@@ -17613,6 +17613,9 @@ async function crmLoadLeads() {
     }
     if (data.actor_id) crmMiId = data.actor_id;
     crmSoyMiembro = !!data.es_miembro;
+    // Solo quien tiene el tablero acotado necesita preguntarle al servidor si
+    // un contacto ya existe: los demás lo ven en su propio buscador.
+    crmSoloMios = !!data.solo_mios;
     crmLeadsLoaded = true;
     crmFalloResuelto('leads');
     crmRender();
@@ -17935,6 +17938,7 @@ function crmRender() {
 // ofrecer botones que iban a rebotar con un 403.
 let crmMiId = '';
 let crmSoyMiembro = false;
+let crmSoloMios = false;   // perfil Ventas: solo ve los leads que le asignaron
 
 function puedoGestionar(lead) {
   if (!crmSoyMiembro) return true;
@@ -18798,6 +18802,7 @@ function crmExportCSV() {
 
 function crmSetSearch(q) {
   crmSearchQuery = q;
+  existeBuscar(q);
   crmRender();
   crmUpdateLeadsStats();
 }
@@ -39220,4 +39225,71 @@ async function citaGuardar() {
     if (msg) msg.textContent = e.message || 'No se pudo agendar';
     if (btn) { btn.disabled = false; btn.textContent = 'Agendar y mover'; }
   }
+}
+
+// ─── ¿ESTE CONTACTO YA EXISTE? ───────────────────────────────────────────────
+// Un asesor de Ventas solo ve los leads que le asignaron —y está bien: no debe
+// encontrarse la cartera entera el día que entra—. Pero entonces su buscador no
+// le sirve para lo más básico antes de llamar a alguien: saber si ya está en el
+// CRM. Dos asesores acababan llamando al mismo contacto.
+//
+// Al buscar se le pregunta también al servidor por lo que NO está en su alcance
+// y se pinta aparte, con lo justo para no repetir trabajo: etapa y de quién es.
+// Ni correo, ni teléfono, ni valor, ni notas: eso sigue siendo de su dueño.
+
+let _existeUltima = '';
+let _existeTimer = null;
+
+function existeBuscar(q) {
+  clearTimeout(_existeTimer);
+  const caja = document.getElementById('crm-existe');
+  if (!crmSoloMios || !q || q.trim().length < 3) { if (caja) caja.remove(); _existeUltima = ''; return; }
+  // Se espera a que deje de escribir: una consulta por tecla es una consulta
+  // por tecla a la base de toda la cuenta.
+  _existeTimer = setTimeout(() => existeConsultar(q.trim()), 450);
+}
+
+async function existeConsultar(q) {
+  if (q === _existeUltima) return;
+  _existeUltima = q;
+  try {
+    const cli = crmAmbitoCliente();
+    const r = await fetchAuth('/api/leads?existe=' + encodeURIComponent(q) +
+      (cli ? '&client_id=' + encodeURIComponent(cli) : ''));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || '');
+    // Los que ya son suyos salen en el tablero: repetirlos aquí confunde.
+    existePintar(q, (d.coincidencias || []).filter(c => !c.mio));
+  } catch { existePintar(q, null); }
+}
+
+function existePintar(q, lista) {
+  document.getElementById('crm-existe')?.remove();
+  if (!lista || !lista.length) return;
+  const cont = document.getElementById('crm-kanban');
+  if (!cont || !cont.parentNode) return;
+  const div = document.createElement('div');
+  div.id = 'crm-existe';
+  div.style.cssText = 'margin:0 0 12px;border:1px solid var(--border);border-radius:12px;background:var(--panel);overflow:hidden';
+  div.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg);border-bottom:1px solid var(--border)">' +
+      icn('users', 14) +
+      '<div style="font-size:12.5px;font-weight:700">' + lista.length +
+        (lista.length === 1 ? ' contacto ya está en el CRM' : ' contactos ya están en el CRM') +
+        ', a nombre de otra persona</div>' +
+      '<div style="flex:1"></div>' +
+      '<span style="font-size:11px;color:var(--muted2)">solo para no repetir trabajo</span>' +
+    '</div>' +
+    lista.map(c =>
+      '<div style="display:flex;align-items:center;gap:10px;padding:9px 13px;border-top:1px solid var(--border);font-size:12.5px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.name || 'Sin nombre') + '</div>' +
+          (c.company ? '<div style="color:var(--muted2);font-size:11.5px">' + esc(c.company) + '</div>' : '') +
+        '</div>' +
+        '<span style="flex:none;padding:3px 9px;border-radius:20px;background:var(--blue-lt,var(--bg));color:var(--blue);font-size:11px;font-weight:700">' +
+          esc(c.etapa || 'sin etapa') + '</span>' +
+        '<span style="flex:none;color:var(--muted);font-size:11.5px">' +
+          (c.asesor ? esc(c.asesor) : 'sin asignar') + '</span>' +
+      '</div>').join('');
+  cont.parentNode.insertBefore(div, cont);
 }

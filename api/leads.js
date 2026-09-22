@@ -437,6 +437,54 @@ export default async function handler(req) {
     const stage = url.searchParams.get('stage');
     // Sin pipeline_id devuelve todos, como antes: asi la app sigue viva si la
     // migracion de pipelines aun no se ha corrido.
+    // ── ¿Este contacto ya existe? ───────────────────────────────────────────
+    //
+    // Un asesor de Ventas solo ve los leads que le asignaron, y eso está bien:
+    // no debe encontrarse la cartera entera el día que entra. Pero entonces su
+    // buscador tampoco le sirve para lo más básico antes de llamar a alguien
+    // —«¿esto ya está en el CRM?»— y dos asesores acaban llamando al mismo.
+    //
+    // Este modo busca en TODA la cuenta y devuelve lo mínimo para no repetir
+    // trabajo: el nombre, la etapa y de quién es. Nada de correo, teléfono,
+    // valor ni notas: eso sigue siendo de su dueño.
+    if (url.searchParams.get('existe')) {
+      const q = String(url.searchParams.get('existe')).trim();
+      // Tres caracteres como mínimo: con uno o dos, «buscar» es listar la base.
+      if (q.length < 3) return jsonResp({ coincidencias: [], corto: true });
+      const como = `*${q.replace(/[(),*]/g, ' ')}*`;
+      const filas = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}` +
+        `&or=(name.ilike.${encodeURIComponent(como)},company.ilike.${encodeURIComponent(como)},` +
+        `email.ilike.${encodeURIComponent(como)},phone.ilike.${encodeURIComponent(como)})` +
+        `&select=id,name,company,stage,pipeline_id,assigned_to,assigned_name&order=created_at.desc&limit=10`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+      // La etiqueta de la etapa sale del pipeline de CADA lead: un asesor puede
+      // encontrar uno que vive en otro proceso de venta, con otras etapas, y
+      // devolver la clave cruda («propuesta») no le dice nada a nadie.
+      const etapas = {};
+      const pipes = [...new Set((filas || []).map(f => f.pipeline_id).filter(Boolean))];
+      if (pipes.length) {
+        const st = await fetch(
+          `${SUPABASE_URL}/rest/v1/pipeline_stages?pipeline_id=in.(${pipes.join(',')})&select=pipeline_id,key,label`,
+          { headers: sbHeaders() }
+        ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+        for (const e of (st || [])) etapas[e.pipeline_id + '|' + e.key] = e.label;
+      }
+
+      return jsonResp({
+        coincidencias: (filas || []).map(f => ({
+          id: f.id, name: f.name, company: f.company,
+          etapa: etapas[f.pipeline_id + '|' + f.stage] || f.stage,
+          // Mismo aseo que en las variables de los correos: hay nombres
+          // guardados con un TABULADOR dentro.
+          asesor: String(f.assigned_name || '').replace(/\s+/g, ' ').trim() || null,
+          mio: !!f.assigned_to && f.assigned_to === actorId,
+        })),
+      });
+    }
+
     const pipelineId = url.searchParams.get('pipeline_id');
     // El más reciente arriba. Antes mandaba `stage_position.asc`, que es orden
     // de creación ASCENDENTE: el tablero abría por los leads más viejos, que

@@ -2,18 +2,11 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
-   "id": "2026-09-22-guardar-dice-que-paso",
+   "id": "2026-09-22-buscar-si-ya-existe",
    "fecha": "2026-09-22",
-   "tipo": "mejora",
-   "titulo": "Al guardar un contacto ahora te decimos qué pasó",
-   "texto": "Si al crear o editar un contacto algo fallaba, el botón se limitaba a poner Â«Error — reintentarÂ» y no decía nada más: no sabías si era el teléfono, un dato que falta o que se cayó la conexión, así que solo quedaba reintentar lo mismo a ver si sonaba. Ahora el motivo aparece escrito encima del botón, con las palabras exactas del problema. Y nos queda registrado, para que si te vuelve a pasar podamos mirar qué ocurrió en vez de pedirte una captura."
-  },
-  {
-   "id": "2026-09-22-editar-desde-la-ficha",
-   "fecha": "2026-09-22",
-   "tipo": "arreglo",
-   "titulo": "Arreglos en la ficha del contacto",
-   "texto": "Si abriste una ficha y los botones no respondían —agendar, propuesta, cambiar de proceso o mover de etapa— ya está corregido: la ficha perdía la referencia al contacto y las acciones se quedaban quietas sin avisar. Por eso mover un lead de etapa desde la ficha no guardaba nada y parecía que había que refrescar. Además, la caja de Información ahora tiene su botón «Editar», con el mismo formulario de siempre, para cambiar correo, teléfono, empresa, valor, fecha de cierre y etiquetas sin salir de la ficha."
+   "tipo": "nuevo",
+   "titulo": "Tus asesores ya pueden comprobar si un contacto está repetido",
+   "texto": "Un asesor con perfil Ventas solo ve los contactos que le asignaste, y así debe seguir siendo. El problema era que tampoco podía comprobar lo más básico antes de llamar a alguien: si ese contacto ya está en el CRM. Dos asesores acababan llamando a la misma persona. Ahora, cuando busca en el CRM, además de sus contactos le aparece un aviso si el que busca ya existe a nombre de otra persona: verá el nombre, en qué etapa está y quién lo trabaja, para que pueda hablarlo con su compañero. Nada más: ni el correo, ni el teléfono, ni el valor, ni las notas. Esos siguen siendo solo de su dueño."
   },
   {
    "id": "2026-09-22-google-ads-permisos",
@@ -70,6 +63,20 @@
    "tipo": "arreglo",
    "titulo": "Vuelve el selector de procesos de venta",
    "texto": "Si tenías más de un proceso de venta, el selector para cambiar entre ellos había desaparecido del tablero: tus procesos seguían ahí, pero la pantalla no conseguía cargarlos. El mismo fallo afectaba a los agentes de chat, las propuestas, las respuestas rápidas y la sincronización del catálogo, que respondían «no se pudo verificar tu cuenta». Ya está corregido en todos."
+  },
+  {
+   "id": "2026-09-22-guardar-dice-que-paso",
+   "fecha": "2026-09-22",
+   "tipo": "mejora",
+   "titulo": "Al guardar un contacto ahora te decimos qué pasó",
+   "texto": "Si al crear o editar un contacto algo fallaba, el botón se limitaba a poner Â«Error — reintentarÂ» y no decía nada más: no sabías si era el teléfono, un dato que falta o que se cayó la conexión, así que solo quedaba reintentar lo mismo a ver si sonaba. Ahora el motivo aparece escrito encima del botón, con las palabras exactas del problema. Y nos queda registrado, para que si te vuelve a pasar podamos mirar qué ocurrió en vez de pedirte una captura."
+  },
+  {
+   "id": "2026-09-22-editar-desde-la-ficha",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Arreglos en la ficha del contacto",
+   "texto": "Si abriste una ficha y los botones no respondían —agendar, propuesta, cambiar de proceso o mover de etapa— ya está corregido: la ficha perdía la referencia al contacto y las acciones se quedaban quietas sin avisar. Por eso mover un lead de etapa desde la ficha no guardaba nada y parecía que había que refrescar. Además, la caja de Información ahora tiene su botón «Editar», con el mismo formulario de siempre, para cambiar correo, teléfono, empresa, valor, fecha de cierre y etiquetas sin salir de la ficha."
   },
   {
    "id": "2026-09-21-ficha-en-el-celular",
