@@ -700,6 +700,14 @@ async function fetchAuth(url, opts = {}) {
   return _fetchAuthRaw(url, opts);
 }
 
+// Se marca cuando el navegador empieza a descargar la página: a partir de ahí,
+// una petición que falla no es una avería, es que nos estamos yendo.
+let _paginaSeVa = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => { _paginaSeVa = true; });
+  window.addEventListener('beforeunload', () => { _paginaSeVa = true; });
+}
+
 async function _fetchAuthRaw(url, opts = {}) {
   const withAuth = async (fresh) => {
     const headers = await getAuthHeaders({ fresh });
@@ -712,7 +720,21 @@ async function _fetchAuthRaw(url, opts = {}) {
   } catch (e) {
     // La red se cayó o el servidor no respondió. Antes esto solo reventaba
     // dentro de quien llamara, y muchas veces en un catch que no decía nada.
-    errRegistrar('sin respuesta del servidor: ' + (e && e.message), 'red ' + String(url).split('?')[0]);
+    //
+    // Pero NO todo «Failed to fetch» es una avería: cuando alguien cierra la
+    // pestaña o navega a otra pantalla con una petición en vuelo, el navegador
+    // la aborta y `fetch` falla exactamente igual. Eso llenó el registro de
+    // «sin respuesta del servidor» en /api/lead-activities —catorce veces en
+    // tres semanas, en tres cuentas— por gente que simplemente cerró la ficha.
+    //
+    // Un registro que llora sin motivo deja de leerse, y entonces no sirve
+    // para lo que sí importa. Se descartan los abortos y lo que pasa con la
+    // pestaña ya oculta o descargándose.
+    const abortada = e && (e.name === 'AbortError' || opts.signal?.aborted);
+    const seVa = typeof document !== 'undefined' && (document.hidden || _paginaSeVa);
+    if (!abortada && !seVa) {
+      errRegistrar('sin respuesta del servidor: ' + (e && e.message), 'red ' + String(url).split('?')[0]);
+    }
     throw e;
   }
   // Sin sesión el reintento volvería a esperar el timeout entero para nada
