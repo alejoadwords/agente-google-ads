@@ -38010,6 +38010,7 @@ async function crmAbrirFicha(leadId) {
   // nada: son datos de otra persona con este nombre encima.
   _lfPropsHtml = '';
   _lfConvsHtml = '';
+  _lfAutosHtml = '';
   if (crmView !== 'lead') lfVistaAnterior = crmView;
   crmCloseDetail();
   crmSetView('lead');
@@ -38273,6 +38274,20 @@ async function lfGuardarActividad() {
 // «Cargando…», se quedarían así para siempre, porque nadie vuelve a pedirlo.
 let _lfPropsHtml = '';
 let _lfConvsHtml = '';
+let _lfAutosHtml = '';
+
+/**
+ * ¿Puede parar una automatización? El servidor exige el módulo Marketing, así
+ * que un comercial VE lo que le va a pasar a su lead pero no lo detiene.
+ * Ofrecerle el botón para que el servidor se lo rechace después sería peor que
+ * no ofrecerlo.
+ *
+ * El dueño no es miembro y no tiene `_miPerfil`: sin la primera mitad, a quien
+ * más permisos tiene se le escondería el botón.
+ */
+const lfPuedeMarketing = () => !crmSoyMiembro ||
+  !!(window._miPerfil && Array.isArray(window._miPerfil.modulos) &&
+     window._miPerfil.modulos.includes('marketing'));
 
 function lfQueFalta(l) {
   const todo = _crmTareasLead || [];
@@ -38319,6 +38334,10 @@ function lfQueFalta(l) {
           }).join('')
         : '<div class="lf-vacio">Ninguna cita agendada.</div>') +
     '</div>' +
+
+    // Esta caja se pinta entera desde el cargador y NO tiene estado vacío: en
+    // una cuenta que no usa automatizaciones sobraría en todas las fichas.
+    '<div id="lf-autos">' + _lfAutosHtml + '</div>' +
 
     '<div class="lf-caja">' +
       '<div class="lf-tit">Propuestas' +
@@ -38412,9 +38431,94 @@ async function lfCargarPropuestas(leadId) {
  */
 function lfGuardarCaja(leadId, id, html) {
   if (lfLead && lfLead.id !== leadId) return;
-  if (id === 'lf-props') _lfPropsHtml = html; else _lfConvsHtml = html;
+  if (id === 'lf-props') _lfPropsHtml = html;
+  else if (id === 'lf-autos') _lfAutosHtml = html;
+  else _lfConvsHtml = html;
   const caja = document.getElementById(id);
   if (caja) caja.innerHTML = html;
+}
+
+/**
+ * Lo que el sistema va a hacerle a este lead por su cuenta, y lo que ya le
+ * hizo.
+ *
+ * Es lo único de la ficha que no depende de que alguien lo escriba: un correo
+ * programado para mañana no lo sabe nadie hasta que sale. De ahí vienen las
+ * dos preguntas de siempre —«¿por qué le llegó esto?» y «¿por qué no le
+ * llegó?»—, y las dos se contestan mirando esto.
+ */
+async function lfCargarAutomatizaciones(leadId) {
+  try {
+    const r = await fetchAuth('/api/automations?lead_id=' + encodeURIComponent(leadId));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const pend = d.pendientes || [];
+    const hechas = d.hechas || [];
+    // Sin nada que contar, ni caja: en una cuenta que no usa automatizaciones
+    // ocuparía sitio en todas las fichas para no decir nada.
+    if (!pend.length && !hechas.length) return lfGuardarCaja(leadId, 'lf-autos', '');
+
+    const puedeParar = lfPuedeMarketing();
+    // Del historial solo lo reciente. Lo que falló va primero, porque es lo
+    // que alguien está buscando cuando abre esto.
+    const ultimas = [...hechas].sort((a, b) => (b.fallo ? 1 : 0) - (a.fallo ? 1 : 0)).slice(0, 3);
+
+    lfGuardarCaja(leadId, 'lf-autos',
+      '<div class="lf-caja">' +
+        '<div class="lf-tit">Automatizaciones' +
+          (pend.length ? '<span class="cuenta">' + pend.length + '</span>' : '') + '</div>' +
+        pend.map(p =>
+          '<div class="lf-auto' + (p.apagada ? ' apagada' : '') + '">' +
+            '<div style="min-width:0">' +
+              '<div>' + esc(p.paso) + '</div>' +
+              '<div class="cuando">' + esc(p.nombre) +
+                (p.run_at ? ' · ' + esc(lfCuando(p.run_at)) : '') +
+                // Una automatización apagada NO cancela sus trabajos en
+                // marcha: el motor los cancela al tocarlos, no antes. Decir
+                // «apagada» a secas haría creer que ya no va a pasar.
+                (p.apagada ? ' · apagada, pero este paso sigue en cola' : '') +
+              '</div>' +
+            '</div>' +
+            (puedeParar
+              ? '<button class="lf-parar" onclick="lfPararAuto(\'' + esc(p.id) + '\')" ' +
+                'title="Cancelar este paso">Parar</button>'
+              : '') +
+          '</div>').join('') +
+        (ultimas.length
+          ? '<div class="lf-tit" style="margin-top:' + (pend.length ? '12px' : '0') + '">Lo último</div>' +
+            ultimas.map(h =>
+              '<div class="lf-log' + (h.fallo ? ' fallo' : '') + '">' +
+                '<b>' + esc(h.accion) + '</b> ' + esc(h.resultado) +
+                // El detalle es la causa: «Resend 422: dominio no verificado»
+                // es lo que se le contesta al cliente que pregunta.
+                (h.fallo && h.detalle ? '<div class="cuando">' + esc(h.detalle) + '</div>' : '') +
+                '<div class="cuando">' + esc(h.nombre) +
+                  (h.created_at ? ' · ' + esc(lfHace(h.created_at)) : '') + '</div>' +
+              '</div>').join('')
+          : '') +
+      '</div>');
+  } catch {
+    lfGuardarCaja(leadId, 'lf-autos',
+      '<div class="lf-caja"><div class="lf-tit">Automatizaciones</div>' +
+      '<div class="lf-vacio">No se pudo consultar qué tiene programado este contacto.</div></div>');
+  }
+}
+
+/** Parar un paso programado. El motor va cada 10 min: puede haber salido ya. */
+async function lfPararAuto(jobId) {
+  if (!lfLead) return;
+  if (!confirm('¿Parar este paso? El resto de la automatización no continuará para este contacto.')) return;
+  try {
+    const r = await fetchAuth('/api/automations?job_id=' + encodeURIComponent(jobId), { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Paso cancelado');
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+  }
+  // Se recarga pase lo que pase: si falló porque el motor ya lo ejecutó, la
+  // fila tiene que desaparecer igualmente, o el botón invitaría a insistir.
+  lfCargarAutomatizaciones(lfLead.id);
 }
 
 /** Las conversaciones del inbox atadas a este lead. */
@@ -38460,6 +38564,7 @@ function lfHace(iso) {
       lfPintar();
       lfCargarConversaciones(lfLead.id);
       lfCargarPropuestas(lfLead.id);
+      lfCargarAutomatizaciones(lfLead.id);
     }
   };
 })();

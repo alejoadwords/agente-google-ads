@@ -128,6 +128,34 @@ console.log('\nCitas y propuestas en la tercera columna\n');
   chk('y al crear una propuesta la ficha se entera', /lfCargarPropuestas\(lfLead\.id\)/.test(js.slice(js.indexOf('async function prpLoad'), js.indexOf('function prpRenderModal'))));
 }
 
+console.log('\nLo que va a pasar solo\n');
+{
+  // Es lo único de la ficha que no depende de que alguien lo escriba. Si se
+  // pinta mal, se pinta creíble: nadie sospecha de una frase razonable.
+  chk('se consulta qué tiene programado el lead',
+      /fetchAuth\('\/api\/automations\?lead_id=' \+ encodeURIComponent\(leadId\)\)/.test(bloque));
+  chk('y un fallo de la consulta se ve', /No se pudo consultar qué tiene programado/.test(bloque));
+  // Apagar una automatización NO cancela sus trabajos en marcha: el motor los
+  // cancela al tocarlos. Decir solo «apagada» haría creer lo contrario.
+  chk('una automatización apagada avisa de que el paso sigue en cola',
+      /apagada, pero este paso sigue en cola/.test(bloque));
+  chk('el detalle del fallo se enseña entero, que es la causa',
+      /h\.fallo && h\.detalle \?/.test(bloque));
+  chk('lo que falló sale primero', /\(b\.fallo \? 1 : 0\) - \(a\.fallo \? 1 : 0\)/.test(bloque));
+  // El servidor exige Marketing para parar. Ofrecer el botón para que lo
+  // rechace después es peor que no ofrecerlo.
+  chk('el botón de parar solo sale a quien el servidor dejará',
+      /const puedeParar = lfPuedeMarketing\(\);/.test(bloque) &&
+      /puedeParar\s*\n?\s*\? '<button class="lf-parar"/.test(bloque));
+  chk('y el dueño, que no tiene _miPerfil, lo ve',
+      /!crmSoyMiembro \|\|[\s\S]{0,180}modulos\.includes\('marketing'\)/.test(bloque));
+  // El motor va cada 10 min: entre pintar y pulsar, el paso pudo salir ya.
+  chk('tras intentar pararlo se recarga aunque haya fallado',
+      /\} catch \(e\) \{[\s\S]{0,140}\}\s*\n\s*\/\/[\s\S]{0,200}lfCargarAutomatizaciones\(lfLead\.id\);\s*\n\}/.test(bloque));
+  chk('sin nada programado ni hecho, la caja no se pinta',
+      /if \(!pend\.length && !hechas\.length\) return lfGuardarCaja\(leadId, 'lf-autos', ''\)/.test(bloque));
+}
+
 console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
 {
   // `lfPintar()` corre en cada clic de pestaña o de filtro. Si estas dos cajas
@@ -136,14 +164,17 @@ console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
   chk('propuestas y conversaciones se guardan pintadas',
       /_lfPropsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque) &&
       /_lfConvsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque));
-  chk('al cambiar de lead se vacían, para no enseñar las del anterior',
-      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';/.test(bloque));
+  chk('y las automatizaciones también', /'<div id="lf-autos">' \+ _lfAutosHtml \+ '<\/div>'/.test(bloque));
+  chk('al cambiar de lead se vacían las tres, para no enseñar las del anterior',
+      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';\s*\n\s*_lfAutosHtml = '';/.test(bloque));
   chk('y lo que llega tarde de otro lead se descarta',
       /if \(lfLead && lfLead\.id !== leadId\) return;/.test(bloque));
   // Decir «ninguna» cuando la consulta falló es peor que no decir nada: se
   // vuelve a redactar una propuesta que ya se había mandado.
-  chk('un fallo de red no se confunde con «no hay nada»',
-      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 2);
+  // Las tres cajas que salen a la red: propuestas, conversaciones y
+  // automatizaciones. Ninguna puede tragarse un 500 y pintar un vacío.
+  chk('un fallo de red no se confunde con «no hay nada», en las tres',
+      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 3);
 }
 
 console.log('\nEn el móvil no se aprietan tres columnas\n');

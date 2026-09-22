@@ -23,6 +23,17 @@
    "texto": "Si tenías más de un proceso de venta, el selector para cambiar entre ellos había desaparecido del tablero: tus procesos seguían ahí, pero la pantalla no conseguía cargarlos. El mismo fallo afectaba a los agentes de chat, las propuestas, las respuestas rápidas y la sincronización del catálogo, que respondían «no se pudo verificar tu cuenta». Ya está corregido en todos."
   },
   {
+   "id": "2026-09-21-automatizaciones-en-la-ficha",
+   "fecha": "2026-09-21",
+   "tipo": "nuevo",
+   "titulo": "Ya puedes ver quÃ© tiene programado cada contacto",
+   "texto": "Hasta ahora, si una automatizaciÃ³n le iba a mandar un correo a un contacto maÃ±ana a las nueve, no habÃ­a forma de saberlo: te enterabas cuando salÃ­a. La ficha del contacto ahora tiene una caja de automatizaciones que te dice exactamente quÃ© le va a pasar, de quÃ© automatizaciÃ³n viene y cuÃ¡ndo, y te deja pararlo con un botÃ³n si no quieres que ocurra. Debajo verÃ¡s lo Ãºltimo que ya se hizo, y si algo fallÃ³ âun correo que no saliÃ³, por ejemploâ aparece en rojo con el motivo, que es justo lo que necesitas para responderle al cliente que pregunta por quÃ© no le llegÃ³. De paso arreglamos el paso Â«Pedir reseñaÂ»: estaba en el constructor y el motor sabía ejecutarlo, pero al guardar la automatización respondía Â«Paso inválidoÂ». Ya se guarda bien.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
    "id": "2026-09-21-citas-y-propuestas-en-la-ficha",
    "fecha": "2026-09-21",
    "tipo": "mejora",

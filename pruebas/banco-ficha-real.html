@@ -40,6 +40,7 @@
   <button onclick="escena('ganado')">ganado</button>
   <button onclick="escena('nuevo')">recién entrado, sin historial</button>
   <button onclick="escena('sin-red')">si fallan las propuestas</button>
+  <button onclick="comoComercial()">como comercial (no puede parar)</button>
   <span>·</span>
   <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'760px'">móvil</button>
 </div>
@@ -87,6 +88,25 @@ var TAREAS = [
   { id: 'm2', type: 'meeting', title: 'Reunión para firmar',
     due_at: new Date(Date.now() - 2 * 864e5).toISOString(), done: false },
 ];
+// Con la forma EXACTA de lo que devuelve /api/automations?lead_id=
+var AUTOS = {
+  pendientes: [
+    { id: 'j1', automation_id: 'a1', nombre: 'Seguimiento de leads web', apagada: false,
+      paso: 'Enviar correo: ¿Seguimos con la búsqueda?',
+      run_at: new Date(Date.now() + 16 * 36e5).toISOString() },
+    { id: 'j2', automation_id: 'a2', nombre: 'Reactivación a los 7 días', apagada: true,
+      paso: 'Enviar WhatsApp: Hola {{nombre}}, ¿sigues interesada?',
+      run_at: new Date(Date.now() + 5 * 864e5).toISOString() },
+  ],
+  hechas: [
+    { automation_id: 'a1', nombre: 'Seguimiento de leads web', accion: 'Correo', resultado: 'falló',
+      fallo: true, detalle: 'Resend 422: el dominio del remitente no está verificado',
+      created_at: new Date(Date.now() - 3 * 36e5).toISOString() },
+    { automation_id: 'a1', nombre: 'Seguimiento de leads web', accion: 'Etiqueta puesta',
+      resultado: 'hecho', fallo: false, detalle: '',
+      created_at: new Date(Date.now() - 4 * 864e5).toISOString() },
+  ],
+};
 var PROPUESTAS = [
   { id: 'pr1', title: 'Arriendo Laureles · 2 alcobas', amount: 1800000, currency: 'COP',
     status: 'viewed', public_token: 'tok1', created_at: new Date(Date.now() - 4 * 864e5).toISOString() },
@@ -108,11 +128,24 @@ function escena(cual) {
   _crmActividadesLead = cual === 'nuevo' ? [] : ACTIVIDADES;
   _crmTareasLead = cual === 'nuevo' ? [] : TAREAS;
   lfLead = l; crmDetailLead = l; lfFiltro = 'todo'; lfPestana = 'quien';
-  _lfPropsHtml = ''; _lfConvsHtml = '';
+  _lfPropsHtml = ''; _lfConvsHtml = ''; _lfAutosHtml = '';
   window._sinRed = cual === 'sin-red';
+  // Una cuenta que no usa automatizaciones: la caja no debe aparecer.
+  window._sinAutos = cual === 'nuevo';
+  window._miPerfil = null;
   lfPintar();
   lfCargarConversaciones(l.id);
   lfCargarPropuestas(l.id);
+  lfCargarAutomatizaciones(l.id);
+}
+
+// Ventas no llega al módulo Marketing: el servidor le rechazaría el «Parar»,
+// así que el botón no debe salirle.
+function comoComercial() {
+  escena('medio');
+  crmSoyMiembro = true;
+  window._miPerfil = { modulos: ['crm', 'conversaciones', 'analisis'] };
+  lfCargarAutomatizaciones('l1');
 }
 
 (async function montar() {
@@ -157,6 +190,8 @@ function escena(cual) {
       '({conversations:[{id:"c1",channel:"whatsapp",last_message_at:new Date(Date.now()-2*864e5).toISOString()}]})};' +
       ' if(u.indexOf("proposals")>=0) return window._sinRed ? {ok:false,status:500} :' +
       ' {ok:true,json:async()=>({proposals:PROPUESTAS})};' +
+      ' if(u.indexOf("automations")>=0) return window._sinAutos ? {ok:true,json:async()=>' +
+      '({pendientes:[],hechas:[]})} : {ok:true,json:async()=>AUTOS};' +
       ' return {ok:true,json:async()=>({})}; }',
     // La ficha, tal cual quedó.
     js.slice(js.indexOf('// ══ FICHA DEL LEAD A PÁGINA COMPLETA ═')),
