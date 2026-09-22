@@ -115,6 +115,25 @@ console.log('\nNo se duplica lo que ya existía\n');
       /const acts = await crmTraerActividades\(leadId\)/.test(js));
 }
 
+console.log('\nRegistrar una actividad tiene lo mismo que el panel\n');
+{
+  // El panel tenía el botón de enlace desde siempre y la ficha nació sin él.
+  // El historial de la ficha ya sabía PINTAR el enlace (actTexto), así que se
+  // veían bien los viejos pero no había forma de meter uno nuevo.
+  // El `'` va escapado en el fuente porque vive dentro de un `onclick`.
+  chk('hay botón de enlace', /actInsertarEnlace\(\\?'lf-texto\\?'\)/.test(bloque));
+  chk('y reutiliza la función del panel, no una copia',
+      (js.match(/function actInsertarEnlace\(/g) || []).length === 1 &&
+      /const ta = document\.getElementById\(campoId \|\| 'crm-activity-input'\)/.test(js));
+  chk('el historial pinta el enlace', /'<div class="txt">' \+ actTexto\(/.test(bloque));
+  // Un icono inventado cae en el de por defecto —un gráfico de barras— sin
+  // avisar, y el botón de enlace saldría con cara de informe.
+  chk('el icono del enlace existe de verdad',
+      /\n  link: *'<path/.test(js) && /icn\('link', 12\)/.test(bloque));
+  // Una tarea sin fecha se guarda pero no sale en ningún sitio.
+  chk('una tarea sigue pidiendo su fecha', /id="lf-vence"/.test(bloque));
+}
+
 console.log('\nSe puede editar el contacto\n');
 {
   // La ficha nació de solo lectura: enseñaba el correo y el teléfono sin

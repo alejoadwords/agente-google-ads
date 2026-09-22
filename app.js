@@ -19328,8 +19328,11 @@ function actTexto(txt) {
 // Envuelve lo que el comercial tenga seleccionado en el cuadro de la actividad.
 // Sin seleccion se pide tambien el texto, para no obligar a nadie a recordar
 // la sintaxis.
-function actInsertarEnlace() {
-  const ta = document.getElementById('crm-activity-input');
+// `campoId` porque hay DOS cuadros de actividad —el del panel y el de la ficha—
+// y escribir una segunda versión de esto acabaría con dos formas distintas de
+// poner un enlace. Sin argumento, el del panel, como siempre.
+function actInsertarEnlace(campoId) {
+  const ta = document.getElementById(campoId || 'crm-activity-input');
   if (!ta) return;
   const ini = ta.selectionStart, fin = ta.selectionEnd;
   let etiqueta = ta.value.slice(ini, fin).trim();
@@ -25930,6 +25933,9 @@ const ICN_PATHS = {
   split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
   star:     '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
+  // para que la ficha no tenga que repetir el SVG.
+  link:     '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
 };
 
 
@@ -38342,8 +38348,12 @@ function lfQuePaso(l) {
         ? '<div style="margin-top:9px"><label class="lf-tit" style="margin:0 0 5px">Para cuándo</label>' +
           '<input type="datetime-local" class="lf-area" id="lf-vence" style="min-height:0;padding:9px 11px"></div>'
         : '') +
-      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px">' +
-        '<button class="btn-pri sm" onclick="lfGuardarActividad()">Guardar</button>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:9px">' +
+        // El panel lo tenía y la ficha nació sin él. El historial de la ficha
+        // ya sabía pintar el enlace (actTexto), pero no había forma de meterlo.
+        '<button class="btn-ghost sm" onclick="actInsertarEnlace(\'lf-texto\')" ' +
+          'title="Convertir el texto seleccionado en un enlace">' + icn('link', 12) + ' Enlace</button>' +
+        '<button class="btn-pri sm" style="margin-left:auto" onclick="lfGuardarActividad()">Guardar</button>' +
       '</div>' +
     '</div>' +
 

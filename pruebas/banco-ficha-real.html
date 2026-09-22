@@ -226,6 +226,10 @@ function comoComercial() {
     (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
     js.slice(js.indexOf('const ICN_PATHS = {'), js.indexOf('// ── AUTOMATIZACIONES DEL CRM')),
     (js.match(/function actTexto\([\s\S]*?\n\}\n/) || [''])[0],
+    // Las de verdad: sin ellas el botón de Enlace saldría pintado y muerto, y
+    // el banco diría que está todo bien.
+    (js.match(/function actUrlSegura\([\s\S]*?\n\}\n/) || [''])[0],
+    (js.match(/function actInsertarEnlace\([\s\S]*?\n\}\n/) || [''])[0],
     (js.match(/function fuenteLabel\([\s\S]*?\n\}\n/) || [''])[0],
     // Vive con las tareas, no con la ficha, pero la ficha depende de él: se
     // trae el de verdad para que un cambio allí se vea aquí.
