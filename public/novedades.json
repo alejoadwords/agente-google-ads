@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-cita-al-mover",
+   "fecha": "2026-09-22",
+   "tipo": "nuevo",
+   "titulo": "Agenda la cita al mover el lead de etapa",
+   "texto": "Hay etapas que significan que pasó algo con fecha —una visita, una cita, una demostración— y hasta ahora había que arrastrar la tarjeta y después ir a la agenda a anotarlo a mano. Ahora cada etapa puede pedir la cita sola: en el editor de etapas elige «Pedir cita» y, cada vez que muevas un lead ahí, se abre una ventana con fecha, hora y duración. La cita entra en la agenda del asesor asignado y, si tiene Google Calendar conectado, también en su calendario. Si ya tiene algo a esa hora te lo decimos y tú decides si agendas igual o cambias la hora. Y si cancelas la ventana, el lead se queda donde estaba: no hay etapas que digan «cita agendada» sin cita."
+  },
+  {
    "id": "2026-09-22-encuesta-a-tu-medida",
    "fecha": "2026-09-22",
    "tipo": "nuevo",

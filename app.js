@@ -17688,6 +17688,7 @@ function pipeRenderRows() {
           '<input class="auto-input" type="number" min="0" max="100" value="' + pipeProbFor(s, i, _pipeDraft.length) + '" ' +
           'oninput="pipeSet(' + i + ',\'probability\',this.value)" style="padding:6px 7px;text-align:right">' +
           '<span style="font-size:11px;color:var(--muted2)">%</span></div>') +
+      pipeSelAlEntrar(s, i) +
       (prot
         ? '<span title="Otros módulos dependen de esta etapa: puedes renombrarla, no eliminarla" style="font-size:11px;color:var(--muted2);padding:4px 6px">🔒</span>'
         : '<button class="auto-step-mini" onclick="pipeDel(' + i + ')" title="Eliminar">🗑</button>') +
@@ -17695,8 +17696,46 @@ function pipeRenderRows() {
   }).join('');
 }
 
+// Qué pedir al mover un lead A esta etapa. Ganado y Perdido ya piden el
+// detalle del cierre por su cuenta, así que no se les ofrece.
+//
+// Tipo y duración van en UN solo desplegable a propósito: la fila del editor
+// ya lleva color, nombre, conteo, probabilidad y borrar. Dos controles más la
+// vuelven ilegible, y la duración solo existe si hay cita.
+const PIPE_AL_ENTRAR = [
+  ['', 'Al entrar: nada'],
+  ['cita:30', 'Pedir cita · 30 min'],
+  ['cita:60', 'Pedir cita · 1 h'],
+  ['cita:90', 'Pedir cita · 1 h 30'],
+  ['cita:120', 'Pedir cita · 2 h'],
+];
+
+function pipeAlEntrarValor(s) {
+  const a = s.al_entrar;
+  return a && a.tipo === 'cita' ? 'cita:' + (a.duracion || 60) : '';
+}
+
+function pipeSelAlEntrar(s, i) {
+  if (s.key === 'ganado' || s.key === 'perdido') return '<div style="width:150px"></div>';
+  const v = pipeAlEntrarValor(s);
+  return '<select class="auto-input" style="width:150px;flex:none;padding:6px 7px;font-size:11.5px" ' +
+    'title="Qué se le pide al usuario cuando mueve un lead a esta etapa" ' +
+    'onchange="pipeSet(' + i + ',&#39;al_entrar&#39;,this.value)">' +
+    PIPE_AL_ENTRAR.map(([val, txt]) =>
+      '<option value="' + val + '"' + (v === val ? ' selected' : '') + '>' + txt + '</option>').join('') +
+    '</select>';
+}
+
 function pipeSet(i, field, val) {
   if (!_pipeDraft[i]) return;
+  if (field === 'al_entrar') {
+    const [tipo, dur] = String(val || '').split(':');
+    _pipeDraft[i].al_entrar = tipo === 'cita'
+      ? { tipo: 'cita', titulo: 'Cita', duracion: Number(dur) || 60, avisarChoque: true }
+      : null;
+    _pipeDraft[i]._dirty = true;
+    return;
+  }
   _pipeDraft[i][field] = val;
   _pipeDraft[i]._dirty = true;
 }
@@ -17765,7 +17804,7 @@ async function pipeSave() {
       } else if (s._dirty) {
         await fetchAuth('/api/pipeline-stages', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: s.id, label: s.label.trim(), color: s.color, probability: Number(s.probability) }),
+          body: JSON.stringify({ id: s.id, label: s.label.trim(), color: s.color, probability: Number(s.probability), al_entrar: s.al_entrar || null }),
         });
       }
     }
@@ -19828,6 +19867,9 @@ function crmSetupDrop(el, stageKey) {
       closeOpenModal(lead, stageKey, oldStage, () => { lead.stage = oldStage; crmRenderKanban(); });
       return;
     }
+    // Y cualquier etapa puede pedir lo suyo: hoy, agendar una cita.
+    const _st = (crmStages || []).find(x => x.key === stageKey);
+    if (_st && citaAbrir(lead, _st, oldStage, () => { lead.stage = oldStage; crmRenderKanban(); })) return;
     try {
       await fetchAuth(`/api/leads`, {
         method: 'PUT',
@@ -20469,6 +20511,10 @@ async function crmSaveLead() {
       // significa "no quiero registrar el detalle ahora", no deshacer el
       // movimiento — devolverlo a su etapa anterior sería una sorpresa.
       closeOpenModal(leadGuardado, payload.stage, etapaAntes, null);
+    } else if (leadGuardado && payload.stage !== etapaAntes) {
+      // Sin onCancel, por el mismo motivo que arriba: ya está guardado ahí.
+      const _st = (crmStages || []).find(x => x.key === payload.stage);
+      if (_st) citaAbrir(leadGuardado, _st, etapaAntes, null);
     }
   } catch(e) {
     console.error('crmSaveLead', e);
@@ -20947,6 +20993,19 @@ async function crmChangeStage(newStage) {
     });
     return;
   }
+
+  // Cualquier otra etapa puede pedir lo suyo — hoy, agendar una cita. Si abre
+  // el modal se corta aquí: mover el lead es cosa suya, después de agendar.
+  const deshacer = () => {
+    crmDetailLead.stage = oldStage;
+    if (lead) lead.stage = oldStage;
+    const sel = document.getElementById('crm-d-stage');
+    if (sel) sel.value = oldStage;
+    crmRender();
+  };
+  const etapaDestino = (crmStages || []).find(x => x.key === newStage);
+  if (etapaDestino && citaAbrir(crmDetailLead, etapaDestino, oldStage, deshacer)) return;
+
   try {
     await fetchAuth('/api/leads', {
       method: 'PUT',
@@ -38887,3 +38946,180 @@ function npsPreguntasHtml(d) {
     } catch {}
   };
 })();
+
+// ─── QUÉ PEDIR AL ENTRAR A UNA ETAPA ─────────────────────────────────────────
+// Mover un lead a ciertas etapas no es solo cambiar una columna: hay etapas que
+// significan que pasó algo con fecha. «Cita de inmueble» es una, y el equipo la
+// estaba anotando a mano en la agenda después de arrastrar la tarjeta.
+//
+// El patrón ya existía escrito a mano para Ganado y Perdido (el modal de
+// cierre). Aquí se generaliza, porque «Cita de inmueble» NO es una etapa
+// especial: es la etapa `propuesta` renombrada por un cliente. Atar la función
+// a esa clave se rompería el día que la renombren, y el siguiente cliente que
+// pidiera lo mismo obligaría a copiar el código.
+//
+// La configuración vive en la etapa (`pipeline_stages.al_entrar`), así que
+// cada cliente de una agencia decide la suya.
+
+let _citaCtx = null;   // { lead, stage, prevStage, onCancel }
+
+function etapaAlEntrar(stageKey) {
+  const st = (crmStages || []).find(s => s.key === stageKey);
+  return st && st.al_entrar && st.al_entrar.tipo === 'cita' ? st.al_entrar : null;
+}
+
+// La hora que se propone: la próxima en punto, mañana. Proponer «ahora» en una
+// cita que por definición es futura obliga a cambiarlo siempre.
+function citaSugerida() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(d.getHours() < 8 ? 9 : d.getHours() + 1, 0, 0, 0);
+  const p = n => String(n).padStart(2, '0');
+  return { fecha: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, hora: `${p(d.getHours())}:00` };
+}
+
+function citaAbrir(lead, stage, prevStage, onCancel) {
+  const cfg = etapaAlEntrar(stage.key);
+  if (!cfg) { onCancel?.(); return false; }
+  _citaCtx = { lead, stage, prevStage, onCancel, cfg };
+  const sug = citaSugerida();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'cita-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) citaCancelar(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:460px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;' +
+          'background:' + esc(stage.color || 'var(--blue)') + '22">' + icn('calendar', 20) + '</div>' +
+        '<div><div style="font-size:var(--fs-md);font-weight:800">Agenda la cita</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' +
+          esc(lead.name || 'Este contacto') + ' pasa a «' + esc(stage.label || stage.key) + '»</div></div>' +
+      '</div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="citaCancelar()">&#10005;</button>' +
+    '</div>' +
+    '<div style="padding:16px 18px">' +
+      '<div style="display:flex;gap:10px">' +
+        '<div class="auto-field" style="flex:1"><label class="auto-label">Fecha</label>' +
+          '<input class="auto-input" type="date" id="cita-fecha" value="' + sug.fecha + '" onchange="citaRevisarChoque()"></div>' +
+        '<div class="auto-field" style="width:120px"><label class="auto-label">Hora</label>' +
+          '<input class="auto-input" type="time" id="cita-hora" value="' + sug.hora + '" onchange="citaRevisarChoque()"></div>' +
+      '</div>' +
+      '<div class="auto-field"><label class="auto-label">Duración</label>' +
+        '<select class="auto-input" id="cita-dur" onchange="citaRevisarChoque()">' +
+          [15, 30, 45, 60, 90, 120].map(m =>
+            '<option value="' + m + '"' + (m === cfg.duracion ? ' selected' : '') + '>' +
+            (m < 60 ? m + ' min' : m === 60 ? '1 hora' : m === 90 ? '1 hora 30' : (m / 60) + ' horas') + '</option>').join('') +
+        '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Título</label>' +
+        '<input class="auto-input" id="cita-titulo" maxlength="80" value="' +
+          esc((cfg.titulo || 'Cita') + ' — ' + (lead.name || '')) + '"></div>' +
+      '<div id="cita-choque"></div>' +
+      '<div id="cita-msg" style="font-size:12px;color:var(--danger);min-height:16px;margin-top:4px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost" onclick="citaCancelar()">Cancelar</button>' +
+      '<button class="btn-pri" id="cita-ok" onclick="citaGuardar()">Agendar y mover</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  setTimeout(citaRevisarChoque, 60);
+  return true;
+}
+
+function citaCancelar() {
+  document.getElementById('cita-modal')?.remove();
+  // Cancelar devuelve la tarjeta a su sitio: la etapa no cambió.
+  _citaCtx?.onCancel?.();
+  _citaCtx = null;
+}
+
+function citaCuando() {
+  const f = document.getElementById('cita-fecha')?.value;
+  const h = document.getElementById('cita-hora')?.value;
+  if (!f || !h) return null;
+  const ini = new Date(f + 'T' + h);
+  if (isNaN(ini)) return null;
+  const dur = Number(document.getElementById('cita-dur')?.value) || 60;
+  return { ini, fin: new Date(ini.getTime() + dur * 60000) };
+}
+
+// Se avisa del choque y se deja decidir. Bloquear dejaría a un asesor sin poder
+// registrar una cita que de verdad existe, y la agenda pasaría a mentir.
+async function citaRevisarChoque() {
+  const box = document.getElementById('cita-choque');
+  if (!box) return;
+  const c = citaCuando();
+  if (!c) { box.innerHTML = ''; return; }
+  try {
+    const cli = crmAmbitoCliente();
+    const r = await fetchAuth('/api/agenda?desde=' + c.ini.toISOString().slice(0, 10) +
+      '&hasta=' + c.ini.toISOString().slice(0, 10) + (cli ? '&client_id=' + encodeURIComponent(cli) : ''));
+    const d = await r.json();
+    const choques = (d.activities || []).filter(a => {
+      if (a.done || a.cancelled_at || !a.due_at) return false;
+      const ai = new Date(a.due_at).getTime();
+      const af = a.end_at ? new Date(a.end_at).getTime() : ai + 3600000;
+      return ai < c.fin.getTime() && af > c.ini.getTime();
+    });
+    box.innerHTML = choques.length
+      ? '<div style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--warning);background:color-mix(in srgb,var(--warning) 12%,transparent);' +
+        'border-radius:10px;padding:9px 11px;margin-top:4px;font-size:12px;color:var(--warning)">' +
+        icn('alert', 14) + '<div><b>Ya hay algo a esa hora</b><br>' +
+        choques.slice(0, 3).map(a => esc(a.title || 'Sin título') + ' · ' + citaHora(a.due_at)).join('<br>') +
+        '<br><span style="opacity:.85">Puedes agendar igual o cambiar la hora.</span></div></div>'
+      : '';
+  } catch { box.innerHTML = ''; }
+}
+
+function citaHora(iso) {
+  try { return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+}
+
+async function citaGuardar() {
+  const ctx = _citaCtx;
+  if (!ctx) return;
+  const c = citaCuando();
+  const msg = document.getElementById('cita-msg');
+  if (!c) { if (msg) msg.textContent = 'Falta la fecha o la hora.'; return; }
+  if (c.ini.getTime() < Date.now() - 60000 &&
+      !confirm('Esa fecha ya pasó. ¿Agendarla igual?')) return;
+
+  const btn = document.getElementById('cita-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Agendando…'; }
+  try {
+    // Primero la cita. Si falla, el lead NO se mueve: una etapa que dice «cita
+    // agendada» sin cita en la agenda es exactamente lo que se quería evitar.
+    const cli = crmAmbitoCliente();
+    const r = await fetchAuth('/api/agenda', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'meeting',
+        title: (document.getElementById('cita-titulo')?.value || 'Cita').slice(0, 80),
+        due_at: c.ini.toISOString(),
+        end_at: c.fin.toISOString(),
+        lead_id: ctx.lead.id,
+        client_id: cli || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo crear la cita');
+
+    await fetchAuth('/api/leads', {
+      method: 'PUT',
+      body: JSON.stringify({ id: ctx.lead.id, stage: ctx.stage.key }),
+    });
+
+    document.getElementById('cita-modal')?.remove();
+    _citaCtx = null;
+    if (typeof crmLoadLeads === 'function') { await crmLoadLeads(); crmRender(); }
+    showToast(d.gcal_warning
+      ? 'Cita agendada en Acuarius · ' + d.gcal_warning
+      : d.gcal_synced ? '📅 Cita agendada y enviada a Google Calendar' : '📅 Cita agendada', 'success');
+  } catch (e) {
+    if (msg) msg.textContent = e.message || 'No se pudo agendar';
+    if (btn) { btn.disabled = false; btn.textContent = 'Agendar y mover'; }
+  }
+}

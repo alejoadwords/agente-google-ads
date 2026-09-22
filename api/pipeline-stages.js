@@ -64,6 +64,31 @@ function uniqueKey(label, taken) {
   return key;
 }
 
+// Qué se le pide al usuario cuando mueve un lead A esta etapa.
+//
+// El patrón ya existía a mano para ganado/perdido (el modal de cierre). Se
+// generaliza porque «Cita de inmueble» no es una etapa especial: es la etapa
+// `propuesta` renombrada por un cliente. Atar la función a esa clave se
+// rompería en silencio el día que la renombren, y el siguiente cliente que
+// pida lo mismo obligaría a copiar el código.
+const ACCIONES = ['nada', 'cita'];
+const DURACIONES = [15, 30, 45, 60, 90, 120];
+
+function normalizarAlEntrar(v) {
+  if (!v || typeof v !== 'object') return null;
+  const tipo = ACCIONES.includes(v.tipo) ? v.tipo : 'nada';
+  if (tipo === 'nada') return null;   // no se guarda ruido
+  const dur = DURACIONES.includes(Number(v.duracion)) ? Number(v.duracion) : 60;
+  return {
+    tipo: 'cita',
+    titulo: String(v.titulo || '').trim().slice(0, 60) || 'Cita',
+    duracion: dur,
+    // Avisar de un choque y dejar decidir: bloquear deja a un asesor sin poder
+    // registrar una cita que de verdad existe.
+    avisarChoque: v.avisarChoque !== false,
+  };
+}
+
 const DEFAULT_STAGES = [
   { key: 'nuevo',       label: 'Nuevo',        color: '#6B7280', position: 1 },
   { key: 'contactado',  label: 'Contactado',   color: '#3B82F6', position: 2 },
@@ -205,6 +230,7 @@ export default async function handler(req) {
       update.probability = body.probability === null ? null
         : Math.max(0, Math.min(100, Math.round(Number(body.probability) || 0)));
     }
+    if (body.al_entrar !== undefined) update.al_entrar = normalizarAlEntrar(body.al_entrar);
     if (!Object.keys(update).length) return jsonResp({ error: 'Nada que actualizar' }, 400);
     const res = await patchStage(`${SUPABASE_URL}/rest/v1/pipeline_stages?id=eq.${id}&user_id=eq.${userId}`, update);
     if (!res) return jsonResp({ error: 'Nada que actualizar' }, 400);
