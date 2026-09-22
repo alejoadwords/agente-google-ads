@@ -19963,12 +19963,6 @@ function crmSetupDrop(el, stageKey) {
         body: JSON.stringify({ id: leadId, stage: stageKey }),
       });
       if (!res.ok) throw await motivoDelFallo(res, 'mover');
-      // El servidor lo guardó. Un rato después, ¿la pantalla sigue diciendo lo
-      // mismo? Se reportó que la tarjeta vuelve sola a su columna aunque el
-      // cambio SÍ quedó guardado —cinco veces seguidas, cada una diciendo que
-      // venía de la etapa vieja—, y leyendo el código no se ve quién la
-      // devuelve. Esto no lo arregla: lo delata, con lo que haga falta para
-      // encontrarlo. Cuando no pasa, no cuesta nada ni se ve.
       // El registro de la actividad es secundario: que falle NO deshace un
       // movimiento que sí se guardó.
       fetchAuth('/api/lead-activities', {
