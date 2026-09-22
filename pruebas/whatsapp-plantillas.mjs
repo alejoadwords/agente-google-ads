@@ -83,8 +83,18 @@ function montar(n, { tope = null, plantilla = null, metaError = null, sinEmpresa
     }
     if (u.includes('/channel_connections')) return ok([conexion]);
     if (u.includes('/chat_conversations')) return ok([]);
+    // El contador de envíos se LEE y se ESCRIBE. El simulacro tiene que
+    // devolver lo escrito: si al leer siempre da el valor inicial, el motor
+    // cree que no ha mandado nada y el tope no se respeta nunca. Eso hacía
+    // que la prueba fallara desde que el cron encadena tandas (22-09-2026),
+    // acusando de un fallo que en producción no existe — porque allí la
+    // escritura sí persiste.
     if (u.includes('/user_profiles') && met === 'GET') return ok([{ profile_data: perfil }]);
-    if (u.includes('/user_profiles') && met === 'POST') { est.perfilGuardado = cuerpo.profile_data; return ok([]); }
+    if (u.includes('/user_profiles') && met === 'POST') {
+      est.perfilGuardado = cuerpo.profile_data;
+      perfil = cuerpo.profile_data;
+      return ok([]);
+    }
     return ok([]);
   };
   return { campana, cola, leads, est };
