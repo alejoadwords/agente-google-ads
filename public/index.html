@@ -1432,6 +1432,10 @@ a.lf-prop:hover{border-color:var(--blue)}
 .lf-estado{margin-left:auto;font-size:10px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap}
 
 
+.crm-modal-aviso{margin:0 20px 10px;padding:10px 12px;border:1px solid var(--danger);
+  border-radius:var(--r);background:var(--danger-bg);color:var(--danger);
+  font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}
+
 /* Fondo tenue bajo las cajas: en blanco sobre blanco los recuadros se
    desdibujan y la pantalla se lee como una lista larga en vez de tres
    columnas. Va en el contenedor y no en `.lf-a` para que cubra también el
@@ -5559,6 +5563,11 @@ if (window.AGENTES_ACTIVOS) {
         <input type="text" id="crm-f-tags" class="crm-f-tags" placeholder="ej: urgente, vip, seguimiento" />
       </div>
     </div>
+    <!-- El motivo del fallo, donde se está mirando. Antes el botón ponía
+         «Error — reintentar» y nada más: el asesor no sabía si era el
+         teléfono, un duplicado o que se cayó la red, y a soporte no llegaba
+         ni una pista. -->
+    <div id="crm-modal-aviso" class="crm-modal-aviso" style="display:none"></div>
     <div class="crm-modal-foot">
       <button class="crm-btn-cancel" onclick="crmCloseModal()">Cancelar</button>
       <button class="crm-btn-save" id="crm-save-btn" onclick="crmSaveLead()">Guardar</button>

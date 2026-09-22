@@ -20408,6 +20408,10 @@ function crmAvisoDuplicado(dup, payload, clientId) {
 function crmCloseModal() {
   document.getElementById('crm-modal').classList.remove('open');
   crmEditingId = null;
+  // El aviso del intento anterior no puede reaparecer al abrir el formulario
+  // otra vez: diría que falló algo que ni se ha intentado.
+  const aviso = document.getElementById('crm-modal-aviso');
+  if (aviso) { aviso.textContent = ''; aviso.style.display = 'none'; }
 }
 
 async function crmSaveLead() {
@@ -20417,6 +20421,13 @@ async function crmSaveLead() {
   const name = document.getElementById('crm-f-name').value.trim();
   if (!name) { document.getElementById('crm-f-name').focus(); return; }
   const btn = document.getElementById('crm-save-btn');
+  const aviso = document.getElementById('crm-modal-aviso');
+  const decir = (texto) => {
+    if (!aviso) return;
+    aviso.textContent = texto;
+    aviso.style.display = texto ? 'block' : 'none';
+  };
+  decir('');
   btn.disabled = true;
   btn.textContent = 'Guardando...';
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -20458,7 +20469,7 @@ async function crmSaveLead() {
         method: 'PUT',
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw await motivoDelFallo(res, 'editar');
       const data = await res.json();
       const idx = crmLeads.findIndex(l => l.id === crmEditingId);
       if (idx >= 0) crmLeads[idx] = data.lead;
@@ -20488,7 +20499,7 @@ async function crmSaveLead() {
           openUpgradeFlow('Alcanzaste el límite de leads de tu plan ' + planLabel + '. Actualiza para agregar más contactos.');
           return;
         }
-        throw new Error();
+        throw await motivoDelFallo(res, 'crear');
       }
       const data = await res.json();
       crmLeads.unshift(data.lead);
@@ -20530,9 +20541,36 @@ async function crmSaveLead() {
     }
   } catch(e) {
     console.error('crmSaveLead', e);
-    btn.textContent = 'Error — reintentar';
+    // El motivo, a la vista. «Error — reintentar» a secas hacía que el asesor
+    // reintentara lo mismo una y otra vez sin saber qué cambiar, y a soporte
+    // no le llegaba nada que investigar.
+    decir(String(e && e.message || e) || 'No se pudo guardar. Inténtalo de nuevo.');
+    btn.textContent = 'Reintentar';
     btn.disabled = false;
   }
+}
+
+/**
+ * Convierte una respuesta fallida en un Error con el motivo de verdad, y lo
+ * deja anotado en el servidor.
+ *
+ * `fetchAuth` solo reporta 5xx y caídas de red, así que un 400 o un 403 no
+ * dejaba ni rastro: el cliente decía «me sale error» y en el registro no había
+ * absolutamente nada que mirar.
+ */
+async function motivoDelFallo(res, accion) {
+  let detalle = '';
+  try {
+    const cuerpo = await res.clone().json();
+    detalle = cuerpo && (cuerpo.error || cuerpo.message) || '';
+  } catch {
+    try { detalle = (await res.text()).slice(0, 200); } catch {}
+  }
+  const texto = detalle || ('El servidor respondió ' + res.status);
+  if (res.status < 500 && typeof errRegistrar === 'function') {
+    errRegistrar('al ' + accion + ' un contacto: HTTP ' + res.status + ' ' + texto, '/api/leads');
+  }
+  return new Error(texto);
 }
 
 // ── Panel de detalle ──────────────────────────────────────────────────────────
