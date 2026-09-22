@@ -2,11 +2,11 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
-   "id": "2026-09-22-enlace-en-la-ficha",
+   "id": "2026-09-22-cuenta-google-por-cliente",
    "fecha": "2026-09-22",
    "tipo": "arreglo",
-   "titulo": "Vuelve el botón de enlace al registrar actividad",
-   "texto": "El botón para convertir un texto en enlace estaba en el panel lateral pero se quedó fuera de la ficha nueva. Ya está: selecciona el texto en el cuadro de actividad, pulsa Â«EnlaceÂ» y pega la dirección. Los enlaces que ya tenías guardados se seguían viendo bien; lo que faltaba era poder meter uno nuevo desde la ficha."
+   "titulo": "Cada cliente, con su cuenta de Google Ads",
+   "texto": "Si trabajas con varios clientes y uno de ellos no tenía cuenta de Google Ads conectada, la pantalla usaba la última cuenta que hubieras abierto — es decir, la de otro cliente. En el mejor de los casos salía un error raro de permisos; en el peor, veías las métricas de un cliente en la pantalla de otro. Ahora cada cliente usa la suya y solo la suya, y si no tiene ninguna te lo decimos con su nombre y te llevamos a conectarla. Si manejas una sola cuenta, nada cambia."
   },
   {
    "id": "2026-09-22-encuesta-no-se-repite",
@@ -91,6 +91,13 @@
    "tipo": "arreglo",
    "titulo": "Arreglos en la ficha del contacto",
    "texto": "Si abriste una ficha y los botones no respondían —agendar, propuesta, cambiar de proceso o mover de etapa— ya está corregido: la ficha perdía la referencia al contacto y las acciones se quedaban quietas sin avisar. Por eso mover un lead de etapa desde la ficha no guardaba nada y parecía que había que refrescar. Además, la caja de Información ahora tiene su botón «Editar», con el mismo formulario de siempre, para cambiar correo, teléfono, empresa, valor, fecha de cierre y etiquetas sin salir de la ficha."
+  },
+  {
+   "id": "2026-09-22-enlace-en-la-ficha",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Vuelve el botón de enlace al registrar actividad",
+   "texto": "El botón para convertir un texto en enlace estaba en el panel lateral pero se quedó fuera de la ficha nueva. Ya está: selecciona el texto en el cuadro de actividad, pulsa Â«EnlaceÂ» y pega la dirección. Los enlaces que ya tenías guardados se seguían viendo bien; lo que faltaba era poder meter uno nuevo desde la ficha."
   },
   {
    "id": "2026-09-21-ficha-en-el-celular",

@@ -2031,6 +2031,29 @@ let warSelectedKpis = {}; // { google: ['inversion','clics',...], meta: [...] }
 let warCustomKpis   = {}; // { google: [{id:'custom_0', label:'Mi métrica'}], ... }
 
 let warClientId = null;
+
+// ── La cuenta de Google de UN cliente concreto ──────────────────────────────
+//
+// Antes esto era `cliente.googleCustomerId || sessionStorage.getItem(...)`, y
+// esa alternativa mezclaba clientes: estando en un lead del cliente «Acuarius»
+// —que no tiene cuenta configurada— se consultaba la cuenta de Google que
+// hubiera quedado en memoria de la última vez, que podía ser la de OTRO
+// cliente. Si la consulta salía bien, pintaba las métricas de uno en la
+// pantalla del otro; si salía mal, un «no tienes permiso» incomprensible.
+//
+// Cuando hay un cliente elegido, manda lo que ese cliente tenga configurado y
+// nada más. La memoria del navegador solo vale cuando NO hay cliente: es el
+// caso de una cuenta Pro con una sola cuenta de anuncios.
+function cuentaGoogleDelCliente(clientId) {
+  if (clientId) {
+    const c = (typeof agencyClients !== 'undefined' ? agencyClients : []).find(x => x.id === clientId);
+    const propia = String(c?.googleCustomerId || '').trim();
+    return { id: propia, deEseCliente: true, nombre: c?.name || '' };
+  }
+  const guardada = sessionStorage.getItem('ads_customer_id') ||
+                   localStorage.getItem('ads_customer_id_persist') || '';
+  return { id: String(guardada || '').trim(), deEseCliente: false, nombre: '' };
+}
 // ── LIVE DASHBOARDS ──────────────────────────────────────────────────────────
 
 let dashManualData = {};
@@ -2467,7 +2490,10 @@ function warBuildMetricsForm() {
     // Botón auto-fill solo si hay cuenta conectada
     var hasConn = false;
     var autoBtn = '';
-    if (plat === 'google' && sessionStorage.getItem('ads_customer_id')) hasConn = true;
+    // El botón decía «hay cuenta conectada» mirando la memoria del navegador,
+    // así que aparecía también para un cliente que no tiene ninguna — y al
+    // pulsarlo traía los datos de otro.
+    if (plat === 'google' && cuentaGoogleDelCliente(warClientId).id) hasConn = true;
     if (plat === 'meta'   && (sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist'))) hasConn = true;
     if (hasConn) {
       if (plat === 'meta') {
@@ -2571,9 +2597,15 @@ async function warAutoFill(plat) {
     let apiData = null;
 
     if (plat === 'google') {
-      const warClient  = agencyClients.find(c => c.id === warClientId);
-      const customerId = warClient?.googleCustomerId || sessionStorage.getItem('ads_customer_id');
-      if (!customerId || !uid) throw new Error('Sin cuenta conectada');
+      const cuenta = cuentaGoogleDelCliente(warClientId);
+      if (!cuenta.id) {
+        throw new Error(cuenta.deEseCliente
+          ? 'El cliente ' + (cuenta.nombre || 'seleccionado') + ' no tiene una cuenta de Google Ads conectada. ' +
+            'Conéctala desde Marketing › Plataformas de pauta.'
+          : 'Sin cuenta de Google Ads conectada');
+      }
+      const customerId = cuenta.id;
+      if (!uid) throw new Error('Sin sesión');
       const r = await fetchAuth('/api/google-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&dateRange=' + ranges.google);
       apiData = await r.json();
     }
