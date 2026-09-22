@@ -12,8 +12,8 @@
    "id": "2026-09-22-editar-contacto-arreglado",
    "fecha": "2026-09-22",
    "tipo": "arreglo",
-   "titulo": "Vuelve a poder editarse un contacto",
-   "texto": "Desde ayer, guardar cualquier cambio en la ficha de un contacto fallaba. A los asesores les salía «solo un administrador puede mover un lead de proceso de venta» aunque solo estuvieran cambiando el valor del negocio, y a los administradores «el lead ya está en ese proceso» — y el cambio no se guardaba. Lo provocó la función nueva de mover un contacto de un proceso de venta a otro: el sistema tomaba cualquier edición por un cambio de proceso. Ya está corregido: solo se considera un cambio de proceso cuando el proceso cambia de verdad. Si ayer editaste algo y no se guardó, vuelve a hacerlo."
+   "titulo": "Editar y mover contactos, arreglado",
+   "texto": "Desde ayer, guardar cualquier cambio en la ficha de un contacto fallaba. A los asesores les salía «solo un administrador puede mover un lead de proceso de venta» aunque solo estuvieran cambiando el valor del negocio, y a los administradores «el lead ya está en ese proceso» — y el cambio no se guardaba. Lo provocó la función nueva de mover un contacto de un proceso de venta a otro: el sistema tomaba cualquier edición por un cambio de proceso. Ya está corregido.\n\nDe paso arreglamos algo que venía de antes: cuando arrastrabas un contacto de una etapa a otra y el guardado fallaba, la tarjeta se quedaba en su columna nueva como si todo hubiera ido bien, y solo al recargar la página volvía a su sitio sin explicación. Ahora, si no se puede mover, la tarjeta regresa a la vista y te decimos por qué. Si estos días moviste algo y no quedó guardado, vuelve a intentarlo."
   },
   {
    "id": "2026-09-22-cuenta-google-por-cliente",

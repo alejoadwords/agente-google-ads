@@ -19914,17 +19914,28 @@ function crmSetupDrop(el, stageKey) {
     // Y cualquier etapa puede pedir lo suyo: hoy, agendar una cita.
     const _st = (crmStages || []).find(x => x.key === stageKey);
     if (_st && citaAbrir(lead, _st, oldStage, () => { lead.stage = oldStage; crmRenderKanban(); })) return;
+    // La tarjeta ya se movió en pantalla; si el guardado falla hay que
+    // DESHACERLO y decir por qué. Antes el fallo solo iba a la consola: la
+    // tarjeta se quedaba en su columna nueva, el servidor seguía con la vieja,
+    // y el usuario solo se enteraba al recargar la pestaña y verla volver
+    // sola. Eso es justo lo que reportaron.
     try {
-      await fetchAuth(`/api/leads`, {
+      const res = await fetchAuth(`/api/leads`, {
         method: 'PUT',
         body: JSON.stringify({ id: leadId, stage: stageKey }),
       });
-      // log stage change activity
-      await fetchAuth('/api/lead-activities', {
+      if (!res.ok) throw await motivoDelFallo(res, 'mover');
+      // El registro de la actividad es secundario: que falle NO deshace un
+      // movimiento que sí se guardó.
+      fetchAuth('/api/lead-activities', {
         method: 'POST',
         body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Movido de ${oldStage} a ${stageKey}`, metadata: { from: oldStage, to: stageKey } }),
-      });
-    } catch(e) { console.error('crmDrop', e); }
+      }).catch(() => {});
+    } catch (e) {
+      lead.stage = oldStage;
+      crmRenderKanban();
+      showToast('No se pudo mover: ' + (e.message || 'inténtalo de nuevo'), 'error');
+    }
   });
 }
 
@@ -21110,17 +21121,23 @@ async function crmChangeStage(newStage) {
   const etapaDestino = (crmStages || []).find(x => x.key === newStage);
   if (etapaDestino && citaAbrir(crmDetailLead, etapaDestino, oldStage, deshacer)) return;
 
+  // Mismo criterio que el tablero: si no se guarda, se deshace y se dice.
+  // `deshacer` ya sabe devolver la ficha, el desplegable y la tarjeta.
   try {
-    await fetchAuth('/api/leads', {
+    const res = await fetchAuth('/api/leads', {
       method: 'PUT',
       body: JSON.stringify({ id: leadId, stage: newStage }),
     });
+    if (!res.ok) throw await motivoDelFallo(res, 'mover');
     await fetchAuth('/api/lead-activities', {
       method: 'POST',
       body: JSON.stringify({ lead_id: leadId, type: 'stage_change', content: `Etapa cambiada de "${oldStage}" a "${newStage}"`, metadata: { from: oldStage, to: newStage } }),
     });
     await crmLoadActivities(leadId);
-  } catch(e) { console.error('crmChangeStage', e); }
+  } catch (e) {
+    deshacer();
+    showToast('No se pudo cambiar la etapa: ' + (e.message || 'inténtalo de nuevo'), 'error');
+  }
 }
 
 // Una llamada o una nota registrada por error se quedaba en la línea de tiempo
