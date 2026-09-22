@@ -30393,6 +30393,13 @@ async function teamAssignLead(sel) {
   if (!lead) return;
   const id = sel.value;
   const name = id ? sel.options[sel.selectedIndex].text.replace(' (yo)', '') : null;
+  // Con qué se queda si el servidor dice que no. Es lo mismo que hace el chip
+  // del tablero: dejar la pantalla enseñando un dueño que no se guardó es peor
+  // que no haber hecho nada — el lead sale del filtro «Míos» de quien lo
+  // lleva y entra en el de otro, y nadie se entera hasta que alguien pregunta
+  // por qué no lo han llamado.
+  const antesId = lead.assigned_to || null;
+  const antesNombre = lead.assigned_name || null;
   lead.assigned_to = id || null;
   lead.assigned_name = name;
   crmRender();
@@ -30400,9 +30407,25 @@ async function teamAssignLead(sel) {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    await fetchAuth('/api/leads' + qs, { method: 'PUT', body: JSON.stringify({ id: lead.id, assigned_to: lead.assigned_to, assigned_name: name }) });
+    const res = await fetchAuth('/api/leads' + qs, { method: 'PUT', body: JSON.stringify({ id: lead.id, assigned_to: lead.assigned_to, assigned_name: name }) });
+    // Sin mirar `res.ok`, un 403 —un miembro que no puede reasignar— o un 500
+    // pasaban por buenos y hasta se anunciaba «Lead asignado a X». El `catch`
+    // solo saltaba si se caía la red.
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || ('HTTP ' + res.status));
+    }
     showToast(id ? '👤 Lead asignado a ' + name : 'Lead sin asignar', 'success');
-  } catch (e) { showToast('No se pudo guardar la asignación', 'error'); }
+  } catch (e) {
+    lead.assigned_to = antesId;
+    lead.assigned_name = antesNombre;
+    crmRender();
+    lfQuienRefrescar();
+    // El desplegable del panel no se repinta solo: hay que devolverlo a mano
+    // o se quedaría enseñando a quien no es.
+    if (typeof teamPopulateAssign === 'function') teamPopulateAssign(lead);
+    showToast('No se pudo reasignar: ' + String(e.message || e), 'error');
+  }
 }
 
 // El dueño necesita el equipo cargado para el selector de asignación

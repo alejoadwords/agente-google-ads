@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-reasignar-no-miente",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Reasignar un contacto ya no dice que sí cuando fue que no",
+   "texto": "Al cambiar el responsable desde el desplegable, si el servidor rechazaba el cambio —por ejemplo porque tu perfil no puede reasignar— la pantalla se quedaba enseÃ±ando al responsable nuevo y hasta te decía Â«Lead asignado aâ¦Â». El contacto salía del filtro Â«MíosÂ» de quien lo llevaba y entraba en el de otro, y nadie se enteraba hasta que alguien preguntaba por qué no lo habían llamado. Ahora, si no se puede guardar, el responsable vuelve a ser el de antes y te decimos el motivo. Las tres formas de reasignar —desde la tarjeta del tablero, desde el panel y desde la ficha— se comportan igual."
+  },
+  {
    "id": "2026-09-22-editar-sin-salir",
    "fecha": "2026-09-22",
    "tipo": "mejora",
