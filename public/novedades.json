@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-editar-sin-salir",
+   "fecha": "2026-09-22",
+   "tipo": "mejora",
+   "titulo": "Cambia los datos del contacto sin abrir el formulario",
+   "texto": "En la ficha ya no hace falta pulsar Â«EditarÂ» para cambios pequeños. La <b>empresa</b> y el <b>valor</b> se editan con un clic sobre el propio dato: escribe, pulsa Enter y queda guardado (Escape lo deja como estaba). La <b>fecha de cierre</b> tiene su calendario, las <b>etiquetas</b> se quitan con su aspa y se añaden escribiendo, y el <b>responsable</b> se cambia desde un desplegable con tu equipo. Â«EditarÂ» sigue ahí para cuando quieras tocar varias cosas de una vez. Si un cambio no se puede guardar, el dato vuelve a como estaba y te lo decimos, en vez de dejarte creyendo que quedó."
+  },
+  {
    "id": "2026-09-22-la-ficha-completa",
    "fecha": "2026-09-22",
    "tipo": "mejora",

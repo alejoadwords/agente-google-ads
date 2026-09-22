@@ -19308,6 +19308,7 @@ async function crmGuardarCierre(valor) {
   if (antes === nuevo) return;
   lead.expected_close_date = nuevo;   // optimista: la ficha responde al instante
   crmPintarCierre(lead);
+  lfQuienRefrescar();
   try {
     const res = await fetchAuth('/api/leads', {
       method: 'PUT',
@@ -19319,13 +19320,18 @@ async function crmGuardarCierre(valor) {
       const i = crmLeads.findIndex(l => l.id === lead.id);
       if (i >= 0) crmLeads[i] = d.lead;
       crmDetailLead = d.lead;
+      // `crmLeads[i] = d.lead` SUSTITUYE el objeto: sin esto la ficha se queda
+      // apuntando al viejo y sus botones trabajarían sobre un lead detenido.
+      if (typeof lfLead !== 'undefined' && lfLead && lfLead.id === d.lead.id) lfLead = d.lead;
       crmPintarCierre(d.lead);
     }
     crmRender();
+    lfQuienRefrescar();
     showToast(nuevo ? 'Fecha de cierre guardada' : 'Fecha de cierre quitada');
   } catch (e) {
     lead.expected_close_date = antes;   // deshacer: nunca dejar la ficha mintiendo
     crmPintarCierre(lead);
+    lfQuienRefrescar();
     showToast('No se pudo guardar la fecha', 'error');
   }
 }
@@ -20675,6 +20681,7 @@ async function crmOpenDetail(leadId, leadSuelto) {
   const valueRow = document.getElementById('crm-d-value-row');
   if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
   crmPintarCierre(lead);
+  lfQuienRefrescar();
   crmRenderDetailTags();
   teamEnsureLoaded().then(() => teamPopulateAssign(lead));
   const notesSection = document.getElementById('crm-d-notes-section');
@@ -20719,6 +20726,7 @@ async function crmDetailSaveTags(newTags) {
   const prev = lead.tags || [];
   lead.tags = newTags;
   crmRenderDetailTags();
+  lfQuienRefrescar();
   crmRender();
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -20728,10 +20736,14 @@ async function crmDetailSaveTags(newTags) {
     if (d.lead) { lead.tags = d.lead.tags || newTags; }
     await crmLoadTags(); // refrescar catálogo (colores de etiquetas nuevas)
     crmRenderDetailTags();
+    lfQuienRefrescar();
     crmRender();
   } catch (e) {
     lead.tags = prev;
     crmRenderDetailTags();
+    // Sin esto la ficha se quedaba enseñando la etiqueta que NO se guardó,
+    // mientras el panel ya la había quitado.
+    lfQuienRefrescar();
     crmRender();
     showToast('No se pudo guardar la etiqueta', 'error');
   }
@@ -30384,6 +30396,7 @@ async function teamAssignLead(sel) {
   lead.assigned_to = id || null;
   lead.assigned_name = name;
   crmRender();
+  lfQuienRefrescar();
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
@@ -38288,6 +38301,86 @@ function lfEmbudoRefrescar() {
   if (caja.firstElementChild) viejo.replaceWith(caja.firstElementChild);
 }
 
+/**
+ * Repinta SOLO la primera columna de la ficha.
+ *
+ * Los editores en línea —etiquetas, responsable, fecha de cierre— son los del
+ * panel y repintan el panel. Aquí hace falta repintar esta columna y NO
+ * `lfPintar()` entera: eso se llevaría por delante una nota a medio escribir
+ * en la columna de al lado.
+ */
+function lfQuienRefrescar() {
+  if (!lfLead) return;
+  const col = document.querySelector('#crm-lead-view .lf-col.quien');
+  if (!col) return;
+  col.innerHTML = lfQuienEs(lfLead);
+  if (typeof crmRevelarNotas === 'function') crmRevelarNotas();
+}
+
+/**
+ * Guarda un campo suelto del contacto desde la ficha y repinta.
+ *
+ * Optimista: se pinta antes de que conteste el servidor y se deshace si falla,
+ * como el resto de la pantalla. Si falla en silencio, el comercial se queda
+ * creyendo que cambió el importe.
+ */
+async function lfGuardarCampo(campo, crudo) {
+  if (!lfLead) return;
+  const lead = lfLead;
+  let valor = String(crudo == null ? '' : crudo).trim();
+  if (campo === 'value') {
+    const n = parseFloat(valor.replace(/[^0-9.,-]/g, '').replace(/\./g, '').replace(',', '.'));
+    valor = Number.isFinite(n) && n > 0 ? n : null;
+  } else {
+    valor = valor || null;
+  }
+  const antes = lead[campo] == null ? null : lead[campo];
+  if (String(antes == null ? '' : antes) === String(valor == null ? '' : valor)) {
+    lfQuienRefrescar();
+    return;
+  }
+  lead[campo] = valor;
+  lfQuienRefrescar();
+  crmRender();
+  try {
+    const res = await fetchAuth('/api/leads', {
+      method: 'PUT', body: JSON.stringify({ id: lead.id, [campo]: valor }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json().catch(() => ({}));
+    if (d.lead) {
+      const i = (crmLeads || []).findIndex(l => l.id === lead.id);
+      if (i >= 0) crmLeads[i] = d.lead;
+      lfLead = d.lead;
+      crmDetailLead = d.lead;
+      lfQuienRefrescar();
+    }
+  } catch (e) {
+    lead[campo] = antes;
+    lfQuienRefrescar();
+    crmRender();
+    showToast('No se pudo guardar: ' + String(e.message || e), 'error');
+  }
+}
+
+/** Cambia el texto por un campo de edición, ahí mismo. */
+function lfEditarCampo(campo, ev) {
+  const celda = ev && ev.currentTarget;
+  if (!celda || celda.querySelector('input')) return;
+  const l = lfLead || {};
+  const actual = campo === 'value' ? (l.value || '') : (l[campo] || '');
+  celda.innerHTML = '<input class="lf-campo" type="' + (campo === 'value' ? 'number' : 'text') + '" ' +
+    'value="' + esc(String(actual)) + '" ' +
+    'onblur="lfGuardarCampo(\'' + campo + '\', this.value)" ' +
+    // Enter guarda y Escape deja las cosas como estaban: sin esto, la única
+    // salida era hacer clic fuera y no se sabía si había guardado.
+    'onkeydown="if(event.key===\'Enter\'){this.blur()}else if(event.key===\'Escape\'){this.value=' +
+      JSON.stringify(String(actual)) + ';this.blur()}">';
+  const inp = celda.querySelector('input');
+  inp.focus();
+  inp.select();
+}
+
 function lfPintar() {
   const host = document.getElementById('crm-lead-view');
   if (!host || !lfLead) return;
@@ -38314,7 +38407,7 @@ function lfPintar() {
           'onclick="lfPestana=\'' + k + '\';lfPintar()">' + t + '</button>').join('') +
     '</div>' +
     '<div class="lf-a">' +
-      '<div class="lf-col' + (lfPestana === 'quien' ? ' visible' : '') + '">' + lfQuienEs(l) + '</div>' +
+      '<div class="lf-col quien' + (lfPestana === 'quien' ? ' visible' : '') + '">' + lfQuienEs(l) + '</div>' +
       '<div class="lf-col' + (lfPestana === 'pasado' ? ' visible' : '') + '">' + lfQuePaso(l) + '</div>' +
       '<div class="lf-col tercera' + (lfPestana === 'hacer' ? ' visible' : '') + '">' + lfQueFalta(l) + '</div>' +
     '</div>';
@@ -38322,6 +38415,11 @@ function lfPintar() {
   // El permiso llega por consulta, así que el botón de «Nota al responsable»
   // se revela cuando se sepa, sin frenar el pintado. Igual que en el panel.
   if (typeof crmRevelarNotas === 'function') crmRevelarNotas();
+  // Y el equipo, para el desplegable de responsable. Sin esto el dueño solo se
+  // veía a sí mismo y «Sin asignar», que es peor que no ofrecer el desplegable.
+  if (!crmSoyMiembro && typeof teamEnsureLoaded === 'function') {
+    teamEnsureLoaded().then(() => lfQuienRefrescar()).catch(() => {});
+  }
 }
 
 /** Las mismas acciones del panel: se reutilizan sus funciones, no se copian. */
@@ -38347,6 +38445,26 @@ function lfAcciones(l) {
     icn('file', 12) + ' Nota al responsable</button>');
   b.push('<button class="btn-pri sm" onclick="prpOpenForLead()">Propuesta</button>');
   return b.join('');
+}
+
+/**
+ * Las mismas opciones que el desplegable del panel: sin asignar, yo, y el
+ * equipo activo. Se saca aparte para que las dos pantallas ofrezcan lo mismo.
+ */
+function lfOpcionesResponsable(l) {
+  const miId = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '';
+  const miNombre = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.firstName) || 'Yo';
+  const opts = [{ id: '', name: 'Sin asignar' }, { id: miId, name: miNombre + ' (yo)' }];
+  if (!window._workspace) {
+    (crmTeam || []).filter(m => m.status === 'active' && m.member_user_id !== miId)
+      .forEach(m => opts.push({ id: m.member_user_id, name: m.member_name || m.member_email }));
+  }
+  // Quien lo lleva puede no estar en la lista —un miembro dado de baja—, y sin
+  // esto el desplegable enseñaría «Sin asignar» sobre un lead que sí lo está.
+  if (l.assigned_to && !opts.some(o => o.id === l.assigned_to)) {
+    opts.push({ id: l.assigned_to, name: (l.assigned_name || 'Otra persona') + ' (ya no está en el equipo)' });
+  }
+  return opts;
 }
 
 /** ¿Se le pasó la fecha de cierre y sigue abierto? */
@@ -38386,17 +38504,24 @@ function lfQuienEs(l) {
         '<button onclick="crmEditCurrentLead()" title="Editar los datos del contacto">Editar</button></div>' +
       fila('Email', l.email ? '<a href="mailto:' + esc(l.email) + '">' + esc(l.email) + '</a>' : '—') +
       fila('Teléfono', esc(l.phone || '—')) +
-      fila('Empresa', esc(l.company || '—')) +
+      // Empresa y Valor se cambian aquí mismo: un clic sobre el dato lo
+      // convierte en un campo. Antes había que abrir el formulario entero
+      // para corregir una cifra.
+      fila('Empresa', '<span class="lf-edit" title="Clic para editar" ' +
+        'onclick="lfEditarCampo(\'company\', event)">' +
+        (l.company ? esc(l.company) : '<span class="pon">añadir</span>') + '</span>') +
       fila('Fuente', esc(fuenteLabel(l.source))) +
-      (l.value ? fila('Valor', '<b>$' + Number(l.value).toLocaleString('es-CO') + '</b>') : '') +
-      fila('Cierre esperado', l.expected_close_date
-        // Vencida y el lead abierto: el panel lo avisaba con un triángulo y la
-        // ficha lo enseñaba como una fecha más. Una fecha de cierre pasada es
-        // lo que decide a quién llamar hoy.
-        ? (lfCierreVencido(l) ? '<span class="lf-vencida">' + icn('alert', 12) + ' ' : '<span>') +
-          esc(new Date(l.expected_close_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })) +
-          '</span>'
-        : '<span style="color:var(--muted2)">sin fecha</span>') +
+      fila('Valor', '<span class="lf-edit" title="Clic para editar" ' +
+        'onclick="lfEditarCampo(\'value\', event)">' +
+        (l.value ? '<b>$' + Number(l.value).toLocaleString('es-CO') + '</b>'
+                 : '<span class="pon">añadir</span>') + '</span>') +
+      // El mismo `crmGuardarCierre` del panel: una sola forma de guardar esta
+      // fecha. Vencida y el lead abierto, en rojo — es lo que decide a quién
+      // llamar hoy.
+      fila('Cierre esperado',
+        (lfCierreVencido(l) ? '<span class="lf-vencida">' + icn('alert', 12) + '</span> ' : '') +
+        '<input type="date" class="lf-fecha" value="' + esc(l.expected_close_date || '') + '" ' +
+        'onchange="crmGuardarCierre(this.value)">') +
     '</div>' +
 
     // El campo `notes` se escribe al crear y al editar, y la ficha no lo
@@ -38410,9 +38535,19 @@ function lfQuienEs(l) {
 
     '<div class="lf-caja">' +
       '<div class="lf-tit">Etiquetas</div>' +
-      ((l.tags || []).length
-        ? (l.tags || []).map(t => '<span class="lf-chip">' + esc(t) + '</span>').join('')
-        : '<div class="lf-vacio">Sin etiquetas.</div>') +
+      // `tagChipHtml(t, true)` es el chip con su aspa, y `crmDetailAddTag` el
+      // alta: los mismos del panel, que ya contemplan el máximo de 15 y que
+      // solo un administrador puede crear etiquetas nuevas.
+      '<div class="lf-chips">' +
+        (l.tags || []).map(x => tagChipHtml(x, true)).join('') +
+        '<input class="lf-tag-nueva" list="lf-tag-datalist" placeholder="+ etiqueta" ' +
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();crmDetailAddTag(this.value);this.value=\'\'}" ' +
+          'onchange="if(this.value){crmDetailAddTag(this.value);this.value=\'\'}">' +
+        '<datalist id="lf-tag-datalist">' +
+          (crmTags || []).filter(x => !(l.tags || []).includes(x.name))
+            .map(x => '<option value="' + esc(x.name) + '">').join('') +
+        '</datalist>' +
+      '</div>' +
     '</div>' +
 
     '<div class="lf-caja">' +
@@ -38421,7 +38556,16 @@ function lfQuienEs(l) {
       '</div>' +
       '<div style="font-size:13.5px;font-weight:600">' + esc(proceso ? proceso.name : 'Sin proceso') + '</div>' +
       '<div class="lf-tit" style="margin:12px 0 6px">Responsable</div>' +
-      '<div style="font-size:13.5px">' + esc(l.assigned_name || 'Sin asignar') + '</div>' +
+      // Reasignar es del dueño: a un miembro se le enseña quién lo lleva, sin
+      // desplegable. Ofrecérselo solo serviría para que el servidor se lo
+      // rechazara con un 403. Es el mismo criterio de `teamPopulateAssign`.
+      (crmSoyMiembro
+        ? '<div style="font-size:13.5px">' + esc(l.assigned_name || 'Sin asignar') + '</div>'
+        : '<select class="lf-resp" onchange="teamAssignLead(this)">' +
+            lfOpcionesResponsable(l).map(o =>
+              '<option value="' + esc(o.id) + '"' + ((l.assigned_to || '') === o.id ? ' selected' : '') +
+              '>' + esc(o.name) + '</option>').join('') +
+          '</select>') +
     '</div>' +
 
     // De dónde vino. Solo si hay algo: una caja vacía ocupa sitio y no dice nada.

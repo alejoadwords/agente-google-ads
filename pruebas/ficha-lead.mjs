@@ -160,6 +160,42 @@ console.log('\nLa ficha no perdió nada del panel\n');
       /crmIsWonStage\(l\.stage\) \|\| crmIsLostStage\(l\.stage\)\) return false;/.test(bloque));
 }
 
+console.log('\nSe edita en la ficha, sin abrir el formulario\n');
+{
+  // Los tres que el panel ya editaba en línea usan SUS funciones: una sola
+  // forma de guardar cada cosa, no dos que un día se separan.
+  chk('la fecha de cierre usa el `crmGuardarCierre` del panel',
+      /onchange="crmGuardarCierre\(this\.value\)"/.test(bloque) &&
+      (js.match(/async function crmGuardarCierre\(/g) || []).length === 1);
+  chk('las etiquetas usan `crmDetailAddTag` y el chip con aspa',
+      /crmDetailAddTag\(this\.value\)/.test(bloque) && /tagChipHtml\(x, true\)/.test(bloque));
+  chk('el responsable usa `teamAssignLead`', /onchange="teamAssignLead\(this\)"/.test(bloque));
+  // Reasignar es del dueño. Ofrecérselo a un miembro solo sirve para que el
+  // servidor se lo rechace con un 403.
+  chk('y a un miembro se le enseña, no se le ofrece',
+      /crmSoyMiembro\s*\n?\s*\? '<div style="font-size:13\.5px">' \+ esc\(l\.assigned_name/.test(bloque));
+  // Empresa y valor no los editaba ni el panel: son nuevos.
+  chk('empresa y valor se editan con un clic',
+      /lfEditarCampo\(..company.., event\)/.test(bloque) && /lfEditarCampo\(..value.., event\)/.test(bloque));
+  chk('Escape deja el valor como estaba', /event\.key===..Escape../.test(bloque));
+  // Si falla en silencio, el comercial se queda creyendo que cambió el importe.
+  chk('un fallo al guardar se deshace y se dice',
+      /lead\[campo\] = antes;[\s\S]{0,140}showToast\('No se pudo guardar/.test(bloque));
+}
+
+console.log('\nGuardar repinta la ficha, no solo el panel\n');
+{
+  // Los editores son los del panel y repintan el panel. Sin esto, se cambia
+  // una etiqueta en la ficha y la ficha sigue enseñando la de antes.
+  chk('hay un refresco de la primera columna, y no repinta la ficha entera',
+      /function lfQuienRefrescar\(\)[\s\S]{0,400}col\.innerHTML = lfQuienEs\(lfLead\)/.test(bloque));
+  chk('la columna se puede encontrar', /'<div class="lf-col quien'/.test(bloque));
+  for (const fn of ['crmGuardarCierre', 'crmDetailSaveTags', 'teamAssignLead']) {
+    const trozo = js.slice(js.indexOf('function ' + fn + '('), js.indexOf('function ' + fn + '(') + 1400);
+    chk(`${fn} repinta la ficha`, /lfQuienRefrescar\(\);/.test(trozo));
+  }
+}
+
 console.log('\nSe puede editar el contacto\n');
 {
   // La ficha nació de solo lectura: enseñaba el correo y el teléfono sin
