@@ -27,6 +27,7 @@ globalThis.puedoGestionar = () => true;
 
 const codigo = trozo('const lfEsCita = ', 'async function crmCargarTareasLead') +
   trozo('function crmPintarTareasLead()', '\nasync function crmTareaHecha');
+globalThis._crmTareasFallo = false;
 const crmPintarTareasLead = new Function(codigo + '\nreturn crmPintarTareasLead;')();
 
 let fallos = 0;
@@ -80,6 +81,20 @@ chk('la sección se muestra cuando hay filas', cajas['crm-d-tareas-section'].sty
   const h = cajas['crm-d-tareas'].innerHTML;
   chk('sin permiso la casilla va deshabilitada y se dice por qué',
       /disabled/.test(h) && /Este lead lo lleva otra persona/.test(h));
+}
+
+{
+  // Si la consulta falla, la caja decía «Ninguna tarea pendiente». Es la misma
+  // mentira que se quitó de las otras cajas de la ficha.
+  globalThis._crmTareasFallo = true;
+  globalThis._crmTareasLead = [];
+  crmPintarTareasLead();
+  const h = cajas['crm-d-tareas'].innerHTML;
+  console.log('\nSi la consulta falla, no se dice «ninguna»\n');
+  chk('se dice que no se pudieron cargar', /No se pudieron cargar/.test(h), h.slice(0, 80));
+  chk('y la sección se queda a la vista, no se esconde',
+      cajas['crm-d-tareas-section'].style.display === 'flex');
+  globalThis._crmTareasFallo = false;
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

@@ -313,6 +313,19 @@ console.log('\nQué contestó en la encuesta\n');
       /if \(!e && !d\.pendiente\) return lfGuardarCaja\(leadId, 'lf-nps', ''\)/.test(bloque));
 }
 
+console.log('\nTareas y citas tampoco dicen «ninguna» cuando la consulta falla\n');
+{
+  // Las otras cinco cajas ya lo hacían; estas dos salen de `/api/agenda` y
+  // caían en `[]` sin distinguir «no tiene» de «no se pudo mirar».
+  chk('la consulta de tareas comprueba la respuesta',
+      /if \(!rTar\.ok\) throw new Error\('HTTP ' \+ rTar\.status\)/.test(js));
+  chk('y el fallo queda marcado', /_crmTareasLead = \[\]; _crmTareasFallo = true;/.test(js));
+  chk('la caja de tareas lo dice',
+      /_crmTareasFallo \? 'No se pudieron cargar\.' : hechas/.test(bloque));
+  chk('la de citas también',
+      /_crmTareasFallo \? 'No se pudieron cargar\.' : 'Ninguna cita agendada\.'/.test(bloque));
+}
+
 console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
 {
   // `lfPintar()` corre en cada clic de pestaña o de filtro. Si estas dos cajas

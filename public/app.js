@@ -851,10 +851,16 @@ async function startNewConversation(agentKey) {
 
 async function deleteConversation(convId, agentKey) {
   try {
-    await fetchAuth('/api/profile?type=conversations&action=delete&id=' + convId, { method: 'DELETE' });
+    const r = await fetchAuth('/api/profile?type=conversations&action=delete&id=' + convId, { method: 'DELETE' });
+    if (!r.ok) throw new Error('el servidor respondió ' + r.status);
     if (convId === currentConvId) currentConvId = null;
     loadRecentConversations();
-  } catch(e) { console.warn('deleteConversation error:', e); }
+  } catch(e) {
+    // Se quitaba de la lista igual: al recargar volvía y parecía cosa de
+    // magia. Mejor que no desaparezca y se diga.
+    console.warn('deleteConversation error:', e);
+    if (typeof showToast === 'function') showToast('No se pudo eliminar la conversación', 'error');
+  }
 }
 
 
@@ -2238,10 +2244,13 @@ async function dashLoadList() {
 async function dashDelete(id, name) {
   if (!confirm('¿Eliminar el dashboard de "' + name + '"? El enlace compartido dejará de funcionar.')) return;
   try {
-    await fetchAuth('/api/dashboard', {
+    const r = await fetchAuth('/api/dashboard', {
       method: 'POST',
       body: JSON.stringify({ action: 'delete', dashboardId: id }),
     });
+    // Anunciar «eliminado» sobre un rechazo es de las mentiras más caras: el
+    // panel sigue ahí y quien lo borró ya no vuelve a mirarlo.
+    if (!r.ok) throw await motivoDelFallo(r, 'eliminar el panel');
     showToast('Dashboard eliminado', 'success');
     dashLoadList();
   } catch (e) { alert('Error eliminando: ' + e.message); }
@@ -3298,12 +3307,17 @@ async function dbSaveProfile(agentKey, data) {
   // Clave de Supabase incluye el clientId si hay cliente de agencia activo
   const scopedAgent = agencyActiveClientId ? `client_${agencyActiveClientId}_${agentKey}` : agentKey;
   try {
-    await fetchAuth(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, {
+    const rPerf = await fetchAuth(`/api/profile?type=profile&agent=${encodeURIComponent(scopedAgent)}`, {
       method: 'POST', body: JSON.stringify({ data })
     });
+    if (!rPerf.ok) throw new Error('el servidor respondió ' + rPerf.status);
     localStorage.setItem(getProfileKey(agentKey), JSON.stringify(data));
   } catch(e) {
+    // No se grita: el perfil queda en este navegador y el cliente sigue
+    // trabajando. Pero si deja de subir se pierde al cambiar de equipo y
+    // nadie se entera, así que queda anotado.
     console.warn('dbSaveProfile error:', e);
+    if (typeof errRegistrar === 'function') errRegistrar('perfil del agente sin guardar: ' + (e.message || e), '/api/profile');
     localStorage.setItem(getProfileKey(agentKey), JSON.stringify(data));
   }
 }
@@ -6819,11 +6833,15 @@ async function generateVideo(briefId, btn) {
 
     // 3. Descontar 1 crédito (generación exitosa)
     try {
-      await fetchAuth('/api/video-credits', {
+      const rCred = await fetchAuth('/api/video-credits', {
         method: 'POST',
         body: JSON.stringify({ action: 'deduct' })
       });
-    } catch(ce) { console.warn('No se pudo descontar crédito:', ce.message); }
+      if (!rCred.ok) throw new Error('el servidor respondió ' + rCred.status);
+    } catch(ce) {
+      console.warn('No se pudo descontar crédito:', ce.message);
+      if (typeof errRegistrar === 'function') errRegistrar('crédito de vídeo sin descontar: ' + ce.message, '/api/video-credits');
+    }
 
     // 4. Renderizar video
     card.closest('.msg').remove();
@@ -9348,11 +9366,16 @@ async function generateVideoForPost(postId) {
 
     // 3. Descontar crédito
     try {
-      await fetchAuth('/api/video-credits', {
+      const rCred = await fetchAuth('/api/video-credits', {
         method: 'POST',
         body: JSON.stringify({ action: 'deduct' })
       });
-    } catch(_) {}
+      if (!rCred.ok) throw new Error('el servidor respondió ' + rCred.status);
+    } catch(_) {
+      // El vídeo se entrega igual, pero el crédito que no se descuenta es
+      // plata que se va sin que nadie lo vea. Queda anotado.
+      if (typeof errRegistrar === 'function') errRegistrar('crédito de vídeo sin descontar: ' + (_ && _.message || _), '/api/video-credits');
+    }
 
     // 4. Guardar como videoUrl en el post y reabrir modal
     updateStudioPost(postId, { videoUrl, videoFileName: 'video-ia.mp4', status: 'listo' });
@@ -18343,7 +18366,10 @@ async function pushDesactivar() {
     if (sub) {
       // Primero el servidor: si se cancela en el navegador y falla el borrado,
       // quedaría una suscripción muerta a la que seguiríamos escribiendo.
-      await fetchAuth('/api/push?endpoint=' + encodeURIComponent(sub.endpoint), { method: 'DELETE' });
+      const r = await fetchAuth('/api/push?endpoint=' + encodeURIComponent(sub.endpoint), { method: 'DELETE' });
+      // Si la suscripción no se borra del servidor le seguiríamos escribiendo
+      // a un navegador que ya dijo que no quiere avisos.
+      if (!r.ok) throw await motivoDelFallo(r, 'desactivar los avisos');
       await sub.unsubscribe();
     }
     showToast('Avisos desactivados');
@@ -20862,6 +20888,10 @@ function crmOpenConvFromDetail(convId, channel) {
 // siguiente la tarjeta le decía en rojo que iba atrasado con algo que ya había
 // hecho. Un aviso que miente sobre trabajo hecho enseña a ignorar los avisos.
 let _crmTareasLead = [];
+// Si la consulta falla, la caja decía «Ninguna tarea pendiente»: la misma
+// mentira que se quitó de las otras cinco cajas de la ficha. Con esto se
+// distingue «no tiene» de «no se pudo mirar».
+let _crmTareasFallo = false;
 
 // `/api/agenda?lead_id=` devuelve TODAS las actividades del lead, y las citas
 // son actividades. Sin distinguirlas, una reserva que hizo el propio cliente
@@ -20875,7 +20905,9 @@ async function crmCargarTareasLead(leadId) {
   if (!sec || !cont) return;
   _crmTareasLead = [];
   try {
-    const d = await fetchAuth('/api/agenda?lead_id=' + encodeURIComponent(leadId)).then(r => r.json());
+    const rTar = await fetchAuth('/api/agenda?lead_id=' + encodeURIComponent(leadId));
+    if (!rTar.ok) throw new Error('HTTP ' + rTar.status);
+    const d = await rTar.json();
     // Se quedan las pendientes y las hechas hace poco. Las hechas siguen a la
     // vista a propósito: una casilla que solo va en un sentido no es una
     // casilla. Al marcarla por error —que pasa— la fila desaparecía y no había
@@ -20885,7 +20917,8 @@ async function crmCargarTareasLead(leadId) {
     const limite = Date.now() - 7 * 864e5;
     _crmTareasLead = (d.activities || []).filter(a =>
       !a.done || (a.updated_at && new Date(a.updated_at).getTime() > limite));
-  } catch { _crmTareasLead = []; }
+    _crmTareasFallo = false;
+  } catch { _crmTareasLead = []; _crmTareasFallo = true; }
   crmPintarTareasLead();
 }
 
@@ -20893,6 +20926,11 @@ function crmPintarTareasLead() {
   const sec = document.getElementById('crm-d-tareas-section');
   const cont = document.getElementById('crm-d-tareas');
   if (!sec || !cont) return;
+  if (_crmTareasFallo) {
+    sec.style.display = 'flex';
+    cont.innerHTML = '<div style="font-size:12px;color:var(--muted)">No se pudieron cargar las tareas.</div>';
+    return;
+  }
   if (!_crmTareasLead.length) { sec.style.display = 'none'; cont.innerHTML = ''; return; }
   sec.style.display = 'flex';
   // Un lead de otro comercial se ve, pero no se toca: la ficha ya esconde el
@@ -26828,7 +26866,12 @@ async function agnLoad() {
     const cq = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
     const res = await fetchAuth('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq);
     agnActivities = (await res.json()).activities || [];
-  } catch { agnActivities = []; }
+  } catch {
+    // Un calendario vacío por un fallo de red se lee como «no tengo nada
+    // agendado», que es justo lo contrario de lo que hay que entender.
+    agnActivities = [];
+    showToast('No se pudo cargar la agenda. Reintenta en unos segundos.', 'error');
+  }
   // El estado de Google Calendar sale de una llamada a Google y tardaba ~2s:
   // se consulta en segundo plano y la agenda se pinta sin esperarlo.
   if (!agnGcal.checked) {
@@ -35900,7 +35943,8 @@ async function lpDuplicar(id, titulo) {
 async function lpBorrar(id, titulo) {
   if (!confirm('¿Borrar la página «' + titulo + '»? Si estaba publicada, su enlace dejará de funcionar.')) return;
   try {
-    await fetchAuth('/api/landings?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const r = await fetchAuth('/api/landings?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw await motivoDelFallo(r, 'borrar la página');
     showToast('Página borrada');
     lpRender();
   } catch { showToast('No se pudo borrar', 'error'); }
@@ -38850,7 +38894,9 @@ function lfQueFalta(l) {
               (t.due_at ? '<div class="cuando">' + esc(lfCuando(t.due_at)) + '</div>' : '') +
               '</div></div>';
           }).join('')
-        : '<div class="lf-vacio">' + (hechas ? 'Todo al día.' : 'Ninguna tarea pendiente.') + '</div>') +
+        : '<div class="lf-vacio">' +
+            (_crmTareasFallo ? 'No se pudieron cargar.' : hechas ? 'Todo al día.' : 'Ninguna tarea pendiente.') +
+          '</div>') +
     '</div>' +
 
     '<div class="lf-caja">' +
@@ -38871,7 +38917,8 @@ function lfQueFalta(l) {
                 (pasada ? ' · sin cerrar' : '') +
               '</div></div></div>';
           }).join('')
-        : '<div class="lf-vacio">Ninguna cita agendada.</div>') +
+        : '<div class="lf-vacio">' +
+            (_crmTareasFallo ? 'No se pudieron cargar.' : 'Ninguna cita agendada.') + '</div>') +
     '</div>' +
 
     // Esta caja se pinta entera desde el cargador y NO tiene estado vacío: en

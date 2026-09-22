@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-nada-se-da-por-hecho",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "Más acciones que ya no dan nada por hecho",
+   "texto": "Seguimos el repaso a las acciones que no comprobaban si el servidor había aceptado el cambio. Ahora también avisan: eliminar un panel, borrar una página de aterrizaje, borrar una conversación del agente y desactivar los avisos del móvil. Y dos cajas que decían Â«ninguna tareaÂ» o Â«ninguna citaÂ» cuando en realidad no habían podido consultarlas ahora lo dicen tal cual, igual que el resto de la ficha. La agenda también te avisa si no pudo cargarse, en vez de aparecer vacía como si no tuvieras nada agendado."
+  },
+  {
    "id": "2026-09-22-guardados-que-avisan",
    "fecha": "2026-09-22",
    "tipo": "arreglo",

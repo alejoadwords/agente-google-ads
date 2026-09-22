@@ -32,11 +32,37 @@ const A_PROPOSITO = [
   'lead-activities?avisos=1',
 ];
 
+// Escrituras de FUERA del CRM que se revisaron una por una el 22-09-2026 y se
+// dejaron como están, con el motivo. No aparecen como pendientes; si cambia el
+// motivo, se quitan de aquí y vuelven a la lista.
+const REVISADAS = {
+  'admin?action=save-recommendation': 'telemetría interna del panel de admin',
+  'admin?action=save-snapshot':       'telemetría interna del panel de admin',
+  'admin?action=log-api-action':      'bitácora interna de llamadas a proveedores',
+  'novedades':                        'marcar una novedad como vista; repetirlo no cuesta nada',
+  'upload-media':                     'lee el cuerpo y decide con él (upData)',
+  'upload-image':                     'lee el cuerpo: sin `d.url` no sustituye la imagen',
+  'generate-image':                   'sin `data.images` no añade la lámina; degrada sin mentir',
+  'meta-ads':                         'devuelve el cuerpo; quien llama mira `.error`',
+  'google-ads':                       'devuelve el cuerpo; quien llama lo maneja',
+  'push?prueba=1':                    'mira `d.enviados` y `d.motivo` para decir qué pasó',
+  'refresh-google-token':             'sin `access_token` no guarda nada; degrada',
+  'whatsapp-templates':               'validación en vivo: los errores vienen en `d.errores`',
+  'pauta':                            'documentado: si falla, la cuenta sigue elegida en este navegador',
+};
+
 const sitios = [];
 const re = /fetchAuth\s*\(/g;
 let m;
 while ((m = re.exec(js))) {
   const ini = m.index;
+  // La propia definición y las menciones en comentarios no son llamadas. Sin
+  // esto el recuento salía inflado y daba la impresión de un problema mayor
+  // del que hay.
+  const inicioLinea = js.lastIndexOf('\n', ini) + 1;
+  const sangria = js.slice(inicioLinea, ini);
+  if (/(?:async\s+)?function\s+$/.test(sangria)) continue;
+  if (/(?:^|\s)(\/\/|\*)/.test(sangria)) continue;
   let i = js.indexOf('(', ini), prof = 0, fin = i;
   for (; fin < js.length && fin < ini + 1400; fin++) {
     const c = js[fin];
@@ -55,7 +81,9 @@ while ((m = re.exec(js))) {
     (nombre && new RegExp('\\b' + nombre + '\\.ok\\b').test(despues)) ||
     /\.status\b\s*(===|!==|>=|<|>)/.test(sentencia + despues) ||
     /\b(?:d|data|r|res|resp|j)\.error\b/.test(despues) ||
-    /if\s*\(\s*[A-Za-z_$][\w$]*\.error/.test(despues) ||
+    // Cualquier `algo.error` justo después cuenta: hay sitios que lo miran con
+    // otro nombre de variable (`if (sr && sr.error) …`).
+    /\b[A-Za-z_$][\w$]*\.error\b/.test(despues) ||
     // Mirar la cabecera también es comprobar: el endpoint de propuestas
     // responde en streaming y distingue el fallo por el `content-type`.
     (nombre && new RegExp('\\b' + nombre + '\\.headers\\.get\\b').test(despues));
@@ -71,21 +99,40 @@ while ((m = re.exec(js))) {
 
 const sin = sitios.filter(s => !s.mira);
 const objetivo = sin.filter(s => s.escribe && s.crm && !s.tolerada);
+// Fuera del CRM no se rompe el dato de un cliente, pero una conexión de pauta
+// que se cree desconectada o un panel que se cree borrado también mienten.
+const revisada = (s) => Object.keys(REVISADAS).some(k => s.texto.includes(k));
+const fuera = sin.filter(s => s.escribe && !s.crm && !s.tolerada && !revisada(s));
+const yaVistas = sin.filter(s => s.escribe && !s.crm && !s.tolerada && revisada(s));
+const toleradas = sin.filter(s => s.escribe && s.tolerada);
+const lecturas = sin.filter(s => !s.escribe);
 
 console.log(`\nLlamadas a fetchAuth: ${sitios.length}`);
 console.log(`  comprueban la respuesta: ${sitios.length - sin.length}`);
 console.log(`  no la comprueban:        ${sin.length}`);
-console.log(`     escrituras del CRM sin comprobar: ${objetivo.length}`);
+console.log(`     escrituras del CRM:              ${objetivo.length}   ← estas hacen fallar`);
+console.log(`     escrituras de fuera del CRM:     ${fuera.length}   ← sin revisar`);
+console.log(`     de fuera, revisadas y dejadas:   ${yaVistas.length}`);
+console.log(`     dispara-y-olvida a propósito:    ${toleradas.length}`);
+console.log(`     lecturas:                        ${lecturas.length}`);
 
-if (objetivo.length) {
-  console.log('\nEscrituras del CRM que dan por bueno lo que el servidor rechace:\n');
-  for (const s of objetivo) console.log(`  app.js:${s.linea}  ${s.texto}`);
-}
-
+const lista = (titulo, arr) => {
+  if (!arr.length) return;
+  console.log('\n' + titulo + '\n');
+  for (const s of arr) console.log(`  app.js:${s.linea}  ${s.texto}`);
+};
+lista('Escrituras del CRM que dan por bueno lo que el servidor rechace:', objetivo);
 if (todas) {
-  const resto = sin.filter(s => !objetivo.includes(s));
-  console.log(`\nEl resto sin comprobar (${resto.length}) — lecturas, cosas de fuera del CRM y las toleradas a propósito:\n`);
-  for (const s of resto) console.log(`  app.js:${s.linea}  ${s.texto}`);
+  lista('Escrituras de fuera del CRM sin comprobar ni revisar:', fuera);
+  if (yaVistas.length) {
+    console.log('\nDe fuera del CRM, revisadas y dejadas a propósito:\n');
+    for (const s of yaVistas) {
+      const k = Object.keys(REVISADAS).find(x => s.texto.includes(x));
+      console.log(`  app.js:${s.linea}  ${k} — ${REVISADAS[k]}`);
+    }
+  }
+  lista('Dispara-y-olvida a propósito (llevan su .catch o están en la lista):', toleradas);
+  lista('Lecturas sin comprobar:', lecturas);
 }
 
 // Solo fallan las del CRM: son las que dejan la pantalla mintiendo sobre un
