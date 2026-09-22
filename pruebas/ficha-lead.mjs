@@ -174,6 +174,25 @@ console.log('\nQué envíos masivos le tocaron\n');
       /if \(!envios\.length && !d\.quemado\) return lfGuardarCaja\(leadId, 'lf-camp', ''\)/.test(bloque));
 }
 
+console.log('\nQué contestó en la encuesta\n');
+{
+  chk('se consulta su encuesta',
+      /fetchAuth\('\/api\/nps\?lead_id=' \+ encodeURIComponent\(leadId\)\)/.test(bloque));
+  chk('y un fallo de la consulta se ve', /No se pudo consultar la encuesta/.test(bloque));
+  // El color es el mensaje: un detractor se ve antes de leerlo, y es lo que
+  // cambia cómo se encara la llamada.
+  chk('la categoría pinta la caja',
+      /class="lf-nota ' \+ esc\(e\.clave\)/.test(bloque) &&
+      /\.lf-nota\.detractor\{border-color:var\(--danger\)/.test(css) &&
+      /\.lf-nota\.promotor\{border-color:var\(--success\)/.test(css));
+  // Un 4 solo no dice qué arreglar; lo que escribió, sí.
+  chk('lo que escribió se enseña', /e\.comentario \? '<div class="lf-cita-nps">/.test(bloque));
+  // Una encuesta enviada y sin contestar puede ser un detractor callado.
+  chk('enviada y sin responder también se dice', /todavía sin responder/.test(bloque));
+  chk('sin encuesta ni pendiente, la caja no se pinta',
+      /if \(!e && !d\.pendiente\) return lfGuardarCaja\(leadId, 'lf-nps', ''\)/.test(bloque));
+}
+
 console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
 {
   // `lfPintar()` corre en cada clic de pestaña o de filtro. Si estas dos cajas
@@ -182,20 +201,22 @@ console.log('\nLas cajas que vienen de la red no se pierden al repintar\n');
   chk('propuestas y conversaciones se guardan pintadas',
       /_lfPropsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque) &&
       /_lfConvsHtml \|\| '<div class="lf-vacio">Cargando…/.test(bloque));
-  chk('las automatizaciones y las campañas también',
+  chk('las automatizaciones, las campañas y la encuesta también',
       /'<div id="lf-autos">' \+ _lfAutosHtml \+ '<\/div>'/.test(bloque) &&
-      /'<div id="lf-camp">' \+ _lfCampHtml \+ '<\/div>'/.test(bloque));
-  chk('al cambiar de lead se vacían las cuatro, para no enseñar las del anterior',
-      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';\s*\n\s*_lfAutosHtml = '';\s*\n\s*_lfCampHtml = '';/.test(bloque));
+      /'<div id="lf-camp">' \+ _lfCampHtml \+ '<\/div>'/.test(bloque) &&
+      /'<div id="lf-nps">' \+ _lfNpsHtml \+ '<\/div>'/.test(bloque));
+  chk('al cambiar de lead se vacían las cinco, para no enseñar las del anterior',
+      /_lfPropsHtml = '';\s*\n\s*_lfConvsHtml = '';\s*\n\s*_lfAutosHtml = '';\s*\n\s*_lfCampHtml = '';\s*\n\s*_lfNpsHtml = '';/.test(bloque));
   chk('y lo que llega tarde de otro lead se descarta',
       /if \(lfLead && lfLead\.id !== leadId\) return;/.test(bloque));
   // Decir «ninguna» cuando la consulta falló es peor que no decir nada: se
   // vuelve a redactar una propuesta que ya se había mandado.
-  // Las cuatro cajas que salen a la red: propuestas, conversaciones,
-  // automatizaciones y campañas. Ninguna puede tragarse un 500 y pintar un
-  // vacío: decir «no hay nada» cuando la consulta falló es peor que callar.
-  chk('un fallo de red no se confunde con «no hay nada», en las cuatro',
-      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 4);
+  // Las cinco cajas que salen a la red: propuestas, conversaciones,
+  // automatizaciones, campañas y satisfacción. Ninguna puede tragarse un 500 y
+  // pintar un vacío: decir «no hay nada» cuando la consulta falló es peor que
+  // callar.
+  chk('un fallo de red no se confunde con «no hay nada», en las cinco',
+      (bloque.match(/if \(!r\.ok\) throw new Error\('HTTP ' \+ r\.status\)/g) || []).length === 5);
 }
 
 console.log('\nEn el móvil no se aprietan tres columnas\n');

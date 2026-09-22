@@ -43,6 +43,10 @@
   <button onclick="comoComercial()">como comercial (no puede parar)</button>
   <button onclick="window._quemado='rebote';escena('medio')">con el correo quemado</button>
   <span>·</span>
+  <button onclick="window._nps='detractor';escena('medio')">detractor</button>
+  <button onclick="window._nps='promotor';escena('medio')">promotor</button>
+  <button onclick="window._nps='pendiente';escena('medio')">encuesta sin responder</button>
+  <span>·</span>
   <button onclick="document.body.style.maxWidth=document.body.style.maxWidth?'':'760px'">móvil</button>
 </div>
 
@@ -123,6 +127,17 @@ var CAMPANAS = {
       cuando: new Date(Date.now() - 9 * 864e5).toISOString() },
   ],
 };
+// Con la forma EXACTA de lo que devuelve /api/nps?lead_id=
+var NPS = {
+  detractor: { pendiente: false, encuesta: { nota: 4, categoria: 'Detractor', clave: 'detractor',
+    comentario: 'Tardaron mucho en responderme y ya había alquilado por otro lado.',
+    cuando: new Date(Date.now() - 2 * 864e5).toISOString(),
+    extras: [{ texto: '¿Qué podríamos mejorar?', valor: 'El tiempo de respuesta' }] } },
+  promotor: { pendiente: false, encuesta: { nota: 10, categoria: 'Promotor', clave: 'promotor',
+    comentario: '', cuando: new Date(Date.now() - 6 * 864e5).toISOString(), extras: [] } },
+  pendiente: { pendiente: true, encuesta: null, enviada: new Date(Date.now() - 3 * 864e5).toISOString() },
+  nada: { pendiente: false, encuesta: null },
+};
 var PROPUESTAS = [
   { id: 'pr1', title: 'Arriendo Laureles · 2 alcobas', amount: 1800000, currency: 'COP',
     status: 'viewed', public_token: 'tok1', created_at: new Date(Date.now() - 4 * 864e5).toISOString() },
@@ -144,17 +159,19 @@ function escena(cual) {
   _crmActividadesLead = cual === 'nuevo' ? [] : ACTIVIDADES;
   _crmTareasLead = cual === 'nuevo' ? [] : TAREAS;
   lfLead = l; crmDetailLead = l; lfFiltro = 'todo'; lfPestana = 'quien';
-  _lfPropsHtml = ''; _lfConvsHtml = ''; _lfAutosHtml = ''; _lfCampHtml = '';
+  _lfPropsHtml = ''; _lfConvsHtml = ''; _lfAutosHtml = ''; _lfCampHtml = ''; _lfNpsHtml = '';
   window._sinRed = cual === 'sin-red';
   // Una cuenta que no usa automatizaciones: la caja no debe aparecer.
   window._sinAutos = cual === 'nuevo';
   if (cual !== 'medio') window._quemado = null;
+  if (cual === 'nuevo') window._nps = 'nada';
   window._miPerfil = null;
   lfPintar();
   lfCargarConversaciones(l.id);
   lfCargarPropuestas(l.id);
   lfCargarAutomatizaciones(l.id);
   lfCargarCampanas(l.id);
+  lfCargarNps(l.id);
 }
 
 // Ventas no llega al módulo Marketing: el servidor le rechazaría el «Parar»,
@@ -210,6 +227,7 @@ function comoComercial() {
       ' {ok:true,json:async()=>({proposals:PROPUESTAS})};' +
       ' if(u.indexOf("automations")>=0) return window._sinAutos ? {ok:true,json:async()=>' +
       '({pendientes:[],hechas:[]})} : {ok:true,json:async()=>AUTOS};' +
+      ' if(u.indexOf("/api/nps")>=0) return {ok:true,json:async()=>NPS[window._nps||"detractor"]};' +
       ' if(u.indexOf("campaigns")>=0) return window._sinAutos ? {ok:true,json:async()=>' +
       '({envios:[],quemado:null})} : {ok:true,json:async()=>' +
       '({envios:CAMPANAS.envios,quemado:window._quemado||null})};' +

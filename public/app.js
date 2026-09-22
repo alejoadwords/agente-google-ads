@@ -38012,6 +38012,7 @@ async function crmAbrirFicha(leadId) {
   _lfConvsHtml = '';
   _lfAutosHtml = '';
   _lfCampHtml = '';
+  _lfNpsHtml = '';
   if (crmView !== 'lead') lfVistaAnterior = crmView;
   crmCloseDetail();
   crmSetView('lead');
@@ -38277,6 +38278,7 @@ let _lfPropsHtml = '';
 let _lfConvsHtml = '';
 let _lfAutosHtml = '';
 let _lfCampHtml = '';
+let _lfNpsHtml = '';
 
 /**
  * ¿Puede parar una automatización? El servidor exige el módulo Marketing, así
@@ -38341,6 +38343,7 @@ function lfQueFalta(l) {
     // una cuenta que no usa automatizaciones sobraría en todas las fichas.
     '<div id="lf-autos">' + _lfAutosHtml + '</div>' +
     '<div id="lf-camp">' + _lfCampHtml + '</div>' +
+    '<div id="lf-nps">' + _lfNpsHtml + '</div>' +
 
     '<div class="lf-caja">' +
       '<div class="lf-tit">Propuestas' +
@@ -38437,6 +38440,7 @@ function lfGuardarCaja(leadId, id, html) {
   if (id === 'lf-props') _lfPropsHtml = html;
   else if (id === 'lf-autos') _lfAutosHtml = html;
   else if (id === 'lf-camp') _lfCampHtml = html;
+  else if (id === 'lf-nps') _lfNpsHtml = html;
   else _lfConvsHtml = html;
   const caja = document.getElementById(id);
   if (caja) caja.innerHTML = html;
@@ -38562,6 +38566,51 @@ async function lfCargarCampanas(leadId) {
   }
 }
 
+/**
+ * Qué contestó en la encuesta de satisfacción.
+ *
+ * Cambia cómo se encara la conversación antes de abrirla: llamar a un
+ * detractor sin saber que lo es es la forma más rápida de perderlo del todo.
+ */
+async function lfCargarNps(leadId) {
+  try {
+    const r = await fetchAuth('/api/nps?lead_id=' + encodeURIComponent(leadId));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const e = d.encuesta;
+    if (!e && !d.pendiente) return lfGuardarCaja(leadId, 'lf-nps', '');
+
+    lfGuardarCaja(leadId, 'lf-nps',
+      '<div class="lf-caja">' +
+        '<div class="lf-tit">Satisfacción</div>' +
+        (e
+          ? '<div class="lf-nota ' + esc(e.clave) + '">' +
+              '<div class="num">' + esc(String(e.nota)) + '</div>' +
+              '<div style="min-width:0">' +
+                '<div><b>' + esc(e.categoria) + '</b></div>' +
+                '<div class="cuando">' + (e.cuando ? esc(lfHace(e.cuando)) : '') + '</div>' +
+              '</div>' +
+            '</div>' +
+            // Lo que escribió es el motivo de la nota: un 4 solo no dice qué
+            // arreglar, y es lo que se le menciona al llamarlo.
+            (e.comentario ? '<div class="lf-cita-nps">«' + esc(e.comentario) + '»</div>' : '') +
+            (e.extras || []).map(x =>
+              '<div class="lf-log"><b>' + esc(x.texto) + '</b>' +
+              '<div class="cuando">' + esc(x.valor) + '</div></div>').join('')
+          : '') +
+        // Enviada y sin contestar dice algo: puede ser un detractor callado.
+        (d.pendiente
+          ? '<div class="lf-vacio">Encuesta enviada' +
+            (d.enviada ? ' ' + esc(lfHace(d.enviada)) : '') + ', todavía sin responder.</div>'
+          : '') +
+      '</div>');
+  } catch {
+    lfGuardarCaja(leadId, 'lf-nps',
+      '<div class="lf-caja"><div class="lf-tit">Satisfacción</div>' +
+      '<div class="lf-vacio">No se pudo consultar la encuesta.</div></div>');
+  }
+}
+
 /** Parar un paso programado. El motor va cada 10 min: puede haber salido ya. */
 async function lfPararAuto(jobId) {
   if (!lfLead) return;
@@ -38624,6 +38673,7 @@ function lfHace(iso) {
       lfCargarPropuestas(lfLead.id);
       lfCargarAutomatizaciones(lfLead.id);
       lfCargarCampanas(lfLead.id);
+      lfCargarNps(lfLead.id);
     }
   };
 })();

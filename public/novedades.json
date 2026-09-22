@@ -23,6 +23,17 @@
    "texto": "Si tenías más de un proceso de venta, el selector para cambiar entre ellos había desaparecido del tablero: tus procesos seguían ahí, pero la pantalla no conseguía cargarlos. El mismo fallo afectaba a los agentes de chat, las propuestas, las respuestas rápidas y la sincronización del catálogo, que respondían «no se pudo verificar tu cuenta». Ya está corregido en todos."
   },
   {
+   "id": "2026-09-21-satisfaccion-en-la-ficha",
+   "fecha": "2026-09-21",
+   "tipo": "mejora",
+   "titulo": "La encuesta de satisfacción, en la ficha del contacto",
+   "texto": "Si a un contacto le mandaste la encuesta, en su ficha ves ahora qué contestó: la nota, si quedó como promotor, neutro o detractor —con su color, para verlo antes de leerlo—, lo que escribió y las respuestas a tus preguntas propias, con la pregunta tal como se la hiciste. Cambia cómo encaras la llamada: saber que alguien es detractor antes de marcar su número evita la conversación que lo pierde del todo. Y si la encuesta se envió y todavía no la responde, también te lo decimos: un silencio largo suele ser un detractor callado.",
+   "accion": {
+    "texto": "Ir al CRM",
+    "ir": "crm"
+   }
+  },
+  {
    "id": "2026-09-21-campanas-en-la-ficha",
    "fecha": "2026-09-21",
    "tipo": "nuevo",

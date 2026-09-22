@@ -68,6 +68,69 @@ function categoryFor(score) {
   return score >= 9 ? 'nps promotor' : score >= 7 ? 'nps neutro' : 'nps detractor';
 }
 
+/**
+ * Qué contestó ESTE contacto en la encuesta.
+ *
+ * Exportada aparte del handler para poder ejecutarla de verdad en
+ * pruebas/nps-ficha.mjs. Lo que aquí se puede equivocar callado son dos cosas:
+ * una fila existe desde que la encuesta se ENVÍA, así que `score` nulo no es
+ * «un cero», es «todavía no ha contestado»; y las preguntas propias se leen de
+ * la copia que guardó la respuesta, no de la configuración de hoy, o una
+ * pregunta reescrita pondría el texto nuevo encima de la respuesta vieja.
+ */
+export async function encuestaDelLead(userId, leadId, clienteDelMiembro) {
+  // El alcance por cliente sale del LEAD, no del parámetro: un miembro atado a
+  // un cliente no mira los contactos de otro aunque escriba el id a mano.
+  if (clienteDelMiembro) {
+    const lr = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&user_id=eq.${encodeURIComponent(userId)}&select=client_id`,
+      { headers: sbHeaders() }
+    );
+    const lead = (lr.ok ? ((await lr.json()) || []) : [])[0];
+    if (!lead || String(lead.client_id || '') !== String(clienteDelMiembro)) return { encuesta: null, pendiente: false };
+  }
+
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/nps_responses?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${leadId}` +
+    `&select=score,comment,sent_at,responded_at,answers,preguntas&order=sent_at.desc&limit=5`,
+    { headers: sbHeaders() }
+  );
+  if (!r.ok) throw new Error('No se pudo leer la encuesta');
+  const filas = (await r.json()) || [];
+  if (!filas.length) return { encuesta: null, pendiente: false };
+
+  const contestada = filas.find(f => f.score !== null && f.score !== undefined);
+  // Una encuesta enviada y sin contestar dice algo: puede ser un detractor
+  // callado. Vale la pena verla aunque no haya nota.
+  const pendiente = filas[0].score === null || filas[0].score === undefined;
+  if (!contestada) return { encuesta: null, pendiente, enviada: filas[0].sent_at };
+
+  const cat = categoryFor(contestada.score);
+  // Las preguntas propias salen de la copia que guardó ESTA respuesta.
+  const defs = Array.isArray(contestada.preguntas) ? contestada.preguntas : [];
+  const resp = (contestada.answers && typeof contestada.answers === 'object') ? contestada.answers : {};
+  const extras = defs
+    .map(d => ({ texto: d.texto, valor: resp[d.id] }))
+    .filter(x => x.texto && x.valor !== undefined && x.valor !== null && x.valor !== '')
+    .slice(0, 3)
+    .map(x => ({ texto: String(x.texto).slice(0, 80), valor: String(x.valor).slice(0, 120) }));
+
+  return {
+    encuesta: {
+      nota: contestada.score,
+      // 'nps promotor' → 'Promotor'. La etiqueta del lead se llama igual, así
+      // que quien la vea en la ficha reconoce de dónde salió.
+      categoria: cat.replace('nps ', '').replace(/^./, c => c.toUpperCase()),
+      clave: cat.replace('nps ', ''),
+      comentario: contestada.comment || '',
+      cuando: contestada.responded_at || contestada.sent_at,
+      extras,
+    },
+    pendiente,
+    enviada: pendiente ? filas[0].sent_at : null,
+  };
+}
+
 const LOGO_SVG = '<span style="display:inline-flex;align-items:center;gap:2px"><svg width="30" height="30" viewBox="0 0 75 75" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#1E2BCC" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/><path fill="#1E2BCC" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/><circle fill="#1E2BCC" cx="60.13" cy="10.7" r="5.3"/></svg><span style="font-size:21px;font-weight:800;color:#0b0b14;letter-spacing:-.5px">cuarius</span></span>';
 
 function page(inner, cfg) {
@@ -101,6 +164,17 @@ export default async function handler(req) {
       if (tw?.[0]?.owner_user_id) { userId = tw[0].owner_user_id; clienteDelMiembro = tw[0].client_id || null; }
     } catch {}
     const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
+
+    // GET ?lead_id= — qué contestó este contacto, para su ficha
+    if (req.method === 'GET' && url.searchParams.get('lead_id')) {
+      const leadId = url.searchParams.get('lead_id');
+      if (!/^[0-9a-f-]{32,36}$/i.test(leadId)) return jsonResp({ error: 'lead_id inválido' }, 400);
+      try {
+        return jsonResp(await encuestaDelLead(userId, leadId, clienteDelMiembro));
+      } catch (e) {
+        return jsonResp({ error: String(e.message || e) }, 502);
+      }
+    }
 
     // ── La encuesta: leerla y guardarla ──
     if (url.searchParams.get('config')) {
