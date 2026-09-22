@@ -19969,15 +19969,32 @@ function crmSetupDrop(el, stageKey) {
       // venía de la etapa vieja—, y leyendo el código no se ve quién la
       // devuelve. Esto no lo arregla: lo delata, con lo que haga falta para
       // encontrarlo. Cuando no pasa, no cuesta nada ni se ve.
-      setTimeout(() => {
-        const ahora = (crmLeads || []).find(l => l.id === leadId);
-        if (ahora && ahora.stage !== stageKey && typeof errRegistrar === 'function') {
-          errRegistrar(
-            'la tarjeta volvió sola: guardado ' + stageKey + ' pero en pantalla quedó ' + ahora.stage +
-            ' · mismo objeto=' + (ahora === lead) + ' · leads en memoria=' + (crmLeads || []).length,
-            'tablero/mover');
-        }
-      }, 1500);
+      // El registro anterior ya dijo QUÉ pasa: el objeto es el mismo y el
+      // número de leads no cambia, así que nadie recarga nada — alguien le
+      // asigna la etapa vieja. Leyendo el código no aparece quién, así que se
+      // vigila la propiedad unos segundos y se anota la PILA de quien escriba
+      // algo distinto a lo que se acaba de guardar. Es temporal: en cuanto se
+      // sepa el nombre, esto se va.
+      try {
+        let real = lead.stage;
+        Object.defineProperty(lead, 'stage', {
+          configurable: true,
+          // `enumerable` sí: sin él, el lead dejaría de serializarse con su
+          // etapa y romperíamos justo lo que venimos a mirar.
+          enumerable: true,
+          get() { return real; },
+          set(v) {
+            if (v !== stageKey && typeof errRegistrar === 'function') {
+              const pila = String(new Error('quien').stack || '')
+                .split('\n').slice(1, 6).map(s => s.trim()).join('  <=  ');
+              errRegistrar('devuelve la tarjeta a ' + v + ' (guardado ' + stageKey + ') · ' + pila,
+                'tablero/mover');
+            }
+            real = v;
+          },
+        });
+        setTimeout(() => { try { delete lead.stage; lead.stage = real; } catch {} }, 4000);
+      } catch {}
       // El registro de la actividad es secundario: que falle NO deshace un
       // movimiento que sí se guardó.
       fetchAuth('/api/lead-activities', {
