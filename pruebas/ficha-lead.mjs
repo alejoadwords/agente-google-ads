@@ -76,8 +76,12 @@ console.log('\nEl panel sigue siendo el sitio para mirar rápido\n');
 {
   chk('el panel conserva su botón de abrir la ficha',
       /onclick="crmAbrirFicha\(crmDetailLead && crmDetailLead\.id\)"/.test(html));
+  // El cierre pasó ARRIBA del todo a propósito: `crmCloseDetail()` anula
+  // `crmDetailLead`, así que tiene que correr antes de apuntarlo al lead. El
+  // orden lo vigila pruebas/ficha-acciones.mjs, que lo ejecuta.
   chk('y la ficha cierra el panel al abrirse, en vez de dejar los dos',
-      /crmCloseDetail\(\);\s*\n\s*crmSetView\('lead'\)/.test(bloque));
+      /crmCloseDetail\(\);\s*\n\s*crmDetailLead = lead;/.test(bloque) &&
+      /crmSetView\('lead'\);/.test(bloque));
 }
 
 console.log('\nLa ficha tiene su dirección\n');
