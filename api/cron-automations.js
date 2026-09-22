@@ -180,9 +180,35 @@ async function emailWasOpened(job) {
 // Encuesta NPS: crea el registro con token único y envía el email con la
 // escala 0-10. La respuesta (api/nps.js) etiqueta al lead como nps promotor/
 // neutro/detractor y eso dispara las automatizaciones tag_added del usuario.
+// Cuántos días tienen que pasar para volver a encuestar al mismo contacto.
+//
+// No es «una sola vez por lead» como la reseña: medir la satisfacción cada
+// cierto tiempo es justo para lo que sirve esto, y bloquearlo para siempre
+// impediría la encuesta anual o la de después de la segunda compra.
+//
+// Lo que sí hay que impedir es la ráfaga: una automatización que se dispara
+// dos veces —o dos automatizaciones que acaban en el mismo lead— mandaba dos
+// correos con minutos de diferencia y creaba DOS filas. El cliente recibía la
+// misma encuesta dos veces y el reporte contaba dos envíos y, si contestaba
+// las dos, dos respuestas: la tasa de respuesta y el NPS salían falseados.
+const DIAS_ENTRE_ENCUESTAS = 30;
+
+export async function yaSeEncuesto(leadId) {
+  const desde = new Date(Date.now() - DIAS_ENTRE_ENCUESTAS * 864e5).toISOString();
+  const previas = await sb(`/nps_responses?lead_id=eq.${leadId}` +
+    `&sent_at=gte.${encodeURIComponent(desde)}&select=id&limit=1`);
+  return Array.isArray(previas) && previas.length > 0;
+}
+
 async function actionSendNps(step, lead, auto) {
   if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
   if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
+  // Se comprueba ANTES de insertar la fila: la fila ES el envío, así que
+  // crearla y decidir después ya habría ensuciado el reporte.
+  if (await yaSeEncuesto(lead.id)) {
+    return { result: 'skipped',
+      detail: `A este lead ya se le mandó la encuesta hace menos de ${DIAS_ENTRE_ENCUESTAS} días` };
+  }
   // La encuesta es de la CUENTA. El paso puede sobreescribir los textos del
   // correo —había automatizaciones con textos propios desde antes de que
   // existiera la pantalla— pero las preguntas y la marca salen de la config.

@@ -104,9 +104,13 @@ Lee hasta **1.000 filas**, acotadas al cliente activo.
   en la base hay un 9.
 - **Las preguntas viajan con el envío.** Reescribir una mañana no cambia lo
   contestado ayer.
-- **NO hay protección contra duplicados.** `pedir_resena` tiene `yaSePidio()`;
-  `send_nps` no. Si la automatización se dispara dos veces sobre el mismo
-  lead, salen dos correos y dos filas, y las dos cuentan en el reporte.
+- **No se reenvía antes de 30 días** (`DIAS_ENTRE_ENCUESTAS` en
+  `api/cron-automations.js`). Impide la ráfaga —una automatización que se
+  dispara dos veces mandaba dos correos y creaba dos filas, falseando la tasa
+  de respuesta y el NPS— pero **no** bloquea para siempre como la reseña:
+  encuestar cada cierto tiempo es justo para lo que sirve. El candado mira la
+  fecha de ENVÍO, no la de respuesta. Cuando salta, la bitácora dice
+  `skipped · A este lead ya se le mandó la encuesta hace menos de 30 días`.
 - **Requiere plan Pro o Agency** (va dentro de automatizaciones) y **email del
   lead**.
 - **Sale por la cuota diaria de Resend**, que es de toda la plataforma. Ver la

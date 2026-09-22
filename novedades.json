@@ -2,6 +2,13 @@
  "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
  "novedades": [
   {
+   "id": "2026-09-22-encuesta-no-se-repite",
+   "fecha": "2026-09-22",
+   "tipo": "arreglo",
+   "titulo": "La encuesta de satisfacción ya no se manda dos veces",
+   "texto": "Si una automatización se disparaba dos veces sobre el mismo contacto —o si tenías dos que acababan en él— le llegaba la misma encuesta repetida con minutos de diferencia, y en tu reporte contaba como dos envíos, así que la tasa de respuesta y el NPS salían más bajos de lo real. Ahora no se le reenvía a un mismo contacto antes de 30 días. Pasado ese tiempo sí, porque medir la satisfacción cada cierto tiempo es justo para lo que sirve: no queda bloqueado para siempre. Cuando el envío se salta por este motivo, te lo decimos en el historial de la automatización."
+  },
+  {
    "id": "2026-09-22-buscar-si-ya-existe",
    "fecha": "2026-09-22",
    "tipo": "nuevo",
