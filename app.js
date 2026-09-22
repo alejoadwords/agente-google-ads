@@ -19953,6 +19953,21 @@ function crmSetupDrop(el, stageKey) {
         body: JSON.stringify({ id: leadId, stage: stageKey }),
       });
       if (!res.ok) throw await motivoDelFallo(res, 'mover');
+      // El servidor lo guardó. Un rato después, ¿la pantalla sigue diciendo lo
+      // mismo? Se reportó que la tarjeta vuelve sola a su columna aunque el
+      // cambio SÍ quedó guardado —cinco veces seguidas, cada una diciendo que
+      // venía de la etapa vieja—, y leyendo el código no se ve quién la
+      // devuelve. Esto no lo arregla: lo delata, con lo que haga falta para
+      // encontrarlo. Cuando no pasa, no cuesta nada ni se ve.
+      setTimeout(() => {
+        const ahora = (crmLeads || []).find(l => l.id === leadId);
+        if (ahora && ahora.stage !== stageKey && typeof errRegistrar === 'function') {
+          errRegistrar(
+            'la tarjeta volvió sola: guardado ' + stageKey + ' pero en pantalla quedó ' + ahora.stage +
+            ' · mismo objeto=' + (ahora === lead) + ' · leads en memoria=' + (crmLeads || []).length,
+            'tablero/mover');
+        }
+      }, 1500);
       // El registro de la actividad es secundario: que falle NO deshace un
       // movimiento que sí se guardó.
       fetchAuth('/api/lead-activities', {
