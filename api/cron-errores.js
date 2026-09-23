@@ -52,7 +52,7 @@ export default async function handler(req) {
       }).catch(() => {});
     }
   }
-  await latir('cron-errores', { vigilados: latidos ? Object.keys(latidos).length : 0 });
+  await latir('cron-errores', { vigilados: latidos?.length || 0 });
 
   const todos = await fetch(
     `${SUPABASE_URL}/rest/v1/error_log?avisado_at=is.null&resuelto=is.false` +
