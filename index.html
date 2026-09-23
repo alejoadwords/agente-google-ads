@@ -2423,7 +2423,22 @@ a.lf-prop:hover{border-color:var(--blue)}
 .pwa-txt span{font-size:12px;color:var(--muted);line-height:1.4}
 .pwa-x{background:none;border:0;color:var(--muted2);font-size:15px;cursor:pointer;padding:2px 4px;flex-shrink:0}
 .pwa-x:hover{color:var(--text)}
-@media(max-width:520px){.pwa-barra{flex-wrap:wrap}.pwa-txt{flex:1 1 100%;order:2}}
+/* En móvil la barra envuelve. La primera versión daba al texto `flex:1 1 100%`
+   con `order:2`, y eso lo mandaba a la segunda fila DETRÁS del botón: se leía
+   «icono · Instalar · ✕» y debajo «Instala Acuarius». El botón aparecía antes
+   que la frase que lo explica.
+   Ahora la primera fila es icono + texto —que es lo que se lee— y el botón
+   baja entero a la segunda, donde además es un blanco de toque mucho mayor. */
+@media(max-width:520px){
+  .pwa-barra{flex-wrap:wrap;align-items:flex-start}
+  .pwa-barra img{order:1}
+  /* base 0, no `auto`: con `auto` el texto reclama el ancho de su contenido y
+     empuja la ✕ a una línea suelta. Con 0 caben icono + texto + ✕ en la
+     primera fila y el texto envuelve por dentro, que es lo que se quiere. */
+  .pwa-txt{flex:1 1 0;order:2;min-width:0}
+  .pwa-x{order:3;align-self:flex-start;margin-top:-2px}
+  .pwa-barra .btn-pri{order:4;flex:1 1 100%;margin-top:2px}
+}
 /* ── Páginas de aterrizaje ───────────────────────────────────────────────── */
 .lp-lista{display:flex;flex-direction:column;gap:10px}
 .lp-item{display:flex;align-items:center;gap:14px;background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:14px 16px}
