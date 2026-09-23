@@ -144,7 +144,7 @@ async function nombreDe(cuenta, quienId) {
 
 async function traspasar(cuenta, suyo, destino) {
   const nombre = await nombreDe(cuenta, destino);
-  const movido = { leads: 0, formularios: 0, reglas: 0, fuentes: 0, hacia: nombre };
+  const movido = { leads: 0, formularios: 0, reglas: 0, fuentes: 0, notas: 0, hacia: nombre };
 
   const rLeads = await fetch(
     `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(cuenta)}&assigned_to=eq.${encodeURIComponent(suyo)}&deleted_at=is.null`,
@@ -154,7 +154,36 @@ async function traspasar(cuenta, suyo, destino) {
       // ya nacen marcados como olvidados.
       body: JSON.stringify({ assigned_to: destino, assigned_name: nombre, updated_at: new Date().toISOString() }) }
   );
-  if (rLeads.ok) movido.leads = ((await rLeads.json()) || []).length;
+  let idsMovidos = [];
+  if (rLeads.ok) {
+    idsMovidos = ((await rLeads.json()) || []).map(l => l.id).filter(Boolean);
+    movido.leads = idsMovidos.length;
+  }
+
+  // Las notas que la dirección le dejó y aún no ha abierto viajan con la
+  // cartera. Sin esto se quedan dirigidas a quien ya no entra: la campana que
+  // las enseña filtra por `metadata->>para`, así que nadie vuelve a verlas.
+  // En Certain quedaron diez así, del 15 al 17-09, y nadie se enteró.
+  //
+  // Solo las de los leads que de verdad cambiaron de manos: una nota sobre un
+  // lead que no se movió no es asunto del destinatario nuevo.
+  if (idsMovidos.length) {
+    try {
+      const enLista = `(${idsMovidos.map(encodeURIComponent).join(',')})`;
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${encodeURIComponent(cuenta)}&type=eq.nota` +
+        `&metadata->>para=eq.${encodeURIComponent(suyo)}&metadata->>leida_at=is.null&lead_id=in.${enLista}` +
+        `&select=id,metadata`,
+        { headers: sbHeaders() }).then(x => (x.ok ? x.json() : [])).catch(() => []);
+      for (const nota of r || []) {
+        const ok = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${nota.id}`, {
+          method: 'PATCH', headers: sbHeaders(),
+          body: JSON.stringify({ metadata: { ...(nota.metadata || {}), para: destino, redirigida_de: suyo } }),
+        });
+        if (ok.ok) movido.notas = (movido.notas || 0) + 1;
+      }
+    } catch { /* una nota que no se puede redirigir no puede tumbar el traspaso */ }
+  }
 
   const rForms = await fetch(
     `${SUPABASE_URL}/rest/v1/lead_forms?user_id=eq.${encodeURIComponent(cuenta)}&assigned_to=eq.${encodeURIComponent(suyo)}`,

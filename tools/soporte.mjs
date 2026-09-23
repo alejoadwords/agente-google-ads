@@ -92,7 +92,7 @@ async function radiografia(busqueda) {
   const avisos = [];
   const avisar = (nivel, texto) => avisos.push({ nivel, texto });
 
-  const [equipo, fuentes, pipelines, canales, plataformas, autos, perfiles, leads, tareas, paginas, campanas, pagos] = await Promise.all([
+  const [equipo, fuentes, pipelines, canales, plataformas, autos, perfiles, leads, tareas, paginas, campanas, pagos, notasHuerfanas] = await Promise.all([
     sql(`select member_name, member_email, role, status, member_user_id from public.team_members where owner_user_id = '${id}';`),
     sql(`select name, token, active, tipo, submissions, last_submission_at, pipeline_id, client_id from public.lead_forms where user_id = '${id}' order by created_at;`),
     sql(`select p.id, p.name, p.is_default, p.client_id,
@@ -122,6 +122,21 @@ async function radiografia(busqueda) {
     sql(`select title, slug, published, visits from public.landings where user_id = '${id}';`),
     sql(`select name, status, channel, sent_at from public.campaigns where user_id = '${id}' order by created_at desc limit 5;`),
     sql(`select plan, status, amount, period_end from public.billing where user_id = '${id}' order by period_end desc;`),
+    // Notas de la dirección dirigidas a alguien que ya no está en el equipo.
+    // La campana filtra por `metadata->>para`, así que una nota dirigida a
+    // quien se fue no la ve nadie nunca más. Hasta 09-2026 el traspaso no se
+    // las llevaba: en Certain quedaron diez así y solo salieron a la luz
+    // mirando la base a mano.
+    sql(`select count(*) as cuantas, min(la.created_at)::date as mas_vieja,
+                count(distinct la.metadata->>'para') as personas
+         from public.lead_activities la
+         where la.user_id = '${id}' and la.type = 'nota'
+           and la.metadata->>'para' is not null
+           and la.metadata->>'leida_at' is null
+           and la.metadata->>'para' <> '${id}'
+           and not exists (select 1 from public.team_members t
+                           where t.member_user_id = la.metadata->>'para'
+                             and t.owner_user_id = '${id}' and t.status = 'active');`),
   ]);
 
   const L = leads[0] || {}, T = tareas[0] || {};
@@ -203,6 +218,11 @@ async function radiografia(busqueda) {
   }
   if (equipo.some((m) => !m.member_user_id && m.status !== 'revoked')) {
     avisar('medio', 'Hay invitaciones de equipo sin aceptar: esa persona no ve nada todavía.');
+  }
+  const NH = notasHuerfanas[0] || {};
+  if (Number(NH.cuantas) > 0) {
+    avisar('medio', `${NH.cuantas} nota(s) de dirección sin leer dirigidas a ${NH.personas} persona(s) que ya no están en el equipo ` +
+      `(la más vieja del ${NH.mas_vieja}). No las ve nadie: la campana filtra por destinatario.`);
   }
   if (!claves.has('__assign_rules__') && comerciales.length) {
     avisar('medio', 'Hay equipo pero el reparto automático nunca se configuró: los leads llegan sin dueño.');

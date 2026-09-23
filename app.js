@@ -30457,7 +30457,10 @@ async function teamConfirmarTraspaso(id) {
     if (!r.ok) throw new Error(d.error || 'No se pudo completar el traspaso.');
     document.getElementById('team-traspaso')?.remove();
     const mv = d.movido || {};
-    showToast('Listo: ' + (mv.leads || 0) + ' leads pasaron a ' + (mv.hacia || 'su nuevo responsable'));
+    // Las notas sin leer se dicen aparte: son avisos de la dirección que el
+    // nuevo responsable tiene que abrir, no un detalle del traspaso.
+    showToast('Listo: ' + (mv.leads || 0) + ' leads pasaron a ' + (mv.hacia || 'su nuevo responsable') +
+      (mv.notas ? ' · ' + mv.notas + ' nota' + (mv.notas === 1 ? '' : 's') + ' sin leer también' : ''));
     teamRenderSettings();
     // La cartera abierta detrás sigue mostrando al responsable viejo hasta que
     // se recarga: se recarga sola en vez de dejar la pantalla mintiendo.
