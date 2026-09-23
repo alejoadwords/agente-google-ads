@@ -50,13 +50,18 @@ ok(!callados(viernes, SABADO).some(c => c.cron === 'cron-tasks'),
 ok(callados(sinTareas, MIERCOLES).some(c => c.cron === 'cron-tasks'),
    'pero el mismo silencio entre semana sí avisa');
 
-// Un cron que nunca ha latido: o no está enchufado, o lleva días muerto.
+// Un cron que NUNCA ha latido no se denuncia: el día de estrenar esto la tabla
+// está vacía y saltarían los seis de golpe. Lo que se vigila es que uno DEJE
+// de correr.
 const faltaUno = alDia.filter(l => l.cron !== 'cron-trials');
-const f2 = callados(faltaUno, MIERCOLES);
-ok(f2.some(c => c.cron === 'cron-trials' && c.desde === null), 'un cron sin ningún latido también sale');
+ok(!callados(faltaUno, MIERCOLES).some(c => c.cron === 'cron-trials'),
+   'un cron que aún no ha latido nunca no genera aviso');
+ok(callados([], MIERCOLES).length === 0, 'con la tabla vacía no avisa de nada — el primer día no suena');
+ok(callados(null, MIERCOLES).length === 0, 'y con null no revienta');
 
-// Sin datos no se puede fingir que todo está bien.
-ok(callados([], MIERCOLES).length === Object.keys(CADA).length, 'con la tabla vacía avisa de todos');
-ok(callados(null, MIERCOLES).length === Object.keys(CADA).length, 'y con null no revienta');
+// Pero en cuanto late una vez, ya queda vigilado.
+const yaLatio = [{ cron: 'cron-trials', ultima_vez: hace(60 * 31) }];
+ok(callados(yaLatio, MIERCOLES).some(c => c.cron === 'cron-trials'),
+   'en cuanto late una vez, su silencio posterior sí avisa');
 
 process.exit(mal ? 1 : 0);

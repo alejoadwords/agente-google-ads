@@ -91,7 +91,15 @@ export function callados(latidos, ahora = new Date()) {
   for (const [cron, minutos] of Object.entries(CADA)) {
     if (finDeSemana && soloEntreSemana.includes(cron)) continue;
     const l = porNombre[cron];
-    if (!l) { fuera.push({ cron, desde: null }); continue; }
+    // Un cron que NUNCA ha latido no se denuncia. La primera versión sí lo
+    // hacía, y eso significaba que el minuto de estrenar esto —tabla vacía,
+    // ningún cron ha corrido todavía— el aviso habría salido con los seis
+    // dentro. Seis falsos positivos el primer día es la forma más rápida de
+    // que el aviso se ignore para siempre.
+    //
+    // Lo que esto vigila es que un cron DEJE de correr, que es el fallo real.
+    // Que uno nunca arranque se ve al enchufarlo, y lo cubre la prueba.
+    if (!l) continue;
     const callado = (ahora.getTime() - new Date(l.ultima_vez).getTime()) / 60000;
     if (callado > tolerancia(minutos)) fuera.push({ cron, desde: l.ultima_vez, minutos: Math.round(callado) });
   }
