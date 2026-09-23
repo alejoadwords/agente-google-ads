@@ -20,6 +20,7 @@ export const config = { runtime: 'edge' };
 import { quienPregunta, exigeModulo, soloSusLeads, alcanceDeCliente } from './_perfiles.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { dondePreguntar } from './_google-login.js';
+import { resolverClics, consultaDelDia, filasAClics, pendientes as clicsPendientes } from './_gclid.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -376,6 +377,47 @@ function monedaDe(filas) {
   return ms.length === 1 ? ms[0] : null;
 }
 
+// Le pregunta a Google de qué campaña es cada clic que llegó suelto. Nunca
+// lanza: es una mejora del dato, y si Google no contesta la pantalla tiene que
+// salir igual —con los leads sin atribuir, como salía antes—. Lo que sí hace
+// es DECIR que no pudo, en vez de dejar un cero que parece un dato.
+async function atribuirPorClic(conexiones, leads) {
+  const cuentas = (conexiones || []).filter(c => c.platform === 'google_ads' && c.account_id);
+  if (!cuentas.length || !clicsPendientes(leads).length) return null;
+
+  const guardar = async (leadId, campos) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(leadId)}`, {
+      method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ custom_fields: campos }),
+    });
+    // Si no se guarda, la atribución se pierde al recargar y se volvería a
+    // preguntar. No rompe la pantalla, pero no puede pasar en silencio.
+    if (!r.ok) throw new Error('no se pudo guardar la campaña del clic: ' + r.status);
+  };
+
+  const total = { resueltos: 0, sin_campana: 0, fuera_de_ventana: 0, dias: 0, pendientes: 0, error: null };
+  for (const [i, fila] of cuentas.entries()) {
+    if (!clicsPendientes(leads).length) break;
+    try {
+      const token = await refrescarGoogle(fila);
+      if (!token) continue;
+      const cid = String(fila.account_id).replace(/-/g, '');
+      const login = await porDondePreguntar(fila, token, cid);
+      const c = await resolverClics({
+        leads,
+        consultarDia: async (dia) => filasAClics(await gaql(cid, token, consultaDelDia(dia), login)),
+        guardar,
+        // Solo la última cuenta puede decir «este clic no es de nadie».
+        marcarSinCampana: i === cuentas.length - 1,
+      });
+      for (const k of ['resueltos', 'sin_campana', 'fuera_de_ventana', 'dias', 'pendientes']) total[k] += c[k];
+    } catch (e) {
+      total.error = 'No se pudo preguntarle a Google de qué campaña vino cada clic.';
+      console.error('[pauta] atribución por clic:', e?.message);
+    }
+  }
+  return total;
+}
+
 async function listaDeCampanas(quien, url) {
   const { desde, hasta } = rangoPorDefecto(url);
   // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
@@ -388,6 +430,12 @@ async function listaDeCampanas(quien, url) {
     traerCampanas(conexiones, desde, hasta),
     leadsDelPeriodo(quien.userId, clientId, desde, hasta, soloDe),
   ]);
+
+  // Antes de unir: los leads que solo traen el gclid no casan con ninguna
+  // campaña hasta que se le pregunta a Google de cuál vino. Lo averiguado se
+  // guarda en el lead, así que esto se paga una vez por lead y no en cada
+  // carga de la pantalla.
+  const porClic = await atribuirPorClic(conexiones, leads);
 
   const campanas = resultados.flatMap(r => r.filas);
   const { filas, huerfanos, sueltos } = unir(campanas, leads);
@@ -405,6 +453,10 @@ async function listaDeCampanas(quien, url) {
     conexiones: resultados.map(estadoConexion),
     campanas: filas,
     sin_campana: { ...sinCampana, motivo: 'Entraron sin el dato de campaña, o por una fuente que no lo manda.' },
+    // Qué pasó con los leads que solo traían el clic del anuncio. Va al
+    // navegador para poder decirlo: si Google no contestó, el cliente tiene
+    // que saber que ese cero es «no se pudo mirar» y no «no hubo».
+    por_clic: porClic,
     fuera_de_rango: resumenCrm(sueltos),
     totales: {
       inversion: moneda === null ? null : Math.round(invTotal),
