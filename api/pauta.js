@@ -29,6 +29,16 @@ const CORS = {
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// Versiones de la API de Google Ads que existen HOY. Comprobado contra la
+// cuenta real el 23-09-2026: v21, v20 y v19 devuelven 404 — Google las retiró.
+// El código las seguía listando y, peor, caía en la v21 como valor por defecto
+// cuando no había sondeado: eso es una llamada muerta, no un respaldo.
+//
+// Se sondea la 22 primero porque es la que está en uso y probada, con la 23
+// detrás para el día que retiren la 22. Cuando eso pase, el respaldo también
+// hay que subirlo: un número aquí no avisa solo.
+const VERSIONES = [22, 23];
+const VERSION_SEGURA = 22;
 const DEV_TOKEN = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
 const GRAPH = 'https://graph.facebook.com/v19.0';
 
@@ -172,7 +182,7 @@ async function gaql(customerId, token, query, login) {
   if (login) h['login-customer-id'] = login;
   // Se prueban varias versiones porque Google retira las viejas sin avisarnos:
   // atarse a una sola convierte una depreciación en una pantalla en blanco.
-  for (const v of [22, 21, 20]) {
+  for (const v of VERSIONES) {
     const r = await fetch(`https://googleads.googleapis.com/v${v}/customers/${customerId}/googleAds:search`, {
       method: 'POST', headers: h, body: JSON.stringify({ query }),
     });
@@ -643,7 +653,7 @@ async function cuentasDisponibles(quien, url) {
   if (!token) return jsonResp({ error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' }, 502);
   const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN };
   let raices = [];
-  for (const v of [22, 21, 20]) {
+  for (const v of VERSIONES) {
     const r = await fetch(`https://googleads.googleapis.com/v${v}/customers:listAccessibleCustomers`, { headers: h });
     if (r.ok) { raices = ((await r.json()).resourceNames || []).map(n => n.split('/').pop()); break; }
   }

@@ -7,6 +7,16 @@ export const config = { runtime: 'edge' };
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const ANTHROPIC_KEY       = process.env.ANTHROPIC_API_KEY;
+// Versiones de la API de Google Ads que existen HOY. Comprobado contra la
+// cuenta real el 23-09-2026: v21, v20 y v19 devuelven 404 — Google las retiró.
+// El código las seguía listando y, peor, caía en la v21 como valor por defecto
+// cuando no había sondeado: eso es una llamada muerta, no un respaldo.
+//
+// Se sondea la 22 primero porque es la que está en uso y probada, con la 23
+// detrás para el día que retiren la 22. Cuando eso pase, el respaldo también
+// hay que subirlo: un número aquí no avisa solo.
+const VERSIONES = [22, 23];
+const VERSION_SEGURA = 22;
 const DEV_TOKEN           = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
 const MCC_ID              = process.env.GOOGLE_ADS_MCC_ID;
 const META_BASE           = 'https://graph.facebook.com/v19.0';
@@ -132,7 +142,7 @@ async function getApiVersion(customerId, accessToken) {
   // Sin `login-customer-id`, igual que en api/google-ads.js: esta sonda solo
   // busca qué versión existe, y el administrador no cambia esa respuesta — solo
   // añade una forma de fallar en las cuentas que no cuelgan de él.
-  for (const ver of [22, 21, 20, 19, 18]) {
+  for (const ver of VERSIONES) {
     const h = { 'Authorization': `Bearer ${accessToken}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
     try {
       const r = await fetch(
