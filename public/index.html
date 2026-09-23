@@ -3429,6 +3429,31 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 /* Export button */
 .crm-export-btn{display:flex;align-items:center;gap:5px;padding:6px 11px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg);font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s;flex-shrink:0}
 .crm-export-btn:hover{border-color:var(--blue);color:var(--blue)}
+
+/* Aviso de versión nueva. Barra, no toast: un toast se va solo y quien estaba
+   escribiendo no llega a leerlo. Abajo y no arriba, para no tapar la barra
+   superior ni el buscador. */
+.nueva-version{
+  position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9000;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:center;
+  max-width:calc(100vw - 32px); padding:12px 16px;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--rlg);
+  box-shadow:var(--shadow-md); font-size:var(--fs-sm); color:var(--text);
+  animation:nvEntra var(--dur-base) var(--ease);
+}
+.nueva-version .nv-txt{display:flex; align-items:center; gap:8px;}
+.nueva-version .nv-txt svg{color:var(--blue); flex:none;}
+.nueva-version .nv-ok{display:inline-flex; align-items:center; gap:6px;}
+.nueva-version .nv-no{white-space:nowrap;}
+@keyframes nvEntra{from{opacity:0; transform:translate(-50%,12px);} to{opacity:1; transform:translate(-50%,0);}}
+/* En el móvil ocupa el ancho y los botones se reparten: apretados en una fila
+   quedaban por debajo del área que el dedo acierta. */
+@media (max-width:520px){
+  .nueva-version{left:16px; right:16px; transform:none; max-width:none;}
+  @keyframes nvEntra{from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:none;}}
+  .nueva-version .nv-txt{flex:1 1 100%;}
+  .nueva-version .nv-ok,.nueva-version .nv-no{flex:1 1 0; justify-content:center;}
+}
 </style>
 <!-- Vercel Web Analytics — páginas vistas por ruta (el router SPA reporta cada pushState) -->
 <script defer src="/_vercel/insights/script.js"></script>

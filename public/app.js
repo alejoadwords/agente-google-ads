@@ -39786,3 +39786,76 @@ function cuentaSuspendida(mensaje) {
   // La sesión se cierra después de que lo lea, no en el mismo instante.
   setTimeout(() => { try { clerkInstance?.signOut(); } catch (e) {} }, 8000);
 }
+
+// ── Versión nueva publicada ──────────────────────────────────────────────────
+//
+// Acuarius es una sola página: quien deja la pestaña abierta el lunes sigue
+// ejecutando el `app.js` del lunes aunque hayamos publicado diez veces. La
+// caché NO es la culpable —el servidor manda `must-revalidate` con ETag y el
+// navegador revalida en cada carga—, la culpable es que nadie recarga. Por eso
+// «borra tus cookies» no arreglaba nada: la pestaña sigue con el código viejo
+// en memoria, y de paso le cerraba la sesión al usuario.
+//
+// La huella la pone el propio servidor (el ETag del fichero), así que no hay
+// endpoint nuevo ni un número que alguien tenga que acordarse de subir en cada
+// despliegue — que es justo lo que se queda desactualizado.
+
+const VER_CADA_MS = 5 * 60 * 1000;
+let _huellaAlArrancar = null;
+let _barraVersionPuesta = false;
+
+async function huellaPublicada() {
+  try {
+    // HEAD: solo interesan las cabeceras. `app.js` pesa más de 2 MB y bajarlo
+    // cada cinco minutos para mirar si cambió sería peor que el problema.
+    const r = await fetch('/app.js', { method: 'HEAD', cache: 'no-store' });
+    if (!r.ok) return null;
+    return r.headers.get('etag') || r.headers.get('last-modified') || null;
+  } catch {
+    return null;   // sin red se calla: no es momento de pedirle nada a nadie
+  }
+}
+
+function mostrarBarraVersion() {
+  if (_barraVersionPuesta || document.getElementById('nueva-version')) return;
+  _barraVersionPuesta = true;
+  const b = document.createElement('div');
+  b.id = 'nueva-version';
+  b.className = 'nueva-version';
+  b.setAttribute('role', 'status');
+  b.innerHTML =
+    '<span class="nv-txt">' + icn('sparkles', 16) +
+      'Hay una versión nueva de Acuarius.</span>' +
+    '<button type="button" class="btn-pri nv-ok">' + icn('refresh', 15) + 'Actualizar</button>' +
+    '<button type="button" class="btn-ghost nv-no" aria-label="Ahora no">Ahora no</button>';
+  document.body.appendChild(b);
+  b.querySelector('.nv-ok').addEventListener('click', () => location.reload());
+  // Quien la cierra no quiere que le insistan cada cinco minutos. Vuelve a
+  // aparecer en la siguiente sesión, que es cuando deja de molestar.
+  b.querySelector('.nv-no').addEventListener('click', () => b.remove());
+}
+
+function vigilarVersion() {
+  alDOMListo(async () => {
+    _huellaAlArrancar = await huellaPublicada();
+    // Sin huella no hay nada que comparar. Antes que avisar a ciegas —y
+    // mandar a recargar a quien no lo necesita— se calla.
+    if (!_huellaAlArrancar) return;
+    setInterval(async () => {
+      // Con la pestaña de fondo no se mira: ni sirve de nada ni hace falta
+      // gastar la llamada.
+      if (document.hidden || _barraVersionPuesta) return;
+      const ahora = await huellaPublicada();
+      if (ahora && ahora !== _huellaAlArrancar) mostrarBarraVersion();
+    }, VER_CADA_MS);
+    // Al volver a la pestaña tras un rato, se mira ya: es justo cuando alguien
+    // retoma una sesión vieja.
+    document.addEventListener('visibilitychange', async () => {
+      if (document.hidden || _barraVersionPuesta) return;
+      const ahora = await huellaPublicada();
+      if (ahora && ahora !== _huellaAlArrancar) mostrarBarraVersion();
+    });
+  });
+}
+
+vigilarVersion();
