@@ -10,6 +10,8 @@
 export const config = { runtime: 'edge' };
 
 import { getRegla, crearTareaVentana } from './_followup.js';
+import { pedirLista } from './_pedir.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -38,15 +40,29 @@ export default async function handler(req) {
   const desde = new Date(ahora - 24 * 3600000).toISOString();   // aún viva
   const hasta = new Date(ahora - 12 * 3600000).toISOString();   // franja más ancha que el máximo configurable
 
-  const convs = await fetch(
-    `${SUPABASE_URL}/rest/v1/chat_conversations?channel=eq.whatsapp&status=neq.resolved` +
-    `&aviso_ventana_at=is.null&lead_id=not.is.null` +
-    `&last_inbound_at=gt.${encodeURIComponent(desde)}&last_inbound_at=lt.${encodeURIComponent(hasta)}` +
-    `&select=id,user_id,lead_id,contact_name,last_inbound_at&order=last_inbound_at.asc&limit=${LOTE}`,
-    { headers: sb() }
-  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  // «La base no contestó» no es «no hay ventanas por cerrarse»: confundirlo
+  // deja a un cliente sin el aviso y la ventana de 24 h se le cierra sin que
+  // nadie lo supiera. Ver api/_pedir.js.
+  let convs;
+  try {
+    convs = await pedirLista(
+      `${SUPABASE_URL}/rest/v1/chat_conversations?channel=eq.whatsapp&status=neq.resolved` +
+      `&aviso_ventana_at=is.null&lead_id=not.is.null` +
+      `&last_inbound_at=gt.${encodeURIComponent(desde)}&last_inbound_at=lt.${encodeURIComponent(hasta)}` +
+      `&select=id,user_id,lead_id,contact_name,last_inbound_at&order=last_inbound_at.asc&limit=${LOTE}`,
+      sb(), 'las conversaciones con la ventana por cerrarse'
+    );
+  } catch (e) {
+    await latir('cron-ventana', { error: true }, e?.message || String(e));
+    return new Response(JSON.stringify({ error: e?.message || 'no se pudo leer las conversaciones' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
-  if (!convs.length) return new Response(JSON.stringify({ ok: true, avisadas: 0 }));
+  if (!convs.length) {
+    await latir('cron-ventana', { avisadas: 0, sin_ventanas: true });
+    return new Response(JSON.stringify({ ok: true, avisadas: 0 }));
+  }
 
   // La regla es por cuenta: se pide una vez por cuenta, no una por conversación.
   const reglas = new Map();
@@ -99,6 +115,7 @@ export default async function handler(req) {
     }
   }
 
+  await latir('cron-ventana', { avisadas, saltadas, revisadas: convs.length });
   return new Response(JSON.stringify({ ok: true, avisadas, saltadas, revisadas: convs.length }), {
     headers: { 'Content-Type': 'application/json' },
   });

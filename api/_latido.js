@@ -60,8 +60,10 @@ export const CADA = {
   'cron-campaigns': 10,
   'cron-errores': 60,
   'cron-recordatorios': 10,
+  'cron-programados': 5,
   'cron-tasks': 24 * 60,         // 0 12 * * 1-5
   'cron-trials': 24 * 60,        // 0 13 * * *
+  'cron-ventana': 60,
 };
 
 /**

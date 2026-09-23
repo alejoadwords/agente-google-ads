@@ -8,6 +8,8 @@ export const config = { runtime: 'edge' };
 
 import { enviarPorCanal } from './_enviar-canal.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { pedirLista } from './_pedir.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -36,13 +38,27 @@ export default async function handler(req) {
   }
 
   const ahora = new Date().toISOString();
-  const pendientes = await fetch(
-    `${SUPABASE_URL}/rest/v1/scheduled_messages?estado=eq.pendiente&enviar_at=lte.${encodeURIComponent(ahora)}` +
-    `&select=*&order=enviar_at.asc&limit=${LOTE}`,
-    { headers: sb() }
-  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  // Si la base no contesta NO es que no haya nada programado. Antes se
+  // confundían las dos cosas y un mensaje que debía salir se quedaba dentro
+  // sin que nadie lo supiera. Ver api/_pedir.js.
+  let pendientes;
+  try {
+    pendientes = await pedirLista(
+      `${SUPABASE_URL}/rest/v1/scheduled_messages?estado=eq.pendiente&enviar_at=lte.${encodeURIComponent(ahora)}` +
+      `&select=*&order=enviar_at.asc&limit=${LOTE}`,
+      sb(), 'los mensajes programados pendientes'
+    );
+  } catch (e) {
+    await latir('cron-programados', { error: true }, e?.message || String(e));
+    return new Response(JSON.stringify({ error: e?.message || 'no se pudo leer los programados' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
-  if (!pendientes.length) return new Response(JSON.stringify({ ok: true, enviados: 0 }));
+  if (!pendientes.length) {
+    await latir('cron-programados', { enviados: 0, sin_pendientes: true });
+    return new Response(JSON.stringify({ ok: true, enviados: 0 }));
+  }
 
   let enviados = 0, fallidos = 0, cancelados = 0;
 
@@ -121,6 +137,7 @@ export default async function handler(req) {
     }
   }
 
+  await latir('cron-programados', { enviados, fallidos, cancelados }, fallidos ? fallidos + ' envío(s) fallaron' : null);
   return new Response(JSON.stringify({ ok: true, enviados, fallidos, cancelados }), {
     headers: { 'Content-Type': 'application/json' },
   });
