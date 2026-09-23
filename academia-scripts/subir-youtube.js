@@ -7,7 +7,7 @@
 //   node subir-youtube.js --sin-subtitulos ahorra 400 unidades de cuota por video
 //
 // Requiere en el entorno: SUPABASE_URL, SUPABASE_SERVICE_KEY, GOOGLE_CLIENT_ID,
-// GOOGLE_CLIENT_SECRET. El token sale de platform_connections (platform
+// GOOGLE_CLIENT_SECRET y TOKENS_KEY (esta última para descifrar el token). El token sale de platform_connections (platform
 // 'youtube'), que se llena autorizando una vez en /api/yt-auth.
 //
 // Cuota de YouTube: 10.000 unidades/día. Cada video cuesta 1.600 (subida) +
@@ -80,13 +80,27 @@ async function tokenFresco() {
   if (!c) throw new Error('No hay conexión de YouTube. Autoriza una vez en https://app.acuarius.app/api/yt-auth?userId=' + USER_ID);
   if (!c.refresh_token) throw new Error('La conexión no tiene refresh_token: vuelve a autorizar en /api/yt-auth');
 
+  // Los tokens de terceros se guardan CIFRADOS (`enc:v1:…`, ver api/_cifrado.js).
+  // Mandarle a Google el texto cifrado devuelve `invalid_grant`, que es EL MISMO
+  // error que da un permiso caducado: parece que hay que volver a autorizar y no
+  // es verdad. Pasó el 23-09-2026 subiendo los videos de instalación y costó una
+  // reautorización innecesaria.
+  //
+  // `descifrar` deja pasar tal cual lo que no esté cifrado, así que esto también
+  // funciona con una conexión vieja guardada en plano.
+  const { descifrar } = await import(path.join(__dirname, '..', 'api', '_cifrado.js'));
+  const refresh = await descifrar(c.refresh_token);
+  if (String(refresh).startsWith('enc:v1:')) {
+    throw new Error('El token sigue cifrado: falta TOKENS_KEY en el entorno.');
+  }
+
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID,
       client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: c.refresh_token,
+      refresh_token: refresh,
       grant_type: 'refresh_token',
     }),
   }).then(x => x.json());
