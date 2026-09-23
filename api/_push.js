@@ -1,3 +1,4 @@
+import { registrarError } from './_registro-errores.js';
 // api/_push.js
 // Envío de avisos push por el estándar Web Push, sin librerías ni proveedor
 // externo: el navegador de cada usuario expone su propio servicio (Google para
@@ -129,7 +130,7 @@ export async function enviarPushA(userId, aviso) {
     etiqueta: aviso.etiqueta || 'acuarius',
   });
 
-  let enviados = 0, caducados = 0;
+  let enviados = 0, caducados = 0, rechazados = 0;
   for (const s of subs) {
     try {
       const destino = new URL(s.endpoint);
@@ -158,11 +159,29 @@ export async function enviarPushA(userId, aviso) {
           body: JSON.stringify({ last_ok_at: new Date().toISOString() }),
         });
       } else {
-        console.error('[push] rechazado', r.status, (await r.text()).slice(0, 160));
+        // Un rechazo que no es «ya no existe» es un fallo nuestro —VAPID mal
+        // firmado, cuerpo demasiado grande, servicio caído— y hasta ahora solo
+        // iba a la consola, que no lee nadie: el aviso no llegaba y no quedaba
+        // rastro. Mismo patrón que dejó sin resumen diario a los asesores de
+        // Certain el 23-09-2026.
+        const motivo = (await r.text().catch(() => '')).slice(0, 200);
+        console.error('[push] rechazado', r.status, motivo);
+        rechazados++;
+        await registrarError({
+          origen: 'api', donde: 'push/' + new URL(s.endpoint).host,
+          error: `el aviso push fue rechazado (${r.status})`,
+          detalle: motivo, usuario: s.user_id || null,
+        }).catch(() => {});
       }
     } catch (e) {
       console.error('[push] error enviando:', e.message);
+      rechazados++;
+      await registrarError({
+        origen: 'api', donde: 'push',
+        error: 'no se pudo enviar el aviso push: ' + (e?.message || e),
+        usuario: s.user_id || null,
+      }).catch(() => {});
     }
   }
-  return { enviados, caducados, total: subs.length };
+  return { enviados, caducados, rechazados, total: subs.length };
 }
