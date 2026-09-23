@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { campaignHtml } from './_campaign-email.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResendLote, huecoParaCampana } from './_correo.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -581,6 +582,7 @@ export default async function handler(req, res) {
     if (saturado) break;
    }
     console.log('[cron-campaigns] processed:', processed, 'closed:', closed);
+    await latir('cron-campaigns', { processed, closed, tandas, ms: Date.now() - T0 });
     return res.status(200).json({ ok: true, processed, closed, tandas, ms: Date.now() - T0 });
   } catch (e) {
     console.error('[cron-campaigns] error:', e);

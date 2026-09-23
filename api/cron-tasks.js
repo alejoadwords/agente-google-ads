@@ -9,6 +9,7 @@
 import { emailHtml, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
 import { yaSeHizo, periodoDe } from './_una-vez.js';
+import { latir } from './_latido.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -138,6 +139,13 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
+  // Toda salida deja latido, incluidas las malas: que no se pueda volver a dar
+  // el caso de mirar qué pasó y no encontrar nada que mirar. Ver api/_latido.js.
+  const responder = async (estado, cuerpo, fallo) => {
+    await latir('cron-tasks', cuerpo, fallo);
+    return res.status(estado).json(cuerpo);
+  };
+
   const resumen = { cuentas: 0, correos: 0, fallidos: [], errores: [] };
   const ahora = Date.now();
   const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
@@ -165,14 +173,14 @@ export default async function handler(req, res) {
   } catch (e) {
     await anotar('el resumen diario de tareas no se pudo armar: la base no contestó',
       e?.message || String(e), null);
-    return res.status(500).json({ error: 'No se pudo leer las tareas pendientes.', detalle: e?.message });
+    return responder(500, { error: 'No se pudo leer las tareas pendientes.', detalle: e?.message }, e?.message || 'la base no contestó');
   }
   if (!Array.isArray(pendientes)) {
     await anotar('el resumen diario de tareas recibió algo que no es una lista',
       JSON.stringify(pendientes).slice(0, 300), null);
-    return res.status(500).json({ error: 'Respuesta inesperada al leer las tareas.' });
+    return responder(500, { error: 'Respuesta inesperada al leer las tareas.' }, 'respuesta que no es una lista');
   }
-  if (!pendientes.length) return res.status(200).json({ ...resumen, sin_pendientes: true });
+  if (!pendientes.length) return responder(200, { ...resumen, sin_pendientes: true });
 
   const porCuenta = {};
   pendientes.forEach(t => { (porCuenta[t.user_id] = porCuenta[t.user_id] || []).push(t); });
@@ -238,5 +246,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(200).json(resumen);
+  return responder(200, resumen, resumen.errores?.length ? resumen.errores.join(' · ').slice(0, 200) : null);
 }

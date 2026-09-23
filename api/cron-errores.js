@@ -12,6 +12,7 @@ export const config = { runtime: 'edge' };
 
 import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
+import { latir, callados } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -28,6 +29,30 @@ export default async function handler(req) {
   if (process.env.CRON_SECRET && !secreto.includes(process.env.CRON_SECRET)) {
     return new Response('No autorizado', { status: 401 });
   }
+
+  // Un cron callado no genera errores: genera ausencia, que es justo lo que
+  // nadie mira. El 23-09-2026 el resumen diario de tareas no salió y no había
+  // forma de saberlo hasta que un asesor lo reportó. Esto lo convierte en un
+  // error normal, que sale por el mismo aviso que todo lo demás.
+  const latidos = await fetch(`${SUPABASE_URL}/rest/v1/cron_latidos?select=cron,ultima_vez`, { headers: cab })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+  if (latidos) {
+    for (const c of callados(latidos)) {
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/registrar_error`, {
+        method: 'POST', headers: cab,
+        body: JSON.stringify({
+          p_firma: 'cron-callado-' + c.cron,
+          p_origen: 'cron', p_donde: c.cron,
+          p_mensaje: c.desde
+            ? `${c.cron} lleva ${c.minutos} minutos sin ejecutarse`
+            : `${c.cron} no se ha ejecutado nunca desde que se vigila`,
+          p_detalle: c.desde ? 'último latido: ' + c.desde : null,
+          p_usuario: null,
+        }),
+      }).catch(() => {});
+    }
+  }
+  await latir('cron-errores', { vigilados: latidos ? Object.keys(latidos).length : 0 });
 
   const todos = await fetch(
     `${SUPABASE_URL}/rest/v1/error_log?avisado_at=is.null&resuelto=is.false` +

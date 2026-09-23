@@ -17,6 +17,7 @@
 //
 // Recorre los usuarios de Clerk por páginas (base pequeña; tope de cordura 10 págs).
 import { enviarResend } from './_correo.js';
+import { latir } from './_latido.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
@@ -183,6 +184,7 @@ export default async function handler(req, res) {
     console.log('[cron-trials] revisadas:', scanned, '· asesores de otra cuenta:', deEquipo,
       '· pruebas vencidas:', expired, '· recordadas:', reminded,
                 '· planes vencidos:', vencidos, '· avisados:', avisados, '· sin fecha:', sinFecha.length);
+    await latir('cron-trials', { scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo }, sinFecha.length ? sinFecha.length + ' plan(es) de pago sin fecha de fin' : null);
     return res.status(200).json({ ok: true, scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo, sin_fecha: sinFecha });
   } catch (e) {
     console.error('[cron-trials] error:', e.message);

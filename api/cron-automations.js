@@ -9,6 +9,7 @@ import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResend } from './_correo.js';
 import { leerNps } from './_nps.js';
 import { emailHtml } from './_email-layout.js';
+import { latir } from './_latido.js';
 
 // Los textos de la encuesta los escribe el cliente y acaban dentro del HTML
 // de un correo: sin escapar, un `<` suelto ya rompe la maqueta.
@@ -824,6 +825,7 @@ export default async function handler(req, res) {
     const enqueued = await processInactiveTriggers();
     const processed = await processJobs();
     console.log('[cron-automations] enqueued:', enqueued, 'processed:', processed);
+    await latir('cron-automations', { enqueued, processed });
     return res.status(200).json({ ok: true, enqueued, processed });
   } catch (e) {
     console.error('[cron-automations] error:', e);

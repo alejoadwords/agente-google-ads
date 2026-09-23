@@ -16,6 +16,7 @@
 import { emailHtml, bloque, RESPONDER_A, esc } from './_email-layout.js';
 import { abrirConexion } from './_cifrado.js';
 import { enviarResend } from './_correo.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -182,7 +183,7 @@ export default async function handler(req, res) {
       `&select=id,user_id,client_id,lead_id,due_at,booking_token,recordatorios_enviados` +
       `&order=due_at.asc&limit=${TOPE}`
     );
-    if (!citas.length) return res.status(200).json({ ok: true, citas: 0, avisados: 0 });
+    if (!citas.length) { await latir('cron-recordatorios', { ok: true, citas: 0, avisados: 0 }); return res.status(200).json({ ok: true, citas: 0, avisados: 0 }); }
 
     // Una sola lectura por cuenta y por lead, no una por cita.
     const cuentas = [...new Set(citas.map(c => c.user_id))];
@@ -282,6 +283,7 @@ export default async function handler(req, res) {
         detalle: bitacora.slice(0, 20).join(' · '),
       }).catch(() => {});
     }
+    await latir('cron-recordatorios', { citas: citas.length, avisados, fallos }, fallos ? fallos + ' aviso(s) fallaron' : null);
     return res.status(200).json({ ok: true, citas: citas.length, avisados, fallos });
   } catch (e) {
     const { registrarError } = await import('./_registro-errores.js');
