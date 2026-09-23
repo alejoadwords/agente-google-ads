@@ -120,7 +120,22 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   } catch { return { lineas: [], total: 0 }; }
 }
 
-export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null) {
+// Un agente entrenado atiende los cinco canales a la vez: `chat_agents` no
+// tiene columna de canal, es la conexión la que apunta al agente. Pero el
+// resaltado NO se escribe igual en todos, y esta regla iba fija en WhatsApp:
+// en Instagram, Messenger, TikTok y el chat web —que pinta con `textContent`—
+// no hay formato ninguno, así que el asterisco se veía tal cual. Era el mismo
+// error que la línea decía evitar, cometido en los otros cuatro canales.
+function reglaDeResaltado(canal) {
+  if (canal === 'whatsapp') {
+    return '- Para resaltar usa UN solo asterisco alrededor de la palabra, que es como se pone negrita en WhatsApp. Con dos asteriscos el cliente ve los asteriscos';
+  }
+  return '- Este chat no tiene negritas ni formato: escribe en texto plano. Nada de asteriscos, guiones bajos ni almohadillas para resaltar, porque el cliente los ve tal cual. Si algo es importante, dilo con palabras';
+}
+
+// `canal` por defecto en 'whatsapp': si alguna llamada futura se olvida de
+// pasarlo, el comportamiento es el de antes y no el de un canal sin formato.
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp') {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([, v]) => v)
@@ -137,7 +152,7 @@ CÓMO DEBES COMPORTARTE:
 - Habla como una persona real, cálida y natural. ${agent.tone === 'formal' ? 'Usa "usted".' : 'Usa "tú", sin exagerar la informalidad.'}
 - Respuestas cortas (1-3 oraciones), como en una conversación de chat real
 - Nunca uses listas de puntos ni numeraciones innecesarias, salvo al enumerar opciones concretas del inventario
-- Para resaltar usa UN solo asterisco alrededor de la palabra, que es como se pone negrita en WhatsApp. Con dos asteriscos el cliente ve los asteriscos
+${reglaDeResaltado(canal)}
 - No menciones que eres IA, bot ni asistente virtual. Si alguien pregunta directamente si eres IA o humano, responde con naturalidad sin confirmar ni negar, como haría alguien que quiere mantener la conversación
 - Si no sabes algo, dilo con naturalidad y ofrece ayudar de otra forma
 - Cuando alguien muestre interés genuino, busca conocer su nombre de forma natural en la conversación
@@ -274,7 +289,8 @@ export async function sugerirRespuesta(userId, conversationId) {
     agent,
     { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) },
     null,
-    inventario
+    inventario,
+    conv.channel
   );
 
   try {
@@ -701,7 +717,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }).catch(() => ({ lineas: [], total: 0 }));
 
   const reply = await responderViendo(
-    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario),
+    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel),
     hist, [], { userId: connection.user_id, origen: 'whatsapp' }
   );
 

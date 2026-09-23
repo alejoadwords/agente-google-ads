@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-23-agente-sin-asteriscos",
+      "fecha": "2026-09-23",
+      "tipo": "arreglo",
+      "titulo": "El agente ya escribe como se escribe en cada chat",
+      "texto": "Tu agente atiende WhatsApp, Instagram, Messenger, TikTok y el chat de tu página con un mismo entrenamiento. Pero solo WhatsApp entiende los asteriscos como negrita: en los demás, el cliente los veía escritos. Ahora el agente sabe en qué chat está y escribe como corresponde en cada uno."
+    },
+    {
       "id": "2026-09-22-notas-siguen-a-la-cartera",
       "fecha": "2026-09-22",
       "tipo": "arreglo",
