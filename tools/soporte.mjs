@@ -26,7 +26,29 @@
 import { execSync } from 'node:child_process';
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const LIMITES_PLAN = { free: 10, trial: 2000, pro: 2000, agency: 10000 };
+// El disparador es un jsonb, no un texto. Imprimirlo con `String()` daba
+// «[object Object]» en todas las automatizaciones: justo el dato que hace
+// falta para entender por qué una no se ha ejecutado nunca.
+const DISPARADORES = {
+  lead_created: 'lead nuevo',
+  stage_changed: 'cambio de etapa',
+  tag_added: 'etiqueta puesta',
+  lead_inactive: 'lead inactivo',
+  form_submitted: 'formulario enviado',
+  message_received: 'mensaje recibido',
+};
+function disparador(t) {
+  if (!t) return '—';
+  if (typeof t === 'string') return t;
+  const base = DISPARADORES[t.type] || t.type || '?';
+  // El detalle importa: «cambio de etapa» a secas no dice a CUÁL, y una
+  // automatización que nunca corre suele ser una que espera una etapa que el
+  // cliente renombró.
+  const detalle = t.stage || t.tag || t.form_id || t.dias;
+  return detalle ? `${base} → ${detalle}` : base;
+}
+
+const LIMITES_PLAN ={ free: 10, trial: 2000, pro: 2000, agency: 10000 };
 
 function token() {
   try {
@@ -186,7 +208,7 @@ async function radiografia(busqueda) {
 
   titulo('AUTOMATIZACIONES');
   if (!autos.length) console.log('  (ninguna)');
-  autos.forEach((a) => console.log(`  ${(a.name || '—').slice(0, 34).padEnd(36)} ${a.active ? 'activa  ' : 'apagada '} ${String(a.trigger || '').padEnd(16)} ${a.ejecuciones} ejecuciones`));
+  autos.forEach((a) => console.log(`  ${(a.name || '—').slice(0, 34).padEnd(36)} ${a.active ? 'activa  ' : 'apagada '} ${disparador(a.trigger).padEnd(24)} ${a.ejecuciones} ejecuciones`));
 
   titulo('TAREAS');
   console.log(`  ${T.vencidas} vencidas sin completar · ${T.futuras} programadas${Number(T.huerfanas) ? ` · ${T.huerfanas} sobre leads ya cerrados` : ''}`);
