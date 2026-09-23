@@ -155,14 +155,23 @@ export default async function handler(req) {
   // se sigue: devolver la cartera propia (vacía) como si fuera la del dueño es
   // exactamente el fallo que estamos arreglando.
   if (type === 'agency_clients') {
+    // Un miembro acotado a un cliente NO puede ver la cartera entera de la
+    // agencia. El endpoint cambiaba al id del dueño y devolvía sus 11 clientes
+    // —nombre, industria, presupuesto y notas— a quien solo trabaja uno.
+    let acotadoA = null;
     try {
       const tw = await fetch(
-        `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id&limit=1`,
+        `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=owner_user_id,client_id&limit=1`,
         { headers: sbHeaders() }
       );
       if (!tw.ok) throw new Error('HTTP ' + tw.status);
       const fila = (await tw.json())?.[0];
       if (fila?.owner_user_id) userId = fila.owner_user_id;
+      // A qué cliente está acotado este miembro. NULL = a todos, que es como
+      // funciona el dueño. Se lee aquí, junto al dueño, porque es la MISMA
+      // fila: pedirla dos veces era la forma de que una consulta se
+      // actualizara y la otra no.
+      acotadoA = fila?.client_id || null;
     } catch {
       return new Response(JSON.stringify({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }), {
         status: 503, headers: { ...CORS, 'Content-Type': 'application/json' }
@@ -183,9 +192,10 @@ export default async function handler(req) {
       }
       const rows = await res.json();
       const stored = rows?.[0]?.profile_data;
-      const data = Array.isArray(stored?.clients) ? stored.clients
-                 : Array.isArray(stored)          ? stored
-                 : [];
+      const todos = Array.isArray(stored?.clients) ? stored.clients
+                  : Array.isArray(stored)          ? stored
+                  : [];
+      const data = acotadoA ? todos.filter(c => c && c.id === acotadoA) : todos;
       return new Response(JSON.stringify({ data }), {
         status: 200, headers: { ...CORS, 'Content-Type': 'application/json' }
       });
@@ -202,10 +212,34 @@ export default async function handler(req) {
           status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
         });
       }
+      // Un miembro acotado manda SOLO su cliente, porque es lo único que se le
+      // devolvió. Escribir esa lista tal cual borraría los otros diez de la
+      // cartera del dueño. Se mezcla: se conserva todo lo demás y se sustituye
+      // únicamente lo suyo — y no puede crear ni borrar clientes.
+      let aGuardar = body.data;
+      if (acotadoA) {
+        const prev = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${userId}&agent_key=eq.${AGENCY_CLIENTS_KEY}&select=profile_data&limit=1`,
+          { headers: sbHeaders() }
+        );
+        // Si no se puede leer lo que había, NO se escribe: guardar a ciegas
+        // aquí es exactamente lo que vacía una cartera.
+        if (!prev.ok) {
+          return new Response(JSON.stringify({ error: 'No se pudo leer tu cartera para guardarla sin pisar el resto. Reintenta.' }), {
+            status: 503, headers: { ...CORS, 'Content-Type': 'application/json' }
+          });
+        }
+        const guardado = (await prev.json())?.[0]?.profile_data;
+        const antes = Array.isArray(guardado?.clients) ? guardado.clients
+                    : Array.isArray(guardado)          ? guardado
+                    : [];
+        const suyo = body.data.find(c => c && c.id === acotadoA);
+        aGuardar = antes.map(c => (c && c.id === acotadoA && suyo ? { ...c, ...suyo } : c));
+      }
       const payload = {
         user_id: userId,
         agent_key: AGENCY_CLIENTS_KEY,
-        profile_data: { clients: body.data },
+        profile_data: { clients: aGuardar },
         updated_at: new Date().toISOString(),
       };
       // on_conflict es obligatorio: sin él PostgREST infiere ON CONFLICT (id)
