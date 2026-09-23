@@ -18306,7 +18306,10 @@ async function pushPintar() {
   // Decirlo evita que el usuario pulse, no pase nada y se quede sin entender.
   if (pwaEsIOS() && !pwaInstalada()) {
     sub.textContent = 'En iPhone primero añade Acuarius a la pantalla de inicio (Compartir → Añadir a inicio).';
-    acc.innerHTML = '';
+    // Aquí el usuario ya intentó activar los avisos y no pudo. Decirle qué
+    // hacer no basta si no encuentra el botón: el video lo enseña en 49
+    // segundos, y se abre dentro de la aplicación.
+    acc.innerHTML = '<button class="btn-ghost sm" onclick="pwaVerVideo()">Ver cómo instalarla</button>';
     return;
   }
   if (Notification.permission === 'denied') {
@@ -18400,6 +18403,26 @@ function pwaEsIOS() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 }
 
+// Los dos videos de instalación, uno por sistema. Explicar «Compartir → Añadir
+// a inicio» con palabras funciona hasta que el usuario no encuentra el botón;
+// verlo son cuarenta segundos. Se abren en el reproductor de la Academia, no en
+// YouTube: sacar a alguien de la aplicación a mitad de una instalación es la
+// forma más fácil de que no vuelva.
+const PWA_VIDEOS = {
+  ios:     { id: '71LwWnB1-Ow', titulo: 'Instalar Acuarius en tu iPhone' },
+  android: { id: 'NOfgRg8JH5o', titulo: 'Instalar Acuarius en tu Android' },
+};
+
+function pwaVideo() {
+  return pwaEsIOS() ? PWA_VIDEOS.ios : PWA_VIDEOS.android;
+}
+
+function pwaVerVideo() {
+  const v = pwaVideo();
+  if (typeof acadPlay === 'function') acadPlay(v.id, v.titulo);
+  else window.open('https://youtu.be/' + v.id, '_blank', 'noopener');
+}
+
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();          // el navegador no decide cuándo: lo decidimos nosotros
   _pwaPrompt = e;
@@ -18417,8 +18440,13 @@ function pwaMostrarAviso(soloInstrucciones) {
     '<img src="/icons/icon-192.png" alt="">' +
     '<div class="pwa-txt"><b>Instala Acuarius</b>' +
       '<span>' + (soloInstrucciones
-        ? 'Toca Compartir y luego «Añadir a inicio» para abrirla como una app y recibir avisos.'
-        : 'Ábrela como una app, sin pestañas, y recibe avisos de leads nuevos.') + '</span></div>' +
+        ? 'Toca Compartir y luego «Añadir a inicio» para abrirla como una app y recibir avisos. '
+        : 'Ábrela como una app, sin pestañas, y recibe avisos de leads nuevos. ') +
+        // En iPhone el enlace es la única salida: ahí no hay botón que instale
+        // por ti, lo tiene que hacer el usuario a mano.
+        '<a href="#" onclick="pwaVerVideo();return false" ' +
+        'style="color:var(--blue);font-weight:600;text-decoration:none">Ver cómo</a>' +
+      '</span></div>' +
     (soloInstrucciones ? '' : '<button class="btn-pri sm" onclick="pwaInstalar()">Instalar</button>') +
     '<button class="pwa-x" onclick="pwaCerrarAviso()" aria-label="Cerrar">&#10005;</button>';
   document.body.appendChild(b);
