@@ -142,12 +142,37 @@ export default async function handler(req, res) {
   const ahora = Date.now();
   const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
 
-  // Solo las cuentas que tienen algo pendiente hasta el final del día
-  const pendientes = await fetch(
-    `${SUPABASE_URL}/rest/v1/activities?done=is.false&cancelled_at=is.null&due_at=lte.${encodeURIComponent(finDeHoy.toISOString())}&select=*&order=due_at.asc&limit=5000`,
-    { headers: sb() }
-  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-  if (!pendientes?.length) return res.status(200).json(resumen);
+  // Solo las cuentas que tienen algo pendiente hasta el final del día.
+  //
+  // «No contestó la base» y «hoy nadie tiene nada» NO son lo mismo, y hasta
+  // ahora el cron los confundía: cualquier fallo se convertía en una lista
+  // vacía, la función devolvía 200 «todo bien» y el resumen del día no salía
+  // para nadie. Sin error, sin reintento y sin rastro — el 23-09-2026 los
+  // cinco asesores de Certain se quedaron sin su aviso y solo se supo porque
+  // uno lo reportó. La base ya ha dado 504 alguna vez (cron-recordatorios,
+  // 22-09), o sea que no es hipotético.
+  //
+  // Ahora un fallo se queda como fallo: se anota y se devuelve 500, que es lo
+  // que hace que Vercel reintente y que el aviso de errores lo enseñe.
+  let pendientes;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/activities?done=is.false&cancelled_at=is.null&due_at=lte.${encodeURIComponent(finDeHoy.toISOString())}&select=*&order=due_at.asc&limit=5000`,
+      { headers: sb() }
+    );
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    pendientes = await r.json();
+  } catch (e) {
+    await anotar('el resumen diario de tareas no se pudo armar: la base no contestó',
+      e?.message || String(e), null);
+    return res.status(500).json({ error: 'No se pudo leer las tareas pendientes.', detalle: e?.message });
+  }
+  if (!Array.isArray(pendientes)) {
+    await anotar('el resumen diario de tareas recibió algo que no es una lista',
+      JSON.stringify(pendientes).slice(0, 300), null);
+    return res.status(500).json({ error: 'Respuesta inesperada al leer las tareas.' });
+  }
+  if (!pendientes.length) return res.status(200).json({ ...resumen, sin_pendientes: true });
 
   const porCuenta = {};
   pendientes.forEach(t => { (porCuenta[t.user_id] = porCuenta[t.user_id] || []).push(t); });
