@@ -27230,6 +27230,10 @@ function agnScheduleForLead() {
   function sync() {
     if (applying) return;
     const path = currentPath();
+    // Se mide AQUÍ y no después del `return` de abajo: en la primera carga la
+    // URL ya coincide con la pantalla, así que ahí se sale antes y la pantalla
+    // de entrada —la más importante de todas— no se contaría nunca.
+    if (typeof medirPantalla === 'function') medirPantalla(path);
     document.title = currentTitle();
     if (location.pathname === path) return;
     if (firstSync) { history.replaceState({ path }, '', path); firstSync = false; }
@@ -39883,3 +39887,92 @@ function vigilarVersion() {
 }
 
 vigilarVersion();
+
+// ── Qué pantallas se usan de verdad ──────────────────────────────────────────
+//
+// El inventario de septiembre de 2026 tuvo que deducir el uso de las FILAS que
+// cada módulo escribe. Eso deja ciegas a las pantallas que no escriben nada
+// —Análisis, Pulso, la cartera— y son justo las que hay que decidir si se
+// rehacen para móvil. Esto lo mide directo.
+//
+// Se guarda la pantalla, si fue en móvil, las veces y el tiempo. Nada más: el
+// id del lead se recorta ANTES de salir del navegador, así que la tabla no
+// sabe qué contacto se abrió.
+//
+// El tiempo es la mitad del valor. Sin él, una pantalla de paso parece tan
+// importante como aquella donde se trabaja media hora.
+
+const USO_CADA_MS = 60000;   // cada cuánto se manda lo acumulado
+let _usoCola = [];
+let _usoActual = null;       // { p, desde }
+
+// Un `/crm/lead/abc-123` es la MISMA pantalla que cualquier otra ficha. Sin
+// recortar el id tendríamos una fila por lead —inútil para decidir— y de paso
+// el dato de un contacto donde no pinta nada.
+function usoNormalizar(path) {
+  const p = String(path || '/').replace(/\/+$/, '') || '/';
+  if (/^\/crm\/lead\//.test(p)) return '/crm/lead';
+  if (/^\/agente\//.test(p)) return '/agente';
+  return p;
+}
+
+const usoEsMovil = () => window.matchMedia('(max-width: 768px)').matches;
+
+function medirPantalla(path) {
+  const p = usoNormalizar(path);
+  const ahora = Date.now();
+  if (_usoActual) {
+    if (_usoActual.p === p) return;   // la misma: no es una visita nueva
+    _usoCola.push({ p: _usoActual.p, ms: ahora - _usoActual.desde, m: usoEsMovil() });
+  }
+  _usoActual = { p, desde: ahora };
+  // La cola no crece sin fin si el envío falla una y otra vez. Se tiran las
+  // más viejas: perder medio día de analítica es preferible a que la pestaña
+  // se quede sin memoria.
+  if (_usoCola.length > 200) _usoCola = _usoCola.slice(-120);
+}
+
+// Cierra la pantalla abierta para que su tiempo no se pierda al salir.
+function usoCerrarActual() {
+  if (!_usoActual) return;
+  _usoCola.push({ p: _usoActual.p, ms: Date.now() - _usoActual.desde, m: usoEsMovil() });
+  _usoActual = { p: _usoActual.p, desde: Date.now() };
+}
+
+async function usoEnviar({ alSalir = false } = {}) {
+  if (!_usoCola.length) return;
+  const lote = _usoCola.splice(0, 60);
+  try {
+    const r = await fetchAuth('/api/uso-pantallas', {
+      method: 'POST',
+      body: JSON.stringify({ vistas: lote }),
+      // `keepalive` deja que la petición sobreviva al cierre de la pestaña.
+      // Sin esto, el último tramo —justo el que dice dónde estaba trabajando
+      // alguien cuando se fue— se perdería siempre.
+      ...(alSalir ? { keepalive: true } : {}),
+    });
+    // Si el servidor lo rechaza se devuelven al principio de la cola y se
+    // reintenta en el siguiente envío. Que la analítica falle no es grave,
+    // pero que falle EN SILENCIO nos dejaría decidiendo el rediseño con una
+    // tabla medio vacía creyendo que está completa.
+    if (!r || !r.ok) _usoCola.unshift(...lote);
+  } catch {
+    _usoCola.unshift(...lote);
+  }
+}
+
+function medirUsoDePantallas() {
+  alDOMListo(() => {
+    setInterval(() => { usoCerrarActual(); usoEnviar(); }, USO_CADA_MS);
+    // Al esconder la pestaña: es cuando la gente se va a otra cosa, y donde
+    // se pierde el tramo más largo si no se cierra aquí.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { _usoActual = _usoActual ? { p: _usoActual.p, desde: Date.now() } : null; return; }
+      usoCerrarActual();
+      usoEnviar({ alSalir: true });
+    });
+    window.addEventListener('pagehide', () => { usoCerrarActual(); usoEnviar({ alSalir: true }); });
+  });
+}
+
+medirUsoDePantallas();
