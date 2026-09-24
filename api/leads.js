@@ -651,6 +651,10 @@ export default async function handler(req) {
         value: r.value ? parseFloat(String(r.value).replace(/[^\d.]/g, '')) || null : null,
         notes: r.notes ? String(r.notes).trim().slice(0, 1000) : null,
         stage, stage_position: 0,
+        // Importar eligiendo «Ganado» como etapa inicial también es cerrar:
+        // sin la fecha, esos contactos se fechan por la última edición.
+        ...(ETAPAS_CERRADAS.includes(String(stage || '').toLowerCase())
+              ? { closed_at: new Date().toISOString() } : {}),
         source: 'importacion',
         tags: cleanTags,
         custom_fields: {},
@@ -745,6 +749,15 @@ export default async function handler(req) {
     // accesorio.
     if (typeof body.expected_close_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.expected_close_date)) {
       payload.expected_close_date = body.expected_close_date;
+    }
+
+    // Un lead puede nacer YA cerrado: el botón «+ Agregar» está en cada
+    // columna del tablero, incluida la de cierre. Certain renombró su etapa
+    // `ganado` a «Entrega de inmueble», así que crear ahí no se siente como
+    // cerrar un negocio — pero lo es, y sin fecha el reporte lo fecha por la
+    // última edición y lo va moviendo de mes.
+    if (ETAPAS_CERRADAS.includes(String(payload.stage || '').toLowerCase())) {
+      payload.closed_at = new Date().toISOString();
     }
     // Un lead creado por un miembro nace asignado a el: asi "los que yo creo
     // son mios" sigue siendo cierto sin que el creador conserve el control tras
@@ -918,6 +931,27 @@ export default async function handler(req) {
         prevTags = prev?.tags ?? [];
         prevCerrado = prev ? (ETAPAS_CERRADAS.includes(String(prev.stage || '').toLowerCase()) || !!prev.closed_at) : null;
       } catch {}
+    }
+
+    // La fecha de cierre la sella el SERVIDOR, no el navegador.
+    //
+    // Hasta ahora solo la escribía el modal de ganada/perdida. Cualquier otro
+    // camino que llegara a una etapa de cierre —crear el lead directamente en
+    // esa columna, arrastrarlo, una automatización, un webhook— dejaba
+    // `closed_at` vacío. Y el reporte, sin esa fecha, fechaba el cierre por
+    // `updated_at`: la última vez que alguien tocó el lead.
+    //
+    // Resultado: un lead de Certain cerrado en agosto aparecía en el reporte
+    // de septiembre porque alguien le había editado algo el 23-09. Cada
+    // edición lo movía de mes.
+    //
+    // También se limpia al salir: `leadCerrado()` da por cerrado cualquier
+    // lead con `closed_at`, así que uno reabierto seguiría contando como
+    // cerrado para siempre.
+    if (update.stage !== undefined && update.closed_at === undefined) {
+      const cierraAhora = ETAPAS_CERRADAS.includes(String(update.stage || '').toLowerCase());
+      if (cierraAhora && !prevCerrado) update.closed_at = update.updated_at;
+      if (!cierraAhora && prevCerrado) update.closed_at = null;
     }
 
     const res = await fetch(

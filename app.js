@@ -18841,6 +18841,21 @@ function tieneSeguimientoProgramado(l) {
 }
 
 const ETAPAS_CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+/**
+ * Cuándo se cerró un negocio, para ubicarlo en el tiempo.
+ *
+ * `updated_at` NO sirve: cambia cada vez que alguien toca el lead. Un negocio
+ * de Certain cerrado en agosto aparecía en el reporte de septiembre porque
+ * alguien le había editado algo el 23-09, y cada edición lo volvía a mover.
+ *
+ * Desde ahora el servidor sella `closed_at` al entrar en una etapa de cierre,
+ * venga de donde venga. El respaldo es `created_at` —estable, y nunca
+ * posterior al cierre— para los leads de antes de ese arreglo.
+ */
+function fechaDeCierre(l) {
+  return (l && (l.closed_at || l.created_at)) || null;
+}
+
 function leadCerrado(l) {
   if (!l) return false;
   if (l.closed_at) return true;
@@ -31960,8 +31975,15 @@ function salesRender() {
   const hastaV = rangoFin(_salesRange);
   const inRange = d => { if (!d) return false; const t = new Date(d).getTime(); return t >= from && t <= hastaV; };
 
-  const won  = leads.filter(l => l.stage === 'ganado'  && inRange(l.closed_at || l.updated_at));
-  const lost = leads.filter(l => l.stage === 'perdido' && inRange(l.closed_at || l.updated_at));
+  // NUNCA `updated_at` para fechar un cierre: se mueve cada vez que alguien
+  // toca el lead, así que un negocio cerrado en agosto se iba al reporte de
+  // septiembre en cuanto alguien le editaba algo. Le pasó a Certain.
+  //
+  // `created_at` como respaldo es estable y nunca es posterior al cierre:
+  // solo hace falta para los leads de antes de que el servidor sellara la
+  // fecha, que ya no se crean.
+  const won  = leads.filter(l => l.stage === 'ganado'  && inRange(fechaDeCierre(l)));
+  const lost = leads.filter(l => l.stage === 'perdido' && inRange(fechaDeCierre(l)));
   const open = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
   const revenue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
   const pipeline = open.reduce((s, l) => s + (Number(l.value) || 0), 0);
@@ -31982,7 +32004,7 @@ function salesRender() {
     const prevFrom = from - largo;
     const prevWon = leads.filter(l => {
       if (l.stage !== 'ganado') return false;
-      const t = new Date(l.closed_at || l.updated_at || 0).getTime();
+      const t = new Date(fechaDeCierre(l) || 0).getTime();
       return t >= prevFrom && t < from;
     });
     const prevRev = prevWon.reduce((s2, l) => s2 + (Number(l.value) || 0), 0);
@@ -32074,7 +32096,7 @@ function salesRender() {
   // Evolución de ingresos por mes
   const byMonth = {};
   won.forEach(l => {
-    const d = new Date(l.closed_at || l.updated_at || l.created_at);
+    const d = new Date(fechaDeCierre(l));
     const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     byMonth[k] = (byMonth[k] || 0) + (Number(l.value) || 0);
   });

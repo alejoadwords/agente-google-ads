@@ -236,9 +236,19 @@ console.log('\nCitas y propuestas en la tercera columna\n');
   chk('las citas se separan de las tareas por tipo', /a\.type === 'meeting'/.test(js));
   chk('y no cuentan como tareas pendientes',
       /filter\(t => !t\.done && !lfEsCita\(t\)\)/.test(bloque));
-  chk('la cita no lleva casilla: no se «marca», se atiende',
-      /class="lf-tarea cita[\s\S]{0,400}<\/div>/.test(bloque) &&
-      !/class="lf-tarea cita[\s\S]{0,300}type="checkbox"/.test(bloque));
+  // DECISIÓN CAMBIADA (24-09-2026, a petición de Alejandro). Antes la cita no
+  // llevaba casilla: «no se marca, se atiende». En la práctica una cita pasada
+  // se quedaba en rojo para siempre porque no había forma de cerrarla, y lo
+  // único que de verdad había pasado —cómo fue la visita— no quedaba en
+  // ninguna parte.
+  //
+  // Ahora sí lleva casilla, pero no cierra sola: pide la nota de la visita y
+  // la deja en el historial del contacto. Ver `pruebas/cerrar-cita.mjs`.
+  chk('la cita lleva casilla, y abre el cierre con nota en vez de marcarse sola',
+      /class="lf-tarea cita[\s\S]{0,400}type="checkbox"/.test(bloque) &&
+      /crmCitaCerrar\(/.test(bloque));
+  chk('y conserva su iconito de calendario, para no confundirla con una tarea',
+      /class="lf-tarea cita[\s\S]{0,500}lf-ico[\s\S]{0,60}calendar/.test(bloque));
   chk('una cita que ya pasó y nadie cerró se ve como pendiente', /sin cerrar/.test(bloque));
   chk('se dice cuándo la reservó el propio cliente', /booking_token \? ' · la reservó el cliente'/.test(bloque));
   chk('las propuestas reutilizan los estados que ya existían',

@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-24-fecha-de-cierre",
+      "fecha": "2026-09-24",
+      "tipo": "arreglo",
+      "titulo": "Un negocio cerrado en agosto ya no aparece en el reporte de septiembre",
+      "texto": "Si un negocio llegaba a la etapa de cierre por un camino que no fuera el botón de Ganado o Perdido —creándolo directamente en esa columna, arrastrándolo, con una automatización o importándolo ya cerrado—, no quedaba guardada la fecha de cierre. El reporte entonces lo fechaba por la última vez que alguien tocó el contacto, así que cada edición lo movía de mes. Ahora la fecha la sella el sistema en cuanto el negocio entra en una etapa de cierre, venga de donde venga, y se borra si vuelve a abrirse. Los reportes ya no usan la fecha de edición para nada."
+    },
+    {
       "id": "2026-09-24-cerrar-cita-con-nota",
       "fecha": "2026-09-24",
       "tipo": "mejora",
