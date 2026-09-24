@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-24-pulso-mensajes",
+      "fecha": "2026-09-24",
+      "tipo": "mejora",
+      "titulo": "El Pulso te avisa de los mensajes sin leer",
+      "texto": "Las notas que te deja la dirección solo las anunciaba la campana. Ahora, si tienes alguna sin leer, es lo primero que ves al entrar: quién te escribió, sobre qué contacto y un adelanto del mensaje."
+    },
+    {
+      "id": "2026-09-24-reservas-tope",
+      "fecha": "2026-09-24",
+      "tipo": "arreglo",
+      "titulo": "La ventana de reservas respeta el máximo que configuraste",
+      "texto": "En tu página de reservas, el número máximo de días de antelación podía ofrecer un día de más dependiendo de la hora a la que tu cliente abriera la página. Ahora el límite es siempre el que pusiste."
+    },
+    {
       "id": "2026-09-24-recordatorio-notas",
       "fecha": "2026-09-24",
       "tipo": "mejora",
@@ -42,6 +56,13 @@
       "tipo": "arreglo",
       "titulo": "Cuando una cuenta de Google Ads no es tuya, ahora te lo decimos",
       "texto": "Si el identificador de Google Ads de un cliente no está en la cuenta de Google que conectaste, el panel se quedaba sin datos y solo aparecía un aviso de «conexión expirada» que no servía de nada: por más que reconectaras, seguía igual. Ahora se distingue. Si el token venció, te decimos que reconectes; si la cuenta simplemente no está en tu Google, te lo decimos con esas palabras y te llevamos a revisar el identificador en la ficha del cliente, que es donde se arregla."
+    },
+    {
+      "id": "2026-09-23-app-abre-al-instante",
+      "fecha": "2026-09-23",
+      "tipo": "mejora",
+      "titulo": "Acuarius instalada abre al instante",
+      "texto": "Si tienes Acuarius instalada en el celular, hasta ahora cada vez que la abrías se descargaba entera antes de mostrarte nada. Ahora se guarda en el dispositivo y abre de inmediato, mientras busca novedades por detrás. Si hay versión nueva te avisa con el botón de actualizar."
     },
     {
       "id": "2026-09-23-aviso-version-nueva",

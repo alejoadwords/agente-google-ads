@@ -1,23 +1,44 @@
 // public/sw.js — service worker de Acuarius
 //
-// DECISIÓN DELIBERADA: aquí NO se cachea la aplicación.
+// Aquí SÍ se cachea la aplicación, desde el 23-09-2026. Antes no, y el
+// comentario que lo prohibía tenía razón en su momento:
 //
-// La tentación de un service worker es guardarse app.js e index.html para que
-// abra al instante. En este proyecto eso sería un arma cargada: se despliega
-// varias veces al día y un usuario con la versión de ayer en caché vería
-// errores imposibles de reproducir, o peor, seguiría usando una versión con un
-// fallo que ya arreglamos. La red siempre manda.
+//   «se despliega varias veces al día y un usuario con la versión de ayer en
+//    caché vería errores imposibles de reproducir»
 //
-// Lo único que se guarda es la carcasa mínima para poder decir «estás sin
-// conexión» en vez de mostrar el dinosaurio del navegador, y los iconos, que
-// no cambian.
+// Lo que cambió es que ese escenario ya tiene quien lo avise. Ese mismo día se
+// publicó la barra de «hay una versión nueva» con su botón de actualizar, que
+// compara la huella del app.js publicado con la que se cargó. Quedarse atrás
+// dejó de ser invisible, así que cachear dejó de ser un arma cargada.
 //
-// Su razón de ser real es otra: sin un service worker registrado no hay
-// instalación en la pantalla de inicio ni avisos push.
+// Y hacía falta: instalada en el celular, la aplicación se bajaba 2,2 MB de
+// app.js antes de pintar nada. Abrir y ver el logo girando es el delator
+// número uno de que aquello es una web, no una app.
+//
+// La estrategia es «de la caché al instante, y se revalida por detrás»:
+//   · se responde con lo guardado, que es lo que hace que abra de golpe
+//   · en paralelo se pide la versión nueva y se guarda para la próxima
+//   · si cambió, la barra de versión se lo dice al usuario
+//
+// Lo que NUNCA se cachea, y por qué:
+//   · /api/*        — son los datos. Servir un lead viejo sería mentir.
+//   · otros dominios — Clerk y las fuentes se gestionan solas.
+//   · las peticiones HEAD — la barra de versión pregunta la huella del app.js
+//     con HEAD. Si se le respondiera desde la caché, siempre vería la huella
+//     vieja, nunca avisaría, y el arreglo se comería a su propia red de
+//     seguridad en silencio.
 
-const CACHE = 'acuarius-carcasa-v1';
+// Subir este número invalida todo lo guardado. Se sube cuando cambia la FORMA
+// de cachear, no en cada despliegue: los ficheros se revalidan solos.
+const CACHE = 'acuarius-v2';
 const OFFLINE = '/offline.html';
 const PRECARGA = [OFFLINE, '/icons/icon-192.png', '/icons/icon-512.png'];
+
+// La aplicación. Se guarda al vuelo la primera vez que se pide, no en la
+// instalación: precargar 2,2 MB al registrar el service worker castigaría
+// justo a quien acaba de entrar por primera vez.
+const APP = ['/app.js', '/index.html'];
+const esApp = (url) => APP.includes(url.pathname) || url.pathname === '/';
 
 self.addEventListener('install', (e) => {
   // skipWaiting: cuando publicamos un service worker nuevo, entra ya. Sin esto
@@ -33,28 +54,45 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// De la caché al instante; la copia nueva se guarda para la próxima vez.
+function deCacheYRevalida(req) {
+  return caches.open(CACHE).then((c) => c.match(req).then((hit) => {
+    const enRed = fetch(req).then((res) => {
+      // Solo se guarda lo que vino bien. Cachear un 500 o el HTML de un error
+      // deja la aplicación rota hasta que alguien limpie el navegador, que es
+      // justo lo que no queremos volver a pedirle a nadie.
+      if (res && res.ok && res.status === 200) c.put(req, res.clone()).catch(() => {});
+      return res;
+    }).catch(() => null);
+    // Con algo guardado se responde YA y la red va por detrás. Sin nada
+    // guardado —primera visita— se espera a la red, como antes.
+    return hit || enRed.then((r) => r || caches.match(OFFLINE));
+  }));
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+  // Solo GET. Un HEAD no se puede guardar en la Cache API, y además es como
+  // la barra de versión pregunta la huella: tiene que llegar a la red.
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // nada de terceros
   if (url.pathname.startsWith('/api/')) return;      // los datos, siempre frescos
 
-  // Navegación: red primero; si no hay conexión, la página de cortesía.
+  // Navegación: la carcasa desde la caché para que abra al instante. Ojo, el
+  // catch-all de vercel.json devuelve el shell para CUALQUIER ruta que no sea
+  // /api, así que se pide siempre '/' y no la ruta concreta: si no, cada
+  // pantalla visitada dejaría su propia copia del mismo HTML.
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).catch(() => caches.match(OFFLINE)));
+    e.respondWith(deCacheYRevalida(new Request('/', { credentials: 'same-origin' })));
     return;
   }
 
-  // Iconos y carcasa: de la caché si están, y se refrescan por detrás.
-  if (PRECARGA.includes(url.pathname)) {
-    e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req))
-    );
+  if (esApp(url) || PRECARGA.includes(url.pathname)) {
+    e.respondWith(deCacheYRevalida(req));
   }
 });
-
 // ── Avisos push ─────────────────────────────────────────────────────────────
 self.addEventListener('push', (e) => {
   let d = {};
