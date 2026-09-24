@@ -19610,6 +19610,132 @@ async function crmNotaGuardar(leadId) {
 }
 
 // ── Avisos que me dejaron a mí ────────────────────────────────────────────────
+// ── Que los avisos suenen, y que la gente los reciba ───────────────────
+//
+// La campana funcionaba pero nadie la miraba: 29 notas dirigidas en tres
+// semanas y un promedio de 82 HORAS hasta leerlas. Tres días y medio para un
+// mensaje interno que casi siempre quiere respuesta hoy.
+//
+// La causa no era el canal, que ya manda correo Y push. Era que **ninguno de
+// los siete asesores de Certain tenía el push activado**: cero de siete. Lo
+// único que les llegaba era el correo, y el correo se entierra.
+//
+// Así que dos cosas: que la campana avise de verdad cuando llega algo, y que a
+// quien recibe notas se le ofrezca activar el teléfono en el momento en que le
+// sirve — no escondido en Configuración, donde un vendedor no entra nunca.
+
+let _avisosVistos = null;          // cuántos había la última vez que se miró
+const AVISO_PUSH_LS = 'acuarius_push_ofrecido';
+
+/**
+ * Un toque corto, generado en el momento.
+ *
+ * Sin fichero de audio a propósito: `package.json` no tiene dependencias y un
+ * .mp3 más es un recurso que cachear, versionar y que falla en silencio. Esto
+ * son cuarenta líneas de WebCrypto… de WebAudio, y suena igual en todos lados.
+ *
+ * El navegador NO deja sonar hasta que el usuario haya interactuado con la
+ * página. Si aún no lo hizo, esto falla callado y la campana avisa igual por
+ * el badge: el sonido es un extra, nunca la única señal.
+ */
+function campanaSonar() {
+  try {
+    if (localStorage.getItem('acuarius_campana_muda') === '1') return;
+  } catch {}
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') { ctx.close(); return; }   // sin interacción todavía
+    const ahora = ctx.currentTime;
+    // Dos notas cortas ascendentes: se reconoce sin ser una alarma.
+    [[880, 0], [1174.7, 0.09]].forEach(([hz, t]) => {
+      const osc = ctx.createOscillator();
+      const vol = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = hz;
+      vol.gain.setValueAtTime(0.0001, ahora + t);
+      vol.gain.exponentialRampToValueAtTime(0.16, ahora + t + 0.012);
+      vol.gain.exponentialRampToValueAtTime(0.0001, ahora + t + 0.16);
+      osc.connect(vol); vol.connect(ctx.destination);
+      osc.start(ahora + t); osc.stop(ahora + t + 0.18);
+    });
+    setTimeout(() => { try { ctx.close(); } catch {} }, 600);
+  } catch { /* que no suene no puede romper nada */ }
+}
+
+/** Silenciar o volver a activar el sonido de la campana. */
+function campanaMuda(callar) {
+  try { localStorage.setItem('acuarius_campana_muda', callar ? '1' : '0'); } catch {}
+  showToast(callar ? 'Campana en silencio' : 'La campana vuelve a sonar');
+  if (typeof openAlertsPanel === 'function' && document.getElementById('alerts-panel')) {
+    closeAlertsPanel(); openAlertsPanel();
+  }
+}
+
+function campanaEstaMuda() {
+  try { return localStorage.getItem('acuarius_campana_muda') === '1'; } catch { return false; }
+}
+
+/**
+ * Suena y da un toque visual solo cuando llega algo NUEVO.
+ *
+ * La primera pasada no suena: al abrir la aplicación con tres notas de ayer
+ * sonaría sin que haya pasado nada, y un sonido que no significa nada se
+ * aprende a ignorar en dos días.
+ */
+function campanaAvisarNuevos() {
+  const ahora = crmAvisos.length;
+  if (_avisosVistos === null) { _avisosVistos = ahora; return; }
+  if (ahora > _avisosVistos) {
+    campanaSonar();
+    const btn = document.getElementById('alerts-btn');
+    if (btn) { btn.classList.add('campana-late'); setTimeout(() => btn.classList.remove('campana-late'), 2200); }
+  }
+  _avisosVistos = ahora;
+}
+
+/**
+ * A quien le llegan notas y no tiene el teléfono activado, se le ofrece.
+ *
+ * Se ofrece en el momento en que se entiende para qué sirve —tienes algo sin
+ * leer— y no como un permiso suelto al entrar. Una sola vez: si lo cierra, no
+ * vuelve. Si dice que no en el navegador tampoco insiste.
+ */
+async function avisosProponerPush() {
+  if (!crmAvisos.length) return;
+  if (!pushSoportado()) return;
+  if (typeof Notification !== 'undefined' && Notification.permission !== 'default') return;
+  try { if (localStorage.getItem(AVISO_PUSH_LS)) return; } catch {}
+  if (document.getElementById('push-barra')) return;
+  if (await pushSuscripcionActual()) return;
+
+  const n = crmAvisos.length;
+  const b = document.createElement('div');
+  b.id = 'push-barra';
+  b.className = 'pwa-barra';
+  b.innerHTML =
+    '<img src="/icons/icon-192.png" alt="">' +
+    '<div class="pwa-txt"><b>' + n + (n === 1 ? ' nota sin leer' : ' notas sin leer') + '</b>' +
+      '<span>Activa los avisos y te llegan al teléfono en cuanto alguien te escriba, ' +
+      'sin tener que entrar a buscarlas.</span></div>' +
+    '<button class="btn-pri sm" onclick="avisosActivarPushDesdeBarra(this)">Activar</button>' +
+    '<button class="pwa-x" onclick="avisosCerrarBarraPush()" aria-label="Cerrar">&#10005;</button>';
+  document.body.appendChild(b);
+  requestAnimationFrame(() => b.classList.add('visible'));
+  track('push_ofrecido');
+}
+
+function avisosCerrarBarraPush() {
+  try { localStorage.setItem(AVISO_PUSH_LS, '1'); } catch {}
+  document.getElementById('push-barra')?.remove();
+}
+
+async function avisosActivarPushDesdeBarra(btn) {
+  await pushActivar(btn);
+  avisosCerrarBarraPush();
+}
+
 async function crmAvisosCargar() {
   try {
     const r = await fetchAuth('/api/lead-activities?avisos=1');
@@ -19619,6 +19745,8 @@ async function crmAvisosCargar() {
     crmAvisosPorLead = {};
     crmAvisos.forEach(a => { crmAvisosPorLead[a.lead_id] = (crmAvisosPorLead[a.lead_id] || 0) + 1; });
     if (typeof refrescarCampana === 'function') refrescarCampana();
+    campanaAvisarNuevos();
+    avisosProponerPush().catch(() => {});
   } catch (e) { console.warn('crmAvisosCargar', e); }
 }
 
@@ -19644,7 +19772,15 @@ function crmAvisosPanel() {
   if (!cont) return;
   if (!crmAvisos.length) { cont.innerHTML = ''; return; }
 
+  // El interruptor del sonido vive AQUÍ y no en Configuración: quien quiere
+  // callarlo está mirando la campana en ese momento, no buscando un ajuste.
+  const mudo = campanaEstaMuda();
   cont.innerHTML =
+    '<div style="display:flex;justify-content:flex-end;padding:0 2px 4px">' +
+      '<button class="btn-ghost sm" onclick="campanaMuda(' + (mudo ? 'false' : 'true') + ')" ' +
+        'title="' + (mudo ? 'La campana está en silencio' : 'Silenciar el sonido de la campana') + '">' +
+        (mudo ? 'Activar sonido' : 'Silenciar') + '</button>' +
+    '</div>' +
     '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:2px 2px 8px">Notas para ti</div>' +
     crmAvisos.map(a =>
       '<div onclick="crmAvisoAbrir(\'' + esc(a.lead_id) + '\')" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +

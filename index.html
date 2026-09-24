@@ -2415,6 +2415,20 @@ a.lf-prop:hover{border-color:var(--blue)}
 .crm-card-tarea.vencida{color:#DC2626;font-weight:600}
 .crm-card-cierre.vencida{color:#DC2626;font-weight:600}
 .crm-btn-filtros.active,#crm-btn-filtros.active{border-color:var(--blue);color:var(--blue)}
+/* La campana da un toque cuando llega algo nuevo. Sin esto el badge cambia de
+   número y, si no estás mirando esa esquina, no te enteras — que es justo lo
+   que hacía que una nota interna tardara tres días en leerse. */
+@keyframes campanaLate{
+  0%,100%{transform:none}
+  15%{transform:rotate(-16deg) scale(1.1)}
+  30%{transform:rotate(13deg) scale(1.1)}
+  45%{transform:rotate(-9deg)}
+  60%{transform:rotate(6deg)}
+  75%{transform:rotate(-3deg)}
+}
+.campana-late{animation:campanaLate 1s ease-in-out 2;transform-origin:50% 12%}
+@media(prefers-reduced-motion:reduce){.campana-late{animation:none}}
+
 .pwa-barra{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:12px;padding:12px 14px;z-index:1500;transform:translateY(140%);transition:transform .3s var(--ease)}
 .pwa-barra.visible{transform:translateY(0)}
 .pwa-barra img{width:38px;height:38px;border-radius:9px;flex-shrink:0}

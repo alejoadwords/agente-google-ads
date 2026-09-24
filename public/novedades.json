@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-24-campana-suena",
+      "fecha": "2026-09-24",
+      "tipo": "mejora",
+      "titulo": "La campana ahora suena, y te ofrece los avisos en el teléfono",
+      "texto": "Una nota interna tardaba en promedio tres días y medio en leerse. No era por el canal —ya se manda correo y aviso al teléfono— sino porque casi nadie tenía activados los avisos del teléfono, así que lo único que llegaba era el correo. Ahora la campana da un toque y un sonido corto cuando entra algo nuevo (solo cuando es nuevo de verdad, y se puede silenciar desde la propia campana), y a quien tiene notas sin leer se le ofrece activar los avisos en el momento en que se entiende para qué sirven, sin tener que entrar a Configuración a buscarlo."
+    },
+    {
       "id": "2026-09-24-fecha-de-cierre",
       "fecha": "2026-09-24",
       "tipo": "arreglo",
