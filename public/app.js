@@ -20996,6 +20996,111 @@ function crmPintarTareasLead() {
   }).join('');
 }
 
+// ── Cerrar una cita: cómo fue la visita ────────────────────────────────
+//
+// Una cita que se marca hecha y ya no deja nada. El asesor fue al inmueble,
+// habló con el cliente y eso —que es lo único que de verdad pasó— se perdía:
+// la ficha solo decía que la cita ya no está pendiente.
+//
+// Así que cerrar una cita pide la nota, y la nota queda en el historial del
+// contacto como una actividad de tipo «visita». Quien abra la ficha dos meses
+// después ve qué pasó en cada visita, no una lista de citas apagadas.
+let _citaCerrando = null;
+
+function crmCitaCerrar(id, casilla) {
+  const c = (_crmTareasLead || []).find(x => x.id === id);
+  if (!c) { if (casilla) casilla.checked = false; return; }
+  _citaCerrando = { id, casilla, titulo: c.title || 'Cita' };
+
+  const v = document.createElement('div');
+  v.className = 'auto-modal-overlay';
+  v.id = 'cita-cerrar-overlay';
+  v.onclick = (e) => { if (e.target === v) crmCitaCerrarSalir(); };
+  v.innerHTML =
+    '<div class="auto-modal" style="max-width:520px">' +
+      '<div class="auto-modal-head">' +
+        '<div><div style="font-weight:800;font-size:var(--fs-lg)">¿Cómo te fue en la visita?</div>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted);margin-top:2px">' + esc(c.title || 'Cita') + '</div></div>' +
+        '<button class="btn-ghost sm" onclick="crmCitaCerrarSalir()">✕</button>' +
+      '</div>' +
+      '<div class="auto-field">' +
+        '<label class="auto-label" for="cita-nota">Qué pasó</label>' +
+        '<textarea class="auto-input" id="cita-nota" rows="5" ' +
+          'placeholder="Asistió, le gustó el apartamento del tercer piso. Pide cotización con cuota inicial a 12 meses."></textarea>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">' +
+        // Cerrar sin nota tiene que ser posible: forzarla dejaría citas
+        // abiertas para siempre, que es peor dato que una nota vacía.
+        '<button class="btn-ghost" onclick="crmCitaCerrarGuardar(true)">Cerrar sin nota</button>' +
+        '<button class="btn-pri" onclick="crmCitaCerrarGuardar(false)">Guardar y cerrar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(v);
+  setTimeout(() => document.getElementById('cita-nota')?.focus(), 60);
+}
+
+function crmCitaCerrarSalir() {
+  // Si se sale sin guardar, la casilla vuelve a su sitio: si no, la cita se ve
+  // cerrada en pantalla y sigue abierta en la base.
+  if (_citaCerrando?.casilla) _citaCerrando.casilla.checked = false;
+  _citaCerrando = null;
+  document.getElementById('cita-cerrar-overlay')?.remove();
+}
+
+async function crmCitaCerrarGuardar(sinNota) {
+  const ctx = _citaCerrando;
+  if (!ctx) return;
+  const texto = sinNota ? '' : ((document.getElementById('cita-nota') || {}).value || '').trim();
+  if (!sinNota && !texto) { showToast('Escribe cómo te fue, o usa «Cerrar sin nota»', 'error'); return; }
+
+  const cita = (_crmTareasLead || []).find(x => x.id === ctx.id);
+  const leadId = cita?.lead_id || (typeof lfLead !== 'undefined' && lfLead ? lfLead.id : null);
+  document.getElementById('cita-cerrar-overlay')?.remove();
+  _citaCerrando = null;
+
+  // PRIMERO la nota y después el cierre, a propósito. Si se hiciera al revés y
+  // fallara la nota, la cita quedaría cerrada y lo que pasó en la visita se
+  // habría perdido sin que nadie pudiera recuperarlo. Al revés, lo peor que
+  // pasa es una nota guardada con la cita todavía abierta: se ve y se repite.
+  if (texto && leadId) {
+    try {
+      const r = await fetchAuth('/api/lead-activities', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: leadId, type: 'visita', content: texto,
+          metadata: { cita_id: ctx.id, cita: ctx.titulo },
+        }),
+      });
+      if (!r.ok) throw new Error(await motivoDelFallo(r, 'guardar la nota'));
+    } catch (e) {
+      if (ctx.casilla) ctx.casilla.checked = false;
+      showToast('No se guardó la nota, así que la cita sigue abierta: ' + (e.message || 'inténtalo otra vez'), 'error');
+      return;
+    }
+  }
+
+  try {
+    const r = await fetchAuth('/api/agenda', { method: 'PUT', body: JSON.stringify({ id: ctx.id, done: true }) });
+    if (!r.ok) throw new Error(await motivoDelFallo(r, 'cerrar la cita'));
+    if (cita) { cita.done = true; cita.updated_at = new Date().toISOString(); }
+    crmPintarTareasLead();
+    showToast(texto ? 'Visita cerrada y anotada en la ficha' : 'Cita cerrada');
+    // El historial de la ficha y el chip de la tarjeta salen de otras
+    // consultas: sin refrescar, la nota recién escrita no aparece en el
+    // historial aunque esté guardada, y parece que se perdió.
+    if (leadId) {
+      Promise.all([crmTraerActividades(leadId), crmCargarTareasLead(leadId)])
+        .then(() => { if (typeof lfPintar === 'function') lfPintar(); })
+        .catch(() => {});
+    }
+    crmTareasCargar().then(() => crmRender()).catch(() => {});
+  } catch (e) {
+    if (ctx.casilla) ctx.casilla.checked = false;
+    showToast((texto ? 'La nota quedó guardada, pero no se pudo cerrar la cita: ' : 'No se pudo cerrar la cita: ')
+      + (e.message || 'inténtalo otra vez'), 'error');
+  }
+}
+
 async function crmTareaHecha(id, hecha) {
   const t = _crmTareasLead.find(x => x.id === id);
   if (!t) return;
@@ -38395,6 +38500,7 @@ const LF_TIPOS = {
   email:        ['Email', 'file'],
   reunion:      ['Reunión', 'users'],
   tarea:        ['Tarea', 'check'],
+  visita:       ['Visita', 'calendar'],
   stage_change: ['Etapa', 'trend'],
   creacion:     ['Creado', 'sparkles'],
 };
@@ -38966,7 +39072,11 @@ function lfQueFalta(l) {
         ? citas.map(c => {
             const pasada = c.due_at && new Date(c.due_at) < new Date();
             return '<div class="lf-tarea cita' + (pasada ? ' vence' : '') + '">' +
-              '<span class="lf-ico">' + icn('calendar', 14) + '</span>' +
+              // La casilla es la misma de las tareas, pero no cierra sola: una
+              // cita sin contar cómo fue es una cita a medias, así que pide la
+              // nota antes de darla por cerrada.
+              '<input type="checkbox" title="Cerrar la cita" ' +
+                'onchange="crmCitaCerrar(\'' + esc(c.id) + '\', this)">' +
               '<div><div>' + esc(c.title || 'Cita') + '</div>' +
               '<div class="cuando">' +
                 (c.due_at ? esc(lfCuando(c.due_at)) : 'Sin fecha') +

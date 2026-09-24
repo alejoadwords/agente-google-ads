@@ -183,7 +183,10 @@ export default async function handler(req) {
     const { lead_id, type, content, metadata, avisar } = body;
     if (!lead_id || !type) return jsonResp({ error: 'Faltan campos requeridos' }, 400);
 
-    const validTypes = ['nota', 'llamada', 'email', 'reunion', 'tarea', 'stage_change', 'creacion'];
+    // 'visita' es la nota que el asesor escribe al cerrar una cita: cómo le
+    // fue en el inmueble. Va como tipo propio y no como 'nota' para que en el
+    // historial del contacto se lea «Visita» y se pueda filtrar aparte.
+    const validTypes = ['nota', 'llamada', 'email', 'reunion', 'tarea', 'visita', 'stage_change', 'creacion'];
     if (!validTypes.includes(type)) return jsonResp({ error: 'Tipo inválido' }, 400);
 
     // Avisar al responsable es una herramienta de dirección: el dueño y los
@@ -300,7 +303,7 @@ export default async function handler(req) {
     //
     // stage_change y creacion no están: esas ya vienen con una escritura de la
     // fila, y contarlas aquí sería tocar updated_at dos veces por lo mismo.
-    if (['llamada', 'email', 'reunion', 'nota', 'tarea'].includes(type)) {
+    if (['llamada', 'email', 'reunion', 'nota', 'tarea', 'visita'].includes(type)) {
       const ok = await fetch(
         `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${encodeURIComponent(userId)}`,
         {
