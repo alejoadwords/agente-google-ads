@@ -30,7 +30,10 @@
 
 // Subir este número invalida todo lo guardado. Se sube cuando cambia la FORMA
 // de cachear, no en cada despliegue: los ficheros se revalidan solos.
-const CACHE = 'acuarius-v2';
+// v3: la v2 respondía con la carcasa a CUALQUIER navegación y rompía las
+// páginas que no son la aplicación. Quien ya tenga la v2 guardada tiene que
+// tirarla, o seguiría viendo el CRM al abrir su propuesta.
+const CACHE = 'acuarius-v3';
 const OFFLINE = '/offline.html';
 const PRECARGA = [OFFLINE, '/icons/icon-192.png', '/icons/icon-512.png'];
 
@@ -53,6 +56,28 @@ self.addEventListener('activate', (e) => {
       .then(() => self.clients.claim())
   );
 });
+
+
+// Las rutas que SON la aplicación. Lista explícita, no «todo lo que no sea
+// /api»: en public/ conviven diecisiete .html que son páginas de verdad, y
+// tratarlas como si fueran la aplicación es servirle a un cliente el CRM
+// cuando abre su propuesta.
+//
+// Si mañana se añade una pantalla nueva y alguien olvida declararla aquí, lo
+// peor que pasa es que cargue desde la red como antes: lenta, pero correcta.
+// El olvido al revés —una página pública tratada como la app— sí rompe.
+const RUTAS_APP = [
+  '/', '/crm', '/marketing', '/conversaciones', '/analisis', '/agente',
+  '/academia', '/clientes', '/configuracion', '/novedades', '/leads',
+  '/studio', '/roadmap', '/proyecto-seo',
+];
+function esRutaDeApp(p) {
+  const ruta = String(p || '/').replace(/\/+$/, '') || '/';
+  if (ruta === '/') return true;
+  // Un .html nunca es la aplicación: la aplicación vive en rutas sin extensión.
+  if (/\.[a-z0-9]+$/i.test(ruta)) return false;
+  return RUTAS_APP.some((r) => r !== '/' && (ruta === r || ruta.startsWith(r + '/')));
+}
 
 // De la caché al instante; la copia nueva se guarda para la próxima vez.
 function deCacheYRevalida(req) {
@@ -80,11 +105,22 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;   // nada de terceros
   if (url.pathname.startsWith('/api/')) return;      // los datos, siempre frescos
 
-  // Navegación: la carcasa desde la caché para que abra al instante. Ojo, el
-  // catch-all de vercel.json devuelve el shell para CUALQUIER ruta que no sea
-  // /api, así que se pide siempre '/' y no la ruta concreta: si no, cada
-  // pantalla visitada dejaría su propia copia del mismo HTML.
+  // Navegación: la carcasa desde la caché, PERO solo para las rutas que son la
+  // aplicación.
+  //
+  // La primera versión respondía con la carcasa a CUALQUIER navegación, y eso
+  // rompía las diecisiete páginas que no son la aplicación: la propuesta que
+  // abre el cliente (/p/…), la página de reservas, el formulario público, los
+  // términos… y sso-callback.html, que es donde vuelve Google al conectar una
+  // cuenta. Todas habrían mostrado la aplicación en su lugar, y a quien la
+  // tuviera instalada le habría pasado sin que nadie pudiera reproducirlo.
+  //
+  // Lo cazó Alejandro abriendo /movil.html y viendo el CRM de siempre.
   if (req.mode === 'navigate') {
+    if (!esRutaDeApp(url.pathname)) return;   // a la red, como cualquier página
+    // Se pide siempre '/' y no la ruta concreta: el catch-all de vercel.json
+    // devuelve el mismo shell para todas, así que guardar por ruta dejaría una
+    // copia idéntica por cada pantalla visitada.
     e.respondWith(deCacheYRevalida(new Request('/', { credentials: 'same-origin' })));
     return;
   }

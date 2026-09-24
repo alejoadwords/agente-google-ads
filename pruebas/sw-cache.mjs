@@ -155,9 +155,35 @@ console.log('\nLa navegación no llena la caché de copias del mismo HTML\n');
   chk('y una ruta profunda se guarda como "/"', claves[0] === '/', JSON.stringify(claves));
 }
 
+console.log('\nLas páginas que NO son la aplicación llegan a la red\n');
+{
+  // Este es el fallo que se coló: la primera versión respondía con la carcasa
+  // a cualquier navegación, así que /movil.html mostraba el CRM de siempre.
+  // Y con él habrían caído las otras dieciséis páginas reales de public/:
+  // la propuesta del cliente, las reservas, los términos... y sso-callback,
+  // que es donde vuelve Google al conectar una cuenta.
+  const paginas = ['/movil.html', '/p/abc123', '/reservar/xyz', '/form/abc',
+                   '/sso-callback.html', '/terms.html', '/offline.html', '/propuesta.html'];
+  for (const ruta of paginas) {
+    const e = montar({ enRed: { [ruta]: 'PAGINA', '/': 'SHELL' } });
+    const res = await pedir(e, R(ruta, { mode: 'navigate' }));
+    chk(`${ruta} no recibe la carcasa`, res === null, res ? JSON.stringify(res.cuerpo) : '');
+  }
+}
+
+console.log('\nY las rutas que SÍ son la aplicación siguen abriendo al instante\n');
+{
+  for (const ruta of ['/', '/crm', '/crm/lead/abc-123', '/marketing/campanas', '/analisis']) {
+    const e = montar({ enCache: { '/': { ok: true, cuerpo: 'SHELL', clone() { return this; } } },
+                       enRed: { '/': 'SHELL' } });
+    const res = await pedir(e, R(ruta, { mode: 'navigate' }));
+    chk(`${ruta} sale de la caché`, res?.cuerpo === 'SHELL', res ? JSON.stringify(res.cuerpo) : 'no respondió');
+  }
+}
+
 console.log('\nSubir la versión de la caché tira la anterior\n');
 {
-  chk('el nombre cambió respecto al anterior', /acuarius-v2/.test(sw) && !/carcasa-v1/.test(sw));
+  chk('el nombre cambió respecto al anterior', /acuarius-v3/.test(sw) && !/carcasa-v1/.test(sw));
   chk('y se borran las claves que no son la actual', /claves\.filter\(\(k\) => k !== CACHE\)/.test(sw));
 }
 
