@@ -18431,6 +18431,11 @@ window.addEventListener('beforeinstallprompt', function (e) {
 
 function pwaMostrarAviso(soloInstrucciones) {
   if (pwaInstalada()) return;
+  // Y tampoco a quien la tiene instalada aunque ahora esté en el navegador.
+  // La comprobación es asíncrona, así que la barra se pinta y se retira si
+  // resulta que ya estaba: aparecer medio segundo es mejor que retrasar la
+  // oferta a todo el mundo por una consulta que en iPhone ni existe.
+  pwaYaEstaInstalada().then(ya => { if (ya) document.getElementById('pwa-barra')?.remove(); }).catch(() => {});
   try { if (localStorage.getItem(PWA_LS)) return; } catch {}
   if (document.getElementById('pwa-barra')) return;
   const b = document.createElement('div');
@@ -18441,13 +18446,15 @@ function pwaMostrarAviso(soloInstrucciones) {
     '<div class="pwa-txt"><b>Instala Acuarius</b>' +
       '<span>' + (soloInstrucciones
         ? 'Toca Compartir y luego «Añadir a inicio» para abrirla como una app y recibir avisos. '
-        : 'Ábrela como una app, sin pestañas, y recibe avisos de leads nuevos. ') +
+        // Se dice que el botón hace las dos cosas: si solo dijera «instalar»,
+        // el diálogo de avisos que sale justo después parecería que se coló.
+        : 'Con un toque queda en tu pantalla de inicio y con los avisos activados. ') +
         // En iPhone el enlace es la única salida: ahí no hay botón que instale
         // por ti, lo tiene que hacer el usuario a mano.
         '<a href="#" onclick="pwaVerVideo();return false" ' +
         'style="color:var(--blue);font-weight:600;text-decoration:none">Ver cómo</a>' +
       '</span></div>' +
-    (soloInstrucciones ? '' : '<button class="btn-pri sm" onclick="pwaInstalar()">Instalar</button>') +
+    (soloInstrucciones ? '' : '<button class="btn-pri sm" onclick="pwaInstalarYAvisos(this)">Instalar</button>') +
     '<button class="pwa-x" onclick="pwaCerrarAviso()" aria-label="Cerrar">&#10005;</button>';
   document.body.appendChild(b);
   requestAnimationFrame(function () { b.classList.add('visible'); });
@@ -18456,6 +18463,135 @@ function pwaMostrarAviso(soloInstrucciones) {
 function pwaCerrarAviso() {
   try { localStorage.setItem(PWA_LS, '1'); } catch {}
   document.getElementById('pwa-barra')?.remove();
+}
+
+/**
+ * ¿Ya la tiene instalada?
+ *
+ * `pwaInstalada()` solo sabe si ESTAMOS CORRIENDO dentro de la app instalada.
+ * No responde la pregunta que importa —«la tiene instalada aunque ahora mismo
+ * esté en el navegador»— y por eso le ofrecíamos instalar a gente que ya la
+ * tenía.
+ *
+ * `getInstalledRelatedApps()` sí lo sabe, pero SOLO en Chrome de Android, y
+ * solo porque el manifiesto declara su `id` y se lista a sí misma en
+ * `related_applications`.
+ *
+ * En iPhone no hay forma. Safari no expone nada: desde el navegador es
+ * imposible saber si el icono está en la pantalla de inicio. Así que ahí se
+ * ofrece igual, y quien ya la tenga verá el aviso una vez y lo cerrará. No hay
+ * mejor opción; fingir que la hay sería peor.
+ */
+async function pwaYaEstaInstalada() {
+  if (pwaInstalada()) return true;
+  try {
+    if (navigator.getInstalledRelatedApps) {
+      const apps = await navigator.getInstalledRelatedApps();
+      if (apps && apps.length) return true;
+    }
+  } catch { /* no soportado: se sigue como antes */ }
+  return false;
+}
+
+/**
+ * Un toque: instalar y, si acepta, activar los avisos a continuación.
+ *
+ * No se puede instalar en silencio —el navegador enseña su propio diálogo, y
+ * eso no lo salta nadie— pero sí se puede encadenar, que es lo que evita que
+ * el usuario tenga que volver a entrar a Configuración a activar los avisos.
+ * Instalar sin avisos deja la app en la pantalla de inicio sin servir para lo
+ * único que de verdad urge: enterarse de un lead nuevo.
+ *
+ * El permiso se pide INMEDIATAMENTE después de aceptar la instalación, sin
+ * esperas ni recargas: los navegadores solo lo permiten cerca de un gesto del
+ * usuario, y con medio segundo de por medio ya lo rechazan sin preguntar.
+ */
+async function pwaInstalarYAvisos(btn) {
+  if (!_pwaPrompt) { pwaCerrarAviso(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Instalando…'; }
+  let instalada = false;
+  try {
+    _pwaPrompt.prompt();
+    const r = await _pwaPrompt.userChoice;
+    instalada = r.outcome === 'accepted';
+  } catch { /* el navegador pudo cerrar el diálogo solo */ }
+  _pwaPrompt = null;
+
+  if (!instalada) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Instalar'; }
+    return;                                   // dijo que no: no se le pide nada más
+  }
+  track('pwa_instalada');
+
+  if (btn) btn.textContent = 'Activando avisos…';
+  let conAvisos = false;
+  try {
+    if (pushSoportado() && Notification.permission === 'default') {
+      conAvisos = (await Notification.requestPermission()) === 'granted';
+      if (conAvisos) await pushSuscribirSilencioso();
+    } else if (Notification.permission === 'granted') {
+      conAvisos = !!(await pushSuscripcionActual()) || await pushSuscribirSilencioso();
+    }
+  } catch { /* que falle el push no deshace la instalación */ }
+
+  pwaCerrarAviso();
+  showToast(conAvisos
+    ? 'Listo: Acuarius quedó en tu pantalla de inicio y con avisos'
+    : 'Acuarius quedó en tu pantalla de inicio. Los avisos puedes activarlos en Configuración.');
+}
+
+/**
+ * Suscribe sin tocar la interfaz de Configuración.
+ *
+ * `pushActivar()` vuelve a pedir el permiso y repinta esa fila; aquí el
+ * permiso ya está dado y esa pantalla ni siquiera está abierta.
+ */
+async function pushSuscribirSilencioso() {
+  try {
+    const { clave } = await fetch('/api/push?clave=1').then(r => r.json());
+    if (!clave) return false;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: pushClaveABytes(clave),
+    });
+    const r = await fetchAuth('/api/push', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+    if (r.ok) track('push_activado');
+    return r.ok;
+  } catch { return false; }
+}
+
+/**
+ * En iPhone los avisos SOLO se pueden pedir con la app ya instalada. Ese
+ * momento —la primera vez que se abre desde la pantalla de inicio— es el único
+ * en el que la pregunta tiene sentido, y hasta hoy no se aprovechaba: el
+ * usuario instalaba, entraba, y se quedaba sin avisos igual que antes.
+ */
+async function pwaOfrecerAvisosAlAbrir() {
+  if (!pwaInstalada()) return;                      // solo dentro de la app
+  if (!pushSoportado()) return;
+  if (typeof Notification !== 'undefined' && Notification.permission !== 'default') return;
+  try { if (localStorage.getItem('acuarius_avisos_ofrecidos')) return; } catch {}
+  if (await pushSuscripcionActual()) return;
+  if (document.getElementById('pwa-barra') || document.getElementById('push-barra')) return;
+
+  const b = document.createElement('div');
+  b.id = 'push-barra';
+  b.className = 'pwa-barra';
+  b.innerHTML =
+    '<img src="/icons/icon-192.png" alt="">' +
+    '<div class="pwa-txt"><b>Activa los avisos</b>' +
+      '<span>Ya tienes Acuarius instalada. Ahora sí puede avisarte al teléfono ' +
+      'cuando entre un lead o alguien te escriba.</span></div>' +
+    '<button class="btn-pri sm" onclick="avisosActivarPushDesdeBarra(this)">Activar</button>' +
+    '<button class="pwa-x" onclick="pwaCerrarOfrecimientoAvisos()" aria-label="Cerrar">&#10005;</button>';
+  document.body.appendChild(b);
+  requestAnimationFrame(() => b.classList.add('visible'));
+}
+
+function pwaCerrarOfrecimientoAvisos() {
+  try { localStorage.setItem('acuarius_avisos_ofrecidos', '1'); } catch {}
+  document.getElementById('push-barra')?.remove();
 }
 
 async function pwaInstalar() {
@@ -18474,6 +18610,10 @@ async function pwaInstalar() {
 // avisos y nadie entiende por qué.
 setTimeout(function () {
   if (pwaEsIOS() && !pwaInstalada()) pwaMostrarAviso(true);
+  // Y al revés: si YA está instalada, este es el único momento en que iPhone
+  // deja pedir los avisos. Hasta hoy el usuario instalaba, entraba, y se
+  // quedaba sin avisos exactamente igual que antes.
+  pwaOfrecerAvisosAlAbrir().catch(() => {});
 }, 6000);
 
 // ── Reseñas de Google ───────────────────────────────────────────────────────

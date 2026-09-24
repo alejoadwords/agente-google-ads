@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-24-instalar-de-un-toque",
+      "fecha": "2026-09-24",
+      "tipo": "mejora",
+      "titulo": "Instalar la app y activar los avisos, de un solo toque",
+      "texto": "En Android, el aviso para instalar Acuarius ahora deja las dos cosas listas con un toque: la app en tu pantalla de inicio y los avisos activados, sin volver a entrar a Configuración. Y si ya la tenías instalada, deja de ofrecértelo. En iPhone el sistema no permite instalar desde la web —hay que hacerlo a mano desde Compartir, y para eso está el video—, pero ahora, la primera vez que abres Acuarius ya instalada, te ofrecemos activar los avisos ahí mismo: es el único momento en que iPhone lo permite, y antes se pasaba de largo."
+    },
+    {
       "id": "2026-09-24-pulso-mensajes",
       "fecha": "2026-09-24",
       "tipo": "mejora",
