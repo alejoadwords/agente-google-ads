@@ -132,8 +132,14 @@ async function radiografia(busqueda) {
                 count(*) filter (where deleted_at is null and updated_at < now() - interval '30 days') as quietos,
                 max(created_at) as ultimo
          from public.leads where user_id = '${id}';`),
-    sql(`select count(*) filter (where pendiente and due_at < now()) as vencidas,
-                count(*) filter (where pendiente and due_at < now() and not cerrado) as vencidas_vivas,
+    // «Vencida» por DÍA, no por hora. Contando por instante, a media tarde
+    // salían 27 vencidas en Certain que eran el trabajo de esa misma mañana:
+    // de 36, veintiocho lo estaban por menos de un día y solo DOS llevaban más
+    // de tres. Reporté como atasco del cliente algo que era mi definición.
+    sql(`select count(*) filter (where pendiente and due_at < current_date) as vencidas,
+                count(*) filter (where pendiente and due_at < current_date and not cerrado) as vencidas_vivas,
+                count(*) filter (where pendiente and due_at < current_date - interval '3 days' and not cerrado) as vencidas_de_verdad,
+                count(*) filter (where pendiente and due_at >= current_date and due_at < now()) as de_hoy_sin_hacer,
                 count(*) filter (where pendiente and due_at >= now()) as futuras,
                 count(*) filter (where pendiente and cerrado) as huerfanas
          from (select a.due_at,
@@ -211,7 +217,9 @@ async function radiografia(busqueda) {
   autos.forEach((a) => console.log(`  ${(a.name || '—').slice(0, 34).padEnd(36)} ${a.active ? 'activa  ' : 'apagada '} ${disparador(a.trigger).padEnd(24)} ${a.ejecuciones} ejecuciones`));
 
   titulo('TAREAS');
-  console.log(`  ${T.vencidas} vencidas sin completar · ${T.futuras} programadas${Number(T.huerfanas) ? ` · ${T.huerfanas} sobre leads ya cerrados` : ''}`);
+  // «De hoy sin hacer» va aparte de «vencidas»: mezclarlas hacía parecer
+  // atrasado un equipo que estaba trabajando esa misma mañana.
+  console.log(`  ${T.vencidas} vencidas sin completar · ${T.futuras} programadas` + (Number(T.de_hoy_sin_hacer) ? ` · ${T.de_hoy_sin_hacer} de hoy todavía sin hacer` : '') + (Number(T.huerfanas) ? ` · ${T.huerfanas} sobre leads ya cerrados` : ''));
 
   if (paginas.length) {
     titulo('PÁGINAS DE ATERRIZAJE');
@@ -254,8 +262,13 @@ async function radiografia(busqueda) {
   }
   // Las huérfanas NO son un subconjunto de las vencidas —hay huérfanas con
   // fecha futura—, así que restarlas daba negativos. Se cuenta cada cosa.
-  if (Number(T.vencidas_vivas) > 0) {
-    avisar('medio', `${T.vencidas_vivas} tarea(s) de seguimiento vencidas sobre leads todavía vivos.`);
+  if (Number(T.vencidas_de_verdad) > 0) {
+    // Se avisa de las que llevan MÁS DE TRES DÍAS, que son las abandonadas de
+    // verdad. Las de ayer se recuperan solas; avisar de ellas es ruido, y un
+    // aviso que siempre sale se deja de leer.
+    avisar('medio', `${T.vencidas_de_verdad} tarea(s) llevan más de 3 días vencidas sobre leads vivos.` +
+      (Number(T.vencidas_vivas) > Number(T.vencidas_de_verdad)
+        ? ` (${T.vencidas_vivas} vencidas en total; el resto es de los últimos días.)` : ''));
   }
   if (limite && Number(L.activos) / limite >= 0.8) {
     avisar(Number(L.activos) >= limite ? 'alto' : 'medio',

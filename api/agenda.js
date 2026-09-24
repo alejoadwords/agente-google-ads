@@ -163,7 +163,20 @@ export default async function handler(req) {
       (leads || []).forEach(l => { leadsPorId[l.id] = l; });
     }
 
-    const ahora = Date.now();
+    // «Vencida» se cuenta por DÍA, no por hora.
+    //
+    // Antes bastaba con que hubiera pasado el instante: una tarea puesta para
+    // hoy a las diez de la mañana salía como vencida a las once. A media tarde
+    // el panel de Certain enseñaba 27 «vencidas» que eran el trabajo de esa
+    // misma mañana — de 36, veintiocho lo estaban por menos de un día y solo
+    // DOS llevaban más de tres. El equipo no iba atrasado; el contador mentía.
+    //
+    // Y un contador que siempre está en rojo deja de leerse, así que también
+    // se pierde el aviso los dos días en que sí hay algo atrasado de verdad.
+    //
+    // Es el mismo criterio que ya usaban la fecha de cierre del lead y el chip
+    // del tablero: se compara el día, no el reloj.
+    const inicioDeHoy = new Date(); inicioDeHoy.setHours(0, 0, 0, 0);
     const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
     const out = { vencidas: [], hoy: [], proximas: [] };
 
@@ -190,7 +203,7 @@ export default async function handler(req) {
       };
       const vence = t.due_at ? new Date(t.due_at).getTime() : null;
       if (vence === null) out.proximas.push(item);
-      else if (vence < ahora) out.vencidas.push(item);
+      else if (vence < inicioDeHoy.getTime()) out.vencidas.push(item);
       else if (vence <= finDeHoy.getTime()) out.hoy.push(item);
       else out.proximas.push(item);
     }
