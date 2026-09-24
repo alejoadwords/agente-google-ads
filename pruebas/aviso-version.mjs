@@ -19,7 +19,12 @@ const chk = (n, ok, extra) => {
   if (!ok) fallos++;
 };
 
-const bloqueJs = js.slice(js.indexOf('// ── Versión nueva publicada'));
+// El trozo se acota hasta la SIGUIENTE sección, no hasta el final del
+// fichero: si no, cualquier bloque que se añada después queda dentro y la
+// comprobación de «qué corre al cargar» acusa a código que no es de aquí.
+const _ini = js.indexOf('// ── Versión nueva publicada');
+const _sig = js.indexOf('\n// ── ', _ini + 10);
+const bloqueJs = js.slice(_ini, _sig > 0 ? _sig : undefined);
 const bloqueCss = html.slice(html.indexOf('.nueva-version{'), html.indexOf('</style>', html.indexOf('.nueva-version{')));
 
 console.log('\nTodo lo que usa el aviso existe de verdad\n');
