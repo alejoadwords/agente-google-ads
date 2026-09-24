@@ -140,9 +140,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .asa{width:38px;height:4px;border-radius:2px;background:var(--border-h);margin:6px auto 14px}
 .sheet textarea{width:100%;min-height:110px;border:1px solid var(--border);border-radius:var(--rlg);
   padding:12px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text);resize:none}
-.sheet .bbtn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:var(--rlg);background:var(--blue);
+.bbtn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:var(--rlg);background:var(--blue);
   color:#fff;font:inherit;font-weight:700;font-size:var(--fs-md)}
-.sheet .bbtn:active{background:var(--blue-h)}
+.bbtn:active{background:var(--blue-h)}
 .vacio{text-align:center;color:var(--muted);padding:48px 24px;font-size:var(--fs-md)}
 .aviso{margin:10px 12px;padding:10px 12px;border-radius:var(--rlg);background:var(--blue-lt);color:var(--blue);
   font-size:var(--fs-xs);line-height:1.5}
@@ -223,6 +223,80 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .opcion:active{background:var(--bg-subtle)}
 .opcion .marca{margin-left:auto;color:var(--blue);opacity:0}
 .opcion[aria-current="true"] .marca{opacity:1}
+
+/* ── Bandeja ── */
+.conv{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--rlg);padding:12px;margin-bottom:8px;font:inherit;color:inherit}
+.conv:active{background:var(--bg-subtle);transform:scale(.985)}
+.conv .ini{position:relative}
+.canal{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;
+  border:2px solid var(--bg-card);display:flex;align-items:center;justify-content:center}
+.canal svg{width:10px;height:10px;color:#fff}
+.canal.whatsapp{background:#25D366}
+.canal.instagram{background:#E1306C}
+.canal.messenger{background:#0084FF}
+.canal.webchat{background:#7c3aed}
+.conv .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
+.conv .arriba{display:flex;align-items:baseline;gap:8px}
+.conv .nom{font-weight:600;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.conv .cuando{color:var(--muted);font-size:10px;flex:none}
+.conv .prev{color:var(--muted);font-size:var(--fs-xs);margin-top:3px;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.conv.nolei .nom{font-weight:700}
+.conv.nolei .prev{color:var(--text)}
+.bolita{flex:none;width:20px;height:20px;border-radius:999px;background:var(--blue);color:#fff;
+  font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;align-self:center}
+.quien{font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:999px;
+  background:var(--bg-subtle);color:var(--muted);text-transform:uppercase}
+.quien.bot{background:var(--blue-lt);color:var(--blue)}
+.quien.human{background:#FFF3E0;color:#B26A00}
+
+/* ── Conversación abierta ── */
+.hilo{padding:12px 12px 4px;display:flex;flex-direction:column;gap:8px}
+.burbuja{max-width:78%;padding:9px 12px;border-radius:var(--rlg);font-size:var(--fs-md);line-height:1.45;
+  white-space:pre-wrap;word-break:break-word}
+.burbuja .h{display:block;font-size:9px;opacity:.65;margin-top:4px;text-align:right}
+.suya{align-self:flex-start;background:var(--bg-card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.mia{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+/* La nota interna NO es un mensaje: el cliente no la ve, y tiene que notarse */
+.nota-int{align-self:stretch;max-width:none;background:#FFFBEB;border:1px dashed #E8C56B;color:#7A5B12;
+  font-size:var(--fs-sm);border-radius:var(--rlg);padding:9px 12px}
+.nota-int b{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;opacity:.8}
+.ventana{margin:8px 12px;padding:9px 12px;border-radius:var(--rlg);font-size:var(--fs-xs);line-height:1.5;
+  background:#FFF3E0;color:#B26A00;border:1px solid #F3D9AE}
+.ventana.ok{background:var(--blue-lt);color:var(--blue);border-color:var(--blue-md)}
+
+/* ── Compositor ── */
+.compositor{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg-card);
+  border-top:1px solid var(--border);padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+.rapidas{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+.rapidas::-webkit-scrollbar{display:none}
+.rapida{flex:none;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg);
+  color:var(--text);font:inherit;font-size:var(--fs-xs);white-space:nowrap}
+.rapida:active{background:var(--blue-lt);border-color:var(--blue-md)}
+.escribir{display:flex;gap:8px;align-items:flex-end}
+.escribir textarea{flex:1;min-height:40px;max-height:110px;border:1px solid var(--border);border-radius:20px;
+  padding:10px 14px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text);resize:none}
+.enviar{flex:none;width:42px;height:42px;border-radius:50%;border:0;background:var(--blue);color:#fff;
+  display:flex;align-items:center;justify-content:center}
+.enviar:active{background:var(--blue-h);transform:scale(.92)}
+.modo{display:flex;gap:6px;padding-bottom:8px}
+.modo button{flex:1;padding:7px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);
+  color:var(--muted);font:inherit;font-size:var(--fs-xs);font-weight:600}
+.modo button[disabled]{opacity:.45}
+.modo button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.modo button[aria-pressed="true"].es-nota{background:#B26A00;border-color:#B26A00}
+
+/* ── Chatbots ── */
+.chatbot{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--rlg);padding:14px;margin-bottom:8px;font:inherit;color:inherit}
+.chatbot:active{background:var(--bg-subtle)}
+.interruptor{flex:none;width:46px;height:27px;border-radius:999px;background:var(--border-h);position:relative;
+  transition:background var(--dur-fast) var(--ease)}
+.interruptor::after{content:'';position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+  background:#fff;transition:transform var(--dur-fast) var(--ease-mover)}
+.chatbot.on .interruptor{background:var(--blue)}
+.chatbot.on .interruptor::after{transform:translateX(19px)}
 </style></head><body><div class="vista" id="inicio">
   <div class="saludo"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div>
   <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
@@ -248,8 +322,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 </div>
 
 <div class="vista" id="chats" hidden>
-  <div class="cab"><div><h1>Conversaciones</h1></div></div>
-  <div class="vacio">La bandeja de WhatsApp, Instagram y el chat de la web llega en la siguiente tanda.</div>
+  <div class="cab">
+    <div style="flex:1"><h1>Conversaciones</h1><div class="sub">3 sin leer</div></div>
+    <button class="volver" style="transform:none" onclick="abrirBots()" aria-label="Chatbots" id="btn-bots"></button>
+  </div>
+  <div class="lista"></div>
 </div>
 
 <button class="fab" onclick="nuevoLead()" aria-label="Contacto nuevo" hidden></button>
@@ -474,6 +551,7 @@ function cerrarLead(){
 }
 window.addEventListener('popstate', function(){
   if ($('#sheet')) { cerrarSheet(); return; }
+  if ($('#hoja-conv')) { cerrarConv(); return; }
   if ($('#hoja-lead')) cerrarLead();
 });
 
@@ -512,5 +590,199 @@ function nuevoLead(){
     + '<button class="bbtn" onclick="cerrarSheet()">Crear contacto</button>');
 }
 
+
+
+// ── Conversaciones ──────────────────────────────────────────────────────────
+// La ventana de 24 h es real: fuera de ella WhatsApp solo entrega plantillas
+// aprobadas. Decirlo ANTES de que alguien escriba evita el mensaje que nunca
+// llega y que el asesor da por enviado.
+var CONVS = [
+  {id:1, nom:'Hellen Marún', canal:'whatsapp', quien:'human', nolei:2, cuando:'10:24',
+   prev:'Perfecto, ¿el jueves a las 9 te sirve para la visita?', horas:1},
+  {id:2, nom:'Andrés Ramírez', canal:'whatsapp', quien:'bot', nolei:0, cuando:'09:12',
+   prev:'Listo, quedaste agendado para el jueves 24 a las 9:00 a. m.', horas:3},
+  {id:3, nom:'paula.rstrp', canal:'instagram', quien:'bot', nolei:1, cuando:'ayer',
+   prev:'¿Tienen algo en Buenavista con parqueadero?', horas:20},
+  {id:4, nom:'Visitante web', canal:'webchat', quien:'human', nolei:0, cuando:'ayer',
+   prev:'Gracias, quedo atento al correo con la ficha.', horas:26},
+  {id:5, nom:'Rubén Corro', canal:'messenger', quien:'bot', nolei:0, cuando:'lun',
+   prev:'El local del centro mide 120 m² y está en $3.200.000 mensuales.', horas:72}
+];
+var MENSAJES = {
+  1:[
+    {de:'ellos', t:'Hola, vi el apartamento AP-2231 en la página', h:'10:02'},
+    {de:'nos',   t:'¡Hola Hellen! Con gusto te ayudo. ¿Buscas para arriendo o compra?', h:'10:03'},
+    {de:'ellos', t:'Arriendo, somos dos personas y tenemos un perro', h:'10:15'},
+    {de:'nota',  t:'Ya le pasé la ficha por correo. Atiende Karen.', h:'10:18'},
+    {de:'nos',   t:'Perfecto, el AP-2231 acepta mascotas.', h:'10:20'},
+    {de:'ellos', t:'¿Se puede visitar esta semana?', h:'10:24'}
+  ]
+};
+var RAPIDAS = ['¡Hola! ¿En qué te ayudo?','Te comparto la ficha','¿Te sirve mañana?','Quedo atento'];
+var ICONO_CANAL = {whatsapp:'chat', instagram:'star', messenger:'chat', webchat:'bot'};
+var BOTS = [
+  {id:1, nom:'Asesor de arriendos', canal:'WhatsApp · Sede Envigado', on:true,  convs:'42 conversaciones este mes'},
+  {id:2, nom:'Atención Instagram',  canal:'Instagram Direct',         on:true,  convs:'11 conversaciones este mes'},
+  {id:3, nom:'Chat de la web',      canal:'certainpezzano.com',       on:false, convs:'Apagado desde el 12 de septiembre'}
+];
+var convAbierta = null;
+var modoNota = false;
+
+function pintarConvs(){
+  $('#chats .lista').innerHTML = CONVS.map(function(c){
+    return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="abrirConv('+c.id+')">'
+      + '<span class="ini">'+esc(c.nom[0])
+        + '<span class="canal '+c.canal+'">'+icn(ICONO_CANAL[c.canal]||'chat',10)+'</span></span>'
+      + '<span class="cuerpo">'
+        + '<span class="arriba"><span class="nom">'+esc(c.nom)+'</span>'
+          + '<span class="quien '+c.quien+'">'+(c.quien==='bot'?'Agente':'Tú')+'</span>'
+          + '<span class="cuando">'+esc(c.cuando)+'</span></span>'
+        + '<span class="prev">'+esc(c.prev)+'</span></span>'
+      + (c.nolei ? '<span class="bolita">'+c.nolei+'</span>' : '')
+      + '</button>';
+  }).join('');
+}
+function abrirConv(id){
+  var c = null;
+  for (var i=0;i<CONVS.length;i++) if (CONVS[i].id===id) c = CONVS[i];
+  if (!c) return;
+  convAbierta = c; c.nolei = 0;
+  var ms = MENSAJES[id] || [{de:'ellos', t:c.prev, h:c.cuando}];
+  // La ventana de 24 h es de WhatsApp, Messenger e Instagram. El chat de la
+  // web no la tiene: avisar ahí de algo que no aplica enseña a ignorar avisos.
+  var tieneVentana = ['whatsapp','messenger','instagram'].indexOf(c.canal) >= 0;
+  var dentro = !tieneVentana || c.horas < 24;
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = 'hoja-conv';
+  h.innerHTML =
+    '<div class="cab"><button class="volver" onclick="cerrarConv()">'+icn('arrow',24)+'</button>'
+    + '<div style="flex:1;min-width:0"><h1 style="font-size:var(--fs-md)">'+esc(c.nom)+'</h1>'
+      + '<div class="sub">'+esc(c.canal)+' · '+(c.quien==='bot'?'lo atiende el agente':'lo atiendes tú')+'</div></div>'
+    + '<button class="volver" style="transform:none" onclick="abrirEstado()">'+icn('gear',22)+'</button></div>'
+    + (tieneVentana
+       ? '<div class="ventana'+(dentro?' ok':'')+'">'
+         + (dentro
+            ? 'Dentro de la ventana de 24 horas: puedes escribirle con normalidad.'
+            : 'Pasaron más de 24 horas desde su último mensaje. Solo le llegará una plantilla aprobada.')
+         + '</div>'
+       : '')
+    + '<div class="hilo" style="padding-bottom:150px">'
+      + ms.map(function(m){
+          if (m.de==='nota') return '<div class="nota-int"><b>Nota interna · solo la ve el equipo</b>'+esc(m.t)+'</div>';
+          return '<div class="burbuja '+(m.de==='nos'?'mia':'suya')+'">'+esc(m.t)
+               + '<span class="h">'+esc(m.h)+'</span></div>';
+        }).join('')
+    + '</div>'
+    + '<div class="compositor">'
+      + '<div class="modo">'
+        + '<button aria-pressed="'+dentro+'" onclick="ponerModo(false)"'+(dentro?'':' disabled')+'>Responder</button>'
+        + '<button class="es-nota" aria-pressed="'+(!dentro)+'" onclick="ponerModo(true)">Nota interna</button></div>'
+      + (dentro
+         ? '<div class="rapidas">'+RAPIDAS.map(function(r){
+             return '<button class="rapida" onclick="meter(this.textContent)">'+esc(r)+'</button>';
+           }).join('')+'</div>'
+         : '<button class="bbtn" style="margin:0 0 8px" onclick="abrirPlantillas()">Enviar una plantilla aprobada</button>')
+      + '<div class="escribir"><textarea id="redactar" rows="1" placeholder="'
+        + (dentro ? 'Escribe un mensaje' : 'Nota interna: el cliente no la ve') + '"></textarea>'
+        + '<button class="enviar" onclick="enviarMsg()" aria-label="Enviar">'+icn('arrow',20)+'</button></div>'
+    + '</div>';
+  modoNota = !dentro;
+  document.body.appendChild(h);
+  history.pushState({hoja:1},'');
+  pintarConvs();
+  var hilo = h.querySelector('.hilo');
+  if (hilo) h.scrollTop = h.scrollHeight;
+}
+function cerrarConv(){
+  var h = $('#hoja-conv'); if (!h) return;
+  h.classList.add('saliendo');
+  setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
+  convAbierta = null;
+}
+function ponerModo(esNota){
+  modoNota = esNota;
+  var bs = document.querySelectorAll('.modo button');
+  bs[0].setAttribute('aria-pressed', String(!esNota));
+  bs[1].setAttribute('aria-pressed', String(esNota));
+  var ta = $('#redactar');
+  if (ta) ta.placeholder = esNota ? 'Nota interna: el cliente no la ve' : 'Escribe un mensaje';
+  toque();
+}
+function meter(t){ var ta = $('#redactar'); if (ta){ ta.value = t; ta.focus(); } toque(); }
+function enviarMsg(){
+  var ta = $('#redactar'); if (!ta || !ta.value.trim()) return;
+  var hilo = $('#hoja-conv .hilo'); if (!hilo) return;
+  var hora = new Date().toTimeString().slice(0,5);
+  var d = document.createElement('div');
+  if (modoNota){
+    d.className = 'nota-int';
+    d.innerHTML = '<b>Nota interna · solo la ve el equipo</b>' + esc(ta.value);
+  } else {
+    d.className = 'burbuja mia';
+    d.innerHTML = esc(ta.value) + '<span class="h">'+hora+'</span>';
+  }
+  hilo.appendChild(d);
+  ta.value = '';
+  toque();
+  var h = $('#hoja-conv'); if (h) h.scrollTop = h.scrollHeight;
+}
+function abrirPlantillas(){
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Plantillas aprobadas</div>'
+    + '<div style="color:var(--muted);font-size:var(--fs-xs);margin-bottom:10px;line-height:1.5">'
+    + 'Fuera de las 24 horas, es lo único que WhatsApp entrega.</div>'
+    + ['Seguimiento de visita','Recordatorio de cita','Reactivación'].map(function(t){
+        return '<button class="opcion" onclick="cerrarSheet()">'+esc(t)+'</button>';
+      }).join(''));
+}
+function abrirEstado(){
+  var c = convAbierta; if (!c) return;
+  var ops = [['bot','Lo atiende el agente'],['human','Lo atiendo yo'],['resolved','Resuelta']];
+  abrirSheet(ops.map(function(o){
+    return '<button class="opcion" aria-current="'+(c.quien===o[0])+'" onclick="ponerQuien(\''+o[0]+'\')">'
+      + esc(o[1]) + '<span class="marca">'+icn('check',18)+'</span></button>';
+  }).join('')
+  + '<div style="color:var(--muted);font-size:var(--fs-xs);padding:12px 4px 0;line-height:1.5">'
+  + 'Mientras la atiendas tú, el agente no responde en esta conversación.</div>');
+}
+function ponerQuien(q){
+  if (!convAbierta) return;
+  convAbierta.quien = q;
+  toque(12); cerrarSheet(); cerrarConv(); pintarConvs();
+}
+
+// ── Chatbots ────────────────────────────────────────────────────────────────
+function pintarBots(){
+  $('#bots .lista').innerHTML = BOTS.map(function(b){
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="alternarBot('+b.id+',this)">'
+      + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
+        + '<div class="tsub">'+esc(b.canal)+'</div>'
+        + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
+      + '<div class="interruptor"></div></div>';
+  }).join('');
+}
+function alternarBot(id,el){
+  for (var i=0;i<BOTS.length;i++) if (BOTS[i].id===id) BOTS[i].on = !BOTS[i].on;
+  el.classList.toggle('on');
+  toque();
+}
+function abrirBots(){
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = 'hoja-conv';
+  h.innerHTML =
+    '<div class="cab"><button class="volver" onclick="cerrarConv()">'+icn('arrow',24)+'</button>'
+    + '<div><h1>Chatbots</h1><div class="sub">Quién contesta en cada canal</div></div></div>'
+    + '<div class="lista" id="bots-lista"></div>';
+  document.body.appendChild(h);
+  $('#bots-lista').innerHTML = BOTS.map(function(b){
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="alternarBot('+b.id+',this)">'
+      + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
+        + '<div class="tsub">'+esc(b.canal)+'</div>'
+        + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
+      + '<div class="interruptor"></div></div>';
+  }).join('');
+  history.pushState({hoja:1},'');
+}
+pintarConvs();
+
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda(); pintarInicio(); ver('inicio');
-</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);</script></body></html>
+</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);document.getElementById("btn-bots").innerHTML = icn("bot",22);</script></body></html>

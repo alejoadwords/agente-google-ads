@@ -52,6 +52,19 @@ console.log('\nCada etapa se distingue sin leer la palabra\n');
   chk(`las ${etapas.length} etapas tienen color propio`, sinColor.length === 0, sinColor.join(', '));
 }
 
+console.log('\nNingún nombre de clase significa dos cosas\n');
+{
+  // `.bot` era a la vez la etiqueta «Agente» de la bandeja (.quien.bot) y la
+  // tarjeta de chatbot (.bot). La regla de la tarjeta —display:flex, ancho
+  // completo— se aplicaba también a la etiqueta y aplastaba el nombre del
+  // contacto hasta 0px. No falla nada: solo desaparece un dato.
+  const sueltas = new Set([...css.matchAll(/(?:^|[,}\s])\.([\w-]+)\s*\{/g)].map(m => m[1]));
+  const modificadores = new Set([...css.matchAll(/\.[\w-]+\.([\w-]+)\s*[,{\s]/g)].map(m => m[1]));
+  const chocan = [...modificadores].filter(m => sueltas.has(m));
+  chk('ninguna clase es componente y modificador a la vez', chocan.length === 0,
+      chocan.map(c => '.' + c).join(', '));
+}
+
 console.log('\nLo que se esconde, se esconde de verdad\n');
 {
   // El atributo `hidden` lo pone la hoja del navegador y cualquier `display`
@@ -74,12 +87,30 @@ console.log('\nEl teléfono no es un escritorio pequeño\n');
 
 console.log('\nCada pestaña lleva a una pantalla que existe\n');
 {
-  const tabs = [...html.matchAll(/\['(\w+)','[^']+','[\w-]+'\]/g)].map(m => m[1]);
+  // Solo del cuerpo de pintarTabs: el patrón suelto también casaba con la
+  // lista de canales que tienen ventana de 24 h, y acusaba a 'whatsapp' de ser
+  // una pestaña sin pantalla.
+  const fn = html.slice(html.indexOf('function pintarTabs'), html.indexOf('}', html.indexOf('.join(\'\');', html.indexOf('function pintarTabs'))));
+  const tabs = [...fn.matchAll(/\['(\w+)','[^']+','[\w-]+'\]/g)].map(m => m[1]);
   const vistas = [...html.matchAll(/class="vista" id="(\w+)"/g)].map(m => m[1]);
   const rotas = tabs.filter(t => !vistas.includes(t));
   chk(`las ${tabs.length} pestañas tienen pantalla`, rotas.length === 0, rotas.join(', '));
   chk('y no hay pantallas huérfanas sin pestaña',
       vistas.every(v => tabs.includes(v)), vistas.filter(v => !tabs.includes(v)).join(', '));
+}
+
+console.log('\nNo se puede enviar lo que no va a llegar\n');
+{
+  // El peor fallo de una bandeja es creer que respondiste. Fuera de la ventana
+  // de 24 h, WhatsApp solo entrega plantillas aprobadas: dejar el compositor
+  // abierto produce una burbuja en pantalla y nada en el teléfono del cliente.
+  chk('fuera de la ventana no se ofrece responder', /'Responder<\/button>'|aria-pressed="'\+dentro\+'"/.test(html));
+  chk('y se ofrece la plantilla en su lugar', /Enviar una plantilla aprobada/.test(html));
+  chk('fuera de la ventana se entra en modo nota', /modoNota = !dentro/.test(html));
+  // El chat de la web no tiene ventana: avisar de algo que no aplica enseña a
+  // ignorar los avisos que sí importan.
+  chk('el aviso es solo de los canales que sí la tienen',
+      /\['whatsapp','messenger','instagram'\]\.indexOf\(c\.canal\)/.test(html));
 }
 
 console.log('\nSe avisa de que los datos no son reales\n');
