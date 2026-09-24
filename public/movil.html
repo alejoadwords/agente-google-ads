@@ -295,10 +295,58 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   transition:background var(--dur-fast) var(--ease)}
 .interruptor::after{content:'';position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
   background:#fff;transition:transform var(--dur-fast) var(--ease-mover)}
-.chatbot.on .interruptor{background:var(--blue)}
-.chatbot.on .interruptor::after{transform:translateX(19px)}
+.chatbot.on .interruptor,
+.item.on .interruptor{background:var(--blue)}
+.chatbot.on .interruptor::after,
+.item.on .interruptor::after{transform:translateX(19px)}
+
+/* ── Menú «Más» ── */
+.mgrupo{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+  margin:18px 16px 8px;font-weight:700}
+.mfila{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--rlg);padding:13px 14px;margin:0 12px 8px;
+  width:calc(100% - 24px);font:inherit;color:inherit}
+.mfila:active{background:var(--bg-subtle);transform:scale(.985)}
+.micono{flex:none;width:36px;height:36px;border-radius:10px;background:var(--blue-lt);color:var(--blue);
+  display:flex;align-items:center;justify-content:center}
+.mfila .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
+.mfila .mt{font-weight:600;font-size:var(--fs-md)}
+.mfila .ms{color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
+.mfila .chev{flex:none;color:var(--muted);opacity:.6}
+
+/* ── Tarjeta genérica de módulo ── */
+.item{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--rlg);padding:13px 14px;margin-bottom:8px;font:inherit;color:inherit}
+.item:active{background:var(--bg-subtle);transform:scale(.985)}
+.item .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
+.item .it{font-weight:600;font-size:var(--fs-md)}
+.item .is{color:var(--muted);font-size:var(--fs-xs);margin-top:3px;line-height:1.45}
+.item .num{flex:none;text-align:right}
+.item .interruptor{align-self:center}
+.item .num b{display:block;font-size:var(--fs-lg);font-weight:700;color:var(--blue);line-height:1.1}
+.item .num span{display:block;color:var(--muted);font-size:9px;margin-top:1px}
+.estado-chip{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;
+  letter-spacing:.2px;white-space:nowrap;align-self:flex-start;margin-top:6px}
+.estado-chip.activa{background:#E6F7EE;color:#0B7A43}
+.estado-chip.pausada{background:#FFF3E0;color:#B26A00}
+.estado-chip.borrador{background:var(--bg-subtle);color:var(--muted)}
+.estado-chip.enviada{background:var(--blue-lt);color:var(--blue)}
+
+/* ── Barras de resultado ── */
+.barras{display:flex;gap:10px;margin-top:8px}
+.barra{flex:1}
+.barra .bt{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.4px}
+.barra .bv{font-weight:700;font-size:var(--fs-md);margin-top:1px}
+.barra .bl{height:4px;border-radius:2px;background:var(--bg-subtle);margin-top:5px;overflow:hidden}
+.barra .bl i{display:block;height:100%;background:var(--blue);border-radius:2px}
+
+/* ── Aviso de «esto se edita en el escritorio» ── */
+.solo-escritorio{margin:12px;padding:14px;border-radius:var(--rlg);background:var(--bg-subtle);
+  border:1px solid var(--border);color:var(--muted);font-size:var(--fs-sm);line-height:1.55}
+.solo-escritorio b{color:var(--text);display:block;margin-bottom:4px;font-size:var(--fs-md)}
 </style></head><body><div class="vista" id="inicio">
-  <div class="saludo"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div>
+  <div class="cab"><div style="flex:1"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div>
+    <button class="volver" style="transform:none" onclick="abrirMas()" aria-label="M&aacute;s" id="btn-mas"></button></div>
   <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
   <div class="cifras"></div>
   <div class="secc"><div class="proxima"></div></div>
@@ -549,8 +597,11 @@ function cerrarLead(){
   setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
   leadAbierto = null;
 }
+// Se cierra de la más reciente a la más antigua: si no, el botón atrás del
+// sistema salta dos pantallas de golpe y el usuario se pierde.
 window.addEventListener('popstate', function(){
   if ($('#sheet')) { cerrarSheet(); return; }
+  if ($('#hoja-mod')) { cerrarModulo(); return; }
   if ($('#hoja-conv')) { cerrarConv(); return; }
   if ($('#hoja-lead')) cerrarLead();
 });
@@ -784,5 +835,127 @@ function abrirBots(){
 }
 pintarConvs();
 
+// ── Menú «Más» y módulos de marketing ───────────────────────────────────────
+// La barra inferior es del ASESOR: ocho de cada diez personas con leads
+// asignados no son dueños de cuenta. Marketing y Análisis son trabajo del
+// dueño, de escritorio y de una vez por semana, así que entran por aquí en
+// vez de robarle un sitio al pulgar.
+var MODULOS = [
+  {id:'campanas', nom:'Campañas',        sub:'Correo y WhatsApp masivos', icono:'chat',     grupo:'Marketing'},
+  {id:'listas',   nom:'Listas',          sub:'A quién le escribes',       icono:'users',    grupo:'Marketing'},
+  {id:'autos',    nom:'Automatizaciones',sub:'Lo que pasa solo',          icono:'sparkles', grupo:'Marketing'},
+  {id:'fuentes',  nom:'Fuentes',         sub:'De dónde entran los leads', icono:'link',     grupo:'Marketing'},
+  {id:'props',    nom:'Propuestas',      sub:'Lo que enviaste a cerrar',  icono:'file',     grupo:'Marketing'},
+  {id:'reservas', nom:'Reservas',        sub:'Citas que piden solos',     icono:'calendar', grupo:'Marketing'},
+  {id:'plant',    nom:'Plantillas',      sub:'Diseños de correo',         icono:'edit',     grupo:'Marketing'},
+  {id:'paginas',  nom:'Páginas',         sub:'Páginas de aterrizaje',     icono:'file',     grupo:'Marketing'}
+];
+var CAMPANAS = [
+  {nom:'Arriendos Envigado · septiembre', est:'enviada', sub:'Correo · 1.240 contactos · hace 3 d',
+   res:{Entregados:98, Abiertos:41, Clics:12}},
+  {nom:'Recordatorio de visitas',         est:'activa',  sub:'WhatsApp · 86 contactos · en curso',
+   res:{Entregados:72, Abiertos:64, Clics:21}},
+  {nom:'Proyectos nuevos · octubre',      est:'borrador',sub:'Correo · sin programar', res:null}
+];
+var LISTAS = [
+  {nom:'Interesados en arriendo', n:412, sub:'Etiqueta «arriendo» · se actualiza sola'},
+  {nom:'Visitaron y no cerraron', n:87,  sub:'Etapa «propuesta» hace más de 15 días'},
+  {nom:'No escribir',             n:23,  sub:'Exclusión · nunca reciben campañas'}
+];
+var AUTOS = [
+  {nom:'Encuesta NPS al ganar',        on:true,  sub:'Cambio de etapa → ganado · 4 veces este mes'},
+  {nom:'Seguimiento a las 2 horas',    on:true,  sub:'Lead nuevo sin contactar · 31 veces este mes'},
+  {nom:'Reactivar leads dormidos',     on:false, sub:'Sin actividad 30 días · apagada'}
+];
+var FUENTES = [
+  {nom:'Formulario certainpezzano.com', n:31, sub:'Web · último hace 2 h'},
+  {nom:'Fincaraíz',                     n:59, sub:'Portal · entrada manual'},
+  {nom:'Google Ads',                    n:12, sub:'Pauta · con campaña identificada'},
+  {nom:'Webhook de entrada',            n:8,  sub:'Integración · último ayer'}
+];
+var PROPS = [
+  {nom:'Paula Restrepo · Penthouse',  est:'enviada',  sub:'$ 890.000.000 · vista hace 2 h'},
+  {nom:'Rubén Corro · Local centro',  est:'enviada',  sub:'$ 180.000.000 · sin abrir'},
+  {nom:'Sandra Caro · Villa Campestre',est:'borrador',sub:'$ 540.000.000 · sin enviar'}
+];
+var RESERVAS = [
+  {nom:'Visita AP-2231',     est:'activa', sub:'Jueves 24 · 09:00 · Hellen Marún'},
+  {nom:'Visita Buenavista',  est:'activa', sub:'Viernes 25 · 15:00 · Paula Restrepo'},
+  {nom:'Asesoría virtual',   est:'pausada',sub:'Servicio pausado · no se puede reservar'}
+];
+
+function abrirMas(){
+  var grupos = {};
+  MODULOS.forEach(function(m){ (grupos[m.grupo] = grupos[m.grupo] || []).push(m); });
+  var html = '<div class="cab"><button class="volver" onclick="cerrarConv()">'+icn('arrow',24)+'</button>'
+    + '<div><h1>Más</h1><div class="sub">Marketing y configuración</div></div></div>';
+  Object.keys(grupos).forEach(function(g){
+    html += '<div class="mgrupo">'+esc(g)+'</div>';
+    html += grupos[g].map(function(m){
+      return '<button class="mfila" onclick="abrirModulo(\''+m.id+'\')">'
+        + '<span class="micono">'+icn(m.icono,18)+'</span>'
+        + '<span class="cuerpo"><span class="mt">'+esc(m.nom)+'</span><span class="ms">'+esc(m.sub)+'</span></span>'
+        + '<span class="chev">'+icn('arrow',18)+'</span></button>';
+    }).join('');
+  });
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = 'hoja-conv';
+  h.innerHTML = html;
+  document.body.appendChild(h);
+  history.pushState({hoja:1},'');
+}
+
+// Una sola función para los seis módulos de lista: cambian los datos, no la
+// forma. Seis pantallas a medida serían seis sitios donde arreglar lo mismo.
+function filaItem(x){
+  var res = '';
+  if (x.res) {
+    res = '<div class="barras">' + Object.keys(x.res).map(function(k){
+      return '<div class="barra"><div class="bt">'+esc(k)+'</div><div class="bv">'+x.res[k]+'%</div>'
+           + '<div class="bl"><i style="width:'+x.res[k]+'%"></i></div></div>';
+    }).join('') + '</div>';
+  }
+  return '<button class="item'+(x.on?' on':'')+'" onclick="toque()">'
+    + '<span class="cuerpo"><span class="it">'+esc(x.nom)+'</span>'
+      + '<span class="is">'+esc(x.sub)+'</span>'
+      + (x.est ? '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span>' : '')
+      + res + '</span>'
+    + (x.n !== undefined ? '<span class="num"><b>'+x.n+'</b><span>contactos</span></span>' : '')
+    + (x.on !== undefined ? '<span class="interruptor"></span>' : '')
+    + '</button>';
+}
+function abrirModulo(id){
+  var M = {
+    campanas:{t:'Campañas', s:'3 este mes',        datos:CAMPANAS},
+    listas:  {t:'Listas',   s:'3 listas',          datos:LISTAS},
+    autos:   {t:'Automatizaciones', s:'2 activas', datos:AUTOS},
+    fuentes: {t:'Fuentes',  s:'4 conectadas',      datos:FUENTES},
+    props:   {t:'Propuestas', s:'3 abiertas',      datos:PROPS},
+    reservas:{t:'Reservas', s:'2 servicios activos', datos:RESERVAS},
+    plant:   {t:'Plantillas', s:'Diseños de correo', soloEscritorio:
+      'Los diseños se arman arrastrando bloques, y eso necesita una pantalla grande para que salga algo usable. Desde el teléfono puedes ver cuáles tienes, duplicarlas y usarlas en una campaña.',
+      datos:[{nom:'Bienvenida', sub:'Usada en 2 campañas'},{nom:'Novedades del mes', sub:'Usada en 1 campaña'}]},
+    paginas: {t:'Páginas', s:'Páginas de aterrizaje', soloEscritorio:
+      'El constructor de páginas funciona arrastrando secciones, que en un teléfono no se maneja bien. Aquí puedes ver las que tienes, copiar su enlace y consultar sus visitas.',
+      datos:[{nom:'Arriendos Envigado', sub:'412 visitas · 31 formularios'},{nom:'Proyecto Altos', sub:'96 visitas · 7 formularios'}]}
+  }[id];
+  if (!M) return;
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = 'hoja-mod';
+  h.innerHTML = '<div class="cab"><button class="volver" onclick="cerrarModulo()">'+icn('arrow',24)+'</button>'
+    + '<div><h1>'+esc(M.t)+'</h1><div class="sub">'+esc(M.s)+'</div></div></div>'
+    // Se dice POR QUÉ no se edita aquí, no solo que no se puede: un «no
+    // disponible» a secas se lee como que falta, no como que no tiene sentido.
+    + (M.soloEscritorio ? '<div class="solo-escritorio"><b>Se edita desde el computador</b>'+esc(M.soloEscritorio)+'</div>' : '')
+    + '<div class="lista">' + M.datos.map(filaItem).join('') + '</div>';
+  document.body.appendChild(h);
+  history.pushState({hoja:1},'');
+}
+function cerrarModulo(){
+  var h = $('#hoja-mod'); if (!h) return;
+  h.classList.add('saliendo');
+  setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
+}
+
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda(); pintarInicio(); ver('inicio');
-</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);document.getElementById("btn-bots").innerHTML = icn("bot",22);</script></body></html>
+</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);document.getElementById("btn-bots").innerHTML = icn("bot",22);document.getElementById("btn-mas").innerHTML = icn("split",22);</script></body></html>
