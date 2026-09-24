@@ -20635,6 +20635,137 @@ async function crmLlenarResponsable(seleccionado) {
   });
 }
 
+// ── Mencionar a alguien con @ ──────────────────────────────────────────
+//
+// Escribir `@` en una caja de notas abre la lista del equipo; al elegir a
+// alguien, esa persona recibe la nota por correo, en la campana y en el
+// teléfono — el mismo camino que ya usaba la «Nota al responsable», que está
+// probado. Sin tabla nueva, sin bandeja nueva, sin chat interno.
+//
+// UNA sola persona por nota, a propósito. La campana busca por
+// `metadata->>para`, un único destinatario; soportar varias obliga a cambiar
+// esa consulta y hoy no compensa. Si hace falta avisar a dos, son dos notas.
+//
+// Y NO se enchufa en cajas que ve el cliente —campañas, WhatsApp, propuestas—:
+// un `@` ahí filtra nombres internos a quien no debe verlos.
+
+let _menMenu = null;          // el desplegable abierto, si lo hay
+let _menCaja = null;          // el textarea sobre el que está
+let _menElegido = new WeakMap();  // textarea → { id, nombre }
+
+/** El equipo mencionable: activos con cuenta, y el dueño. */
+function menCandidatos() {
+  const lista = (crmTeam || [])
+    .filter(m => m.status === 'active' && m.member_user_id)
+    .map(m => ({ id: m.member_user_id, nombre: m.member_name || m.member_email || 'Sin nombre' }));
+  // El dueño no tiene fila en el equipo y también se le menciona.
+  const yo = clerkInstance?.user?.id;
+  if (!crmSoyMiembro && yo) lista.unshift({ id: yo, nombre: 'Tú', propio: true });
+  return lista;
+}
+
+/** A quién quedó mencionado en esta caja, si sigue escrito. */
+function menDe(caja) {
+  const m = _menElegido.get(caja);
+  if (!m) return null;
+  // Si borró el `@nombre` del texto, la mención se va con él: avisar a alguien
+  // cuyo nombre ya no aparece es mandar un correo que nadie entiende.
+  return (caja.value || '').includes('@' + m.nombre) ? m : null;
+}
+
+function menCerrar() {
+  _menMenu?.remove();
+  _menMenu = null;
+  _menCaja = null;
+}
+
+/**
+ * Engancha el `@` a un textarea. Idempotente: llamarlo dos veces no duplica.
+ */
+function menEnchufar(caja) {
+  if (!caja || caja.dataset.mencion === '1') return;
+  caja.dataset.mencion = '1';
+  caja.addEventListener('input', () => menQuizasAbrir(caja));
+  caja.addEventListener('keydown', (e) => {
+    if (!_menMenu) return;
+    const items = [..._menMenu.querySelectorAll('[data-id]')];
+    const act = _menMenu.querySelector('.men-act');
+    let i = items.indexOf(act);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      i = e.key === 'ArrowDown' ? Math.min(i + 1, items.length - 1) : Math.max(i - 1, 0);
+      items.forEach(x => x.classList.remove('men-act'));
+      items[i]?.classList.add('men-act');
+      items[i]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (act) { e.preventDefault(); menElegir(act.dataset.id, act.dataset.nombre); }
+    } else if (e.key === 'Escape') { e.preventDefault(); menCerrar(); }
+  });
+  caja.addEventListener('blur', () => setTimeout(menCerrar, 180));
+}
+
+/** ¿Lo último que se escribió es un `@` con texto detrás? */
+function menQuizasAbrir(caja) {
+  const hasta = (caja.value || '').slice(0, caja.selectionStart ?? 0);
+  const m = hasta.match(/(?:^|\s)@([\p{L}\p{N} ]{0,24})$/u);
+  if (!m) return menCerrar();
+  const filtro = (m[1] || '').trim().toLowerCase();
+  const gente = menCandidatos().filter(p => !filtro || p.nombre.toLowerCase().includes(filtro));
+  if (!gente.length) return menCerrar();
+  menAbrir(caja, gente);
+}
+
+function menAbrir(caja, gente) {
+  menCerrar();
+  _menCaja = caja;
+  const r = caja.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'men-menu';
+  d.style.left = Math.round(r.left) + 'px';
+  d.style.top = Math.round(r.bottom + 4) + 'px';
+  d.style.width = Math.round(Math.min(r.width, 280)) + 'px';
+  // El nombre va en `data-` y se lee del elemento al pulsar, en vez de
+  // incrustarlo en un `onmousedown`. `esc()` también escapa las comillas, así
+  // que lo otro tampoco se rompía; esto es sencillamente menos frágil: un
+  // cambio futuro en `esc()` no puede convertir un apellido en código.
+  const attr = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  d.innerHTML = gente.slice(0, 8).map((p, i) =>
+    '<div data-id="' + attr(p.id) + '" data-nombre="' + attr(p.nombre) + '"' +
+      ' class="men-it' + (i === 0 ? ' men-act' : '') + '">' +
+      '<span class="men-ini">' + esc(p.nombre.trim().charAt(0).toUpperCase()) + '</span>' +
+      '<span class="men-nom">' + esc(p.nombre) + '</span>' +
+    '</div>').join('');
+  // `mousedown` y no `click`: el textarea pierde el foco antes del click y el
+  // menú ya se habría cerrado.
+  d.addEventListener('mousedown', (e) => {
+    const it = e.target.closest('[data-id]');
+    if (!it) return;
+    e.preventDefault();
+    menElegir(it.dataset.id, it.dataset.nombre);
+  });
+  document.body.appendChild(d);
+  _menMenu = d;
+}
+
+function menElegir(id, nombre) {
+  const caja = _menCaja;
+  menCerrar();
+  if (!caja) return;
+  const pos = caja.selectionStart ?? caja.value.length;
+  const antes = caja.value.slice(0, pos).replace(/(?:^|\s)@([\p{L}\p{N} ]{0,24})$/u, (t) => t.slice(0, t.indexOf('@')));
+  const despues = caja.value.slice(pos);
+  const texto = '@' + nombre + ' ';
+  caja.value = antes + texto + despues;
+  const cursor = (antes + texto).length;
+  caja.setSelectionRange(cursor, cursor);
+  caja.focus();
+  _menElegido.set(caja, { id, nombre });
+  // Se dice a quién va a llegar. Sin esto el `@` parece decoración: no hay
+  // forma de saber si de verdad se le va a avisar a alguien.
+  const pista = caja.parentElement?.querySelector('.men-pista');
+  if (pista) pista.innerHTML = 'Le llegará a <b>' + esc(nombre) + '</b> por correo, campana y teléfono.';
+}
+
 function crmNombreResponsable(id) {
   if (!id) return null;
   const m = crmTeam.find(x => x.member_user_id === id);
@@ -38902,6 +39033,13 @@ function lfPintar() {
   if (!crmSoyMiembro && typeof teamEnsureLoaded === 'function') {
     teamEnsureLoaded().then(() => lfQuienRefrescar()).catch(() => {});
   }
+  // El `@` se engancha aquí y no al cargar el archivo: `lfPintar()` rehace ese
+  // textarea en cada clic de pestaña, así que un enganche de una sola vez se
+  // perdería con el primer cambio de pestaña. `menEnchufar` es idempotente.
+  menEnchufar(document.getElementById('lf-texto'));
+  // El equipo hace falta para la lista del desplegable, y un miembro también
+  // menciona: sin esto, a un asesor el `@` no le ofrecía a nadie.
+  if (typeof teamEnsureLoaded === 'function') teamEnsureLoaded().catch(() => {});
 }
 
 /** Las mismas acciones del panel: se reutilizan sus funciones, no se copian. */
@@ -39075,7 +39213,10 @@ function lfQuePaso(l) {
       '<textarea class="lf-area" id="lf-texto" placeholder="' +
         (crmActivityType === 'tarea'
           ? 'Qué hay que hacer…'
-          : 'Queda en el historial, sin avisar a nadie…') + '"></textarea>' +
+          // El placeholder enseña el `@`: una función que no se ve no se usa,
+          // y esta no tiene botón que la anuncie.
+          : 'Queda en el historial. Escribe @ para avisar a alguien del equipo…') + '"></textarea>' +
+      '<div class="men-pista"></div>' +
       (crmActivityType === 'tarea'
         ? '<div style="margin-top:9px"><label class="lf-tit" style="margin:0 0 5px">Para cuándo</label>' +
           '<input type="datetime-local" class="lf-area" id="lf-vence" style="min-height:0;padding:9px 11px"></div>'
@@ -39161,6 +39302,9 @@ async function lfGuardarActividad() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         lead_id: lfLead.id, type: crmActivityType, content: txt.trim(),
+        // Si hay un `@` elegido y su nombre sigue escrito, esa persona recibe
+        // la nota. El servidor valida que sea del equipo antes de avisar.
+        ...(menDe(document.getElementById('lf-texto')) ? { mencion: menDe(document.getElementById('lf-texto')).id } : {}),
         ...(crmActivityType === 'tarea' && vence ? { metadata: { due_date: new Date(vence).toISOString() } } : {}),
       }),
     });

@@ -174,6 +174,33 @@ export async function quienPregunta(userId) {
  * Quien no está acotado —el dueño, o un miembro sin cliente— trabaja con el
  * que pidió, exactamente como hasta ahora.
  */
+/**
+ * ¿Esta persona pertenece a esta cuenta?
+ *
+ * Para validar un destinatario que llega del navegador —una mención con `@`,
+ * por ejemplo—. Sin esto, cualquiera podría mandar un identificador cualquiera
+ * y hacer que a un usuario de OTRA cuenta le llegara un correo y un aviso al
+ * teléfono con el texto que quisiera y el nombre de un lead ajeno dentro.
+ *
+ * El dueño cuenta: no tiene fila en `team_members`, y aun así se le menciona.
+ */
+export async function esDelEquipo(cuenta, userId) {
+  if (!cuenta || !userId) return false;
+  if (userId === cuenta) return true;                 // el dueño
+  try {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}` +
+      `&member_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=member_user_id&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    ).then(r => (r.ok ? r.json() : []));
+    return !!filas?.[0];
+  } catch {
+    // Ante la duda NO se deja pasar: es una comprobación de permisos, y
+    // fallar abierto aquí es dejar que le escriban a quien no toca.
+    return false;
+  }
+}
+
 export function alcanceDeCliente(quien, pedido) {
   if (quien && quien.cliente) return quien.cliente;
   return pedido || null;

@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-import { soloSusLeads } from './_perfiles.js';
+import { soloSusLeads, esDelEquipo } from './_perfiles.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
@@ -180,7 +180,7 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { lead_id, type, content, metadata, avisar } = body;
+    const { lead_id, type, content, metadata, avisar, mencion } = body;
     if (!lead_id || !type) return jsonResp({ error: 'Faltan campos requeridos' }, 400);
 
     // 'visita' es la nota que el asesor escribe al cerrar una cita: cómo le
@@ -207,7 +207,25 @@ export default async function handler(req) {
 
     // A quién va dirigida. Uno no se avisa a sí mismo: si el admin lleva el lead,
     // la nota se guarda igual pero sin aviso, y se dice por qué.
-    const para = (avisar && lead.assigned_to && lead.assigned_to !== actorId) ? lead.assigned_to : null;
+    //
+    // `mencion` es el `@` escrito dentro de la nota, y manda sobre el
+    // responsable: si escribes «@Deysy mira esto», el aviso es para Deysy
+    // aunque el lead lo lleve otra persona. Es la diferencia entre la nota de
+    // dirección —siempre al responsable, solo la deja un admin— y mencionar a
+    // alguien, que puede hacer cualquiera del equipo.
+    //
+    // El destinatario se valida CONTRA EL EQUIPO. Sin esto, cualquiera podría
+    // mandar un identificador por la barra de direcciones y hacer que a un
+    // usuario de otra cuenta le llegara un correo y un aviso al teléfono con
+    // el texto que quisiera, y con el nombre de un lead ajeno dentro.
+    let mencionado = null;
+    if (mencion && mencion !== actorId) {
+      mencionado = (await esDelEquipo(userId, mencion)) ? mencion : null;
+      if (!mencionado) return jsonResp({ error: 'Esa persona no está en tu equipo.' }, 403);
+    }
+
+    const para = mencionado
+      || ((avisar && lead.assigned_to && lead.assigned_to !== actorId) ? lead.assigned_to : null);
 
     const payload = {
       lead_id,

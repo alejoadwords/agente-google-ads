@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-24-mencionar-con-arroba",
+      "fecha": "2026-09-24",
+      "tipo": "mejora",
+      "titulo": "Escribe @ y avisa a quien tenga que enterarse",
+      "texto": "En la caja de actividad de un contacto ahora puedes escribir @ y elegir a alguien de tu equipo. Esa persona recibe la nota por correo, en la campana y en el teléfono, sin que tengas que salir a buscarla ni abrir otra ventana. Antes solo el dueño o un administrador podían dejar una nota, y solo al responsable del contacto; ahora cualquiera del equipo puede avisar a cualquiera. Una persona por nota, y si borras el @nombre antes de guardar, no se avisa a nadie. El @ solo está en las cajas internas: nunca en lo que ve tu cliente."
+    },
+    {
       "id": "2026-09-24-campana-suena",
       "fecha": "2026-09-24",
       "tipo": "mejora",
