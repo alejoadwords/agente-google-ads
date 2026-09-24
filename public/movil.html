@@ -1579,13 +1579,19 @@ async function cargarReales(){
   if (d.leads === null && d.tareas === null && d.convs === null) {
     MODO = 'fallo'; pintarModo(); return;
   }
-  // Lo que sí llegó sustituye a los ejemplos; lo que no, se queda en null y
-  // cada pantalla lo dirá. Nunca se mezclan ejemplos con datos reales: media
-  // pantalla verdadera y media inventada es peor que ninguna.
-  if (d.leads !== null) LEADS = d.leads;
-  if (d.tareas !== null) TAREAS = d.tareas;
-  if (d.citas !== null) CITAS = d.citas;
-  if (d.convs !== null) CONVS = d.convs;
+  // Se asignan TAL CUAL, nulls incluidos.
+  //
+  // La primera versión hacía `if (d.tareas !== null) TAREAS = d.tareas`, que
+  // parece prudente y es lo contrario: cuando la consulta de la agenda fallaba,
+  // la pantalla seguía enseñando las tareas de EJEMPLO mientras el resto ya
+  // eran datos reales de la cuenta. Datos inventados presentándose como
+  // propios, que es la peor forma de fallar que tiene un CRM.
+  //
+  // Cada pantalla ya sabe pintar el null: «No se pudieron traer tus tareas».
+  LEADS  = d.leads;
+  TAREAS = d.tareas;
+  CITAS  = d.citas;
+  CONVS  = d.convs;
   MODO = 'real';
   pintarModo();
   repintarTodo();

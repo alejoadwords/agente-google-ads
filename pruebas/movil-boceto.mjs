@@ -177,6 +177,34 @@ console.log('\nEl guion entero se ejecuta sin reventar\n');
   }
 }
 
+console.log('\nCon datos reales, nada de ejemplo se cuela\n');
+{
+  // El fallo que tuve: `if (d.tareas !== null) TAREAS = d.tareas` parece
+  // prudente y es lo contrario. Cuando la agenda fallaba, la pantalla seguía
+  // enseñando las tareas de EJEMPLO mientras el resto ya eran datos de la
+  // cuenta. Datos inventados presentándose como propios.
+  const i = html.indexOf('async function cargarReales');
+  const fn = html.slice(i, html.indexOf('\n}', i));
+  chk('las listas se asignan tal cual, nulls incluidos',
+      /LEADS\s*=\s*d\.leads;/.test(fn) && /TAREAS\s*=\s*d\.tareas;/.test(fn), fn.slice(0, 80));
+  // Sin quitar los comentarios, esta aserción se choca con el comentario que
+  // explica el fallo. Es la tercera vez que me pasa: lo que se comprueba es
+  // el CÓDIGO, nunca lo que uno escribió para explicarlo.
+  const codigo = fn.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  chk('no se conserva el valor anterior cuando algo falla',
+      !/if \(d\.\w+ !== null\)/.test(codigo));
+  // Y cada pantalla tiene que saber decirlo.
+  for (const [pantalla, frase] of [['pintarLeads', 'traer tus contactos'],
+                                   ['pintarTareas', 'traer tus tareas'],
+                                   ['pintarAgenda', 'traer tu agenda'],
+                                   ['pintarConvs', 'traer tus conversaciones']]) {
+    const j = html.indexOf('function ' + pantalla);
+    const cuerpo = html.slice(j, html.indexOf('\n}', j));
+    chk(`${pantalla} distingue «no se pudo» de «no hay»`,
+        /=== null/.test(cuerpo) && cuerpo.includes(frase), frase);
+  }
+}
+
 console.log('\nSe avisa de que los datos no son reales\n');
 {
   // Sin esto, alguien podría creer que está tocando su cartera de verdad.
