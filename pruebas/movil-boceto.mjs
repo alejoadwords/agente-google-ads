@@ -113,6 +113,51 @@ console.log('\nNo se puede enviar lo que no va a llegar\n');
       /\['whatsapp','messenger','instagram'\]\.indexOf\(c\.canal\)/.test(html));
 }
 
+console.log('\nEl guion entero se ejecuta sin reventar\n');
+{
+  // Un `var X` se iza pero vale undefined hasta su línea. Ampliar MODULOS
+  // antes de declararlo lanzaba AL CARGAR y abortaba el resto del script:
+  // media aplicación quedaba sin definir y solo se notaba al tocar un botón.
+  // Comprobar el orden a ojo no sirve; hay que ejecutarlo.
+  const script = html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>'));
+  const elemento = () => ({
+    innerHTML: '', className: '', id: '', style: {}, dataset: {}, hidden: false,
+    classList: { add(){}, remove(){}, toggle(){} },
+    setAttribute(){}, appendChild(){}, remove(){}, addEventListener(){},
+    querySelector: () => elemento(), querySelectorAll: () => [],
+    getBoundingClientRect: () => ({ width: 0 }),
+  });
+  const entorno = {
+    document: {
+      querySelector: () => elemento(), querySelectorAll: () => [],
+      getElementById: () => elemento(), createElement: () => elemento(),
+      addEventListener(){}, body: elemento(),
+    },
+    window: { matchMedia: () => ({ matches: false }), addEventListener(){}, scrollTo(){} },
+    history: { pushState(){} },
+    navigator: {},
+    setInterval(){}, setTimeout(){},
+  };
+  let error = null, globales = null;
+  try {
+    const nombres = Object.keys(entorno);
+    globales = new Function(...nombres, script + `
+      ; return { MODULOS: typeof MODULOS, PINTORES: typeof PINTORES,
+                 abrirModulo: typeof abrirModulo, CONVS: typeof CONVS,
+                 modulos: MODULOS.length, pintores: Object.keys(PINTORES).length };
+    `)(...nombres.map(n => entorno[n]));
+  } catch (e) { error = e.message; }
+  chk('carga sin lanzar', error === null, error);
+  if (!error) {
+    chk('MODULOS quedó definido', globales.MODULOS === 'object');
+    chk('PINTORES quedó definido', globales.PINTORES === 'object');
+    // Si el push falló, MODULOS se queda en los ocho de marketing.
+    chk(`están los ${globales.modulos} módulos, no solo los de marketing`,
+        globales.modulos === 15, String(globales.modulos));
+    chk('cada informe tiene su pintor', globales.pintores === 7, String(globales.pintores));
+  }
+}
+
 console.log('\nSe avisa de que los datos no son reales\n');
 {
   // Sin esto, alguien podría creer que está tocando su cartera de verdad.

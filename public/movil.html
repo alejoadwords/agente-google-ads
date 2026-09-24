@@ -92,8 +92,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .ini{flex:none;width:42px;height:42px;border-radius:50%;background:var(--blue-lt);color:var(--blue);
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-md)}
 .lead .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
-.lead .nom{font-weight:600;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lead .meta{color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
+.lead .nom{display:block;font-weight:600;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead .meta{display:block;color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
 .chip{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;
   letter-spacing:.2px;background:var(--blue-lt);color:var(--blue);white-space:nowrap}
 .chip.nuevo{background:#E8F0FF;color:#1C4FD8}
@@ -238,7 +238,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .canal.webchat{background:#7c3aed}
 .conv .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
 .conv .arriba{display:flex;align-items:baseline;gap:8px}
-.conv .nom{font-weight:600;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.conv .nom{display:block;font-weight:600;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
 .conv .cuando{color:var(--muted);font-size:10px;flex:none}
 .conv .prev{color:var(--muted);font-size:var(--fs-xs);margin-top:3px;display:-webkit-box;
   -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -310,8 +310,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .micono{flex:none;width:36px;height:36px;border-radius:10px;background:var(--blue-lt);color:var(--blue);
   display:flex;align-items:center;justify-content:center}
 .mfila .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
-.mfila .mt{font-weight:600;font-size:var(--fs-md)}
-.mfila .ms{color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
+.mfila .mt{display:block;font-weight:600;font-size:var(--fs-md)}
+.mfila .ms{display:block;color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
 .mfila .chev{flex:none;color:var(--muted);opacity:.6}
 
 /* ── Tarjeta genérica de módulo ── */
@@ -319,8 +319,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   border:1px solid var(--border);border-radius:var(--rlg);padding:13px 14px;margin-bottom:8px;font:inherit;color:inherit}
 .item:active{background:var(--bg-subtle);transform:scale(.985)}
 .item .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
-.item .it{font-weight:600;font-size:var(--fs-md)}
-.item .is{color:var(--muted);font-size:var(--fs-xs);margin-top:3px;line-height:1.45}
+.item .it{display:block;font-weight:600;font-size:var(--fs-md)}
+.item .is{display:block;color:var(--muted);font-size:var(--fs-xs);margin-top:3px;line-height:1.45}
 .item .num{flex:none;text-align:right}
 .item .interruptor{align-self:center}
 .item .num b{display:block;font-size:var(--fs-lg);font-weight:700;color:var(--blue);line-height:1.1}
@@ -344,6 +344,64 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .solo-escritorio{margin:12px;padding:14px;border-radius:var(--rlg);background:var(--bg-subtle);
   border:1px solid var(--border);color:var(--muted);font-size:var(--fs-sm);line-height:1.55}
 .solo-escritorio b{color:var(--text);display:block;margin-bottom:4px;font-size:var(--fs-md)}
+
+/* ── Embudo ── */
+.embudo{padding:4px 16px}
+.etapa-f{margin-bottom:10px}
+.etapa-f .ef{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-sm)}
+.etapa-f .ef b{font-weight:700;font-size:var(--fs-md)}
+.etapa-f .ef span{color:var(--muted);font-size:var(--fs-xs)}
+.etapa-f .eb{height:8px;border-radius:4px;background:var(--bg-subtle);margin-top:5px;overflow:hidden}
+.etapa-f .eb i{display:block;height:100%;background:var(--blue);border-radius:4px;
+  transition:width var(--dur-slow) var(--ease-mover)}
+.etapa-f.perdida .eb i{background:var(--muted);opacity:.5}
+.etapa-f.ganada .eb i{background:#0B7A43}
+
+/* ── NPS ── */
+.nps{text-align:center;padding:18px 16px 8px}
+.nps .val{font-size:52px;font-weight:700;line-height:1;color:#0B7A43;letter-spacing:-2px}
+.nps .val.tibio{color:#B26A00}
+.nps .val.malo{color:var(--danger)}
+.nps .et{color:var(--muted);font-size:var(--fs-xs);margin-top:6px}
+.nps-barras{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 16px 6px}
+.nps-barras i{display:block;height:100%}
+.nps-barras .p{background:#0B7A43}
+.nps-barras .n{background:#E8C56B}
+.nps-barras .d{background:var(--danger)}
+.nps-ley{display:flex;justify-content:space-between;padding:0 16px;color:var(--muted);font-size:10px}
+.nps-ley b{color:var(--text)}
+
+/* ── SEO ── */
+.kw{display:flex;gap:12px;align-items:center;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--rlg);padding:12px 14px;margin-bottom:8px}
+.kw .txt{flex:1;min-width:0}
+.kw .kt{display:block;font-weight:600;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kw .ks{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.kw .pos{flex:none;text-align:center;min-width:46px}
+.kw .pos b{display:block;font-size:var(--fs-lg);font-weight:700;line-height:1}
+.delta{display:block;font-size:10px;font-weight:700;margin-top:2px}
+.delta.sube{color:#0B7A43}
+.delta.baja{color:var(--danger)}
+.delta.igual{color:var(--muted)}
+
+/* ── Parrilla social ── */
+.post{display:flex;gap:12px;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--rlg);padding:12px;margin-bottom:8px}
+.post .lam{flex:none;width:52px;height:52px;border-radius:10px;background:var(--blue-lt);color:var(--blue);
+  display:flex;align-items:center;justify-content:center}
+.post .txt{flex:1;min-width:0}
+.post .pt{font-weight:600;font-size:var(--fs-sm);line-height:1.4;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.post .ps{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+
+/* ── Academia ── */
+.video{display:flex;gap:12px;align-items:center;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--rlg);padding:12px;margin-bottom:8px}
+.video .play{flex:none;width:46px;height:46px;border-radius:10px;background:var(--blue);color:#fff;
+  display:flex;align-items:center;justify-content:center}
+.video .txt{flex:1;min-width:0}
+.video .vt{display:block;font-weight:600;font-size:var(--fs-sm)}
+.video .vs{display:block;color:var(--muted);font-size:10px;margin-top:2px}
 </style></head><body><div class="vista" id="inicio">
   <div class="cab"><div style="flex:1"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div>
     <button class="volver" style="transform:none" onclick="abrirMas()" aria-label="M&aacute;s" id="btn-mas"></button></div>
@@ -939,6 +997,19 @@ function abrirModulo(id){
       'El constructor de páginas funciona arrastrando secciones, que en un teléfono no se maneja bien. Aquí puedes ver las que tienes, copiar su enlace y consultar sus visitas.',
       datos:[{nom:'Arriendos Envigado', sub:'412 visitas · 31 formularios'},{nom:'Proyecto Altos', sub:'96 visitas · 7 formularios'}]}
   }[id];
+  // Los informes y los módulos de cuenta tienen pintor propio: forzarlos a la
+  // lista genérica los convertiría en tablas encogidas.
+  if (!M && PINTORES[id]) {
+    var t = TITULOS[id] || [id, ''];
+    var hp = document.createElement('div');
+    hp.className = 'hoja'; hp.id = 'hoja-mod';
+    hp.innerHTML = '<div class="cab"><button class="volver" onclick="cerrarModulo()">'+icn('arrow',24)+'</button>'
+      + '<div><h1>'+esc(t[0])+'</h1><div class="sub">'+esc(t[1])+'</div></div></div>'
+      + PINTORES[id]();
+    document.body.appendChild(hp);
+    history.pushState({hoja:1},'');
+    return;
+  }
   if (!M) return;
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-mod';
@@ -956,6 +1027,143 @@ function cerrarModulo(){
   h.classList.add('saliendo');
   setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
 }
+
+// ── Las siete restantes ─────────────────────────────────────────────────────
+// Un informe en un teléfono no es una tabla encogida: es lo que se lee de un
+// vistazo, de pie y con una mano. Por eso van cifras grandes y barras en vez
+// de filas y columnas.
+MODULOS.push(
+  {id:'analisis', nom:'Análisis',   sub:'Cómo va el embudo',         icono:'chart',    grupo:'Análisis'},
+  {id:'nps',      nom:'Satisfacción',sub:'Qué opinan tus clientes',  icono:'star',     grupo:'Análisis'},
+  {id:'aperturas',nom:'Aperturas',  sub:'Qué correos se leen',       icono:'chat',     grupo:'Análisis'},
+  {id:'clientes', nom:'Panel de clientes', sub:'Tu cartera',         icono:'users',    grupo:'Cuenta'},
+  {id:'studio',   nom:'Social Studio',sub:'Tu parrilla de contenido',icono:'sparkles', grupo:'Cuenta'},
+  {id:'seo',      nom:'Proyecto SEO',sub:'Tus posiciones en Google', icono:'trend',    grupo:'Cuenta'},
+  {id:'academia', nom:'Academia',   sub:'Aprende a usar Acuarius',   icono:'file',     grupo:'Cuenta'}
+);
+
+var EMBUDO = [
+  {e:'Nuevo',       n:190, clase:''},
+  {e:'Contactado',  n:74,  clase:''},
+  {e:'Calificado',  n:61,  clase:''},
+  {e:'Propuesta',   n:22,  clase:''},
+  {e:'Ganado',      n:17,  clase:'ganada'},
+  {e:'Perdido',     n:209, clase:'perdida'}
+];
+var NPS_DATOS = {valor:42, promotores:11, neutros:5, detractores:3, respuestas:19};
+var APERTURAS = [
+  {nom:'Arriendos Envigado · septiembre', ab:41, sub:'1.240 enviados · 508 abiertos'},
+  {nom:'Recordatorio de visitas',         ab:64, sub:'86 enviados · 55 abiertos'},
+  {nom:'Novedades de agosto',             ab:28, sub:'1.190 enviados · 333 abiertos'}
+];
+var CARTERA = [
+  {nom:'Certain & Pezzano', sub:'Inmobiliaria · 328 leads · 9 del equipo', est:'activa'},
+  {nom:'Forest Living',     sub:'Inmobiliaria · sin actividad 30 días',    est:'pausada'},
+  {nom:'Iluminata',         sub:'Retail · 12 leads este mes',              est:'activa'}
+];
+var PARRILLA = [
+  {t:'3 razones para arrendar en Envigado antes de fin de año', s:'Instagram · jueves 24, 18:00 · programado'},
+  {t:'Recorrido por Altos del Esmeraldal',                      s:'Instagram · viernes 25, 12:00 · falta la imagen'},
+  {t:'¿Cuánto necesitas ganar para arrendar en Laureles?',      s:'Facebook · lunes 28, 09:00 · borrador'}
+];
+var SEO = [
+  {kw:'arriendo apartamentos envigado', pos:3,  d:+2, vol:'1.300 búsquedas/mes'},
+  {kw:'apartamentos zúñiga envigado',   pos:7,  d:-1, vol:'480 búsquedas/mes'},
+  {kw:'inmobiliaria envigado',          pos:12, d:0,  vol:'2.100 búsquedas/mes'},
+  {kw:'proyectos vis sabaneta',         pos:18, d:+5, vol:'890 búsquedas/mes'}
+];
+var ACADEMIA = [
+  {t:'Cómo armar tu proceso de venta', s:'4 videos · 18 min'},
+  {t:'Campañas que sí se leen',        s:'3 videos · 12 min'},
+  {t:'Automatiza el seguimiento',      s:'5 videos · 22 min'}
+];
+
+// Cada informe se pinta a su manera: forzarlos a la lista genérica los
+// convertiría en tablas encogidas, que es justo lo que no queremos.
+var PINTORES = {
+  analisis: function(){
+    var tope = Math.max.apply(null, EMBUDO.map(function(x){ return x.n; }));
+    return '<div class="cifras" style="padding-top:14px">'
+      + '<div class="cifra"><b>573</b><span>leads en total</span></div>'
+      + '<div class="cifra"><b>3%</b><span>se ganan</span></div>'
+      + '<div class="cifra urge"><b>190</b><span>sin contactar</span></div></div>'
+      + '<div class="secc"><h2>Embudo</h2></div><div class="embudo">'
+      + EMBUDO.map(function(x){
+          return '<div class="etapa-f '+x.clase+'"><div class="ef"><b>'+esc(x.e)+'</b>'
+            + '<span>'+x.n+'</span></div>'
+            + '<div class="eb"><i style="width:'+Math.round(x.n/tope*100)+'%"></i></div></div>';
+        }).join('')
+      + '</div>'
+      // El dato incómodo se dice, no se esconde: es la única razón de mirar
+      // un informe.
+      + '<div class="aviso" style="background:#FFF3E0;color:#B26A00">Se pierden más leads de los que se ganan, '
+      + 'y el cuello está en el primer contacto: 190 esperan a que alguien los llame.</div>';
+  },
+  nps: function(){
+    var d = NPS_DATOS, tot = d.promotores + d.neutros + d.detractores;
+    var clase = d.valor >= 50 ? '' : d.valor >= 0 ? 'tibio' : 'malo';
+    return '<div class="nps"><div class="val '+clase+'">'+d.valor+'</div>'
+      + '<div class="et">de -100 a 100 &middot; '+d.respuestas+' respuestas</div></div>'
+      + '<div class="nps-barras">'
+        + '<i class="p" style="width:'+(d.promotores/tot*100)+'%"></i>'
+        + '<i class="n" style="width:'+(d.neutros/tot*100)+'%"></i>'
+        + '<i class="d" style="width:'+(d.detractores/tot*100)+'%"></i></div>'
+      + '<div class="nps-ley"><span><b>'+d.promotores+'</b> promotores</span>'
+        + '<span><b>'+d.neutros+'</b> neutros</span>'
+        + '<span><b>'+d.detractores+'</b> detractores</span></div>'
+      + '<div class="secc"><h2>Lo último que dijeron</h2><div class="caja">'
+        + '<div class="hito"><span class="cuando">9</span><span>«Muy atentos, respondieron rápido.»</span></div>'
+        + '<div class="hito"><span class="cuando">6</span><span>«La visita se movió dos veces.»</span></div>'
+      + '</div></div>';
+  },
+  aperturas: function(){
+    return '<div class="lista">' + APERTURAS.map(function(x){
+      return '<div class="item"><span class="cuerpo"><span class="it">'+esc(x.nom)+'</span>'
+        + '<span class="is">'+esc(x.sub)+'</span>'
+        + '<span class="barras"><span class="barra"><span class="bt">Abiertos</span>'
+          + '<span class="bv">'+x.ab+'%</span>'
+          + '<span class="bl"><i style="width:'+x.ab+'%"></i></span></span></span></span></div>';
+    }).join('') + '</div>';
+  },
+  clientes: function(){
+    return '<div class="lista">' + CARTERA.map(function(x){
+      return '<button class="item" onclick="toque()"><span class="cuerpo">'
+        + '<span class="it">'+esc(x.nom)+'</span><span class="is">'+esc(x.sub)+'</span>'
+        + '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span></span></button>';
+    }).join('') + '</div>';
+  },
+  studio: function(){
+    return '<div class="lista">' + PARRILLA.map(function(x){
+      return '<div class="post"><span class="lam">'+icn('sparkles',22)+'</span>'
+        + '<span class="txt"><span class="pt">'+esc(x.t)+'</span>'
+        + '<span class="ps">'+esc(x.s)+'</span></span></div>';
+    }).join('') + '</div>';
+  },
+  seo: function(){
+    return '<div class="lista">' + SEO.map(function(x){
+      var cl = x.d > 0 ? 'sube' : x.d < 0 ? 'baja' : 'igual';
+      // El signo va explícito: «+2» y «−1» se leen sin pensar; un «2» suelto
+      // no dice si subió o bajó.
+      var txt = x.d > 0 ? '+'+x.d : x.d < 0 ? '−'+Math.abs(x.d) : '=';
+      return '<div class="kw"><span class="txt"><span class="kt">'+esc(x.kw)+'</span>'
+        + '<span class="ks">'+esc(x.vol)+'</span></span>'
+        + '<span class="pos"><b>'+x.pos+'</b><span class="delta '+cl+'">'+txt+'</span></span></div>';
+    }).join('') + '</div>';
+  },
+  academia: function(){
+    return '<div class="lista">' + ACADEMIA.map(function(x){
+      return '<button class="video" onclick="toque()"><span class="play">'+icn('arrow',20)+'</span>'
+        + '<span class="txt"><span class="vt">'+esc(x.t)+'</span>'
+        + '<span class="vs">'+esc(x.s)+'</span></span></button>';
+    }).join('') + '</div>';
+  }
+};
+var TITULOS = {
+  analisis:['Análisis','Últimos 30 días'], nps:['Satisfacción','19 respuestas'],
+  aperturas:['Aperturas','3 campañas'], clientes:['Panel de clientes','3 clientes'],
+  studio:['Social Studio','3 publicaciones esta semana'], seo:['Proyecto SEO','4 palabras vigiladas'],
+  academia:['Academia','3 cursos']
+};
 
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda(); pintarInicio(); ver('inicio');
 </script><script>document.querySelector(".fab").innerHTML = icn("plus",26);document.getElementById("btn-bots").innerHTML = icn("bot",22);document.getElementById("btn-mas").innerHTML = icn("split",22);</script></body></html>
