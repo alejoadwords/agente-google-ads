@@ -1,0 +1,282 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"><meta name="theme-color" content="#1E2BCC"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Acuarius móvil — boceto</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&display=swap" rel="stylesheet"><style>:root{
+  /* Brand blues */
+  --blue:#1E2BCC;--blue-h:#1520B0;--blue-mid:#3D52E5;
+  --blue-lt:#EEF0FD;--blue-md:#C5CAF8;--blue-dim:rgba(30,43,204,.07);
+  --blue-glow:rgba(30,43,204,.15);--blue-ring:rgba(30,43,204,.2);
+  /* Text */
+  --text:#0D0F1C;--text-2:#5A607A;--text-3:#9DA3BE;
+  /* Aliases for backward compat */
+  --muted:#5A607A;--muted2:#9DA3BE;
+  /* Borders */
+  --border:#E4E6F0;--border2:#F0F1F8;--border-h:#C5CAF8;
+  /* Backgrounds */
+  --bg:#FFFFFF;--bg-subtle:#F7F8FC;--bg-muted:#F0F1F8;--bg-card:#FFFFFF;
+  /* Aliases for backward compat */
+  --sidebar:#F7F8FC;--sidebar2:#F0F1F8;
+  --panel:var(--bg-card);
+  /* Semantic */
+  --success:#059669;--warning:#D97706;--danger:#DC2626;
+  --success-bg:#E7F7F0;--warning-bg:#FEF3E2;--danger-bg:#FDECEC;
+  /* Secundarios de marca */
+  --violet:#7C3AED;--violet-lt:#F5F3FF;--aqua:#00B8CE;--aqua-lt:#E4FAFC;
+  --agua-grad:linear-gradient(135deg,var(--blue),var(--aqua));
+  /* Escala tipográfica (7 pasos) */
+  --fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-md:15px;--fs-lg:18px;--fs-xl:24px;--fs-2xl:32px;
+  /* System */
+  --font:'Outfit',sans-serif;--r:10px;--rlg:14px;--rxl:18px;
+  --ease:cubic-bezier(0.16,1,0.3,1);--ease-mover:cubic-bezier(0.4,0,0.2,1);
+  --dur-fast:.15s;--dur-base:.25s;--dur-slow:.4s;
+  --shadow-sm:0 1px 3px rgba(13,15,28,.06),0 1px 2px rgba(13,15,28,.04);
+  --shadow-md:0 4px 12px rgba(13,15,28,.08),0 1px 3px rgba(13,15,28,.05);
+  --shadow-lg:0 12px 40px -8px rgba(13,15,28,.16),0 4px 12px rgba(13,15,28,.06);
+  --shadow-blue:0 2px 8px rgba(30,43,204,.25);
+  /* 244 px venían del árbol de agentes, con sus sub-items indentados y
+     etiquetas como «Social Media Manager». Sin él, el contenido de la barra
+     necesita 165 px medidos: quedaban casi 80 px muertos a la derecha. */
+  --sb-w:200px;
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --blue:#5B6CFF;--blue-h:#7C89FF;--blue-mid:#6E7DFF;
+  --blue-lt:#1B2040;--blue-md:#37407A;--blue-dim:rgba(91,108,255,.12);
+  --blue-glow:rgba(91,108,255,.25);--blue-ring:rgba(91,108,255,.3);
+  --text:#E8EAF6;--text-2:#A7ACC8;--text-3:#6E7494;
+  --muted:#A7ACC8;--muted2:#6E7494;
+  --border:#262B47;--border2:#1D2138;--border-h:#37407A;
+  --bg:#0E1120;--bg-subtle:#151930;--bg-muted:#1D2138;--bg-card:#151930;
+  --sidebar:#12152A;--sidebar2:#1D2138;
+  --success:#34D399;--warning:#FBBF24;--danger:#F87171;
+  --success-bg:rgba(16,185,129,.14);--warning-bg:rgba(251,191,36,.14);--danger-bg:rgba(239,68,68,.14);
+  --violet:#A78BFA;--violet-lt:#241B45;--aqua:#22D3EE;--aqua-lt:#0B2E38;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 4px 12px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4);
+  --shadow-lg:0 12px 40px -8px rgba(0,0,0,.6),0 4px 12px rgba(0,0,0,.4);
+  --shadow-blue:0 2px 8px rgba(91,108,255,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overscroll-behavior-y:none}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:var(--fs-base);
+  -webkit-text-size-adjust:100%;-webkit-user-select:none;user-select:none}
+/* NINGÚN :hover en todo el fichero. En un dedo no existe y se queda pegado tras
+   tocar; lo que da respuesta es :active, y tiene que ser inmediato. */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;background:var(--bg-card);
+  border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 7px;border:0;
+  background:none;color:var(--muted);font:inherit;font-size:10px;font-weight:600;letter-spacing:.2px;
+  transition:color var(--dur-fast) var(--ease)}
+.tab svg{width:22px;height:22px}
+.tab[aria-selected="true"]{color:var(--blue)}
+.tab:active{background:var(--bg-subtle)}
+.vista{position:fixed;inset:0;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+.vista[hidden]{display:none}
+.hoja{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  animation:empuja var(--dur-base) var(--ease);padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.hoja.saliendo{animation:retrocede var(--dur-base) var(--ease) forwards}
+@keyframes empuja{from{transform:translateX(100%)}to{transform:none}}
+@keyframes retrocede{from{transform:none}to{transform:translateX(100%)}}
+.cab{position:sticky;top:0;z-index:10;background:var(--bg-card);border-bottom:1px solid var(--border);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px;min-height:52px}
+.cab h1{margin:0;font-size:var(--fs-lg);font-weight:700;letter-spacing:-.3px}
+.cab .sub{color:var(--muted);font-size:var(--fs-xs);margin-top:1px}
+.volver{border:0;background:none;padding:6px;margin:-6px 0 -6px -6px;color:var(--blue);display:flex;
+  align-items:center;border-radius:var(--r)}
+.volver:active{background:var(--blue-lt)}
+.volver svg{width:24px;height:24px;transform:rotate(180deg)}
+.lista{padding:8px 12px}
+.lead{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--rlg);padding:12px;margin-bottom:8px;font:inherit;
+  color:inherit;transition:transform var(--dur-fast) var(--ease)}
+/* La tarjeta se hunde al tocarla: es lo que hace que el toque "responda" */
+.lead:active{transform:scale(.975);background:var(--bg-subtle)}
+.ini{flex:none;width:42px;height:42px;border-radius:50%;background:var(--blue-lt);color:var(--blue);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-md)}
+.lead .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}
+.lead .nom{font-weight:600;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead .meta{color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
+.chip{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;
+  letter-spacing:.2px;background:var(--blue-lt);color:var(--blue);white-space:nowrap}
+.chip.nuevo{background:#E8F0FF;color:#1C4FD8}
+.chip.contactado{background:#FFF3E0;color:#B26A00}
+.chip.ganado{background:#E6F7EE;color:#0B7A43}
+.acciones{display:flex;gap:10px;padding:14px 16px}
+.acc{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 8px;
+  border-radius:var(--rlg);border:1px solid var(--border);background:var(--bg-card);color:var(--text);
+  font:inherit;font-size:var(--fs-xs);font-weight:600}
+.acc svg{width:22px;height:22px;color:var(--blue)}
+.acc:active{background:var(--blue-lt);transform:scale(.97)}
+.acc.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.acc.pri svg{color:#fff}
+.acc.pri:active{background:var(--blue-h)}
+.secc{padding:4px 16px 0}
+.secc h2{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:18px 0 8px}
+.caja{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:12px 14px}
+.hito{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.hito:last-child{border-bottom:0}
+.hito .cuando{color:var(--muted);font-size:var(--fs-xs);flex:none;width:54px}
+.tarea{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--rlg);margin-bottom:8px}
+.tarea:active{background:var(--bg-subtle)}
+/* 28px: por debajo de 24 el dedo falla y toca reintentar */
+.tick{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--border-h);background:none;
+  display:flex;align-items:center;justify-content:center;color:#fff;padding:0}
+.tick svg{width:16px;height:16px;opacity:0}
+.tarea.hecha .tick{background:var(--blue);border-color:var(--blue)}
+.tarea.hecha .tick svg{opacity:1}
+.tarea.hecha .tt{text-decoration:line-through;color:var(--muted)}
+.tt{font-weight:600;font-size:var(--fs-md)}
+.tsub{color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
+.fondo{position:fixed;inset:0;z-index:70;background:rgba(13,15,28,.4);animation:fundido var(--dur-fast) var(--ease)}
+@keyframes fundido{from{opacity:0}to{opacity:1}}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:71;background:var(--bg-card);
+  border-radius:var(--rxl) var(--rxl) 0 0;padding:8px 16px calc(20px + env(safe-area-inset-bottom));
+  animation:sube var(--dur-base) var(--ease-mover)}
+@keyframes sube{from{transform:translateY(100%)}to{transform:none}}
+.asa{width:38px;height:4px;border-radius:2px;background:var(--border-h);margin:6px auto 14px}
+.sheet textarea{width:100%;min-height:110px;border:1px solid var(--border);border-radius:var(--rlg);
+  padding:12px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text);resize:none}
+.sheet .bbtn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:var(--rlg);background:var(--blue);
+  color:#fff;font:inherit;font-weight:700;font-size:var(--fs-md)}
+.sheet .bbtn:active{background:var(--blue-h)}
+.vacio{text-align:center;color:var(--muted);padding:48px 24px;font-size:var(--fs-md)}
+.aviso{margin:10px 12px;padding:10px 12px;border-radius:var(--rlg);background:var(--blue-lt);color:var(--blue);
+  font-size:var(--fs-xs);line-height:1.5}
+</style></head><body><div class="vista" id="inicio" hidden>
+  <div class="cab"><div><h1>Hoy</h1><div class="sub">jueves 24 de septiembre</div></div></div>
+  <div class="secc"><h2>Tu día</h2><div class="caja"><b>2 leads</b> sin contactar &middot; <b>3 tareas</b> para hoy</div></div>
+</div>
+<div class="vista" id="leads">
+  <div class="cab"><div><h1>Mis leads</h1><div class="sub">5 activos &middot; 2 sin contactar</div></div></div>
+  <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
+  <div class="lista"></div>
+</div>
+<div class="vista" id="tareas" hidden>
+  <div class="cab"><div><h1>Tareas</h1><div class="sub">3 para hoy</div></div></div>
+  <div class="lista"></div>
+</div>
+<div class="vista" id="chats" hidden>
+  <div class="cab"><div><h1>Conversaciones</h1></div></div>
+  <div class="vacio">Aqu&iacute; ir&aacute; la bandeja de WhatsApp, Instagram y el chat de la web.</div>
+</div>
+<nav class="tabs"></nav><script>const ICN_PATHS = {
+  alert:    '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  check:    '<path d="M22 11.1V12a10 10 0 11-5.9-9.1"/><path d="M22 4L12 14l-3-3"/>',
+  chart:    '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  trend:    '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  search:   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  refresh:  '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
+  sparkles: '<path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/>',
+  edit:     '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/>',
+  chat:     '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>',
+  gear:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  file:     '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  bot:      '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4M8 4h8"/><circle cx="8.5" cy="13.5" r=".5" fill="currentColor"/><circle cx="15.5" cy="13.5" r=".5" fill="currentColor"/><path d="M9 17h6"/>',
+  users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
+  arrow:    '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+  split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
+  star:     '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
+  tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
+  // para que la ficha no tenga que repetir el SVG.
+  link:     '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
+};
+function icn(n,s){
+  var p = ICN_PATHS[n] || ICN_PATHS.chart;
+  return '<svg width="'+(s||20)+'" height="'+(s||20)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+}
+var $ = function(s,r){ return (r||document).querySelector(s); };
+var esc = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+
+var LEADS = [
+  {id:1,nom:'Hellen Marún',     etapa:'nuevo',      chip:'Nuevo',      hace:'hace 2 h', origen:'Formulario web', interes:'Apartamento 2 hab · Alto Prado'},
+  {id:2,nom:'Rubén Corro',      etapa:'contactado', chip:'Contactado', hace:'ayer',     origen:'Fincaraíz',      interes:'Local comercial · Centro'},
+  {id:3,nom:'Sandra Caro',      etapa:'contactado', chip:'Contactado', hace:'ayer',     origen:'Google Ads',     interes:'Casa 3 hab · Villa Campestre'},
+  {id:4,nom:'Giancarlo Armella',etapa:'ganado',     chip:'Ganado',     hace:'hace 3 d', origen:'Referido',       interes:'Oficina 80 m²'},
+  {id:5,nom:'Walter Peralta',   etapa:'nuevo',      chip:'Nuevo',      hace:'hace 5 h', origen:'Metrocuadrado',  interes:'Apartaestudio · Riomar'}
+];
+var HITOS = [['10:24','Llamada · no contestó'],['ayer','Le envié la ficha por WhatsApp'],['ayer','Entró por el formulario de la web']];
+var TAREAS = [
+  {t:'Llamar a Hellen Marún',      s:'Vence hoy · 11:00', hecha:false},
+  {t:'Enviar propuesta a Rubén',   s:'Vence hoy · 15:00', hecha:false},
+  {t:'Confirmar visita con Sandra',s:'Mañana · 09:30',    hecha:false},
+  {t:'Llamar a Walter',            s:'Hecha hoy · 08:10', hecha:true}
+];
+
+function pintarTabs(){
+  var t = [['inicio','Hoy','star'],['leads','Leads','users'],['tareas','Tareas','check'],['chats','Chats','chat']];
+  $('.tabs').innerHTML = t.map(function(x){
+    return '<button class="tab" data-v="'+x[0]+'" onclick="ver(\''+x[0]+'\')">'+icn(x[2],22)+x[1]+'</button>';
+  }).join('');
+}
+function pintarLeads(){
+  $('#leads .lista').innerHTML = LEADS.map(function(l){
+    return '<button class="lead" onclick="abrirLead('+l.id+')">'
+      + '<span class="ini">'+esc(l.nom[0])+'</span>'
+      + '<span class="cuerpo"><span class="nom">'+esc(l.nom)+'</span>'
+      + '<span class="meta">'+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
+      + '<span class="chip '+l.etapa+'">'+esc(l.chip)+'</span></button>';
+  }).join('');
+}
+function pintarTareas(){
+  $('#tareas .lista').innerHTML = TAREAS.map(function(t,i){
+    return '<div class="tarea'+(t.hecha?' hecha':'')+'" onclick="marcar('+i+',this)">'
+      + '<button class="tick" aria-label="Marcar">'+icn('check',16)+'</button>'
+      + '<div><div class="tt">'+esc(t.t)+'</div><div class="tsub">'+esc(t.s)+'</div></div></div>';
+  }).join('');
+}
+function marcar(i,el){
+  TAREAS[i].hecha = !TAREAS[i].hecha;
+  el.classList.toggle('hecha');
+  if (navigator.vibrate) navigator.vibrate(8);   // el toque se confirma en la mano
+}
+function ver(id){
+  var vs = document.querySelectorAll('.vista');
+  for (var i=0;i<vs.length;i++) vs[i].hidden = vs[i].id !== id;
+  var ts = document.querySelectorAll('.tab');
+  for (var j=0;j<ts.length;j++) ts[j].setAttribute('aria-selected', String(ts[j].dataset.v === id));
+}
+function abrirLead(id){
+  var l = null;
+  for (var i=0;i<LEADS.length;i++) if (LEADS[i].id===id) l = LEADS[i];
+  if (!l) return;
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = 'hoja-lead';
+  h.innerHTML =
+    '<div class="cab"><button class="volver" onclick="cerrarLead()">'+icn('arrow',24)+'</button>'
+    + '<div><h1>'+esc(l.nom)+'</h1><div class="sub">'+esc(l.origen)+' · '+esc(l.hace)+'</div></div></div>'
+    + '<div class="acciones">'
+    + '<button class="acc pri" onclick="toque()">'+icn('chat',22)+'Llamar</button>'
+    + '<button class="acc" onclick="toque()">'+icn('chat',22)+'WhatsApp</button>'
+    + '<button class="acc" onclick="abrirNota()">'+icn('edit',22)+'Anotar</button></div>'
+    + '<div class="secc"><h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div>'
+    + '<h2>Etapa</h2><div class="caja"><span class="chip '+l.etapa+'">'+esc(l.chip)+'</span></div>'
+    + '<h2>Últimos movimientos</h2><div class="caja">'
+    + HITOS.map(function(x){ return '<div class="hito"><span class="cuando">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>'; }).join('')
+    + '</div></div>';
+  document.body.appendChild(h);
+  // El botón atrás del sistema la cierra, como en una app de verdad
+  history.pushState({hoja:1},'');
+}
+function cerrarLead(){
+  var h = $('#hoja-lead'); if (!h) return;
+  h.classList.add('saliendo');
+  setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
+}
+window.addEventListener('popstate', function(){ if ($('#hoja-lead')) cerrarLead(); });
+function abrirNota(){
+  var f = document.createElement('div'); f.className='fondo'; f.id='fondo'; f.onclick = cerrarNota;
+  var s = document.createElement('div'); s.className='sheet'; s.id='sheet';
+  s.innerHTML = '<div class="asa"></div><textarea placeholder="¿Qué pasó en la llamada?"></textarea>'
+    + '<button class="bbtn" onclick="cerrarNota()">Guardar nota</button>';
+  document.body.appendChild(f); document.body.appendChild(s);
+}
+function cerrarNota(){
+  var f = $('#fondo'); if (f) f.remove();
+  var s = $('#sheet'); if (s) s.remove();
+}
+function toque(){ if (navigator.vibrate) navigator.vibrate(8); }
+pintarTabs(); pintarLeads(); pintarTareas(); ver('leads');
+</script></body></html>
