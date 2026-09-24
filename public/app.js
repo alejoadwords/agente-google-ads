@@ -19539,6 +19539,28 @@ function crmPintarCierre(lead) {
 
 // Una fecha pasada solo es un problema si el negocio sigue vivo: en uno ganado
 // o perdido la fecha es historia, no un aviso.
+/**
+ * ¿Esta tarea está de verdad vencida?
+ *
+ * NO basta con que haya pasado su hora. Una tarea puesta para hoy a las 10 de
+ * la mañana no está «vencida» a las once: está para hoy. Comparar instantes
+ * hacía que a media tarde el tablero de Certain se pintara de rojo con el
+ * trabajo de esa misma mañana — 28 de sus 36 «vencidas» lo estaban por menos
+ * de un día, y solo 2 llevaban más de tres.
+ *
+ * Un rojo que sale siempre no dice nada. Esto es lo mismo que ya hace
+ * `crmCierreVencido()` con la fecha de cierre del lead: se compara el DÍA.
+ */
+function tareaVencida(due) {
+  if (!due) return false;
+  return crmFechaLocal(new Date(due)) < crmFechaLocal(new Date());
+}
+
+/** Su hora ya pasó, aunque sea de hoy. Para una cita, que sí importa. */
+function tareaPasada(due) {
+  return !!due && new Date(due).getTime() < Date.now();
+}
+
 function crmCierreVencido(lead) {
   if (!lead || !lead.expected_close_date) return false;
   if (leadCerrado(lead)) return false;
@@ -21395,7 +21417,9 @@ function crmPintarTareasLead() {
     (a.done === b.done) ? (cuandoOrdenar(a) - cuandoOrdenar(b)) : (a.done ? 1 : -1));
   cont.innerHTML = orden.map(t => {
     const cuando = t.due_at ? new Date(t.due_at) : null;
-    const vencida = cuando && cuando.getTime() < ahora;
+    // Mismo criterio que la ficha: por día, no por hora. Si no, a media tarde
+    // el tablero entero se pinta de rojo con el trabajo de esa misma mañana.
+    const vencida = cuando && crmFechaLocal(cuando) < crmFechaLocal(new Date(ahora));
     // Sin fecha no lleva preposición: «Para el Sin fecha» no es español.
     const fecha = !cuando
       ? 'Sin fecha'
@@ -39528,7 +39552,7 @@ function lfQueFalta(l) {
         '<button onclick="agnScheduleForLead()">+ Nueva</button></div>' +
       (tareas.length
         ? tareas.map(t => {
-            const vencida = t.due_at && new Date(t.due_at) < new Date();
+            const vencida = tareaVencida(t.due_at);
             return '<div class="lf-tarea' + (vencida ? ' vence' : '') + '">' +
               '<input type="checkbox" onchange="crmTareaHecha(\'' + esc(t.id) + '\', this.checked)">' +
               '<div><div>' + esc(t.title || 'Tarea') + '</div>' +
@@ -39546,7 +39570,10 @@ function lfQueFalta(l) {
         '<button onclick="agnScheduleForLead()">+ Agendar</button></div>' +
       (citas.length
         ? citas.map(c => {
-            const pasada = c.due_at && new Date(c.due_at) < new Date();
+            // El rojo va por día, como las tareas; pero «sin cerrar» se dice en
+            // cuanto pasa la hora: una cita de esta mañana ya se puede cerrar.
+            const pasada = tareaVencida(c.due_at);
+            const yaFue = tareaPasada(c.due_at);
             return '<div class="lf-tarea cita' + (pasada ? ' vence' : '') + '">' +
               // La casilla es la misma de las tareas, pero no cierra sola: una
               // cita sin contar cómo fue es una cita a medias, así que pide la
@@ -39560,7 +39587,7 @@ function lfQueFalta(l) {
                 // Que la reservó el propio cliente cambia cómo se trata: no hay
                 // que confirmarla con él, ya eligió la hora.
                 (c.booking_token ? ' · la reservó el cliente' : '') +
-                (pasada ? ' · sin cerrar' : '') +
+                (yaFue ? ' · sin cerrar' : '') +
               '</div></div></div>';
           }).join('')
         : '<div class="lf-vacio">' +

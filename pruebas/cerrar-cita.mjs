@@ -66,4 +66,61 @@ for (const f of ['crmTraerActividades', 'crmCargarTareasLead', 'lfPintar', 'moti
   ok(new RegExp('(async )?function ' + f + '\\b').test(app), `${f}() existe`);
 }
 
+
+
+// ── Y que la BASE acepte el tipo, no solo el código ────────────────────
+//
+// Esta parte faltaba, y por faltar salió a producción rota: `validTypes` en
+// `api/lead-activities.js` aceptaba «visita», pero la tabla tenía un CHECK
+// que no. Los asesores de Certain vieron el error de PostgreSQL en pantalla
+// al intentar cerrar su primera cita.
+//
+// El esquema de Supabase no está versionado: los CREATE TABLE comentados en
+// api/*.js son aspiracionales. Hay que preguntarle a la base, y una prueba
+// que solo lee ficheros nunca lo habría visto.
+if (process.argv[2]) {
+  const { readFileSync: leer } = await import('node:fs');
+  const env = {};
+  for (const l of leer(process.argv[2] + '/.env', 'utf8').split('\n')) {
+    const i = l.indexOf('='); if (i > 0) env[l.slice(0, i)] = l.slice(i + 1);
+  }
+  // Se comprueba insertando de verdad y borrando: leer la definición de la
+  // restricción sería frágil, y lo que importa es si la base ACEPTA la fila.
+  const cab = {
+    'Content-Type': 'application/json',
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    Prefer: 'return=representation',
+  };
+  // CONTRA LA CUENTA DE PRUEBAS, nunca contra la de un cliente. La primera
+  // versión cogía el primer lead que encontrara, que podía ser de Certain: una
+  // prueba no escribe en los datos de nadie.
+  const CUENTA_PRUEBAS = 'acuarius.review@gmail.com';
+  const dueno = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(CUENTA_PRUEBAS)}&select=id&limit=1`,
+    { headers: cab }).then(x => x.json()).then(x => x?.[0]).catch(() => null);
+  const lead = dueno ? await fetch(
+    `${env.SUPABASE_URL}/rest/v1/leads?user_id=eq.${dueno.id}&select=id,user_id&limit=1`,
+    { headers: cab }).then(x => x.json()).then(x => x?.[0]).catch(() => null) : null;
+  if (!lead) {
+    ok(false, 'no hay un lead en la cuenta de pruebas (' + CUENTA_PRUEBAS + ') contra el que probar');
+  } else {
+    const ins = await fetch(`${env.SUPABASE_URL}/rest/v1/lead_activities`, {
+      method: 'POST', headers: cab,
+      body: JSON.stringify({
+        lead_id: lead.id, user_id: lead.user_id, type: 'visita',
+        content: 'PRUEBA automatica', metadata: { prueba_visita: true },
+      }),
+    });
+    const cuerpo = await ins.text();
+    ok(ins.ok, 'la BASE acepta una actividad de tipo «visita»' +
+       (ins.ok ? '' : ' → ' + cuerpo.slice(0, 160)));
+    await fetch(`${env.SUPABASE_URL}/rest/v1/lead_activities` +
+      `?metadata->>prueba_visita=eq.true&user_id=eq.${lead.user_id}`,
+      { method: 'DELETE', headers: cab }).catch(() => {});
+  }
+} else {
+  console.log('  · (sin .env: no se comprueba contra la base)');
+}
+
 process.exit(mal ? 1 : 0);
