@@ -445,7 +445,6 @@ function abrirBots_viejo(){
   }).join('');
   history.pushState({hoja:1},'');
 }
-pintarConvs();
 
 // ── Menú «Más» y módulos de marketing ───────────────────────────────────────
 // La barra inferior es del ASESOR: ocho de cada diez personas con leads

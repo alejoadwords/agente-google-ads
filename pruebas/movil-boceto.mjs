@@ -207,6 +207,19 @@ console.log('\nCon datos reales, nada de ejemplo se cuela\n');
   }
 }
 
+console.log('\nNada se ejecuta al leer el guion\n');
+{
+  // `pintarConvs()` se quedó suelto al sacar el boceto a fichero propio.
+  // Pintaba ANTES de que movilMontar inyectara la marca, reventaba, y dejaba
+  // sin asignar todo lo que venía después —incluida la propia marca—. El
+  // síntoma fue una pantalla en blanco con la palabra «undefined».
+  const sueltas = guion.split('\n')
+    .filter(l => l.trimEnd().endsWith(');') && /^[a-zA-Z_$]/.test(l)
+                 && !/^(function|var |const |let |return|\/\/|\})/.test(l))
+    .map(l => l.trim());
+  chk('ninguna llamada corre al cargar el fichero', sueltas.length === 0, sueltas.join(' | '));
+}
+
 console.log('\nLa cabecera no afirma números que nadie pudo contar\n');
 {
   // Los subtítulos estaban escritos a mano en el HTML. Con datos reales
