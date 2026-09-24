@@ -1298,6 +1298,9 @@ function pintarMas(){
 // good— y su botón. Un contador te dice «2»; una tarjeta te dice a quién
 // llamar. Esto imita `pulsoBuild` de app.js.
 var PULSO = [
+  {tono:'warn', t:'2 mensajes sin leer',
+   b:'Marilia González te escribió sobre Sandra Caro: «Ojo con este, ya preguntó dos veces por el canon. Llámala hoy.»',
+   cta:'Leer', ir:function(){ abrirAvisos(); }},
   {tono:'warn', t:'CRM · 1 lead sin actividad',
    b:'Sin contacto hace más de 3 días. Incluye a «Sandra Caro» (etapa contactado).',
    cta:'Ver esos leads', ir:function(){ verMod('crm'); filtrar('contactado'); }},
@@ -1416,6 +1419,30 @@ function fichaFalta(l){
     + caja('Propuestas',      [], 'Ninguna propuesta enviada.')
     + caja('Conversaciones',  [['whatsapp','Última hace 2 h · la atiendes tú']], 'Sin conversaciones.')
     + '</div>';
+}
+
+// La campana: los mensajes que otra persona te dejó. En la web es un panel que
+// cuelga del icono; aquí es una hoja, que es donde el pulgar la espera.
+var AVISOS = [
+  {de:'Marilia González', lead:'Sandra Caro', hace:'hace 1 h',
+   txt:'Ojo con este, ya preguntó dos veces por el canon. Llámala hoy.'},
+  {de:'Pierluigi Pezzano', lead:'Paula Restrepo', hace:'ayer',
+   txt:'Confirmá si sigue interesada en el penthouse antes de mandar la propuesta.'}
+];
+function abrirAvisos(){
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Mensajes para ti</div>'
+    + AVISOS.map(function(a){
+        return '<div class="nota-int" style="margin-bottom:8px">'
+          + '<b>' + esc(a.de) + ' · sobre ' + esc(a.lead) + ' · ' + esc(a.hace) + '</b>'
+          + esc(a.txt) + '</div>';
+      }).join('')
+    // Marcarlos leídos es una decisión, no un efecto de haber abierto la hoja:
+    // quien la abre de paso no quiere perder el aviso.
+    + '<button class="bbtn" onclick="leerAvisos()">Marcar como leídos</button>');
+}
+function leerAvisos(){
+  PULSO = PULSO.filter(function(c){ return c.t.indexOf('sin leer') < 0; });
+  toque(12); cerrarSheet(); pintarPulso();
 }
 
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();

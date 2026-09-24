@@ -25236,6 +25236,40 @@ async function pulsoMetaCards() {
   } catch { return []; }
 }
 
+// Los mensajes que otra persona le dejó a quien está mirando.
+//
+// Va como fuente APARTE, y no dentro de pulsoCrmCards, por una razón concreta:
+// aquella se rinde temprano tres veces —sin sesión, si falla la consulta de
+// leads, y si la persona no tiene leads—. Metido ahí, un asesor recién llegado
+// sin leads asignados, o un simple fallo de red al pedirlos, esconderían el
+// mensaje de su jefe mientras el Pulso dice que todo está en orden.
+//
+// Y va la PRIMERA de la lista: es lo único del Pulso que otra persona escribió
+// esperando respuesta. Todo lo demás son datos.
+async function pulsoAvisosCards() {
+  try {
+    await crmAvisosCargar();
+    const sinLeer = (typeof crmAvisos !== 'undefined' && crmAvisos) ? crmAvisos : [];
+    if (!sinLeer.length) return [];
+    const a = sinLeer[0];
+    const texto = String(a.texto || '');
+    return [{
+      tone: 'warn',
+      title: sinLeer.length === 1 ? '1 mensaje sin leer' : sinLeer.length + ' mensajes sin leer',
+      // Se muestra un trozo del mensaje, no solo que existe: decidir si abrirlo
+      // ahora o después necesita saber de qué va.
+      body: (a.autor ? a.autor + ' te escribió' : 'Te dejaron una nota')
+        + (a.lead ? ' sobre ' + a.lead : '') + ': «'
+        + texto.slice(0, 90) + (texto.length > 90 ? '…' : '') + '»',
+      actLabel: 'Leer →',
+      act: () => { try { openAlertsPanel(); } catch (e) { console.warn('pulso avisos', e); } },
+    }];
+  } catch (e) {
+    console.warn('pulsoAvisosCards', e);
+    return [];
+  }
+}
+
 async function pulsoCrmCards() {
   try {
     if (!clerkInstance?.user?.id) return [];
@@ -25417,7 +25451,7 @@ async function renderPulso(force) {
     });
   }
 
-  const results = await Promise.allSettled([pulsoGoogleCards(), pulsoMetaCards(), pulsoCrmCards()]);
+  const results = await Promise.allSettled([pulsoAvisosCards(), pulsoGoogleCards(), pulsoMetaCards(), pulsoCrmCards()]);
   let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   cards = cards.concat(pulsoStudioCards());
 
@@ -25686,7 +25720,7 @@ async function renderPulsoAgency(force) {
   }
 
   _pulsoHealthMap = {}; // se reconstruye con lo que reporten los collectors
-  const results = await Promise.allSettled([pulsoAgencyAdsCards(), pulsoAgencyMetaCards(), pulsoCrmCards()]);
+  const results = await Promise.allSettled([pulsoAvisosCards(), pulsoAgencyAdsCards(), pulsoAgencyMetaCards(), pulsoCrmCards()]);
   let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
 
   // Actualizar el semáforo de salud del panel con los datos recién obtenidos
