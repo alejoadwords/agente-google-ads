@@ -82,12 +82,18 @@ export function aLead(l, ahora = Date.now()) {
   const cf = l.custom_fields || {};
   return {
     id: l.id,
+    pipeline: l.pipeline_id || null,
     nom: l.name || 'Sin nombre',
     etapa: l.stage || 'nuevo',
     // `updated_at` y no `created_at`: es el campo del que cuelga todo lo de
     // inactividad en el resto de la aplicación, y usar otro aquí haría que el
     // móvil y el Pulso dijeran cosas distintas del mismo lead.
     hace: hace(l.updated_at || l.created_at, ahora),
+    // Las marcas en crudo, además del texto: el Pulso necesita comparar
+    // fechas, y «hace 2 h» no se puede comparar con nada.
+    tocado: Date.parse(l.updated_at || l.created_at) || 0,
+    creado: Date.parse(l.created_at) || 0,
+    cerrado: ['ganado','perdido','won','lost','descartado'].indexOf(String(l.stage||'').toLowerCase()) >= 0,
     origen: l.source || 'Sin fuente',
     tel: l.phone || '',
     email: l.email || '',
@@ -114,6 +120,7 @@ export function aTarea(a, ahora = Date.now()) {
   const ayer = new Date(ahora); ayer.setHours(0, 0, 0, 0);
   return {
     id: a.id,
+    lead: a.lead_id || null,
     t: a.title || 'Tarea',
     s: vence
       ? new Date(vence).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -178,12 +185,18 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
     } catch { return null; }
   };
   const q = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
-  const [leads, actividades, convs] = await Promise.all([
+  const [leads, actividades, convs, pipelines] = await Promise.all([
     uno('/api/leads?limit=200' + q, (d) => (d.leads || []).map((l) => aLead(l))),
     uno('/api/agenda?proximos=1' + q, (d) => d.actividades || d.items || []),
     uno('/api/chat-conversations?' + q.slice(1), (d) => (d.conversations || d.convs || []).map(aConversacion)),
+    // Una cuenta puede tener varios tableros —Certain tiene cuatro, y sus
+    // leads viven en «Arriendo», no en el principal—. Sin poder elegir, el
+    // móvil enseña todo revuelto o el tablero equivocado.
+    uno('/api/pipelines' + (clientId ? '?client_id=' + encodeURIComponent(clientId) : ''),
+        (d) => (d.pipelines || []).map((p) => ({ id: p.id, nom: p.name || 'Sin nombre', principal: !!p.is_default }))),
   ]);
   return {
+    pipelines,
     leads,
     tareas: actividades ? actividades.filter((a) => !esCita(a)).map((a) => aTarea(a)) : null,
     citas: actividades ? actividades.filter(esCita).map(aCita) : null,

@@ -92,6 +92,8 @@ var CITAS = [
   {h:'15:00', dur:'1 h',    t:'Presentación de propuesta',  s:'Paula Restrepo',    pasada:false}
 ];
 
+var PIPELINES = null;
+var pipelineActual = null;   // null = todos los tableros
 var filtroEtapa = 'todos';
 var textoBusqueda = '';
 
@@ -102,6 +104,7 @@ function etiquetaEtapa(k){
 }
 function leadsVisibles(){
   return LEADS.filter(function(l){
+    if (pipelineActual && l.pipeline !== pipelineActual) return false;
     if (filtroEtapa !== 'todos' && l.etapa !== filtroEtapa) return false;
     if (!textoBusqueda) return true;
     var q = textoBusqueda.toLowerCase();
@@ -118,6 +121,37 @@ function pintarFiltros(){
   }).join('');
 }
 function filtrar(k){ filtroEtapa = k; toque(); pintarFiltros(); pintarLeads(); }
+function elegirTablero(id){
+  pipelineActual = id || null;
+  toque(); cerrarSheet(); pintarTableros(); pintarFiltros(); pintarLeads(); pintarSubtitulos();
+}
+function nombreTablero(){
+  if (!pipelineActual || !PIPELINES) return 'Todos los tableros';
+  for (var i=0;i<PIPELINES.length;i++) if (PIPELINES[i].id === pipelineActual) return PIPELINES[i].nom;
+  return 'Todos los tableros';
+}
+function pintarTableros(){
+  var c = $('#leads .tableros');
+  if (!c) return;
+  // Con un solo tablero el selector no decide nada y solo ocupa sitio.
+  if (!PIPELINES || PIPELINES.length < 2) { c.innerHTML = ''; c.hidden = true; return; }
+  c.hidden = false;
+  c.innerHTML = '<button class="tablero" onclick="M.abrirTableros()">'
+    + icn('split',15) + '<span>' + esc(nombreTablero()) + '</span>' + icn('arrow',14) + '</button>';
+}
+function abrirTableros(){
+  if (!PIPELINES) return;
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:8px">Tablero</div>'
+    + '<button class="opcion" aria-current="' + (!pipelineActual) + '" onclick="M.elegirTablero(\'\')">'
+      + 'Todos los tableros<span class="marca">' + icn('check',18) + '</span></button>'
+    + PIPELINES.map(function(p){
+        var n = LEADS ? LEADS.filter(function(l){ return l.pipeline === p.id; }).length : 0;
+        return '<button class="opcion" aria-current="' + (pipelineActual === p.id) + '" '
+          + 'onclick="M.elegirTablero(\'' + p.id + '\')">'
+          + esc(p.nom) + ' <span style="color:var(--muted);font-size:var(--fs-xs)">· ' + n + '</span>'
+          + '<span class="marca">' + icn('check',18) + '</span></button>';
+      }).join(''));
+}
 function buscar(v){ textoBusqueda = v; pintarLeads(); }
 
 function pintarLeads(){
@@ -129,7 +163,7 @@ function pintarLeads(){
   }
   var ls = leadsVisibles();
   $('#leads .lista').innerHTML = ls.length ? ls.map(function(l){
-    return '<button class="lead" onclick="M.abrirLead('+l.id+')">'
+    return '<button class="lead" onclick="M.abrirLead(\''+l.id+'\')">'
       + '<span class="ini">'+esc(l.nom[0])+'</span>'
       + '<span class="cuerpo"><span class="nom">'+esc(l.nom)+'</span>'
       + '<span class="meta">'+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
@@ -304,7 +338,7 @@ function pintarConvs(){
     return;
   }
   $('#bandeja .lista').innerHTML = CONVS.map(function(c){
-    return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="M.abrirConv('+c.id+')">'
+    return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="M.abrirConv(\''+c.id+'\')">'
       + '<span class="ini">'+esc(c.nom[0])
         + '<span class="canal '+c.canal+'">'+icn(ICONO_CANAL[c.canal]||'chat',10)+'</span></span>'
       + '<span class="cuerpo">'
@@ -427,7 +461,7 @@ function ponerQuien(q){
 // ── Chatbots ────────────────────────────────────────────────────────────────
 function pintarBots(){
   $('#chatbots .lista').innerHTML = BOTS.map(function(b){
-    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot('+b.id+',this)">'
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot(\''+b.id+'\',this)">'
       + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
         + '<div class="tsub">'+esc(b.canal)+'</div>'
         + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
@@ -448,7 +482,7 @@ function abrirBots_viejo(){
     + '<div class="lista" id="bots-lista"></div>';
   movilRaiz().appendChild(h);
   $('#bots-lista').innerHTML = BOTS.map(function(b){
-    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot('+b.id+',this)">'
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot(\''+b.id+'\',this)">'
       + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
         + '<div class="tsub">'+esc(b.canal)+'</div>'
         + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
@@ -991,33 +1025,57 @@ function leerAvisos(){
 // El Pulso calculado de los datos de verdad. Las mismas reglas que la web:
 // leads sin tocar hace más de 3 días, y los que entraron hoy.
 function pulsoDeDatos(){
+  // Las MISMAS dos reglas que `pulsoCrmCards` en app.js. Antes el móvil
+  // inventaba las suyas —tareas vencidas, leads en etapa «nuevo»— y por eso
+  // no decía lo mismo que la web sobre la misma cuenta, que es peor que no
+  // decir nada: dos números distintos y ninguno de fiar.
   var cards = [];
+  var DIA = 864e5, ahora = Date.now();
   var leads = (typeof LEADS !== 'undefined' && LEADS) ? LEADS : [];
-  var sinContactar = leads.filter(function(l){ return l.etapa === 'nuevo'; });
-  var vencidas = (typeof TAREAS !== 'undefined' && TAREAS)
-    ? TAREAS.filter(function(t){ return t.cuando === 'vencida' && !t.hecha; }) : [];
-  if (vencidas.length) {
+  // El tablero elegido manda: anunciar «6 sin actividad» de toda la cuenta y
+  // mandar a un tablero donde hay dos es lo mismo que mentir.
+  if (pipelineActual) leads = leads.filter(function(l){ return l.pipeline === pipelineActual; });
+
+  // Un lead con una tarea pendiente NO está abandonado: alguien ya quedó en
+  // hacer algo. Es la misma salvedad que hace la web.
+  var conTarea = {};
+  if (typeof TAREAS !== 'undefined' && TAREAS) {
+    TAREAS.forEach(function(t){ if (t.lead && !t.hecha) conTarea[t.lead] = true; });
+  }
+
+  var stale = leads.filter(function(l){
+    return !l.cerrado && !conTarea[l.id] && (ahora - (l.tocado || 0)) > 3 * DIA;
+  });
+  if (stale.length) {
     cards.push({tono:'warn',
-      t: vencidas.length === 1 ? '1 tarea vencida' : vencidas.length + ' tareas vencidas',
-      b: 'Empieza por «' + vencidas[0].t + '».',
-      cta:'Ver tareas', ir:function(){ verMod('crm'); verSub('crm','tareas'); }});
+      t: 'CRM · ' + stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
+      b: 'Sin contacto hace más de 3 días. Incluye a «' + stale[0].nom + '»'
+         + (stale[0].etapa ? ' (etapa ' + etiquetaEtapa(stale[0].etapa) + ')' : '') + '.',
+      cta:'Ver cuáles', ir:function(){ verMod('crm'); verSub('crm','leads'); }});
   }
-  if (sinContactar.length) {
-    cards.push({tono:'info',
-      t: sinContactar.length === 1 ? '1 lead sin contactar' : sinContactar.length + ' leads sin contactar',
-      b: sinContactar.slice(0,2).map(function(l){ return l.nom; }).join(', ')
-        + (sinContactar.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
-      cta:'Ver esos leads', ir:function(){ verMod('crm'); filtrar('nuevo'); }});
+
+  var fresh = leads.filter(function(l){ return (ahora - (l.creado || 0)) < DIA; });
+  if (fresh.length) {
+    cards.push({tono:'good',
+      t: 'CRM · ' + fresh.length + (fresh.length === 1 ? ' lead nuevo' : ' leads nuevos') + ' hoy',
+      b: fresh.slice(0,2).map(function(l){ return l.nom; }).join(', ')
+         + (fresh.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
+      cta:'Verlos', ir:function(){ verMod('crm'); verSub('crm','leads'); }});
   }
+
+  // Esta no está en la web porque allí la bandeja se ve de un vistazo en el
+  // menú. En el teléfono está a dos toques, así que se anuncia.
   var sinLeer = (typeof CONVS !== 'undefined' && CONVS)
     ? CONVS.filter(function(c){ return c.nolei > 0; }) : [];
   if (sinLeer.length) {
-    cards.push({tono:'warn', t: sinLeer.length + ' conversaciones sin leer',
+    cards.push({tono:'warn',
+      t: sinLeer.length === 1 ? '1 conversación sin leer' : sinLeer.length + ' conversaciones sin leer',
       b: 'La más reciente, de ' + sinLeer[0].nom + '.',
       cta:'Abrir la bandeja', ir:function(){ verMod('chats'); }});
   }
   return cards;
 }
+
 function pintarTarjetas(host, cards){
   // Un Pulso vacío con datos REALES es una buena noticia. Con datos que no se
   // pudieron traer sería una mentira, y por eso ese caso lo dice el aviso de
@@ -1100,8 +1158,18 @@ async function cargarReales(){
   // propios, que es la peor forma de fallar que tiene un CRM.
   //
   // Cada pantalla ya sabe pintar el null: «No se pudieron traer tus tareas».
+  PIPELINES = d.pipelines;
   LEADS  = d.leads;
   TAREAS = d.tareas;
+  if (PIPELINES && PIPELINES.length > 1 && LEADS && LEADS.length && !pipelineActual) {
+    // El que más leads tiene. Certain trabaja en «Arriendo» y su principal
+    // está vacío: arrancar ahí parecería una cuenta sin contactos.
+    var cuenta = {};
+    LEADS.forEach(function(l){ if (l.pipeline) cuenta[l.pipeline] = (cuenta[l.pipeline]||0)+1; });
+    var mejor = null;
+    PIPELINES.forEach(function(p){ if (!mejor || (cuenta[p.id]||0) > (cuenta[mejor]||0)) mejor = p.id; });
+    if (mejor && cuenta[mejor]) pipelineActual = mejor;
+  }
   CITAS  = d.citas;
   CONVS  = d.convs;
   MODO = 'real';
@@ -1110,7 +1178,7 @@ async function cargarReales(){
 }
 
 function repintarTodo(){
-  pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
+  pintarTableros(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
   pintarConvs(); pintarBots(); pintarPulso(); pintarSubtitulos();
 }
 
@@ -1164,7 +1232,10 @@ function pintarSubtitulos(){
     if (!lista.length) return varios.replace('{n}', '0');
     return (lista.length === 1 ? uno : varios).replace('{n}', lista.length);
   };
-  s('leads', cuenta(LEADS, '1 contacto', '{n} contactos', 'no se pudieron traer'));
+  var visibles = (LEADS === null) ? null : leadsVisibles();
+  s('leads', (LEADS === null) ? 'no se pudieron traer'
+    : cuenta(visibles, '1 contacto', '{n} contactos', 'no se pudieron traer')
+      + (pipelineActual ? ' · ' + nombreTablero() : ''));
   s('tareas', TAREAS === null ? 'no se pudieron traer' : (function(){
     var v = TAREAS.filter(function(t){ return t.cuando === 'vencida' && !t.hecha; }).length;
     var h = TAREAS.filter(function(t){ return t.cuando === 'hoy' && !t.hecha; }).length;
@@ -1190,6 +1261,7 @@ var MOVIL_MARCA = `<div class="vista" id="inicio">
 <div class="vista" id="leads" hidden>
   <div class="cab"><div><h1>CRM</h1><div class="sub">6 contactos activos</div></div></div>
   <div class="subtabs" id="sub-leads"></div>
+  <div class="tableros" hidden></div>
   <div class="buscar"><input type="search" placeholder="Buscar contacto" oninput="M.buscar(this.value)" enterkeyhint="search"></div>
   <div class="filtros"></div>
   <div class="lista"></div>
@@ -1264,6 +1336,8 @@ function movilMontar(opciones){
   // Lo único que sale al espacio global.
   window.movilMontar = movilMontar;
   window.M = {
+    abrirTableros: abrirTableros,
+    elegirTablero: elegirTablero,
     abrirConv: abrirConv,
     abrirEstado: abrirEstado,
     abrirLead: abrirLead,

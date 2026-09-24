@@ -207,6 +207,46 @@ console.log('\nCon datos reales, nada de ejemplo se cuela\n');
   }
 }
 
+console.log('\nLos identificadores de verdad son UUID, no números\n');
+{
+  // Con datos de ejemplo los ids eran 1, 2, 3 y todo funcionaba. Con los de
+  // verdad son UUID: `M.abrirLead(0f3a-9c…)` es código inválido, el manejador
+  // lanza, el botón no hace nada y no hay ni un aviso. Alejandro lo vio como
+  // «toco un lead y no abre nada» — y lo mismo en los chats.
+  const conValor = [...guion.matchAll(/M\.(\w+)\('\+([\w.]+)/g)];
+  const sinComillas = conValor
+    .filter(([, , v]) => !/^(i|n|x\.i)$/.test(v))       // los índices sí son números
+    .map(([, fn, v]) => fn + '(' + v + ')');
+  chk('ningún manejador recibe un id sin comillas', sinComillas.length === 0, sinComillas.join(', '));
+}
+
+console.log('\nSe puede elegir el tablero\n');
+{
+  // Certain tiene cuatro tableros y sus 328 leads viven en «Arriendo», no en
+  // el principal. Sin selector, el móvil enseñaba todo revuelto.
+  chk('hay selector de tablero', /function pintarTableros/.test(guion));
+  chk('solo aparece con más de un tablero', /PIPELINES\.length < 2/.test(guion));
+  chk('el filtro de leads lo respeta', /l\.pipeline !== pipelineActual/.test(guion));
+  // Arrancar en un tablero vacío parece una cuenta sin contactos.
+  chk('arranca en el tablero con más leads', /cuenta\[mejor\]/.test(guion));
+  chk('y el Pulso cuenta solo ese tablero', /if \(pipelineActual\) leads = leads\.filter/.test(guion));
+}
+
+console.log('\nEl Pulso dice lo mismo que la web\n');
+{
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  // Dos números distintos sobre la misma cuenta es peor que no dar ninguno.
+  chk('usa «lead sin actividad», como la web',
+      /lead sin actividad/.test(guion) && /lead sin actividad/.test(app));
+  chk('usa «leads nuevos», como la web',
+      /leads nuevos/.test(guion) && /leads nuevos/.test(app));
+  chk('el corte es de 3 días, como la web',
+      /3 \* DIA/.test(guion) && /3 \* DAY/.test(app));
+  // Un lead con una tarea pendiente no está abandonado: alguien ya quedó en
+  // hacer algo. La web lo tiene en cuenta y el móvil también.
+  chk('no llama abandonado a quien tiene tarea pendiente', /conTarea\[l\.id\]/.test(guion));
+}
+
 console.log('\nNada se escapa del envoltorio\n');
 {
   // app.js y movil-app.js conviven en la misma página. Un `const` repetido en

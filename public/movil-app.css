@@ -410,3 +410,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .fcampo .lapiz{flex:none;color:var(--blue);opacity:.55}
 .fcampo:active{background:var(--bg-subtle);margin:0 -14px;padding-left:14px;padding-right:14px;
   border-radius:var(--r)}
+
+/* ── Selector de tablero ── */
+/* Una cuenta puede tener varios. Certain tiene cuatro y sus leads viven en
+   «Arriendo», no en el principal: sin poder elegir, el móvil enseñaba todo
+   revuelto. */
+.tableros{padding:8px 12px 0}
+.tableros[hidden]{display:none}
+.tablero{display:flex;align-items:center;gap:8px;width:100%;padding:11px 14px;border-radius:var(--rlg);
+  border:1px solid var(--border);background:var(--bg-card);color:var(--text);font:inherit;
+  font-size:var(--fs-sm);font-weight:600;text-align:left}
+.tablero span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tablero svg:first-child{color:var(--blue);flex:none}
+.tablero svg:last-child{color:var(--muted);flex:none;opacity:.6}
+.tablero:active{background:var(--bg-subtle);transform:scale(.985)}
