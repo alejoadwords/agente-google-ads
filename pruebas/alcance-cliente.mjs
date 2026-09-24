@@ -56,8 +56,12 @@ console.log('\nNINGUN endpoint lee el cliente sin acotarlo\n');
       // 403 en vez de recortar en silencio. Lo que se exige es que el valor
       // crudo no llegue a una consulta sin pasar por el alcance, no una forma
       // concreta de escribirlo.
-      const ventana = lineas.slice(i, i + 8).join('\n');
-      const acotada = /alcanceDeCliente\(|clienteDelMiembro \|\||clienteDe\(userId\)\) \|\|/.test(ventana);
+      // La ventana era de 8 líneas y se quedó corta: al meter entre medias el
+      // try/catch de cuenta suspendida, la comprobación del alcance cayó a la
+      // línea +9 y dos endpoints que estaban BIEN salieron en rojo. Un rojo
+      // falso enseña a ignorar el rojo.
+      const ventana = lineas.slice(i, i + 18).join('\n');
+      const acotada = /alcanceDeCliente\(|clienteAjeno\(|clienteDelMiembro \|\||clienteDe\(userId\)\) \|\|/.test(ventana);
       if (!acotada) sueltos.push(`${f}:${i + 1}`);
     });
   }
