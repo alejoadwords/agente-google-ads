@@ -411,11 +411,55 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   background:var(--bg-card);color:var(--muted);font:inherit;font-size:var(--fs-sm);font-weight:600;white-space:nowrap}
 .subtab[aria-selected="true"]{background:var(--text);border-color:var(--text);color:var(--bg)}
 .subtab:active{transform:scale(.95)}
+
+/* ── Pulso: tarjetas accionables, no contadores ── */
+.pcard{background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--border-h);
+  border-radius:var(--rlg);padding:13px 14px;margin:0 12px 8px}
+.pcard.warn{border-left-color:var(--danger);background:#FFFBFA}
+.pcard.good{border-left-color:#0B7A43}
+.pcard.info{border-left-color:var(--blue)}
+.pcard .pt{font-weight:700;font-size:var(--fs-md);line-height:1.35}
+.pcard .pb{color:var(--muted);font-size:var(--fs-sm);margin-top:5px;line-height:1.5}
+.pcard .pa{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:8px 14px;
+  border-radius:999px;border:0;background:var(--blue);color:#fff;font:inherit;font-size:var(--fs-xs);font-weight:700}
+.pcard.warn .pa{background:var(--danger)}
+.pcard .pa:active{transform:scale(.96);filter:brightness(.92)}
+.pulso-cab{display:flex;align-items:baseline;justify-content:space-between;padding:14px 16px 6px}
+.pulso-cab h1{margin:0;font-size:var(--fs-xl);font-weight:700;letter-spacing:-.5px}
+.pulso-cab .cuando{color:var(--muted);font-size:var(--fs-xs)}
+.pulso-vacio{text-align:center;color:var(--muted);padding:40px 28px;font-size:var(--fs-md);line-height:1.6}
+
+/* ── Ficha: embudo de etapas ── */
+.fem{display:flex;gap:6px;overflow-x:auto;padding:12px;scrollbar-width:none}
+.fem::-webkit-scrollbar{display:none}
+.fpaso{flex:none;padding:7px 13px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);
+  color:var(--muted);font:inherit;font-size:var(--fs-xs);font-weight:600;white-space:nowrap}
+.fpaso.hecho{background:var(--blue-lt);border-color:var(--blue-md);color:var(--blue)}
+.fpaso.actual{background:var(--blue);border-color:var(--blue);color:#fff}
+.fpaso:active{transform:scale(.95)}
+
+/* ── Ficha: pestañas ── */
+.ftabs{display:flex;gap:6px;padding:0 12px 10px;position:sticky;top:0;z-index:8;background:var(--bg)}
+.ftab{flex:1;padding:9px 6px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg-card);
+  color:var(--muted);font:inherit;font-size:var(--fs-xs);font-weight:700;white-space:nowrap}
+.ftab[aria-selected="true"]{background:var(--text);border-color:var(--text);color:var(--bg)}
+.ftab:active{transform:scale(.96)}
+
+/* ── Ficha: campo editable ── */
+.fcampo{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;
+  border-bottom:1px solid var(--border)}
+.fcampo:last-child{border-bottom:0}
+.fcampo .k{color:var(--muted);font-size:var(--fs-sm);flex:none}
+.fcampo .v{font-weight:600;font-size:var(--fs-sm);text-align:right;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcampo .v.sindato{color:var(--muted);font-weight:400;font-style:italic}
+.fcampo .lapiz{flex:none;color:var(--blue);opacity:.55}
+.fcampo:active{background:var(--bg-subtle);margin:0 -14px;padding-left:14px;padding-right:14px;
+  border-radius:var(--r)}
 </style></head><body><div class="vista" id="inicio">
-  <div class="cab"><div style="flex:1"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div></div>
+  <div class="pulso-cab"><h1>Pulso</h1><span class="cuando">jueves 24, 9:12</span></div>
   <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
-  <div class="cifras"></div>
-  <div class="secc"><div class="proxima"></div></div>
+  <div id="pulso-lista"></div>
 </div>
 
 <div class="vista" id="leads" hidden>
@@ -508,7 +552,8 @@ var ETAPAS = [
 ];
 var LEADS = [
   {id:1,nom:'Hellen Marún',     etapa:'nuevo',      hace:'hace 2 h', origen:'Formulario web', tel:'+57 300 412 8890',
-   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', resp:'Karen Acosta', tags:['arriendo','alto-prado']},
+   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', resp:'Karen Acosta', tags:['arriendo','alto-prado'],
+   email:'hellen.marun@example.com', empresa:'', campana:'Search - general 2026', pagina:'Arriendos Envigado', cierre:'30 sep'},
   {id:2,nom:'Rubén Corro',      etapa:'contactado', hace:'ayer',     origen:'Fincaraíz',      tel:'+57 311 220 4417',
    interes:'Local comercial · Centro', valor:'$ 180.000.000', resp:'Maira Ballesteros', tags:['venta']},
   {id:3,nom:'Sandra Caro',      etapa:'contactado', hace:'ayer',     origen:'Google Ads',     tel:'+57 315 887 1120',
@@ -597,21 +642,7 @@ function pintarAgenda(){
   }
   $('#agenda .lista').innerHTML = html || '<div class="vacio">Nada agendado para hoy.</div>';
 }
-function pintarInicio(){
-  var sinContactar = LEADS.filter(function(l){ return l.etapa==='nuevo'; }).length;
-  var hoy = TAREAS.filter(function(t){ return t.cuando==='hoy' && !t.hecha; }).length;
-  var vencidas = TAREAS.filter(function(t){ return t.cuando==='vencida' && !t.hecha; }).length;
-  var prox = LEADS.filter(function(l){ return l.etapa==='nuevo'; })[0];
-  $('#inicio .cifras').innerHTML =
-      '<button class="cifra" onclick="verLeads(\'nuevo\')"><b>'+sinContactar+'</b><span>sin contactar</span></button>'
-    + '<button class="cifra" onclick="ver(\'tareas\')"><b>'+hoy+'</b><span>tareas hoy</span></button>'
-    + '<button class="cifra'+(vencidas?' urge':'')+'" onclick="ver(\'tareas\')"><b>'+vencidas+'</b><span>vencidas</span></button>';
-  $('#inicio .proxima').innerHTML = prox
-    ? '<button class="siguiente" onclick="abrirLead('+prox.id+')">'
-      + '<span><span class="q">Lo siguiente</span><span class="n">Llamar a '+esc(prox.nom)+'</span></span>'
-      + icn('arrow',22)+'</button>'
-    : '';
-}
+
 function verLeads(etapa){ filtrar(etapa||'todos'); ver('leads'); }
 
 function marcar(i,el){
@@ -642,24 +673,7 @@ function abrirLead(id){
   pintarFicha();
   history.pushState({hoja:1},'');   // el botón atrás del sistema la cierra
 }
-function pintarFicha(){
-  var l = leadAbierto; if (!l || !$('#ficha-cuerpo')) return;
-  $('#ficha-cuerpo').innerHTML =
-      '<h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div>'
-    + '<h2>Detalles</h2><div class="caja">'
-      + '<div class="fila"><span class="k">Etapa</span>'
-        + '<button class="v" onclick="abrirEtapas()">'+esc(etiquetaEtapa(l.etapa))+' ›</button></div>'
-      + '<div class="fila"><span class="k">Valor</span><span class="v">'+esc(l.valor)+'</span></div>'
-      + '<div class="fila"><span class="k">Responsable</span><span class="v">'+esc(l.resp)+'</span></div>'
-      + '<div class="fila"><span class="k">Teléfono</span><span class="v">'+esc(l.tel)+'</span></div>'
-    + '</div>'
-    + '<h2>Etiquetas</h2><div class="caja"><div class="tags">'
-      + l.tags.map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
-    + '</div></div>'
-    + '<h2>Últimos movimientos</h2><div class="caja">'
-      + HITOS.map(function(x){ return '<div class="hito"><span class="cuando">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>'; }).join('')
-    + '</div>';
-}
+
 function cerrarLead(){
   var h = $('#hoja-lead'); if (!h) return;
   h.classList.add('saliendo');
@@ -1197,7 +1211,7 @@ var TITULOS = {
 // Ahora es la misma lógica que arriba: abajo los MÓDULOS, dentro de cada uno
 // sus PESTAÑAS. Quien sabe usar Acuarius en el computador sabe usarlo aquí.
 var MODS = [
-  {id:'inicio',     t:'Hoy',       icono:'star'},
+  {id:'inicio',     t:'Pulso',     icono:'sparkles'},
   {id:'crm',        t:'CRM',       icono:'users',  tabs:[['leads','Contactos'],['tareas','Tareas'],['agenda','Agenda']]},
   {id:'chats',      t:'Chats',     icono:'chat',   tabs:[['bandeja','Bandeja'],['chatbots','Chatbots']]},
   {id:'marketing',  t:'Marketing', icono:'sparkles'},
@@ -1278,7 +1292,133 @@ function pintarMas(){
   pintarMenu('mas-cuenta',   ['clientes','academia','ajustes']);
 }
 
+// ── Pulso ───────────────────────────────────────────────────────────────────
+// La web no enseña contadores en el inicio: enseña TARJETAS accionables. Cada
+// una dice qué pasó, por qué importa y qué hacer, con su tono —warn, info,
+// good— y su botón. Un contador te dice «2»; una tarjeta te dice a quién
+// llamar. Esto imita `pulsoBuild` de app.js.
+var PULSO = [
+  {tono:'warn', t:'CRM · 1 lead sin actividad',
+   b:'Sin contacto hace más de 3 días. Incluye a «Sandra Caro» (etapa contactado).',
+   cta:'Ver esos leads', ir:function(){ verMod('crm'); filtrar('contactado'); }},
+  {tono:'info', t:'CRM · 2 leads nuevos hoy',
+   b:'Hellen Marún, Walter Peralta. Contáctalos mientras están calientes.',
+   cta:'Llamar al primero', ir:function(){ abrirLead(1); }},
+  {tono:'warn', t:'Google Ads · CPA disparado',
+   b:'Ayer el CPA subió un 68% frente al promedio de los 7 días previos: $84.200 contra $50.100.',
+   cta:'Preguntarle al agente', ir:function(){ toque(12); }},
+  {tono:'good', t:'Google Ads · últimos 7 días',
+   b:'Inversión $2.951.720 · 164 conversiones · CPA $18.000',
+   cta:'Ver campañas', ir:function(){ verMod('marketing'); }},
+  {tono:'warn', t:'Meta Ads · conexión expirada',
+   b:'El permiso de esta cuenta caducó. Hasta que se reconecte, sus cifras no entran en los informes.',
+   cta:'Reconectar', ir:function(){ toque(12); }}
+];
+function pintarPulso(){
+  var host = document.getElementById('pulso-lista');
+  if (!host) return;
+  // Un Pulso vacío es una buena noticia y hay que decirlo así, no dejar un
+  // hueco en blanco que parece que no cargó.
+  host.innerHTML = PULSO.length ? PULSO.map(function(c,i){
+    return '<div class="pcard '+c.tono+'">'
+      + '<div class="pt">'+esc(c.t)+'</div>'
+      + '<div class="pb">'+esc(c.b)+'</div>'
+      + '<button class="pa" onclick="pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button>'
+      + '</div>';
+  }).join('') : '<div class="pulso-vacio">Todo en orden por ahora.<br>Nada pide tu atención hoy.</div>';
+}
+function pulsoIr(i){ toque(); var c = PULSO[i]; if (c && c.ir) c.ir(); }
+
+// ── Ficha: embudo y tres pestañas, como la web ──────────────────────────────
+// La ficha web tiene el embudo arriba y tres pestañas —«Quién es», «Qué ha
+// pasado», «Qué falta»—. La versión móvil era una lista plana, y es la
+// pantalla que más se abre: merece la misma estructura.
+var fichaPestana = 'quien';
+function pintarFicha(){
+  var l = leadAbierto; if (!l || !$('#ficha-cuerpo')) return;
+  $('#ficha-cuerpo').innerHTML =
+      pintarEmbudoFicha(l)
+    + '<div class="ftabs">'
+      + [['quien','Quién es'],['pasado','Qué ha pasado'],['falta','Qué falta']].map(function(p){
+          return '<button class="ftab" aria-selected="'+(fichaPestana===p[0])+'" '
+               + 'onclick="fichaPestana=\''+p[0]+'\';pintarFicha()">'+esc(p[1])+'</button>';
+        }).join('')
+    + '</div>'
+    + (fichaPestana === 'quien' ? fichaQuien(l)
+     : fichaPestana === 'pasado' ? fichaPasado(l) : fichaFalta(l));
+}
+function pintarEmbudoFicha(l){
+  var iActual = 0;
+  for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k === l.etapa) iActual = i;
+  return '<div class="fem">' + ETAPAS.map(function(e,i){
+    var cl = e.k === l.etapa ? 'actual' : (i < iActual ? 'hecho' : '');
+    return '<button class="fpaso '+cl+'" onclick="ponerEtapa(\''+e.k+'\')">'+esc(e.t)+'</button>';
+  }).join('') + '</div>';
+}
+// Los mismos campos que «Quién es» en la web, y editables de un toque: en el
+// teléfono un campo que no se puede corregir obliga a abrir el computador
+// justo cuando el dato está fresco.
+function fichaQuien(l){
+  var campos = [
+    ['Empresa',        l.empresa],
+    ['Email',          l.email],
+    ['Teléfono',       l.tel],
+    ['Valor',          l.valor],
+    ['Fuente',         l.origen],
+    ['Campaña',        l.campana],
+    ['Página',         l.pagina],
+    ['Cierre esperado',l.cierre],
+    ['Responsable',    l.resp]
+  ];
+  return '<div class="secc"><h2>Quién es</h2><div class="caja">'
+    + campos.map(function(c){
+        var vacio = !c[1];
+        return '<div class="fcampo" onclick="editarCampo(\''+esc(c[0])+'\')">'
+          + '<span class="k">'+esc(c[0])+'</span>'
+          + '<span class="v'+(vacio?' sindato':'')+'">'+esc(vacio ? 'Sin dato' : c[1])+'</span>'
+          + '<span class="lapiz">'+icn('edit',14)+'</span></div>';
+      }).join('')
+    + '</div>'
+    + '<h2>Etiquetas</h2><div class="caja"><div class="tags">'
+      + l.tags.map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
+      + '<button class="tag" onclick="toque()" style="border-style:dashed;color:var(--blue)">+ etiqueta</button>'
+    + '</div></div>'
+    + '<h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div></div>';
+}
+function editarCampo(campo){
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">'+esc(campo)+'</div>'
+    + '<textarea style="min-height:60px" placeholder="Escribe el nuevo valor"></textarea>'
+    + '<button class="bbtn" onclick="cerrarSheet()">Guardar</button>');
+}
+function fichaPasado(l){
+  return '<div class="secc"><h2>Todo lo que ha pasado</h2><div class="caja">'
+    + HITOS.concat([['12 sep','Se creó el contacto desde el formulario web']])
+        .map(function(x){
+          return '<div class="hito"><span class="cuando">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>';
+        }).join('')
+    + '</div></div>';
+}
+// Las mismas cajas que la tercera columna de la web.
+function fichaFalta(l){
+  var caja = function(tit, filas, vacio){
+    return '<h2>'+esc(tit)+'</h2><div class="caja">'
+      + (filas.length ? filas.map(function(f){
+          return '<div class="hito"><span class="cuando">'+esc(f[0])+'</span><span>'+esc(f[1])+'</span></div>';
+        }).join('') : '<div style="color:var(--muted);font-size:var(--fs-sm)">'+esc(vacio)+'</div>')
+      + '</div>';
+  };
+  return '<div class="secc">'
+    + caja('Tareas',          [['hoy','Llamar a '+l.nom+' · 11:00']], 'Ninguna tarea pendiente.')
+    + caja('Citas',           [['jue 24','Visita AP-2231 · 09:00']],  'Ninguna cita agendada.')
+    + caja('Automatizaciones',[['en curso','Seguimiento a las 2 horas · paso 2 de 3']], 'Ninguna en curso.')
+    + caja('Campañas',        [['3 sep','Arriendos Envigado · abierta 2 veces']], 'No ha recibido campañas.')
+    + caja('Satisfacción',    [], 'Todavía no se le ha encuestado.')
+    + caja('Propuestas',      [], 'Ninguna propuesta enviada.')
+    + caja('Conversaciones',  [['whatsapp','Última hace 2 h · la atiendes tú']], 'Sin conversaciones.')
+    + '</div>';
+}
+
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
-pintarConvs(); pintarBots(); pintarInicio(); pintarMarketing(); pintarMas();
+pintarConvs(); pintarBots(); pintarPulso(); pintarMarketing(); pintarMas();
 verMod('inicio');
 </script><script>document.querySelector(".fab").innerHTML = icn("plus",26);</script></body></html>
