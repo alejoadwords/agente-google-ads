@@ -3497,6 +3497,30 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
   .nueva-version .nv-txt{flex:1 1 100%;}
   .nueva-version .nv-ok,.nueva-version .nv-no{flex:1 1 0; justify-content:center;}
 }
+
+/* ── Versión móvil: el enganche ───────────────────────────────────────────── */
+/* Mientras está encendida, la aplicación de siempre se esconde ENTERA. Dejar
+   las dos vivas a la vez haría que los atajos de teclado, los focos y los
+   temporizadores de la de escritorio siguieran corriendo por debajo. */
+body.modo-movil > *:not(#movil-host):not(#movil-oferta){display:none !important}
+body.modo-movil{overflow:hidden}
+#movil-host[hidden]{display:none}
+#movil-host{position:fixed;inset:0;z-index:9500;background:var(--bg)}
+/* La franja que ofrece probarla. Abajo, donde llega el pulgar, y por encima de
+   todo menos del propio móvil. */
+#movil-oferta{
+  position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9400;
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:12px 14px;border-radius:var(--rlg);background:var(--bg-card);
+  border:1px solid var(--border);box-shadow:var(--shadow-lg);
+  font-size:var(--fs-sm);color:var(--text);font-family:var(--font)
+}
+#movil-oferta span{flex:1 1 100%}
+#movil-oferta button{flex:1;padding:10px;border-radius:var(--r);font:inherit;font-weight:700;font-size:var(--fs-xs)}
+#movil-si{border:0;background:var(--blue);color:#fff}
+#movil-no{border:1px solid var(--border);background:var(--bg);color:var(--muted)}
+#movil-oferta button:active{transform:scale(.97)}
+@media (min-width:769px){#movil-oferta{display:none}}
 </style>
 <!-- Vercel Web Analytics — páginas vistas por ruta (el router SPA reporta cada pushState) -->
 <script defer src="/_vercel/insights/script.js"></script>
@@ -5521,7 +5545,9 @@ if (window.AGENTES_ACTIVOS) {
   <div class="lienzo-body" id="lienzo-body"></div>
 </div>
 
+<div id="movil-host" hidden></div>
 <script src="/app.js"></script>
+<script src="/movil-enganche.js"></script>
 
 <!-- CRM MODAL: crear / editar lead -->
 <!-- Tickets de soporte a pantalla completa. Fuera de las vistas de la app

@@ -8,8 +8,13 @@
 
 import { readFileSync } from 'node:fs';
 
-const html = readFileSync(new URL('../public/movil.html', import.meta.url), 'utf8');
-const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+// El boceto vive en tres ficheros desde que se sacó a fuente única: el
+// anfitrión, sus estilos y su guion. Se juntan aquí para comprobarlo entero,
+// que es como lo ve el navegador.
+const anfitrion = readFileSync(new URL('../public/movil.html', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../public/movil-app.css', import.meta.url), 'utf8');
+const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+const html = anfitrion + '\n' + css + '\n' + guion;
 
 let fallos = 0;
 const chk = (n, ok, extra) => {
@@ -132,11 +137,8 @@ console.log('\nEl guion entero se ejecuta sin reventar\n');
   // guion real— y el trozo salía vacío o al revés. Ya me pasó con el banco de
   // pruebas de la ficha: un extractor que se equivoca calla y hace fallar otra
   // cosa, así que aquí revienta a la vista.
-  const desde = html.indexOf('<script>') + 8;
-  const hasta = html.indexOf('</script>', desde);
-  if (desde < 8 || hasta < desde) throw new Error('no pude extraer el guion de movil.html');
-  const script = html.slice(desde, hasta);
-  if (script.length < 5000) throw new Error('el guion extraído es sospechosamente corto: ' + script.length);
+  const script = guion;
+  if (script.length < 5000) throw new Error('el guion es sospechosamente corto: ' + script.length);
   const elemento = () => ({
     innerHTML: '', className: '', id: '', style: {}, dataset: {}, hidden: false,
     classList: { add(){}, remove(){}, toggle(){} },
@@ -158,7 +160,7 @@ console.log('\nEl guion entero se ejecuta sin reventar\n');
   let error = null, globales = null;
   try {
     const nombres = Object.keys(entorno);
-    globales = new Function(...nombres, script + `
+    globales = new Function(...nombres, script + '\nmovilMontar();' + `
       ; return { MODULOS: typeof MODULOS, PINTORES: typeof PINTORES,
                  abrirModulo: typeof abrirModulo, CONVS: typeof CONVS,
                  modulos: MODULOS.length, pintores: Object.keys(PINTORES).length,
