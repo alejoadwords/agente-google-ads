@@ -9,7 +9,7 @@
 // prueba vigila al vigilante: un aviso que salta cuando no debe se deja de
 // leer, y entonces no sirve para nada el día que sí importa.
 
-import { callados, CADA, tolerancia } from '../api/_latido.js';
+import { callados, CADA, tolerancia, DESDE } from '../api/_latido.js';
 
 let mal = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) mal++; };
@@ -50,14 +50,42 @@ ok(!callados(viernes, SABADO).some(c => c.cron === 'cron-tasks'),
 ok(callados(sinTareas, MIERCOLES).some(c => c.cron === 'cron-tasks'),
    'pero el mismo silencio entre semana sí avisa');
 
-// Un cron que NUNCA ha latido no se denuncia: el día de estrenar esto la tabla
-// está vacía y saltarían los seis de golpe. Lo que se vigila es que uno DEJE
-// de correr.
+// Un cron que NUNCA ha latido: ni ignorarlo siempre ni denunciarlo siempre.
+//
+// Ignorarlo fue el punto ciego real: `cron-tasks` —el cron para el que se
+// construyó todo esto— no latió en dos días y el vigilante calló, porque
+// «nunca ha latido» era su caso descartado.
+//
+// Denunciarlo siempre habría sacado seis falsos positivos el día de estrenar.
+// El término medio es perdonarle su intervalo contado desde que la vigilancia
+// existe.
+const RECIEN = new Date(new Date(DESDE).getTime() + 60 * 60000);        // una hora después
+const MUCHO  = new Date(new Date(DESDE).getTime() + 120 * 60 * 60000); // cinco días después
+// OJO: tiene que caer ENTRE SEMANA. A las sesenta horas caía en sábado y el
+// vigilante perdonaba a cron-tasks con toda la razón, así que la prueba daba
+// rojo por la fecha elegida y no por el código.
+if (MUCHO.getUTCDay() === 0 || MUCHO.getUTCDay() === 6) throw new Error('MUCHO cayó en fin de semana');
+
 const faltaUno = alDia.filter(l => l.cron !== 'cron-trials');
-ok(!callados(faltaUno, MIERCOLES).some(c => c.cron === 'cron-trials'),
-   'un cron que aún no ha latido nunca no genera aviso');
-ok(callados([], MIERCOLES).length === 0, 'con la tabla vacía no avisa de nada — el primer día no suena');
-ok(callados(null, MIERCOLES).length === 0, 'y con null no revienta');
+ok(!callados(faltaUno, RECIEN).some(c => c.cron === 'cron-trials'),
+   'recién estrenado, un cron sin latido no genera aviso: no le ha dado tiempo');
+// Con la tabla vacía el perdón NO es igual para todos, y debe ser así: a la
+// hora de estrenar, un cron de diez minutos ya ha perdido seis oportunidades
+// —eso es un problema— mientras que uno diario ni siquiera ha tenido la suya.
+const vaciaRecien = callados([], RECIEN).map(c => c.cron);
+ok(vaciaRecien.includes('cron-automations'),
+   'un cron de 10 min sin latido tras una hora sí se denuncia: perdió seis turnos');
+ok(!vaciaRecien.includes('cron-tasks') && !vaciaRecien.includes('cron-trials'),
+   'y uno diario no: todavía no le ha tocado');
+ok(Array.isArray(callados(null, RECIEN)), 'con null no revienta');
+
+const sinTasks = Object.keys(CADA).filter(c => c !== 'cron-tasks')
+  .map(cron => ({ cron, ultima_vez: hace(1, MUCHO) }));
+const f3 = callados(sinTasks, MUCHO);
+ok(f3.some(c => c.cron === 'cron-tasks'),
+   'pero pasado su plazo SIN haber latido nunca, sí se denuncia — el punto ciego de cron-tasks');
+ok(f3.find(c => c.cron === 'cron-tasks')?.desde === null,
+   'y se distingue: no tiene «desde», porque nunca latió');
 
 // Pero en cuanto late una vez, ya queda vigilado.
 const yaLatio = [{ cron: 'cron-trials', ultima_vez: hace(60 * 31) }];

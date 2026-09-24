@@ -139,8 +139,17 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
-  // Toda salida deja latido, incluidas las malas: que no se pueda volver a dar
-  // el caso de mirar qué pasó y no encontrar nada que mirar. Ver api/_latido.js.
+  // Se marca la ENTRADA, no solo la salida.
+  //
+  // El 24-09-2026 este cron volvió a no mandar nada y no había latido — y un
+  // latido que solo se escribe al terminar no distingue «Vercel no lo llamó»
+  // de «lo llamó y se murió a mitad». Son dos problemas distintos con arreglos
+  // distintos, y sin esta marca no hay forma de saber cuál es.
+  //
+  // Si mañana queda un latido con `empezo` y sin resultado, es lo segundo.
+  await latir('cron-tasks', { empezo: new Date().toISOString() });
+
+  // Y toda salida deja el suyo, incluidas las malas. Ver api/_latido.js.
   const responder = async (estado, cuerpo, fallo) => {
     await latir('cron-tasks', cuerpo, fallo);
     return res.status(estado).json(cuerpo);

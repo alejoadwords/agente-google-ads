@@ -81,6 +81,10 @@ export const CADA = {
  */
 export const tolerancia = (minutos) => (minutos <= 60 ? minutos * 3 : minutos + 360);
 
+// Desde cuándo existe la vigilancia. Antes de esta fecha no había latidos que
+// buscar, así que un cron sin fila no significaba nada.
+export const DESDE = '2026-09-23T16:00:00Z';
+
 /**
  * Los que llevan callados más de lo que se les perdona. Los que solo corren de
  * lunes a viernes se perdonan el sábado y el domingo.
@@ -94,15 +98,24 @@ export function callados(latidos, ahora = new Date()) {
   for (const [cron, minutos] of Object.entries(CADA)) {
     if (finDeSemana && soloEntreSemana.includes(cron)) continue;
     const l = porNombre[cron];
-    // Un cron que NUNCA ha latido no se denuncia. La primera versión sí lo
-    // hacía, y eso significaba que el minuto de estrenar esto —tabla vacía,
-    // ningún cron ha corrido todavía— el aviso habría salido con los seis
-    // dentro. Seis falsos positivos el primer día es la forma más rápida de
-    // que el aviso se ignore para siempre.
+    // Un cron que NUNCA ha latido se denuncia, pero solo cuando ya ha tenido
+    // tiempo de hacerlo.
     //
-    // Lo que esto vigila es que un cron DEJE de correr, que es el fallo real.
-    // Que uno nunca arranque se ve al enchufarlo, y lo cubre la prueba.
-    if (!l) continue;
+    // La primera versión lo denunciaba siempre, y el minuto de estrenar esto
+    // —tabla vacía— el aviso habría salido con los seis dentro. La segunda se
+    // pasó al otro extremo y lo ignoraba por completo… y resultó ser el punto
+    // ciego exacto: `cron-tasks`, el cron para el que se construyó todo esto,
+    // NO ha latido ni una vez en dos días. El vigilante no dijo nada porque
+    // «nunca ha latido» era su caso descartado.
+    //
+    // El término medio: se le perdona lo mismo que a cualquiera —su intervalo
+    // más el margen— contado desde que la vigilancia existe. Si en ese plazo
+    // no ha aparecido, es que no está corriendo.
+    if (!l) {
+      const desdeQueSeVigila = (ahora.getTime() - new Date(DESDE).getTime()) / 60000;
+      if (desdeQueSeVigila > tolerancia(minutos)) fuera.push({ cron, desde: null, minutos: null });
+      continue;
+    }
     const callado = (ahora.getTime() - new Date(l.ultima_vez).getTime()) / 60000;
     if (callado > tolerancia(minutos)) fuera.push({ cron, desde: l.ultima_vez, minutos: Math.round(callado) });
   }
