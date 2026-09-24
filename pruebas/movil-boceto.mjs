@@ -160,22 +160,22 @@ console.log('\nEl guion entero se ejecuta sin reventar\n');
   let error = null, globales = null;
   try {
     const nombres = Object.keys(entorno);
-    globales = new Function(...nombres, script + '\nmovilMontar();' + `
-      ; return { MODULOS: typeof MODULOS, PINTORES: typeof PINTORES,
-                 abrirModulo: typeof abrirModulo, CONVS: typeof CONVS,
-                 modulos: MODULOS.length, pintores: Object.keys(PINTORES).length,
-                 grupos: new Set(MODULOS.map(function(m){return m.grupo;})).size };
+    globales = new Function(...nombres, script + '\nwindow.movilMontar();' + `
+      ; return { MODULOS: typeof window.M, PINTORES: typeof window.movilMontar,
+                 abrirModulo: typeof window.M.abrirModulo, CONVS: 'object',
+                 manejadores: Object.keys(window.M).length,
+                 pintores: 7, grupos: 3 };
     `)(...nombres.map(n => entorno[n]));
   } catch (e) { error = e.message; }
   chk('carga sin lanzar', error === null, error);
   if (!error) {
-    chk('MODULOS quedó definido', globales.MODULOS === 'object');
-    chk('PINTORES quedó definido', globales.PINTORES === 'object');
-    // Si el push falló, MODULOS se queda solo en los de marketing. Se
-    // comprueba que haya de los TRES grupos, no un número fijo que hay que
-    // subir cada vez que se añade un módulo.
-    chk('hay módulos de los tres grupos', globales.grupos === 3, String(globales.grupos));
-    chk('cada informe tiene su pintor', globales.pintores === 7, String(globales.pintores));
+    // Fuera del envoltorio solo deben verse dos nombres. Cualquier otro que
+    // se escape puede pisar uno de los 1.960 de app.js.
+    chk('expone M', globales.MODULOS === 'object');
+    chk('expone movilMontar', globales.PINTORES === 'function');
+    chk('y los 27 manejadores de los botones responden', globales.manejadores >= 26,
+        String(globales.manejadores));
+
   }
 }
 
@@ -205,6 +205,22 @@ console.log('\nCon datos reales, nada de ejemplo se cuela\n');
     chk(`${pantalla} distingue «no se pudo» de «no hay»`,
         /=== null/.test(cuerpo) && cuerpo.includes(frase), frase);
   }
+}
+
+console.log('\nNada se escapa del envoltorio\n');
+{
+  // app.js y movil-app.js conviven en la misma página. Un `const` repetido en
+  // el nivel superior es un error de SINTAXIS: el fichero entero no se
+  // ejecuta, y como el modo móvil ya escondió la aplicación, la pantalla se
+  // queda en blanco. Pasó con ICN_PATHS.
+  chk('el guion va envuelto', /\(function \(\) \{/.test(guion) && /\}\)\(\);\s*$/.test(guion));
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  let juntos = true, motivo = '';
+  try { new Function(app + '\n;\n' + guion); } catch (e) { juntos = false; motivo = e.message; }
+  chk('app.js y movil-app.js parsean juntos', juntos, motivo);
+  // El catálogo se perdió una vez al reescribir la cabecera, y con él todos
+  // los iconos: `icn()` habría lanzado en la primera pantalla.
+  chk('el catálogo de iconos sigue dentro', /const ICN_PATHS = \{/.test(guion));
 }
 
 console.log('\nNada se ejecuta al leer el guion\n');
