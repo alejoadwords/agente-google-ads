@@ -89,12 +89,15 @@
       '<button type="button" id="movil-si">Probarla</button>' +
       '<button type="button" id="movil-no">Ahora no</button>';
     document.body.appendChild(b);
-    document.getElementById('movil-si').addEventListener('click', function () {
-      b.remove(); encender();
-    });
-    document.getElementById('movil-no').addEventListener('click', function () {
-      b.remove(); apagar();
-    });
+    // Los oyentes se buscan DENTRO de la franja y con guarda. Con
+    // `document.getElementById(...).addEventListener(...)` bastaba que el
+    // elemento no estuviera para lanzar aquí, y esto corre en el arranque: la
+    // excepción no la recoge nadie y se lleva por delante lo que venga
+    // después. Es el mismo patrón que dejó la pantalla en blanco.
+    var si = b.querySelector('#movil-si');
+    var no = b.querySelector('#movil-no');
+    if (si) si.addEventListener('click', function () { b.remove(); encender(); });
+    if (no) no.addEventListener('click', function () { b.remove(); apagar(); });
   }
 
   function decidir() {
