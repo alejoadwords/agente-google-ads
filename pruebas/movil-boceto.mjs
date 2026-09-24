@@ -87,14 +87,22 @@ console.log('\nEl teléfono no es un escritorio pequeño\n');
 
 console.log('\nCada pestaña lleva a una pantalla que existe\n');
 {
-  // Solo del cuerpo de pintarTabs: el patrón suelto también casaba con la
-  // lista de canales que tienen ventana de 24 h, y acusaba a 'whatsapp' de ser
-  // una pestaña sin pantalla.
-  const fn = html.slice(html.indexOf('function pintarTabs'), html.indexOf('}', html.indexOf('.join(\'\');', html.indexOf('function pintarTabs'))));
-  const tabs = [...fn.matchAll(/\['(\w+)','[^']+','[\w-]+'\]/g)].map(m => m[1]);
+  // Una pantalla es alcanzable si es un MÓDULO de la barra o una pestaña
+  // contextual de alguno. Antes se leía un patrón suelto que también casaba
+  // con la lista de canales; ahora se lee la declaración de MODS.
+  const bloqueMods = html.slice(html.indexOf('var MODS = ['), html.indexOf('\n];', html.indexOf('var MODS = [')));
+  // Un módulo CON pestañas no tiene pantalla propia: sus pestañas lo son.
+  // Uno SIN pestañas sí. Exigirle pantalla a un contenedor era pedirle algo
+  // que por diseño no debe tener.
+  const entradas = bloqueMods.split('{id:').slice(1);
+  const modulos = entradas.map(e => e.match(/'(\w+)'/)[1]);
+  const contenedores = entradas.filter(e => e.includes('tabs:')).map(e => e.match(/'(\w+)'/)[1]);
+  const subs = [...bloqueMods.matchAll(/\['(\w+)','[^']+'\]/g)].map(m => m[1]);
+  const tabs = modulos.filter(m => !contenedores.includes(m)).concat(subs);
   const vistas = [...html.matchAll(/class="vista" id="(\w+)"/g)].map(m => m[1]);
   const rotas = tabs.filter(t => !vistas.includes(t));
-  chk(`las ${tabs.length} pestañas tienen pantalla`, rotas.length === 0, rotas.join(', '));
+  chk(`los ${modulos.length} módulos y sus ${subs.length} pestañas llevan a una pantalla`,
+      rotas.length === 0, rotas.join(', '));
   chk('y no hay pantallas huérfanas sin pestaña',
       vistas.every(v => tabs.includes(v)), vistas.filter(v => !tabs.includes(v)).join(', '));
 }
@@ -144,16 +152,18 @@ console.log('\nEl guion entero se ejecuta sin reventar\n');
     globales = new Function(...nombres, script + `
       ; return { MODULOS: typeof MODULOS, PINTORES: typeof PINTORES,
                  abrirModulo: typeof abrirModulo, CONVS: typeof CONVS,
-                 modulos: MODULOS.length, pintores: Object.keys(PINTORES).length };
+                 modulos: MODULOS.length, pintores: Object.keys(PINTORES).length,
+                 grupos: new Set(MODULOS.map(function(m){return m.grupo;})).size };
     `)(...nombres.map(n => entorno[n]));
   } catch (e) { error = e.message; }
   chk('carga sin lanzar', error === null, error);
   if (!error) {
     chk('MODULOS quedó definido', globales.MODULOS === 'object');
     chk('PINTORES quedó definido', globales.PINTORES === 'object');
-    // Si el push falló, MODULOS se queda en los ocho de marketing.
-    chk(`están los ${globales.modulos} módulos, no solo los de marketing`,
-        globales.modulos === 15, String(globales.modulos));
+    // Si el push falló, MODULOS se queda solo en los de marketing. Se
+    // comprueba que haya de los TRES grupos, no un número fijo que hay que
+    // subir cada vez que se añade un módulo.
+    chk('hay módulos de los tres grupos', globales.grupos === 3, String(globales.grupos));
     chk('cada informe tiene su pintor', globales.pintores === 7, String(globales.pintores));
   }
 }

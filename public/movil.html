@@ -402,37 +402,62 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .video .txt{flex:1;min-width:0}
 .video .vt{display:block;font-weight:600;font-size:var(--fs-sm)}
 .video .vs{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+
+/* ── Pestañas contextuales, como las de la web ── */
+.subtabs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px 4px;scrollbar-width:none;
+  position:sticky;top:0;z-index:8;background:var(--bg)}
+.subtabs::-webkit-scrollbar{display:none}
+.subtab{flex:none;padding:8px 16px;border-radius:999px;border:1px solid var(--border);
+  background:var(--bg-card);color:var(--muted);font:inherit;font-size:var(--fs-sm);font-weight:600;white-space:nowrap}
+.subtab[aria-selected="true"]{background:var(--text);border-color:var(--text);color:var(--bg)}
+.subtab:active{transform:scale(.95)}
 </style></head><body><div class="vista" id="inicio">
-  <div class="cab"><div style="flex:1"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div>
-    <button class="volver" style="transform:none" onclick="abrirMas()" aria-label="M&aacute;s" id="btn-mas"></button></div>
+  <div class="cab"><div style="flex:1"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div></div>
   <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
   <div class="cifras"></div>
   <div class="secc"><div class="proxima"></div></div>
 </div>
 
 <div class="vista" id="leads" hidden>
-  <div class="cab"><div><h1>Contactos</h1><div class="sub">6 activos</div></div></div>
+  <div class="cab"><div><h1>CRM</h1><div class="sub">6 contactos activos</div></div></div>
+  <div class="subtabs" id="sub-leads"></div>
   <div class="buscar"><input type="search" placeholder="Buscar contacto" oninput="buscar(this.value)" enterkeyhint="search"></div>
   <div class="filtros"></div>
   <div class="lista"></div>
 </div>
 
 <div class="vista" id="tareas" hidden>
-  <div class="cab"><div><h1>Tareas</h1><div class="sub">1 vencida &middot; 2 para hoy</div></div></div>
+  <div class="cab"><div><h1>CRM</h1><div class="sub">1 vencida &middot; 2 para hoy</div></div></div>
+  <div class="subtabs" id="sub-tareas"></div>
   <div class="lista"></div>
 </div>
 
 <div class="vista" id="agenda" hidden>
-  <div class="cab"><div><h1>Agenda</h1><div class="sub">jueves 24 &middot; 3 citas</div></div></div>
+  <div class="cab"><div><h1>CRM</h1><div class="sub">jueves 24 &middot; 3 citas</div></div></div>
+  <div class="subtabs" id="sub-agenda"></div>
   <div class="lista"></div>
 </div>
 
-<div class="vista" id="chats" hidden>
-  <div class="cab">
-    <div style="flex:1"><h1>Conversaciones</h1><div class="sub">3 sin leer</div></div>
-    <button class="volver" style="transform:none" onclick="abrirBots()" aria-label="Chatbots" id="btn-bots"></button>
-  </div>
+<div class="vista" id="bandeja" hidden>
+  <div class="cab"><div><h1>Conversaciones</h1><div class="sub">3 sin leer</div></div></div>
+  <div class="subtabs" id="sub-bandeja"></div>
   <div class="lista"></div>
+</div>
+
+<div class="vista" id="chatbots" hidden>
+  <div class="cab"><div><h1>Conversaciones</h1><div class="sub">Qui&eacute;n contesta en cada canal</div></div></div>
+  <div class="subtabs" id="sub-chatbots"></div>
+  <div class="lista"></div>
+</div>
+
+<div class="vista" id="marketing" hidden>
+  <div class="cab"><div><h1>Marketing</h1><div class="sub">Campa&ntilde;as, contenido y captaci&oacute;n</div></div></div>
+  <div id="lista-marketing"></div>
+</div>
+
+<div class="vista" id="mas" hidden>
+  <div class="cab"><div><h1>M&aacute;s</h1><div class="sub">Informes y cuenta</div></div></div>
+  <div id="lista-mas"></div>
 </div>
 
 <button class="fab" onclick="nuevoLead()" aria-label="Contacto nuevo" hidden></button>
@@ -595,20 +620,6 @@ function marcar(i,el){
   toque();
   pintarInicio();
 }
-function pintarTabs(){
-  var t = [['inicio','Hoy','star'],['leads','Leads','users'],['tareas','Tareas','check'],['agenda','Agenda','calendar'],['chats','Chats','chat']];
-  $('.tabs').innerHTML = t.map(function(x){
-    return '<button class="tab" data-v="'+x[0]+'" onclick="ver(\''+x[0]+'\')">'+icn(x[2],22)+x[1]+'</button>';
-  }).join('');
-}
-function ver(id){
-  var vs = document.querySelectorAll('.vista');
-  for (var i=0;i<vs.length;i++) vs[i].hidden = vs[i].id !== id;
-  var ts = document.querySelectorAll('.tab');
-  for (var j=0;j<ts.length;j++) ts[j].setAttribute('aria-selected', String(ts[j].dataset.v === id));
-  var fab = $('.fab'); if (fab) fab.hidden = (id !== 'leads');
-  window.scrollTo(0,0);
-}
 
 // ── Ficha ───────────────────────────────────────────────────────────────────
 var leadAbierto = null;
@@ -738,7 +749,7 @@ var convAbierta = null;
 var modoNota = false;
 
 function pintarConvs(){
-  $('#chats .lista').innerHTML = CONVS.map(function(c){
+  $('#bandeja .lista').innerHTML = CONVS.map(function(c){
     return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="abrirConv('+c.id+')">'
       + '<span class="ini">'+esc(c.nom[0])
         + '<span class="canal '+c.canal+'">'+icn(ICONO_CANAL[c.canal]||'chat',10)+'</span></span>'
@@ -861,7 +872,7 @@ function ponerQuien(q){
 
 // ── Chatbots ────────────────────────────────────────────────────────────────
 function pintarBots(){
-  $('#bots .lista').innerHTML = BOTS.map(function(b){
+  $('#chatbots .lista').innerHTML = BOTS.map(function(b){
     return '<div class="chatbot'+(b.on?' on':'')+'" onclick="alternarBot('+b.id+',this)">'
       + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
         + '<div class="tsub">'+esc(b.canal)+'</div>'
@@ -874,7 +885,7 @@ function alternarBot(id,el){
   el.classList.toggle('on');
   toque();
 }
-function abrirBots(){
+function abrirBots_viejo(){
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-conv';
   h.innerHTML =
@@ -984,18 +995,25 @@ function filaItem(x){
 }
 function abrirModulo(id){
   var M = {
-    campanas:{t:'Campañas', s:'3 este mes',        datos:CAMPANAS},
-    listas:  {t:'Listas',   s:'3 listas',          datos:LISTAS},
-    autos:   {t:'Automatizaciones', s:'2 activas', datos:AUTOS},
-    fuentes: {t:'Fuentes',  s:'4 conectadas',      datos:FUENTES},
-    props:   {t:'Propuestas', s:'3 abiertas',      datos:PROPS},
-    reservas:{t:'Reservas', s:'2 servicios activos', datos:RESERVAS},
-    plant:   {t:'Plantillas', s:'Diseños de correo', soloEscritorio:
+    campanas:{t:'Campañas', s:'3 este mes', datos:CAMPANAS, escritorio:
+      'Armar una campaña es elegir plantilla, audiencia y fecha: son muchas decisiones seguidas y se hacen mejor en el computador. Desde aquí ves cómo van las que ya salieron.'},
+    listas:  {t:'Listas',   s:'3 listas',   datos:LISTAS},
+    autos:   {t:'Automatizaciones', s:'2 activas', datos:AUTOS, escritorio:
+      'El constructor encadena pasos y condiciones, y eso necesita espacio para verse entero. Aquí puedes encender y apagar las que ya tienes, y ver cuántas veces corrió cada una.'},
+    fuentes: {t:'Fuentes',  s:'4 conectadas', datos:FUENTES, escritorio:
+      'Conectar una fuente nueva implica copiar un código a tu web o a otra herramienta, que es cosa del computador. Aquí ves cuántos leads trae cada una y cuándo entró el último.'},
+    props:   {t:'Propuestas', s:'3 abiertas', datos:PROPS},
+    reservas:{t:'Reservas', s:'2 servicios activos', datos:RESERVAS, escritorio:
+      'Los servicios, los horarios y la disponibilidad se configuran en el computador. Aquí ves las reservas que van entrando.'},
+    plant:   {t:'Plantillas', s:'Diseños de correo', escritorio:
       'Los diseños se arman arrastrando bloques, y eso necesita una pantalla grande para que salga algo usable. Desde el teléfono puedes ver cuáles tienes, duplicarlas y usarlas en una campaña.',
       datos:[{nom:'Bienvenida', sub:'Usada en 2 campañas'},{nom:'Novedades del mes', sub:'Usada en 1 campaña'}]},
-    paginas: {t:'Páginas', s:'Páginas de aterrizaje', soloEscritorio:
+    paginas: {t:'Páginas', s:'Páginas de aterrizaje', escritorio:
       'El constructor de páginas funciona arrastrando secciones, que en un teléfono no se maneja bien. Aquí puedes ver las que tienes, copiar su enlace y consultar sus visitas.',
-      datos:[{nom:'Arriendos Envigado', sub:'412 visitas · 31 formularios'},{nom:'Proyecto Altos', sub:'96 visitas · 7 formularios'}]}
+      datos:[{nom:'Arriendos Envigado', sub:'412 visitas · 31 formularios'},{nom:'Proyecto Altos', sub:'96 visitas · 7 formularios'}]},
+    ajustes: {t:'Configuración', s:'Cuenta, equipo y plan', escritorio:
+      'Los ajustes de la cuenta —equipo, permisos, plan, integraciones y catálogos— se hacen desde el computador. Son cambios que afectan a todos y conviene hacerlos con calma y la pantalla completa.',
+      datos:[{nom:'Equipo', sub:'9 personas activas'},{nom:'Plan', sub:'Agency · renueva el 11 de septiembre'},{nom:'Integraciones', sub:'Google Ads, Google Calendar'}]}
   }[id];
   // Los informes y los módulos de cuenta tienen pintor propio: forzarlos a la
   // lista genérica los convertiría en tablas encogidas.
@@ -1017,7 +1035,7 @@ function abrirModulo(id){
     + '<div><h1>'+esc(M.t)+'</h1><div class="sub">'+esc(M.s)+'</div></div></div>'
     // Se dice POR QUÉ no se edita aquí, no solo que no se puede: un «no
     // disponible» a secas se lee como que falta, no como que no tiene sentido.
-    + (M.soloEscritorio ? '<div class="solo-escritorio"><b>Se edita desde el computador</b>'+esc(M.soloEscritorio)+'</div>' : '')
+    + (M.escritorio ? '<div class="solo-escritorio"><b>Se edita desde el computador</b>'+esc(M.escritorio)+'</div>' : '')
     + '<div class="lista">' + M.datos.map(filaItem).join('') + '</div>';
   document.body.appendChild(h);
   history.pushState({hoja:1},'');
@@ -1037,9 +1055,10 @@ MODULOS.push(
   {id:'nps',      nom:'Satisfacción',sub:'Qué opinan tus clientes',  icono:'star',     grupo:'Análisis'},
   {id:'aperturas',nom:'Aperturas',  sub:'Qué correos se leen',       icono:'chat',     grupo:'Análisis'},
   {id:'clientes', nom:'Panel de clientes', sub:'Tu cartera',         icono:'users',    grupo:'Cuenta'},
-  {id:'studio',   nom:'Social Studio',sub:'Tu parrilla de contenido',icono:'sparkles', grupo:'Cuenta'},
-  {id:'seo',      nom:'Proyecto SEO',sub:'Tus posiciones en Google', icono:'trend',    grupo:'Cuenta'},
-  {id:'academia', nom:'Academia',   sub:'Aprende a usar Acuarius',   icono:'file',     grupo:'Cuenta'}
+  {id:'studio',   nom:'Social Studio',sub:'Tu parrilla de contenido',icono:'sparkles', grupo:'Marketing'},
+  {id:'seo',      nom:'Proyecto SEO',sub:'Tus posiciones en Google', icono:'trend',    grupo:'Marketing'},
+  {id:'academia', nom:'Academia',   sub:'Aprende a usar Acuarius',   icono:'file',     grupo:'Cuenta'},
+  {id:'ajustes',  nom:'Configuración',sub:'Cuenta, equipo y plan',    icono:'gear',     grupo:'Cuenta'}
 );
 
 var EMBUDO = [
@@ -1133,7 +1152,10 @@ var PINTORES = {
     }).join('') + '</div>';
   },
   studio: function(){
-    return '<div class="lista">' + PARRILLA.map(function(x){
+    return '<div class="solo-escritorio"><b>Se arma desde el computador</b>'
+      + 'Escribir los textos, generar las imágenes y ordenar la parrilla se hace mejor con pantalla grande. '
+      + 'Aquí ves qué sale y cuándo, y qué le falta a cada publicación.</div>'
+      + '<div class="lista">' + PARRILLA.map(function(x){
       return '<div class="post"><span class="lam">'+icn('sparkles',22)+'</span>'
         + '<span class="txt"><span class="pt">'+esc(x.t)+'</span>'
         + '<span class="ps">'+esc(x.s)+'</span></span></div>';
@@ -1165,5 +1187,98 @@ var TITULOS = {
   academia:['Academia','3 cursos']
 };
 
-pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda(); pintarInicio(); ver('inicio');
-</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);document.getElementById("btn-bots").innerHTML = icn("bot",22);document.getElementById("btn-mas").innerHTML = icn("split",22);</script></body></html>
+// ── Navegación: los mismos módulos que la web ───────────────────────────────
+//
+// La primera versión inventaba un modelo propio —Hoy, Leads, Tareas, Agenda,
+// Chats— y escondía Marketing tras un icono sin nombre en una esquina. Quien
+// conoce la web no lo encontraba, y con razón: la web se organiza en cuatro
+// módulos (NAV_MOD_LABELS en app.js) y aquí estaban desarmados.
+//
+// Ahora es la misma lógica que arriba: abajo los MÓDULOS, dentro de cada uno
+// sus PESTAÑAS. Quien sabe usar Acuarius en el computador sabe usarlo aquí.
+var MODS = [
+  {id:'inicio',     t:'Hoy',       icono:'star'},
+  {id:'crm',        t:'CRM',       icono:'users',  tabs:[['leads','Contactos'],['tareas','Tareas'],['agenda','Agenda']]},
+  {id:'chats',      t:'Chats',     icono:'chat',   tabs:[['bandeja','Bandeja'],['chatbots','Chatbots']]},
+  {id:'marketing',  t:'Marketing', icono:'sparkles'},
+  {id:'mas',        t:'Más',       icono:'split'}
+];
+var subActual = {crm:'leads', chats:'bandeja'};
+
+function pintarTabs(){
+  $('.tabs').innerHTML = MODS.map(function(m){
+    return '<button class="tab" data-v="'+m.id+'" onclick="verMod(\''+m.id+'\')">'
+         + icn(m.icono,22) + m.t + '</button>';
+  }).join('');
+}
+function modDe(id){
+  for (var i=0;i<MODS.length;i++){
+    if (MODS[i].id === id) return MODS[i];
+    if (MODS[i].tabs) for (var j=0;j<MODS[i].tabs.length;j++)
+      if (MODS[i].tabs[j][0] === id) return MODS[i];
+  }
+  return null;
+}
+function verMod(id){
+  var m = modDe(id);
+  if (m && m.tabs) { verSub(m.id, subActual[m.id] || m.tabs[0][0]); return; }
+  ver(id);
+}
+function verSub(mod, sub){
+  subActual[mod] = sub;
+  ver(sub);
+  pintarSubTabs(mod, sub);
+}
+// Las pestañas contextuales se pintan DENTRO de la pantalla activa, debajo de
+// su cabecera: es donde están en la web y donde el ojo las busca.
+function pintarSubTabs(mod, sub){
+  var m = modDe(mod); if (!m || !m.tabs) return;
+  var cont = document.getElementById('sub-' + sub);
+  if (!cont) return;
+  cont.innerHTML = m.tabs.map(function(t){
+    return '<button class="subtab" aria-selected="'+(t[0]===sub)+'" onclick="verSub(\''+mod+'\',\''+t[0]+'\')">'
+         + esc(t[1]) + '</button>';
+  }).join('');
+}
+function ver(id){
+  var vs = document.querySelectorAll('.vista');
+  for (var i=0;i<vs.length;i++) vs[i].hidden = vs[i].id !== id;
+  var m = modDe(id);
+  var ts = document.querySelectorAll('.tab');
+  for (var j=0;j<ts.length;j++)
+    ts[j].setAttribute('aria-selected', String(m ? ts[j].dataset.v === m.id : false));
+  if (m && m.tabs) pintarSubTabs(m.id, id);
+  var fab = $('.fab'); if (fab) fab.hidden = (id !== 'leads');
+  window.scrollTo(0,0);
+}
+
+// ── Marketing y Más, como pantallas de verdad ───────────────────────────────
+// Antes Marketing vivía tras un icono sin etiqueta. Ahora tiene su sitio en la
+// barra, con los mismos nueve de la web (NAV_TABS.marketing).
+function pintarMenu(cont, ids){
+  document.getElementById(cont).innerHTML = ids.map(function(id){
+    var m = null;
+    for (var i=0;i<MODULOS.length;i++) if (MODULOS[i].id === id) m = MODULOS[i];
+    if (!m) return '';
+    return '<button class="mfila" onclick="abrirModulo(\''+m.id+'\')">'
+      + '<span class="micono">'+icn(m.icono,18)+'</span>'
+      + '<span class="cuerpo"><span class="mt">'+esc(m.nom)+'</span><span class="ms">'+esc(m.sub)+'</span></span>'
+      + '<span class="chev">'+icn('arrow',18)+'</span></button>';
+  }).join('');
+}
+function pintarMarketing(){
+  pintarMenu('lista-marketing',
+    ['campanas','plant','paginas','listas','autos','fuentes','props','reservas','studio','seo']);
+}
+function pintarMas(){
+  var html = '<div class="mgrupo">Análisis</div><div id="mas-analisis"></div>'
+           + '<div class="mgrupo">Cuenta</div><div id="mas-cuenta"></div>';
+  document.getElementById('lista-mas').innerHTML = html;
+  pintarMenu('mas-analisis', ['analisis','nps','aperturas']);
+  pintarMenu('mas-cuenta',   ['clientes','academia','ajustes']);
+}
+
+pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
+pintarConvs(); pintarBots(); pintarInicio(); pintarMarketing(); pintarMas();
+verMod('inicio');
+</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);</script></body></html>
