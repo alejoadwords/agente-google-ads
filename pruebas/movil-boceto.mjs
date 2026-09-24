@@ -127,7 +127,16 @@ console.log('\nEl guion entero se ejecuta sin reventar\n');
   // antes de declararlo lanzaba AL CARGAR y abortaba el resto del script:
   // media aplicación quedaba sin definir y solo se notaba al tocar un botón.
   // Comprobar el orden a ojo no sirve; hay que ejecutarlo.
-  const script = html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>'));
+  // El cierre se busca DESPUÉS de la apertura. Al añadir el guion de Clerk en
+  // la cabecera, buscarlo desde el principio encontraba SU cierre —anterior al
+  // guion real— y el trozo salía vacío o al revés. Ya me pasó con el banco de
+  // pruebas de la ficha: un extractor que se equivoca calla y hace fallar otra
+  // cosa, así que aquí revienta a la vista.
+  const desde = html.indexOf('<script>') + 8;
+  const hasta = html.indexOf('</script>', desde);
+  if (desde < 8 || hasta < desde) throw new Error('no pude extraer el guion de movil.html');
+  const script = html.slice(desde, hasta);
+  if (script.length < 5000) throw new Error('el guion extraído es sospechosamente corto: ' + script.length);
   const elemento = () => ({
     innerHTML: '', className: '', id: '', style: {}, dataset: {}, hidden: false,
     classList: { add(){}, remove(){}, toggle(){} },

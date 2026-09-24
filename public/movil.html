@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"><meta name="theme-color" content="#1E2BCC"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Acuarius móvil — boceto</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&display=swap" rel="stylesheet"><style>:root{
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"><meta name="theme-color" content="#1E2BCC"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Acuarius móvil — boceto</title><link rel="preconnect" href="https://fonts.googleapis.com"><script async crossorigin="anonymous" data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA" src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5.125.10/dist/clerk.browser.js" type="text/javascript"></script><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&display=swap" rel="stylesheet"><style>:root{
   /* Brand blues */
   --blue:#1E2BCC;--blue-h:#1520B0;--blue-mid:#3D52E5;
   --blue-lt:#EEF0FD;--blue-md:#C5CAF8;--blue-dim:rgba(30,43,204,.07);
@@ -596,6 +596,7 @@ function leadsVisibles(){
   });
 }
 function pintarFiltros(){
+  if (LEADS === null) { $('#leads .filtros').innerHTML = ''; return; }
   var f = [{k:'todos',t:'Todos'}].concat(ETAPAS);
   $('#leads .filtros').innerHTML = f.map(function(x){
     var n = x.k==='todos' ? LEADS.length : LEADS.filter(function(l){return l.etapa===x.k;}).length;
@@ -607,6 +608,12 @@ function filtrar(k){ filtroEtapa = k; toque(); pintarFiltros(); pintarLeads(); }
 function buscar(v){ textoBusqueda = v; pintarLeads(); }
 
 function pintarLeads(){
+  // null = no se pudo mirar. Pintar «ningún contacto» sería afirmar que la
+  // cartera está vacía cuando lo que pasó fue que se cayó la consulta.
+  if (LEADS === null) {
+    $('#leads .lista').innerHTML = '<div class="vacio">No se pudieron traer tus contactos.</div>';
+    return;
+  }
   var ls = leadsVisibles();
   $('#leads .lista').innerHTML = ls.length ? ls.map(function(l){
     return '<button class="lead" onclick="abrirLead('+l.id+')">'
@@ -617,6 +624,14 @@ function pintarLeads(){
   }).join('') : '<div class="vacio">Ningún contacto con ese filtro.</div>';
 }
 function pintarTareas(){
+  if (TAREAS === null) {
+    $('#tareas .lista').innerHTML = '<div class="vacio">No se pudieron traer tus tareas.</div>';
+    return;
+  }
+  if (!TAREAS.length) {
+    $('#tareas .lista').innerHTML = '<div class="vacio">Ninguna tarea pendiente.</div>';
+    return;
+  }
   var grupos = [['vencida','Vencidas'],['hoy','Hoy'],['proxima','Próximas']];
   $('#tareas .lista').innerHTML = grupos.map(function(g){
     var ts = TAREAS.map(function(t,i){ return {t:t,i:i}; }).filter(function(x){ return x.t.cuando===g[0]; });
@@ -630,6 +645,10 @@ function pintarTareas(){
   }).join('');
 }
 function pintarAgenda(){
+  if (CITAS === null) {
+    $('#agenda .lista').innerHTML = '<div class="vacio">No se pudo traer tu agenda.</div>';
+    return;
+  }
   var html = '';
   for (var i=0;i<CITAS.length;i++){
     var c = CITAS[i];
@@ -763,6 +782,14 @@ var convAbierta = null;
 var modoNota = false;
 
 function pintarConvs(){
+  if (CONVS === null) {
+    $('#bandeja .lista').innerHTML = '<div class="vacio">No se pudieron traer tus conversaciones.</div>';
+    return;
+  }
+  if (!CONVS.length) {
+    $('#bandeja .lista').innerHTML = '<div class="vacio">Ninguna conversación todavía.</div>';
+    return;
+  }
   $('#bandeja .lista').innerHTML = CONVS.map(function(c){
     return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="abrirConv('+c.id+')">'
       + '<span class="ini">'+esc(c.nom[0])
@@ -1320,6 +1347,10 @@ var PULSO = [
 function pintarPulso(){
   var host = document.getElementById('pulso-lista');
   if (!host) return;
+  // Con datos reales el Pulso se calcula de ellos. Con ejemplos, se usa la
+  // lista fija: así se puede revisar el diseño sin cuenta.
+  var tarjetas = (typeof MODO !== 'undefined' && MODO === 'real') ? pulsoDeDatos() : PULSO;
+  if (tarjetas !== PULSO) { return pintarTarjetas(host, tarjetas); }
   // Un Pulso vacío es una buena noticia y hay que decirlo así, no dejar un
   // hueco en blanco que parece que no cargó.
   host.innerHTML = PULSO.length ? PULSO.map(function(c,i){
@@ -1445,7 +1476,164 @@ function leerAvisos(){
   toque(12); cerrarSheet(); pintarPulso();
 }
 
+// El Pulso calculado de los datos de verdad. Las mismas reglas que la web:
+// leads sin tocar hace más de 3 días, y los que entraron hoy.
+function pulsoDeDatos(){
+  var cards = [];
+  var leads = (typeof LEADS !== 'undefined' && LEADS) ? LEADS : [];
+  var sinContactar = leads.filter(function(l){ return l.etapa === 'nuevo'; });
+  var vencidas = (typeof TAREAS !== 'undefined' && TAREAS)
+    ? TAREAS.filter(function(t){ return t.cuando === 'vencida' && !t.hecha; }) : [];
+  if (vencidas.length) {
+    cards.push({tono:'warn',
+      t: vencidas.length === 1 ? '1 tarea vencida' : vencidas.length + ' tareas vencidas',
+      b: 'Empieza por «' + vencidas[0].t + '».',
+      cta:'Ver tareas', ir:function(){ verMod('crm'); verSub('crm','tareas'); }});
+  }
+  if (sinContactar.length) {
+    cards.push({tono:'info',
+      t: sinContactar.length === 1 ? '1 lead sin contactar' : sinContactar.length + ' leads sin contactar',
+      b: sinContactar.slice(0,2).map(function(l){ return l.nom; }).join(', ')
+        + (sinContactar.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
+      cta:'Ver esos leads', ir:function(){ verMod('crm'); filtrar('nuevo'); }});
+  }
+  var sinLeer = (typeof CONVS !== 'undefined' && CONVS)
+    ? CONVS.filter(function(c){ return c.nolei > 0; }) : [];
+  if (sinLeer.length) {
+    cards.push({tono:'warn', t: sinLeer.length + ' conversaciones sin leer',
+      b: 'La más reciente, de ' + sinLeer[0].nom + '.',
+      cta:'Abrir la bandeja', ir:function(){ verMod('chats'); }});
+  }
+  return cards;
+}
+function pintarTarjetas(host, cards){
+  // Un Pulso vacío con datos REALES es una buena noticia. Con datos que no se
+  // pudieron traer sería una mentira, y por eso ese caso lo dice el aviso de
+  // arriba y no esta función.
+  host.innerHTML = cards.length ? cards.map(function(c,i){
+    PULSO[i] = c;
+    return '<div class="pcard '+c.tono+'">'
+      + '<div class="pt">'+esc(c.t)+'</div><div class="pb">'+esc(c.b)+'</div>'
+      + '<button class="pa" onclick="pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button></div>';
+  }).join('') : '<div class="pulso-vacio">Todo en orden por ahora.<br>Nada pide tu atención hoy.</div>';
+}
+
+// ── Datos reales ────────────────────────────────────────────────────────────
+//
+// Hasta aquí el boceto dibujaba con ejemplos. Esto lo enchufa a la cuenta de
+// quien entra, usando `movil-datos.js` para traducir.
+//
+// La regla que manda sobre todo lo demás: NUNCA se hace pasar un dato de
+// ejemplo por uno real. Si no hay sesión, se dice y se sigue con los ejemplos
+// para poder revisar el diseño. Si hay sesión pero la consulta falla, NO se
+// cae de vuelta a los ejemplos: se dice que no se pudo mirar. Rellenar un
+// hueco con datos inventados es la peor forma posible de fallar en un CRM.
+
+var MODO = 'ejemplo';   // 'ejemplo' | 'cargando' | 'real' | 'fallo'
+var DATOS = null;
+
+function pintarModo(){
+  var av = document.querySelector('#inicio .aviso');
+  if (!av) return;
+  if (MODO === 'ejemplo') {
+    av.className = 'aviso';
+    av.innerHTML = 'Boceto con datos de ejemplo. Entra con tu cuenta para ver los tuyos.';
+  } else if (MODO === 'cargando') {
+    av.className = 'aviso';
+    av.innerHTML = 'Trayendo tus datos…';
+  } else if (MODO === 'fallo') {
+    // Ni ejemplos ni ceros: se dice lo que pasó y se ofrece reintentar.
+    av.className = 'aviso';
+    av.style.background = '#FFF3E0'; av.style.color = '#B26A00';
+    av.innerHTML = 'No se pudieron traer tus datos. Lo que ves abajo puede estar incompleto. '
+      + '<button class="rapida" style="margin-top:6px" onclick="cargarReales()">Reintentar</button>';
+  } else {
+    av.remove();   // con datos reales el aviso sobra
+  }
+}
+
+// Una pantalla sin datos tiene que distinguir «no tienes» de «no se pudo
+// mirar». La capa de datos ya devuelve null para lo segundo; aquí se pinta.
+function vacioODuda(lista, hayTexto, noSePudo){
+  return lista === null
+    ? '<div class="vacio">' + esc(noSePudo) + '</div>'
+    : '<div class="vacio">' + esc(hayTexto) + '</div>';
+}
+
+async function cargarReales(){
+  if (typeof fetchAuth !== 'function') { MODO = 'ejemplo'; pintarModo(); return; }
+  MODO = 'cargando'; pintarModo();
+  var d;
+  try {
+    // Relativo, no absoluto: con '/movil-datos.js' la ruta apunta a la raíz
+    // del sitio, que es correcto al servirlo pero imposible de abrir desde un
+    // fichero local. Y probar el boceto en local es medio trabajo.
+    var mod = await import('./movil-datos.js');
+    d = await mod.cargarTodo(fetchAuth);
+  } catch (e) {
+    console.warn('movil: no se pudo cargar', e);
+    MODO = 'fallo'; pintarModo(); return;
+  }
+  DATOS = d;
+  // Si TODO vino null, la cuenta no respondió: no es que esté vacía.
+  if (d.leads === null && d.tareas === null && d.convs === null) {
+    MODO = 'fallo'; pintarModo(); return;
+  }
+  // Lo que sí llegó sustituye a los ejemplos; lo que no, se queda en null y
+  // cada pantalla lo dirá. Nunca se mezclan ejemplos con datos reales: media
+  // pantalla verdadera y media inventada es peor que ninguna.
+  if (d.leads !== null) LEADS = d.leads;
+  if (d.tareas !== null) TAREAS = d.tareas;
+  if (d.citas !== null) CITAS = d.citas;
+  if (d.convs !== null) CONVS = d.convs;
+  MODO = 'real';
+  pintarModo();
+  repintarTodo();
+}
+
+function repintarTodo(){
+  pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
+  pintarConvs(); pintarBots(); pintarPulso();
+}
+
+// ── La sesión ───────────────────────────────────────────────────────────────
+// El boceto es una página suelta: no tiene el Clerk de la aplicación. Se carga
+// aquí con la MISMA clave publicable, para que la sesión sea la misma y no
+// haya que entrar dos veces.
+var clerkMovil = null;
+async function abrirSesion(){
+  try {
+    if (!window.Clerk) return false;
+    await window.Clerk.load();
+    clerkMovil = window.Clerk;
+    return !!clerkMovil.session;
+  } catch (e) { console.warn('movil: clerk', e); return false; }
+}
+
+// El mismo contrato que `fetchAuth` de app.js: devuelve la Response, no lanza
+// en 4xx. Quien llama decide, igual que en el resto del proyecto.
+async function fetchAuth(url, opts){
+  opts = opts || {};
+  var token = null;
+  try { token = clerkMovil && clerkMovil.session ? await clerkMovil.session.getToken() : null; } catch (e) {}
+  var headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  for (var k in (opts.headers || {})) headers[k] = opts.headers[k];
+  return fetch(url, Object.assign({}, opts, { headers: headers }));
+}
+
+async function arrancar(){
+  var hay = await abrirSesion();
+  if (!hay) { MODO = 'ejemplo'; pintarModo(); return; }
+  await cargarReales();
+}
+
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
 pintarConvs(); pintarBots(); pintarPulso(); pintarMarketing(); pintarMas();
 verMod('inicio');
+(function esperarClerk(intentos){
+  if (window.Clerk) { arrancar(); return; }
+  if (intentos > 40) { MODO = 'ejemplo'; pintarModo(); return; }
+  setTimeout(function(){ esperarClerk(intentos + 1); }, 150);
+})(0);
 </script><script>document.querySelector(".fab").innerHTML = icn("plus",26);</script></body></html>
