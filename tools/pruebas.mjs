@@ -91,8 +91,14 @@ function correr(fichero, dirEnv) {
 const { dir, cuantas } = await entorno();
 console.log(`  entorno: ${cuantas} variables\n`);
 
+// `pruebas/servidor-*.mjs` NO son pruebas: son servidores para mirar los
+// bancos en el navegador, y se quedan escuchando a propósito. La primera
+// versión del lanzador los ejecutaba y los cortaba por tiempo, así que la
+// batería salía con dos rojos permanentes que no significaban nada — y un
+// rojo que siempre está enseña a ignorar el rojo.
 const suites = readdirSync(join(RAIZ, 'pruebas'))
   .filter(f => f.endsWith('.mjs'))
+  .filter(f => !f.startsWith('servidor-'))
   .filter(f => !filtro || f.includes(filtro))
   .sort();
 
