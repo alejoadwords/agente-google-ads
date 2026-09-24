@@ -39077,6 +39077,7 @@ function lfQueFalta(l) {
               // nota antes de darla por cerrada.
               '<input type="checkbox" title="Cerrar la cita" ' +
                 'onchange="crmCitaCerrar(\'' + esc(c.id) + '\', this)">' +
+              '<span class="lf-ico">' + icn('calendar', 14) + '</span>' +
               '<div><div>' + esc(c.title || 'Cita') + '</div>' +
               '<div class="cuando">' +
                 (c.due_at ? esc(lfCuando(c.due_at)) : 'Sin fecha') +
