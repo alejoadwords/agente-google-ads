@@ -1,35 +1,18 @@
 // public/movil-app.js — la versión móvil de Acuarius.
 //
-// Una sola fuente, igual que el CSS: `movil.html` la usa para revisarla
-// suelta y `index.html` la carga cuando alguien enciende el interruptor.
+// Una sola fuente: `movil.html` la usa para revisarla suelta y `index.html` la
+// carga cuando alguien enciende el interruptor.
 //
-// No arranca sola. Quien la carga llama a `movilMontar()`, porque dentro de
-// la aplicación hay que decidir ANTES si toca mostrarla.
-const ICN_PATHS = {
-  alert:    '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
-  check:    '<path d="M22 11.1V12a10 10 0 11-5.9-9.1"/><path d="M22 4L12 14l-3-3"/>',
-  chart:    '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
-  trend:    '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
-  search:   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
-  refresh:  '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
-  sparkles: '<path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/>',
-  edit:     '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/>',
-  chat:     '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>',
-  gear:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
-  plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
-  file:     '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
-  bot:      '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4M8 4h8"/><circle cx="8.5" cy="13.5" r=".5" fill="currentColor"/><circle cx="15.5" cy="13.5" r=".5" fill="currentColor"/><path d="M9 17h6"/>',
-  users:    '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>',
-  arrow:    '<path d="M5 12h14M12 5l7 7-7 7"/>',
-  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-  bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
-  split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
-  star:     '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
-  tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
-  // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
-  // para que la ficha no tenga que repetir el SVG.
-  link:     '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
-};
+// TODO va dentro de una función. Cuando los dos guiones conviven en la misma
+// página, cualquier nombre repetido es un problema, y `const` repetido es
+// LETAL: el navegador lanza un error de sintaxis, el fichero entero no se
+// ejecuta y —como el modo móvil ya escondió la aplicación— la pantalla se
+// queda en blanco. Pasó con `ICN_PATHS`, que existe en los dos.
+//
+// Hacia fuera solo salen `movilMontar` y `M`, el objeto por el que pasan los
+// manejadores de los botones. Un solo nombre no puede chocar con los 1.960
+// globales de app.js.
+(function () {
 function icn(n,s){
   var p = ICN_PATHS[n] || ICN_PATHS.chart;
   return '<svg width="'+(s||20)+'" height="'+(s||20)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
@@ -103,7 +86,7 @@ function pintarFiltros(){
   $('#leads .filtros').innerHTML = f.map(function(x){
     var n = x.k==='todos' ? LEADS.length : LEADS.filter(function(l){return l.etapa===x.k;}).length;
     if (x.k!=='todos' && n===0) return '';
-    return '<button class="filtro" aria-pressed="'+(filtroEtapa===x.k)+'" onclick="filtrar(\''+x.k+'\')">'+esc(x.t)+' '+n+'</button>';
+    return '<button class="filtro" aria-pressed="'+(filtroEtapa===x.k)+'" onclick="M.filtrar(\''+x.k+'\')">'+esc(x.t)+' '+n+'</button>';
   }).join('');
 }
 function filtrar(k){ filtroEtapa = k; toque(); pintarFiltros(); pintarLeads(); }
@@ -118,7 +101,7 @@ function pintarLeads(){
   }
   var ls = leadsVisibles();
   $('#leads .lista').innerHTML = ls.length ? ls.map(function(l){
-    return '<button class="lead" onclick="abrirLead('+l.id+')">'
+    return '<button class="lead" onclick="M.abrirLead('+l.id+')">'
       + '<span class="ini">'+esc(l.nom[0])+'</span>'
       + '<span class="cuerpo"><span class="nom">'+esc(l.nom)+'</span>'
       + '<span class="meta">'+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
@@ -140,7 +123,7 @@ function pintarTareas(){
     if (!ts.length) return '';
     return '<div class="grupo'+(g[0]==='vencida'?' vence':'')+'">'+g[1]+' · '+ts.length+'</div>'
       + ts.map(function(x){
-          return '<div class="tarea'+(x.t.hecha?' hecha':'')+'" onclick="marcar('+x.i+',this)">'
+          return '<div class="tarea'+(x.t.hecha?' hecha':'')+'" onclick="M.marcar('+x.i+',this)">'
             + '<button class="tick" aria-label="Marcar">'+icn('check',16)+'</button>'
             + '<div><div class="tt">'+esc(x.t.t)+'</div><div class="tsub">'+esc(x.t.s)+'</div></div></div>';
         }).join('');
@@ -157,7 +140,7 @@ function pintarAgenda(){
     // La línea de «ahora» va justo antes de la primera cita que no ha pasado:
     // es lo que hace que se lea de un vistazo qué queda por delante.
     if (!c.pasada && (i===0 || CITAS[i-1].pasada)) html += '<div class="ahora">AHORA</div>';
-    html += '<button class="cita" onclick="toque()">'
+    html += '<button class="cita" onclick="M.toque()">'
       + '<span class="hora">'+esc(c.h)+'<span class="dur">'+esc(c.dur)+'</span></span>'
       + '<span><span class="qt">'+esc(c.t)+'</span><span class="qs">'+esc(c.s)+'</span></span></button>';
   }
@@ -183,12 +166,12 @@ function abrirLead(id){
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-lead';
   h.innerHTML =
-    '<div class="cab"><button class="volver" onclick="cerrarLead()">'+icn('arrow',24)+'</button>'
+    '<div class="cab"><button class="volver" onclick="M.cerrarLead()">'+icn('arrow',24)+'</button>'
     + '<div><h1>'+esc(l.nom)+'</h1><div class="sub">'+esc(l.origen)+' · '+esc(l.hace)+'</div></div></div>'
     + '<div class="acciones">'
-    + '<button class="acc pri" onclick="toque()">'+icn('chat',22)+'Llamar</button>'
-    + '<button class="acc" onclick="toque()">'+icn('chat',22)+'WhatsApp</button>'
-    + '<button class="acc" onclick="abrirNota()">'+icn('edit',22)+'Anotar</button></div>'
+    + '<button class="acc pri" onclick="M.toque()">'+icn('chat',22)+'Llamar</button>'
+    + '<button class="acc" onclick="M.toque()">'+icn('chat',22)+'WhatsApp</button>'
+    + '<button class="acc" onclick="M.abrirNota()">'+icn('edit',22)+'Anotar</button></div>'
     + '<div class="secc" id="ficha-cuerpo"></div>';
   movilRaiz().appendChild(h);
   pintarFicha();
@@ -223,12 +206,12 @@ function cerrarSheet(){
 }
 function abrirNota(){
   abrirSheet('<textarea placeholder="¿Qué pasó en la llamada?"></textarea>'
-    + '<button class="bbtn" onclick="cerrarSheet()">Guardar nota</button>');
+    + '<button class="bbtn" onclick="M.cerrarSheet()">Guardar nota</button>');
 }
 function abrirEtapas(){
   var l = leadAbierto; if (!l) return;
   abrirSheet(ETAPAS.map(function(e){
-    return '<button class="opcion" aria-current="'+(l.etapa===e.k)+'" onclick="ponerEtapa(\''+e.k+'\')">'
+    return '<button class="opcion" aria-current="'+(l.etapa===e.k)+'" onclick="M.ponerEtapa(\''+e.k+'\')">'
       + '<span class="chip '+e.k+'">'+esc(e.t)+'</span>'
       + '<span class="marca">'+icn('check',18)+'</span></button>';
   }).join(''));
@@ -242,7 +225,7 @@ function ponerEtapa(k){
 function nuevoLead(){
   abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Contacto nuevo</div>'
     + '<textarea placeholder="Nombre y teléfono"></textarea>'
-    + '<button class="bbtn" onclick="cerrarSheet()">Crear contacto</button>');
+    + '<button class="bbtn" onclick="M.cerrarSheet()">Crear contacto</button>');
 }
 
 
@@ -293,7 +276,7 @@ function pintarConvs(){
     return;
   }
   $('#bandeja .lista').innerHTML = CONVS.map(function(c){
-    return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="abrirConv('+c.id+')">'
+    return '<button class="conv'+(c.nolei?' nolei':'')+'" onclick="M.abrirConv('+c.id+')">'
       + '<span class="ini">'+esc(c.nom[0])
         + '<span class="canal '+c.canal+'">'+icn(ICONO_CANAL[c.canal]||'chat',10)+'</span></span>'
       + '<span class="cuerpo">'
@@ -318,10 +301,10 @@ function abrirConv(id){
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-conv';
   h.innerHTML =
-    '<div class="cab"><button class="volver" onclick="cerrarConv()">'+icn('arrow',24)+'</button>'
+    '<div class="cab"><button class="volver" onclick="M.cerrarConv()">'+icn('arrow',24)+'</button>'
     + '<div style="flex:1;min-width:0"><h1 style="font-size:var(--fs-md)">'+esc(c.nom)+'</h1>'
       + '<div class="sub">'+esc(c.canal)+' · '+(c.quien==='bot'?'lo atiende el agente':'lo atiendes tú')+'</div></div>'
-    + '<button class="volver" style="transform:none" onclick="abrirEstado()">'+icn('gear',22)+'</button></div>'
+    + '<button class="volver" style="transform:none" onclick="M.abrirEstado()">'+icn('gear',22)+'</button></div>'
     + (tieneVentana
        ? '<div class="ventana'+(dentro?' ok':'')+'">'
          + (dentro
@@ -338,16 +321,16 @@ function abrirConv(id){
     + '</div>'
     + '<div class="compositor">'
       + '<div class="modo">'
-        + '<button aria-pressed="'+dentro+'" onclick="ponerModo(false)"'+(dentro?'':' disabled')+'>Responder</button>'
-        + '<button class="es-nota" aria-pressed="'+(!dentro)+'" onclick="ponerModo(true)">Nota interna</button></div>'
+        + '<button aria-pressed="'+dentro+'" onclick="M.ponerModo(false)"'+(dentro?'':' disabled')+'>Responder</button>'
+        + '<button class="es-nota" aria-pressed="'+(!dentro)+'" onclick="M.ponerModo(true)">Nota interna</button></div>'
       + (dentro
          ? '<div class="rapidas">'+RAPIDAS.map(function(r){
-             return '<button class="rapida" onclick="meter(this.textContent)">'+esc(r)+'</button>';
+             return '<button class="rapida" onclick="M.meter(this.textContent)">'+esc(r)+'</button>';
            }).join('')+'</div>'
-         : '<button class="bbtn" style="margin:0 0 8px" onclick="abrirPlantillas()">Enviar una plantilla aprobada</button>')
+         : '<button class="bbtn" style="margin:0 0 8px" onclick="M.abrirPlantillas()">Enviar una plantilla aprobada</button>')
       + '<div class="escribir"><textarea id="redactar" rows="1" placeholder="'
         + (dentro ? 'Escribe un mensaje' : 'Nota interna: el cliente no la ve') + '"></textarea>'
-        + '<button class="enviar" onclick="enviarMsg()" aria-label="Enviar">'+icn('arrow',20)+'</button></div>'
+        + '<button class="enviar" onclick="M.enviarMsg()" aria-label="Enviar">'+icn('arrow',20)+'</button></div>'
     + '</div>';
   modoNota = !dentro;
   movilRaiz().appendChild(h);
@@ -394,14 +377,14 @@ function abrirPlantillas(){
     + '<div style="color:var(--muted);font-size:var(--fs-xs);margin-bottom:10px;line-height:1.5">'
     + 'Fuera de las 24 horas, es lo único que WhatsApp entrega.</div>'
     + ['Seguimiento de visita','Recordatorio de cita','Reactivación'].map(function(t){
-        return '<button class="opcion" onclick="cerrarSheet()">'+esc(t)+'</button>';
+        return '<button class="opcion" onclick="M.cerrarSheet()">'+esc(t)+'</button>';
       }).join(''));
 }
 function abrirEstado(){
   var c = convAbierta; if (!c) return;
   var ops = [['bot','Lo atiende el agente'],['human','Lo atiendo yo'],['resolved','Resuelta']];
   abrirSheet(ops.map(function(o){
-    return '<button class="opcion" aria-current="'+(c.quien===o[0])+'" onclick="ponerQuien(\''+o[0]+'\')">'
+    return '<button class="opcion" aria-current="'+(c.quien===o[0])+'" onclick="M.ponerQuien(\''+o[0]+'\')">'
       + esc(o[1]) + '<span class="marca">'+icn('check',18)+'</span></button>';
   }).join('')
   + '<div style="color:var(--muted);font-size:var(--fs-xs);padding:12px 4px 0;line-height:1.5">'
@@ -416,7 +399,7 @@ function ponerQuien(q){
 // ── Chatbots ────────────────────────────────────────────────────────────────
 function pintarBots(){
   $('#chatbots .lista').innerHTML = BOTS.map(function(b){
-    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="alternarBot('+b.id+',this)">'
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot('+b.id+',this)">'
       + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
         + '<div class="tsub">'+esc(b.canal)+'</div>'
         + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
@@ -432,12 +415,12 @@ function abrirBots_viejo(){
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-conv';
   h.innerHTML =
-    '<div class="cab"><button class="volver" onclick="cerrarConv()">'+icn('arrow',24)+'</button>'
+    '<div class="cab"><button class="volver" onclick="M.cerrarConv()">'+icn('arrow',24)+'</button>'
     + '<div><h1>Chatbots</h1><div class="sub">Quién contesta en cada canal</div></div></div>'
     + '<div class="lista" id="bots-lista"></div>';
   movilRaiz().appendChild(h);
   $('#bots-lista').innerHTML = BOTS.map(function(b){
-    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="alternarBot('+b.id+',this)">'
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot('+b.id+',this)">'
       + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
         + '<div class="tsub">'+esc(b.canal)+'</div>'
         + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
@@ -498,12 +481,12 @@ var RESERVAS = [
 function abrirMas(){
   var grupos = {};
   MODULOS.forEach(function(m){ (grupos[m.grupo] = grupos[m.grupo] || []).push(m); });
-  var html = '<div class="cab"><button class="volver" onclick="cerrarConv()">'+icn('arrow',24)+'</button>'
+  var html = '<div class="cab"><button class="volver" onclick="M.cerrarConv()">'+icn('arrow',24)+'</button>'
     + '<div><h1>Más</h1><div class="sub">Marketing y configuración</div></div></div>';
   Object.keys(grupos).forEach(function(g){
     html += '<div class="mgrupo">'+esc(g)+'</div>';
     html += grupos[g].map(function(m){
-      return '<button class="mfila" onclick="abrirModulo(\''+m.id+'\')">'
+      return '<button class="mfila" onclick="M.abrirModulo(\''+m.id+'\')">'
         + '<span class="micono">'+icn(m.icono,18)+'</span>'
         + '<span class="cuerpo"><span class="mt">'+esc(m.nom)+'</span><span class="ms">'+esc(m.sub)+'</span></span>'
         + '<span class="chev">'+icn('arrow',18)+'</span></button>';
@@ -526,7 +509,7 @@ function filaItem(x){
            + '<div class="bl"><i style="width:'+x.res[k]+'%"></i></div></div>';
     }).join('') + '</div>';
   }
-  return '<button class="item'+(x.on?' on':'')+'" onclick="toque()">'
+  return '<button class="item'+(x.on?' on':'')+'" onclick="M.toque()">'
     + '<span class="cuerpo"><span class="it">'+esc(x.nom)+'</span>'
       + '<span class="is">'+esc(x.sub)+'</span>'
       + (x.est ? '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span>' : '')
@@ -563,7 +546,7 @@ function abrirModulo(id){
     var t = TITULOS[id] || [id, ''];
     var hp = document.createElement('div');
     hp.className = 'hoja'; hp.id = 'hoja-mod';
-    hp.innerHTML = '<div class="cab"><button class="volver" onclick="cerrarModulo()">'+icn('arrow',24)+'</button>'
+    hp.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
       + '<div><h1>'+esc(t[0])+'</h1><div class="sub">'+esc(t[1])+'</div></div></div>'
       + PINTORES[id]();
     movilRaiz().appendChild(hp);
@@ -573,7 +556,7 @@ function abrirModulo(id){
   if (!M) return;
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-mod';
-  h.innerHTML = '<div class="cab"><button class="volver" onclick="cerrarModulo()">'+icn('arrow',24)+'</button>'
+  h.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
     + '<div><h1>'+esc(M.t)+'</h1><div class="sub">'+esc(M.s)+'</div></div></div>'
     // Se dice POR QUÉ no se edita aquí, no solo que no se puede: un «no
     // disponible» a secas se lee como que falta, no como que no tiene sentido.
@@ -688,7 +671,7 @@ var PINTORES = {
   },
   clientes: function(){
     return '<div class="lista">' + CARTERA.map(function(x){
-      return '<button class="item" onclick="toque()"><span class="cuerpo">'
+      return '<button class="item" onclick="M.toque()"><span class="cuerpo">'
         + '<span class="it">'+esc(x.nom)+'</span><span class="is">'+esc(x.sub)+'</span>'
         + '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span></span></button>';
     }).join('') + '</div>';
@@ -716,7 +699,7 @@ var PINTORES = {
   },
   academia: function(){
     return '<div class="lista">' + ACADEMIA.map(function(x){
-      return '<button class="video" onclick="toque()"><span class="play">'+icn('arrow',20)+'</span>'
+      return '<button class="video" onclick="M.toque()"><span class="play">'+icn('arrow',20)+'</span>'
         + '<span class="txt"><span class="vt">'+esc(x.t)+'</span>'
         + '<span class="vs">'+esc(x.s)+'</span></span></button>';
     }).join('') + '</div>';
@@ -749,7 +732,7 @@ var subActual = {crm:'leads', chats:'bandeja'};
 
 function pintarTabs(){
   $('.tabs').innerHTML = MODS.map(function(m){
-    return '<button class="tab" data-v="'+m.id+'" onclick="verMod(\''+m.id+'\')">'
+    return '<button class="tab" data-v="'+m.id+'" onclick="M.verMod(\''+m.id+'\')">'
          + icn(m.icono,22) + m.t + '</button>';
   }).join('');
 }
@@ -778,7 +761,7 @@ function pintarSubTabs(mod, sub){
   var cont = movilRaiz().querySelector('#sub-' + sub);
   if (!cont) return;
   cont.innerHTML = m.tabs.map(function(t){
-    return '<button class="subtab" aria-selected="'+(t[0]===sub)+'" onclick="verSub(\''+mod+'\',\''+t[0]+'\')">'
+    return '<button class="subtab" aria-selected="'+(t[0]===sub)+'" onclick="M.verSub(\''+mod+'\',\''+t[0]+'\')">'
          + esc(t[1]) + '</button>';
   }).join('');
 }
@@ -802,7 +785,7 @@ function pintarMenu(cont, ids){
     var m = null;
     for (var i=0;i<MODULOS.length;i++) if (MODULOS[i].id === id) m = MODULOS[i];
     if (!m) return '';
-    return '<button class="mfila" onclick="abrirModulo(\''+m.id+'\')">'
+    return '<button class="mfila" onclick="M.abrirModulo(\''+m.id+'\')">'
       + '<span class="micono">'+icn(m.icono,18)+'</span>'
       + '<span class="cuerpo"><span class="mt">'+esc(m.nom)+'</span><span class="ms">'+esc(m.sub)+'</span></span>'
       + '<span class="chev">'+icn('arrow',18)+'</span></button>';
@@ -858,7 +841,7 @@ function pintarPulso(){
     return '<div class="pcard '+c.tono+'">'
       + '<div class="pt">'+esc(c.t)+'</div>'
       + '<div class="pb">'+esc(c.b)+'</div>'
-      + '<button class="pa" onclick="pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button>'
+      + '<button class="pa" onclick="M.pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button>'
       + '</div>';
   }).join('') : '<div class="pulso-vacio">Todo en orden por ahora.<br>Nada pide tu atención hoy.</div>';
 }
@@ -887,7 +870,7 @@ function pintarEmbudoFicha(l){
   for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k === l.etapa) iActual = i;
   return '<div class="fem">' + ETAPAS.map(function(e,i){
     var cl = e.k === l.etapa ? 'actual' : (i < iActual ? 'hecho' : '');
-    return '<button class="fpaso '+cl+'" onclick="ponerEtapa(\''+e.k+'\')">'+esc(e.t)+'</button>';
+    return '<button class="fpaso '+cl+'" onclick="M.ponerEtapa(\''+e.k+'\')">'+esc(e.t)+'</button>';
   }).join('') + '</div>';
 }
 // Los mismos campos que «Quién es» en la web, y editables de un toque: en el
@@ -908,7 +891,7 @@ function fichaQuien(l){
   return '<div class="secc"><h2>Quién es</h2><div class="caja">'
     + campos.map(function(c){
         var vacio = !c[1];
-        return '<div class="fcampo" onclick="editarCampo(\''+esc(c[0])+'\')">'
+        return '<div class="fcampo" onclick="M.editarCampo(\''+esc(c[0])+'\')">'
           + '<span class="k">'+esc(c[0])+'</span>'
           + '<span class="v'+(vacio?' sindato':'')+'">'+esc(vacio ? 'Sin dato' : c[1])+'</span>'
           + '<span class="lapiz">'+icn('edit',14)+'</span></div>';
@@ -916,14 +899,14 @@ function fichaQuien(l){
     + '</div>'
     + '<h2>Etiquetas</h2><div class="caja"><div class="tags">'
       + l.tags.map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
-      + '<button class="tag" onclick="toque()" style="border-style:dashed;color:var(--blue)">+ etiqueta</button>'
+      + '<button class="tag" onclick="M.toque()" style="border-style:dashed;color:var(--blue)">+ etiqueta</button>'
     + '</div></div>'
     + '<h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div></div>';
 }
 function editarCampo(campo){
   abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">'+esc(campo)+'</div>'
     + '<textarea style="min-height:60px" placeholder="Escribe el nuevo valor"></textarea>'
-    + '<button class="bbtn" onclick="cerrarSheet()">Guardar</button>');
+    + '<button class="bbtn" onclick="M.cerrarSheet()">Guardar</button>');
 }
 function fichaPasado(l){
   return '<div class="secc"><h2>Todo lo que ha pasado</h2><div class="caja">'
@@ -970,7 +953,7 @@ function abrirAvisos(){
       }).join('')
     // Marcarlos leídos es una decisión, no un efecto de haber abierto la hoja:
     // quien la abre de paso no quiere perder el aviso.
-    + '<button class="bbtn" onclick="leerAvisos()">Marcar como leídos</button>');
+    + '<button class="bbtn" onclick="M.leerAvisos()">Marcar como leídos</button>');
 }
 function leerAvisos(){
   PULSO = PULSO.filter(function(c){ return c.t.indexOf('sin leer') < 0; });
@@ -1015,7 +998,7 @@ function pintarTarjetas(host, cards){
     PULSO[i] = c;
     return '<div class="pcard '+c.tono+'">'
       + '<div class="pt">'+esc(c.t)+'</div><div class="pb">'+esc(c.b)+'</div>'
-      + '<button class="pa" onclick="pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button></div>';
+      + '<button class="pa" onclick="M.pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button></div>';
   }).join('') : '<div class="pulso-vacio">Todo en orden por ahora.<br>Nada pide tu atención hoy.</div>';
 }
 
@@ -1047,7 +1030,7 @@ function pintarModo(){
     av.className = 'aviso';
     av.style.background = '#FFF3E0'; av.style.color = '#B26A00';
     av.innerHTML = 'No se pudieron traer tus datos. Lo que ves abajo puede estar incompleto. '
-      + '<button class="rapida" style="margin-top:6px" onclick="cargarReales()">Reintentar</button>';
+      + '<button class="rapida" style="margin-top:6px" onclick="M.cargarReales()">Reintentar</button>';
   } else {
     av.remove();   // con datos reales el aviso sobra
   }
@@ -1179,7 +1162,7 @@ var MOVIL_MARCA = `<div class="vista" id="inicio">
 <div class="vista" id="leads" hidden>
   <div class="cab"><div><h1>CRM</h1><div class="sub">6 contactos activos</div></div></div>
   <div class="subtabs" id="sub-leads"></div>
-  <div class="buscar"><input type="search" placeholder="Buscar contacto" oninput="buscar(this.value)" enterkeyhint="search"></div>
+  <div class="buscar"><input type="search" placeholder="Buscar contacto" oninput="M.buscar(this.value)" enterkeyhint="search"></div>
   <div class="filtros"></div>
   <div class="lista"></div>
 </div>
@@ -1218,7 +1201,7 @@ var MOVIL_MARCA = `<div class="vista" id="inicio">
   <div id="lista-mas"></div>
 </div>
 
-<button class="fab" onclick="nuevoLead()" aria-label="Contacto nuevo" hidden></button>
+<button class="fab" onclick="M.nuevoLead()" aria-label="Contacto nuevo" hidden></button>
 <nav class="tabs"></nav>`;
 
 // Dónde vive el móvil. Suelto es el <body>; dentro de la aplicación, su
@@ -1249,3 +1232,36 @@ function movilMontar(opciones){
     setTimeout(function(){ esperarClerk(intentos + 1); }, 150);
   })(0);
 }
+
+  // Lo único que sale al espacio global.
+  window.movilMontar = movilMontar;
+  window.M = {
+    abrirConv: abrirConv,
+    abrirEstado: abrirEstado,
+    abrirLead: abrirLead,
+    abrirModulo: abrirModulo,
+    abrirNota: abrirNota,
+    abrirPlantillas: abrirPlantillas,
+    alternarBot: alternarBot,
+    buscar: buscar,
+    cargarReales: cargarReales,
+    cerrarConv: cerrarConv,
+    cerrarLead: cerrarLead,
+    cerrarModulo: cerrarModulo,
+    cerrarSheet: cerrarSheet,
+    editarCampo: editarCampo,
+    enviarMsg: enviarMsg,
+    filtrar: filtrar,
+    leerAvisos: leerAvisos,
+    marcar: marcar,
+    meter: meter,
+    nuevoLead: nuevoLead,
+    ponerEtapa: ponerEtapa,
+    ponerModo: ponerModo,
+    ponerQuien: ponerQuien,
+    pulsoIr: pulsoIr,
+    toque: toque,
+    verMod: verMod,
+    verSub: verSub,
+  };
+})();

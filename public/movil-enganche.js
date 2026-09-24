@@ -45,11 +45,7 @@
       // que funciona. Quedarse en blanco por un fichero que no llegó es dejar
       // a alguien sin CRM en la calle.
       js.onerror = function () {
-        cargado = false;
-        apagar();
-        if (typeof showToast === 'function') {
-          showToast('No se pudo cargar la versión móvil. Seguimos con la de siempre.', 'error');
-        }
+        cargado = false;   // para poder reintentar
         falla(new Error('movil-app.js no cargó'));
       };
       document.body.appendChild(js);
@@ -57,17 +53,31 @@
   }
 
   function encender() {
-    recordar('si');
-    document.body.classList.add('modo-movil');
-    var host = document.getElementById('movil-host');
-    if (host) host.hidden = false;
+    // El orden importa y esto costó una pantalla en blanco: ANTES se escondía
+    // la aplicación y DESPUÉS se cargaba el móvil. Si la carga fallaba —o el
+    // fichero no llegaba a ejecutarse— quedaba todo escondido y nada montado.
+    //
+    // Ahora se esconde solo cuando el móvil está de verdad en pantalla. Si
+    // algo sale mal, lo peor que pasa es que siga viendo el de siempre.
     cargar().then(function () {
+      if (typeof window.movilMontar !== 'function') {
+        throw new Error('movil-app.js cargó pero no dejó movilMontar');
+      }
+      var host = document.getElementById('movil-host');
+      if (host) host.hidden = false;
       // Se le pasa el fetchAuth de la aplicación: la sesión ya está resuelta
       // aquí, y abrir una segunda con Clerk obligaría a entrar dos veces.
-      if (typeof movilMontar === 'function') {
-        movilMontar({ fetchAuth: typeof fetchAuth === 'function' ? fetchAuth : null });
+      window.movilMontar({ fetchAuth: typeof fetchAuth === 'function' ? fetchAuth : null });
+      // Y solo ahora se esconde la de escritorio.
+      document.body.classList.add('modo-movil');
+      recordar('si');
+    }).catch(function (e) {
+      apagar();
+      if (typeof console !== 'undefined') console.error('[movil] no se pudo encender:', e);
+      if (typeof showToast === 'function') {
+        showToast('No se pudo abrir la versión móvil. Seguimos con la de siempre.', 'error');
       }
-    }).catch(function () {});
+    });
   }
 
   function apagar() {

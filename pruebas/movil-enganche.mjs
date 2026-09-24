@@ -16,7 +16,7 @@ const chk = (n, ok, extra) => {
   if (!ok) fallos++;
 };
 
-function montar({ ancho = 375, guardado = null, cargaFalla = false } = {}) {
+function montar({ ancho = 375, guardado = null, cargaFalla = false, montajeFalla = false } = {}) {
   const almacen = { [ 'acuarius_movil' ]: guardado };
   const creados = [];
   const clases = new Set();
@@ -25,6 +25,8 @@ function montar({ ancho = 375, guardado = null, cargaFalla = false } = {}) {
       tag, id: '', rel: '', href: '', src: '', hidden: false, innerHTML: '',
       _oyentes: {},
       setAttribute() {}, appendChild() {}, remove() { e._quitado = true; },
+      set onload(f) { e._onload = f; if (e.src && !cargaFalla) setTimeout(f, 0); },
+      set onerror(f) { e._onerror = f; if (e.src && cargaFalla) setTimeout(f, 0); },
       addEventListener(n, f) { e._oyentes[n] = f; },
       // Los hijos de la franja: el fichero los busca dentro de ella.
       querySelector: (sel) => {
@@ -47,14 +49,18 @@ function montar({ ancho = 375, guardado = null, cargaFalla = false } = {}) {
     getElementById: (id) => porId[id] || null,
     addEventListener() {},
   };
+  const montado = { veces: 0, opciones: null };
   const win = {
     matchMedia: (q) => ({ matches: ancho <= Number((q.match(/(\d+)px/) || [])[1] || 0) }),
+    // Se simula que el fichero llegó y dejó su función, salvo que la prueba
+    // pida lo contrario.
+    movilMontar: (cargaFalla || montajeFalla) ? undefined : (o) => { montado.veces++; montado.opciones = o; },
   };
   const local = {
     getItem: (k) => (almacen[k] === undefined ? null : almacen[k]),
     setItem: (k, v) => { almacen[k] = v; },
   };
-  return { doc, win, local, clases, creados, porId, almacen, cargaFalla };
+  return { doc, win, local, clases, creados, porId, almacen, cargaFalla, montajeFalla, montado };
 }
 
 function correr(e) {
@@ -100,30 +106,51 @@ console.log('\nLa elección se recuerda\n');
 
   const e2 = montar({ ancho: 375, guardado: 'si' });
   correr(e2);
-  chk('a quien dijo que sí se le enciende sin preguntar',
-      !e2.creados.some((c) => c.id === 'movil-oferta') && e2.clases.has('modo-movil'));
+  await new Promise((r) => setTimeout(r, 5));
+  chk('a quien dijo que sí no se le pregunta', !e2.creados.some((c) => c.id === 'movil-oferta'));
   chk('y se carga el móvil', e2.creados.some((c) => c.src && c.src.includes('movil-app.js')));
   chk('con sus estilos', e2.creados.some((c) => c.href && c.href.includes('movil-app.css')));
+  chk('se monta una sola vez', e2.montado.veces === 1, String(e2.montado.veces));
+  chk('reutilizando el fetchAuth de la aplicación', e2.montado.opciones !== null);
 }
 
 console.log('\nApagarlo devuelve la aplicación de siempre\n');
 {
   const e = montar({ ancho: 375, guardado: 'si' });
   const api = correr(e);
-  chk('encendido marca el body', e.clases.has('modo-movil'));
+  await new Promise((r) => setTimeout(r, 5));
+  chk('encendido esconde la de escritorio', e.clases.has('modo-movil'));
   api.apagar();
   chk('apagado lo quita', !e.clases.has('modo-movil'));
   chk('y queda recordado', e.almacen['acuarius_movil'] === 'no');
 }
 
-console.log('\nSi el fichero no carga, no se queda en blanco\n');
+console.log('\nSi el fichero no carga, NO se queda en blanco\n');
 {
-  // Quedarse sin pantalla por un fichero que no llegó es dejar a alguien sin
-  // CRM en la calle. El responsive de siempre funciona: se vuelve a él.
-  const s = fuente;
-  chk('hay un onerror para el guion', /js\.onerror\s*=/.test(s));
-  chk('que apaga el modo móvil', /onerror[\s\S]{0,200}apagar\(\)/.test(s));
-  chk('y lo dice en vez de callar', /onerror[\s\S]{0,320}showToast/.test(s));
+  // Esto es lo que costó una pantalla en blanco: antes se escondía la
+  // aplicación y DESPUÉS se cargaba el móvil. Si la carga fallaba, quedaba
+  // todo escondido y nada montado.
+  const e = montar({ ancho: 375, guardado: 'si', cargaFalla: true });
+  correr(e);
+  await new Promise((r) => setTimeout(r, 5));
+  chk('la aplicación de siempre NO se esconde', !e.clases.has('modo-movil'));
+  chk('el contenedor del móvil queda oculto',
+      !e.creados.some((c) => c.id === 'movil-host' && c.hidden === false));
+  chk('y la elección vuelve a «no» para no repetir el fallo cada vez',
+      e.almacen['acuarius_movil'] === 'no', String(e.almacen['acuarius_movil']));
+  chk('se avisa en vez de callar', /showToast/.test(fuente));
+}
+{
+  // ESTE es el fallo que ocurrió de verdad: el fichero SÍ llegó —el <script>
+  // disparó su onload— pero al evaluarlo lanzó un error de sintaxis, así que
+  // no dejó `movilMontar`. El código viejo no lo trataba como error: un `if`
+  // que no hacía nada. La aplicación quedaba escondida y nada montado.
+  const e = montar({ ancho: 375, guardado: 'si', montajeFalla: true });
+  correr(e);
+  await new Promise((r) => setTimeout(r, 5));
+  chk('si el guion carga pero no deja movilMontar, NO se esconde la aplicación',
+      !e.clases.has('modo-movil'));
+  chk('y se registra el motivo en vez de callar', /console\.error\('\[movil\]/.test(fuente));
 }
 
 console.log('\nMientras está encendido, la de escritorio no sigue corriendo\n');
