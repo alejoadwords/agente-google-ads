@@ -98,7 +98,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   letter-spacing:.2px;background:var(--blue-lt);color:var(--blue);white-space:nowrap}
 .chip.nuevo{background:#E8F0FF;color:#1C4FD8}
 .chip.contactado{background:#FFF3E0;color:#B26A00}
+/* Cada etapa con su color: en la lista se lee el estado sin leer la palabra.
+   «Perdido» en azul parecía un estado bueno. */
+.chip.calificado{background:#EDE9FE;color:#5B21B6}
+.chip.propuesta{background:#E0F2FE;color:#0369A1}
 .chip.ganado{background:#E6F7EE;color:#0B7A43}
+.chip.perdido{background:var(--bg-subtle);color:var(--muted)}
 .acciones{display:flex;gap:10px;padding:14px 16px}
 .acc{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 8px;
   border-radius:var(--rlg);border:1px solid var(--border);background:var(--bg-card);color:var(--text);
@@ -141,23 +146,113 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .vacio{text-align:center;color:var(--muted);padding:48px 24px;font-size:var(--fs-md)}
 .aviso{margin:10px 12px;padding:10px 12px;border-radius:var(--rlg);background:var(--blue-lt);color:var(--blue);
   font-size:var(--fs-xs);line-height:1.5}
-</style></head><body><div class="vista" id="inicio" hidden>
-  <div class="cab"><div><h1>Hoy</h1><div class="sub">jueves 24 de septiembre</div></div></div>
-  <div class="secc"><h2>Tu día</h2><div class="caja"><b>2 leads</b> sin contactar &middot; <b>3 tareas</b> para hoy</div></div>
-</div>
-<div class="vista" id="leads">
-  <div class="cab"><div><h1>Mis leads</h1><div class="sub">5 activos &middot; 2 sin contactar</div></div></div>
+
+/* ── Inicio ── */
+.saludo{padding:16px 16px 4px}
+.saludo h1{margin:0;font-size:var(--fs-xl);font-weight:700;letter-spacing:-.5px}
+.saludo .sub{color:var(--muted);font-size:var(--fs-sm);margin-top:2px}
+.cifras{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:12px 16px 4px}
+.cifra{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:12px 10px;text-align:center}
+.cifra b{display:block;font-size:var(--fs-xl);font-weight:700;line-height:1.1;color:var(--blue)}
+.cifra span{display:block;color:var(--muted);font-size:10px;margin-top:3px;line-height:1.3}
+.cifra.urge b{color:var(--danger)}
+.cifra:active{background:var(--bg-subtle)}
+.siguiente{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--blue);
+  border:0;border-radius:var(--rlg);padding:14px;margin:4px 0 0;color:#fff;font:inherit}
+.siguiente:active{background:var(--blue-h);transform:scale(.985)}
+/* Los dos van en span porque el botón entero es el destino del toque, pero
+   tienen que apilarse: en línea se lee «LO SIGUIENTELlamar a…». */
+.siguiente > span{display:flex;flex-direction:column;min-width:0}
+.siguiente .q{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;opacity:.75}
+.siguiente .n{display:block;font-weight:700;font-size:var(--fs-md);margin-top:2px}
+.siguiente svg{margin-left:auto;flex:none;opacity:.9}
+
+/* ── Filtros y búsqueda ── */
+.buscar{padding:8px 12px 4px;position:sticky;top:0;z-index:9;background:var(--bg)}
+.buscar input{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:999px;
+  font:inherit;font-size:var(--fs-md);background:var(--bg-card);color:var(--text)}
+.filtros{display:flex;gap:7px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.filtros::-webkit-scrollbar{display:none}
+.filtro{flex:none;padding:7px 14px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);
+  color:var(--muted);font:inherit;font-size:var(--fs-xs);font-weight:600;white-space:nowrap}
+.filtro[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.filtro:active{transform:scale(.95)}
+
+/* ── Botón flotante ── */
+.fab{position:fixed;right:16px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:40;
+  width:54px;height:54px;border-radius:50%;border:0;background:var(--blue);color:#fff;
+  box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center}
+/* El atributo `hidden` vale display:none, pero lo pone la hoja del navegador
+   y cualquier `display` de una clase le gana. Sin esta línea el botón sale en
+   todas las pantallas. Lo mismo le pasa a .vista, que ya la tiene. */
+.fab[hidden]{display:none}
+.fab:active{background:var(--blue-h);transform:scale(.92)}
+.fab svg{width:26px;height:26px}
+
+/* ── Grupos de tareas ── */
+.grupo{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+  margin:16px 4px 8px;font-weight:700}
+.grupo.vence{color:var(--danger)}
+
+/* ── Agenda ── */
+.dia{display:flex;gap:12px;padding:0 12px 4px}
+.cita{display:flex;gap:12px;width:100%;text-align:left;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--rlg);padding:12px;margin-bottom:8px;font:inherit;color:inherit}
+.cita:active{background:var(--bg-subtle);transform:scale(.985)}
+.cita .hora{flex:none;width:52px;font-weight:700;color:var(--blue);font-size:var(--fs-md)}
+.cita .dur{display:block;color:var(--muted);font-size:10px;font-weight:600;margin-top:1px}
+.cita > span:last-child{display:flex;flex-direction:column;min-width:0}
+.cita .qt{display:block;font-weight:600;font-size:var(--fs-md)}
+.cita .qs{display:block;color:var(--muted);font-size:var(--fs-xs);margin-top:2px}
+.ahora{display:flex;align-items:center;gap:8px;padding:2px 12px 10px;color:var(--danger);font-size:10px;font-weight:700}
+.ahora::after{content:'';flex:1;height:1px;background:var(--danger);opacity:.35}
+
+/* ── Etiquetas y responsable en la ficha ── */
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{padding:3px 9px;border-radius:999px;background:var(--bg-subtle);border:1px solid var(--border);
+  font-size:10px;font-weight:600;color:var(--muted)}
+.fila{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;
+  border-bottom:1px solid var(--border)}
+.fila:last-child{border-bottom:0}
+.fila .k{color:var(--muted);font-size:var(--fs-sm)}
+.fila .v{font-weight:600;font-size:var(--fs-sm);text-align:right}
+.fila button.v{border:0;background:none;color:var(--blue);font:inherit;font-weight:600;padding:4px;margin:-4px}
+.opcion{display:flex;align-items:center;gap:10px;width:100%;padding:14px 4px;border:0;background:none;
+  border-bottom:1px solid var(--border);font:inherit;font-size:var(--fs-md);color:var(--text);text-align:left}
+.opcion:last-child{border-bottom:0}
+.opcion:active{background:var(--bg-subtle)}
+.opcion .marca{margin-left:auto;color:var(--blue);opacity:0}
+.opcion[aria-current="true"] .marca{opacity:1}
+</style></head><body><div class="vista" id="inicio">
+  <div class="saludo"><h1>Hola, Karen</h1><div class="sub">jueves 24 de septiembre</div></div>
   <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
+  <div class="cifras"></div>
+  <div class="secc"><div class="proxima"></div></div>
+</div>
+
+<div class="vista" id="leads" hidden>
+  <div class="cab"><div><h1>Contactos</h1><div class="sub">6 activos</div></div></div>
+  <div class="buscar"><input type="search" placeholder="Buscar contacto" oninput="buscar(this.value)" enterkeyhint="search"></div>
+  <div class="filtros"></div>
   <div class="lista"></div>
 </div>
+
 <div class="vista" id="tareas" hidden>
-  <div class="cab"><div><h1>Tareas</h1><div class="sub">3 para hoy</div></div></div>
+  <div class="cab"><div><h1>Tareas</h1><div class="sub">1 vencida &middot; 2 para hoy</div></div></div>
   <div class="lista"></div>
 </div>
+
+<div class="vista" id="agenda" hidden>
+  <div class="cab"><div><h1>Agenda</h1><div class="sub">jueves 24 &middot; 3 citas</div></div></div>
+  <div class="lista"></div>
+</div>
+
 <div class="vista" id="chats" hidden>
   <div class="cab"><div><h1>Conversaciones</h1></div></div>
-  <div class="vacio">Aqu&iacute; ir&aacute; la bandeja de WhatsApp, Instagram y el chat de la web.</div>
+  <div class="vacio">La bandeja de WhatsApp, Instagram y el chat de la web llega en la siguiente tanda.</div>
 </div>
+
+<button class="fab" onclick="nuevoLead()" aria-label="Contacto nuevo" hidden></button>
 <nav class="tabs"></nav><script>const ICN_PATHS = {
   alert:    '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   check:    '<path d="M22 11.1V12a10 10 0 11-5.9-9.1"/><path d="M22 4L12 14l-3-3"/>',
@@ -189,59 +284,156 @@ function icn(n,s){
 }
 var $ = function(s,r){ return (r||document).querySelector(s); };
 var esc = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+function toque(ms){ if (navigator.vibrate) navigator.vibrate(ms||8); }
 
+// ── Datos de ejemplo ────────────────────────────────────────────────────────
+// Inventados a propósito: aquí se decide la FORMA. Conectar los de verdad es
+// trabajo aparte y va después de aprobar el diseño — cambiar una pantalla es
+// barato, recablear veinte ya conectadas no.
+var ETAPAS = [
+  {k:'nuevo',       t:'Nuevo'},
+  {k:'contactado',  t:'Contactado'},
+  {k:'calificado',  t:'Calificado'},
+  {k:'propuesta',   t:'Propuesta'},
+  {k:'ganado',      t:'Ganado'},
+  {k:'perdido',     t:'Perdido'}
+];
 var LEADS = [
-  {id:1,nom:'Hellen Marún',     etapa:'nuevo',      chip:'Nuevo',      hace:'hace 2 h', origen:'Formulario web', interes:'Apartamento 2 hab · Alto Prado'},
-  {id:2,nom:'Rubén Corro',      etapa:'contactado', chip:'Contactado', hace:'ayer',     origen:'Fincaraíz',      interes:'Local comercial · Centro'},
-  {id:3,nom:'Sandra Caro',      etapa:'contactado', chip:'Contactado', hace:'ayer',     origen:'Google Ads',     interes:'Casa 3 hab · Villa Campestre'},
-  {id:4,nom:'Giancarlo Armella',etapa:'ganado',     chip:'Ganado',     hace:'hace 3 d', origen:'Referido',       interes:'Oficina 80 m²'},
-  {id:5,nom:'Walter Peralta',   etapa:'nuevo',      chip:'Nuevo',      hace:'hace 5 h', origen:'Metrocuadrado',  interes:'Apartaestudio · Riomar'}
+  {id:1,nom:'Hellen Marún',     etapa:'nuevo',      hace:'hace 2 h', origen:'Formulario web', tel:'+57 300 412 8890',
+   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', resp:'Karen Acosta', tags:['arriendo','alto-prado']},
+  {id:2,nom:'Rubén Corro',      etapa:'contactado', hace:'ayer',     origen:'Fincaraíz',      tel:'+57 311 220 4417',
+   interes:'Local comercial · Centro', valor:'$ 180.000.000', resp:'Maira Ballesteros', tags:['venta']},
+  {id:3,nom:'Sandra Caro',      etapa:'contactado', hace:'ayer',     origen:'Google Ads',     tel:'+57 315 887 1120',
+   interes:'Casa 3 hab · Villa Campestre', valor:'$ 540.000.000', resp:'Karen Acosta', tags:['venta','urgente']},
+  {id:4,nom:'Giancarlo Armella',etapa:'ganado',     hace:'hace 3 d', origen:'Referido',       tel:'+57 320 559 3301',
+   interes:'Oficina 80 m²', valor:'$ 260.000.000', resp:'Maira Ballesteros', tags:['venta']},
+  {id:5,nom:'Walter Peralta',   etapa:'nuevo',      hace:'hace 5 h', origen:'Metrocuadrado',  tel:'+57 301 778 2245',
+   interes:'Apartaestudio · Riomar', valor:'$ 145.000.000', resp:'Sin asignar', tags:['arriendo']},
+  {id:6,nom:'Paula Restrepo',   etapa:'propuesta',  hace:'hace 1 d', origen:'Instagram',      tel:'+57 318 004 9912',
+   interes:'Penthouse · Buenavista', valor:'$ 890.000.000', resp:'Karen Acosta', tags:['venta','premium']}
 ];
 var HITOS = [['10:24','Llamada · no contestó'],['ayer','Le envié la ficha por WhatsApp'],['ayer','Entró por el formulario de la web']];
 var TAREAS = [
-  {t:'Llamar a Hellen Marún',      s:'Vence hoy · 11:00', hecha:false},
-  {t:'Enviar propuesta a Rubén',   s:'Vence hoy · 15:00', hecha:false},
-  {t:'Confirmar visita con Sandra',s:'Mañana · 09:30',    hecha:false},
-  {t:'Llamar a Walter',            s:'Hecha hoy · 08:10', hecha:true}
+  {t:'Llamar a Sandra Caro',        s:'Venció ayer · 16:00', cuando:'vencida', hecha:false},
+  {t:'Llamar a Hellen Marún',       s:'Hoy · 11:00',         cuando:'hoy',     hecha:false},
+  {t:'Enviar propuesta a Rubén',    s:'Hoy · 15:00',         cuando:'hoy',     hecha:false},
+  {t:'Confirmar visita con Paula',  s:'Mañana · 09:30',      cuando:'proxima', hecha:false},
+  {t:'Llamar a Walter',             s:'Hoy · 08:10',         cuando:'hoy',     hecha:true}
+];
+var CITAS = [
+  {h:'09:30', dur:'45 min', t:'Visita · Alto Prado',        s:'Hellen Marún',      pasada:true},
+  {h:'11:00', dur:'30 min', t:'Llamada de seguimiento',     s:'Rubén Corro',       pasada:false},
+  {h:'15:00', dur:'1 h',    t:'Presentación de propuesta',  s:'Paula Restrepo',    pasada:false}
 ];
 
-function pintarTabs(){
-  var t = [['inicio','Hoy','star'],['leads','Leads','users'],['tareas','Tareas','check'],['chats','Chats','chat']];
-  $('.tabs').innerHTML = t.map(function(x){
-    return '<button class="tab" data-v="'+x[0]+'" onclick="ver(\''+x[0]+'\')">'+icn(x[2],22)+x[1]+'</button>';
+var filtroEtapa = 'todos';
+var textoBusqueda = '';
+
+// ── Pintado ─────────────────────────────────────────────────────────────────
+function etiquetaEtapa(k){
+  for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k===k) return ETAPAS[i].t;
+  return k;
+}
+function leadsVisibles(){
+  return LEADS.filter(function(l){
+    if (filtroEtapa !== 'todos' && l.etapa !== filtroEtapa) return false;
+    if (!textoBusqueda) return true;
+    var q = textoBusqueda.toLowerCase();
+    return (l.nom+' '+l.origen+' '+l.interes).toLowerCase().indexOf(q) >= 0;
+  });
+}
+function pintarFiltros(){
+  var f = [{k:'todos',t:'Todos'}].concat(ETAPAS);
+  $('#leads .filtros').innerHTML = f.map(function(x){
+    var n = x.k==='todos' ? LEADS.length : LEADS.filter(function(l){return l.etapa===x.k;}).length;
+    if (x.k!=='todos' && n===0) return '';
+    return '<button class="filtro" aria-pressed="'+(filtroEtapa===x.k)+'" onclick="filtrar(\''+x.k+'\')">'+esc(x.t)+' '+n+'</button>';
   }).join('');
 }
+function filtrar(k){ filtroEtapa = k; toque(); pintarFiltros(); pintarLeads(); }
+function buscar(v){ textoBusqueda = v; pintarLeads(); }
+
 function pintarLeads(){
-  $('#leads .lista').innerHTML = LEADS.map(function(l){
+  var ls = leadsVisibles();
+  $('#leads .lista').innerHTML = ls.length ? ls.map(function(l){
     return '<button class="lead" onclick="abrirLead('+l.id+')">'
       + '<span class="ini">'+esc(l.nom[0])+'</span>'
       + '<span class="cuerpo"><span class="nom">'+esc(l.nom)+'</span>'
       + '<span class="meta">'+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
-      + '<span class="chip '+l.etapa+'">'+esc(l.chip)+'</span></button>';
-  }).join('');
+      + '<span class="chip '+l.etapa+'">'+esc(etiquetaEtapa(l.etapa))+'</span></button>';
+  }).join('') : '<div class="vacio">Ningún contacto con ese filtro.</div>';
 }
 function pintarTareas(){
-  $('#tareas .lista').innerHTML = TAREAS.map(function(t,i){
-    return '<div class="tarea'+(t.hecha?' hecha':'')+'" onclick="marcar('+i+',this)">'
-      + '<button class="tick" aria-label="Marcar">'+icn('check',16)+'</button>'
-      + '<div><div class="tt">'+esc(t.t)+'</div><div class="tsub">'+esc(t.s)+'</div></div></div>';
+  var grupos = [['vencida','Vencidas'],['hoy','Hoy'],['proxima','Próximas']];
+  $('#tareas .lista').innerHTML = grupos.map(function(g){
+    var ts = TAREAS.map(function(t,i){ return {t:t,i:i}; }).filter(function(x){ return x.t.cuando===g[0]; });
+    if (!ts.length) return '';
+    return '<div class="grupo'+(g[0]==='vencida'?' vence':'')+'">'+g[1]+' · '+ts.length+'</div>'
+      + ts.map(function(x){
+          return '<div class="tarea'+(x.t.hecha?' hecha':'')+'" onclick="marcar('+x.i+',this)">'
+            + '<button class="tick" aria-label="Marcar">'+icn('check',16)+'</button>'
+            + '<div><div class="tt">'+esc(x.t.t)+'</div><div class="tsub">'+esc(x.t.s)+'</div></div></div>';
+        }).join('');
   }).join('');
 }
+function pintarAgenda(){
+  var html = '';
+  for (var i=0;i<CITAS.length;i++){
+    var c = CITAS[i];
+    // La línea de «ahora» va justo antes de la primera cita que no ha pasado:
+    // es lo que hace que se lea de un vistazo qué queda por delante.
+    if (!c.pasada && (i===0 || CITAS[i-1].pasada)) html += '<div class="ahora">AHORA</div>';
+    html += '<button class="cita" onclick="toque()">'
+      + '<span class="hora">'+esc(c.h)+'<span class="dur">'+esc(c.dur)+'</span></span>'
+      + '<span><span class="qt">'+esc(c.t)+'</span><span class="qs">'+esc(c.s)+'</span></span></button>';
+  }
+  $('#agenda .lista').innerHTML = html || '<div class="vacio">Nada agendado para hoy.</div>';
+}
+function pintarInicio(){
+  var sinContactar = LEADS.filter(function(l){ return l.etapa==='nuevo'; }).length;
+  var hoy = TAREAS.filter(function(t){ return t.cuando==='hoy' && !t.hecha; }).length;
+  var vencidas = TAREAS.filter(function(t){ return t.cuando==='vencida' && !t.hecha; }).length;
+  var prox = LEADS.filter(function(l){ return l.etapa==='nuevo'; })[0];
+  $('#inicio .cifras').innerHTML =
+      '<button class="cifra" onclick="verLeads(\'nuevo\')"><b>'+sinContactar+'</b><span>sin contactar</span></button>'
+    + '<button class="cifra" onclick="ver(\'tareas\')"><b>'+hoy+'</b><span>tareas hoy</span></button>'
+    + '<button class="cifra'+(vencidas?' urge':'')+'" onclick="ver(\'tareas\')"><b>'+vencidas+'</b><span>vencidas</span></button>';
+  $('#inicio .proxima').innerHTML = prox
+    ? '<button class="siguiente" onclick="abrirLead('+prox.id+')">'
+      + '<span><span class="q">Lo siguiente</span><span class="n">Llamar a '+esc(prox.nom)+'</span></span>'
+      + icn('arrow',22)+'</button>'
+    : '';
+}
+function verLeads(etapa){ filtrar(etapa||'todos'); ver('leads'); }
+
 function marcar(i,el){
   TAREAS[i].hecha = !TAREAS[i].hecha;
   el.classList.toggle('hecha');
-  if (navigator.vibrate) navigator.vibrate(8);   // el toque se confirma en la mano
+  toque();
+  pintarInicio();
+}
+function pintarTabs(){
+  var t = [['inicio','Hoy','star'],['leads','Leads','users'],['tareas','Tareas','check'],['agenda','Agenda','calendar'],['chats','Chats','chat']];
+  $('.tabs').innerHTML = t.map(function(x){
+    return '<button class="tab" data-v="'+x[0]+'" onclick="ver(\''+x[0]+'\')">'+icn(x[2],22)+x[1]+'</button>';
+  }).join('');
 }
 function ver(id){
   var vs = document.querySelectorAll('.vista');
   for (var i=0;i<vs.length;i++) vs[i].hidden = vs[i].id !== id;
   var ts = document.querySelectorAll('.tab');
   for (var j=0;j<ts.length;j++) ts[j].setAttribute('aria-selected', String(ts[j].dataset.v === id));
+  var fab = $('.fab'); if (fab) fab.hidden = (id !== 'leads');
+  window.scrollTo(0,0);
 }
+
+// ── Ficha ───────────────────────────────────────────────────────────────────
+var leadAbierto = null;
 function abrirLead(id){
   var l = null;
   for (var i=0;i<LEADS.length;i++) if (LEADS[i].id===id) l = LEADS[i];
   if (!l) return;
+  leadAbierto = l;
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-lead';
   h.innerHTML =
@@ -251,32 +443,74 @@ function abrirLead(id){
     + '<button class="acc pri" onclick="toque()">'+icn('chat',22)+'Llamar</button>'
     + '<button class="acc" onclick="toque()">'+icn('chat',22)+'WhatsApp</button>'
     + '<button class="acc" onclick="abrirNota()">'+icn('edit',22)+'Anotar</button></div>'
-    + '<div class="secc"><h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div>'
-    + '<h2>Etapa</h2><div class="caja"><span class="chip '+l.etapa+'">'+esc(l.chip)+'</span></div>'
-    + '<h2>Últimos movimientos</h2><div class="caja">'
-    + HITOS.map(function(x){ return '<div class="hito"><span class="cuando">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>'; }).join('')
-    + '</div></div>';
+    + '<div class="secc" id="ficha-cuerpo"></div>';
   document.body.appendChild(h);
-  // El botón atrás del sistema la cierra, como en una app de verdad
-  history.pushState({hoja:1},'');
+  pintarFicha();
+  history.pushState({hoja:1},'');   // el botón atrás del sistema la cierra
+}
+function pintarFicha(){
+  var l = leadAbierto; if (!l || !$('#ficha-cuerpo')) return;
+  $('#ficha-cuerpo').innerHTML =
+      '<h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div>'
+    + '<h2>Detalles</h2><div class="caja">'
+      + '<div class="fila"><span class="k">Etapa</span>'
+        + '<button class="v" onclick="abrirEtapas()">'+esc(etiquetaEtapa(l.etapa))+' ›</button></div>'
+      + '<div class="fila"><span class="k">Valor</span><span class="v">'+esc(l.valor)+'</span></div>'
+      + '<div class="fila"><span class="k">Responsable</span><span class="v">'+esc(l.resp)+'</span></div>'
+      + '<div class="fila"><span class="k">Teléfono</span><span class="v">'+esc(l.tel)+'</span></div>'
+    + '</div>'
+    + '<h2>Etiquetas</h2><div class="caja"><div class="tags">'
+      + l.tags.map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
+    + '</div></div>'
+    + '<h2>Últimos movimientos</h2><div class="caja">'
+      + HITOS.map(function(x){ return '<div class="hito"><span class="cuando">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>'; }).join('')
+    + '</div>';
 }
 function cerrarLead(){
   var h = $('#hoja-lead'); if (!h) return;
   h.classList.add('saliendo');
   setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
+  leadAbierto = null;
 }
-window.addEventListener('popstate', function(){ if ($('#hoja-lead')) cerrarLead(); });
-function abrirNota(){
-  var f = document.createElement('div'); f.className='fondo'; f.id='fondo'; f.onclick = cerrarNota;
+window.addEventListener('popstate', function(){
+  if ($('#sheet')) { cerrarSheet(); return; }
+  if ($('#hoja-lead')) cerrarLead();
+});
+
+// ── Hojas desde abajo ───────────────────────────────────────────────────────
+function abrirSheet(html){
+  var f = document.createElement('div'); f.className='fondo'; f.id='fondo'; f.onclick = cerrarSheet;
   var s = document.createElement('div'); s.className='sheet'; s.id='sheet';
-  s.innerHTML = '<div class="asa"></div><textarea placeholder="¿Qué pasó en la llamada?"></textarea>'
-    + '<button class="bbtn" onclick="cerrarNota()">Guardar nota</button>';
+  s.innerHTML = '<div class="asa"></div>' + html;
   document.body.appendChild(f); document.body.appendChild(s);
 }
-function cerrarNota(){
+function cerrarSheet(){
   var f = $('#fondo'); if (f) f.remove();
   var s = $('#sheet'); if (s) s.remove();
 }
-function toque(){ if (navigator.vibrate) navigator.vibrate(8); }
-pintarTabs(); pintarLeads(); pintarTareas(); ver('leads');
-</script></body></html>
+function abrirNota(){
+  abrirSheet('<textarea placeholder="¿Qué pasó en la llamada?"></textarea>'
+    + '<button class="bbtn" onclick="cerrarSheet()">Guardar nota</button>');
+}
+function abrirEtapas(){
+  var l = leadAbierto; if (!l) return;
+  abrirSheet(ETAPAS.map(function(e){
+    return '<button class="opcion" aria-current="'+(l.etapa===e.k)+'" onclick="ponerEtapa(\''+e.k+'\')">'
+      + '<span class="chip '+e.k+'">'+esc(e.t)+'</span>'
+      + '<span class="marca">'+icn('check',18)+'</span></button>';
+  }).join(''));
+}
+function ponerEtapa(k){
+  if (!leadAbierto) return;
+  leadAbierto.etapa = k;
+  toque(12);
+  cerrarSheet(); pintarFicha(); pintarFiltros(); pintarLeads(); pintarInicio();
+}
+function nuevoLead(){
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Contacto nuevo</div>'
+    + '<textarea placeholder="Nombre y teléfono"></textarea>'
+    + '<button class="bbtn" onclick="cerrarSheet()">Crear contacto</button>');
+}
+
+pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda(); pintarInicio(); ver('inicio');
+</script><script>document.querySelector(".fab").innerHTML = icn("plus",26);</script></body></html>

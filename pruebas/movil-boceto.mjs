@@ -1,0 +1,92 @@
+// El boceto de la versión móvil: node pruebas/movil-boceto.mjs
+//
+// Todo lo que se comprueba aquí falla EN SILENCIO: un token inventado no
+// rompe, solo se ve mal; un icono que no existe cae en el de barras; una
+// etapa sin color se pinta azul y «Perdido» parece un estado bueno; y una
+// clase con `display` propio ignora el atributo `hidden` y sale en todas las
+// pantallas —que es justo lo que le pasó al botón de contacto nuevo—.
+
+import { readFileSync } from 'node:fs';
+
+const html = readFileSync(new URL('../public/movil.html', import.meta.url), 'utf8');
+const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+
+let fallos = 0;
+const chk = (n, ok, extra) => {
+  console.log(`  ${ok ? '✓' : '✗'} ${n}${extra && !ok ? ' → ' + extra : ''}`);
+  if (!ok) fallos++;
+};
+
+console.log('\nNada inventado: todo lo que usa existe\n');
+{
+  const tokens = [...new Set([...css.matchAll(/var\((--[\w-]+)\)/g)].map(m => m[1]))];
+  const faltan = tokens.filter(t => !new RegExp('\\' + t + '\\s*:').test(html));
+  chk(`los ${tokens.length} tokens existen`, faltan.length === 0, faltan.join(', '));
+
+  const iconos = [...new Set([...html.matchAll(/icn\(["'](\w[\w-]*)["']/g)].map(m => m[1]))];
+  const i = html.indexOf('const ICN_PATHS');
+  const catalogo = html.slice(i, html.indexOf('\n};', i));
+  const sin = iconos.filter(n => !new RegExp('^\\s*' + n + ':', 'm').test(catalogo));
+  chk(`los ${iconos.length} iconos existen`, sin.length === 0, sin.join(', '));
+}
+
+console.log('\nEs táctil, no de ratón\n');
+{
+  const reglas = css.split('\n').filter(l => l.includes(':hover') && !l.trim().startsWith('/*'));
+  // En un dedo no hay hover: el estado se queda pegado tras tocar.
+  chk('ni una regla :hover', reglas.length === 0, reglas.join(' | ').slice(0, 90));
+  chk('hay respuesta al tocar (:active)', (css.match(/:active/g) || []).length >= 8);
+  chk('nada de resaltado azul al tocar', /-webkit-tap-highlight-color:transparent/.test(css));
+  // Por debajo de 24px el dedo falla y hay que reintentar.
+  const tick = css.match(/\.tick\{[^}]*width:(\d+)px/);
+  chk('las casillas miden 24px o más', tick && Number(tick[1]) >= 24, tick ? tick[1] + 'px' : 'no encontrada');
+}
+
+console.log('\nCada etapa se distingue sin leer la palabra\n');
+{
+  // Solo del arreglo ETAPAS: 'todos' es la clave del filtro, no una etapa, y
+  // contarla hacía fallar la prueba por una etapa que no existe.
+  const bloque = html.slice(html.indexOf('var ETAPAS'), html.indexOf('];', html.indexOf('var ETAPAS')));
+  const etapas = [...new Set([...bloque.matchAll(/\{k:'(\w+)'/g)].map(m => m[1]))];
+  const sinColor = etapas.filter(e => !css.includes('.chip.' + e));
+  chk(`las ${etapas.length} etapas tienen color propio`, sinColor.length === 0, sinColor.join(', '));
+}
+
+console.log('\nLo que se esconde, se esconde de verdad\n');
+{
+  // El atributo `hidden` lo pone la hoja del navegador y cualquier `display`
+  // de una clase le gana. Sin su regla, el elemento sale siempre.
+  const conDisplay = [...css.matchAll(/\.([\w-]+)\{[^}]*display:(?:flex|grid|block)/g)].map(m => m[1]);
+  const marcadosHidden = [...new Set([...html.matchAll(/class="([\w-]+)"[^>]*\shidden/g)].map(m => m[1]))];
+  const sinRegla = marcadosHidden.filter(c => conDisplay.includes(c) && !css.includes('.' + c + '[hidden]'));
+  chk('toda clase con display propio que se esconde tiene su regla [hidden]',
+      sinRegla.length === 0, sinRegla.join(', '));
+}
+
+console.log('\nEl teléfono no es un escritorio pequeño\n');
+{
+  chk('respeta el notch y la barra inferior', (css.match(/safe-area-inset/g) || []).length >= 4);
+  chk('la barra de pestañas está abajo, al alcance del pulgar',
+      /\.tabs\{[^}]*position:fixed[^}]*bottom:0/.test(css));
+  chk('no se puede hacer zoom accidental al tocar dos veces', /maximum-scale=1/.test(html));
+  chk('el viewport cubre el notch', /viewport-fit=cover/.test(html));
+}
+
+console.log('\nCada pestaña lleva a una pantalla que existe\n');
+{
+  const tabs = [...html.matchAll(/\['(\w+)','[^']+','[\w-]+'\]/g)].map(m => m[1]);
+  const vistas = [...html.matchAll(/class="vista" id="(\w+)"/g)].map(m => m[1]);
+  const rotas = tabs.filter(t => !vistas.includes(t));
+  chk(`las ${tabs.length} pestañas tienen pantalla`, rotas.length === 0, rotas.join(', '));
+  chk('y no hay pantallas huérfanas sin pestaña',
+      vistas.every(v => tabs.includes(v)), vistas.filter(v => !tabs.includes(v)).join(', '));
+}
+
+console.log('\nSe avisa de que los datos no son reales\n');
+{
+  // Sin esto, alguien podría creer que está tocando su cartera de verdad.
+  chk('el aviso está a la vista', /Los datos son de ejemplo/.test(html));
+}
+
+console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
+process.exit(fallos ? 1 : 0);
