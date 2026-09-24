@@ -16,6 +16,12 @@ const css = readFileSync(new URL('../public/movil-app.css', import.meta.url), 'u
 const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
 const html = anfitrion + '\n' + css + '\n' + guion;
 
+// Lo que se comprueba es el CÓDIGO, nunca lo que uno escribió para
+// explicarlo. Cuatro aserciones de esta prueba se chocaron con el comentario
+// que describía el fallo que vigilaban, así que aquí hay un solo sitio.
+const soloCodigo = (t) => t.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+const guionSinComentarios = () => soloCodigo(guion);
+
 let fallos = 0;
 const chk = (n, ok, extra) => {
   console.log(`  ${ok ? '✓' : '✗'} ${n}${extra && !ok ? ' → ' + extra : ''}`);
@@ -245,6 +251,54 @@ console.log('\nEl Pulso dice lo mismo que la web\n');
   // Un lead con una tarea pendiente no está abandonado: alguien ya quedó en
   // hacer algo. La web lo tiene en cuenta y el móvil también.
   chk('no llama abandonado a quien tiene tarea pendiente', /conTarea\[l\.id\]/.test(guion));
+}
+
+console.log('\nLas tarjetas de pauta se REUTILIZAN, no se copian\n');
+{
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  // Copiar la detección de anomalías —CPA disparado, conversiones caídas,
+  // gasto disparado— sería garantizar que en un mes la web y el móvil digan
+  // cosas distintas sobre la misma cuenta.
+  chk('el móvil llama a las de app.js', /window\.pulsoGoogleCards/.test(guion) && /window\.pulsoMetaCards/.test(guion));
+  // «CPA disparado» aparece en los datos de EJEMPLO, y eso es legítimo. Lo
+  // que no puede haber es consulta ni cálculo propios: ahí es donde las dos
+  // versiones se separarían.
+  const codigo = guionSinComentarios();
+  chk('no consulta las cuentas de pauta por su cuenta',
+      !/\/api\/(google-ads|meta-ads|pauta)/.test(codigo));
+  // Buscar palabras sueltas como «promedio» o «delta» daba falsos positivos
+  // —una está en el texto de ejemplo y la otra es una clase del SEO—. Lo
+  // preciso: las tarjetas de pauta SALEN de app.js y solo se traducen.
+  const i2 = codigo.indexOf('function tarjetasDePauta');
+  const fn = codigo.slice(i2, codigo.indexOf('\n}', i2));
+  chk('las de pauta solo se traducen, no se fabrican',
+      /deLaWeb\(x\.c\)/.test(fn) && !/tono:\s*'/.test(fn), fn.slice(0, 70));
+  chk('existen en app.js', /async function pulsoGoogleCards/.test(app) && /async function pulsoMetaCards/.test(app));
+  // No basta con que existan: tienen que quedar en `window`. Declaradas dentro
+  // de un envoltorio seguirían compilando y el móvil no encontraría ninguna —
+  // sin error, sin tarjetas, sin que nadie se entere.
+  chk('y están en el nivel superior, así que window las ve',
+      app.split('\n').some((l) => /^async function pulsoGoogleCards/.test(l)) &&
+      app.split('\n').some((l) => /^async function pulsoMetaCards/.test(l)));
+  // El `act` de la web abre el chat del agente. En modo móvil el escritorio
+  // está oculto, así que ese botón no haría NADA al tocarlo: es justo el fallo
+  // que ya se reportó con los leads y los chats que no abrían.
+  chk('el botón no hereda la acción de escritorio, que aquí está oculta',
+      /m\.ir = /.test(fn) && /hojaPauta\(/.test(fn), fn.slice(-90));
+  chk('y lleva a una hoja que sí existe', /function hojaPauta\(/.test(guion));
+  chk('esa hoja se puede cerrar', /function hojaPauta\([\s\S]{0,700}M\.cerrarModulo\(\)/.test(guion));
+  // Suelto no existen: entonces no hay tarjetas de pauta y se nota, en vez de
+  // enseñar unas inventadas.
+  chk('si no están, devuelve vacío en vez de inventar',
+      /if \(!fuentes\.length\) return Promise\.resolve\(\[\]\)/.test(guion));
+  chk('una red caída no tumba a la otra ni al CRM',
+      /\.catch\(function\s*\(e\)\s*\{[\s\S]{0,160}return \[\];/.test(guion));
+  // El CRM se pinta ya y la pauta se añade cuando llegue: esperar a Google
+  // para enseñar a quién llamar es castigar a quien solo quiere eso.
+  chk('el CRM no espera a la red', /pintarTarjetas\(host, pulsoDeDatos\(\)\);[\s\S]{0,120}tarjetasDePauta\(\)/.test(guion));
+  // Con dos pintados, guardar las tarjetas encima de la lista de ejemplo
+  // hacía que un botón ejecutara la acción de otra tarjeta.
+  chk('los botones apuntan a la tarjeta que se ve', /PULSO_VISIBLE\[i\]/.test(guion));
 }
 
 console.log('\nNada se escapa del envoltorio\n');

@@ -895,10 +895,20 @@ function pintarPulso(){
   if (!host) return;
   // Con datos reales el Pulso se calcula de ellos. Con ejemplos, se usa la
   // lista fija: así se puede revisar el diseño sin cuenta.
-  var tarjetas = (typeof MODO !== 'undefined' && MODO === 'real') ? pulsoDeDatos() : PULSO;
-  if (tarjetas !== PULSO) { return pintarTarjetas(host, tarjetas); }
+  if (typeof MODO !== 'undefined' && MODO === 'real') {
+    // Primero lo del CRM, que ya está en memoria y se pinta al instante. Las
+    // de pauta llegan por red y se añaden cuando lleguen: hacer esperar el
+    // Pulso entero por una consulta a Google es castigar a quien solo quiere
+    // ver a quién llamar.
+    pintarTarjetas(host, pulsoDeDatos());
+    tarjetasDePauta().then(function(mas){
+      if (mas.length) pintarTarjetas(host, pulsoDeDatos().concat(mas));
+    });
+    return;
+  }
   // Un Pulso vacío es una buena noticia y hay que decirlo así, no dejar un
   // hueco en blanco que parece que no cargó.
+  PULSO_VISIBLE = PULSO.slice();
   host.innerHTML = PULSO.length ? PULSO.map(function(c,i){
     return '<div class="pcard '+c.tono+'">'
       + '<div class="pt">'+esc(c.t)+'</div>'
@@ -907,7 +917,12 @@ function pintarPulso(){
       + '</div>';
   }).join('') : '<div class="pulso-vacio">Todo en orden por ahora.<br>Nada pide tu atención hoy.</div>';
 }
-function pulsoIr(i){ toque(); var c = PULSO[i]; if (c && c.ir) c.ir(); }
+function pulsoIr(i){
+  toque();
+  // De lo que hay en pantalla, no de la lista de ejemplo.
+  var c = PULSO_VISIBLE[i] || PULSO[i];
+  if (c && c.ir) c.ir();
+}
 
 // ── Ficha: embudo y tres pestañas, como la web ──────────────────────────────
 // La ficha web tiene el embudo arriba y tres pestañas —«Quién es», «Qué ha
@@ -1076,12 +1091,83 @@ function pulsoDeDatos(){
   return cards;
 }
 
+// Las tarjetas de Google Ads y Meta.
+//
+// NO se reimplementan sus reglas. Dentro de la aplicación, app.js ya trae
+// `pulsoGoogleCards` y `pulsoMetaCards` con su detección de anomalías —CPA
+// disparado, conversiones caídas, gasto disparado— y sus avisos de conexión
+// caducada. Copiar todo eso aquí sería garantizar que dentro de un mes la web
+// y el móvil digan cosas distintas sobre la misma cuenta.
+//
+// Suelto, en movil.html, esas funciones no existen: entonces no hay tarjetas
+// de pauta, y se nota porque no aparecen. Mejor que enseñar unas inventadas.
+function tarjetasDePauta(){
+  var fuentes = [];
+  if (typeof window.pulsoGoogleCards === 'function') fuentes.push({ p: 'Google Ads', f: window.pulsoGoogleCards });
+  if (typeof window.pulsoMetaCards === 'function') fuentes.push({ p: 'Meta Ads', f: window.pulsoMetaCards });
+  if (!fuentes.length) return Promise.resolve([]);
+  return Promise.all(fuentes.map(function(s){
+    // Que una red falle no puede dejar sin Pulso a la otra ni al CRM.
+    return Promise.resolve().then(s.f).then(function(l){
+      return (l || []).map(function(c){ return { c: c, p: s.p }; });
+    }).catch(function(e){
+      console.warn('[movil] tarjetas de pauta:', e);
+      return [];
+    });
+  })).then(function(listas){
+    var fuera = [];
+    listas.forEach(function(l){ l.forEach(function(x){
+      var m = deLaWeb(x.c);
+      // El `act` de la web abre el chat del agente, que en modo móvil está
+      // oculto: el botón no haría NADA. Un botón que no hace nada es peor que
+      // no tenerlo, así que aquí lleva a donde sí hay algo que ver.
+      m.cta = 'Ver detalle';
+      m.ir = (function(c, p){ return function(){ hojaPauta(c, p); }; })(x.c, x.p);
+      fuera.push(m);
+    }); });
+    return fuera;
+  });
+}
+
+// El dato completo y dónde se sigue. No se promete lo que aquí no se puede
+// hacer: revisar la cuenta con el agente necesita la pantalla del computador.
+function hojaPauta(c, plataforma){
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = 'hoja-mod';
+  h.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
+    + '<div><h1>'+esc(c.title || 'Tu pauta')+'</h1><div class="sub">'+esc(plataforma || '')+'</div></div></div>'
+    + '<div class="lista"><div class="pcard warn"><div class="pb">'+esc(c.body || '')+'</div></div></div>'
+    + '<div class="solo-escritorio"><b>Se revisa desde el computador</b>'
+    + 'Para entrar a la cuenta y decirte qué campaña lo explica, el agente necesita la pantalla completa. '
+    + 'Aquí tienes el dato a tiempo; el ajuste se hace allá.</div>';
+  movilRaiz().appendChild(h);
+  history.pushState({hoja:1},'');
+}
+
+// De la forma que usa la web a la del móvil. Una sola traducción, aquí.
+function deLaWeb(c){
+  return {
+    tono: c.tone === 'good' ? 'good' : c.tone === 'info' ? 'info' : 'warn',
+    t: c.title || '',
+    b: c.body || '',
+    // «Investigar con el agente →» ya trae su flecha; aquí la pone el icono.
+    cta: String(c.actLabel || 'Ver').replace(/\s*→\s*$/, ''),
+    ir: typeof c.act === 'function' ? c.act : function(){},
+  };
+}
+
+// Las que están AHORA en pantalla. Antes se guardaban encima de la lista de
+// ejemplo, y con el pintado en dos fases —primero el CRM, luego la pauta— los
+// índices se pisaban: el botón de una tarjeta acababa ejecutando la acción de
+// otra. Un botón que hace lo que no dice es peor que uno que no hace nada.
+var PULSO_VISIBLE = [];
+
 function pintarTarjetas(host, cards){
   // Un Pulso vacío con datos REALES es una buena noticia. Con datos que no se
   // pudieron traer sería una mentira, y por eso ese caso lo dice el aviso de
   // arriba y no esta función.
+  PULSO_VISIBLE = cards.slice();
   host.innerHTML = cards.length ? cards.map(function(c,i){
-    PULSO[i] = c;
     return '<div class="pcard '+c.tono+'">'
       + '<div class="pt">'+esc(c.t)+'</div><div class="pb">'+esc(c.b)+'</div>'
       + '<button class="pa" onclick="M.pulsoIr('+i+')">'+esc(c.cta)+icn('arrow',14)+'</button></div>';
