@@ -205,6 +205,20 @@ console.log('\nCon datos reales, nada de ejemplo se cuela\n');
   }
 }
 
+console.log('\nLa cabecera no afirma números que nadie pudo contar\n');
+{
+  // Los subtítulos estaban escritos a mano en el HTML. Con datos reales
+  // mentían: la cabecera decía «1 vencida · 2 para hoy» mientras el cuerpo
+  // decía que no se pudieron traer las tareas.
+  const i = html.indexOf('function pintarSubtitulos');
+  chk('los subtítulos se calculan', i > 0);
+  const fn = html.slice(i, html.indexOf('\n}\n', i));
+  chk('y dicen «no se pudo» cuando no se pudo', (fn.match(/no se pud(?:o|ieron)/g) || []).length >= 4,
+      String((fn.match(/no se pudi?o/g) || []).length));
+  chk('se repintan al cargar datos reales',
+      /pintarSubtitulos\(\);/.test(html.slice(html.indexOf('function repintarTodo'), html.indexOf('function repintarTodo') + 260)));
+}
+
 console.log('\nSe avisa de que los datos no son reales\n');
 {
   // Sin esto, alguien podría creer que está tocando su cartera de verdad.

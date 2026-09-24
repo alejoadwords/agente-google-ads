@@ -1599,7 +1599,7 @@ async function cargarReales(){
 
 function repintarTodo(){
   pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
-  pintarConvs(); pintarBots(); pintarPulso();
+  pintarConvs(); pintarBots(); pintarPulso(); pintarSubtitulos();
 }
 
 // ── La sesión ───────────────────────────────────────────────────────────────
@@ -1632,6 +1632,39 @@ async function arrancar(){
   var hay = await abrirSesion();
   if (!hay) { MODO = 'ejemplo'; pintarModo(); return; }
   await cargarReales();
+}
+
+// Los subtítulos de cada cabecera, calculados.
+//
+// Estaban escritos a mano en el HTML, y con datos reales mentían: la cabecera
+// decía «1 vencida · 2 para hoy» mientras el cuerpo decía que no se pudieron
+// traer las tareas. Una cabecera que afirma un número que nadie pudo contar es
+// la misma mentira que una lista vacía haciéndose pasar por «no hay».
+function pintarSubtitulos(){
+  var s = function(id, txt){
+    var v = document.getElementById(id);
+    if (!v) return;
+    var sub = v.querySelector('.cab .sub');
+    if (sub) sub.textContent = txt;
+  };
+  var cuenta = function(lista, uno, varios, noSePudo){
+    if (lista === null) return noSePudo;
+    if (!lista.length) return varios.replace('{n}', '0');
+    return (lista.length === 1 ? uno : varios).replace('{n}', lista.length);
+  };
+  s('leads', cuenta(LEADS, '1 contacto', '{n} contactos', 'no se pudieron traer'));
+  s('tareas', TAREAS === null ? 'no se pudieron traer' : (function(){
+    var v = TAREAS.filter(function(t){ return t.cuando === 'vencida' && !t.hecha; }).length;
+    var h = TAREAS.filter(function(t){ return t.cuando === 'hoy' && !t.hecha; }).length;
+    if (!v && !h) return 'nada pendiente hoy';
+    return (v ? v + (v === 1 ? ' vencida' : ' vencidas') : '') + (v && h ? ' · ' : '')
+         + (h ? h + ' para hoy' : '');
+  })());
+  s('agenda', cuenta(CITAS, '1 cita', '{n} citas', 'no se pudo traer'));
+  s('bandeja', CONVS === null ? 'no se pudieron traer' : (function(){
+    var n = CONVS.filter(function(c){ return c.nolei > 0; }).length;
+    return n ? n + (n === 1 ? ' sin leer' : ' sin leer') : 'todo leído';
+  })());
 }
 
 pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
