@@ -210,7 +210,15 @@ async function manejarGet(url, neg) {
   if (!puede.length) return jsonResp({ error: 'Nadie presta ese servicio ahora mismo' }, 404);
 
   // El techo de la ventana: ni un día más de lo que el negocio permite.
+  //
+  // Se guarda como DÍA LOCAL del negocio, no como instante. Antes se comparaba
+  // `new Date(d.dia) <= tope`, y `d.dia` es un día suelto («2026-11-23»): eso
+  // lo interpreta como medianoche UTC, cinco horas antes de que empiece de
+  // verdad en Colombia. El resultado era que, según la hora a la que alguien
+  // abriera la página, se ofrecía un día MÁS del máximo configurado. Comparar
+  // dos cadenas de día no depende de la hora ni de la zona de quien mira.
   const tope = new Date(ahora.getTime() + ((neg.antelacion_max_dias | 0) || 60) * 86400000);
+  const topeDia = diaLocal(zona, tope);
 
   if (quiereDias) {
     const desde = url.searchParams.get('desde') || diaLocal(zona, ahora);
@@ -224,7 +232,7 @@ async function manejarGet(url, neg) {
     const dias = (porRecurso[0] || []).map((d, i) => ({
       dia: d.dia,
       cerrado: porRecurso.every(p => p[i] && p[i].cerrado),
-      cupo: porRecurso.some(p => p[i] && p[i].cupo) && new Date(d.dia) <= tope,
+      cupo: porRecurso.some(p => p[i] && p[i].cupo) && d.dia <= topeDia,
     }));
     return jsonResp({ negocio, dias });
   }
