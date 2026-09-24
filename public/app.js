@@ -24684,6 +24684,22 @@ function pulsoReconnectCard(platform) {
   };
 }
 
+// No es lo mismo que el token haya expirado que no tener permiso sobre esa
+// cuenta. Enseñar «conexión expirada» cuando el problema es el identificador
+// manda al usuario a reconectar una y otra vez sin que cambie nada: el Google
+// que conectó, sencillamente, no alcanza esa cuenta.
+function pulsoSinPermisoCard(platform, cuantas) {
+  return {
+    tone: 'warn',
+    title: platform + ' · ' + (cuantas > 1 ? cuantas + ' cuentas fuera de tu alcance' : 'cuenta fuera de tu alcance'),
+    body: (cuantas > 1 ? 'Esas cuentas no están' : 'Esa cuenta no está') +
+          ' en el Google que tienes conectado. Revisa el identificador en la ficha del cliente, ' +
+          'o conecta el Google que sí tiene acceso.',
+    actLabel: 'Ver clientes →',
+    act: () => showView('agency'),
+  };
+}
+
 // Compara ayer vs el promedio de los 7 días previos. Devuelve la anomalía
 // más grave o null. days = [{date,cost,conversions,...}] orden ascendente.
 function pulsoDayVsAvg(days) {
@@ -25158,10 +25174,17 @@ async function pulsoAgencyAdsCards() {
   }));
   const cards = [];
   let totSpend = 0, totConv = 0, okCount = 0, needsReconnect = false;
+  let sinPermiso = 0;   // cuentas que el Google conectado no alcanza
   results.forEach(res => {
     if (res.status !== 'fulfilled') return;
     const { c, d, series } = res.value;
-    if (!d || d.error) { if (d && d.needsConnect) needsReconnect = true; return; }
+    if (!d || d.error) {
+      // «Sin permiso» y «token expirado» piden cosas distintas: una se
+      // arregla con el identificador del cliente y la otra reconectando.
+      if (d && d.sinPermiso) sinPermiso++;
+      else if (d && d.needsConnect) needsReconnect = true;
+      return;
+    }
     const cost = parseFloat(d.totalCost) || 0;
     const conv = parseFloat(d.conversions) || 0;
     // Semáforo automático: rojo = gasta sin convertir, verde = convierte,
@@ -25200,6 +25223,7 @@ async function pulsoAgencyAdsCards() {
       act: () => dashboardOpen(),
     });
   }
+  if (sinPermiso) cards.unshift(pulsoSinPermisoCard('Google Ads', sinPermiso));
   if (needsReconnect) cards.unshift(pulsoReconnectCard('Google Ads'));
   return cards;
 }

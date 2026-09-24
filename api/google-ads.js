@@ -300,12 +300,38 @@ function gaqlAuthError(data) {
   if (!data || !data.error) return null;
   const s = JSON.stringify(data.error);
   const isAuth = s.includes('UNAUTHENTICATED') || s.includes('"code":401') || data.error.code === 401;
-  return {
-    status: isAuth ? 401 : 502,
-    body: isAuth
-      ? { error: 'Token de Google Ads expirado. Reconecta tu cuenta.', needsConnect: true }
-      : { error: data.error.message || 'Error de Google Ads API' },
-  };
+  if (isAuth) {
+    return { status: 401, body: { error: 'Token de Google Ads expirado. Reconecta tu cuenta.', needsConnect: true } };
+  }
+
+  // «No tienes permiso sobre esa cuenta» NO es una avería: es que el Google
+  // conectado no alcanza ese identificador. Devolverlo como 502 lo convertía
+  // en un fallo del servidor, y el navegador —que sí reporta los 5xx— lo
+  // anotaba una y otra vez: 39 veces entre el 16 y el 24-09-2026, con el
+  // mensaje de Google en inglés y sin decirle al usuario qué hacer. El
+  // recuento hacía además que pareciera el problema más grave de la
+  // plataforma, tapando los que sí lo eran.
+  //
+  // Comprobado contra la API: de las cuentas que fallaban, las de una eran
+  // genuinamente inalcanzables con su Google y la de otra sí colgaba de uno de
+  // sus administradores. Las dos daban el mismo 502 indistinguible.
+  const sinPermiso = s.includes('PERMISSION_DENIED')
+    || s.includes('USER_PERMISSION_DENIED')
+    || /caller does not have permission/i.test(s)
+    || data.error.code === 403;
+  if (sinPermiso) {
+    return {
+      status: 403,
+      body: {
+        error: 'Esta cuenta de Google Ads no está en la cuenta de Google que conectaste. '
+             + 'Reconecta con el Google que tiene acceso, o corrige el identificador del cliente.',
+        needsConnect: true,
+        sinPermiso: true,
+      },
+    };
+  }
+
+  return { status: 502, body: { error: data.error.message || 'Error de Google Ads API' } };
 }
 
 function isTestAccessError(data) {
