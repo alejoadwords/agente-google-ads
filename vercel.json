@@ -23,16 +23,31 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "geolocation=(), camera=(), microphone=(self)" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), camera=(), microphone=(self)"
+        }
       ]
     },
     {
       "source": "/((?!form/|reservar/|cita/|p/|l/).*)",
       "headers": [
-        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self'" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self'"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        }
       ]
     }
   ],
@@ -154,6 +169,10 @@
     {
       "path": "/api/cron-errores",
       "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron-notas",
+      "schedule": "0 13,20 * * 1-5"
     }
   ]
 }

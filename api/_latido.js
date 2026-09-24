@@ -59,6 +59,7 @@ export const CADA = {
   'cron-automations': 10,
   'cron-campaigns': 10,
   'cron-errores': 60,
+  'cron-notas': 24 * 60,         // 0 13,20 * * 1-5
   'cron-recordatorios': 10,
   'cron-programados': 5,
   'cron-tasks': 24 * 60,         // 0 12 * * 1-5
@@ -88,7 +89,7 @@ export function callados(latidos, ahora = new Date()) {
   const porNombre = {};
   (latidos || []).forEach(l => { porNombre[l.cron] = l; });
   const finDeSemana = ahora.getUTCDay() === 0 || ahora.getUTCDay() === 6;
-  const soloEntreSemana = ['cron-tasks'];
+  const soloEntreSemana = ['cron-tasks', 'cron-notas'];
   const fuera = [];
   for (const [cron, minutos] of Object.entries(CADA)) {
     if (finDeSemana && soloEntreSemana.includes(cron)) continue;
