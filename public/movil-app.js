@@ -292,7 +292,12 @@ function marcar(i,el){
 var leadAbierto = null;
 function abrirLead(id){
   var l = null;
-  for (var i=0;i<LEADS.length;i++) if (LEADS[i].id===id) l = LEADS[i];
+  // Comparado como CADENA: el id llega del `onclick` y ahí todo es texto, así
+  // que un `===` contra un id numérico no casa NUNCA y el toque no abre nada,
+  // sin error y sin pista. Con leads de verdad los ids son UUID y colaba; con
+  // los del boceto —1, 2, 3— la ficha no abría. Es el mismo fallo que tuvo el
+  // interruptor de los agentes.
+  for (var i=0;i<LEADS.length;i++) if (String(LEADS[i].id) === String(id)) l = LEADS[i];
   if (!l) return;
   leadAbierto = l;
   var h = document.createElement('div');
@@ -475,7 +480,7 @@ function pintarConvs(){
 }
 function abrirConv(id){
   var c = null;
-  for (var i=0;i<CONVS.length;i++) if (CONVS[i].id===id) c = CONVS[i];
+  for (var i=0;i<CONVS.length;i++) if (String(CONVS[i].id) === String(id)) c = CONVS[i];
   if (!c) return;
   convAbierta = c; c.nolei = 0;
   var ms = MENSAJES[id] || [{de:'ellos', t:c.prev, h:c.cuando}];

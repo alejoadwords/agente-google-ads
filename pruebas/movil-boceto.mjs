@@ -301,6 +301,36 @@ console.log('\nLas tarjetas de pauta se REUTILIZAN, no se copian\n');
   chk('los botones apuntan a la tarjeta que se ve', /PULSO_VISIBLE\[i\]/.test(guion));
 }
 
+console.log('\nBuscar por id no puede depender del tipo\n');
+{
+  // El id sale del `onclick` del HTML, y ahí TODO es texto. Compararlo con
+  // `===` contra un id numérico no casa nunca: el toque no abre nada, sin
+  // error y sin pista. Con UUID colaba y con los del boceto no, así que el
+  // fallo solo se veía donde revisamos el diseño.
+  const codigo = guionSinComentarios();
+  // Solo las colecciones que vienen de la API: sus ids los pone el servidor.
+  // MODS y MODULOS son catálogos internos con ids de texto a los dos lados, y
+  // señalarlos era ruido que tapa el aviso de verdad.
+  const DE_LA_API = ['LEADS', 'CONVS', 'BOTS', 'PIPELINES'];
+  const malas = DE_LA_API.flatMap((c) =>
+    [...codigo.matchAll(new RegExp('^.*' + c + '\\[i\\]\\.id\\s*===\\s*id.*$', 'gm'))].map((m) => m[0].trim()));
+  chk('ningún buscador de datos compara el id con === a secas', malas.length === 0, malas.join(' | '));
+  chk('abrirLead compara como cadena',
+      /String\(LEADS\[i\]\.id\) === String\(id\)/.test(codigo));
+  chk('abrirConv también',
+      /String\(CONVS\[i\]\.id\) === String\(id\)/.test(codigo));
+  // Y los ids que se meten en un `onclick` van SIEMPRE entre comillas: sin
+  // ellas un UUID con guiones se convierte en una resta y el navegador no
+  // ejecuta nada.
+  // Solo los manejadores que reciben un ID. `marcar` y `pulsoIr` reciben un
+  // ÍNDICE —un número sin comillas es lo correcto ahí— y ese índice se guarda
+  // antes de filtrar, así que apunta a la tarea que se ve.
+  const POR_ID = ['abrirLead', 'abrirConv', 'alternarBot', 'alternarAuto', 'elegirTablero'];
+  const sinComillas = POR_ID.flatMap((h) =>
+    [...codigo.matchAll(new RegExp("M\\." + h + "\\('\\+[a-zA-Z.]+\\+'[,)]", 'g'))].map((m) => m[0]));
+  chk('los ids en los onclick van entre comillas', sinComillas.length === 0, sinComillas.join(' '));
+}
+
 console.log('\nNo se llama a nada que no exista\n');
 {
   // `pintarInicio()` no existió nunca, y aun así lo llamaban seis sitios: al
