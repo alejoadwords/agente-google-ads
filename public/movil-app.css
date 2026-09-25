@@ -550,3 +550,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   padding:5px 10px;border-radius:999px;margin-left:8px}
 .mas-h2:active{background:var(--blue-lt)}
 .mas-h2 svg{width:13px;height:13px}
+
+/* La casilla de «avisar al responsable»: toda la fila es tocable, que en un
+   teléfono un cuadrito de 13px no se acierta. */
+.casilla{display:flex;align-items:flex-start;gap:10px;margin-top:12px;padding:10px 2px;
+  font-size:var(--fs-sm);line-height:1.45;color:var(--text)}
+.casilla input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--blue)}
+.casilla b{font-weight:700}
+.casilla-nota{margin-top:12px;padding:10px 12px;border-radius:var(--rlg);background:var(--bg-subtle);
+  color:var(--muted);font-size:var(--fs-xs);line-height:1.5}

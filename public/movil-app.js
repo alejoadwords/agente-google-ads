@@ -150,18 +150,18 @@ var ETIQ_QUIEN = { bot:'Agente', human:'Tú', resolved:'Resuelta' };
 var DICE_QUIEN = { bot:'lo atiende el agente', human:'lo atiendes tú', resolved:'resuelta' };
 var LEADS = [
   {id:1,nom:'Hellen Marún',     etapa:'nuevo',      hace:'hace 2 h', origen:'Formulario web', tel:'+57 300 412 8890',
-   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', valorNum:320000000, resp:'Karen Acosta', tags:['arriendo','alto-prado'],
+   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', valorNum:320000000, resp:'Karen Acosta', respId:'u1', tags:['arriendo','alto-prado'],
    email:'hellen.marun@example.com', empresa:'', campana:'Search - general 2026', pagina:'Arriendos Envigado', cierre:'30 sep'},
   {id:2,nom:'Rubén Corro',      etapa:'contactado', hace:'ayer',     origen:'Fincaraíz',      tel:'+57 311 220 4417',
-   interes:'Local comercial · Centro', valor:'$ 180.000.000', valorNum:180000000, resp:'Maira Ballesteros', tags:['venta']},
+   interes:'Local comercial · Centro', valor:'$ 180.000.000', valorNum:180000000, resp:'Maira Ballesteros', respId:'u2', tags:['venta']},
   {id:3,nom:'Sandra Caro',      etapa:'contactado', hace:'ayer',     origen:'Google Ads',     tel:'+57 315 887 1120',
-   interes:'Casa 3 hab · Villa Campestre', valor:'$ 540.000.000', valorNum:540000000, resp:'Karen Acosta', tags:['venta','urgente']},
+   interes:'Casa 3 hab · Villa Campestre', valor:'$ 540.000.000', valorNum:540000000, resp:'Karen Acosta', respId:'u3', tags:['venta','urgente']},
   {id:4,nom:'Giancarlo Armella',etapa:'ganado',     hace:'hace 3 d', origen:'Referido',       tel:'+57 320 559 3301',
-   interes:'Oficina 80 m²', valor:'$ 260.000.000', valorNum:260000000, resp:'Maira Ballesteros', tags:['venta']},
+   interes:'Oficina 80 m²', valor:'$ 260.000.000', valorNum:260000000, resp:'Maira Ballesteros', respId:'u4', tags:['venta']},
   {id:5,nom:'Walter Peralta',   etapa:'nuevo',      hace:'hace 5 h', origen:'Metrocuadrado',  tel:'+57 301 778 2245',
-   interes:'Apartaestudio · Riomar', valor:'$ 145.000.000', valorNum:145000000, resp:'Sin asignar', tags:['arriendo']},
+   interes:'Apartaestudio · Riomar', valor:'$ 145.000.000', valorNum:145000000, resp:'Sin asignar', respId:'u5', tags:['arriendo']},
   {id:6,nom:'Paula Restrepo',   etapa:'propuesta',  hace:'hace 1 d', origen:'Instagram',      tel:'+57 318 004 9912',
-   interes:'Penthouse · Buenavista', valor:'$ 890.000.000', valorNum:890000000, resp:'Karen Acosta', tags:['venta','premium']}
+   interes:'Penthouse · Buenavista', valor:'$ 890.000.000', valorNum:890000000, resp:'Karen Acosta', respId:'u6', tags:['venta','premium']}
 ];
 var TAREAS = [
   {t:'Llamar a Sandra Caro',        cuando:'vencida', hecha:false},
@@ -378,9 +378,27 @@ function cerrarSheet(){
   var f = $('#fondo'); if (f) f.remove();
   var s = $('#sheet'); if (s) s.remove();
 }
-function abrirNota(){
+async function abrirNota(){
+  var l = leadAbierto;
   abrirSheet('<textarea id="sh-nota" placeholder="¿Qué pasó en la llamada?"></textarea>'
+    + '<div id="sh-avisar"></div>'
     + '<button class="bbtn" onclick="M.guardarNota()">Guardar nota</button>');
+
+  // La casilla de avisar solo para quien dirige. A un vendedor se le ofrecería
+  // mandarle un correo a sí mismo, y el servidor no lo haría igual.
+  var puede = false;
+  try {
+    puede = (typeof soyDireccion === 'function') ? await soyDireccion() : false;
+  } catch (e) { puede = false; }
+  var caja = $('#sh-avisar'); if (!caja || !l) return;   // la hoja pudo cerrarse
+  if (!puede) return;
+  // Se dice a quién va ANTES de escribir, no después: si el contacto no tiene
+  // responsable hay que enterarse ahora, no cuando ya se pulsó Guardar.
+  caja.innerHTML = l.respId
+    ? '<label class="casilla"><input type="checkbox" id="sh-avisar-ck" checked>'
+      + '<span>Avisar a <b>'+esc(l.resp)+'</b> por correo y en la campana</span></label>'
+    : '<div class="casilla-nota">Este contacto no tiene responsable, así que no hay a quién avisar. '
+      + 'La nota se guarda igual.</div>';
 }
 // Llamar y escribir por WhatsApp. Sin número no se abre nada roto: se dice.
 function telLimpio(){
@@ -701,10 +719,23 @@ async function guardarNota(){
   // Cerrar la hoja con la nota escrita y sin guardarla la pierde sin avisar.
   if (!texto) { chicharra('Escribe la nota antes de guardar.', 'mal'); return; }
   if (!l) { chicharra('No hay ningún contacto abierto.', 'mal'); return; }
+  var ck = $('#sh-avisar-ck');
+  var avisar = !!(ck && ck.checked && l.respId);
   var d = await guardar('/api/lead-activities',
-    { lead_id: l.id, type: 'nota', content: texto }, 'POST');
+    { lead_id: l.id, type: 'nota', content: texto, avisar: avisar }, 'POST');
   if (!d) return;   // el texto se queda en la hoja para reintentar
   cerrarSheet();
+  // Nunca decir «avisado» sin saberlo. El correo puede no salir —un buzón que
+  // rebota, el cupo del día— y la nota queda guardada igual: si se callara,
+  // quien la escribió se iría creyendo que el responsable ya se enteró.
+  if (avisar) {
+    if (d.aviso && d.aviso.enviado) {
+      chicharra('Guardada y avisado ' + (l.resp || 'el responsable') + '.', 'ok');
+    } else {
+      chicharra('La nota quedó guardada, pero el aviso no salió'
+        + ((d.aviso && d.aviso.motivo) ? ': ' + d.aviso.motivo : '.'), 'mal');
+    }
+  }
   // Tocar el lead: toda la inactividad del CRM cuelga de `updated_at`, y una
   // nota que no lo mueve deja al contacto marcado como abandonado.
   l.hace = 'ahora'; l.tocado = Date.now();

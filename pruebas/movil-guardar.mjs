@@ -235,6 +235,71 @@ console.log('\nEl mensaje no se borra de la caja hasta que sale\n');
       e.chicharras.some((x) => /ventana de 24/.test(x.txt)), JSON.stringify(e.chicharras.map((c) => c.txt)));
 }
 
+console.log('\nLa nota puede avisar al responsable\n');
+{
+  // Quien dirige deja una instrucción y al responsable le llega por correo y
+  // en la campana. Antes el móvil solo guardaba la nota: la dejaba escrita y
+  // nadie se enteraba.
+  const e = montar({ responde: { ok: true, datos: { aviso: { enviado: true } } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L8', resp: 'Maira', respId: 'u7' }));
+  const ta = e.plantar('#sh-nota'); ta.value = 'Llamarla hoy sin falta';
+  const ck = e.plantar('#sh-avisar-ck'); ck.checked = true;
+  g.__pruebas.modoReal();
+  await g.M.guardarNota();
+  await esperar();
+  const c = e.llamadas[0] || {};
+  chk('la nota va con la marca de avisar', c.cuerpo && c.cuerpo.avisar === true, JSON.stringify(c.cuerpo));
+  chk('y se confirma a quién se avisó',
+      e.chicharras.some((x) => /avisado Maira/.test(x.txt)), JSON.stringify(e.chicharras.map((x) => x.txt)));
+}
+{
+  // El caso que importa: la nota SE GUARDA pero el correo no sale —un buzón
+  // que rebota, el cupo del día—. Callarlo deja a quien la escribió creyendo
+  // que el responsable ya se enteró.
+  const e = montar({ responde: { ok: true, datos: { aviso: { enviado: false, motivo: 'buzón rebotado' } } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L8', resp: 'Maira', respId: 'u7' }));
+  e.plantar('#sh-nota').value = 'Ojo con este';
+  e.plantar('#sh-avisar-ck').checked = true;
+  g.__pruebas.modoReal();
+  await g.M.guardarNota();
+  await esperar();
+  chk('si el aviso no sale, se dice',
+      e.chicharras.some((x) => /el aviso no salió/.test(x.txt)), JSON.stringify(e.chicharras.map((x) => x.txt)));
+  chk('y se dice el motivo',
+      e.chicharras.some((x) => /buzón rebotado/.test(x.txt)));
+  chk('sin fingir que se avisó',
+      !e.chicharras.some((x) => /avisado Maira/.test(x.txt)));
+}
+{
+  // Sin responsable no hay a quién avisar: la marca no puede viajar en true o
+  // el servidor intentaría mandar un correo a nadie.
+  const e = montar({ responde: { ok: true, datos: {} } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L8', resp: 'Sin asignar', respId: null }));
+  e.plantar('#sh-nota').value = 'Nota suelta';
+  e.plantar('#sh-avisar-ck').checked = true;   // aunque alguien la marcara
+  g.__pruebas.modoReal();
+  await g.M.guardarNota();
+  await esperar();
+  chk('sin responsable no se pide aviso',
+      (e.llamadas[0] || {}).cuerpo.avisar === false, JSON.stringify((e.llamadas[0] || {}).cuerpo));
+}
+{
+  // La casilla solo para quien dirige: a un vendedor se le ofrecería mandarse
+  // un correo a sí mismo, y el servidor no lo haría igual.
+  const codigoMov = fuente.split('\n').filter((x) => !x.trim().startsWith('//')).join('\n');
+  const i = codigoMov.indexOf('async function abrirNota');
+  const fn = codigoMov.slice(i, codigoMov.indexOf('\n}', i));
+  chk('la casilla depende del permiso de dirección', /soyDireccion/.test(fn), fn.slice(0, 140));
+  // Y se dice a quién va ANTES de escribir, no después.
+  chk('sin responsable se avisa antes de escribir', /no tiene responsable/.test(fn));
+}
+
 console.log('\nReasignar un contacto\n');
 {
   const e = montar({ responde: { ok: true, datos: { lead: {} } } });
