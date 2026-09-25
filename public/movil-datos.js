@@ -116,8 +116,13 @@ export const esCita = (a) => !!a && a.type === 'meeting';
 
 export function aTarea(a, ahora = Date.now()) {
   const vence = a.due_at ? new Date(a.due_at).getTime() : null;
-  const hoy = new Date(ahora); hoy.setHours(23, 59, 59, 999);
-  const ayer = new Date(ahora); ayer.setHours(0, 0, 0, 0);
+  const finDeHoy = new Date(ahora); finDeHoy.setHours(23, 59, 59, 999);
+  // Se llamaba `ayer` y era el INICIO DE HOY: el nombre invitaba a «arreglarlo»
+  // restándole un día, y eso habría hecho que el móvil contara como vencido lo
+  // de esta mañana. Es el mismo corte que usa `api/agenda.js`: se compara el
+  // día, no el reloj. Una tarea puesta para hoy a las diez no está vencida a
+  // las once, y un contador siempre en rojo deja de leerse.
+  const inicioDeHoy = new Date(ahora); inicioDeHoy.setHours(0, 0, 0, 0);
   return {
     id: a.id,
     lead: a.lead_id || null,
@@ -127,8 +132,8 @@ export function aTarea(a, ahora = Date.now()) {
       : 'Sin fecha',
     // Vencida, hoy o próxima. Sin fecha NO es vencida: nadie la incumplió.
     cuando: !vence ? 'proxima'
-      : vence < ayer.getTime() ? 'vencida'
-      : vence <= hoy.getTime() ? 'hoy' : 'proxima',
+      : vence < inicioDeHoy.getTime() ? 'vencida'
+      : vence <= finDeHoy.getTime() ? 'hoy' : 'proxima',
     hecha: !!a.done,
   };
 }

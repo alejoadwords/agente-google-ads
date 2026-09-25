@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-24-version-movil",
+      "fecha": "2026-09-24",
+      "tipo": "nuevo",
+      "titulo": "Una versión de Acuarius hecha para el teléfono",
+      "texto": "Si entras desde el celular, te aparece una franja ofreciéndote la nueva versión móvil. No es la de siempre encogida: es otra pantalla, pensada para una mano y un pulgar. Arranca en el Pulso —lo que pide tu atención hoy, con tus datos de Google Ads y Meta si los tienes conectados—, y desde ahí llegas a tus contactos, tus tareas, tu agenda y tus conversaciones sin buscar nada. Puedes abrir la ficha de un contacto, cambiarle la etapa, dejar una nota, marcar una tarea o responder un chat, y todo queda guardado igual que en el computador. Lo que no tiene sentido hacer en un teléfono —armar una campaña, diseñar un correo, configurar la cuenta— te dice que se hace desde el computador, en vez de dejarte a medias. Es opcional: si prefieres seguir como hasta ahora, le das a «Ahora no» y no se te vuelve a preguntar. Y si la enciendes y no te convence, vuelves con un toque."
+    },
+    {
       "id": "2026-09-24-vencida-por-dia",
       "fecha": "2026-09-24",
       "tipo": "arreglo",

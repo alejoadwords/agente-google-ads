@@ -74,6 +74,24 @@ console.log('\nVencida, hoy o próxima\n');
   chk('ayer es vencida', t('2026-09-23T10:00:00Z') === 'vencida', t('2026-09-23T10:00:00Z'));
   chk('hoy es hoy', t('2026-09-24T18:00:00Z') === 'hoy', t('2026-09-24T18:00:00Z'));
   chk('mañana es próxima', t('2026-09-25T09:00:00Z') === 'proxima', t('2026-09-25T09:00:00Z'));
+  // El caso que tumbó el contador de Certain en la web: una tarea puesta para
+  // hoy a las diez NO está vencida a las once. Se compara el DÍA, no el reloj,
+  // igual que hace `api/agenda.js`. Un contador siempre en rojo deja de leerse
+  // y se pierde el aviso los días en que sí hay algo atrasado de verdad.
+  // Las horas se construyen desde la medianoche LOCAL de AHORA: escribirlas en
+  // UTC ataba la prueba al huso de la máquina —«02:00Z» son las nueve de la
+  // noche de AYER en Colombia, así que «vencida» era lo correcto y la aserción
+  // la que mentía—.
+  const medianoche = new Date(AHORA); medianoche.setHours(0, 0, 0, 0);
+  const hoyALas = (h) => new Date(medianoche.getTime() + h * 3600000).toISOString();
+  chk('una tarea de esta madrugada sigue siendo de hoy',
+      t(hoyALas(0.5)) === 'hoy', t(hoyALas(0.5)));
+  chk('y una de las 23:59 de hoy también',
+      t(hoyALas(23.9)) === 'hoy', t(hoyALas(23.9)));
+  // El corte: un minuto antes de la medianoche de hoy ya es de ayer.
+  chk('un minuto antes de medianoche sí está vencida',
+      t(new Date(medianoche.getTime() - 60000).toISOString()) === 'vencida',
+      t(new Date(medianoche.getTime() - 60000).toISOString()));
   // Nadie incumplió una tarea que no tenía fecha: pintarla en rojo es acusar
   // de un retraso que no existe.
   chk('sin fecha NO es vencida', t(null) === 'proxima', t(null));
