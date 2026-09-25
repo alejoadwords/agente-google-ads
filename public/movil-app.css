@@ -133,6 +133,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   padding:12px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text);resize:none}
 /* Los campos de una hoja se visten igual que su textarea: un input desnudo al
    lado de uno vestido parece que no funciona. */
+/* El select de la moneda, con el mismo aspecto que los demás campos de la
+   hoja: uno desnudo al lado de uno vestido parece que no funciona. */
+.sheet select{border:1px solid var(--border);border-radius:var(--rlg);padding:12px 8px;
+  font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text)}
 .sheet input{width:100%;border:1px solid var(--border);border-radius:var(--rlg);
   padding:12px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text)}
 .sheet input:focus{outline:2px solid var(--blue);outline-offset:-2px}

@@ -520,6 +520,113 @@ async function crearTarea(){
   cargarReales();
 }
 
+// ── Cerrar un negocio ───────────────────────────────────────────────────────
+var MONEDAS = ['COP','MXN','USD','ARS','CLP','PEN','EUR','BRL','UYU','GTQ','CRC','DOP'];
+var MOTIVOS = null;          // catálogo de la cuenta; null = todavía no llegó
+var _cierre = null;          // { tipo, antes, notaGuardada }
+
+function monedaRecordada(){
+  try { return localStorage.getItem('crm_last_currency') || 'COP'; } catch (e) { return 'COP'; }
+}
+
+async function abrirCierre(tipo, antes){
+  var l = leadAbierto; if (!l) return;
+  _cierre = { tipo: tipo, antes: antes, notaGuardada: false };
+  var gano = tipo === 'ganado';
+  var hoy = new Date();
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  var dia = hoy.getFullYear()+'-'+p(hoy.getMonth()+1)+'-'+p(hoy.getDate());
+  var cur = monedaRecordada();
+
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">'
+      + (gano ? 'Negocio ganado' : 'Negocio perdido') + '</div>'
+    + (gano
+        ? '<div style="display:flex;gap:8px">'
+          + '<input id="sh-monto" type="number" inputmode="decimal" placeholder="Importe" style="flex:1" value="'
+            + (l.valorNum || '') + '">'
+          + '<select id="sh-moneda" style="flex:none;width:92px">'
+            + MONEDAS.map(function(m){ return '<option'+(m===cur?' selected':'')+'>'+m+'</option>'; }).join('')
+          + '</select></div>'
+        : '')
+    + '<input id="sh-cierre-dia" type="date" style="margin-top:8px" value="'+dia+'">'
+    + '<div id="sh-motivos" style="margin-top:10px"><div class="vacio" style="padding:14px">Trayendo los motivos…</div></div>'
+    + '<input id="sh-motivo" type="text" placeholder="'+(gano?'Por qué se ganó':'Por qué se perdió')+'" style="margin-top:8px">'
+    + '<textarea id="sh-cierre-nota" placeholder="Notas (opcional)" style="min-height:60px;margin-top:8px"></textarea>'
+    + '<button class="bbtn" onclick="M.guardarCierre()">Confirmar cierre</button>');
+
+  // El catálogo de la cuenta, para no escribir el motivo a mano cada vez.
+  if (MOTIVOS === null && MODO === 'real' && typeof fetchAuth === 'function') {
+    try {
+      var r = await fetchAuth('/api/close-reasons');
+      MOTIVOS = r && r.ok ? await r.json() : null;
+    } catch (e) { MOTIVOS = null; }
+  }
+  var caja = $('#sh-motivos'); if (!caja) return;   // la hoja pudo cerrarse
+  var lista = (MOTIVOS && MOTIVOS[gano ? 'won' : 'lost']) || [];
+  caja.innerHTML = lista.length
+    ? '<div class="rapidas">' + lista.map(function(m){
+        return '<button class="rapida" onclick="M.ponerMotivo(\''+esc(String(m.label || ''))+'\')">'
+          + esc(m.label || '') + '</button>';
+      }).join('') + '</div>'
+    : '';   // sin catálogo no se ocupa sitio: queda el campo de texto
+}
+
+function ponerMotivo(t){
+  var e = $('#sh-motivo'); if (!e) return;
+  e.value = t; toque();
+}
+
+async function guardarCierre(){
+  var l = leadAbierto, c = _cierre;
+  if (!l || !c) return;
+  var gano = c.tipo === 'ganado';
+  var motivo = String(($('#sh-motivo') || {}).value || '').trim();
+  if (!motivo) { chicharra(gano ? 'Di por qué se ganó.' : 'Di por qué se perdió.', 'mal'); return; }
+  var dia = String(($('#sh-cierre-dia') || {}).value || '').trim();
+  if (!dia) { chicharra('Ponle la fecha de cierre.', 'mal'); return; }
+
+  // La nota PRIMERO, y una sola vez. Si el cierre falla y se vuelve a pulsar
+  // —que es lo que uno hace— la nota se guardaría repetida en el historial.
+  var nota = String(($('#sh-cierre-nota') || {}).value || '').trim();
+  if (nota && !c.notaGuardada) {
+    var dn = await guardar('/api/lead-activities', {
+      lead_id: l.id, type: 'nota', content: nota,
+      metadata: { al_cerrar: c.tipo, close_reason: motivo },
+    }, 'POST');
+    // Si la nota no se guardó NO se cierra: quedaría un negocio cerrado sin la
+    // explicación que alguien acaba de escribir.
+    if (!dn) return;
+    c.notaGuardada = true;
+  }
+
+  var cuerpo = {
+    id: l.id, stage: c.tipo, close_reason: motivo,
+    // Mediodía a propósito: un día suelto se interpreta como medianoche UTC y
+    // en Colombia el cierre se guardaría con la fecha del día anterior.
+    closed_at: new Date(dia + 'T12:00:00').toISOString(),
+  };
+  if (gano) {
+    var monto = parseFloat(String(($('#sh-monto') || {}).value || '').replace(/[^\d.-]/g, ''));
+    var cur = String(($('#sh-moneda') || {}).value || monedaRecordada());
+    if (isFinite(monto)) cuerpo.value = monto;
+    cuerpo.close_currency = cur;
+    try { localStorage.setItem('crm_last_currency', cur); } catch (e) {}
+  }
+  var d = await guardar('/api/leads', cuerpo, 'PUT');
+  if (!d) return;
+
+  l.etapa = c.tipo; l.cerrado = true;
+  if (gano && isFinite(monto)) {
+    l.valorNum = monto;
+    if (TRADUCTOR) l.valor = TRADUCTOR.plata(monto);
+  }
+  _cierre = null;
+  cerrarSheet();
+  toque(12);
+  delete FICHA_CACHE[l.id];
+  pintarFicha(); pintarFiltros(); pintarLeads(); pintarPulso(); pintarSubtitulos();
+}
+
 async function guardarNota(){
   var ta = $('#sh-nota'), l = leadAbierto;
   var texto = ta ? ta.value.trim() : '';
@@ -547,6 +654,10 @@ function ponerEtapa(k){
   if (!leadAbierto) return;
   var l = leadAbierto, antes = l.etapa;
   if (antes === k) { cerrarSheet(); return; }
+  // Cerrar un negocio sin importe ni motivo deja el informe de ventas cojo:
+  // el de ganancias no suma nada y el de pérdidas no sabe por qué se perdió.
+  // La web lo pregunta; el móvil lo guardaba a secas.
+  if (k === 'ganado' || k === 'perdido') { abrirCierre(k, antes); return; }
   // Se pinta ya y se deshace si falla: en un teléfono la red tarda, y esperar
   // con la pantalla quieta se siente roto. Lo que no se hace es dar por bueno
   // el cambio pase lo que pase.
@@ -2645,6 +2756,7 @@ function movilMontar(opciones){
     verVideo: verVideo, verPestana: verPestana,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     abrirTarea: abrirTarea, cuandoTarea: cuandoTarea, crearTarea: crearTarea,
+    abrirCierre: abrirCierre, ponerMotivo: ponerMotivo, guardarCierre: guardarCierre,
     alternarAuto: alternarAuto,
     toque: toque,
     verMod: verMod,

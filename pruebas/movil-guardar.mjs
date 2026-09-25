@@ -143,14 +143,14 @@ console.log('\nCambiar de etapa guarda, y si falla vuelve atrás\n');
   g.__pruebas.modoReal();
   const lead = unLead();
   g.__pruebas.abrirLead(lead);
-  g.M.ponerEtapa('ganado');
+  g.M.ponerEtapa('contactado');
   await esperar(); await esperar();
   const c = e.llamadas[0] || {};
   chk('llama a /api/leads', c.ruta === '/api/leads', c.ruta);
   chk('con PUT', c.metodo === 'PUT', c.metodo);
   chk('mandando el id y la etapa nueva',
-      c.cuerpo && c.cuerpo.id === 'L1' && c.cuerpo.stage === 'ganado', JSON.stringify(c.cuerpo));
-  chk('y la etapa queda puesta', lead.etapa === 'ganado', lead.etapa);
+      c.cuerpo && c.cuerpo.id === 'L1' && c.cuerpo.stage === 'contactado', JSON.stringify(c.cuerpo));
+  chk('y la etapa queda puesta', lead.etapa === 'contactado', lead.etapa);
 }
 {
   // Lo que de verdad importa: el servidor dice que no y la pantalla NO puede
@@ -160,7 +160,7 @@ console.log('\nCambiar de etapa guarda, y si falla vuelve atrás\n');
   g.__pruebas.modoReal();
   const lead = unLead();
   g.__pruebas.abrirLead(lead);
-  g.M.ponerEtapa('ganado');
+  g.M.ponerEtapa('contactado');
   await esperar(); await esperar();
   chk('si el servidor dice que no, la etapa VUELVE a la de antes',
       lead.etapa === 'nuevo', lead.etapa);
@@ -174,7 +174,7 @@ console.log('\nCambiar de etapa guarda, y si falla vuelve atrás\n');
   g.__pruebas.modoReal();
   const lead = unLead();
   g.__pruebas.abrirLead(lead);
-  g.M.ponerEtapa('ganado');
+  g.M.ponerEtapa('contactado');
   await esperar(); await esperar();
   chk('sin red tampoco se da por guardado', lead.etapa === 'nuevo', lead.etapa);
   chk('y se dice que fue la conexión',
@@ -190,7 +190,7 @@ console.log('\nEn modo muestra NO se finge que se guardó\n');
   g.movilMontar({});                 // sin fetchAuth: se queda en 'ejemplo'
   const lead = unLead();
   g.__pruebas.abrirLead(lead);
-  g.M.ponerEtapa('ganado');
+  g.M.ponerEtapa('contactado');
   await esperar(); await esperar();
   chk('no se llama a nadie', e.llamadas.length === 0, String(e.llamadas.length));
   chk('la etapa NO se queda cambiada', lead.etapa === 'nuevo', lead.etapa);
@@ -233,6 +233,93 @@ console.log('\nEl mensaje no se borra de la caja hasta que sale\n');
   chk('si no salió, el texto SIGUE en la caja', caja.value === 'Voy para allá', caja.value);
   chk('y se dice el motivo del servidor',
       e.chicharras.some((x) => /ventana de 24/.test(x.txt)), JSON.stringify(e.chicharras.map((c) => c.txt)));
+}
+
+console.log('\nCerrar un negocio pide importe y motivo\n');
+{
+  // Antes, mover un lead a Ganado desde el móvil guardaba la etapa a secas:
+  // el informe de ganancias no sumaba nada y el de pérdidas no sabía por qué
+  // se perdió. Y eso no se nota hasta que alguien mira el reporte del mes.
+  const e = montar({ responde: { ok: true, datos: { lead: {} } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L3', etapa: 'propuesta' }));
+  g.M.ponerEtapa('ganado');
+  await esperar(); await esperar();
+  chk('mover a ganado NO guarda todavía',
+      !e.llamadas.some((x) => x.ruta === '/api/leads'), e.llamadas.map((x) => x.ruta).join(','));
+  chk('primero se pide el catálogo de motivos',
+      e.llamadas.some((x) => x.ruta === '/api/close-reasons'));
+}
+{
+  const e = montar({ responde: { ok: true, datos: { lead: {} } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const l = unLead({ id: 'L3', etapa: 'propuesta' });
+  g.__pruebas.abrirLead(l);
+  g.M.abrirCierre('ganado', 'propuesta');
+  await esperar();
+  e.plantar('#sh-motivo').value = 'Precio';
+  e.plantar('#sh-cierre-dia').value = '2026-09-30';
+  e.plantar('#sh-monto').value = '320000000';
+  e.plantar('#sh-moneda').value = 'USD';
+  // El banco deja MODO en 'fallo' en cuanto hay un `await` por medio: la
+  // importación de movil-datos.js no resuelve aquí. Se refija antes de actuar.
+  g.__pruebas.modoReal();
+  await g.M.guardarCierre();
+  await esperar();
+
+  const put = e.llamadas.filter((x) => x.ruta === '/api/leads')[0] || {};
+  chk('se guarda en /api/leads con PUT', put.metodo === 'PUT', put.metodo);
+  const b = put.cuerpo || {};
+  chk('con la etapa de cierre', b.stage === 'ganado', JSON.stringify(b));
+  chk('el motivo', b.close_reason === 'Precio', b.close_reason);
+  chk('el importe', b.value === 320000000, String(b.value));
+  chk('y la moneda elegida', b.close_currency === 'USD', b.close_currency);
+  // Un día suelto se interpreta como medianoche UTC, y en Colombia el cierre
+  // se guardaría con la fecha del día ANTERIOR. La web usa mediodía por eso.
+  chk('la fecha de cierre no retrocede un día',
+      /^2026-09-30T1[0-9]:/.test(String(b.closed_at)), String(b.closed_at));
+  chk('y el lead queda cerrado', l.etapa === 'ganado' && l.cerrado === true);
+}
+{
+  // Sin motivo no se llama a nadie: cerrar sin motivo es lo que deja el
+  // informe de pérdidas en blanco.
+  const e = montar();
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ etapa: 'propuesta' }));
+  g.M.abrirCierre('perdido', 'propuesta');
+  await esperar();
+  e.plantar('#sh-motivo').value = '';
+  e.plantar('#sh-cierre-dia').value = '2026-09-30';
+  g.__pruebas.modoReal();
+  await g.M.guardarCierre();
+  chk('sin motivo no se cierra',
+      !e.llamadas.some((x) => x.ruta === '/api/leads'), e.llamadas.map((x) => x.ruta).join(','));
+  chk('y se dice qué falta', e.chicharras.some((x) => /por qué se perdió/i.test(x.txt)),
+      JSON.stringify(e.chicharras.map((c) => c.txt)));
+}
+{
+  // La nota va PRIMERO y si no se guarda NO se cierra: quedaría un negocio
+  // cerrado sin la explicación que alguien acaba de escribir.
+  const e = montar({ responde: { ok: false, error: 'no se pudo' } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ etapa: 'propuesta' }));
+  g.M.abrirCierre('perdido', 'propuesta');
+  await esperar();
+  e.plantar('#sh-motivo').value = 'Precio';
+  e.plantar('#sh-cierre-dia').value = '2026-09-30';
+  e.plantar('#sh-cierre-nota').value = 'Se fue con la competencia';
+  g.__pruebas.modoReal();
+  await g.M.guardarCierre();
+  await esperar();
+  const rutas = e.llamadas.map((x) => x.ruta);
+  chk('la nota se intenta antes que el cierre',
+      rutas[rutas.length - 1] === '/api/lead-activities', rutas.join(','));
+  chk('y si la nota falla, el negocio NO se cierra',
+      !rutas.includes('/api/leads'), rutas.join(','));
 }
 
 console.log('\nProgramar un seguimiento desde el teléfono\n');
