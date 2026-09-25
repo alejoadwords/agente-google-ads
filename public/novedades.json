@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-degradado-agua",
+      "fecha": "2026-09-25",
+      "tipo": "mejora",
+      "titulo": "Nuevo color en la barra superior y el menú lateral",
+      "texto": "La barra de arriba y la columna del menú pasan del gris a los colores de la marca: el degradado azul-agua de Acuarius, con el logo y los textos en blanco. Es solo el marco de la aplicación; tus tableros, contactos y conversaciones se ven exactamente igual que antes. Si usas el modo oscuro, ahí no cambia nada."
+    },
+    {
       "id": "2026-09-25-agentes-ia",
       "fecha": "2026-09-25",
       "tipo": "mejora",
