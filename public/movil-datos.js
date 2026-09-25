@@ -400,6 +400,62 @@ export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
   } catch { return null; }
 }
 
+// ── La ficha de un contacto ─────────────────────────────────────────────────
+// Las pestañas «Qué ha pasado» y «Qué falta» estaban ESCRITAS A MANO, y encima
+// metían el nombre real del contacto en hechos falsos: «Llamar a Isla Chen ·
+// 11:00» sobre una tarea que no existe. Es la peor forma de mentir que tenía
+// esta pantalla, porque el nombre verdadero le da credibilidad al resto.
+
+export const ETIQUETA_HITO = {
+  nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión',
+  tarea: 'Tarea', stage_change: 'Etapa', creacion: 'Creado',
+};
+
+export function aHito(a) {
+  const t = a.created_at ? new Date(a.created_at) : null;
+  return {
+    cuando: t ? t.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '',
+    que: (ETIQUETA_HITO[a.type] || a.type || 'Actividad') + ': ' + String(a.content || '').slice(0, 160),
+    marca: t ? t.getTime() : 0,
+  };
+}
+
+/**
+ * Todo lo que cuelga de un contacto. Cada caja viaja por su cuenta: que falle
+ * la de campañas no puede dejar sin tareas a quien está mirando la ficha.
+ *
+ * Como en el resto: null es «no se pudo mirar», [] es «no hay».
+ */
+export async function cargarFicha(fetchAuth, leadId, { clientId } = {}) {
+  const q = '?lead_id=' + encodeURIComponent(leadId)
+    + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
+  const uno = async (ruta, saca) => {
+    try {
+      const r = await fetchAuth(ruta);
+      if (!r || !r.ok) return null;
+      return saca(await r.json());
+    } catch { return null; }
+  };
+  const [hitos, agenda, autos, campanas, nps, props, convs] = await Promise.all([
+    uno('/api/lead-activities' + q, (d) => (d.activities || []).map(aHito)),
+    uno('/api/agenda' + q, (d) => d.actividades || d.items || []),
+    uno('/api/automations' + q, (d) => ({ pendientes: d.pendientes || [], hechas: d.hechas || [] })),
+    uno('/api/campaigns' + q, (d) => d.envios || []),
+    uno('/api/nps' + q, (d) => d.encuesta || null),
+    uno('/api/proposals' + q, (d) => d.proposals || []),
+    uno('/api/chat-conversations' + q, (d) => (d.conversations || []).map(aConversacion)),
+  ]);
+  return {
+    hitos: hitos ? hitos.sort((a, b) => b.marca - a.marca) : null,
+    // La agenda devuelve tareas Y citas juntas: separarlas aquí evita que una
+    // reserva del propio cliente aparezca como un pendiente que alguien se
+    // apuntó, que es el mismo fallo que ya tuvimos en la pantalla de Tareas.
+    tareas: agenda ? agenda.filter((a) => !esCita(a)).map((a) => aTarea(a)) : null,
+    citas: agenda ? agenda.filter(esCita).map(aCita) : null,
+    autos, campanas, nps, props, convs,
+  };
+}
+
 // ── Carga ───────────────────────────────────────────────────────────────────
 /**
  * Pide lo que necesita el móvil. Devuelve SIEMPRE un objeto con las claves

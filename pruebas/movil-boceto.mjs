@@ -338,6 +338,24 @@ console.log('\nBuscar por id no puede depender del tipo\n');
   chk('los ids en los onclick van entre comillas', sinComillas.length === 0, sinComillas.join(' '));
 }
 
+console.log('\nTodo onclick pasa por M.\n');
+{
+  // Un `onclick` en línea corre en el ámbito GLOBAL. Desde que el fichero va
+  // envuelto, nada de dentro existe ahí: las tres pestañas de la ficha
+  // llevaban muertas —`ReferenceError` en consola y nada al tocarlas— porque
+  // llamaban a `pintarFicha()` a pelo.
+  //
+  // `node --check` no lo ve, el navegador tampoco hasta que alguien toca.
+  const sueltos = [...guion.matchAll(/onclick=\\?"([^"]{0,80})/g)]
+    .map((m) => m[1])
+    .filter((h) => !/^M\./.test(h) && !/^'\s*\+/.test(h));
+  chk('ningún manejador llama a algo de dentro del envoltorio',
+      sueltos.length === 0, sueltos.join(' | '));
+  // El que se arma por variable —`onclick="'+accion+'"`— también tiene que
+  // acabar en M.: se comprueba en su sitio.
+  chk('y el que se arma por variable también', /'M\.alternarAuto\(|'M\.toque\(\)'/.test(guion));
+}
+
 console.log('\nNingún nombre de función repetido\n');
 {
   // Dos `function` con el mismo nombre en el mismo ámbito NO es un error: gana

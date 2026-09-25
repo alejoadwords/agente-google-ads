@@ -163,7 +163,6 @@ var LEADS = [
   {id:6,nom:'Paula Restrepo',   etapa:'propuesta',  hace:'hace 1 d', origen:'Instagram',      tel:'+57 318 004 9912',
    interes:'Penthouse · Buenavista', valor:'$ 890.000.000', valorNum:890000000, resp:'Karen Acosta', tags:['venta','premium']}
 ];
-var HITOS = [['10:24','Llamada · no contestó'],['ayer','Le envié la ficha por WhatsApp'],['ayer','Entró por el formulario de la web']];
 var TAREAS = [
   {t:'Llamar a Sandra Caro',        cuando:'vencida', hecha:false},
   {t:'Llamar a Hellen Marún',               cuando:'hoy',     hecha:false},
@@ -1217,6 +1216,12 @@ function abrirPerfil(){
 
 // Abre el video en YouTube. Sin enlace se dice: un botón que no lleva a
 // ninguna parte se toca dos veces y se da por roto.
+function verPestana(p){
+  fichaPestana = p;
+  toque();
+  pintarFicha();
+}
+
 function verVideo(id){
   var vs = MODULO_CACHE.academia || [];
   var v = null;
@@ -1752,7 +1757,12 @@ function pintarFicha(){
     + '<div class="ftabs">'
       + [['quien','Quién es'],['pasado','Qué ha pasado'],['falta','Qué falta']].map(function(p){
           return '<button class="ftab" aria-selected="'+(fichaPestana===p[0])+'" '
-               + 'onclick="fichaPestana=\''+p[0]+'\';pintarFicha()">'+esc(p[1])+'</button>';
+               // Por `M.`, como todo lo demás. Un `onclick` en línea corre en el
+               // ámbito GLOBAL, y desde que el fichero va envuelto ni
+               // `fichaPestana` ni `pintarFicha` existen ahí: las tres
+               // pestañas de la ficha llevaban muertas desde entonces —
+               // `ReferenceError` en consola y nada al tocarlas—.
+               + 'onclick="M.verPestana(\''+p[0]+'\')">'+esc(p[1])+'</button>';
         }).join('')
     + '</div>'
     + (fichaPestana === 'quien' ? fichaQuien(l)
@@ -1863,12 +1873,55 @@ async function guardarCampo(campo){
     : (guardado == null ? '' : String(guardado));
   pintarFicha(); pintarLeads();
 }
+// Lo que cuelga del contacto abierto. Se pide al abrir una de estas dos
+// pestañas y se guarda por lead: volver de «Quién es» no lo vuelve a pedir.
+var FICHA_CACHE = {};
+var _fichaPidiendo = null;
+
+// «hace 2 h» sin duplicar la función: la de `movil-datos.js` ya está cargada
+// cuando esto se pinta. Una segunda copia diría otra cosa con el tiempo.
+function cuandoFue(iso){
+  try { return (TRADUCTOR && iso) ? (TRADUCTOR.hace(iso) || '') : ''; }
+  catch (e) { return ''; }
+}
+
+function fichaDatos(){
+  var l = leadAbierto;
+  return (l && FICHA_CACHE[l.id]) || null;
+}
+
+function pedirFicha(){
+  var l = leadAbierto;
+  if (!l || MODO !== 'real' || typeof fetchAuth !== 'function') return;
+  if (FICHA_CACHE[l.id] !== undefined || _fichaPidiendo === l.id) return;
+  _fichaPidiendo = l.id;
+  var quien = l.id;
+  (async function(){
+    var d = null;
+    try {
+      var mod = TRADUCTOR || await import('./movil-datos.js');
+      TRADUCTOR = mod;
+      d = await mod.cargarFicha(fetchAuth, quien, { clientId: alcanceCliente() });
+    } catch (e) { console.warn('[movil] ficha', e); }
+    _fichaPidiendo = null;
+    // Todo null es que no se pudo mirar nada; se guarda igual para no pedirlo
+    // en bucle, y cada caja dirá lo suyo.
+    FICHA_CACHE[quien] = d || {};
+    // La ficha pudo cerrarse o abrirse otra mientras viajaba.
+    if (leadAbierto && leadAbierto.id === quien) pintarFicha();
+  })();
+}
+
 function fichaPasado(l){
+  if (MODO !== 'real') return '<div class="secc"><div class="vacio">Entra con tu cuenta para ver su historial.</div></div>';
+  var d = fichaDatos();
+  if (!d) { pedirFicha(); return '<div class="secc"><div class="vacio">Trayendo su historial…</div></div>'; }
+  if (d.hitos === null) return '<div class="secc"><div class="vacio">No se pudo traer su historial.</div></div>';
+  if (!d.hitos.length) return '<div class="secc"><div class="vacio">Todavía no hay nada registrado de este contacto.</div></div>';
   return '<div class="secc"><h2>Todo lo que ha pasado</h2><div class="caja">'
-    + HITOS.concat([['12 sep','Se creó el contacto desde el formulario web']])
-        .map(function(x){
-          return '<div class="hito"><span class="cuando">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></div>';
-        }).join('')
+    + d.hitos.map(function(x){
+        return '<div class="hito"><span class="cuando">'+esc(x.cuando)+'</span><span>'+esc(x.que)+'</span></div>';
+      }).join('')
     + '</div></div>';
 }
 // Las mismas cajas que la tercera columna de la web.
@@ -1880,14 +1933,48 @@ function fichaFalta(l){
         }).join('') : '<div style="color:var(--muted);font-size:var(--fs-sm)">'+esc(vacio)+'</div>')
       + '</div>';
   };
+  if (MODO !== 'real') return '<div class="secc"><div class="vacio">Entra con tu cuenta para ver lo suyo.</div></div>';
+  var d = fichaDatos();
+  if (!d) { pedirFicha(); return '<div class="secc"><div class="vacio">Trayendo lo suyo…</div></div>'; }
+
+  // Cada caja dice lo suyo: null es «no se pudo traer» y [] es «no hay». Antes
+  // las siete estaban escritas a mano, y la de tareas metía el nombre REAL del
+  // contacto en una tarea que no existía.
+  var de = function(tit, lista, pinta, vacio){
+    if (lista === null || lista === undefined) {
+      return '<h2>'+esc(tit)+'</h2><div class="caja"><div style="color:var(--muted);font-size:var(--fs-sm)">'
+        + 'No se pudo traer.</div></div>';
+    }
+    return caja(tit, lista.map(pinta), vacio);
+  };
+
+  var autos = d.autos;
+  var filasAutos = autos ? (autos.pendientes || []).map(function(a){
+      return ['en curso', (a.nombre || a.name || 'Automatización')];
+    }).concat((autos.hechas || []).slice(0, 3).map(function(a){
+      return [a.fallo ? 'falló' : 'hecha', (a.nombre || a.name || 'Automatización')];
+    })) : null;
+
   return '<div class="secc">'
-    + caja('Tareas',          [['hoy','Llamar a '+l.nom+' · 11:00']], 'Ninguna tarea pendiente.')
-    + caja('Citas',           [['jue 24','Visita AP-2231 · 09:00']],  'Ninguna cita agendada.')
-    + caja('Automatizaciones',[['en curso','Seguimiento a las 2 horas · paso 2 de 3']], 'Ninguna en curso.')
-    + caja('Campañas',        [['3 sep','Arriendos Envigado · abierta 2 veces']], 'No ha recibido campañas.')
-    + caja('Satisfacción',    [], 'Todavía no se le ha encuestado.')
-    + caja('Propuestas',      [], 'Ninguna propuesta enviada.')
-    + caja('Conversaciones',  [['whatsapp','Última hace 2 h · la atiendes tú']], 'Sin conversaciones.')
+    + de('Tareas', d.tareas, function(t){ return [t.cuando === 'vencida' ? 'vencida' : t.s, t.t]; },
+         'Ninguna tarea pendiente.')
+    + de('Citas', d.citas, function(c){ return [c.h, c.t]; }, 'Ninguna cita agendada.')
+    + (filasAutos === null
+        ? de('Automatizaciones', null, null, '')
+        : caja('Automatizaciones', filasAutos, 'Ninguna en curso.'))
+    + de('Campañas', d.campanas, function(e){
+        return [cuandoFue(e.sent_at || e.created_at), (e.name || e.campaign_name || 'Campaña')
+          + (e.opened_at ? ' · abierta' : '')];
+      }, 'No ha recibido campañas.')
+    + (d.nps === null || d.nps === undefined
+        ? caja('Satisfacción', [], 'Todavía no se le ha encuestado.')
+        : caja('Satisfacción', [[String(d.nps.nota) + '/10', d.nps.comentario || d.nps.categoria || 'Sin comentario']], ''))
+    + de('Propuestas', d.props, function(x){
+        return [cuandoFue(x.created_at), (x.title || 'Propuesta') + (x.status ? ' · ' + x.status : '')];
+      }, 'Ninguna propuesta enviada.')
+    + de('Conversaciones', d.convs, function(c){
+        return [c.canal, c.cuando + ' · ' + (c.quien === 'bot' ? 'la atiende el agente' : 'la atiendes tú')];
+      }, 'Sin conversaciones.')
     + '</div>';
 }
 
@@ -2441,7 +2528,7 @@ function movilMontar(opciones){
     abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,
     cerrarBarra: cerrarBarra, volverEscritorio: volverEscritorio, cerrarSesion: cerrarSesion,
     abrirClientes: abrirClientes, elegirCliente: elegirCliente,
-    verVideo: verVideo,
+    verVideo: verVideo, verPestana: verPestana,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     alternarAuto: alternarAuto,
     toque: toque,
