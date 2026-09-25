@@ -235,6 +235,70 @@ console.log('\nEl mensaje no se borra de la caja hasta que sale\n');
       e.chicharras.some((x) => /ventana de 24/.test(x.txt)), JSON.stringify(e.chicharras.map((c) => c.txt)));
 }
 
+console.log('\nReasignar un contacto\n');
+{
+  const e = montar({ responde: { ok: true, datos: { lead: {} } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const l = unLead({ id: 'L5', resp: 'Karen', respId: 'u1' });
+  g.__pruebas.abrirLead(l);
+  g.__pruebas.modoReal();
+  await g.M.ponerResponsable('u7', 'Maira');
+  await esperar();
+  const c = e.llamadas[0] || {};
+  chk('se guarda en /api/leads con PUT',
+      c.ruta === '/api/leads' && c.metodo === 'PUT', c.ruta + ' ' + c.metodo);
+  // El id Y el nombre: el nombre es lo que se pinta y el id lo que manda.
+  chk('con el id y el nombre del nuevo responsable',
+      c.cuerpo.assigned_to === 'u7' && c.cuerpo.assigned_name === 'Maira', JSON.stringify(c.cuerpo));
+  chk('y la ficha queda con el nuevo', l.respId === 'u7' && l.resp === 'Maira');
+}
+{
+  // «Sin asignar» tiene que llegar como null, no como cadena vacía: una cadena
+  // vacía en assigned_to deja el contacto asignado a un usuario que no existe.
+  const e = montar({ responde: { ok: true, datos: { lead: {} } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L5', respId: 'u1' }));
+  g.__pruebas.modoReal();
+  await g.M.ponerResponsable('', 'Sin asignar');
+  await esperar();
+  const b = (e.llamadas[0] || {}).cuerpo || {};
+  chk('«sin asignar» viaja como null', b.assigned_to === null && b.assigned_name === null, JSON.stringify(b));
+}
+{
+  // Si el servidor dice que no, la pantalla NO puede quedarse enseñando un
+  // dueño que no se guardó: el contacto sale del filtro «Míos» de quien lo
+  // lleva y entra en el de otro, y nadie se entera hasta que alguien pregunta
+  // por qué no lo han llamado.
+  const e = montar({ responde: { ok: false, error: 'no puedes reasignar' } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const l = unLead({ id: 'L5', resp: 'Karen', respId: 'u1' });
+  g.__pruebas.abrirLead(l);
+  g.__pruebas.modoReal();
+  await g.M.ponerResponsable('u7', 'Maira');
+  await esperar(); await esperar();
+  chk('si el servidor dice que no, vuelve el de antes',
+      l.respId === 'u1' && l.resp === 'Karen', l.resp + '/' + l.respId);
+  chk('y se dice el motivo',
+      e.chicharras.some((x) => /no puedes reasignar/.test(x.txt)),
+      JSON.stringify(e.chicharras.map((c) => c.txt)));
+}
+{
+  // A un miembro no se le ofrece: el servidor se lo negaría con un 403, y un
+  // botón que promete y no cumple es peor que no tenerlo.
+  const codigoMov = fuente.split('\n').filter((x) => !x.trim().startsWith('//')).join('\n');
+  const i = codigoMov.indexOf('async function abrirResponsable');
+  const fn = codigoMov.slice(i, codigoMov.indexOf('\n}', i));
+  chk('a un miembro se le enseña, no se le ofrece', /if \(soyMiembro\(\)\)/.test(fn), fn.slice(0, 120));
+  chk('y se le dice quién lo lleva', /l\.resp \|\| 'Sin asignar'/.test(fn));
+  // Solo los activos: ofrecer a alguien invitado que todavía no entró deja el
+  // contacto en manos de nadie.
+  chk('solo se ofrecen los miembros activos', /m\.activo && m\.id/.test(fn));
+  chk('y uno no se ofrece a sí mismo dos veces', /m\.id !== yo\.id/.test(fn));
+}
+
 console.log('\nCerrar un negocio pide importe y motivo\n');
 {
   // Antes, mover un lead a Ganado desde el móvil guardaba la etapa a secas:

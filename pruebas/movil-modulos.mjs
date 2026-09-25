@@ -235,6 +235,10 @@ console.log('\nAperturas y parrillas, con sus números\n');
   chk('el equipo sale con su perfil', /vendedor/.test(eq[0].sub), eq[0].sub);
   chk('quien cae al correo no queda «sin nombre»', eq[1].nom === 'x@y.co', eq[1].nom);
   chk('y un estado que no es activo se dice', /invited/.test(eq[1].sub), eq[1].sub);
+  // Sin el id del usuario la pantalla se pinta igual, pero no se le puede
+  // asignar un contacto a nadie: el desplegable tendría nombres sin destino.
+  chk('cada miembro lleva su id', eq[0].id === undefined ? false : true, JSON.stringify(eq[0]));
+  chk('y si está activo o no', eq[0].activo === true && eq[1].activo === false);
 }
 
 console.log('\nEl NPS, ejecutado con respuestas de verdad\n');
@@ -547,8 +551,13 @@ console.log('\nEl lápiz solo donde de verdad se edita\n');
   const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
   // Ponerlo en la fuente o en el responsable prometía algo que al tocarlo se
   // niega: un adorno que dice «puedes» y responde «no».
-  chk('el lápiz depende de si el campo es editable',
-      /var editable = !!CAMPOS_FICHA\[c\[0\]\];/.test(guion) && /editable \? '<span class="lapiz">/.test(guion));
+  // Ahora hay dos formas de tocar un campo: escribirlo (CAMPOS_FICHA) o
+  // elegirlo de una lista (CAMPOS_ELEGIR, como el responsable). El lápiz sale
+  // en los dos y en ninguno más.
+  chk('el lápiz depende de si el campo se puede tocar',
+      /var editable = !!CAMPOS_FICHA\[c\[0\]\] \|\| !!CAMPOS_ELEGIR\[c\[0\]\];/.test(guion)
+      && /editable \? '<span class="lapiz">/.test(guion),
+      (guion.match(/var editable = [^;]*/) || [''])[0]);
 }
 
 console.log('\nEl interruptor de una automatización no es un adorno\n');

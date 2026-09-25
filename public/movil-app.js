@@ -520,6 +520,74 @@ async function crearTarea(){
   cargarReales();
 }
 
+// ── Quién lleva el contacto ─────────────────────────────────────────────────
+// Reasignar es decisión del dueño de la cuenta. A un miembro se le enseña
+// quién lo lleva y nada más: ofrecerle el cambio solo serviría para que el
+// servidor se lo rechace con un 403 — un botón que promete y no cumple.
+function soyMiembro(){
+  try { return (typeof crmSoyMiembro !== 'undefined') ? !!crmSoyMiembro : false; }
+  catch (e) { return false; }
+}
+function yoMismo(){
+  var u = null;
+  try { u = (typeof clerkInstance !== 'undefined' && clerkInstance) ? clerkInstance.user : null; } catch (e) {}
+  return { id: (u && u.id) || '', nom: (u && (u.firstName || u.fullName)) || 'Yo' };
+}
+
+async function abrirResponsable(){
+  var l = leadAbierto; if (!l) return;
+  if (soyMiembro()) {
+    abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Responsable</div>'
+      + '<div class="solo-escritorio" style="margin:0"><b>'+esc(l.resp || 'Sin asignar')+'</b>'
+      + 'Reasignar un contacto lo decide quien administra la cuenta.</div>'
+      + '<button class="bbtn" onclick="M.cerrarSheet()">Entendido</button>');
+    return;
+  }
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Responsable</div>'
+    + '<div id="sh-equipo"><div class="vacio" style="padding:16px">Trayendo tu equipo…</div></div>');
+
+  if (MODULO_CACHE.ajustes === undefined) {
+    var eq = await cargarModuloReal('ajustes');
+    if (eq !== null) MODULO_CACHE.ajustes = eq;
+  }
+  var caja = $('#sh-equipo'); if (!caja) return;   // la hoja pudo cerrarse
+  var yo = yoMismo();
+  var equipo = MODULO_CACHE.ajustes;
+  if (equipo === undefined || equipo === null) {
+    // Sin sesión no es que fallara: es que no hay de dónde traerlo. Es la
+    // tercera vez que este matiz se me escapa, así que aquí queda dicho.
+    caja.innerHTML = MODO === 'real'
+      ? '<div class="vacio" style="padding:16px">No se pudo traer tu equipo.</div>'
+      : '<div class="vacio" style="padding:16px">Entra con tu cuenta para ver tu equipo.</div>';
+    return;
+  }
+  var ops = [{ id: '', nom: 'Sin asignar' }, { id: yo.id, nom: yo.nom + ' (yo)' }]
+    .concat(equipo.filter(function(m){ return m.activo && m.id && m.id !== yo.id; })
+                  .map(function(m){ return { id: m.id, nom: m.nom }; }));
+  caja.innerHTML = ops.map(function(o){
+    return '<button class="opcion" aria-current="'+(String(l.respId || '') === String(o.id))+'" '
+      + 'onclick="M.ponerResponsable(\''+esc(String(o.id))+'\',\''+esc(o.nom.replace(' (yo)',''))+'\')">'
+      + esc(o.nom) + '<span class="marca">'+icn('check',18)+'</span></button>';
+  }).join('');
+}
+
+async function ponerResponsable(id, nombre){
+  var l = leadAbierto; if (!l) return;
+  var antesId = l.respId || null, antesNom = l.resp;
+  // Se pinta ya y se deshace si falla. Dejar la pantalla enseñando un dueño
+  // que no se guardó es peor que no haber hecho nada: el contacto sale del
+  // filtro «Míos» de quien lo lleva y entra en el de otro, y nadie se entera
+  // hasta que alguien pregunta por qué no lo han llamado.
+  l.respId = id || null;
+  l.resp = id ? nombre : 'Sin asignar';
+  cerrarSheet(); toque(12); pintarFicha(); pintarLeads();
+  guardar('/api/leads', { id: l.id, assigned_to: id || null, assigned_name: id ? nombre : null }, 'PUT',
+    function(){
+      l.respId = antesId; l.resp = antesNom;
+      pintarFicha(); pintarLeads();
+    });
+}
+
 // ── Cerrar un negocio ───────────────────────────────────────────────────────
 var MONEDAS = ['COP','MXN','USD','ARS','CLP','PEN','EUR','BRL','UYU','GTQ','CRC','DOP'];
 var MOTIVOS = null;          // catálogo de la cuenta; null = todavía no llegó
@@ -2019,7 +2087,7 @@ function fichaQuien(l){
         // El lápiz solo en lo que de verdad se edita aquí. Ponerlo en la
         // fuente o en el responsable prometía algo que al tocarlo se niega:
         // un adorno que dice «puedes» y responde «no».
-        var editable = !!CAMPOS_FICHA[c[0]];
+        var editable = !!CAMPOS_FICHA[c[0]] || !!CAMPOS_ELEGIR[c[0]];
         return '<div class="fcampo" onclick="M.editarCampo(\''+esc(c[0])+'\')">'
           + '<span class="k">'+esc(c[0])+'</span>'
           + '<span class="v'+(vacio?' sindato':'')+'">'+esc(vacio ? 'Sin dato' : c[1])+'</span>'
@@ -2037,6 +2105,8 @@ function fichaQuien(l){
 // personas —un cuadro de texto libre los rompería— y la campaña y la página
 // las pone la atribución de pauta. Ofrecer un campo que no se puede guardar es
 // el mismo engaño que arreglamos, solo que más tarde.
+// Reasignar no es escribir texto: es elegir a alguien. Va por su propia hoja.
+var CAMPOS_ELEGIR = { 'Responsable': 1 };
 var CAMPOS_FICHA = {
   'Empresa':         { api: 'company',              movil: 'empresa', tipo: 'texto' },
   'Email':           { api: 'email',                movil: 'email',   tipo: 'email' },
@@ -2048,9 +2118,9 @@ var PORQUE_NO = {
   'Fuente':      'La fuente sale del catálogo de la cuenta y la edita quien la administra, desde el computador.',
   'Campaña':     'La campaña y la página las pone la atribución de pauta cuando entra el lead. Cambiarlas a mano partiría el reporte en dos.',
   'Página':      'La campaña y la página las pone la atribución de pauta cuando entra el lead. Cambiarlas a mano partiría el reporte en dos.',
-  'Responsable': 'Reasignar es elegir a alguien del equipo, y esa lista se maneja desde el computador.',
 };
 function editarCampo(campo){
+  if (CAMPOS_ELEGIR[campo]) { abrirResponsable(); return; }
   var def = CAMPOS_FICHA[campo];
   if (!def) {
     abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">'+esc(campo)+'</div>'
@@ -2757,6 +2827,7 @@ function movilMontar(opciones){
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     abrirTarea: abrirTarea, cuandoTarea: cuandoTarea, crearTarea: crearTarea,
     abrirCierre: abrirCierre, ponerMotivo: ponerMotivo, guardarCierre: guardarCierre,
+    abrirResponsable: abrirResponsable, ponerResponsable: ponerResponsable,
     alternarAuto: alternarAuto,
     toque: toque,
     verMod: verMod,

@@ -39,6 +39,9 @@ console.log('\nEl lead trae lo que la ficha necesita\n');
     created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-24T10:00:00Z',
   }, AHORA);
   chk('nombre, etapa y fuente', l.nom === 'Hellen Marún' && l.etapa === 'contactado' && l.origen === 'web');
+  // El id del responsable además del nombre: con solo el nombre, dos personas
+  // homónimas se confunden y nadie queda marcado si alguien se cambió el suyo.
+  chk('el responsable viaja con su id', aLead({ id: 'x', assigned_to: 'u9', assigned_name: 'Karen' }).respId === 'u9');
   chk('los campos de pauta salen de custom_fields',
       l.campana === 'Search 2026' && l.pagina === 'Arriendos', l.campana);
   chk('el valor va formateado', l.valor === '$ 320.000.000', l.valor);
@@ -62,6 +65,7 @@ console.log('\nEl lead trae lo que la ficha necesita\n');
       l.valor === '' && l.campana === '' && l.cierre === '' && l.empresa === '',
       JSON.stringify([l.valor, l.campana, l.cierre, l.empresa]));
   chk('sin responsable se dice, no se deja en blanco', l.resp === 'Sin asignar');
+  chk('y sin id de responsable queda en null', l.respId === null);
   chk('las etiquetas son siempre una lista', Array.isArray(l.tags));
   chk('y un lead sin importe suma cero, no NaN', aLead({ id: 'z' }).valorNum === 0);
 }

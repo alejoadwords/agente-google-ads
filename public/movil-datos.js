@@ -103,6 +103,10 @@ export function aLead(l, ahora = Date.now()) {
     // «$ 320.000.000» no se puede sumar con nada.
     valorNum: Number(l.value) || 0,
     resp: l.assigned_name || 'Sin asignar',
+    // El id además del nombre: para saber cuál de los del equipo está marcado
+    // al reasignar. Con solo el nombre, dos personas homónimas se confunden y
+    // nadie queda seleccionado si el nombre cambió.
+    respId: l.assigned_to || null,
     tags: Array.isArray(l.tags) ? l.tags : [],
     interes: l.notes || '',
     campana: cf['Campaña'] || '',
@@ -336,6 +340,10 @@ export function aParrilla(p) {
 
 export function aMiembro(m) {
   return {
+    // El id del usuario viaja: sin él la pantalla de equipo se puede pintar,
+    // pero no se le puede asignar un contacto a nadie.
+    id: m.member_user_id || null,
+    activo: m.status === 'active',
     nom: m.member_name || m.member_email || 'Sin nombre',
     sub: (m.role || 'sin perfil') + (m.status && m.status !== 'active' ? ' · ' + m.status : ''),
   };

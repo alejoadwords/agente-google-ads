@@ -126,6 +126,16 @@ console.log('\nLa barra de arriba: tres puertas y ninguna muerta\n');
   chk('y se marcan leídos por el camino de la web', /crmAvisosMarcarLeidos\(\)/.test(codigo));
 }
 
+console.log('\nSin sesión se dice, no se finge un fallo\n');
+{
+  // «No se pudo traer» cuando no hay nada que traer asusta por algo que no
+  // está roto. Se me escapó tres veces —avisos, NPS/academia y el equipo—,
+  // así que esto lo vigila una prueba en vez de mi memoria.
+  for (const q of ['tus avisos', 'tu satisfacción', 'los videos', 'tu equipo']) {
+    chk('sin sesión, ' + q + ' lo dice', codigo.includes('Entra con tu cuenta para ver ' + q), q);
+  }
+}
+
 console.log('\nEl cliente activo de una agencia se puede cambiar\n');
 {
   chk('la barra enseña el cliente', /function pintarBarraCliente\(/.test(codigo));
