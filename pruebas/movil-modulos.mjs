@@ -371,30 +371,21 @@ console.log('\nEl embudo, ejecutado con leads de verdad\n');
     L('ganado'),
     L('perdido'), L('perdido'), L('perdido'),
   ]);
-  chk('cuenta todos los contactos', /<b>8<\/b><span>contactos<\/span>/.test(html), html.slice(0, 200));
-  // 1 ganado de 4 cerrados = 25%. Sobre el total serían 12%, que es el número
-  // que hace parecer un desastre a una cuenta que apenas empieza.
-  chk('la tasa es sobre lo cerrado: 1 de 4 = 25%', /<b>25%<\/b>/.test(html), html.slice(0, 300));
-  chk('los sin contactar son los de etapa nuevo', /<b>3<\/b><span>sin contactar<\/span>/.test(html));
-  chk('y como son más que los ganados, sale el aviso', /El cuello está en el primer contacto: 3 contactos/.test(html));
-
-  // Una cuenta joven: nada cerrado todavía.
-  const joven = g.__pintar([L('nuevo'), L('contactado')]);
-  chk('sin nada cerrado se pinta — y no 0%', /<b>—<\/b>/.test(joven), joven.slice(0, 260));
-  chk('y lo explica', /nada cerrado aún/.test(joven));
-
-  // Una cuenta sana: no se le acusa de un cuello que no tiene.
-  const sana = g.__pintar([L('ganado'), L('ganado'), L('nuevo')]);
-  chk('a una cuenta sana no se le inventa un cuello de botella',
-      !/El cuello está/.test(sana));
+  chk('cuenta todos los contactos', /<b>8<\/b><span>/.test(html), html.slice(0, 200));
+  // La tasa de cierre es ganados/TOTAL, la MISMA fórmula que
+  // `crmRenderAnalytics`. Antes el móvil la medía sobre lo cerrado: un número
+  // más justo, pero distinto con el mismo nombre en las dos pantallas, y eso
+  // es peor — no se puede creer a ninguna de las dos.
+  chk('la tasa de cierre coincide con la de la web: 1 de 8 = 13%',
+      /13% de cierre/.test(html), html.slice(0, 460));
 
   // El alcance: si el informe contara los de otro tablero, diría un número
   // distinto que el CRM de al lado.
   const dos = [L('nuevo','p1'), L('nuevo','p1'), L('ganado','p2')];
   chk('con un tablero elegido solo cuenta los suyos',
-      /<b>2<\/b><span>contactos<\/span>/.test(g.__pintar(dos, 'p1')));
+      /<b>2<\/b><span>/.test(g.__pintar(dos, 'p1')), g.__pintar(dos, 'p1').slice(0, 160));
   chk('y sin tablero los cuenta todos',
-      /<b>3<\/b><span>contactos<\/span>/.test(g.__pintar(dos, null)));
+      /<b>3<\/b><span>/.test(g.__pintar(dos, null)));
 
   // Una etapa que no está en nuestro catálogo no puede desaparecer.
   const rara = g.__pintar([L('nuevo'), L('en-veremos'), L('en-veremos')]);
@@ -402,6 +393,46 @@ console.log('\nEl embudo, ejecutado con leads de verdad\n');
 
   chk('sin leads lo dice, no pinta un embudo vacío',
       /Todavía no hay contactos/.test(g.__pintar([])));
+
+  // ── Los MISMOS informes que la web ──
+  // `crmRenderAnalytics` pinta cuatro KPI, embudo con valor, fuentes,
+  // etiquetas y «requieren atención». El móvil traía solo el embudo.
+  const V = (etapa, valor, extra) => Object.assign(
+    { id: 'l' + Math.random(), etapa, pipeline: 'p1', valorNum: valor || 0, tags: [],
+      cerrado: etapa === 'ganado' || etapa === 'perdido', origen: 'web', tocado: Date.now(), nom: 'X' },
+    extra || {});
+  const inf = g.__pintar([
+    V('nuevo', 1000), V('contactado', 2000), V('propuesta', 7000),
+    V('ganado', 5000), V('perdido', 3000),
+  ]);
+  chk('cuenta activos y ganados', /3 activos · 1 ganados/.test(inf), inf.slice(0, 260));
+  // En proceso = los ABIERTOS. Meter los ganados ahí infla el pipeline con
+  // plata que ya entró, y meter los perdidos con plata que nunca va a entrar.
+  chk('«en proceso» suma solo los abiertos', /\$ 10\.000<\/b><span>en proceso/.test(inf), inf.slice(0, 400));
+  chk('lo ganado se suma aparte', /\$ 5\.000<\/b><span>ganado/.test(inf));
+  // Tasa de cierre = ganados / TOTAL, igual que la web. Medirla sobre lo
+  // cerrado daba otro número con el mismo nombre en las dos pantallas.
+  chk('la tasa de cierre es sobre el total, como en la web', /20% de cierre/.test(inf), inf.slice(0, 500));
+  chk('el promedio es por negocio abierto', /\$ 3\.333<\/b><span>promedio/.test(inf), inf.slice(0, 560));
+  chk('el embudo lleva el valor de cada etapa', /Propuesta<\/b><span>1 · \$ 7\.000/.test(inf), inf.slice(0, 900));
+  chk('y están las fuentes', /Fuentes de leads/.test(inf));
+
+  const conTags = g.__pintar([V('nuevo', 0, { tags: ['arriendo', 'urgente'] }), V('nuevo', 0, { tags: ['arriendo'] })]);
+  chk('las etiquetas se cuentan', /Leads por etiqueta/.test(conTags) && /arriendo<\/span>/.test(conTags));
+
+  // «Requieren atención»: 7 días o más sin tocar, ni cerrados ni con tarea.
+  const viejo = Date.now() - 12 * 86400000;
+  const dormido = g.__pintar([
+    V('contactado', 0, { id: 'dormido', nom: 'Sin tocar', tocado: viejo }),
+    V('ganado', 0, { id: 'cerrado', nom: 'Ya cerrado', tocado: viejo }),
+  ]);
+  chk('los dormidos salen con sus días', /Requieren atención/.test(dormido) && /12d/.test(dormido), dormido.slice(-400));
+  // Un lead cerrado hace un mes no «requiere atención»: ya se resolvió.
+  chk('un cerrado no aparece ahí', !/Ya cerrado/.test(dormido));
+  chk('y se puede abrir desde el informe', /M\.abrirLead\('dormido'\)/.test(dormido));
+
+  const fresco = g.__pintar([V('contactado', 0, { tocado: Date.now() })]);
+  chk('lo tocado hoy no requiere atención', !/Requieren atención/.test(fresco));
   chk('y null es «no se pudo traer»',
       /No se pudieron traer/.test(g.__pintar(null)));
 
@@ -435,16 +466,22 @@ console.log('\nEl embudo y la cartera salen de datos, no de una lista fija\n');
   // al lado, no se podría creer a ninguno de los dos.
   chk('y respeta el tablero elegido', /!pipelineActual \|\| l\.pipeline === pipelineActual/.test(fn));
   chk('null es «no se pudo», no cero', /LEADS === null/.test(fn));
-  // Contar los negocios ABIERTOS como fracasos hace que toda cuenta joven
-  // parezca un desastre.
-  chk('la tasa se mide sobre lo cerrado, no sobre el total',
-      /var cerrados = ganados \+ perdidos/.test(fn) && /ganados \/ cerrados/.test(fn));
-  chk('sin nada cerrado no inventa un porcentaje', /tasa === null/.test(fn));
+  // La MISMA fórmula que `crmRenderAnalytics` en la web: ganados sobre el
+  // total. Un número distinto con el mismo nombre en dos pantallas es peor
+  // que un número imperfecto.
+  chk('la tasa de cierre usa la fórmula de la web',
+      /ganados\.length \/ ls\.length/.test(fn), fn.slice(0, 200));
+  // Y los importes: lo abierto y lo ganado no se mezclan.
+  chk('lo en proceso y lo ganado se suman por separado',
+      /plataGan \+=/.test(fn) && /plataAct \+=/.test(fn));
   // Una etapa que el cliente inventó no puede desaparecer del informe.
   chk('las etapas propias de la cuenta también salen', /Object\.keys\(cuenta\)/.test(fn));
-  // El aviso incómodo solo si es cierto.
-  chk('el aviso del cuello de botella es condicional',
-      /sinContactar > ganados && sinContactar > 0/.test(fn));
+  // «Requieren atención» usa la regla de la web: 7 días o más sin tocar, ni
+  // cerrados ni con tarea pendiente. Contar uno que ya tiene su llamada
+  // agendada lo pone en rojo por un trabajo que alguien ya hizo.
+  chk('los dormidos excluyen los cerrados y los que ya tienen tarea',
+      /l\.cerrado \|\| conTarea\[l\.id\]/.test(fn), fn.slice(0, 200));
+  chk('y el corte son 7 días, como en la web', /86400000\) >= 7/.test(fn));
 
   const j = codigo.indexOf('clientes: function');
   const fc = codigo.slice(j, codigo.indexOf('\n  },', j));

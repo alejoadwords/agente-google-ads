@@ -150,18 +150,18 @@ var ETIQ_QUIEN = { bot:'Agente', human:'Tú', resolved:'Resuelta' };
 var DICE_QUIEN = { bot:'lo atiende el agente', human:'lo atiendes tú', resolved:'resuelta' };
 var LEADS = [
   {id:1,nom:'Hellen Marún',     etapa:'nuevo',      hace:'hace 2 h', origen:'Formulario web', tel:'+57 300 412 8890',
-   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', resp:'Karen Acosta', tags:['arriendo','alto-prado'],
+   interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', valorNum:320000000, resp:'Karen Acosta', tags:['arriendo','alto-prado'],
    email:'hellen.marun@example.com', empresa:'', campana:'Search - general 2026', pagina:'Arriendos Envigado', cierre:'30 sep'},
   {id:2,nom:'Rubén Corro',      etapa:'contactado', hace:'ayer',     origen:'Fincaraíz',      tel:'+57 311 220 4417',
-   interes:'Local comercial · Centro', valor:'$ 180.000.000', resp:'Maira Ballesteros', tags:['venta']},
+   interes:'Local comercial · Centro', valor:'$ 180.000.000', valorNum:180000000, resp:'Maira Ballesteros', tags:['venta']},
   {id:3,nom:'Sandra Caro',      etapa:'contactado', hace:'ayer',     origen:'Google Ads',     tel:'+57 315 887 1120',
-   interes:'Casa 3 hab · Villa Campestre', valor:'$ 540.000.000', resp:'Karen Acosta', tags:['venta','urgente']},
+   interes:'Casa 3 hab · Villa Campestre', valor:'$ 540.000.000', valorNum:540000000, resp:'Karen Acosta', tags:['venta','urgente']},
   {id:4,nom:'Giancarlo Armella',etapa:'ganado',     hace:'hace 3 d', origen:'Referido',       tel:'+57 320 559 3301',
-   interes:'Oficina 80 m²', valor:'$ 260.000.000', resp:'Maira Ballesteros', tags:['venta']},
+   interes:'Oficina 80 m²', valor:'$ 260.000.000', valorNum:260000000, resp:'Maira Ballesteros', tags:['venta']},
   {id:5,nom:'Walter Peralta',   etapa:'nuevo',      hace:'hace 5 h', origen:'Metrocuadrado',  tel:'+57 301 778 2245',
-   interes:'Apartaestudio · Riomar', valor:'$ 145.000.000', resp:'Sin asignar', tags:['arriendo']},
+   interes:'Apartaestudio · Riomar', valor:'$ 145.000.000', valorNum:145000000, resp:'Sin asignar', tags:['arriendo']},
   {id:6,nom:'Paula Restrepo',   etapa:'propuesta',  hace:'hace 1 d', origen:'Instagram',      tel:'+57 318 004 9912',
-   interes:'Penthouse · Buenavista', valor:'$ 890.000.000', resp:'Karen Acosta', tags:['venta','premium']}
+   interes:'Penthouse · Buenavista', valor:'$ 890.000.000', valorNum:890000000, resp:'Karen Acosta', tags:['venta','premium']}
 ];
 var HITOS = [['10:24','Llamada · no contestó'],['ayer','Le envié la ficha por WhatsApp'],['ayer','Entró por el formulario de la web']];
 var TAREAS = [
@@ -1267,10 +1267,18 @@ function pintarBarraCliente(){
   // La clase NO se toca: `bhueco` es la que lleva el `flex:1` que empuja los
   // iconos a los lados. Quitándola, el nombre del cliente se pegaba al menú y
   // los tres iconos se amontonaban a la izquierda.
-  if (cs.length < 2) { medio.innerHTML = ''; return; }
-  medio.innerHTML = '<button class="bcliente" onclick="M.abrirClientes()">'
-    + '<span>'+esc(nombreCliente(alcanceCliente()) || 'Elegir cliente')+'</span>'
-    + icn('arrow',14) + '</button>';
+  //
+  // Se enseña con UNO también: es el contexto de todo lo que hay debajo, y sin
+  // verlo no se sabe de quién son los contactos que se están mirando. Con uno
+  // solo no se puede cambiar, pero se lee.
+  if (!cs.length) { medio.innerHTML = ''; return; }
+  var nom = esc(nombreCliente(alcanceCliente()) || 'Elegir cliente');
+  // Con un solo cliente no hay nada que elegir: se pinta como etiqueta, no
+  // como botón. Un botón que abre una lista de una opción ya elegida es otro
+  // botón que no hace nada.
+  medio.innerHTML = cs.length < 2
+    ? '<div class="bcliente"><span>'+nom+'</span></div>'
+    : '<button class="bcliente" onclick="M.abrirClientes()"><span>'+nom+'</span>'+icn('arrow',14)+'</button>';
 }
 function abrirClientes(){
   toque();
@@ -1391,55 +1399,92 @@ var SEO = [
 // convertiría en tablas encogidas, que es justo lo que no queremos.
 var PINTORES = {
   analisis: function(){
-    // Se calcula de los leads que YA están en memoria: ni una petición más, y
-    // el mismo alcance de cliente y de tablero que la pantalla de CRM. Si
-    // dijera otro número que el CRM de al lado, no se podría creer a ninguno.
+    // Los MISMOS informes que `crmRenderAnalytics` en la web, calculados de los
+    // leads que ya están en memoria. Antes el móvil solo traía el embudo, y a
+    // quien abría «Análisis» le faltaba todo lo demás.
+    //
+    // El alcance también es el mismo que el del CRM de al lado: si dijera otro
+    // número, no se podría creer a ninguno de los dos.
     if (LEADS === null) return '<div class="vacio">No se pudieron traer tus contactos.</div>';
     var ls = LEADS.filter(function(l){ return !pipelineActual || l.pipeline === pipelineActual; });
     if (!ls.length) return '<div class="vacio">Todavía no hay contactos en este tablero.</div>';
 
-    // Las etapas que de VERDAD tiene esta cuenta, en el orden del catálogo y
-    // con las propias al final. Una etapa que el cliente inventó no puede
-    // desaparecer del informe solo por no estar en nuestra lista.
-    var cuenta = {};
-    ls.forEach(function(l){ cuenta[l.etapa] = (cuenta[l.etapa] || 0) + 1; });
+    var ganados = [], activos = [], plataAct = 0, plataGan = 0;
+    var cuenta = {}, valEtapa = {}, fuentes = {}, etiquetas = {};
+    ls.forEach(function(l){
+      cuenta[l.etapa] = (cuenta[l.etapa] || 0) + 1;
+      valEtapa[l.etapa] = (valEtapa[l.etapa] || 0) + (l.valorNum || 0);
+      var f = l.origen || 'manual';
+      fuentes[f] = (fuentes[f] || 0) + 1;
+      (l.tags || []).forEach(function(t){ etiquetas[t] = (etiquetas[t] || 0) + 1; });
+      if (l.etapa === 'ganado') { ganados.push(l); plataGan += (l.valorNum || 0); }
+      else if (!l.cerrado) { activos.push(l); plataAct += (l.valorNum || 0); }
+    });
+    // `ganados / total`, igual que la web. Medirlo sobre lo cerrado daba un
+    // número distinto con el mismo nombre en las dos pantallas, que es peor
+    // que un número imperfecto.
+    var tasa = ls.length ? Math.round(ganados.length / ls.length * 100) : 0;
+    var prom = activos.length ? Math.round(plataAct / activos.length) : 0;
+    var pes = function(n){ return '$ ' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }); };
+
     var orden = ETAPAS.map(function(e){ return e.k; });
     var claves = Object.keys(cuenta).sort(function(a, b){
       var ia = orden.indexOf(a), ib = orden.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
-    var filas = claves.map(function(k){
-      var t = k; for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k === k) t = ETAPAS[i].t;
-      return { e: t, n: cuenta[k], clase: k === 'ganado' ? 'ganada' : k === 'perdido' ? 'perdida' : '' };
-    });
-    var tope = Math.max.apply(null, filas.map(function(x){ return x.n; }));
+    var tope = Math.max.apply(null, claves.map(function(k){ return cuenta[k]; }));
 
-    var ganados = cuenta['ganado'] || 0;
-    var perdidos = cuenta['perdido'] || 0;
-    var sinContactar = cuenta['nuevo'] || 0;
-    // El porcentaje se mide sobre lo CERRADO, no sobre el total: contar los
-    // abiertos como fracasos hace que toda cuenta joven parezca un desastre.
-    var cerrados = ganados + perdidos;
-    var tasa = cerrados ? Math.round(ganados / cerrados * 100) : null;
+    var barras = function(obj, tit, etiqueta){
+      var ks = Object.keys(obj).sort(function(a, b){ return obj[b] - obj[a]; });
+      if (!ks.length) return '';
+      var max = obj[ks[0]] || 1;
+      return '<div class="secc"><h2>' + esc(tit) + '</h2></div><div class="secc"><div class="caja">'
+        + ks.slice(0, 12).map(function(k){
+            return '<div class="barra-fila"><span class="bf">' + esc(etiqueta ? etiqueta(k) : k) + '</span>'
+              + '<span class="bl"><i style="width:' + Math.round(obj[k] / max * 100) + '%"></i></span>'
+              + '<b>' + obj[k] + '</b></div>';
+          }).join('') + '</div></div>';
+    };
+
+    // Sin tocar en 7 días o más, ni cerrados ni con tarea pendiente: la misma
+    // regla de la web. Contar uno que ya tiene su llamada agendada lo pondría
+    // en rojo por un trabajo que alguien ya hizo.
+    var conTarea = {};
+    (TAREAS || []).forEach(function(t){ if (t.lead && !t.hecha) conTarea[t.lead] = 1; });
+    var ahora = Date.now();
+    var dormidos = ls.filter(function(l){
+      if (l.cerrado || conTarea[l.id]) return false;
+      return Math.floor((ahora - (l.tocado || 0)) / 86400000) >= 7;
+    }).sort(function(a, b){ return (a.tocado || 0) - (b.tocado || 0); }).slice(0, 8);
 
     return '<div class="cifras" style="padding-top:14px">'
-      + '<div class="cifra"><b>'+ls.length+'</b><span>contactos</span></div>'
-      + '<div class="cifra"><b>'+(tasa === null ? '—' : tasa + '%')+'</b><span>'
-        + (tasa === null ? 'nada cerrado aún' : 'de lo cerrado se gana')+'</span></div>'
-      + '<div class="cifra'+(sinContactar ? ' urge' : '')+'"><b>'+sinContactar+'</b><span>sin contactar</span></div></div>'
+      + '<div class="cifra"><b>' + ls.length + '</b><span>' + activos.length + ' activos · ' + ganados.length + ' ganados</span></div>'
+      + '<div class="cifra"><b class="chico">' + pes(plataAct) + '</b><span>en proceso</span></div>'
+      + '</div><div class="cifras">'
+      + '<div class="cifra"><b class="chico">' + pes(plataGan) + '</b><span>ganado · ' + tasa + '% de cierre</span></div>'
+      + '<div class="cifra"><b class="chico">' + pes(prom) + '</b><span>promedio por negocio</span></div>'
+      + '</div>'
       + '<div class="secc"><h2>Embudo</h2></div><div class="embudo">'
-      + filas.map(function(x){
-          return '<div class="etapa-f '+x.clase+'"><div class="ef"><b>'+esc(x.e)+'</b>'
-            + '<span>'+x.n+'</span></div>'
-            + '<div class="eb"><i style="width:'+Math.round(x.n/tope*100)+'%"></i></div></div>';
+      + claves.map(function(k){
+          var t = etiquetaEtapa(k);
+          var cl = k === 'ganado' ? 'ganada' : k === 'perdido' ? 'perdida' : '';
+          return '<div class="etapa-f ' + cl + '"><div class="ef"><b>' + esc(t) + '</b>'
+            + '<span>' + cuenta[k] + (valEtapa[k] ? ' · ' + pes(valEtapa[k]) : '') + '</span></div>'
+            + '<div class="eb"><i style="width:' + Math.round(cuenta[k] / tope * 100) + '%"></i></div></div>';
         }).join('')
       + '</div>'
-      // El dato incómodo se dice, pero SOLO si es cierto. Antes estaba escrito
-      // a mano y acusaba de un cuello de botella a cuentas que no lo tenían.
-      + (sinContactar > ganados && sinContactar > 0
-          ? '<div class="aviso" style="background:#FFF3E0;color:#B26A00">El cuello está en el primer contacto: '
-            + sinContactar + (sinContactar === 1 ? ' contacto espera' : ' contactos esperan')
-            + ' a que alguien los llame.</div>'
+      + barras(fuentes, 'Fuentes de leads')
+      + barras(etiquetas, 'Leads por etiqueta')
+      + (dormidos.length
+          ? '<div class="secc"><h2>Requieren atención</h2></div><div class="lista">'
+            + dormidos.map(function(l){
+                var d = Math.floor((ahora - (l.tocado || 0)) / 86400000);
+                return '<button class="lead" onclick="M.abrirLead(\'' + esc(String(l.id)) + '\')">'
+                  + '<span class="ini urge">' + d + 'd</span>'
+                  + '<span class="cuerpo"><span class="nom">' + esc(l.nom) + '</span>'
+                  + '<span class="meta">' + esc(l.empresa || l.origen) + '</span></span>'
+                  + '<span class="chip ' + esc(l.etapa) + '">' + esc(etiquetaEtapa(l.etapa)) + '</span></button>';
+              }).join('') + '</div>'
           : '');
   },
   nps: function(){
@@ -2074,15 +2119,45 @@ function alcanceCliente(){
 
 // app.js lo resuelve de forma asíncrona al arrancar. Si el móvil se monta
 // antes, cargaría con un alcance y la web con otro, y las dos enseñarían
-// cuentas distintas. Se espera un poco; si no llega, se sigue sin él.
+// cuentas distintas. Se espera a que haya alcance O a que llegue la cartera.
+//
+// Esperar SOLO el alcance no bastaba: en una cuenta de agencia nunca llega
+// solo. La aplicación lo activa automáticamente únicamente en las cuentas Pro;
+// en las de agencia lo restaura del localStorage, que es del NAVEGADOR — así
+// que en el teléfono está vacío la primera vez, por muy elegido que esté en el
+// computador.
 function esperarAlcance(tope){
   return new Promise(function(listo){
     var t0 = Date.now();
     (function mirar(){
-      if (alcanceCliente() || Date.now() - t0 > tope) { listo(alcanceCliente()); return; }
+      if (alcanceCliente() || clientesDeLaWeb().length || Date.now() - t0 > tope) { listo(); return; }
       setTimeout(mirar, 120);
     })();
   });
+}
+
+// Con qué cliente entra el móvil. Sin esto una cuenta de agencia entraba SIN
+// alcance, y entonces los tableros se piden con alcance nulo —donde solo está
+// el Principal, vacío— mientras los leads vienen de toda la cuenta. Eso es lo
+// que enseñaba 377 contactos revueltos y ningún selector.
+async function alcanceInicial(){
+  await esperarAlcance(4000);
+  var act = alcanceCliente();
+  if (act) return act;
+  var cs = clientesDeLaWeb();
+  if (!cs.length) return '';         // cuenta sin cartera: no hay nada que elegir
+  // La misma regla que usa la aplicación en una cuenta Pro: el principal si
+  // está, y si no el primero. Con un solo cliente no hay nada que preguntar, y
+  // con varios el selector de la barra deja cambiarlo en un toque.
+  var elegido = null;
+  for (var i=0;i<cs.length;i++) if (String(cs[i].id) === 'pro_main') elegido = cs[i];
+  if (!elegido) elegido = cs[0];
+  // Se activa POR LA APLICACIÓN, para que la web quede en el mismo cliente.
+  if (typeof window.agencyOpenClient === 'function') {
+    try { await window.agencyOpenClient(elegido.id); }
+    catch (e) { console.warn('[movil] alcance inicial', e); }
+  }
+  return alcanceCliente();
 }
 
 var _alcanceUsado = null;   // con cuál se cargó, para saber si cambió
@@ -2104,7 +2179,7 @@ async function cargarReales(){
     // segundo formateador aquí haría que el mismo importe se viera distinto
     // según si acabas de escribirlo o lo trajo la carga.
     TRADUCTOR = mod;
-    var cliente = await esperarAlcance(3000);
+    var cliente = await alcanceInicial();
     _alcanceUsado = cliente;
     d = await mod.cargarTodo(fetchAuth, { clientId: cliente });
   } catch (e) {

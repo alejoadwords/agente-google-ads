@@ -523,3 +523,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   border-bottom:1px solid var(--border);font-size:var(--fs-sm)}
 .nps-fila:last-child{border-bottom:0}
 .nps-fila b{font-weight:700}
+
+/* ── Informe: barras de fuentes y etiquetas ── */
+.barra-fila{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);
+  font-size:var(--fs-sm)}
+.barra-fila:last-child{border-bottom:0}
+.barra-fila .bf{flex:none;width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.barra-fila .bl{flex:1;height:7px;border-radius:999px;background:var(--bg-muted);overflow:hidden}
+.barra-fila .bl i{display:block;height:100%;background:var(--blue);border-radius:999px}
+.barra-fila b{flex:none;min-width:26px;text-align:right;font-weight:700}
+/* Un importe no cabe con el tamaño de una cifra suelta: se encoge en vez de
+   desbordarse o partirse en dos líneas. */
+.cifra b.chico{font-size:var(--fs-md);letter-spacing:-.2px}
+/* Los días sin tocar, en el círculo del contacto */
+.ini.urge{background:var(--danger-bg);color:var(--danger);font-size:var(--fs-sm)}

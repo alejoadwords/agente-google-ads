@@ -42,6 +42,9 @@ console.log('\nEl lead trae lo que la ficha necesita\n');
   chk('los campos de pauta salen de custom_fields',
       l.campana === 'Search 2026' && l.pagina === 'Arriendos', l.campana);
   chk('el valor va formateado', l.valor === '$ 320.000.000', l.valor);
+  // Y en crudo, porque el informe SUMA importes y un «$ 320.000.000» no se
+  // puede sumar con nada.
+  chk('y también en crudo, para poder sumarlo', l.valorNum === 320000000, String(l.valorNum));
   // Una fecha sin hora interpretada en UTC retrocede un día en Colombia: el
   // cierre del 30 se pintaba «29 de sept». Adelanta TODOS los cierres un día.
   chk('la fecha de cierre no retrocede un día', /30/.test(l.cierre), l.cierre);
@@ -60,6 +63,7 @@ console.log('\nEl lead trae lo que la ficha necesita\n');
       JSON.stringify([l.valor, l.campana, l.cierre, l.empresa]));
   chk('sin responsable se dice, no se deja en blanco', l.resp === 'Sin asignar');
   chk('las etiquetas son siempre una lista', Array.isArray(l.tags));
+  chk('y un lead sin importe suma cero, no NaN', aLead({ id: 'z' }).valorNum === 0);
 }
 
 console.log('\nUna cita no es una tarea\n');

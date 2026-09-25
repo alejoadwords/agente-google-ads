@@ -129,8 +129,30 @@ console.log('\nLa barra de arriba: tres puertas y ninguna muerta\n');
 console.log('\nEl cliente activo de una agencia se puede cambiar\n');
 {
   chk('la barra enseña el cliente', /function pintarBarraCliente\(/.test(codigo));
-  // Con uno solo el selector no decide nada y solo quita sitio.
-  chk('solo cuando hay de dónde elegir', /if \(cs\.length < 2\)/.test(codigo));
+  // El chip se enseña también con UN cliente: es el contexto de todo lo de
+  // abajo, y sin verlo no se sabe de quién son los contactos que se miran.
+  chk('el chip sale aunque haya un solo cliente', /if \(!cs\.length\) \{ medio\.innerHTML/.test(codigo));
+  // Pero sin nada que elegir es una etiqueta, no un botón.
+  chk('y con uno solo es etiqueta, no botón', /cs\.length < 2\s*\n?\s*\? '<div class="bcliente">/.test(codigo));
+
+  // ── El fallo que lo destapó ──
+  // Una cuenta de AGENCIA no recibe alcance automático: la aplicación solo lo
+  // activa sola en las Pro, y en las de agencia lo restaura del localStorage,
+  // que es del NAVEGADOR. En el teléfono está vacío la primera vez.
+  //
+  // Sin alcance, los tableros se piden con alcance nulo —donde solo está el
+  // Principal— mientras los leads vienen de TODA la cuenta: 377 contactos
+  // revueltos y ningún selector.
+  chk('el móvil elige cliente si no hay ninguno activo', /async function alcanceInicial\(/.test(codigo));
+  const ai = codigo.slice(codigo.indexOf('async function alcanceInicial'),
+                          codigo.indexOf('\n}', codigo.indexOf('async function alcanceInicial')));
+  chk('espera también a que llegue la cartera, no solo al alcance',
+      /clientesDeLaWeb\(\)\.length/.test(codigo.slice(codigo.indexOf('function esperarAlcance'),
+                                                      codigo.indexOf('async function alcanceInicial'))));
+  chk('usa la misma regla que la web: pro_main o el primero',
+      /'pro_main'/.test(ai) && /cs\[0\]/.test(ai), ai.slice(0, 140));
+  chk('y lo activa por la aplicación, no a mano', /window\.agencyOpenClient/.test(ai));
+  chk('una cuenta sin cartera no se inventa un cliente', /if \(!cs\.length\) return '';/.test(ai));
   // Dejar los leads del cliente anterior bajo el nombre del nuevo es la peor
   // forma de equivocarse en una agencia.
   const i = codigo.indexOf('async function elegirCliente');

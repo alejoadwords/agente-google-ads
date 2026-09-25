@@ -99,6 +99,9 @@ export function aLead(l, ahora = Date.now()) {
     email: l.email || '',
     empresa: l.company || '',
     valor: plata(l.value),
+    // El importe en CRUDO además del formateado: el informe suma valores, y
+    // «$ 320.000.000» no se puede sumar con nada.
+    valorNum: Number(l.value) || 0,
     resp: l.assigned_name || 'Sin asignar',
     tags: Array.isArray(l.tags) ? l.tags : [],
     interes: l.notes || '',
