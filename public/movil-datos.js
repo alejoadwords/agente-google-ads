@@ -171,6 +171,146 @@ export function aConversacion(c, ahora = Date.now()) {
   };
 }
 
+// ── Módulos ─────────────────────────────────────────────────────────────────
+// Las siete pantallas de módulo —chatbots, campañas, listas, automatizaciones,
+// fuentes, propuestas y reservas— enseñaban los datos de EJEMPLO a cuentas
+// reales: «3 campañas este mes» y «Arriendos Envigado · 412 visitas» eran
+// inventados. Un cliente no tiene forma de saber que lo que lee no es suyo.
+//
+// Todos pintan con la misma fila: {nom, sub, est?, n?, on?, res?}.
+
+/** El chip de estado solo tiene cuatro colores en el CSS. Cualquier estado que
+ *  no caiga en uno se pintaría sin color y parecería roto, así que aquí se
+ *  traduce TODO lo que devuelve la API a esos cuatro. */
+export function chipEstado(v) {
+  const s = String(v || '').toLowerCase();
+  if (['sent', 'enviada', 'completed', 'done'].includes(s)) return 'enviada';
+  if (['draft', 'borrador'].includes(s)) return 'borrador';
+  if (['paused', 'pausada', 'inactive', 'cancelled', 'canceled'].includes(s)) return 'pausada';
+  if (['queued', 'sending', 'active', 'activa', 'running', 'viewed', 'accepted', 'paid'].includes(s)) return 'activa';
+  return 'borrador';
+}
+
+export function aCampana(c, ahora = Date.now()) {
+  const s = c.stats || {};
+  const programada = c.status === 'queued' && c.scheduled_at && Date.parse(c.scheduled_at) > ahora;
+  const canal = c.channel === 'whatsapp' ? 'WhatsApp' : 'Correo';
+  const cuenta = c.status === 'draft' ? 'sin programar'
+    : programada ? 'sale el ' + new Date(c.scheduled_at).toLocaleString('es-CO',
+        { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : (s.sent || 0) + ' de ' + (s.total || 0) + ' enviados';
+  return {
+    nom: c.name || 'Sin nombre',
+    est: programada ? 'activa' : chipEstado(c.status),
+    sub: canal + ' · ' + cuenta,
+    // Los porcentajes solo cuando hay base para calcularlos: un «0 %» sobre
+    // cero envíos se lee como una campaña que fracasó.
+    res: (s.sent > 0) ? {
+      Entregados: Math.round(((s.delivered != null ? s.delivered : s.sent) / s.sent) * 100),
+      Abiertos: Math.round(((s.opened || 0) / s.sent) * 100),
+      Clics: Math.round(((s.clicked || 0) / s.sent) * 100),
+    } : null,
+  };
+}
+
+export function aLista(l) {
+  const estatica = l.kind === 'static';
+  return {
+    nom: l.name || 'Sin nombre',
+    // Una lista dinámica NO tiene un número fijo: poner uno sería inventarlo.
+    n: estatica ? (l.lead_ids || []).length : undefined,
+    sub: l.type === 'exclusion' || l.kind === 'exclusion'
+      ? 'Exclusión · nunca reciben campañas'
+      : estatica ? 'Lista fija' : 'Dinámica · se actualiza sola',
+  };
+}
+
+export function aAutomatizacion(a) {
+  const on = a.is_active != null ? !!a.is_active : !!a.active;
+  return {
+    // El id viaja hasta la fila: sin él el interruptor no sabe a quién apagar.
+    id: a.id,
+    nom: a.name || 'Sin nombre',
+    on,
+    sub: (a.trigger ? String(a.trigger).replace(/_/g, ' ') : 'Sin disparador')
+      + (on ? '' : ' · apagada'),
+  };
+}
+
+export function aFuente(s) {
+  return {
+    nom: s.label || s.key || 'Sin nombre',
+    // `count` puede venir sin definir: dejarlo en 0 diría «esta fuente no trae
+    // a nadie», que no es lo mismo que «no sé cuántos trae».
+    n: Number.isFinite(Number(s.count)) ? Number(s.count) : undefined,
+    sub: s.key ? 'Clave: ' + s.key : 'Fuente de la cuenta',
+  };
+}
+
+export function aPropuesta(p) {
+  const monto = plata(p.amount);
+  return {
+    nom: (p.lead_name ? p.lead_name + ' · ' : '') + (p.title || 'Sin título'),
+    est: chipEstado(p.status),
+    sub: (monto || 'Sin importe') + ' · ' + (hace(p.created_at) || 'sin fecha'),
+  };
+}
+
+export function aServicio(s) {
+  const activo = s.activo !== false;
+  return {
+    nom: s.nombre || s.name || 'Sin nombre',
+    est: activo ? 'activa' : 'pausada',
+    sub: (s.duracion_min ? s.duracion_min + ' min' : 'Sin duración')
+      + (activo ? '' : ' · pausado, no se puede reservar'),
+  };
+}
+
+export function aAgente(a) {
+  const on = a.is_active != null ? !!a.is_active : !!a.active;
+  return {
+    id: a.id,
+    nom: a.name || 'Sin nombre',
+    on,
+    canal: a.channel || 'Sin canal',
+    // Nunca un recuento inventado: si la API no lo manda, se dice el estado.
+    convs: on ? 'Encendido' : 'Apagado',
+  };
+}
+
+/**
+ * Trae UN módulo, cuando se abre. Los siete de golpe al arrancar serían siete
+ * peticiones más antes de ver nada, y la mayoría de las veces no se abre
+ * ninguno: quien saca el teléfono va a los leads y a los chats.
+ *
+ * Devuelve null si no se pudo mirar —igual que `cargarTodo`—, nunca [].
+ */
+export const MODULOS_API = {
+  chatbots: { ruta: '/api/chat-agents',  clave: 'agents',      mapa: aAgente },
+  campanas: { ruta: '/api/campaigns',    clave: 'campaigns',   mapa: aCampana },
+  listas:   { ruta: '/api/lead-lists',   clave: 'lists',       mapa: aLista },
+  autos:    { ruta: '/api/automations',  clave: 'automations', mapa: aAutomatizacion },
+  fuentes:  { ruta: '/api/lead-sources', clave: 'sources',     mapa: aFuente },
+  props:    { ruta: '/api/proposals',    clave: 'proposals',   mapa: aPropuesta },
+  reservas: { ruta: '/api/bookings',     clave: 'servicios',   mapa: aServicio },
+};
+
+export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
+  const def = MODULOS_API[id];
+  if (!def) return null;
+  try {
+    const q = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const r = await fetchAuth(def.ruta + q);
+    if (!r || !r.ok) return null;
+    const d = await r.json();
+    const lista = d[def.clave];
+    // Si la clave no viene, es que la respuesta no tiene la forma esperada. Eso
+    // es «no se pudo mirar», no «no hay nada».
+    if (!Array.isArray(lista)) return null;
+    return lista.map(def.mapa);
+  } catch { return null; }
+}
+
 // ── Carga ───────────────────────────────────────────────────────────────────
 /**
  * Pide lo que necesita el móvil. Devuelve SIEMPRE un objeto con las claves

@@ -141,11 +141,11 @@ var LEADS = [
 ];
 var HITOS = [['10:24','Llamada · no contestó'],['ayer','Le envié la ficha por WhatsApp'],['ayer','Entró por el formulario de la web']];
 var TAREAS = [
-  {t:'Llamar a Sandra Caro',        s:'Venció ayer · 16:00', cuando:'vencida', hecha:false},
-  {t:'Llamar a Hellen Marún',       s:'Hoy · 11:00',         cuando:'hoy',     hecha:false},
-  {t:'Enviar propuesta a Rubén',    s:'Hoy · 15:00',         cuando:'hoy',     hecha:false},
-  {t:'Confirmar visita con Paula',  s:'Mañana · 09:30',      cuando:'proxima', hecha:false},
-  {t:'Llamar a Walter',             s:'Hoy · 08:10',         cuando:'hoy',     hecha:true}
+  {t:'Llamar a Sandra Caro',        cuando:'vencida', hecha:false},
+  {t:'Llamar a Hellen Marún',               cuando:'hoy',     hecha:false},
+  {t:'Enviar propuesta a Rubén',            cuando:'hoy',     hecha:false},
+  {t:'Confirmar visita con Paula',       cuando:'proxima', hecha:false},
+  {t:'Llamar a Walter',                     cuando:'hoy',     hecha:true}
 ];
 var CITAS = [
   {h:'09:30', dur:'45 min', t:'Visita · Alto Prado',        s:'Hellen Marún',      pasada:true},
@@ -605,8 +605,19 @@ async function ponerQuien(q){
 
 // ── Chatbots ────────────────────────────────────────────────────────────────
 function pintarBots(){
-  $('#chatbots .lista').innerHTML = BOTS.map(function(b){
-    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot(\''+b.id+'\',this)">'
+  var host = $('#chatbots .lista'); if (!host) return;
+  // null es «no se pudieron traer», que no es lo mismo que no tener ninguno.
+  if (BOTS === null) {
+    host.innerHTML = '<div class="vacio">No se pudieron traer tus agentes.<br>'
+      + '<button class="rapida" style="margin-top:10px" onclick="M.reintentarModulo(\'chatbots\')">Reintentar</button></div>';
+    return;
+  }
+  if (!BOTS.length) {
+    host.innerHTML = '<div class="vacio">Todavía no tienes agentes de conversación.</div>';
+    return;
+  }
+  host.innerHTML = BOTS.map(function(b){
+    return '<div class="chatbot'+(b.on?' on':'')+'" onclick="M.alternarBot(\''+esc(b.id)+'\',this)">'
       + '<div style="flex:1;min-width:0"><div class="tt">'+esc(b.nom)+'</div>'
         + '<div class="tsub">'+esc(b.canal)+'</div>'
         + '<div class="tsub" style="margin-top:4px">'+esc(b.convs)+'</div></div>'
@@ -614,9 +625,22 @@ function pintarBots(){
   }).join('');
 }
 function alternarBot(id,el){
-  for (var i=0;i<BOTS.length;i++) if (BOTS[i].id===id) BOTS[i].on = !BOTS[i].on;
+  var b = null;
+  // Los ids de la API son cadenas; el `===` contra un número del ejemplo no
+  // casaba nunca y el interruptor movía la clase sin tocar el dato.
+  for (var i=0;i<(BOTS||[]).length;i++) if (String(BOTS[i].id) === String(id)) b = BOTS[i];
+  if (!b) return;
+  var antes = b.on;
+  b.on = !antes;
   el.classList.toggle('on');
   toque();
+  // Apagar un agente que sigue encendido es peor que no poder apagarlo: quien
+  // lo apagó deja de vigilar la conversación creyendo que nadie responde.
+  guardar('/api/chat-agents', { id: b.id, is_active: b.on }, 'PUT', function(){
+    b.on = antes;
+    el.classList.toggle('on');
+    pintarBots();
+  });
 }
 function abrirBots_viejo(){
   var h = document.createElement('div');
@@ -716,7 +740,13 @@ function filaItem(x){
            + '<div class="bl"><i style="width:'+x.res[k]+'%"></i></div></div>';
     }).join('') + '</div>';
   }
-  return '<button class="item'+(x.on?' on':'')+'" onclick="M.toque()">'
+  // El interruptor era decorativo: `M.toque()` vibraba y ya. Y el texto de la
+  // pantalla promete «aquí puedes encender y apagar las que ya tienes». Cuando
+  // la fila trae id y estado, el toque guarda de verdad.
+  var accion = (x.id && x.on !== undefined)
+    ? 'M.alternarAuto(\''+esc(String(x.id))+'\',this)'
+    : 'M.toque()';
+  return '<button class="item'+(x.on?' on':'')+'" onclick="'+accion+'">'
     + '<span class="cuerpo"><span class="it">'+esc(x.nom)+'</span>'
       + '<span class="is">'+esc(x.sub)+'</span>'
       + (x.est ? '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span>' : '')
@@ -725,28 +755,51 @@ function filaItem(x){
     + (x.on !== undefined ? '<span class="interruptor"></span>' : '')
     + '</button>';
 }
-function abrirModulo(id){
-  var M = {
-    campanas:{t:'Campañas', s:'3 este mes', datos:CAMPANAS, escritorio:
+// La ficha de cada módulo: título, texto de «esto se hace en el computador» y
+// los datos de EJEMPLO, que solo se usan cuando no hay sesión. Vive fuera de
+// `abrirModulo` porque el repintado y el reintento también la necesitan.
+function FICHA_MODULO(id){
+  return {
+    campanas:{t:'Campañas', datos:CAMPANAS, escritorio:
       'Armar una campaña es elegir plantilla, audiencia y fecha: son muchas decisiones seguidas y se hacen mejor en el computador. Desde aquí ves cómo van las que ya salieron.'},
-    listas:  {t:'Listas',   s:'3 listas',   datos:LISTAS},
-    autos:   {t:'Automatizaciones', s:'2 activas', datos:AUTOS, escritorio:
+    listas:  {t:'Listas',     datos:LISTAS},
+    autos:   {t:'Automatizaciones', datos:AUTOS, escritorio:
       'El constructor encadena pasos y condiciones, y eso necesita espacio para verse entero. Aquí puedes encender y apagar las que ya tienes, y ver cuántas veces corrió cada una.'},
-    fuentes: {t:'Fuentes',  s:'4 conectadas', datos:FUENTES, escritorio:
+    fuentes: {t:'Fuentes',  datos:FUENTES, escritorio:
       'Conectar una fuente nueva implica copiar un código a tu web o a otra herramienta, que es cosa del computador. Aquí ves cuántos leads trae cada una y cuándo entró el último.'},
-    props:   {t:'Propuestas', s:'3 abiertas', datos:PROPS},
-    reservas:{t:'Reservas', s:'2 servicios activos', datos:RESERVAS, escritorio:
+    props:   {t:'Propuestas', datos:PROPS},
+    reservas:{t:'Reservas', datos:RESERVAS, escritorio:
       'Los servicios, los horarios y la disponibilidad se configuran en el computador. Aquí ves las reservas que van entrando.'},
-    plant:   {t:'Plantillas', s:'Diseños de correo', escritorio:
+    plant:   {t:'Plantillas', escritorio:
       'Los diseños se arman arrastrando bloques, y eso necesita una pantalla grande para que salga algo usable. Desde el teléfono puedes ver cuáles tienes, duplicarlas y usarlas en una campaña.',
       datos:[{nom:'Bienvenida', sub:'Usada en 2 campañas'},{nom:'Novedades del mes', sub:'Usada en 1 campaña'}]},
-    paginas: {t:'Páginas', s:'Páginas de aterrizaje', escritorio:
+    paginas: {t:'Páginas', escritorio:
       'El constructor de páginas funciona arrastrando secciones, que en un teléfono no se maneja bien. Aquí puedes ver las que tienes, copiar su enlace y consultar sus visitas.',
       datos:[{nom:'Arriendos Envigado', sub:'412 visitas · 31 formularios'},{nom:'Proyecto Altos', sub:'96 visitas · 7 formularios'}]},
-    ajustes: {t:'Configuración', s:'Cuenta, equipo y plan', escritorio:
+    ajustes: {t:'Configuración', escritorio:
       'Los ajustes de la cuenta —equipo, permisos, plan, integraciones y catálogos— se hacen desde el computador. Son cambios que afectan a todos y conviene hacerlos con calma y la pantalla completa.',
       datos:[{nom:'Equipo', sub:'9 personas activas'},{nom:'Plan', sub:'Agency · renueva el 11 de septiembre'},{nom:'Integraciones', sub:'Google Ads, Google Calendar'}]}
   }[id];
+}
+
+// Los ids que tienen fuente propia en la API. Los que no están aquí lo dicen,
+// en vez de enseñar los ejemplos como si fueran de la cuenta.
+var MODULOS_API_IDS = { chatbots:1, campanas:1, listas:1, autos:1, fuentes:1, props:1, reservas:1 };
+
+// «No hay nada» dicho con las palabras de cada módulo: un «sin resultados»
+// genérico no distingue una cuenta nueva de una pantalla rota.
+var VACIO_MODULO = {
+  campanas: 'Todavía no has enviado ninguna campaña.',
+  listas:   'Todavía no tienes listas. Se arman desde el computador.',
+  autos:    'Todavía no tienes automatizaciones.',
+  fuentes:  'Todavía no hay fuentes conectadas.',
+  props:    'Todavía no has enviado ninguna propuesta.',
+  reservas: 'Todavía no tienes servicios para reservar.',
+  chatbots: 'Todavía no tienes agentes de conversación.',
+};
+
+function abrirModulo(id){
+  var M = FICHA_MODULO(id);
   // Los informes y los módulos de cuenta tienen pintor propio: forzarlos a la
   // lista genérica los convertiría en tablas encogidas.
   if (!M && PINTORES[id]) {
@@ -763,14 +816,110 @@ function abrirModulo(id){
   if (!M) return;
   var h = document.createElement('div');
   h.className = 'hoja'; h.id = 'hoja-mod';
+  // El subtítulo de la cabecera venía escrito a mano —«3 este mes»— y mentía en
+  // cuanto la cuenta no tenía tres. Se deja vacío hasta saber el número.
   h.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
-    + '<div><h1>'+esc(M.t)+'</h1><div class="sub">'+esc(M.s)+'</div></div></div>'
+    + '<div><h1>'+esc(M.t)+'</h1><div class="sub" id="mod-sub"></div></div></div>'
     // Se dice POR QUÉ no se edita aquí, no solo que no se puede: un «no
     // disponible» a secas se lee como que falta, no como que no tiene sentido.
     + (M.escritorio ? '<div class="solo-escritorio"><b>Se edita desde el computador</b>'+esc(M.escritorio)+'</div>' : '')
-    + '<div class="lista">' + M.datos.map(filaItem).join('') + '</div>';
+    + '<div class="lista" id="mod-lista"></div>';
   movilRaiz().appendChild(h);
   history.pushState({hoja:1},'');
+  pintarModulo(id, M);
+}
+
+// Lo que hay dentro de un módulo, ya traído. Se guarda por módulo para no
+// volver a pedirlo cada vez que se abre y se cierra la hoja.
+var MODULO_CACHE = {};
+
+function pintarModulo(id, M){
+  var lista = $('#mod-lista'), sub = $('#mod-sub');
+  if (!lista) return;
+  // En modo muestra se siguen enseñando los ejemplos —sirven para revisar el
+  // diseño— pero se dice que lo son. Lo que no puede pasar es que una cuenta
+  // real los lea como suyos, que es lo que pasaba.
+  if (MODO !== 'real') {
+    lista.innerHTML = (M.datos || []).map(filaItem).join('');
+    if (sub) sub.textContent = 'Datos de ejemplo';
+    return;
+  }
+  var guardado = MODULO_CACHE[id];
+  if (guardado !== undefined) { volcarModulo(id, guardado, M); return; }
+  if (!MODULOS_API_IDS[id]) {
+    // Módulos sin fuente propia todavía. Se dice, en vez de enseñar ejemplos.
+    lista.innerHTML = '<div class="vacio">Esta pantalla todavía no trae tus datos. '
+      + 'Por ahora se consulta desde el computador.</div>';
+    if (sub) sub.textContent = '';
+    return;
+  }
+  lista.innerHTML = '<div class="vacio">Trayendo tus datos…</div>';
+  if (sub) sub.textContent = '';
+  cargarModuloReal(id).then(function(datos){
+    // Un fallo NO se guarda: si se cachea, un corte de red de un segundo deja
+    // la pantalla diciendo «no se pudieron traer» cada vez que se abre, hasta
+    // que alguien dé al botón de reintentar. Cerrar y volver a entrar es lo
+    // primero que hace cualquiera, y tiene que bastar.
+    if (datos !== null) MODULO_CACHE[id] = datos;
+    // La hoja puede haberse cerrado —o haberse abierto otra— mientras tanto.
+    // Pintar sin comprobarlo metería los datos de un módulo en la cabecera de
+    // otro, que es peor que no pintarlos.
+    if ($('#mod-lista') !== lista) return;
+    volcarModulo(id, datos, M);
+  });
+}
+
+function volcarModulo(id, datos, M){
+  var lista = $('#mod-lista'), sub = $('#mod-sub');
+  if (!lista) return;
+  if (datos === null) {
+    // Ni ejemplos ni una lista vacía: «no se pudo mirar» y se puede reintentar.
+    lista.innerHTML = '<div class="vacio">No se pudieron traer estos datos.<br>'
+      + '<button class="rapida" style="margin-top:10px" onclick="M.reintentarModulo(\''+esc(id)+'\')">Reintentar</button></div>';
+    if (sub) sub.textContent = 'no se pudieron traer';
+    return;
+  }
+  lista.innerHTML = datos.length
+    ? datos.map(filaItem).join('')
+    : '<div class="vacio">' + esc(VACIO_MODULO[id] || 'Todavía no hay nada aquí.') + '</div>';
+  if (sub) sub.textContent = datos.length === 1 ? '1 en total' : datos.length + ' en total';
+}
+
+// El interruptor de una automatización, desde la lista del módulo.
+function alternarAuto(id, el){
+  var lista = MODULO_CACHE.autos;
+  var a = null;
+  for (var i=0;i<(lista||[]).length;i++) if (String(lista[i].id) === String(id)) a = lista[i];
+  if (!a) return;
+  var antes = a.on;
+  a.on = !antes;
+  el.classList.toggle('on');
+  toque();
+  // Una automatización que se cree apagada y siga corriendo manda correos que
+  // nadie espera. En plan gratuito el servidor responde 403 con su motivo, y
+  // `guardar` ya lo dice y lo deshace.
+  guardar('/api/automations', { id: a.id, active: a.on }, 'PUT', function(){
+    a.on = antes;
+    el.classList.toggle('on');
+  });
+}
+
+function reintentarModulo(id){
+  delete MODULO_CACHE[id];
+  var M = FICHA_MODULO(id);
+  if (M) pintarModulo(id, M);
+}
+
+async function cargarModuloReal(id){
+  if (typeof fetchAuth !== 'function') return null;
+  try {
+    var mod = TRADUCTOR || await import('./movil-datos.js');
+    TRADUCTOR = mod;
+    return await mod.cargarModulo(fetchAuth, id);
+  } catch (e) {
+    console.warn('[movil] módulo ' + id, e);
+    return null;
+  }
 }
 function cerrarModulo(){
   var h = $('#hoja-mod'); if (!h) return;
@@ -1467,8 +1616,17 @@ async function cargarReales(){
   CITAS  = d.citas;
   CONVS  = d.convs;
   MODO = 'real';
+  // Los agentes salían de la lista de EJEMPLO aunque la cuenta fuera real:
+  // «Asesor de arriendos · 42 conversaciones este mes» se lo leía como suyo
+  // cualquiera. Hasta que lleguen los de verdad, null —«no se pudo mirar»—,
+  // nunca los inventados.
+  BOTS = null;
   pintarModo();
   repintarTodo();
+  cargarModuloReal('chatbots').then(function(ags){
+    BOTS = ags;
+    pintarBots();
+  });
 }
 
 function repintarTodo(){
@@ -1657,6 +1815,8 @@ function movilMontar(opciones){
     ponerQuien: ponerQuien,
     pulsoIr: pulsoIr,
     guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead,
+    reintentarModulo: reintentarModulo,
+    alternarAuto: alternarAuto,
     toque: toque,
     verMod: verMod,
     verSub: verSub,
