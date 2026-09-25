@@ -6,7 +6,7 @@
       "fecha": "2026-09-25",
       "tipo": "mejora",
       "titulo": "«Chatbots» ahora se llama «Agentes IA»",
-      "texto": "La pantalla donde decides quién contesta en cada canal se llamaba «Chatbots» en el menú, pero el resto de la aplicación ya la nombraba «Agentes IA»: si no tenías canales conectados, el mensaje te mandaba a «Agentes IA» y esa pestaña no existía por ningún lado. Ya se llama igual en todas partes, también en el teléfono. La dirección de siempre sigue funcionando, así que los enlaces que tengas guardados no se rompen, y el buscador ⌘K la sigue encontrando si escribes «chatbots»."
+      "texto": "La pantalla donde decides quién contesta en cada canal se llamaba «Chatbots» en el menú, pero el resto de la aplicación ya la nombraba «Agentes IA»: si no tenías canales conectados, el mensaje te mandaba a «Agentes IA» y esa pestaña no existía por ningún lado. Ya se llama igual en todas partes, también en el teléfono, y su dirección web pasó a ser /conversaciones/agentes-ia. Si tenías guardado el enlace viejo no se rompe: te lleva a la misma pantalla y corrige la dirección solo. Y el buscador ⌘K la sigue encontrando si escribes «chatbots»."
     },
     {
       "id": "2026-09-25-pulso-tareas-vencidas",

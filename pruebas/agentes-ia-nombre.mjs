@@ -71,8 +71,11 @@ for (const [nombre, texto] of [['app.js', app], ['index.html', html], ['movil-ap
 
 // ── 3. Lo que NO se puede romper al renombrar ──────────────────────────────
 console.log('\nLo que el cambio de nombre no puede llevarse por delante');
-ok(/agents: '\/conversaciones\/chatbots'/.test(app),
-   'la dirección sigue siendo la de siempre: hay enlaces guardados que la usan');
+// La dirección se renombró con la pantalla, pero la vieja sigue viva como
+// alias. El detalle de a dónde lleva y qué deja en la barra de direcciones lo
+// comprueba `pruebas/ruta-agentes-ia.mjs`, ejecutando el enrutador.
+ok(/CRM_RENOMBRADAS = \{ '\/conversaciones\/chatbots': 'agents' \}/.test(app),
+   'la dirección vieja sigue viva como alias: hay enlaces guardados que la usan');
 ok(/kw: '[^']*chatbots/.test(app),
    'el ⌘K todavía encuentra la pantalla escribiendo «chatbots», el nombre de toda la vida');
 ok(/label: 'Conversaciones · Agentes IA'/.test(app),

@@ -27845,10 +27845,18 @@ function agnScheduleForLead() {
     // La ficha lleva el id en la ruta, así que su dirección se arma aparte en
     // `currentPath()`. Aquí solo queda anotada para que el reverso la reconozca.
     lead: '/crm/lead',
-    inbox: '/conversaciones', agents: '/conversaciones/chatbots',
+    inbox: '/conversaciones', agents: '/conversaciones/agentes-ia',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
   const CRM_LEGACY = { '': 'kanban', '/contactos': 'list', '/agentes-ia': 'agents', '/inbox': 'inbox', '/analisis': 'analytics', '/automatizaciones': 'autos', '/agenda': 'agenda', '/tareas': 'tareas', '/campanas': 'campaigns', '/fuentes': 'sources' };
+
+  // Direcciones canónicas que cambiaron de nombre. La pantalla se llamó
+  // «Chatbots» hasta el 25-09-2026 y su dirección con ella; los enlaces
+  // guardados o pegados en un chat siguen llegando ahí, así que sigue viva.
+  //
+  // No es lo mismo que CRM_LEGACY: aquella son las rutas /leads/* de la
+  // navegación vieja, y estas son direcciones v2 que solo se renombraron.
+  const CRM_RENOMBRADAS = { '/conversaciones/chatbots': 'agents' };
   const VIEW_PATHS = { home: '/', agency: '/clientes', 'social-studio': '/studio', 'seo-project': '/proyecto-seo', roadmap: '/roadmap', academia: '/academia' };
   const TITLES = {
     '/': 'Acuarius', '/clientes': 'Panel de clientes · Acuarius', '/studio': 'Social Studio · Acuarius',
@@ -27917,6 +27925,22 @@ function agnScheduleForLead() {
             crmAbrirFicha(idLead);
           } else if (++vueltas > 60) clearInterval(reloj);   // 12 s y se rinde
         }, 200);
+      } else if (CRM_RENOMBRADAS[p]) {
+        // Una dirección que cambió de nombre: se abre la pantalla igual y se
+        // corrige la barra de direcciones a la actual.
+        //
+        // `replaceState` y no `pushState`: quien llega por aquí viene de fuera
+        // —un enlace guardado, un mensaje— y apilar una entrada haría que el
+        // botón atrás lo devolviera a la misma pantalla en la que ya está.
+        //
+        // Se reescribe AQUÍ y no se deja para `sync()`, porque mientras se
+        // enruta `applying` está en true y `sync()` se sale antes de tocar la
+        // URL: la dirección vieja se quedaría a la vista para siempre.
+        const sub = CRM_RENOMBRADAS[p];
+        showView('crm');
+        if (typeof crmInit === 'function') crmInit();
+        history.replaceState({ path: CRM_SUB[sub] }, '', CRM_SUB[sub]);
+        setTimeout(function () { crmSetView(sub); }, 60);
       } else if (Object.values(CRM_SUB).indexOf(p) !== -1) {
         // Rutas canónicas v2: /crm/*, /marketing/*, /conversaciones/*, /analisis/*
         showView('crm');
