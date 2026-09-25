@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-submenus-color",
+      "fecha": "2026-09-25",
+      "tipo": "mejora",
+      "titulo": "Los desplegables del menú ya van con el color nuevo",
+      "texto": "Al pasar por CRM, Marketing, Conversaciones o Análisis se abre un panel con las opciones de cada módulo. Ese panel se había quedado blanco mientras el menú del que sale ya era azul, y parecía de otra aplicación. Ahora va con el mismo degradado de la marca y los textos en blanco. En el teléfono, donde las opciones se despliegan dentro del propio menú, se apoyan en el color de fondo en vez de dibujar un recuadro blanco encima."
+    },
+    {
       "id": "2026-09-25-cabecera-telefono",
       "fecha": "2026-09-25",
       "tipo": "arreglo",

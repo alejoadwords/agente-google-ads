@@ -41,8 +41,8 @@ const ok = (c, m, extra) => {
 
 const nav = await chromium.launch();
 
-async function mirar(oscuro) {
-  const p = await nav.newPage({ viewport: { width: 1440, height: 820 } });
+async function mirar(oscuro, ancho = 1440) {
+  const p = await nav.newPage({ viewport: { width: ancho, height: 820 } });
   await p.route('**/*.js', (r) => r.abort());       // sin JS: solo interesa el CSS
   await p.goto('file://' + (oscuro ? OSCURO : INDEX), { waitUntil: 'domcontentloaded' });
   const r = await p.evaluate(() => {
@@ -55,12 +55,22 @@ async function mirar(oscuro) {
     // La pestaña activa se comprueba sobre una de verdad, marcada al vuelo.
     const m = document.querySelector('.sb-mod');
     if (m) m.classList.add('active');
+    // El submenú lo construye el JS, que aquí no corre: se monta con sus
+    // clases reales para poder medirlo.
+    const sub = document.createElement('div');
+    sub.className = 'sb-sub open';
+    sub.innerHTML = '<div class="sb-sub-title">Marketing</div>' +
+      '<div class="sb-sub-item">Campañas</div>' +
+      '<div class="sb-sub-item active">Plantillas</div>';
+    document.body.appendChild(sub);
     return {
       hdr: cs('.hdr'), sidebar: cs('.sidebar'),
       logoClaro: cs('.hdr-logo-light'), logoBlanco: cs('.hdr-logo-dark'),
       campana: cs('#alerts-btn'), soporte: cs('#sop-btn'),
       academia: cs('.hdr-academia-btn'), cliente: cs('#hdr-client-btn'),
       salir: cs('.hdr-signout'), activa: cs('.sb-mod.active'),
+      sub: cs('.sb-sub'), subTitulo: cs('.sb-sub-title'),
+      subItem: cs('.sb-sub-item'), subActivo: cs('.sb-sub-item.active'),
     };
   });
   await p.close();
@@ -96,6 +106,26 @@ for (const [nombre, v] of [
 ok(BLANCO(claro.cliente.fondo),
    'y el selector de cliente tiene fondo translúcido, no blanco opaco', claro.cliente.fondo);
 
+// ── El submenú flotante ────────────────────────────────────────────────────
+// Se quedaba blanco mientras el menú del que sale ya era azul.
+console.log('\nModo claro — el submenú que sale del menú');
+ok(DEGRADADO(claro.sub.imagen), 'el panel lleva degradado, no el blanco de antes', claro.sub.fondo);
+ok(BLANCO(claro.subTitulo.color), 'su título se lee', claro.subTitulo.color);
+ok(BLANCO(claro.subItem.color), 'y sus opciones también', claro.subItem.color);
+ok(BLANCO(claro.subActivo.color) && BLANCO(claro.subActivo.fondo),
+   'la opción en la que estás se distingue en blanco',
+   claro.subActivo.color + ' sobre ' + claro.subActivo.fondo);
+
+// En el teléfono no flota: se despliega DENTRO de la columna, que ya lleva el
+// degradado. Ahí el panel no debe pintar nada o sería un recuadro dentro de
+// otro. Esto se rompió al poner el degradado y no se vio hasta medirlo.
+console.log('\nEn el teléfono el submenú va dentro del menú');
+const movil = await mirar(false, 390);
+ok(!DEGRADADO(movil.sub.imagen) && !/rgb\(255, 255, 255\)/.test(movil.sub.fondo),
+   'no pinta fondo propio: se apoya en el de la columna',
+   'imagen=' + movil.sub.imagen + ' fondo=' + movil.sub.fondo);
+ok(BLANCO(movil.subItem.color), 'y sus opciones se leen sobre el degradado', movil.subItem.color);
+
 // ── Modo oscuro: no se tocó ────────────────────────────────────────────────
 console.log('\nModo oscuro — se quedó como estaba');
 const oscuro = await mirar(true);
@@ -105,6 +135,8 @@ ok(!BLANCO(oscuro.activa.color),
    'la pestaña activa conserva su color de siempre, no el blanco del degradado', oscuro.activa.color);
 ok(!BLANCO(oscuro.cliente.fondo),
    'y el selector de cliente, su fondo de siempre', oscuro.cliente.fondo);
+ok(!DEGRADADO(oscuro.sub.imagen), 'el submenú tampoco hereda el degradado', oscuro.sub.imagen);
+ok(!BLANCO(oscuro.subItem.color), 'y sus opciones conservan su color', oscuro.subItem.color);
 
 await nav.close();
 console.log('');

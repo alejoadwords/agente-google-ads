@@ -2065,6 +2065,52 @@ html:not([data-theme="dark"]) .sidebar svg{stroke:currentColor}
     border-radius:0;margin:0 0 0 10px;padding:2px 0;max-width:none;min-width:0;animation:none}
   .sb-sub.open{display:block}
 }
+
+/* ── El submenú, sobre el degradado ─────────────────────────────────────────
+   Se quedaba blanco mientras el menú del que sale ya era azul: parecía de otra
+   aplicación. Igual que el resto del marco, SOLO EN MODO CLARO.
+
+   Lleva su PROPIO degradado, con la misma receta que la columna. Se intentó
+   que continuara la rampa de la columna —mismo degradado anclado a la ventana,
+   para que el panel enseñara el color que le toca a esa altura— y no sale a
+   cuenta: un degradado se reparte sobre su propia caja, la columna mide 200 px
+   y el panel flota en otro sitio, así que para que coincidan hay que anclar el
+   fondo y recortarlo al tamaño de la columna. Eso lo repite en mosaico y
+   aparece una COSTURA de agua a media altura del panel. Medido: el desvío de
+   color entre los dos era de 25 sobre 255 —un 10%, que no se distingue— y la
+   costura sí se ve. Además Safari en iPhone ignora `background-attachment:
+   fixed`, así que ni siquiera sería fiable.
+
+   No hace falta que empalmen: el panel no toca la columna —flota a 14 px, con
+   su sombra, sobre el fondo claro— y lo que se le pide es parecer de la misma
+   familia, no ser una prolongación exacta.
+
+   Si algún navegador ignora `background-attachment:fixed` —Safari en iPhone lo
+   hace a veces—, el panel cae en su propio degradado: se ve distinto, pero
+   sigue siendo legible. */
+html:not([data-theme="dark"]) .sb-sub{
+  background:linear-gradient(170deg,#1E2BCC,#00B8CE);
+  border-color:rgba(255,255,255,.22);
+  box-shadow:0 18px 44px rgba(13,15,28,.28);
+}
+html:not([data-theme="dark"]) .sb-sub-title{color:rgba(255,255,255,.62)}
+html:not([data-theme="dark"]) .sb-sub-item{color:rgba(255,255,255,.88)}
+html:not([data-theme="dark"]) .sb-sub-item:hover{background:rgba(255,255,255,.16);color:#fff}
+html:not([data-theme="dark"]) .sb-sub-item.active{background:rgba(255,255,255,.22);color:#fff}
+html:not([data-theme="dark"]) .sb-sub-sep{background:rgba(255,255,255,.22)}
+html:not([data-theme="dark"]) .sb-sub-action{color:rgba(255,255,255,.82)}
+html:not([data-theme="dark"]) .sb-sub-action:hover{color:#fff}
+
+@media(max-width:768px){
+  /* En el teléfono no flota: se despliega DENTRO de la columna, que ya lleva el
+     degradado. Aquí no hay que pintar nada —solo dejar de pintar el blanco que
+     traía de la regla de escritorio— y marcar la sangría con un filo claro. */
+  html:not([data-theme="dark"]) .sb-sub{
+    background:none;
+    box-shadow:none;
+    border-left-color:rgba(255,255,255,.30);
+  }
+}
 #sb-agents-group{margin-left:4px}
 #sb-agents-group.sb-collapsed{display:none}
 #sb-leads-btn{display:none !important}
