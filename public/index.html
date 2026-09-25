@@ -782,7 +782,13 @@ textarea.seop-input{resize:vertical;min-height:70px}
   .mob-menu-btn { order: -1; }                     /* el menú, siempre lo primero */
   .hdr-badge { display: none; }                    /* el plan se ve en Configuración */
   #cmdk-hint-btn { display: none; }                /* ⌘K no existe sin teclado */
-  .hdr-right { gap: 6px; min-width: 0; }
+  /* Los iconos, el avatar y «salir» suman 162 px y no saben encogerse: son
+     cajas de tamaño fijo con texto dentro. Dejándolos encoger, el navegador
+     les quitaba 18 px repartidos —el botón del tema quedaba en 16 px de los 30
+     que mide— y «salir» se salía igual por el borde derecho.
+     Quien cede el ancho es el selector de cliente, que para eso corta el
+     nombre con puntos suspensivos. */
+  .hdr-right { gap: 6px; min-width: 0; flex-shrink: 0; }
   #hdr-client-switch { margin-left: 2px !important; flex: 1 1 auto; max-width: none; min-width: 0; }
   #hdr-client-btn { width: 100%; padding: 5px 8px; }
   .hdr-logo .hdr-logo-img { height: 46px; }

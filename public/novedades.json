@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-cabecera-telefono",
+      "fecha": "2026-09-25",
+      "tipo": "arreglo",
+      "titulo": "En el teléfono, el botón «salir» quedaba cortado por el borde",
+      "texto": "Si trabajas con varios clientes, la barra de arriba lleva el selector de cliente además de los iconos, y en pantallas de teléfono no cabía todo: el botón «salir» se salía por el borde derecho y el de modo oscuro se veía aplastado. Ahora el que cede el espacio es el nombre del cliente, que se corta con puntos suspensivos, y el resto se ve completo. Probado desde pantallas grandes hasta las de 320 puntos."
+    },
+    {
       "id": "2026-09-25-degradado-agua",
       "fecha": "2026-09-25",
       "tipo": "mejora",
