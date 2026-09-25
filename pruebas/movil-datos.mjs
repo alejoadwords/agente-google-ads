@@ -91,6 +91,17 @@ console.log('\nLa ventana de 24 h se cuenta desde el cliente\n');
   chk('las horas salen de last_inbound_at', c.horas === 3, String(c.horas));
   chk('no leídas y vista previa', c.nolei === 2 && c.prev === 'Hola');
   chk('quién la atiende', c.quien === 'bot');
+  // 'resolved' se colapsaba a 'human'. Desde que la hoja de estado deja elegir
+  // «Resuelta», eso significaba que al reabrir la conversación la marca había
+  // saltado sola a «Lo atiendo yo»: la pantalla contradiciendo lo que acabas
+  // de guardar.
+  chk('«resuelta» no se convierte en «la atiendo yo»',
+      aConversacion({ id: 'r1', status: 'resolved' }, AHORA).quien === 'resolved',
+      aConversacion({ id: 'r1', status: 'resolved' }, AHORA).quien);
+  // Un estado que no conocemos NO puede caer en 'bot': eso dejaría al agente
+  // respondiendo por su cuenta sin que nadie lo haya decidido.
+  chk('un estado desconocido cae del lado seguro, no en el agente',
+      aConversacion({ id: 'r2', status: 'loquesea' }, AHORA).quien === 'human');
   // Si se contara desde el último mensaje a secas, escribirle nosotros
   // reiniciaría la ventana y el aviso diría que se puede escribir cuando no.
   const d = aConversacion({

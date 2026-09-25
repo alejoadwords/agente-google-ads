@@ -94,6 +94,23 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .asa{width:38px;height:4px;border-radius:2px;background:var(--border-h);margin:6px auto 14px}
 .sheet textarea{width:100%;min-height:110px;border:1px solid var(--border);border-radius:var(--rlg);
   padding:12px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text);resize:none}
+/* Los campos de una hoja se visten igual que su textarea: un input desnudo al
+   lado de uno vestido parece que no funciona. */
+.sheet input{width:100%;border:1px solid var(--border);border-radius:var(--rlg);
+  padding:12px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text)}
+.sheet input:focus{outline:2px solid var(--blue);outline-offset:-2px}
+
+/* La chicharra: lo que confirma —o desmiente— que algo se guardó. Va SOBRE la
+   barra de pestañas, porque debajo queda tapada justo cuando hay que leerla. */
+.chicharra{position:fixed;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:80;
+  padding:12px 14px;border-radius:var(--rlg);font-size:var(--fs-sm);font-weight:600;line-height:1.4;
+  box-shadow:var(--shadow-lg);animation:sube-chicha var(--dur-base) var(--ease-mover);text-align:center}
+@keyframes sube-chicha{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+.chicharra.ok{background:var(--success);color:#fff}
+.chicharra.esperando{background:var(--bg-muted);color:var(--text)}
+/* El fallo NO se disfraza de aviso suave: si no se guardó hay que enterarse. */
+.chicharra.mal{background:var(--danger);color:#fff;text-align:left}
+
 .bbtn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:var(--rlg);background:var(--blue);
   color:#fff;font:inherit;font-weight:700;font-size:var(--fs-md)}
 .bbtn:active{background:var(--blue-h)}
@@ -204,6 +221,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
   background:var(--bg-subtle);color:var(--muted);text-transform:uppercase}
 .quien.bot{background:var(--blue-lt);color:var(--blue)}
 .quien.human{background:#FFF3E0;color:#B26A00}
+.quien.resolved{background:var(--bg-muted);color:var(--muted)}
 
 /* ── Conversación abierta ── */
 .hilo{padding:12px 12px 4px;display:flex;flex-direction:column;gap:8px}

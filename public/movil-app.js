@@ -51,6 +51,62 @@ var $ = function(s,r){ return (r||movilRaiz()).querySelector(s); };
 var esc = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
 function toque(ms){ if (navigator.vibrate) navigator.vibrate(ms||8); }
 
+// ── Guardar de verdad ───────────────────────────────────────────────────────
+// Las acciones que cambian algo pasan TODAS por aquí.
+//
+// Antes cada una repintaba la pantalla y no llamaba a nadie: mover un lead a
+// Ganado se veía exactamente igual que si se hubiera guardado, y la base no se
+// enteraba. En un CRM eso es lo peor que puede pasar, porque no se descubre
+// hasta que el negocio ya se enfrió.
+//
+// El contrato de `guardar`:
+//  · en modo muestra lo dice, en vez de fingir que guardó;
+//  · si el servidor falla, DESHACE lo que se pintó y explica por qué;
+//  · nunca se queda callado.
+var _chichaTmr = null;
+function chicharra(txt, tipo){
+  var r = movilRaiz(); if (!r) return;
+  var c = r.querySelector('.chicharra');
+  if (!c) { c = document.createElement('div'); c.className = 'chicharra'; r.appendChild(c); }
+  c.className = 'chicharra ' + (tipo || 'ok');
+  c.textContent = txt;
+  clearTimeout(_chichaTmr);
+  // El fallo se queda más tiempo: es el que hay que leer.
+  _chichaTmr = setTimeout(function(){ if (c.parentNode) c.remove(); }, tipo === 'mal' ? 6000 : 2600);
+}
+
+async function guardar(ruta, cuerpo, metodo, alDeshacer){
+  if (MODO !== 'real' || typeof fetchAuth !== 'function') {
+    if (alDeshacer) alDeshacer();
+    chicharra('Esto es una muestra. Entra con tu cuenta para guardar de verdad.', 'mal');
+    return null;
+  }
+  chicharra('Guardando…', 'esperando');
+  try {
+    var r = await fetchAuth(ruta, {
+      method: metodo || 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+    // `fetchAuth` NO lanza con un 4xx o un 5xx: hay que mirar `ok` a mano. Dar
+    // por bueno lo que devuelve sin mirarlo es volver al fallo de partida.
+    var d = {};
+    try { d = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      if (alDeshacer) alDeshacer();
+      chicharra('No se guardó: ' + (d.error || 'el servidor respondió ' + r.status), 'mal');
+      return null;
+    }
+    chicharra('Guardado', 'ok');
+    return d;
+  } catch (e) {
+    if (alDeshacer) alDeshacer();
+    chicharra('No se guardó: no hay conexión.', 'mal');
+    console.warn('[movil] guardar', ruta, e);
+    return null;
+  }
+}
+
 // ── Datos de ejemplo ────────────────────────────────────────────────────────
 // Inventados a propósito: aquí se decide la FORMA. Conectar los de verdad es
 // trabajo aparte y va después de aprobar el diseño — cambiar una pantalla es
@@ -63,6 +119,11 @@ var ETAPAS = [
   {k:'ganado',      t:'Ganado'},
   {k:'perdido',     t:'Perdido'}
 ];
+// Los tres estados de una conversación. 'resolved' dejó de colapsarse en
+// 'human' cuando la hoja de estado empezó a ofrecerlo: si no está aquí, se
+// pinta la palabra cruda en el chip.
+var ETIQ_QUIEN = { bot:'Agente', human:'Tú', resolved:'Resuelta' };
+var DICE_QUIEN = { bot:'lo atiende el agente', human:'lo atiendes tú', resolved:'resuelta' };
 var LEADS = [
   {id:1,nom:'Hellen Marún',     etapa:'nuevo',      hace:'hace 2 h', origen:'Formulario web', tel:'+57 300 412 8890',
    interes:'Apartamento 2 hab · Alto Prado', valor:'$ 320.000.000', resp:'Karen Acosta', tags:['arriendo','alto-prado'],
@@ -212,10 +273,19 @@ function pintarAgenda(){
 function verLeads(etapa){ filtrar(etapa||'todos'); ver('leads'); }
 
 function marcar(i,el){
-  TAREAS[i].hecha = !TAREAS[i].hecha;
+  var t = TAREAS && TAREAS[i]; if (!t) return;
+  var antes = t.hecha;
+  t.hecha = !antes;
   el.classList.toggle('hecha');
   toque();
-  pintarInicio();
+  pintarPulso(); pintarSubtitulos();
+  // La agenda es el sistema real de tareas; `lead_activities` solo guarda el
+  // historial. Marcar ahí no cerraría el pendiente.
+  guardar('/api/agenda', { id: t.id, done: t.hecha }, 'PUT', function(){
+    t.hecha = antes;
+    el.classList.toggle('hecha');
+    pintarTareas(); pintarPulso(); pintarSubtitulos();
+  });
 }
 
 // ── Ficha ───────────────────────────────────────────────────────────────────
@@ -267,8 +337,23 @@ function cerrarSheet(){
   var s = $('#sheet'); if (s) s.remove();
 }
 function abrirNota(){
-  abrirSheet('<textarea placeholder="¿Qué pasó en la llamada?"></textarea>'
-    + '<button class="bbtn" onclick="M.cerrarSheet()">Guardar nota</button>');
+  abrirSheet('<textarea id="sh-nota" placeholder="¿Qué pasó en la llamada?"></textarea>'
+    + '<button class="bbtn" onclick="M.guardarNota()">Guardar nota</button>');
+}
+async function guardarNota(){
+  var ta = $('#sh-nota'), l = leadAbierto;
+  var texto = ta ? ta.value.trim() : '';
+  // Cerrar la hoja con la nota escrita y sin guardarla la pierde sin avisar.
+  if (!texto) { chicharra('Escribe la nota antes de guardar.', 'mal'); return; }
+  if (!l) { chicharra('No hay ningún contacto abierto.', 'mal'); return; }
+  var d = await guardar('/api/lead-activities',
+    { lead_id: l.id, type: 'nota', content: texto }, 'POST');
+  if (!d) return;   // el texto se queda en la hoja para reintentar
+  cerrarSheet();
+  // Tocar el lead: toda la inactividad del CRM cuelga de `updated_at`, y una
+  // nota que no lo mueve deja al contacto marcado como abandonado.
+  l.hace = 'ahora'; l.tocado = Date.now();
+  pintarFicha(); pintarLeads(); pintarPulso(); pintarSubtitulos();
 }
 function abrirEtapas(){
   var l = leadAbierto; if (!l) return;
@@ -280,14 +365,52 @@ function abrirEtapas(){
 }
 function ponerEtapa(k){
   if (!leadAbierto) return;
-  leadAbierto.etapa = k;
+  var l = leadAbierto, antes = l.etapa;
+  if (antes === k) { cerrarSheet(); return; }
+  // Se pinta ya y se deshace si falla: en un teléfono la red tarda, y esperar
+  // con la pantalla quieta se siente roto. Lo que no se hace es dar por bueno
+  // el cambio pase lo que pase.
+  l.etapa = k;
   toque(12);
-  cerrarSheet(); pintarFicha(); pintarFiltros(); pintarLeads(); pintarInicio();
+  cerrarSheet(); pintarFicha(); pintarFiltros(); pintarLeads(); pintarPulso(); pintarSubtitulos();
+  guardar('/api/leads', { id: l.id, stage: k }, 'PUT', function(){
+    l.etapa = antes;
+    pintarFicha(); pintarFiltros(); pintarLeads(); pintarPulso(); pintarSubtitulos();
+  });
 }
 function nuevoLead(){
+  // Nombre y teléfono en campos SEPARADOS. Un solo cuadro con «Nombre y
+  // teléfono» obliga a adivinar dónde acaba uno y empieza el otro, y lo que se
+  // adivina mal se guarda mal.
   abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Contacto nuevo</div>'
-    + '<textarea placeholder="Nombre y teléfono"></textarea>'
-    + '<button class="bbtn" onclick="M.cerrarSheet()">Crear contacto</button>');
+    + '<input id="sh-nom" type="text" placeholder="Nombre">'
+    + '<input id="sh-tel" type="tel" placeholder="Teléfono" style="margin-top:8px">'
+    + '<input id="sh-mail" type="email" placeholder="Email (opcional)" style="margin-top:8px">'
+    + '<button class="bbtn" onclick="M.crearLead()">Crear contacto</button>');
+}
+async function crearLead(){
+  var nom = ($('#sh-nom') || {}).value, tel = ($('#sh-tel') || {}).value, mail = ($('#sh-mail') || {}).value;
+  nom = String(nom || '').trim(); tel = String(tel || '').trim(); mail = String(mail || '').trim();
+  if (!nom) { chicharra('Ponle un nombre al contacto.', 'mal'); return; }
+  if (!tel && !mail) { chicharra('Hace falta un teléfono o un email para poder contactarlo.', 'mal'); return; }
+  var cuerpo = { name: nom, phone: tel, email: mail, source: 'Móvil' };
+  // Al tablero que se está mirando: crearlo en el principal lo mandaría a un
+  // tablero que quizá ni se usa —Certain trabaja en «Arriendo»— y parecería
+  // que no se guardó.
+  if (pipelineActual) cuerpo.pipeline_id = pipelineActual;
+  var d = await guardar('/api/leads', cuerpo, 'POST');
+  if (!d) return;
+  cerrarSheet();
+  if (d.lead && TRADUCTOR) {
+    if (LEADS === null) LEADS = [];
+    LEADS.unshift(TRADUCTOR.aLead(d.lead));
+    pintarLeads(); pintarFiltros(); pintarPulso(); pintarSubtitulos();
+  } else {
+    // Se guardó pero no sabemos con qué forma volvió: se recarga en vez de
+    // inventar la fila. Una fila a medias en la lista es un lead que luego
+    // no abre.
+    cargarReales();
+  }
 }
 
 
@@ -343,7 +466,7 @@ function pintarConvs(){
         + '<span class="canal '+c.canal+'">'+icn(ICONO_CANAL[c.canal]||'chat',10)+'</span></span>'
       + '<span class="cuerpo">'
         + '<span class="arriba"><span class="nom">'+esc(c.nom)+'</span>'
-          + '<span class="quien '+c.quien+'">'+(c.quien==='bot'?'Agente':'Tú')+'</span>'
+          + '<span class="quien '+c.quien+'">'+ETIQ_QUIEN[c.quien]+'</span>'
           + '<span class="cuando">'+esc(c.cuando)+'</span></span>'
         + '<span class="prev">'+esc(c.prev)+'</span></span>'
       + (c.nolei ? '<span class="bolita">'+c.nolei+'</span>' : '')
@@ -365,7 +488,7 @@ function abrirConv(id){
   h.innerHTML =
     '<div class="cab"><button class="volver" onclick="M.cerrarConv()">'+icn('arrow',24)+'</button>'
     + '<div style="flex:1;min-width:0"><h1 style="font-size:var(--fs-md)">'+esc(c.nom)+'</h1>'
-      + '<div class="sub">'+esc(c.canal)+' · '+(c.quien==='bot'?'lo atiende el agente':'lo atiendes tú')+'</div></div>'
+      + '<div class="sub">'+esc(c.canal)+' · '+DICE_QUIEN[c.quien]+'</div></div>'
     + '<button class="volver" style="transform:none" onclick="M.abrirEstado()">'+icn('gear',22)+'</button></div>'
     + (tieneVentana
        ? '<div class="ventana'+(dentro?' ok':'')+'">'
@@ -417,19 +540,32 @@ function ponerModo(esNota){
   toque();
 }
 function meter(t){ var ta = $('#redactar'); if (ta){ ta.value = t; ta.focus(); } toque(); }
-function enviarMsg(){
+async function enviarMsg(){
   var ta = $('#redactar'); if (!ta || !ta.value.trim()) return;
   var hilo = $('#hoja-conv .hilo'); if (!hilo) return;
+  var c = convAbierta;
+  if (!c) { chicharra('No hay ninguna conversación abierta.', 'mal'); return; }
+  var texto = ta.value.trim(), era = modoNota;
+  var btn = $('#hoja-conv .enviar'); if (btn) btn.disabled = true;
+
+  // El texto NO se borra hasta saber que salió. Si WhatsApp lo rechaza, quien
+  // escribió lo pierde y encima cree que se envió.
+  var d = era
+    ? await guardar('/api/chat-conversations?action=nota', { conversation_id: c.id, texto: texto }, 'POST')
+    : await guardar('/api/chat-conversations', { conversation_id: c.id, content: texto }, 'POST');
+  if (btn) btn.disabled = false;
+  if (!d) return;
+
   var hora = new Date().toTimeString().slice(0,5);
-  var d = document.createElement('div');
-  if (modoNota){
-    d.className = 'nota-int';
-    d.innerHTML = '<b>Nota interna · solo la ve el equipo</b>' + esc(ta.value);
+  var b = document.createElement('div');
+  if (era){
+    b.className = 'nota-int';
+    b.innerHTML = '<b>Nota interna · solo la ve el equipo</b>' + esc(texto);
   } else {
-    d.className = 'burbuja mia';
-    d.innerHTML = esc(ta.value) + '<span class="h">'+hora+'</span>';
+    b.className = 'burbuja mia';
+    b.innerHTML = esc(texto) + '<span class="h">'+hora+'</span>';
   }
-  hilo.appendChild(d);
+  hilo.appendChild(b);
   ta.value = '';
   toque();
   var h = $('#hoja-conv'); if (h) h.scrollTop = h.scrollHeight;
@@ -452,9 +588,18 @@ function abrirEstado(){
   + '<div style="color:var(--muted);font-size:var(--fs-xs);padding:12px 4px 0;line-height:1.5">'
   + 'Mientras la atiendas tú, el agente no responde en esta conversación.</div>');
 }
-function ponerQuien(q){
-  if (!convAbierta) return;
-  convAbierta.quien = q;
+async function ponerQuien(q){
+  var c = convAbierta; if (!c) return;
+  var antes = c.quien;
+  if (antes === q) { cerrarSheet(); return; }
+  // Esta es la que menos puede fallar en silencio: la hoja promete que el
+  // agente deja de responder. Si no se guarda, el agente sigue contestando por
+  // encima del comercial y los dos le escriben al cliente a la vez.
+  //
+  // Por eso aquí NO se pinta antes de tiempo: primero se guarda.
+  var d = await guardar('/api/chat-conversations', { id: c.id, status: q }, 'PUT');
+  if (!d) return;
+  c.quien = q;
   toque(12); cerrarSheet(); cerrarConv(); pintarConvs();
 }
 
@@ -975,15 +1120,73 @@ function fichaQuien(l){
       }).join('')
     + '</div>'
     + '<h2>Etiquetas</h2><div class="caja"><div class="tags">'
-      + l.tags.map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
+      + (l.tags || []).map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
       + '<button class="tag" onclick="M.toque()" style="border-style:dashed;color:var(--blue)">+ etiqueta</button>'
     + '</div></div>'
     + '<h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div></div>';
 }
+// Qué campo de la ficha es qué columna, y de qué tipo. Los que NO están aquí
+// no se editan a mano a propósito: la fuente y el responsable son catálogos o
+// personas —un cuadro de texto libre los rompería— y la campaña y la página
+// las pone la atribución de pauta. Ofrecer un campo que no se puede guardar es
+// el mismo engaño que arreglamos, solo que más tarde.
+var CAMPOS_FICHA = {
+  'Empresa':         { api: 'company',              movil: 'empresa', tipo: 'texto' },
+  'Email':           { api: 'email',                movil: 'email',   tipo: 'email' },
+  'Teléfono':        { api: 'phone',                movil: 'tel',     tipo: 'tel'   },
+  'Valor':           { api: 'value',                movil: 'valor',   tipo: 'plata' },
+  'Cierre esperado': { api: 'expected_close_date',  movil: 'cierre',  tipo: 'dia'   },
+};
+var PORQUE_NO = {
+  'Fuente':      'La fuente sale del catálogo de la cuenta y la edita quien la administra, desde el computador.',
+  'Campaña':     'La campaña y la página las pone la atribución de pauta cuando entra el lead. Cambiarlas a mano partiría el reporte en dos.',
+  'Página':      'La campaña y la página las pone la atribución de pauta cuando entra el lead. Cambiarlas a mano partiría el reporte en dos.',
+  'Responsable': 'Reasignar es elegir a alguien del equipo, y esa lista se maneja desde el computador.',
+};
 function editarCampo(campo){
+  var def = CAMPOS_FICHA[campo];
+  if (!def) {
+    abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">'+esc(campo)+'</div>'
+      + '<div class="solo-escritorio" style="margin:0"><b>Aquí no se edita</b>'
+      + esc(PORQUE_NO[campo] || 'Este dato se cambia desde el computador.') + '</div>'
+      + '<button class="bbtn" onclick="M.cerrarSheet()">Entendido</button>');
+    return;
+  }
+  var l = leadAbierto;
+  var actual = l ? (l[def.movil] || '') : '';
+  var entrada = def.tipo === 'dia'
+    ? '<input id="sh-campo" type="date">'
+    : '<input id="sh-campo" type="' + (def.tipo === 'plata' ? 'number' : def.tipo === 'email' ? 'email' : def.tipo === 'tel' ? 'tel' : 'text')
+      + '" value="' + esc(def.tipo === 'plata' ? '' : actual) + '" placeholder="Escribe el nuevo valor">';
   abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">'+esc(campo)+'</div>'
-    + '<textarea style="min-height:60px" placeholder="Escribe el nuevo valor"></textarea>'
-    + '<button class="bbtn" onclick="M.cerrarSheet()">Guardar</button>');
+    + entrada
+    + '<button class="bbtn" onclick="M.guardarCampo(\''+esc(campo)+'\')">Guardar</button>');
+}
+async function guardarCampo(campo){
+  var def = CAMPOS_FICHA[campo], l = leadAbierto, e = $('#sh-campo');
+  if (!def || !l || !e) return;
+  var crudo = String(e.value || '').trim();
+  if (!crudo) { chicharra('Escribe un valor antes de guardar.', 'mal'); return; }
+  var valor = crudo;
+  if (def.tipo === 'plata') {
+    var n = Number(crudo.replace(/[^\d.-]/g, ''));
+    if (!isFinite(n)) { chicharra('El valor tiene que ser un número.', 'mal'); return; }
+    valor = n;
+  }
+  var cuerpo = { id: l.id };
+  cuerpo[def.api] = valor;
+  var d = await guardar('/api/leads', cuerpo, 'PUT');
+  if (!d) return;
+  cerrarSheet();
+  // Se repinta con lo que devolvió el SERVIDOR, no con lo que se escribió: si
+  // normalizó el teléfono o redondeó el importe, la ficha tiene que enseñar lo
+  // que quedó guardado y no lo que uno creyó guardar.
+  var guardado = d.lead ? d.lead[def.api] : valor;
+  var T = TRADUCTOR;
+  l[def.movil] = (def.tipo === 'plata' && T) ? T.plata(guardado)
+    : (def.tipo === 'dia' && T) ? T.diaSuelto(guardado)
+    : (guardado == null ? '' : String(guardado));
+  pintarFicha(); pintarLeads();
 }
 function fichaPasado(l){
   return '<div class="secc"><h2>Todo lo que ha pasado</h2><div class="caja">'
@@ -1187,6 +1390,7 @@ function pintarTarjetas(host, cards){
 
 var MODO = 'ejemplo';   // 'ejemplo' | 'cargando' | 'real' | 'fallo'
 var DATOS = null;
+var TRADUCTOR = null;   // el módulo movil-datos.js, una vez cargado
 
 function pintarModo(){
   var av = movilRaiz().querySelector('#inicio .aviso');
@@ -1225,6 +1429,10 @@ async function cargarReales(){
     // del sitio, que es correcto al servirlo pero imposible de abrir desde un
     // fichero local. Y probar el boceto en local es medio trabajo.
     var mod = await import('./movil-datos.js');
+    // Se guarda para poder REUSAR sus formateadores al guardar un campo. Un
+    // segundo formateador aquí haría que el mismo importe se viera distinto
+    // según si acabas de escribirlo o lo trajo la carga.
+    TRADUCTOR = mod;
     d = await mod.cargarTodo(fetchAuth);
   } catch (e) {
     console.warn('movil: no se pudo cargar', e);
@@ -1448,6 +1656,7 @@ function movilMontar(opciones){
     ponerModo: ponerModo,
     ponerQuien: ponerQuien,
     pulsoIr: pulsoIr,
+    guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead,
     toque: toque,
     verMod: verMod,
     verSub: verSub,

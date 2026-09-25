@@ -154,9 +154,13 @@ export function aConversacion(c, ahora = Date.now()) {
     id: c.id,
     nom: c.contact_name || c.contact_phone || 'Sin nombre',
     canal: c.channel || 'whatsapp',
-    // 'bot' y 'human' son los valores reales de la columna; 'resolved' también
-    // existe y aquí se trata como atendida para no inventar un cuarto estado.
-    quien: c.status === 'bot' ? 'bot' : 'human',
+    // Los tres valores reales de la columna, sin colapsar. Antes 'resolved' se
+    // traducía a 'human', y desde que la hoja de estado deja elegir «Resuelta»
+    // eso significaba que al reabrir la conversación la marca había saltado
+    // sola a «Lo atiendo yo»: la pantalla contradiciendo lo que acabas de
+    // guardar. Cualquier otro valor cae a 'human', que es el lado seguro —el
+    // agente callado— y nunca a 'bot'.
+    quien: c.status === 'bot' ? 'bot' : c.status === 'resolved' ? 'resolved' : 'human',
     nolei: Number(c.unread_count) || 0,
     cuando: hace(c.last_message_at, ahora),
     prev: c.last_message || '',

@@ -301,6 +301,18 @@ console.log('\nLas tarjetas de pauta se REUTILIZAN, no se copian\n');
   chk('los botones apuntan a la tarjeta que se ve', /PULSO_VISIBLE\[i\]/.test(guion));
 }
 
+console.log('\nNo se llama a nada que no exista\n');
+{
+  // `pintarInicio()` no existió nunca, y aun así lo llamaban seis sitios: al
+  // cambiar de etapa o marcar una tarea, el manejador lanzaba un
+  // ReferenceError a media función y abortaba el resto de los repintados. No
+  // se veía: lo pintado hasta ahí quedaba, y lo de después no llegaba nunca.
+  const def = new Set([...guion.matchAll(/function ([a-zA-Z_$][\w$]*)\s*\(/g)].map((m) => m[1]));
+  const llamadas = new Set([...guion.matchAll(/(?:^|[^.\w])(pintar[A-Za-z]+)\s*\(/g)].map((m) => m[1]));
+  const huerfanas = [...llamadas].filter((f) => !def.has(f));
+  chk('todos los pintores que se llaman existen', huerfanas.length === 0, huerfanas.join(', '));
+}
+
 console.log('\nNada se escapa del envoltorio\n');
 {
   // app.js y movil-app.js conviven en la misma página. Un `const` repetido en
