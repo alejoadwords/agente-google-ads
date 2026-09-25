@@ -202,15 +202,22 @@ console.log('\nCon datos reales, nada de ejemplo se cuela\n');
   chk('no se conserva el valor anterior cuando algo falla',
       !/if \(d\.\w+ !== null\)/.test(codigo));
   // Y cada pantalla tiene que saber decirlo.
-  for (const [pantalla, frase] of [['pintarLeads', 'traer tus contactos'],
-                                   ['pintarTareas', 'traer tus tareas'],
-                                   ['pintarAgenda', 'traer tu agenda'],
-                                   ['pintarConvs', 'traer tus conversaciones']]) {
+  // El texto ya no está escrito en cada pintor: pasa por `sinLista()`, que
+  // además separa «se está trayendo» de «no se pudo traer». Lo que se
+  // comprueba sigue siendo lo mismo — que la pantalla mire el null y diga algo
+  // distinto de «no tienes»—, solo que ahora por el ayudante.
+  for (const [pantalla, queEs] of [['pintarLeads', 'tus contactos'],
+                                   ['pintarTareas', 'tus tareas'],
+                                   ['pintarAgenda', 'tu agenda'],
+                                   ['pintarConvs', 'tus conversaciones']]) {
     const j = html.indexOf('function ' + pantalla);
     const cuerpo = html.slice(j, html.indexOf('\n}', j));
     chk(`${pantalla} distingue «no se pudo» de «no hay»`,
-        /=== null/.test(cuerpo) && cuerpo.includes(frase), frase);
+        /=== null/.test(cuerpo) && cuerpo.includes("sinLista('" + queEs + "')"), queEs);
   }
+  // Y el ayudante tiene que decir cosas distintas en cada caso, o daría igual.
+  chk('el ayudante separa «trayendo» de «no se pudo»',
+      /function sinLista[\s\S]{0,260}Trayendo[\s\S]{0,160}No se pudieron traer/.test(html));
 }
 
 console.log('\nLos identificadores de verdad son UUID, no números\n');

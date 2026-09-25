@@ -52,6 +52,26 @@ var $ = function(s,r){ return (r||movilRaiz()).querySelector(s); };
 var esc = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
 function toque(ms){ if (navigator.vibrate) navigator.vibrate(ms||8); }
 
+// Qué se pinta cuando no hay lista. Mientras carga, que se está trayendo; si
+// falló, que no se pudo. Decir «no tienes» en cualquiera de los dos casos es
+// mentir, y decir «no se pudo» mientras carga es asustar sin motivo.
+function sinLista(queEs){
+  return MODO === 'cargando'
+    ? '<div class="vacio">Trayendo ' + esc(queEs) + '…</div>'
+    : '<div class="vacio">No se pudieron traer ' + esc(queEs) + '.</div>';
+}
+
+// Con sesión abierta NO puede quedar ni un dato de ejemplo en pantalla.
+// Se pintaban al montar y se sustituían al llegar los de verdad, así que quien
+// entraba veía durante unos segundos contactos, mensajes y cifras de Google
+// Ads de otra persona, con SU propia sesión abierta. Es la peor mentira que
+// ha tenido esta pantalla: no parece un fallo, parece su cuenta.
+function vaciarEjemplos(){
+  LEADS = null; TAREAS = null; CITAS = null; CONVS = null;
+  BOTS = null; PIPELINES = null; PULSO = [];
+  MODULO_CACHE = {};
+}
+
 // ── Guardar de verdad ───────────────────────────────────────────────────────
 // Las acciones que cambian algo pasan TODAS por aquí.
 //
@@ -220,7 +240,7 @@ function pintarLeads(){
   // null = no se pudo mirar. Pintar «ningún contacto» sería afirmar que la
   // cartera está vacía cuando lo que pasó fue que se cayó la consulta.
   if (LEADS === null) {
-    $('#leads .lista').innerHTML = '<div class="vacio">No se pudieron traer tus contactos.</div>';
+    $('#leads .lista').innerHTML = sinLista('tus contactos');
     return;
   }
   var ls = leadsVisibles();
@@ -234,7 +254,7 @@ function pintarLeads(){
 }
 function pintarTareas(){
   if (TAREAS === null) {
-    $('#tareas .lista').innerHTML = '<div class="vacio">No se pudieron traer tus tareas.</div>';
+    $('#tareas .lista').innerHTML = sinLista('tus tareas');
     return;
   }
   if (!TAREAS.length) {
@@ -255,7 +275,7 @@ function pintarTareas(){
 }
 function pintarAgenda(){
   if (CITAS === null) {
-    $('#agenda .lista').innerHTML = '<div class="vacio">No se pudo traer tu agenda.</div>';
+    $('#agenda .lista').innerHTML = sinLista('tu agenda');
     return;
   }
   var html = '';
@@ -532,7 +552,7 @@ var modoNota = false;
 
 function pintarConvs(){
   if (CONVS === null) {
-    $('#bandeja .lista').innerHTML = '<div class="vacio">No se pudieron traer tus conversaciones.</div>';
+    $('#bandeja .lista').innerHTML = sinLista('tus conversaciones');
     return;
   }
   if (!CONVS.length) {
@@ -687,7 +707,8 @@ function pintarBots(){
   var host = $('#chatbots .lista'); if (!host) return;
   // null es «no se pudieron traer», que no es lo mismo que no tener ninguno.
   if (BOTS === null) {
-    host.innerHTML = '<div class="vacio">No se pudieron traer tus agentes.<br>'
+    host.innerHTML = MODO === 'cargando' ? sinLista('tus agentes')
+      : '<div class="vacio">No se pudieron traer tus agentes.<br>'
       + '<button class="rapida" style="margin-top:10px" onclick="M.reintentarModulo(\'chatbots\')">Reintentar</button></div>';
     return;
   }
@@ -1289,6 +1310,17 @@ function pintarPulso(){
     });
     return;
   }
+  // Los ejemplos, SOLO cuando no hay ninguna sesión —revisar el diseño suelto—.
+  // Antes bastaba con que el modo no fuera 'real', así que durante la carga y
+  // también cuando la carga FALLABA se pintaban las tarjetas inventadas a una
+  // cuenta de verdad.
+  if (MODO !== 'ejemplo') {
+    PULSO_VISIBLE = [];
+    host.innerHTML = MODO === 'cargando'
+      ? '<div class="pulso-vacio">Trayendo lo tuyo…</div>'
+      : '<div class="pulso-vacio">No se pudo traer tu Pulso.</div>';
+    return;
+  }
   // Un Pulso vacío es una buena noticia y hay que decirlo así, no dejar un
   // hueco en blanco que parece que no cargó.
   PULSO_VISIBLE = PULSO.slice();
@@ -1692,9 +1724,44 @@ function vacioODuda(lista, hayTexto, noSePudo){
     : '<div class="vacio">' + esc(hayTexto) + '</div>';
 }
 
+// El alcance de cliente con el que trabaja la aplicación de escritorio.
+//
+// De él cuelgan los TABLEROS: pedirlos sin alcance devuelve solo los que no
+// tienen cliente —en Certain, uno de cuatro—, mientras que /api/leads sin
+// alcance devuelve TODA la cuenta. Por eso el móvil enseñaba 369 contactos de
+// cuatro tableros revueltos y ningún selector: los leads de un mundo y los
+// tableros de otro.
+//
+// Se lee a pelo y NO por `window`: en app.js es un `let` de nivel superior, y
+// esos no quedan en el objeto global —solo los `function` y los `var`—.
+function alcanceCliente(){
+  try {
+    return (typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) || '';
+  } catch (e) { return ''; }
+}
+
+// app.js lo resuelve de forma asíncrona al arrancar. Si el móvil se monta
+// antes, cargaría con un alcance y la web con otro, y las dos enseñarían
+// cuentas distintas. Se espera un poco; si no llega, se sigue sin él.
+function esperarAlcance(tope){
+  return new Promise(function(listo){
+    var t0 = Date.now();
+    (function mirar(){
+      if (alcanceCliente() || Date.now() - t0 > tope) { listo(alcanceCliente()); return; }
+      setTimeout(mirar, 120);
+    })();
+  });
+}
+
+var _alcanceUsado = null;   // con cuál se cargó, para saber si cambió
+
 async function cargarReales(){
   if (typeof fetchAuth !== 'function') { MODO = 'ejemplo'; pintarModo(); return; }
-  MODO = 'cargando'; pintarModo();
+  MODO = 'cargando';
+  // También aquí: al móvil suelto se le resuelve la sesión más tarde, y desde
+  // ese instante los ejemplos dejan de poder enseñarse.
+  vaciarEjemplos();
+  pintarModo(); repintarTodo();
   var d;
   try {
     // Relativo, no absoluto: con '/movil-datos.js' la ruta apunta a la raíz
@@ -1705,7 +1772,9 @@ async function cargarReales(){
     // segundo formateador aquí haría que el mismo importe se viera distinto
     // según si acabas de escribirlo o lo trajo la carga.
     TRADUCTOR = mod;
-    d = await mod.cargarTodo(fetchAuth);
+    var cliente = await esperarAlcance(3000);
+    _alcanceUsado = cliente;
+    d = await mod.cargarTodo(fetchAuth, { clientId: cliente });
   } catch (e) {
     console.warn('movil: no se pudo cargar', e);
     MODO = 'fallo'; pintarModo(); return;
@@ -1750,6 +1819,14 @@ async function cargarReales(){
     BOTS = ags;
     pintarBots();
   });
+  // Si el alcance llegó tarde —app.js lo resuelve por su cuenta— se recarga una
+  // vez con el bueno. Quedarse con el equivocado enseñaría otra cuenta que la
+  // web, que es justo lo que se está arreglando.
+  if (!_alcanceUsado) {
+    setTimeout(function(){
+      if (alcanceCliente() && alcanceCliente() !== _alcanceUsado) cargarReales();
+    }, 4000);
+  }
 }
 
 function repintarTodo(){
@@ -1876,7 +1953,7 @@ var MOVIL_MARCA = `<div class="vista" id="inicio">
   <div id="lista-mas"></div>
 </div>
 
-<button class="fab" onclick="M.nuevoLead()" aria-label="Contacto nuevo" hidden></button>
+<button class="fab" onclick="M.nuevoLead()" hidden>${icn('plus',22)}<span>Contacto</span></button>
 <nav class="tabs"></nav>`;
 
 // Dónde vive el móvil. Suelto es el <body>; dentro de la aplicación, su
@@ -1889,6 +1966,10 @@ function movilMontar(opciones){
   opciones = opciones || {};
   _raiz = opciones.host || document.getElementById('movil-host') || document.body;
   if (!_raiz.querySelector('.tabs')) _raiz.innerHTML = MOVIL_MARCA;
+  // El orden importa y esto enseñó datos de otra persona: ANTES se pintaba
+  // todo con los ejemplos y DESPUÉS se miraba si había sesión. Quien entraba
+  // veía un Pulso ajeno hasta que llegaban sus datos.
+  if (opciones.fetchAuth) { MODO = 'cargando'; vaciarEjemplos(); }
   pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
   pintarConvs(); pintarBots(); pintarPulso(); pintarMarketing(); pintarMas();
   verMod('inicio');

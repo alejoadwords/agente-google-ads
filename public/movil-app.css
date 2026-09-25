@@ -150,15 +150,22 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .filtro:active{transform:scale(.95)}
 
 /* ── Botón flotante ── */
+/* Era un círculo azul VACÍO —el botón no llevaba icono dentro— así que no se
+   entendía qué hacía. Ahora dice lo que es: un signo de más y la palabra. Un
+   icono solo obliga a adivinar, y esto se toca una vez al día. */
 .fab{position:fixed;right:16px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:40;
-  width:54px;height:54px;border-radius:50%;border:0;background:var(--blue);color:#fff;
-  box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center}
+  height:50px;padding:0 18px 0 14px;border-radius:999px;border:0;background:var(--blue);color:#fff;
+  box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center;gap:7px;
+  font:inherit;font-weight:700;font-size:var(--fs-sm)}
 /* El atributo `hidden` vale display:none, pero lo pone la hoja del navegador
    y cualquier `display` de una clase le gana. Sin esta línea el botón sale en
    todas las pantallas. Lo mismo le pasa a .vista, que ya la tiene. */
 .fab[hidden]{display:none}
 .fab:active{background:var(--blue-h);transform:scale(.92)}
-.fab svg{width:26px;height:26px}
+.fab svg{width:22px;height:22px}
+/* El botón tapaba la última fila de la lista: quien tenía un contacto abajo lo
+   veía medio cubierto y no podía tocarlo. */
+#leads .lista{padding-bottom:76px}
 
 /* ── Grupos de tareas ── */
 .grupo{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.6px;color:var(--muted);

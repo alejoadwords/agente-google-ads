@@ -1,0 +1,106 @@
+// Con sesión abierta, ni un dato de ejemplo: node pruebas/movil-sin-ejemplos.mjs
+//
+// Un cliente entró con su cuenta y el Pulso le enseñó «Hellen Marún»,
+// «Sandra Caro» y un CPA de Google Ads de $84.200. Nada de eso era suyo: eran
+// los datos de ejemplo del boceto. No parecía un fallo — parecía su cuenta.
+//
+// Pasaba por dos sitios: se pintaba TODO con ejemplos antes de mirar si había
+// sesión, y el único filtro del Pulso era `MODO === 'real'`, así que mientras
+// cargaba —y también si la carga FALLABA— salían los inventados.
+//
+// Esta prueba ejecuta el fichero de verdad y comprueba el orden.
+
+import { readFileSync } from 'node:fs';
+
+const fuente = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+const codigo = fuente.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+let fallos = 0;
+const chk = (n, ok, extra) => {
+  console.log(`  ${ok ? '✓' : '✗'} ${n}${extra && !ok ? ' → ' + extra : ''}`);
+  if (!ok) fallos++;
+};
+
+console.log('\nEl modo se decide ANTES del primer pintado\n');
+{
+  const i = codigo.indexOf('function movilMontar');
+  const fn = codigo.slice(i, codigo.indexOf('\n}', i));
+  const vacia = fn.indexOf('vaciarEjemplos()');
+  const pinta = fn.indexOf('pintarTabs()');
+  chk('se vacían los ejemplos al montar con sesión', vacia >= 0, 'no se vacían');
+  // El orden es el fallo entero: pintar primero y comprobar después significa
+  // que el usuario YA vio los datos de otro.
+  chk('y se vacían antes de pintar nada', vacia >= 0 && vacia < pinta,
+      'se pinta en la posición ' + pinta + ' y se vacía en la ' + vacia);
+  chk('el disparador es que haya fetchAuth, o sea sesión',
+      /if \(opciones\.fetchAuth\) \{ MODO = 'cargando'; vaciarEjemplos\(\); \}/.test(codigo));
+}
+
+console.log('\nEl Pulso solo enseña ejemplos cuando NO hay sesión\n');
+{
+  const i = codigo.indexOf('function pintarPulso');
+  const fn = codigo.slice(i, codigo.indexOf('\n}\nfunction', i));
+  // Antes: `if (MODO === 'real')` … y si no, ejemplos. O sea que 'cargando' y
+  // 'fallo' —los dos momentos en que el usuario YA entró— pintaban inventados.
+  chk('hay una puerta explícita para el modo ejemplo', /MODO !== 'ejemplo'/.test(fn), fn.slice(0, 150));
+  const puerta = fn.indexOf("MODO !== 'ejemplo'");
+  const usaPulso = fn.indexOf('PULSO.map');
+  chk('la lista de ejemplo se usa DESPUÉS de esa puerta',
+      puerta >= 0 && usaPulso > puerta, 'ejemplo en ' + usaPulso + ', puerta en ' + puerta);
+  chk('mientras carga lo dice, no finge un Pulso', /Trayendo lo tuyo/.test(fn));
+  chk('y si falla lo dice, en vez de inventar', /No se pudo traer tu Pulso/.test(fn));
+}
+
+console.log('\n«Trayendo» y «no se pudo» no son lo mismo\n');
+{
+  chk('existe el ayudante que los separa', /function sinLista\(queEs\)/.test(codigo));
+  chk('mira el modo para elegir el texto',
+      /MODO === 'cargando'[\s\S]{0,80}Trayendo/.test(codigo));
+  // Las cuatro listas del CRM tienen que usarlo: decir «no se pudieron traer»
+  // mientras carga asusta sin motivo, y decir «no tienes» miente.
+  for (const q of ['tus contactos', 'tus tareas', 'tu agenda', 'tus conversaciones']) {
+    chk(q + ' pasa por el ayudante', codigo.includes("sinLista('" + q + "')"));
+  }
+}
+
+console.log('\nLos ejemplos se vacían de verdad, todos\n');
+{
+  const i = codigo.indexOf('function vaciarEjemplos');
+  const fn = codigo.slice(i, codigo.indexOf('\n}', i));
+  // Dejarse uno es dejar una pantalla mintiendo.
+  for (const v of ['LEADS', 'TAREAS', 'CITAS', 'CONVS', 'BOTS', 'PIPELINES']) {
+    chk(v + ' se vacía', new RegExp('\\b' + v + ' = null').test(fn), fn.slice(0, 100));
+  }
+  chk('y el Pulso de ejemplo también', /PULSO = \[\]/.test(fn));
+}
+
+console.log('\nEl alcance del móvil es el mismo que el de la web\n');
+{
+  // /api/leads sin alcance devuelve TODA la cuenta; /api/pipelines sin alcance
+  // devuelve solo los tableros SIN cliente. Certain tiene cuatro tableros y
+  // tres cuelgan de 'pro_main': el móvil enseñaba sus 369 contactos revueltos
+  // y ningún selector, porque veía un solo tablero.
+  chk('el móvil lee el alcance de la aplicación', /function alcanceCliente\(\)/.test(codigo));
+  // `agencyActiveClientId` es un `let` de nivel superior en app.js, y esos NO
+  // quedan en `window`: leerlo por `window.` daría undefined siempre y el
+  // fallo volvería sin que nadie lo viera.
+  chk('lo lee a pelo, no por window',
+      /typeof agencyActiveClientId !== 'undefined'/.test(codigo)
+      && !/window\.agencyActiveClientId/.test(codigo), 'lo lee por window: siempre undefined');
+  chk('espera a que la aplicación lo resuelva', /function esperarAlcance\(/.test(codigo));
+  chk('y se lo pasa a la carga', /cargarTodo\(fetchAuth, \{ clientId: cliente \}\)/.test(codigo));
+  chk('si llega tarde, recarga con el bueno', /!== _alcanceUsado\) cargarReales\(\)/.test(codigo));
+}
+
+console.log('\nEl botón flotante dice lo que hace\n');
+{
+  // Era un círculo azul VACÍO: el botón no llevaba icono dentro, así que no se
+  // entendía qué era. Y tapaba la última fila de la lista.
+  chk('lleva icono', /class="fab"[^>]*>\$\{icn\('plus'/.test(fuente), 'sigue vacío');
+  chk('y la palabra, no solo un signo', /<span>Contacto<\/span><\/button>/.test(fuente));
+  const css = readFileSync(new URL('../public/movil-app.css', import.meta.url), 'utf8');
+  chk('la lista deja sitio para que no lo tape', /#leads \.lista\{padding-bottom:\d+px\}/.test(css));
+}
+
+console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
+process.exit(fallos ? 1 : 0);
